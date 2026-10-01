@@ -6,15 +6,15 @@ How the engineering skills should consume this repo's domain documentation when 
 
 - **`GLOSSARY.md`** at the repo root — the glossary.
 - **The spec chapters** — the numbered files in `docs/`. Read the ones that touch your area.
-- **`docs/adr/`** — read ADRs that touch the built system you're about to work in, such as `rayoc`.
+- **`docs/adr/`** — read ADRs that touch the area you're about to work in.
 
 If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## Where terms and decisions live
 
 - **Terms**: the language's terms are defined in the spec chapters. `GLOSSARY.md` names them and points into those chapters; it must not restate or contradict them.
-- **The language's design** is the spec chapters themselves: they state the current rules. A design change edits the chapters it touches, and keeps no separate log of decisions.
-- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record decisions about built systems only: code that exists, such as `rayoc`. A decision about the language, or about a system not yet built, changes the spec instead.
+- **The language's design** is the spec chapters themselves: they state the current rules. While the design is still being shaped, a design decision is part of that work: it edits the chapters it touches, and no separate log of decisions is kept.
+- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record a change of course: a decision that considerably changes something that already exists, or turns the project in a new direction. The `domain-modeling` skill holds the full test.
 
 ## File structure
 

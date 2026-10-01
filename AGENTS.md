@@ -23,4 +23,4 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context: `GLOSSARY.md` at the root, the spec chapters in `docs/`, and ADRs in `docs/adr/` for built systems only. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` at the root, the spec chapters in `docs/`, and ADRs in `docs/adr/`. See `docs/agents/domain.md`.
