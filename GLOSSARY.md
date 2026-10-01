@@ -17,14 +17,14 @@ A place that may be changed or lent with `&`, such as a `var` that owns its valu
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership.md#moving-values-out)).
 
 **Copy**:
-A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership.md#values)).
+A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership.md#copies)).
 
 **Copyable**:
-A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#values)).
+A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#copies)).
 _Avoid_: trivially copyable, bitwise-copyable
 
 **Hidden local**:
-A local the language declares to keep a value that a statement can't name, such as a `when` subject or a loop's sequence ([01](docs/spec/01-values-and-ownership.md#values)).
+A local the language declares to keep a value that a statement can't name, such as a `when` subject or a loop's sequence ([01](docs/spec/01-values-and-ownership.md#destruction)).
 
 **Law of exclusivity**:
 The rule that nothing else reaches a place while it is mutably borrowed, and nothing changes it while it is borrowed shared ([01](docs/spec/01-values-and-ownership.md#the-law-of-exclusivity)).
@@ -35,11 +35,11 @@ Said of a place that holds a value on only some of the paths that reach a point,
 _Avoid_: conditionally initialized
 
 **Move**:
-Taking a value from a place, which hands it to a new owner and leaves the place without a value until it is assigned again ([01](docs/spec/01-values-and-ownership.md#values)).
+Taking a value from a place, which hands it to a new owner and leaves the place without a value until it is assigned again ([01](docs/spec/01-values-and-ownership.md#moves)).
 _Avoid_: transfer, destructive copy
 
 **Move-only**:
-A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#values)).
+A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#copies)).
 _Avoid_: non-copyable, linear, affine
 
 **Overlap**:

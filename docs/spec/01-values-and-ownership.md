@@ -14,7 +14,7 @@ heal(&b)                           // lends 'b' to heal, which changes it in pla
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 
-**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, and the compiler checks each borrow inside the function that makes it.
+**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it.
 
 **A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([below](#moving-values-out)), or through an operation that copies its operands ([below](#operations-that-copy)).
 
@@ -30,43 +30,23 @@ A **place** is storage that holds a value: a local, a global, a parameter or a t
 
 **Safe code** is the code of the first two tiers: everything outside `unsafe` code, `unchecked` blocks and C. It has no undefined behavior ([11](11-compilation-model.md#what-the-language-leaves-open)).
 
-## Values
-
-**Rayo types are value types: no code can watch a value change through another name.** While a shared borrow of a value is live, nothing changes it. While a mutable borrow is live, nothing else can reach it ([below](#the-law-of-exclusivity)).
-
-Shared mutable state exists only where a type or a declaration says so:
-
-- objects and their weak pointers ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert));
-- `Pool` and `Handle` ([03](03-handles-and-objects.md#pools-and-handles));
-- pins, which keep a `StablePool` from moving an element out ([03](03-handles-and-objects.md#pinning-for-c));
-- thread-locals ([07](07-concurrency.md#global-state));
-- `Synchronized` types, such as `Mutex` ([07](07-concurrency.md#atomics-and-locks)), and channel ends ([07](07-concurrency.md#queues-and-channels));
-- in `unsafe` code, raw pointers, bare global `var`s and imported C variables.
-
-### Moves
+## Moves
 
 ```swift
 var cmds = CommandList()
 cmds.draw(mesh)
-owned var frame = cmds            // move: 'frame' takes over, 'cmds' can't be used any more
-print(cmds.count)                 // error: 'cmds' used after move
+submit(cmds)                      // submit keeps the list: it moves out of 'cmds'
+print(cmds.count)                 // error: 'cmds' was moved
 cmds = CommandList()              // fine: a new value makes 'cmds' usable again
-submit(frame)                     // an 'owned' parameter: 'frame' moves into submit
 ```
 
-**Taking a value moves it.** These take a value:
-
-- an `owned` binding, an assignment, `return`, `throw` and `await`;
-- an `owned` argument, and a `consuming` method's receiver;
-- a `[move x]` capture ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
-- a global's initializer;
-- the elements of a tuple or array literal, and an enum case's payload.
-
-**Taking from a place moves the value out**, and the place can't be used until it gets a new value. Only a place the code owns can be moved from ([below](#moving-values-out)); taking from any other place is a compile error. A copyable `const` is the exception: taking one makes a new value ([below](#moving-values-out)). A local `let` of a place, or a `var` of `&place`, borrows the place instead, and one declared `owned` takes it ([below](#bindings)).
+**Assigning a value, returning it or passing it to a function that keeps it moves it.** The new owner takes it over, and the place it came from can't be used until it gets a new value. Only a place the code owns can be moved from: moving out of a value the code only borrows is a compile error.
 
 **A move changes the owner and nothing else.** It runs none of the program's code, allocates nothing, and copies at most the value's bytes, into the place that takes it.
 
-### Copies
+[Moving values out](#moving-values-out) lists every construct that moves a value, and every place that can be moved from.
+
+## Copies
 
 ```swift
 var spawn = copy e.pos            // copy: Vec3 is copyable, so this is a memcpy
@@ -112,7 +92,7 @@ Besides `copy`, `clone()` and taking a copyable `const`, these operations copy t
 
 One copy is deferred: a `String` made from a literal uses the literal's bytes until its first write or growth, and copies them then ([04](04-types.md#literals)).
 
-### Destruction
+## Destruction
 
 **A value is destroyed when its owner's scope ends or when it is overwritten**, and its type's `deinit` runs then. Destruction runs in reverse order:
 
@@ -242,7 +222,18 @@ Every binding also follows these rules:
 
 ## Moving values out
 
-A move happens wherever a value is taken ([Values](#values)). `consume place` writes one as an expression, and also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary destroyed at the end of the statement.
+**These take a value, and so move it** ([above](#moves)):
+
+- an assignment, `return`, `throw` and `await`;
+- an `owned` argument, and a `consuming` method's receiver ([above](#parameters));
+- an `owned` binding ([above](#bindings));
+- a `[move x]` capture ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
+- a global's initializer;
+- the elements of a tuple or array literal, and an enum case's payload.
+
+A copyable `const` is the exception: taking one makes a new value (below). A `let` of a place, or a `var` of `&place`, borrows the place instead ([above](#bindings)).
+
+`consume place` writes a move as an expression, and also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary destroyed at the end of the statement.
 
 ```swift
 var loot = List<Item>()
@@ -284,7 +275,7 @@ for (h, var e) in &world.enemies.entries {
 
 **While a mutable borrow of a place is live, no other access to an overlapping place may happen. While a shared borrow is live, no mutable access may happen.** Moving from a place, assigning it and destroying it are mutable accesses to it.
 
-Borrows can't escape the function body that makes them, so this is checked **statically, in every build, with no run-time checks**. Run-time exclusivity checks exist only in the dynamic tier, on objects and on thread-locals ([03](03-handles-and-objects.md#dynamic-exclusivity), [07](07-concurrency.md#global-state)), announced by their types and by `@threadlocal`, and in the locks of `Synchronized` types ([07](07-concurrency.md#atomics-and-locks)), which a `Slice` into a locked buffer also takes ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). Changing another field during the loop is allowed:
+The compiler checks this one function at a time, from its body and the signatures of the functions it calls: a borrow never outlives the function that makes it, except as that function's signature says. The check is **static, in every build, at no run-time cost**. Changing another field during the loop is allowed:
 
 ```swift
 for (h, e) in world.enemies.entries {
@@ -292,6 +283,18 @@ for (h, e) in world.enemies.entries {
 }
 world.apply(world.commands.take())                       // take() moves the contents out, leaving it empty
 ```
+
+### State that other code can change
+
+**Only these let other code change a value between two of your uses**, and each says so in its type or declaration:
+
+- an object, through its owner or any of its weak pointers. Each access takes a mark, and a conflicting one panics ([03](03-handles-and-objects.md#dynamic-exclusivity));
+- a thread-local, declared `@threadlocal`, whose accesses are marked the same way ([07](07-concurrency.md#global-state));
+- a `Synchronized` value, such as a `Mutex`, which changes only through its own synchronization ([07](07-concurrency.md#atomics-and-locks)). A `Slice` into a locked buffer takes the buffer's lock ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
+- a channel's ends ([07](07-concurrency.md#queues-and-channels));
+- a pool's element, named by a `Handle`, which reads `nil` once the element is removed ([03](03-handles-and-objects.md#pools-and-handles));
+- a pinned element, whose address C may hold ([03](03-handles-and-objects.md#pinning-for-c));
+- in `unsafe` code, raw pointers, bare global `var`s and imported C variables, which nothing checks.
 
 ### Which places overlap
 
