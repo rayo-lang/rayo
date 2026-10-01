@@ -45,7 +45,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
     - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([11](docs/11-errors-and-safety.md#unsafe-code)).
 
   No build setting turns the memory-safety checks off. Bounds checks stay on in shipping builds ([11](docs/11-errors-and-safety.md#check-levels)).
-- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([12](docs/12-compilation-model.md#what-a-target-must-provide), [09](docs/09-c-interop.md#what-the-runtime-needs-from-the-platform), [14](docs/14-decisions.md) D4). Rayo calls C and exports C directly. It has no C++ interop.
+- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([12](docs/12-compilation-model.md#what-a-target-must-provide), [09](docs/09-c-interop.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
 
 ## Why Rayo
 
@@ -58,7 +58,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, [14](docs/14-decisions.md) records each design decision and the alternatives it rejected, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
+The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
 
 | Doc | Covers |
 | --- | --- |
@@ -75,7 +75,6 @@ The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory mod
 | [11 Errors and safety](docs/11-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/11-errors-and-safety.md#unsafe-code), [check levels](docs/11-errors-and-safety.md#check-levels), build profiles |
 | [12 Compilation model](docs/12-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/12-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/12-compilation-model.md#what-the-language-leaves-open) |
 | [13 Grammar](docs/13-grammar.md) | EBNF grammar |
-| [14 Decisions](docs/14-decisions.md) | The design decisions (D0–D19) with the alternatives they rejected, and open questions (Q1–Q3) |
 | [15 Soundness](docs/15-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
 | [Hard cases](docs/hard-cases.md) | Systems patterns the spec is tested against |
 
