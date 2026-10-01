@@ -56,45 +56,6 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 [Why Rayo](docs/why-rayo.md) makes the full case: the six design pillars, each problem Rayo answers in C++, Rust, Swift and C#, and a small game that uses most of the ideas.
 
-## Try the compiler
-
-`rayoc` is a Swift package. You need Swift 6.4, the version CI uses, on macOS or Linux.
-
-```sh
-git clone https://github.com/rayo-lang/rayo.git
-cd rayo
-swift build
-swift test
-```
-
-`rayoc parse` prints a file's syntax tree. Put this in `enemy.rayo`:
-
-```swift
-struct Enemy(var hp: Int)
-
-func heal(_ e: mutable Enemy) { e.hp = 100 }
-
-func main() {
-    var a = Enemy(hp: 40)
-    var b = copy a
-    b.hp = 50
-    heal(&a)
-}
-```
-
-Then run:
-
-```console
-$ swift run -q rayoc parse enemy.rayo
-(struct Enemy(var hp: Int))
-(func heal(_ e: mutable Enemy) {(= (. e hp) 100)})
-(func main() {(var a (call Enemy hp:40)); (var b (copy a)); (= (. b hp) 50); (call heal (& a))})
-```
-
-The parser covers the syntax of the subset that [TOOLCHAIN.md](TOOLCHAIN.md#the-first-phase-checking-the-rules) lists, and reports syntax outside it, such as generics and optionals, as not supported yet. The programs in [`examples/`](examples/) use the whole language, so they don't parse yet.
-
-**What comes next.** The first phase checks the language's static rules on that subset, before any backend exists. It builds a checker for moves, borrows and exclusivity, a reference interpreter that runs checked programs and stops at the first unsafe access, a generator of random programs on which those two cross-check each other, and compile tests taken from the [hard cases](docs/hard-cases.md). Backends come after it: LLVM by default, and C for platforms whose only toolchain is a C compiler. [TOOLCHAIN.md](TOOLCHAIN.md) has the details.
-
 ## Read the spec
 
 The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, [14](docs/14-decisions.md) records each design decision and the alternatives it rejected, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
@@ -135,7 +96,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 - **Ask questions and report problems** in [GitHub issues](https://github.com/rayo-lang/rayo/issues). A rule that is hard to follow, two parts of the spec that disagree, and a program the spec accepts that isn't safe are each worth an issue.
 - **Find work** in the issues labeled [`good first issue`](https://github.com/rayo-lang/rayo/labels/good%20first%20issue), [`help wanted`](https://github.com/rayo-lang/rayo/labels/help%20wanted) or [`ready-for-human`](https://github.com/rayo-lang/rayo/labels/ready-for-human).
 - **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A new design decision gets a record in `docs/adr/`, numbered from `0001`; decisions D0–D19 came before it and stay in [14](docs/14-decisions.md). A spec change is reviewed against the soundness argument in [15](docs/15-soundness.md) and the criteria of the [hard cases](docs/hard-cases.md).
-- **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. CI builds and tests on Linux with Swift 6.4, and a change must pass there. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
+- **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayoc`, and what it builds next. CI builds and tests on Linux with Swift 6.4, and a change must pass there. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 
 [AGENTS.md](AGENTS.md) has the full project rules.
