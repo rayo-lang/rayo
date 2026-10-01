@@ -10,7 +10,7 @@ swift run rayoc parse program.rayo
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **CI runs on Linux**, in the `swift:6.4-noble` container, and code must pass there whatever it does on macOS.
-- **LLVM is the default backend, and C an alternative target** for platforms whose only toolchain is a vendor's C compiler, such as consoles ([D4](docs/14-decisions.md#d4-every-feature-can-be-implemented-in-portable-c)). The C backend is supported and tested, as WebAssembly is in rustc, but never the main path.
+- **LLVM is the default backend, and C an alternative target** for platforms whose only toolchain is a vendor's C compiler, such as consoles ([D4](docs/14-decisions.md#d4-every-feature-can-be-implemented-in-portable-c)). The C backend is supported and tested, but never the main path.
 
 ## The first phase: checking the rules
 
