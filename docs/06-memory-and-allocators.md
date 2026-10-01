@@ -20,7 +20,7 @@ Every heap allocation goes through an allocator the code can name, and every rel
 
 ## Allocator values
 
-**An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it ([14](14-decisions.md) D5).
+**An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it, so the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.system` are the same type.
 
 - `.system`, the platform's general-purpose heap, has a fixed id and is never unregistered, so its storage never goes stale: `Allocator.unregister(.system)` panics. `Allocator.system` is a `static const`, so code takes it with no `copy` ([01](01-values-and-ownership.md#moving-values-out)): `Budgeted(inner: .system, …)`.
 - Every other registered allocator, such as an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`, is library code implementing `AllocatorImpl` ([below](#writing-an-allocator-allocatorimpl)).

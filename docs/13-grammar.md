@@ -339,7 +339,7 @@ for x in items.filter({ $0.alive }) { use(x) }   // the closure is inside the ca
 
 ### Operators and punctuation
 
-**The range operators, and `?`.** A `?` after an operand is always postfix optional chaining ([14](14-decisions.md) D19). Whitespace separates prefix `..<x` and postfix `x...` from the binary range operators. Between two operands, with whitespace on both sides or on neither, as in `0..<n`, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side, whitespace, a bracket or punctuation, as in `xs[3...]` and `xs[..<n]`.
+**The range operators, and `?`.** Rayo has no ternary operator, so a `?` after an operand is always postfix optional chaining. Whitespace separates prefix `..<x` and postfix `x...` from the binary range operators. Between two operands, with whitespace on both sides or on neither, as in `0..<n`, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side, whitespace, a bracket or punctuation, as in `xs[3...]` and `xs[..<n]`.
 
 ```swift
 let hp = copy target?.hp                     // optional chaining

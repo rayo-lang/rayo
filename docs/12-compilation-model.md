@@ -58,7 +58,16 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - **No cycles.** An `@inline` function that reaches itself through direct calls to `@inline` functions is a compile error. An `@inline` cycle that only an instantiation makes, through a requirement call, isn't an error: in that instantiation, the call that would run an `@inline` function in place inside its own expansion is an ordinary call.
 - **Its body is part of what it exports.** A module that calls it needs its body to build, though not to type-check.
 
+## What the spec defines
+
+**The spec defines the language, the run-time behavior programs can rely on, such as what panics and the order of startup, thread teardown and exit, and the contracts libraries implement. How a toolchain or runtime implements them, and everything built on the language, is outside it.**
+
+- **Contracts** are the protocols the language calls or derives, such as `Sequence`, the literal protocols, `Equatable`, `Awaitable` and `Attribute`; every `unsafe protocol`, such as `Synchronized` and `AllocatorImpl`; and the promise of code that lends a scoped value to another thread ([07](07-concurrency.md#the-librarys-promise), [11](11-errors-and-safety.md#safe-modules)).
+- **std types** appear where a rule or an example uses one, such as `List` and `String` for literals and the locks and queues for concurrency, and the spec then states what that type checks ([11](11-errors-and-safety.md#the-checks)). The rest of std's catalog, and runtime policy ([below](#what-the-language-leaves-open)), are left to libraries and implementations.
+
 ## What a target must provide
+
+Everything the language defines can be implemented in portable C, so a platform whose only toolchain is its vendor's C compiler can run Rayo when that compiler and its C ABI meet these requirements:
 
 **A target's C ABI represents integers in two's complement, and `float` and `double` as IEEE 754 binary32 and binary64. Its `char` is 8 bits, it has the exact-width integer types, and its `bool` is one byte holding 0 or 1. It has 64-bit data and function pointers, whose null is all zero bits, and 64-bit `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t`, and lays out structs as Rayo does: each integer, floating-point value, `bool` and pointer aligned to its size, and every struct by the rule of [04](04-types.md#structs). Its C compiler evaluates each `float` and `double` operation in its own type and rounds it once (`FLT_EVAL_METHOD` 0, no contraction), keeps subnormals, and provides thread-local storage and C11's atomic operations and fences, with the guarantees of the C++20 memory model ([07](07-concurrency.md#atomics-and-locks)), lock-free for every size `Atomic<T>` accepts ([07](07-concurrency.md#atomics-and-locks)), and reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([11](11-errors-and-safety.md#what-panics)).**
 

@@ -1,8 +1,8 @@
 # Hard cases
 
-This file is a validation suite for the Rayo spec (`docs/01`–`14`). Each case names a capability that systems code needs, chosen because a mainstream language forbids it, makes it painful, or makes it unsafe. A case's examples show one instance of the capability, and its criteria hold for every instance. For each case, a validator writes the Rayo code the spec allows and judges it against the case's pass criteria. The spec is the only source of truth: a case that needs a feature the spec doesn't define fails.
+This file is a validation suite for the Rayo spec (the numbered chapters in `docs/`). Each case names a capability that systems code needs, chosen because a mainstream language forbids it, makes it painful, or makes it unsafe. A case's examples show one instance of the capability, and its criteria hold for every instance. For each case, a validator writes the Rayo code the spec allows and judges it against the case's pass criteria. The spec is the only source of truth: a case that needs a feature the spec doesn't define fails.
 
-The cases test Rayo's governing rule ([14](14-decisions.md) D0): **no reasonable systems pattern is forbidden**, and each lands in the cheapest of the three [tiers](01-values-and-ownership.md#tiers-of-checking) that can check it.
+The cases test Rayo's governing rule: **no reasonable systems pattern is forbidden**, and each lands in the cheapest of the three [tiers](01-values-and-ownership.md#tiers-of-checking) that can check it.
 
 ## How to validate
 
@@ -33,7 +33,7 @@ For every case, report the **tier** the natural solution lands in, and one verdi
 | **Forbidden** | The pattern can't be written at all, even with `unsafe`. Always a failure. |
 | **Unsound** | Code the spec accepts as safe produces a data race, use-after-free, dangling view or other undefined behavior, with C and `unsafe` code that keep exactly what the spec asks of them ([09](09-c-interop.md#what-c-must-uphold), [11](11-errors-and-safety.md#unsafe-code)). It breaks a step of [15](15-soundness.md). **Always the most severe finding.** |
 
-Writing `copy` where the code makes a copy isn't ceremony: Rayo requires copies to be written out ([14](14-decisions.md) D14). An extra copy that C++, C# or Swift wouldn't make is a cost.
+Writing `copy` where the code makes a copy isn't ceremony: Rayo requires copies to be written out ([01](01-values-and-ownership.md#values)). An extra copy that C++, C# or Swift wouldn't make is a cost.
 
 For each verdict, include the Rayo code you wrote (short) and the spec sections it relies on. A case can't be marked Solved by pointing at a sentence in the spec: the code has to type-check under the rules as written.
 
@@ -301,7 +301,7 @@ Entities have optional components of many types. A query needs every entity with
 
 ## C. Concurrency
 
-std provides threads and structured concurrency, checked by the language's ordinary rules ([07](07-concurrency.md), [14](14-decisions.md) D9). Where a case forks work, assume std's shapes in 07, which a job system of a program's own would share:
+std provides threads and structured concurrency, checked by the language's ordinary rules ([07](07-concurrency.md)). Where a case forks work, assume std's shapes in 07, which a job system of a program's own would share:
 
 - `join` takes two `@sendable` closures, each of which may write what it captures, and returns when both are done. `@sendable` means every capture must be `Sendable`, whether borrowed or owned, and `join` also requires what the closures return or throw to be `Sendable` ([07](07-concurrency.md#the-librarys-promise)).
 - `forEachInParallel` runs a non-`mutating` `@sendable (mutable Element) -> Void` body over a collection's elements.
@@ -427,7 +427,7 @@ One part of a program may use at most a fixed amount of memory. Its budget wrapp
 
 ## E. C interop
 
-Every crossing between Rayo and C is unsafe by definition ([09](09-c-interop.md), [14](14-decisions.md) D13), so these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
+Every crossing between Rayo and C is unsafe by definition ([09](09-c-interop.md)), so these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
 
 ### E1 · C holding pointers into Rayo memory
 
@@ -537,7 +537,7 @@ A hash function divides by a value read from a file, negates and divides `Int.mi
 
 ## G. Hot reload: a tool the language must not rule out
 
-A hot reloader swaps code and migrates live state while a program runs. It is a tool built on a runtime and toolchain layer that the spec doesn't define ([14](14-decisions.md) D12), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
+A hot reloader swaps code and migrates live state while a program runs. It is a tool built on a runtime and toolchain layer that the spec doesn't define ([12](12-compilation-model.md#what-the-spec-defines)), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
 
 - **Solved** means every property the case names holds in the spec.
 - A rule of the spec that breaks one, such as a way for safe code to keep the address of a value it doesn't own, is the finding.

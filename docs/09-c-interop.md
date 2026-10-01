@@ -254,7 +254,7 @@ A `@c func`, an `@export` function and a closure literal converted to a `@c` poi
 
 ## What C must uphold
 
-C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place ([14](14-decisions.md) D13):
+C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place:
 
 - every value it passes, returns or writes into Rayo memory is valid for its Rayo type ([11](11-errors-and-safety.md#unsafe-code)):
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
