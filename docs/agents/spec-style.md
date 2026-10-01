@@ -23,7 +23,7 @@ The spec is **precise and plain**: every rule stated exactly, in words a reader 
 
 ## Terms and links
 
-- **Each term of art is defined once**, in bold, in the section that owns it. `GLOSSARY.md` names the term and links to that definition.
+- **Each term of art is defined once**, in bold, in the section that owns it. `GLOSSARY.md` names the term, says in one sentence what it is, and links to that definition. A pull request that adds, renames or moves a term updates its entry.
 - **A chapter follows its construct, not a teaching order.** A rule may use a term defined later; on the term's first use in a section, it links to its definition.
 - **One link per idea.** A sentence carrying more than two links is a list: give each item its own bullet and link.
 - **Links** read `([06](06-memory-and-allocators.md#anchor))` across chapters, and `([above](#anchor))` or `([below](#anchor))` within one.

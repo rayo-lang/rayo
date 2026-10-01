@@ -60,14 +60,14 @@ Every access to an object's value, through the owner or any weak pointer, is che
 
 ### Sharing across threads
 
-Objects stay on their home thread. Data that several threads use lives behind a counted owner, `Shared<T>`, whose value is `Frozen` or `Synchronized`, such as a `Mutex`, and a `WeakShared<T>` links to it without keeping it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)):
+Objects stay on their home thread. Data that several threads use lives behind a reference-counted pointer, `Shared<T>`, whose value is `Frozen` or `Synchronized`, such as a `Mutex`, and a `WeakShared<T>` links to it without keeping it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)):
 
 ```swift
 let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
 Thread.start { [copy m, copy clip] in
-    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // a counted owner for as long as 'mx' lives
+    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives
 }
 ```
 

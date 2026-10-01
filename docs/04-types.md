@@ -331,7 +331,7 @@ let hp = enemies[h]?.hp ?? 0         // looks at the element's hp in place, or a
 
 **An optional stores `nil` in a niche, a bit pattern `T` never uses, when `T` has one, and then costs no extra bytes.** These types have one:
 
-- raw pointers, `@c` function pointers, `Box`es, object owners and counted owners, whose `nil` is null;
+- raw pointers, `@c` function pointers, `Box`es, object owners and reference-counted pointers, whose `nil` is null;
 - weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([12](12-compilation-model.md#modules-and-names)), and its generation is never 0 ([03](03-handles-and-objects.md#pools-and-handles));
 - an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([09](09-c-interop.md#structs-unions-and-enums));
 - a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([09](09-c-interop.md#structs-unions-and-enums)).
@@ -402,7 +402,7 @@ The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpa
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](03-handles-and-objects.md#pools-and-handles)) |
 | `StablePool<T>` | yes | Stable and pinnable element addresses |
 | `UniquePointer<T>`, `WeakPointer<T>` | yes / no | An object on one thread, with checked weak pointers to it ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) |
-| `Shared<T>`, `LocalShared<T>`, `WeakShared<T>` | yes / yes / no | Counted owners of a value that many places hold, and checked weak links to a `Shared` one ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)) |
+| `Shared<T>`, `LocalShared<T>`, `WeakShared<T>` | yes / yes / no | Reference-counted pointers to a value that many places hold, and checked weak links to a `Shared` one ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)) |
 | `Slice<T>` | no | Checked long-lived view into a buffer behind a `Shared` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)) |
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([below](#struct-of-arrays-soat)) |
 | `String` | yes | UTF-8 bytes, allocator |

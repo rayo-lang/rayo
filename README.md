@@ -58,7 +58,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
+The spec has one chapter per topic, in [`docs/`](docs/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
 
 | Doc | Covers |
 | --- | --- |
