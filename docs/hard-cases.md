@@ -13,7 +13,7 @@ Terms the cases and criteria use:
 - A **view** is a value that borrows memory something else owns, such as a `Span<T>` of a list's elements or a `StringView` of a string's text.
 - A **scoped** value, one whose type conforms to `Scoped`, must stay within the scope that lent it, as every view that borrows memory that can be freed must ([02](02-views-and-dependencies.md#scoped-values)).
 - A `Handle<T>` is a small checked index into a pool of `T`s.
-- A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked stored reference to it. Both stay on the thread that made the object. `ConcurrentUniquePointer<T>` and `ConcurrentWeakPointer<T>` are the pair for an object that several threads share, locked for each use unless created `lockFree:` ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)).
+- A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked stored reference to it. Both stay on the thread that made the object. A `Shared<T>` is a counted owner of a value that several threads share, which never changes or synchronizes itself, as a `Mutex` does, and a `WeakShared<T>` is a checked link to one that doesn't keep it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)).
 - A **`Sendable`** type is one whose values may reach another thread. The compiler derives it from what the type holds, every `Synchronized` type is one, and a type can opt out with `~Sendable` or promise it with `unsafe Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
 - A thread runs Rayo code inside a **section**, and a long-lived thread body leaves its section at a **checkpoint**, between units of work. Memory made unreachable while a view may still read it is **retired**, and reclaimed only once every thread has been outside a section since ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)). A **parked** thread is blocked in a wait, such as on a queue or a condition variable.
 
@@ -88,7 +88,7 @@ use(entry)
 
 ### A5 · Long-lived views into a long-lived buffer
 
-A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives, as the components of a loaded level hold views of its package. Separately, code keeps `Slice<T>`s into a lockable `ConcurrentUniquePointer<Blob>` it edits, replaces the whole blob with a shorter one, and reads through an old slice.
+A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives, as the components of a loaded level hold views of its package. Separately, code keeps `Slice<T>`s into a blob that several threads share under a lock, replaces the whole blob with a shorter one, and reads through an old slice.
 
 - **Must accept** storing those references in long-lived structs, without copying the data. Name the cost of whatever replaces the views (offsets, a shared owner): run-time checks, and bytes per reference where the spec fixes a layout.
 - **Must accept** reads through slices that still fit, without re-creating them.
@@ -178,8 +178,8 @@ Separately, `mutex.lock { data in … }` returns a value computed from the prote
 - **Must accept** a helper that returns the guard, as a method of a struct holding the mutex or as a free function over a global mutex, and a service-locator function that returns the view a global `Once` lends.
 - **Must accept** the closure form returning an owned result, generically.
 - **Must accept** a guard moved into a closure, as in `let h = Handler(onClick: { [move g] in print(g.value.count) })`, and `let n = total({ [move g] in g.value.count })` followed by taking the same lock again.
-- **Must accept** two `Slice`s of one lockable blob read at once on one thread, and a concurrent object's `read` nested in its own `read`, even while a writer waits.
-- **Must accept** a lock-free concurrent object whose value is a struct of `Synchronized` fields and concurrent owners, such as a log `Mutex` and an audio mixer, used from any thread.
+- **Must accept** two `Slice`s of one locked blob read at once on one thread, and a shared lock's `read` nested in its own `read`, even while a writer waits.
+- **Must accept** a struct of `Synchronized` fields and counted owners of other `Synchronized` values, such as a log `Mutex` and an audio mixer, shared by every thread with no lock of its own and used from any thread.
 
 ### A12 · Sorting with a comparator that borrows
 
@@ -359,7 +359,7 @@ A closure panics on a worker thread in the middle of a parallel loop. Separately
 
 ### C10 · Resetting a shared arena while other threads allocate from it
 
-An arena shared by several threads is reset by one of them while two others are in the middle of allocating from it, and a third is creating a concurrent object in it.
+An arena shared by several threads is reset by one of them while two others are in the middle of allocating from it, and a third is creating a `Shared` value in it.
 
 - Each allocation racing the reset is ordered before it, and goes stale, or after it, and stays valid; state the rule that orders it.
 - The reset must not wait for the other threads.
@@ -385,7 +385,7 @@ A program has three kinds of state:
 2. an object that several threads all change, such as an audio mixer;
 3. the id of a C resource, a `UInt32` that is valid only on one thread, such as an OpenGL texture's.
 
-- **Must accept** the tree with no synchronization on any access, the shared object with every access marked as a lock at the call and no wrapper type around it, and the resource id as a type that stays on its thread although its only field is an integer.
+- **Must accept** the tree with no synchronization on any access, the shared object with every access marked as a lock at the call and its sharing and its lock written in its type, and the resource id as a type that stays on its thread although its only field is an integer.
 
 ---
 
@@ -480,7 +480,7 @@ C holds references to Rayo objects of different types as `uint64_t`s, and may pa
 
 - **Must accept** an entry point that defends itself against that mistake, so the wrong object is never accessed as the other type, in any build, with no `unsafe` in the Rayo code.
 - **Must accept** C holding references to objects of different types as `uint64_t` and passing them to one Rayo function that takes any object conforming to a protocol.
-- **Must accept** a `@c func` callback taking two `ConcurrentWeakPointer<T>`s, registered with a C library whose callback type takes two `uint64_t`s and that calls it on its own threads, and the same with `WeakPointer<T>` for a library that calls back on the thread that drives it. State what the C library must uphold in each.
+- **Must accept** a `@c func` callback taking two `WeakShared<T>`s, registered with a C library whose callback type takes two `uint64_t`s and that calls it on its own threads, and the same with `WeakPointer<T>` for a library that calls back on the thread that drives it. State what the C library must uphold in each.
 - **Must accept** `Handle` bits that C passes back as a `void* user` which addresses nothing, converted back only by `unsafe` code.
 
 ### E7 · C code that needs a large stack
@@ -646,7 +646,7 @@ A global configuration is read everywhere, including from lent work and worker t
 
 - **Must accept** in safe code, with concurrency behavior that suits contention. Two threads logging at the same time must not panic.
 - The cost of each access must be stated.
-- **Must accept** as safe globals an inline array of 64 mutexes built without a 64-element literal, a struct of `Synchronized` fields, a `ConcurrentUniquePointer`, a `List<Mutex<Job>>`, and an array of `@sendable` `Closure`s.
+- **Must accept** as safe globals an inline array of 64 mutexes built without a 64-element literal, a struct of `Synchronized` fields, a `Shared<Mutex<Job>>`, a `List<Mutex<Job>>`, and an array of `@sendable` `Closure`s.
 
 ### I5 · Waiter registered from the stack
 
@@ -751,7 +751,7 @@ Write a state machine with five states, timers and transitions, such as an enemy
 
 ### K1 · A program that runs once
 
-A command-line tool runs once. It starts threads, runs work on a job system, publishes shared settings through `Published`, destroys lock-free concurrent objects, and resets arenas.
+A command-line tool runs once. It starts threads, runs work on a job system, publishes shared settings through `Published`, drops the last owners of `Shared` values, and resets arenas.
 
 - **Must accept** every construct.
 - **Must hold:** the program can have retired memory reclaimed while it runs, not only at exit, through the runtime's reclaimer thread where there is one, or `Runtime.reclaim` calls it places. State which the solution relies on.
@@ -778,8 +778,8 @@ A `@noalloc` callback with a real-time deadline, called by a C library on its ow
 
 ### K4 · Cleanup at exit
 
-A program retires a lock-free concurrent object whose `deinit` flushes a log file, then returns from `main` a millisecond later, before anything has reclaimed it.
+A program retires an arena object whose `deinit` flushes a log file, by resetting its arena, then returns from `main` a millisecond later, before anything has reclaimed it.
 
 - **Must hold:** the `deinit` runs before the process exits, whether a runtime thread or the program's own calls do reclamation.
 - Define what happens when another thread is stuck in a section at exit, or C still holds a pin.
-- **Must accept** without a panic a lock-free concurrent object owned by a `@threadlocal var` of the thread that runs `main`, whose `deinit` builds an interpolated `String` before it flushes, and a thread-bound object leaked to C whose `deinit` appends to a `List` it owns, destroyed when its thread's body returns.
+- **Must accept** without a panic a `Shared` value whose last owner is a `@threadlocal var` of the thread that runs `main`, whose `deinit` builds an interpolated `String` before it flushes, and a thread-bound object leaked to C whose `deinit` appends to a `List` it owns, destroyed when its thread's body returns.

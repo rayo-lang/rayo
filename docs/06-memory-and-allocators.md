@@ -232,12 +232,12 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 | --- | --- |
 | `Box<T>` | Unique owning pointer, move-only. `Box.leak`, for a `T: ~Scoped`, gives up ownership and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([11](11-errors-and-safety.md#unsafe-code)), for C to hold. `Box.adopt` (`unsafe`) takes it back, and its caller promises that it came from leaking a `Box<T>` and is adopted at most once |
 | `UniquePointer<T>` | Unique owner of an object, on one thread; hands out checked `WeakPointer<T>`s ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) |
-| `ConcurrentUniquePointer<T>` | The same for an object that several threads use, with a lock built in ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)) |
-| `Shared<T>` | Atomic refcounted, **immutable** `T` |
+| `Shared<T>` | Counted owner of a `Frozen` or `Synchronized` `T`, with an atomic count; hands out checked `WeakShared<T>`s |
+| `LocalShared<T>` | Counted owner of a `Frozen` `T`, with a plain count, on one thread |
 
-### `Shared<T>`: immutable data with many owners
+### `Shared<T>`: data with many owners
 
-`Shared<T>` counts the owners of data that can't change:
+`Shared<T>` counts the owners of a value that many places, on any threads, hold at once:
 
 ```swift
 struct Texture(var pixels: List<UInt8>, var width: Int)                // Frozen: derived by the compiler
@@ -246,51 +246,58 @@ struct Material(var albedo: Shared<Texture>, var roughness: Float)      // Froze
 let rock = Shared(Texture(pixels: loadPixels("rock.tex"), width: 512))
 let wet = Shared(Material(albedo: rock.share(), roughness: 0.2))       // share() adds an owner, visibly
 let dry = Shared(Material(albedo: consume rock, roughness: 0.9))       // a move: the count doesn't change
+
+let log = Shared(Mutex(List<Message>()))                               // Synchronized: changes only under its lock
+log.value.lock { $0.append(m) }
 ```
 
-**`Shared<T>` is Rayo's only reference-counted type for general values, and its `T` must be `Frozen`** ([below](#frozen-types-with-no-interior-mutability)). A `Frozen` value behind a `Shared`, or in a lock-free concurrent object, never changes, and neither does anything it owns. So a `Shared` can only point at values that existed before it, and nothing it owns can be changed to point back: **immutable counted values can't form cycles.**
+**A `Shared<T>`'s count is atomic, and its `T` must be `Frozen`** ([below](#frozen-types-with-no-interior-mutability)) **or `Synchronized`** ([07](07-concurrency.md#the-synchronized-contract)), so any number of threads may read the value at once, and it changes only through its own synchronization, if at all. **`LocalShared<T>`** is the same with a plain count, for a `Frozen` `T` only, and with no weak links: it is never `Sendable`, so all its owners stay on one thread and counting needs no atomic operation.
 
-- **Counting is visible.** `Shared` is move-only, and each new owner takes an explicit `s.share()`.
+- **Counting is visible.** Both are move-only, and each new owner takes an explicit `s.share()`. A move doesn't change the count. `s.value` lends the value read-only for as long as `s` is borrowed.
+- **The last owner destroys the value.** Dropping the owner that takes the count to zero runs the value's `deinit` and frees its memory at once, on the thread that dropped it.
+- **Cycles.** A `Frozen` value never changes, and neither does anything it owns, so a `Shared` of one can only point at values that existed before it, and nothing it owns can be changed to point back: **immutable counted values can't form cycles.** A `Synchronized` value can be changed to hold an owner of itself, as a `Shared<Mutex<Node>>` can, and that cycle leaks.
+- **Weak links.** `s.weak()` on a `Shared<T>` returns a **`WeakShared<T>`**: 8 bytes and copyable, and it doesn't keep the value alive. `w.upgrade()` returns a new owner, a `Shared<T>?`, through an atomic compare-and-swap, never waiting for another thread, and reads `nil` once the value is destroyed or its storage stale ([above](#opening-an-owning-value-checks-it)). A weak link names its value by a generation that no other `Shared` value of the run gets, so it never names a later one, and `w.bits` packs it into a `UInt64` that `WeakShared<T>(bits:)` checks as `WeakPointer<T>(bits:)` does, without the thread ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)). `WeakShared<any P>` holds an existential as `WeakPointer<any P>` does ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+- **Handing an owner to C.** `Shared.leak(s)` gives up the owner, keeping its count, and returns a weak link for C to hold as a `uint64_t`. `Shared.adopt(w)` returns that owner, and reads `nil` unless `w` names a live value with a leaked owner, so a forged, mistyped or repeated `adopt` is harmless. While C holds a leaked owner, the value stays at its address.
+- **Threads.** `Shared<T>` and `WeakShared<T>` are `Sendable` when `T` is, and `LocalShared<T>` never is ([07](07-concurrency.md#what-may-cross-threads-sendable)). Weak pointers and weak links don't own, so a `Frozen` value may hold them without creating cycles, and one that crosses threads holds only weak links, since an object's weak pointers stay on its home thread.
 - **Other counts.** `Sender`, `Receiver` and `Future` values also count their owners internally, and [07](07-concurrency.md#queues-and-channels) says which of their cycles dropping a `Receiver` breaks; the others leak.
-- **Weak pointers inside.** Weak pointers don't own, so a `Frozen` value may contain them without creating cycles. A `Shared<T>` is `Sendable` when `T` is, so one that crosses threads holds only concurrent weak pointers.
 
 ### `Frozen`: types with no interior mutability
 
 **The compiler derives `Frozen` for types with no interior mutability:** no `Synchronized` fields (no `Mutex`, `Atomic` or queue), no object owners (whose objects are mutable through weak pointers), no raw pointers, and no `Closure`s. **Nothing that is or holds a `Synchronized` value, at any depth, is `Frozen`**, whatever the `Synchronized` type's own fields look like, since its non-`mutating` methods write it ([07](07-concurrency.md#the-synchronized-contract)), and declaring `: unsafe Frozen` on such a type is a compile error.
 
-- **What it covers.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer or a handle in it only names another value, which isn't part of it and may change.
+- **What it covers.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer, a weak link or a handle in it only names another value, which isn't part of it and may change.
 - **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`, an unverified promise ([11](11-errors-and-safety.md#safe-modules)) that nothing writes what it holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes, and that nothing at all writes a value of it frozen into read-only data ([10](10-compile-time.md#consts-that-reach-run-time)). So a type that writes bookkeeping must keep its values from being freezable, as a `Shared` does by not being `TrivialFree`. The language makes it for `StaticSpan` and `StaticString`, which point into immortal read-only data.
 - **Existentials.** An existential has no fields to check, so `any P` and `mutable any P` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names a buffer the container owns alone, written only by its `mutating` methods, which need exclusive access that no shared borrow of a `Frozen` holder grants, apart from a `StablePool`'s pin counts (below), or, in a `String` made from a literal, immortal bytes nothing writes ([04](04-types.md#literals)).
-- **`Shared<T>`.** It is `Frozen` too, since its `T` is: its count is atomic bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
+- **`Shared<T>` and `LocalShared<T>`.** Each is `Frozen` when its `T` is: its count is bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
 
 ## Long-lived views into long-lived buffers
 
-For a view that has to be stored in long-lived state, which a scoped `Span` can't be ([02](02-views-and-dependencies.md#scoped-values)), the buffer lives in a concurrent object ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)), as a fixed-size **`Blob`** of bytes or a `List`, and the view is a checked **`Slice<T>`**:
+For a view that has to be stored in long-lived state, which a scoped `Span` can't be ([02](02-views-and-dependencies.md#scoped-values)), the buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`, and the view is a checked **`Slice<T>`**:
 
 ```swift
-let package = ConcurrentUniquePointer(lockFree: try Blob.load("level3.pak"))  // Blob: fixed-size bytes, 16-byte-aligned unless asked
-struct MeshComponent(var vertices: Slice<Vertex>)        // a checked view: the buffer's object and an element range
+let package = Shared(try Blob.load("level3.pak"))       // Blob: fixed-size bytes, 16-byte-aligned unless asked
+struct MeshComponent(var vertices: Slice<Vertex>)        // a checked view: a weak link to the buffer and an element range
 
 let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.vertexOffset, count: header.vertexCount))
 upload(m.vertices.read()!)                               // Span<Vertex>: one check, then none per element
 ```
 
-**`Slice<T>` is unscoped, copyable and `Sendable`. Once the object is destroyed, every `Slice` into it reads `nil`.**
+**`Slice<T>` is unscoped, copyable and `Sendable`. It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`.**
 
-- **Reading and locking it.** `s.read()` gives a slice's elements as a `Span<T>?` and `s.lock()` as a `MutableSpan<T>?`, each `nil` once the buffer is gone: its object destroyed, or the buffer's storage stale after a reset or an unregistration, which each call checks as an open does, reading `nil` where an open would panic ([above](#opening-an-owning-value-checks-it)). The span holds the object's access, shared for `read()` and exclusive for `lock()`, until its last use (rule 6 in [02](02-views-and-dependencies.md#dependencies)); a lock-free buffer's `read()` takes none, and its `lock()` panics, as locking the object does ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)).
+- **Reading and locking it.** `s.read()` gives a slice's elements as a `Span<T>?` and `s.lock()` as a `MutableSpan<T>?`, each `nil` once the buffer is gone: its `Shared` value destroyed, or the buffer's storage stale after a reset or an unregistration, which each call checks as an open does, reading `nil` where an open would panic ([above](#opening-an-owning-value-checks-it)). Each call upgrades the weak link, and the span holds that owner, and for a buffer under an `RwLock` its read lock for `read()` or its write lock for `lock()`, until its last use (rule 6 in [02](02-views-and-dependencies.md#dependencies)). A slice of a bare `Shared<Blob>` is read-only: its `lock()` panics, since nothing writes a `Frozen` value.
 - **Blobs.** A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction. The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `Blob(count: n, align: 64)`.
 - **What creation checks.** `T` must be `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` throws unless the range is in bounds, `T`'s alignment is at most the blob's, and the offset is a multiple of `T`'s alignment. Locking as a `MutableSpan<T>` also requires `T.isPaddingFree`, as a mutable span cast does ([04](04-types.md#plain-data-pod-and-bit-casts)), since a store through a padded `T` would leave bytes other slices read uninitialized.
-- **Lockable blobs.** A slice of a lockable `ConcurrentUniquePointer<Blob>` (not `lockFree:`) is read and locked under the object's lock. An exclusive access can **replace the whole blob** with a shorter or less-aligned one (`o.lock { $0 = Blob(count: 16) }`), so each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the access it takes anyway. A failure reads as `nil`. A lock-free blob can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
-- **Lists.** `o.slice(at:count:)` on a `ConcurrentUniquePointer<List<T>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. An exclusive access can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the access it takes. A failure reads as `nil`.
+- **Locked blobs.** A slice of a `Shared<RwLock<Blob>>` is read and locked under the blob's lock. A write lock can **replace the whole blob** with a shorter or less-aligned one (`o.value.write { $0 = Blob(count: 16) }`), so each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the lock it takes anyway. A failure reads as `nil`. A bare `Shared<Blob>` can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
+- **Lists.** `o.slice(at:count:)` on a `Shared<RwLock<List<T>>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. A write lock can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the lock it takes. A failure reads as `nil`.
 - **Limits.** `slice` throws when the offset or the count exceeds `UInt32.max`.
 
-A `Font` stores a lock-free object holding its file's blob, plus `Slice`s into it:
+A `Font` owns its file's blob through a `Shared`, plus `Slice`s into it:
 
 ```swift
 struct Font(
-    var file: ConcurrentUniquePointer<Blob>,  // the owner: ConcurrentUniquePointer(lockFree: fileBlob)
-    var glyphs: Slice<GlyphRecord>,           // stored views into that same blob
+    var file: Shared<Blob>,          // an owner: the blob lives while any font that shares it does
+    var glyphs: Slice<GlyphRecord>,  // stored views into that same blob
 )
 ```
 
@@ -309,7 +316,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 
 **An operation of the language's, or of a std type the language names, such as `Box` or `Shared` ([12](12-compilation-model.md#modules-and-names)), that allocates panics when its allocator can't make the allocation.** Those that build or grow a value at run time also have a fallible form, which throws `AllocError`, the prelude's error for an allocation its allocator couldn't make, or returns `nil`:
 
-- `try Box.tryNew(v)`, `try Shared.tryNew(v)`, and `try UniquePointer.tryNew(v)` and its concurrent form;
+- `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
 - the builtin `SoA`'s growing operations, such as `try rows.tryAppend(x)` ([04](04-types.md#struct-of-arrays-soat));
 - `Name(interning:)` ([04](04-types.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([11](11-errors-and-safety.md#unsafe-code)).

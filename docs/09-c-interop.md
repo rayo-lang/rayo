@@ -175,8 +175,8 @@ extern c func rsqrt(_ x: Float) -> Float             // declared for the type ch
 A C or C++ program uses a library written in Rayo:
 
 ```swift
-@export(c) func nav_load(_ desc: NavDesc) -> ConcurrentWeakPointer<NavMesh> { ... }   // leak: the C caller owns the mesh
-@export(c, name: "nav_path") func findPath(_ mesh: ConcurrentWeakPointer<NavMesh>, _ out: owned MutableSpan<Int32>) -> Int32 { ... }
+@export(c) func nav_load(_ desc: NavDesc) -> WeakShared<NavMesh> { ... }   // Shared.leak: the C caller owns the mesh
+@export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: owned MutableSpan<Int32>) -> Int32 { ... }
 
 @export(c) @c struct NavDesc(
     var width: Int32,
@@ -215,7 +215,7 @@ Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such a
 | enum with payloads | `struct { tag; union { … } }`, its tag as an enum without payloads stores it |
 | `T?` with a niche | same layout as `T`, with one value meaning `nil` (below) |
 | other `T?` | `struct { T value; bool has; }` |
-| `Handle<T>`, `WeakPointer<T>`, `ConcurrentWeakPointer<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |
+| `Handle<T>`, `WeakPointer<T>`, `WeakShared<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |
 | `List<T>`, `String` | `struct { T* ptr; int64_t count; int64_t cap; uint64_t alloc; }` (below) |
 | `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([11](11-errors-and-safety.md#unsafe-code)) |
 | `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset [04](04-types.md#variable-sized-structs-trailingarray) gives, which the generated header names |
@@ -224,9 +224,9 @@ Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such a
 - **The `nil` value of a niche** is the one [04](04-types.md#optionals) gives, and the generated header names it.
 - **A `String` that still uses a literal's immortal bytes** ([04](04-types.md#literals)) has `cap` 0 and a non-null `ptr`.
 
-**Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes function-typed values other than `@c` pointers, weak pointers to `any P`, `Name`, any type whose layout the language or a library leaves open ([12](12-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`, and any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](07-concurrency.md#atomics-and-locks)).
+**Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes function-typed values other than `@c` pointers, weak pointers and weak links to `any P`, `Name`, any type whose layout the language or a library leaves open ([12](12-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`, and any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](07-concurrency.md#atomics-and-locks)).
 
-**Handing ownership to C.** Besides a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable` parameter C lent, or that Rayo passes to an `owned` parameter of an `extern c func` or a `@c` pointer ([above](#c-representations)), ownership crosses as a weak pointer from `UniquePointer.leak` or `ConcurrentUniquePointer.leak`, which comes back through `adopt` ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)), or as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](06-memory-and-allocators.md#owning-boxes)). An object reached through a protocol crosses as its weak pointer's bits, and Rayo rebuilds the existential with `WeakPointer<any P>(bits:)`.
+**Handing ownership to C.** Besides a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable` parameter C lent, or that Rayo passes to an `owned` parameter of an `extern c func` or a `@c` pointer ([above](#c-representations)), ownership crosses as a weak pointer from `UniquePointer.leak` or a weak link from `Shared.leak`, which comes back through `adopt` ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), or as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](06-memory-and-allocators.md#owning-boxes)). An object or a `Shared` value reached through a protocol crosses as its weak pointer's or weak link's bits, and Rayo rebuilds the existential with `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)`.
 
 ## Callbacks
 
@@ -260,7 +260,7 @@ C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligati
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
     - a non-null pointer isn't null, a span's pointer included when its count is 0, since null is a `Span<T>?`'s `nil`;
     - a `String`, `StringView` or `StaticString` holds whole UTF-8 sequences ([04](04-types.md#strings));
-    - a weak pointer or `Handle` holds bits that Rayo gave out for that type, stale or not;
+    - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;
     - a `StaticSpan`, a `StaticString` or a `String` with `cap` 0 points at bytes that stay valid and unwritten for the rest of the run, a `StaticString`'s followed by a NUL;
 - a move-only value's bytes are never copied to stand for a second value ([11](11-errors-and-safety.md#unsafe-code));
 - a value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([11](11-errors-and-safety.md#unsafe-code)): the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`;
@@ -275,23 +275,23 @@ C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligati
 - C enters Rayo only by an ordinary call, never from a signal handler or an interrupt, which could arrive while its thread is in the middle of Rayo code;
 - a value C passes to an `owned` parameter, directly or through a `@c` pointer, returns from a C function Rayo called, or writes into Rayo memory, such as through a `mutable` parameter Rayo lent it, is Rayo's from then on, so C never uses or frees it again, while one passed to a borrowed parameter stays its sender's, so C never frees or keeps one that Rayo passed it borrowed, nor passes it to an `owned` parameter;
 - C frees a `List`, `String` or `TrailingArray` that Rayo handed it ([above](#c-representations)) at most once, only through the free function the header declares for its type, and never after passing it to an `owned` parameter, returning it to Rayo or writing it into Rayo memory, and reads its elements only until the allocator its `alloc` word names is reset or unregistered ([06](06-memory-and-allocators.md#what-a-reset-does));
-- C reads Rayo-owned memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could. It writes a `TrailingArray`'s header, or a struct whose flexible array member's elements share its tail padding, field by field, never as a whole struct ([11](11-errors-and-safety.md#unsafe-code)), and never passes one to Rayo as a `mutable` parameter or in a `MutableSpan`. It never writes memory Rayo treats as immutable, such as a lock-free object's `Frozen` value, static data or the contents of a `Shared` value, which Rayo reads without a mark, and writes a `Synchronized` value only through that value's own synchronization.
+- C reads Rayo-owned memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could. It writes a `TrailingArray`'s header, or a struct whose flexible array member's elements share its tail padding, field by field, never as a whole struct ([11](11-errors-and-safety.md#unsafe-code)), and never passes one to Rayo as a `mutable` parameter or in a `MutableSpan`. It never writes memory Rayo treats as immutable, such as static data or a `Frozen` value behind a `Shared`, which Rayo reads without a mark, and writes a `Synchronized` value only through that value's own synchronization.
 
 **Breaking one is undefined behavior**, as a wrong `unsafe` block is.
 
 ```swift
 enum NavMode: Int32 { case walk, fly }
 
-@export(c) func nav_set_mode(_ mesh: ConcurrentWeakPointer<NavMesh>, _ mode: NavMode) { ... }   // C must pass a valid case
+@export(c) func nav_set_mode(_ mesh: WeakShared<NavMesh>, _ mode: NavMode) { ... }   // C must pass a valid case
 
 @export(c) func nav_set_mode_checked(_ bits: UInt64, _ raw: Int32) -> Bool {  // accepts anything C passes
-    guard let mesh = ConcurrentWeakPointer<NavMesh>(bits: bits) else { return false }   // nil unless the bits name a live NavMesh
+    guard let mesh = WeakShared<NavMesh>(bits: bits) else { return false }   // nil unless the bits name a live NavMesh
     guard let mode = NavMode(rawValue: raw) else { return false }            // nil unless 'raw' is a case's value
     ...
 }
 ```
 
-An entry point that takes the raw form, as `nav_set_mode_checked` does, converts it with Rayo's checked conversions: a `UInt64` and `ConcurrentWeakPointer<T>(bits:)`, `WeakPointer<T>(bits:)`, which also checks the thread, or `Handle<T>(bits:)`, or a raw integer and `E(rawValue:)`.
+An entry point that takes the raw form, as `nav_set_mode_checked` does, converts it with Rayo's checked conversions: a `UInt64` and `WeakShared<T>(bits:)`, `WeakPointer<T>(bits:)`, which also checks the thread, or `Handle<T>(bits:)`, or a raw integer and `E(rawValue:)`.
 
 ## The platform, and embedding Rayo in C
 

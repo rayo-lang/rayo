@@ -58,25 +58,18 @@ Every access to an object's value, through the owner or any weak pointer, is che
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destruction is not an access and never conflicts: it retires the object's value ([below](#destroying-an-object)).
 - **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([11](11-errors-and-safety.md#what-panics)), and so does creating an object when no generation is left ([below](#destroying-an-object)).
 
-### Objects shared across threads: `ConcurrentUniquePointer<T>`
+### Sharing across threads
 
-An object that several threads use has the lock built in:
+Objects stay on their home thread. Data that several threads use lives behind a counted owner, `Shared<T>`, whose value is `Frozen` or `Synchronized`, such as a `Mutex`, and a `WeakShared<T>` links to it without keeping it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)):
 
 ```swift
-let mixer = ConcurrentUniquePointer(AudioMixer())          // AudioMixer must be Sendable
-let m: ConcurrentWeakPointer<AudioMixer> = mixer.weak()    // Sendable: may go to any thread
+let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
+let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
-Thread.start { [copy m, copy clip] in m.lock { $0.play(clip) } }   // exclusive: waits while anyone else uses the mixer
-let volume = m.read { copy $0.volume }                             // shared: many readers at once; waits only for a writer
-
-let mesh = ConcurrentUniquePointer(lockFree: loadedMesh)  // never locked: reads take no lock and never wait
+Thread.start { [copy m, copy clip] in
+    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // a counted owner for as long as 'mx' lives
+}
 ```
-
-- **A concurrent object is an object with a lock built in**, unless it is created `lockFree:` (below). `ConcurrentUniquePointer<T>` and `ConcurrentWeakPointer<T>` work as the thread-bound pair does. `T` must be `Sendable`, since any thread may reach the value, so both are `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)). A conflicting access from another thread **waits** instead of panicking.
-- **Every access names its kind.** As for a `Mutex` or `RwLock` ([07](07-concurrency.md#locks-mutex-and-rwlock)), there is no `.value`: `p.lock { … }` runs its closure with exclusive access and `p.read { … }` with shared access, and `p.lock()` and `p.read()` return a guard whose `.value` is the object. Through the owner they give the result or the guard; through a weak pointer, an optional that is `nil` once the object is destroyed.
-- **Its lock outlives its value.** The lock isn't in the value's memory, which may be an arena's: it is state from `.system` that the object's owner and weak pointers refer to, kept while any thread holds it, waits for it, or will take it again after a parked wait, and until a grace period has passed since the object was destroyed. A thread that found the object live is still inside its section, so it still finds the lock, and any later use of a weak pointer checks the object's generation, which is never freed or reused, and reads `nil` before it reaches the lock. So a guard points only into its lock ([07](07-concurrency.md#locks-mutex-and-rwlock)), and a `Condvar` wait that parks with a guard and relocks after the object is destroyed finds the lock, finds the object gone, and panics instead of touching the value's memory.
-- **Locks follow `RwLock`'s rules.** `lock` takes the write lock and `read` the read lock ([07](07-concurrency.md#locks-mutex-and-rwlock)). The guards are `@guard` types ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them)). Waiting is never a checkpoint.
-- **A lock-free object is never locked.** For `ConcurrentUniquePointer(lockFree: v)`, `read` takes no lock, writes nothing and never waits, and `lock` panics before touching anything. `v`'s type must be `Frozen` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)) or `Synchronized` ([07](07-concurrency.md#the-synchronized-contract)), so it changes only through its own synchronization, if at all. Lock-freedom is chosen when the object is created, not by its type, and the value is reclaimed only after a grace period, so it stays valid for every reader.
 
 ### Destroying an object
 
@@ -84,8 +77,6 @@ let mesh = ConcurrentUniquePointer(lockFree: loadedMesh)  // never locked: reads
 
 - **A retired value's `deinit` runs once, when nothing can still see the value.** Then no access to it is live and no pin holds it ([below](#pinning-for-c)). It starts on whichever path below comes first, and never starts again, even when another `deinit` drops an owner of the same object.
 - **A thread-bound object's `deinit` runs on its home thread.** Destroyed through its owner, which is on that thread, its `deinit` runs at once if no access is live and no pin holds it, and otherwise it is queued to the home thread, which runs it at its next outermost section entry ([08](08-grace-periods-and-checkpoints.md#deinits-queued-to-a-thread)), so ending an access or dropping a pin never runs a `deinit` the code didn't ask for. A reset or an unregistration always queues it to the home thread ([below](#objects-in-arenas-and-other-allocators)).
-- **A lockable concurrent object's `deinit` runs where its last user leaves it.** Destroyed through its owner, it runs its `deinit` at once, on that thread, if no access is live and no pin holds it; otherwise the last access to end, or the last pin to drop, hands the value to the **reclaimer** ([08](08-grace-periods-and-checkpoints.md#who-reclaims-and-when)). A reset or an unregistration always leaves it to the reclaimer, unless the object was still being created ([below](#objects-in-arenas-and-other-allocators)). Threads waiting for an access wake and find the object gone.
-- **A lock-free object is reclaimed after the next grace period** ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)), since its readers take no mark, and not before the last pin drops.
 - **A retired value keeps its memory until its `deinit` has finished.** A later reset or unregistration of its allocator doesn't release that memory first. If a reset or unregistration of its allocator comes before its `deinit` runs, whatever retired the object, the `deinit` can still read what the value owns there ([06](06-memory-and-allocators.md#stale-values-and-retired-objects)).
 - **Owners go stale too.** That happens when something else, such as an arena reset or an unregistration, destroys their object. An access through a stale owner panics, and so does pinning through it. Dropping it does nothing: its object's `deinit` was already scheduled when the object was destroyed.
 - **A thread's objects end with it.** Every thread-bound object belongs to its home thread wherever its owner lies, even in a stale container or in C. So in the thread's teardown ([07](07-concurrency.md#global-state)), its objects are destroyed on it, those it leaked to C included ([below](#weak-pointers-as-bits-and-handing-objects-to-c)), with their `deinit`s, except one that a pin never dropped still holds ([below](#pinning-for-c)).
@@ -93,21 +84,21 @@ let mesh = ConcurrentUniquePointer(lockFree: loadedMesh)  // never locked: reads
 
 ### Objects in arenas and other allocators
 
-`UniquePointer(value, allocator: a)` and `ConcurrentUniquePointer` take any allocator. Objects in an arena die together when it is reset ([06](06-memory-and-allocators.md)), and objects in a heap when it is unregistered: afterwards every weak pointer to them reads `nil`, and their owners are stale ([above](#destroying-an-object)).
+`UniquePointer(value, allocator: a)` takes any allocator. Objects in an arena die together when it is reset ([06](06-memory-and-allocators.md)), and objects in a heap when it is unregistered: afterwards every weak pointer to them reads `nil`, and their owners are stale ([above](#destroying-an-object)).
 
 - **Destroying them all is O(1)** in the number of objects: a reset or an unregistration destroys every object whose value its memory holds, including through a wrapper over the allocator.
-- **Their `deinit`s run later**, never inside the reset or the unregistration itself. A concurrent object's runs on the reclaimer ([08](08-grace-periods-and-checkpoints.md#who-reclaims-and-when)), and a thread-bound object's on its home thread at its next outermost section entry; either may be the thread that reset. An object still being created is the exception (below).
+- **Their `deinit`s run later**, never inside the reset or the unregistration itself: each on its object's home thread, at that thread's next outermost section entry, which may be on the thread that reset. An object still being created is the exception (below).
 - **Creation racing a reset or an unregistration** is ordered either before it, and the object is destroyed with the others, or after it: the object survives a reset, and its allocation through an unregistered allocator panics ([06](06-memory-and-allocators.md#unregistering-an-allocator)). An object destroyed this way while it was still being created has its value destroyed at once, on the creating thread, and its creation returns a stale owner.
 
 ### Weak pointers as bits, and handing objects to C
 
-- **Weak pointers from bits are checked.** `w.bits` packs a weak pointer into a `UInt64`. `WeakPointer<T>(bits:)` returns `nil` unless the bits name a live thread-bound object of type `T` whose home thread is the calling thread, never a concurrent one, which other threads lock or read without its marks. It is memory-safe for any bits, even while another thread destroys the object. Genuine bits never resolve to an object other than the one they were made for; forged or mistyped bits, like a forged `Handle`, read `nil` or name some live `T` on this thread. `ConcurrentWeakPointer<T>(bits:)` makes the same checks except the home thread, and reads `nil` for a thread-bound object's bits.
-- **Existential weak pointers from bits.** `WeakPointer<any P>(bits:)` takes the same 64 bits, and reads `nil` unless the object's type conforms to `P` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). The concurrent forms work the same way.
-- **Handing ownership to C.** `UniquePointer.leak(p)` gives up the owner and returns a weak pointer for C to hold as a `uint64_t`. The object lives until `UniquePointer.adopt(w)` returns its owner, a reset or an unregistration of its allocator destroys it ([above](#objects-in-arenas-and-other-allocators)), or its home thread tears down ([above](#destroying-an-object)). `adopt` returns `nil` unless `w` names a live leaked thread-bound object of type `T` whose home thread is the caller's, and a successful `adopt` ends the leak, so a forged, mistyped or repeated `adopt` is harmless, and so is one of an object never leaked. `ConcurrentUniquePointer.leak` and `.adopt` work the same way on any thread, and `.adopt` reads `nil` for a thread-bound object. A leaked object is used through its weak pointers as any other, a lock-free one included.
+- **Weak pointers from bits are checked.** `w.bits` packs a weak pointer into a `UInt64`. `WeakPointer<T>(bits:)` returns `nil` unless the bits name a live object of type `T` whose home thread is the calling thread. It is memory-safe for any bits, even while another thread destroys the object. Genuine bits never resolve to an object other than the one they were made for; forged or mistyped bits, like a forged `Handle`, read `nil` or name some live `T` on this thread.
+- **Existential weak pointers from bits.** `WeakPointer<any P>(bits:)` takes the same 64 bits, and reads `nil` unless the object's type conforms to `P` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+- **Handing ownership to C.** `UniquePointer.leak(p)` gives up the owner and returns a weak pointer for C to hold as a `uint64_t`. The object lives until `UniquePointer.adopt(w)` returns its owner, a reset or an unregistration of its allocator destroys it ([above](#objects-in-arenas-and-other-allocators)), or its home thread tears down ([above](#destroying-an-object)). `adopt` returns `nil` unless `w` names a live leaked object of type `T` whose home thread is the caller's, and a successful `adopt` ends the leak, so a forged, mistyped or repeated `adopt` is harmless, and so is one of an object never leaked. A leaked object is used through its weak pointers as any other. A `Shared` value crosses to C the same way ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)).
 
 ### Pinning for C
 
-`stablePool.pin(h)` and `p.pin()` on a concurrent owner return a move-only, unscoped **`Pin<T>`**, the first as a `Pin<T>?` that is `nil` for a stale handle, and `p.pin()` on a thread-bound owner a **`LocalPin<T>`**, which works the same way but never leaves its object's home thread. While a pin lives, the address it holds is safe for C to use. A dense `Pool` can't pin, since removals move its elements. Pinning takes a shared `self`, so several threads may pin at once.
+`stablePool.pin(h)` returns a move-only, unscoped **`Pin<T>?`**, `nil` for a stale handle, and `p.pin()` on an object's owner a **`LocalPin<T>`**, which works the same way but never leaves its object's home thread. While a pin lives, the address it holds is safe for C to use. A dense `Pool` can't pin, since removals move its elements. Pinning takes a shared `self`, so several threads may pin at once.
 
 **A pin keeps its memory alive, independent of any owner.** While it lives:
 
