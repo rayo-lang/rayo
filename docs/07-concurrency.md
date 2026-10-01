@@ -15,7 +15,7 @@ Thread.scope { s in                                        // threads that may b
 }                                                          // the spawned thread has finished here
 ```
 
-Threads, locks and job systems are libraries. The language gives them the checking rules below and one marker, `Sendable`, for what may cross threads, and the runtime starts, parks and wakes threads and tracks each thread's **section**, the span in which it may hold views, so that nothing is reclaimed while a thread may still view it ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([below](#task-functions-explicitly-stepped-coroutines)).
+Threads, locks and job systems are libraries. The language gives them the checking rules below and one marker, `Sendable`, for what may cross threads, and the runtime starts, parks and wakes threads ([below](#starting-a-thread-runtimestartthread), [below](#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([below](#task-functions-explicitly-stepped-coroutines)).
 
 ## Why safe code can't race
 
@@ -120,7 +120,7 @@ Thread.scope { s in
 - to keep it past the call it was given to only in a type that is unsealed and scoped, as `Thread.scope`'s scope keeps what `spawn` is given ([02](02-views-and-dependencies.md#dependencies)), so the value that keeps it absorbs what it borrows for as long as it is kept. While that call runs, a raw pointer to it may pass through any storage that only the library's `unsafe` code reads, such as a global work queue;
 - to have every other thread done with it by the time the borrows it carries may end, every access they made through it happening before then: when the call that lent them returns, as for `join`, or, for a value kept as above, at the last use of the value that keeps it. So a keeping type that safe code can make and drop declares a `deinit` that waits, which makes destroying it a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), or, like `Thread.scope`'s scope, is made only by the library, which waits before the call that lends it returns.
 
-So a closure that returns or throws a lock guard taken on a worker, or an object made there, is rejected at the call, since neither is `Sendable`. The borrowed memory stays valid meanwhile, since nothing a thread views is reclaimed while it is inside a section, and the lending thread stays inside its section while it waits ([grace periods](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)). An unscoped `Sendable` value needs no such promise: it can't borrow.
+So a closure that returns or throws a lock guard taken on a worker, or an object made there, is rejected at the call, since neither is `Sendable`. The borrowed memory stays valid meanwhile: the lender can't free it while the borrow lasts, and a reset or an unregistration of its allocator panics while an open, the lender's or a worker's, still lends from it ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). An unscoped `Sendable` value needs no such promise: it can't borrow.
 
 ### Thread-locals in lent work
 
@@ -141,13 +141,13 @@ let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // 
 
 func startRendererOnGlobal() -> Thread {
     Thread.start(name: "render") {
-        while true { draw(snapshots.waitPop()) }                              // the wait is a checkpoint (08)
+        while true { draw(snapshots.waitPop()) }                              // parks until the simulation pushes one
     }
 }
 ```
 
-- **`Thread.loop`** runs its body once per item, on a thread that owns the `Receiver`. Its wait for the next item is a checkpoint ([08](08-grace-periods-and-checkpoints.md#blocking-waits)), and so is its call of the body ([08](08-grace-periods-and-checkpoints.md#entry-function-types)), so the body's own checkpoints take effect.
-- **`Thread.start`** runs its closure once. A long-lived body places its own checkpoints ([08](08-grace-periods-and-checkpoints.md#checkpoints-and-parking-waits)).
+- **`Thread.loop`** runs its body once per item, on a thread that owns the `Receiver`, and parks between items.
+- **`Thread.start`** runs its closure once.
 
 ### What a thread can share
 
@@ -166,11 +166,11 @@ Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the closur
 
 ### Starting a thread: `Runtime.startThread`
 
-**`Runtime.startThread(_ body: owned Closure<consuming @sendable @entry () -> Void>) -> Closure<consuming @sendable @entry () -> Void>?` is the runtime's one primitive for starting a thread.** The new platform thread enters `body` from depth zero, with no Rayo frame below it, in a section of its own, so the body's checkpoints take effect ([08](08-grace-periods-and-checkpoints.md#sections)). It returns `nil` once the thread has started, and returns `body`, unstarted, when the platform can't start a thread. The call happens before the body begins.
+**`Runtime.startThread(_ body: owned Closure<consuming @sendable () -> Void>) -> Closure<consuming @sendable () -> Void>?` is the runtime's one primitive for starting a thread.** The new platform thread runs `body` with no Rayo frame below it. It returns `nil` once the thread has started, and returns `body`, unstarted, when the platform can't start a thread, or after shutdown ([below](#shutdown)). The call happens before the body begins.
 
-During startup it returns `nil` at once and queues the thread until startup ends ([below](#initialization-at-startup)); a queued thread that the platform can't start then panics. A thread that `Runtime.startThread` starts after shutdown parks for good when it tries to begin its section, instead of panicking.
+During startup it returns `nil` at once and queues the thread until startup ends ([below](#initialization-at-startup)); a queued thread that the platform can't start then panics.
 
-A library may also start threads through the platform's API with `import c`. The start routine is then a C entry ([08](08-grace-periods-and-checkpoints.md#where-a-checkpoint-can-go)), whose checkpoints take effect the same way, but the runtime doesn't know that thread until it enters, so entering before startup ends or after shutdown panics, as for any C thread.
+A library may also start threads through the platform's API with `import c`. The start routine is then a C entry ([09](09-c-interop.md#c-entries-and-threads)), and the runtime doesn't know that thread until it enters, so entering before startup ends or after shutdown panics, as for any C thread.
 
 ## Atomics and locks
 
@@ -198,9 +198,9 @@ log.lock { msgs in
 ```
 
 - **The closure form** calls the closure exactly once, so it takes the most general closure kind, and the closure may move a captured local out, as the first one moves `m`. The closure's parameter isn't `keep`, so no view of the protected data outlives the lock ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)).
-- **The guard form** returns an exclusive guard from a shared `self`, the `Synchronized` exception to dependency rule 3 ([02](02-views-and-dependencies.md#dependencies)). A guard is scoped, so it can't be stored anywhere unscoped, such as a global, a `StablePool` or an object, returned past the mutex it came from, or held across an `await` or a checkpoint.
+- **The guard form** returns an exclusive guard from a shared `self`, the `Synchronized` exception to dependency rule 3 ([02](02-views-and-dependencies.md#dependencies)). A guard is scoped, so it can't be stored anywhere unscoped, such as a global, a `StablePool` or an object, returned past the mutex it came from, or held across an `await`.
 - **Relocking** a `Mutex` that the same thread already holds panics, in either form, including from lent work that the lending thread runs while an outer frame of it holds the lock, so no thread ever gets a second exclusive view.
-- **Guards** have `@guard` types, so a guard is released only on the thread that took it ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them)), and points only into the lock it came from ([below](#the-synchronized-contract)), which lets a `Condvar` wait consume one at a checkpoint ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)).
+- **Guards** have `@guard` types, so a guard is released only on the thread that took it ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them)), and points only into the lock it came from ([below](#the-synchronized-contract)).
 
 **`RwLock<T>`** works like `Mutex`, with `read` (shared) and `write` (exclusive) in both forms. Taking the write lock on a thread that holds either lock, or either lock on a thread that holds the write lock, panics. A read lock taken again on a thread that holds one is granted at once, even while a writer waits, since that writer can't proceed before the outer read ends.
 
@@ -213,7 +213,7 @@ log.lock { msgs in
 
 - **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
 - **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
-- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits are declared `@parks` ([08](08-grace-periods-and-checkpoints.md#blocking-waits)). `g = cv.wait(consume g)` unlocks, parks, relocks after it wakes, and returns a new guard. `g` can be consumed only after the last use of every view derived from it, so no view of the protected data survives the unlock. The mutex is in the consumed guard's dependency set, so the wait borrows both the condvar and the mutex, and is a checkpoint only under 08's rule for lock guards ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)), as for `var g = m.lock()` of a global `m` followed by `g = cv.wait(consume g)` on a global `cv`.
+- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits park the thread ([below](#parking-and-waking-a-thread)). `g = cv.wait(consume g)` unlocks, parks, relocks after it wakes, and returns a new guard. `g` can be consumed only after the last use of every view derived from it, so no view of the protected data survives the unlock. The mutex is in the consumed guard's dependency set, so the wait borrows both the condvar and the mutex.
 
 ### The `Synchronized` contract
 
@@ -226,11 +226,20 @@ The language defines the contract that the types above share, the marker protoco
 - **keeps what its synchronization writes out of safe code's reach**: every stored field that its non-`mutating` methods write is `unsafe` or itself `Synchronized`, so no safe access by name, reflection, `SoA` column, protocol witness or derived `==` or `hash(into:)` reads it with a plain load ([05](05-protocols-generics-and-closures.md#conformances), [10](10-compile-time.md#reflection-and-access-control)). For the same reason it is never `Frozen` or `Pod` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability), [04](04-types.md#plain-data-pod-and-bit-casts));
 - **takes elements in and hands them out as owned values**, each handed out after, in happens-before order, the call that took it in, and lends views of them only as the next bullets allow;
 - **grants a view only while no conflicting view of the same data is live, on any thread**: an exclusive guard or closure argument while no other view is live, and a shared one while no exclusive one is. Each view it grants happens after the end of every conflicting view it granted before. A request that would conflict with a view its own thread holds panics or blocks, and never succeeds, so a re-entrant lock can't satisfy the contract;
-- **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or `.system` heap state that the lock points to and keeps allocated while the guard lives, even while its thread is parked outside its section ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them), [08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow));
+- **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or `.system` heap state that the lock points to and keeps allocated while the guard lives ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them));
 - **lends a view of its interior only under a lock**, through a closure it runs or a `@guard` guard it returns, as `Mutex` and `RwLock` do, **or as a read-only view of data that its non-`mutating` methods never write again, except through that data's own synchronization, and never free before the value itself is destroyed**, as `Once.get()` lends;
 - **is bitwise-movable whenever nothing borrows it**: the language moves a value only when nothing borrows it, and an `unsafe Synchronized` conformance promises that the unborrowed value keeps no pointer to itself and has no address registered anywhere. Moving or destroying it stays sound even when a guard it returned is never destroyed ([11](11-errors-and-safety.md#unsafe-code)), as when the guard sits in a stale container; its lock then stays held.
 
 Declaring a conformance to `Synchronized` requires `unsafe`, because the compiler can't verify the implementation: `struct SpinQueue<T>(…): unsafe Synchronized { … }`, or `extension T: unsafe Synchronized {}` ([11](11-errors-and-safety.md#safe-modules)).
+
+### Parking and waking a thread
+
+**A blocking primitive parks its waiting thread through the runtime**, which any `unsafe` code may call:
+
+- `unsafe Runtime.park(on word: *UInt32, expected: UInt32, timeout: Int?) -> Bool` parks the calling thread on `word` if it still holds `expected`, until another thread wakes it or `timeout` nanoseconds pass, and returns `false` only when the timeout passed. It may also return early, so its caller checks its condition again. Its caller promises that `word` stays live and is accessed only atomically meanwhile.
+- `unsafe Runtime.wake(on word: *UInt32, count: Int)` wakes up to `count` threads parked on `word`.
+
+A parked thread keeps everything it holds, so its live borrows still count as uses of their allocators ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)).
 
 ## Global state
 
@@ -260,20 +269,17 @@ A global is declared at a file's top level or as a static member of a type. A va
 - **Thread-locals** need no synchronization, but the static checker can't see a callee touching one, so each access is marked as a read or a change, and a conflicting one panics, as `grow()` does above under the loop. The marks never synchronize with another thread. A view of a thread-local is a dynamic access under rule 6 ([02](02-views-and-dependencies.md#dependencies)).
 - **Each thread's copy** lives until the thread's teardown. Copies are initialized on their own thread, before it runs any other Rayo code, in the order globals are and under the same checks ([below](#initialization-at-startup)):
     - the startup thread's during startup, interleaved with the globals: the thread that runs `main`, or the one that calls `rayo_init`;
-    - a thread's started with `Runtime.startThread`: inside its body's section, before the body;
-    - a C thread's when it attaches ([09](09-c-interop.md#embedding-rayo-in-a-c-program));
-    - the runtime's reclaimer thread's, when it starts, before it runs any `deinit`. Its copies leak at exit.
+    - a thread's started with `Runtime.startThread`: before the body;
+    - a C thread's when it attaches ([09](09-c-interop.md#embedding-rayo-in-a-c-program)).
 
-**A thread's teardown** destroys its copies and its objects, on that thread, once it has no other Rayo code to run: when its body returns, when `main` returns or the thread calls `rayo_shutdown`, in the second exit step of [08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry), or when a C thread detaches. It runs in a section of its own ([08](08-grace-periods-and-checkpoints.md#sections)):
+**A thread's teardown** destroys its copies and its objects, on that thread, once it has no other Rayo code to run: when its body returns, at shutdown on the thread that shuts down ([below](#shutdown)), or when a C thread detaches:
 
 1. The thread's copies are destroyed in reverse order, except those of the prelude's modules and every module they import. Each copy is marked dead before its value is destroyed, so a `deinit` that touches it later in the teardown panics, whether the copy's own destruction runs that `deinit` or a later step does.
 2. The thread's objects end ([03](03-handles-and-objects.md#destroying-an-object)).
-3. The `deinit`s queued to the thread run, including those that pins dropped in the steps before released ([03](03-handles-and-objects.md#pinning-for-c)).
-4. At exit, what the steps before retired is reclaimed, its `deinit`s running on this thread.
-5. A `deinit` of steps 2 to 4 may make or leak another object of the thread, so those steps repeat until a round leaves nothing. No object outlives its thread, and nothing is queued to a thread after its teardown.
-6. Those copies, the current allocator among them, are destroyed last, each marked dead first as in step 1.
+3. A `deinit` of step 2 may make or leak another object of the thread, so that step repeats until a round leaves nothing. No object outlives its thread.
+4. Those copies, the current allocator among them, are destroyed last, each marked dead first as in step 1.
 
-A thread still running or attached when entry closes at exit, or a C thread that exits without detaching, never tears down: what its copies and objects own leaks.
+A thread that never tears down, such as a C thread that exits without detaching, leaks what its copies and objects own.
 
 ### Initialization at startup
 
@@ -282,17 +288,27 @@ let names = loadNames()      // runs before main, unless it can run at compile t
 let table = buildTable()     // may read 'names'; reading a global declared after it is an error
 ```
 
-**Initialization is eager and ordered.** `const`s are folded at compile time. A global `let` goes into static data, in every build, exactly when its initializer can run at compile time ([10](10-compile-time.md#running-code-at-compile-time-const)) and its value passes the **freezable** test ([10](10-compile-time.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`, and one that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value. No global other than a thread-local's copy, which ends in its thread's teardown, is destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)) or consumed ([01](01-values-and-ownership.md#moving-values-out)).
+**Initialization is eager and ordered.** `const`s are folded at compile time. A global `let` goes into static data, in every build, exactly when its initializer can run at compile time ([10](10-compile-time.md#running-code-at-compile-time-const)) and its value passes the **freezable** test ([10](10-compile-time.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`, and one that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value. No global other than a thread-local's copy, which ends in its thread's teardown, is destroyed ([below](#shutdown)) or consumed ([01](01-values-and-ownership.md#moving-values-out)).
 
 Every other global is initialized at **startup**, before `main`, or in `rayo_init()` when a C program embeds Rayo ([09](09-c-interop.md)), one module at a time, each module's declarations in source order. The next module is always the first in the build's list ([10](10-compile-time.md#what-a-build-declares)) whose imports are all initialized; a module outside the prelude's modules and every module they import counts all of those as imports ([12](12-compilation-model.md#modules-and-names)).
 
 - **Static check.** Reading a global that isn't initialized yet, directly or through any chain of direct calls from the initializer, is a compile error. A direct call is any whose callee is known statically, including those the language makes for the code ([05](05-protocols-generics-and-closures.md#functions-and-closures)), except a requirement call inside an imported generic body, which the module's check, made against interfaces alone ([12](12-compilation-model.md#type-checking-is-local)), can't see. Imports form no cycle ([12](12-compilation-model.md#modules-and-names)), so a chain of calls the check follows ends in the initializer's own module, at its own global or one declared after it.
 - **Run-time check, in every build.** For calls the static check doesn't follow (closures, `any P`, function pointers, and requirement calls inside imported generic bodies), reading a global before its initializer has finished panics.
 - **Static data.** A global in static data counts as initialized, for both checks, only once startup reaches its declaration, so whether its compile-time run fits the toolchain's limits never changes what a program does ([12](12-compilation-model.md#what-the-language-leaves-open)).
-- **No other threads during startup.** Initialization is single-threaded, and no retired memory is reclaimed, nor a `deinit` that waited run, one queued to a thread or left to the reclaimer, until the last initializer returns; a `deinit` that runs at once, as an unaccessed object's does when its owner is destroyed ([03](03-handles-and-objects.md#destroying-an-object)), still does. That return happens before every later section entry on another thread, a queued thread's start included.
+- **No other threads during startup.** Initialization is single-threaded. The last initializer's return happens before every later entry into Rayo code on another thread, a queued thread's start included.
     - A thread started with `Runtime.startThread` during startup is queued until then ([above](#starting-a-thread-runtimestartthread)).
     - A wait that would park until another thread acts panics. `Thread.sleep` and waits with a timeout depend on no other thread, so they don't panic, and a wait whose condition already holds returns at once.
-- **Entry.** Entering Rayo code from C before startup has finished panics, in every build, and so does entering from a C thread after shutdown ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)), except a **nested entry**, one with a Rayo frame below it on its thread, on any of the thread's stacks. During startup only the startup thread has one: an initializer may call C that calls an `@export` or `@c` function back, which is let in while the initialization check still guards every global the callback reads. After shutdown such an entry goes one depth deeper, or, during a `parks` call that left its section, parks for good ([09](09-c-interop.md#embedding-rayo-in-a-c-program)).
+- **Entry.** Entering Rayo code from C before startup has finished panics, in every build, and so does entering from a C thread after shutdown ([below](#shutdown)), except a **nested entry**, one with a Rayo frame below it on its thread, on any of the thread's stacks. During startup only the startup thread has one: an initializer may call C that calls an `@export` or `@c` function back, which is let in while the initialization check still guards every global the callback reads. After shutdown such an entry is let in as before.
+
+### Shutdown
+
+A program's **`main`** takes no parameters, and returns `Void`, `Never`, or an `Int32` that becomes the process's exit status. The runtime shuts down when `main` returns, or when a C program that embeds Rayo calls `rayo_shutdown()` ([09](09-c-interop.md#embedding-rayo-in-a-c-program)). **At shutdown, the thread that shuts down tears down, and then entry closes:**
+
+1. The thread's teardown runs ([above](#global-state)), so a `deinit` that flushes or closes something runs, and sees that thread's copies, the current allocator included.
+2. Entry closes: from then on, an entry from C with no Rayo frame below it on its thread panics ([above](#initialization-at-startup)), and `Runtime.startThread` returns its body unstarted ([above](#starting-a-thread-runtimestartthread)).
+
+- **Other threads don't tear down at shutdown.** When `main` returns, the process exits, ending them where they stand. In a C program that embeds Rayo, a thread that `Runtime.startThread` started still tears down when its body returns, and an attached C thread can no longer detach ([09](09-c-interop.md#embedding-rayo-in-a-c-program)).
+- **No global is destroyed**, not even at shutdown, since a thread still running may read one; only a thread-local's copies end, each in its own thread's teardown.
 
 ## `task` functions: explicitly stepped coroutines
 
@@ -315,7 +331,7 @@ Tasks are stackless coroutines. **Each step runs the task to the next `await` wh
 ### Semantics
 
 - **A task is a value.** Calling a `task func` runs nothing: it returns a **state machine value**, a struct whose layout the compiler computes. Its size is known statically, so **a task never allocates on its own**. It is move-only, and it borrows nothing, since its parameters are unscoped and no borrow is live across an `await` (below). It lives wherever its owner puts it: a local, a field, a parent task's state (when awaited as a sub-task), or a task set ([below](#running-tasks)).
-- **No borrow and no dynamic access may be live across an `await`.** The same holds across a checkpoint ([08](08-grace-periods-and-checkpoints.md#checkpoints-and-parking-waits)). That means no scoped value ([02](02-views-and-dependencies.md#scoped-values)), no binding or pattern part that borrows a place, and no borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`, except one in the task's own state, its parameters and owned locals, reached through stored fields and indices without reading an optional: only its body reaches that state, so the place is worked out again on resuming, from the index values already computed. So `total += await next()` on a local works, while `game.score += await pointsFor(n)` is a compile error, and `let p = await pointsFor(n)` comes first. The resume parameter is exempt, since each step lends it anew. `d` above borrows the door and ends before the first `await`, so using it after the `await` is a compile error, and code there reads `game.doors[door]` again.
+- **No borrow and no dynamic access may be live across an `await`.** That means no scoped value ([02](02-views-and-dependencies.md#scoped-values)), no binding or pattern part that borrows a place, and no borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`, except one in the task's own state, its parameters and owned locals, reached through stored fields and indices without reading an optional: only its body reaches that state, so the place is worked out again on resuming, from the index values already computed. So `total += await next()` on a local works, while `game.score += await pointsFor(n)` is a compile error, and `let p = await pointsFor(n)` comes first. The resume parameter is exempt, since each step lends it anew. `d` above borrows the door and ends before the first `await`, so using it after the `await` is a compile error, and code there reads `game.doors[door]` again.
 - **Locals that are live across an `await`, and parameters, are stored in the state.** So they must be owned: every task parameter is declared `owned` ([01](01-values-and-ownership.md#parameters)), and its type is unscoped. A `task func` method is `consuming` or `static`, so `self` is owned too, and its type is unscoped.
 - **The resume parameter.** The `with (...)` clause declares the task's one **resume parameter**, whose type is its `Context` ([Awaitables](#awaitables)), or `Void` when there is none. It is declared `mutable`, since the owner only lends it for the step and every awaitable's `poll` takes it `mutable`, and it has no default value. The owner passes it in fresh at every step, as `scripts.step(&game)` does ([below](#running-tasks)).
 - **What a task can await.** In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`. The operand is checked expecting an `Awaitable` whose `Context` is `C`, so a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, and a closure argument gets its parameter types from it, as in `await seconds(0.5)` and `await until { [copy door] game in … }` above. `await` takes its operand as an `owned` argument is taken ([01](01-values-and-ownership.md#moving-values-out)): it moves into the task's state and is polled there, so `let mesh = await f` consumes a local future `f`.

@@ -55,7 +55,7 @@ throw throws try catch do defer static mutable owned consuming copy consume muta
 where with await yield unsafe unchecked using extern as is nil true false
 associatedtype subscript`.
 
-`read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `checkpoint`, `error`, `prefix`, `parks`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard` are contextual keywords: they are keywords only in the positions below and can be used as identifiers anywhere else. `union` is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call. `keep` is a keyword only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses. `checkpoint` is a keyword only as a whole statement, `error` only after `static`, `prefix` only in an `import c … where` clause, `parks` only at the start of a rule inside an import config or after `extern c`, `noalloc` only at the start of such a rule, or after `extern c` or its `parks`, and `stack` only at the start of such a rule, after `extern c` or its `parks` or `noalloc`, or after `@c` in a type. `borrows` and `outlives` are keywords only in a `where` clause, right after an item's subject: a requirement starts with a type, which a dotted path such as `out.items` also parses as, and the token after it tells a `borrows-item` from a constraint. `rebind` is a keyword only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and `to` only after `rebind` and that identifier. `discard` is a keyword only at the start of a statement when `self` follows it.
+`read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard` are contextual keywords: they are keywords only in the positions below and can be used as identifiers anywhere else. `union` is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call. `keep` is a keyword only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses. `error` is a keyword only after `static`, `prefix` only in an `import c … where` clause, `noalloc` only at the start of a rule inside an import config or after `extern c`, and `stack` only at the start of such a rule, after `extern c` or its `noalloc`, or after `@c` in a type. `borrows` and `outlives` are keywords only in a `where` clause, right after an item's subject: a requirement starts with a type, which a dotted path such as `out.items` also parses as, and the token after it tells a `borrows-item` from a constraint. `rebind` is a keyword only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and `to` only after `rebind` and that identifier. `discard` is a keyword only at the start of a statement when `self` follows it.
 
 **Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword: `func index(of x: T, in s: Span<T>)` is called as `index(of: x, in: s)`. An argument's label is always followed by `:`, and a parameter's external label by its internal name and then `:`, with the convention after the `:`, so a keyword label is never ambiguous.
 
@@ -73,8 +73,7 @@ static-error  = 'static' 'error' '(' string-lit ')' ;              (* a compile 
 import        = 'import' module-path ('as' identifier)?
               | 'import' 'c' plain-string-lit ('as' identifier)? ('where' 'prefix' ':' plain-string-lit)? c-import-config? ;
 c-import-config = 'unsafe' '{' c-import-rule* '}' ;                 (* asserted facts; rejected in @safe modules *)
-c-import-rule = 'parks' identifier (',' identifier)*               (* C functions that may block (09) *)
-              | 'noalloc' identifier (',' identifier)*             (* C functions that allocate nothing (09) *)
+c-import-rule = 'noalloc' identifier (',' identifier)*             (* C functions that allocate nothing (09) *)
               | c-stack identifier (',' identifier)*                 (* the stack those functions need (09) *)
               | ('struct' | 'union' | 'enum') identifier 'in' plain-string-lit ;   (* the header whose reading has a type this one only declares (09) *)
 module-path   = identifier ('.' identifier)* ;
@@ -139,7 +138,7 @@ extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                       only in an unconditional extension, in the type's module (04);
                                                                       a conformance only at a file's top level (05) *)
 typealias-decl= 'typealias' identifier generic-params? '=' type ;
-extern-c-decl = 'extern' 'c' ( plain-string-lit | 'parks'? 'noalloc'? c-stack? 'func' identifier param-clause ('->' type)? ) ;
+extern-c-decl = 'extern' 'c' ( plain-string-lit | 'noalloc'? c-stack? 'func' identifier param-clause ('->' type)? ) ;
 c-stack       = 'stack' '(' expression ')' ;                        (* the stack, in bytes, the C function needs at most: a const Int expression (09) *)
 
 member        = declaration | init-decl | deinit-decl | subscript-decl | static-if-decl | static-for-decl | static-error ;
@@ -183,12 +182,11 @@ type-primary  = type-name
               | 'any' composition | 'some' composition | 'mutable' 'any' composition   (* mutable any P: the exclusive existential view *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
                                                                    (* C function pointer (09): never throws; 'noalloc': its calls allocate nothing (05) *)
-              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '@entry'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' typed-throws? '->' type ;
+              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' typed-throws? '->' type ;
                                                                    (* function type; 'unsafe' calls need 'unsafe' (05);
                                                                       'mutating' may write its captures, 'consuming' is call-once;
                                                                       '@sendable' holds only closures with Sendable captures (07);
-                                                                      '@noalloc' holds only functions whose calls can't allocate (05);
-                                                                      '@entry' marks an entry function type (08), never a C function pointer *)
+                                                                      '@noalloc' holds only functions whose calls can't allocate (05) *)
 composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; after a cast operator, the type takes every '&' that follows *)
 type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy> *)
 fn-param-type = 'keep'? param-convention? type ('|' type)* ;      (* some (mutable Context) -> Bool; mutating (keep StringView) -> Void; (IoError | ParseError) -> Void;
@@ -209,7 +207,6 @@ statement     = declaration | expression | assignment | guard-stmt
               | 'defer' block | 'unsafe' block | 'unchecked' block | using-stmt
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (11) *)
               | rebind-stmt | static-if-stmt | static-for-stmt | yield-stmt
-              | 'checkpoint'                                            (* only at the top level of an entry body *)
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
               | static-error
               | label ':' (for-stmt | while-stmt | repeat-stmt) ;

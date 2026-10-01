@@ -23,7 +23,7 @@ import c "SDL3/SDL.h" as sdl                             // explicit name
 import c "vendor/fmod.h" as fmod where prefix: "FMOD_"   // strips the prefix: FMOD_System_Create → fmod.System_Create
 ```
 
-**`import c` makes a header's declarations available in a Rayo module, each as the Rayo declaration that the mapping [below](#what-imports-as-what) gives it.** `prefix:` strips a case-sensitive match from the start of each imported function, type, enumerator, macro and variable name. A name keeps its prefix when stripping it would leave text that doesn't start an identifier, as `FMOD_3D` would, or a name that collides with another. An import may end with a **config block**, `unsafe { … }`, of rules about the header's C: `stack(n)` ([below](#the-stack-a-c-call-needs)), `parks` ([below](#blocking-c-calls-parks)), `noalloc` ([below](#c-calls-in-noalloc-code-noalloc)) and `struct`, `union` or `enum S in "h"` ([below](#importing-headers)). Its rules name declarations by their C names, before `prefix:` is stripped.
+**`import c` makes a header's declarations available in a Rayo module, each as the Rayo declaration that the mapping [below](#what-imports-as-what) gives it.** `prefix:` strips a case-sensitive match from the start of each imported function, type, enumerator, macro and variable name. A name keeps its prefix when stripping it would leave text that doesn't start an identifier, as `FMOD_3D` would, or a name that collides with another. An import may end with a **config block**, `unsafe { … }`, of rules about the header's C: `stack(n)` ([below](#the-stack-a-c-call-needs)), `noalloc` ([below](#c-calls-in-noalloc-code-noalloc)) and `struct`, `union` or `enum S in "h"` ([below](#importing-headers)). Its rules name declarations by their C names, before `prefix:` is stripped.
 
 **Each `import c` reads its header with only the preprocessor definitions the build declares for that import** ([10](10-compile-time.md#what-a-build-declares)), so no other import's macros reach it.
 
@@ -129,29 +129,13 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
 - **Flag enums.** A flag enum (`__attribute__((flag_enum))`) imports as a flag set: a struct holding a `rawValue` of the underlying type, with a static constant per flag, an `init()` of no flags, `==`, the bitwise operators `|`, `&`, `^` and `~` between flag sets, and `contains(_:)`.
 - **Shared values.** Enumerators that share a value name one value: the first imports as a case, and each later one as a static constant equal to it.
 
-### Blocking C calls: `parks`
-
-An ordinary call to C stays inside the thread's **section** ([08](08-grace-periods-and-checkpoints.md#sections)), so an event loop that idles in a blocking C call would delay reclamation the whole time, unless the import declares that the function parks:
-
-```swift
-import c "sys/epoll.h" unsafe { parks epoll_wait }
-```
-
-**`parks f` lets a call to `f` leave the thread's section, so `f` may block until something outside Rayo happens without delaying reclamation.** A call to `f` placed where a `checkpoint` could go, that passes the checkpoint check, is a checkpoint, as a std parking wait is ([08](08-grace-periods-and-checkpoints.md#checkpoints-and-parking-waits)): at depth one it leaves the thread's section for the call's duration, and deeper, where checkpoints do nothing ([08](08-grace-periods-and-checkpoints.md#sections)), it blocks inside the section.
-
-- **The caller vouches for the memory `f` uses.** `f`'s arguments pass by value, as every C call's do, except a `mutable` one, which passes its place's address and keeps that place borrowed across the call, so the call is a checkpoint only when that place meets the path rule ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)), as a `@parks` wait's must. While `f` runs the thread holds no section, so nothing keeps what the arguments point at from being reclaimed. The calling `unsafe` code promises that nothing frees that memory until `f` returns: it is the thread's own frame, memory that frame alone owns from an allocator that no other code can reset or unregister meanwhile, its entry closure's context, pinned storage, static data or a global's own storage, never memory that other code could free, reset or reallocate meanwhile, such as a shared arena's.
-- **Callbacks.** A callback that `f` makes enters Rayo as any call from C does ([below](#threads-and-sections)). While the call is outside the thread's section, the thread is at depth zero, so the callback runs in a section of its own.
-- **Other positions.** Elsewhere, a call to `f` just blocks inside the section, as other waits do.
-- **The declaration promises nothing.** Whether or not `f` blocks, each call's `unsafe` promise above is what keeps the call sound.
-- **Inline C.** An `extern c func` declares the same with `parks` before `func`, as in `extern c parks func wait_input(_ ms: CInt) -> CInt`, for a blocking call that inline C wraps ([below](#inline-c)).
-
 ### C calls in `@noalloc` code: `noalloc`
 
 ```swift
 import c "mixer.h" unsafe { noalloc mix_block, apply_gain }
 ```
 
-**`noalloc f` states that `f`, and everything it calls, allocates no memory**, from C's allocator or a Rayo one, so a `@noalloc` function may call it ([06](06-memory-and-allocators.md#allocation-failure)). Any other C function may allocate. It is asserted, not checked, so the config block that holds it is spelled `unsafe { … }` ([11](11-errors-and-safety.md#safe-modules)), and an `extern c func` declares it with `noalloc` before `func`, after any `parks`.
+**`noalloc f` states that `f`, and everything it calls, allocates no memory**, from C's allocator or a Rayo one, so a `@noalloc` function may call it ([06](06-memory-and-allocators.md#allocation-failure)). Any other C function may allocate. It is asserted, not checked, so the config block that holds it is spelled `unsafe { … }` ([11](11-errors-and-safety.md#safe-modules)), and an `extern c func` declares it with `noalloc` before `func`.
 
 ## Inline C
 
@@ -192,7 +176,7 @@ A C or C++ program uses a library written in Rayo:
 - **No throwing.** Neither kind of function can throw, since C has no form for it.
 - **Panics stay in Rayo.** A panic in the body is reported as any panic is ([11](11-errors-and-safety.md#panics)), and Rayo never unwinds.
 - **Not generic.** An `@export` function has no type parameters and no `some P` parameter, since C calls one symbol.
-- **A generated header.** The build writes a C header for each module, with every exported function, every `@export(c)` type and every type that the signature of an exported function, a `@c func` or an `extern c func`, or a `@c` type, of the module uses, in its C representation ([below](#c-representations)). For each `List`, `String` and `TrailingArray` type among them it declares a free function, an `@export` function that takes the value `owned` and destroys it, so a call of it enters Rayo as any call from C does ([below](#threads-and-sections)).
+- **A generated header.** The build writes a C header for each module, with every exported function, every `@export(c)` type and every type that the signature of an exported function, a `@c func` or an `extern c func`, or a `@c` type, of the module uses, in its C representation ([below](#c-representations)). For each `List`, `String` and `TrailingArray` type among them it declares a free function, an `@export` function that takes the value `owned` and destroys it, so a call of it enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
 ### C representations
 
@@ -220,7 +204,7 @@ Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such a
 | `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([11](11-errors-and-safety.md#unsafe-code)) |
 | `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset [04](04-types.md#variable-sized-structs-trailingarray) gives, which the generated header names |
 
-- **A `Span<T>` or `StringView` handed back to C** views what it depends on ([02](02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. Returning to C at depth zero ends the thread's section, as a checkpoint does, so what a C entry ([08](08-grace-periods-and-checkpoints.md#where-a-checkpoint-can-go)) hands back to C, its scoped result and whatever it stores into a `mutable` parameter or through a view a parameter carries, may depend only on its parameters, on `const`s, and on places in global `let`s that the path rule accepts ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)): never on a lock guard, `Once.get()` or an owning value's storage, such as a global `List`'s elements, whose memory a grace period could let be reclaimed while C still holds the view.
+- **A `Span<T>` or `StringView` handed back to C** views what it depends on ([02](02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. Once a C entry ([below](#c-entries-and-threads)) returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). So what a C entry hands back to C, its scoped result and whatever it stores into a `mutable` parameter or through a view a parameter carries, may depend only on its parameters, on `const`s, and on places in a global `let`'s own storage, reached through stored fields, inline array elements and enum payloads only: never on a lock guard, `Once.get()` or an owning value's storage, such as a global `List`'s elements, which a reset or an unregistration could free while C still holds the view.
 - **The `nil` value of a niche** is the one [04](04-types.md#optionals) gives, and the generated header names it.
 - **A `String` that still uses a literal's immortal bytes** ([04](04-types.md#literals)) has `cap` 0 and a non-null `ptr`.
 
@@ -245,12 +229,9 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }
 
 A function pointer type imported from a C header has borrowed parameters, so a `@c func` with an `owned` parameter doesn't convert to it ([05](05-protocols-generics-and-closures.md#c-function-pointers)): C calling through it never gives up what it passes.
 
-### Threads and sections
+### C entries and threads
 
-A `@c func`, an `@export` function and a closure literal converted to a `@c` pointer all have the C calling convention, and C may call any of them from any thread. A call from C:
-
-- attaches the calling thread on first entry, if Rayo didn't create it and C hasn't attached it ([below](#embedding-rayo-in-a-c-program));
-- enters a section when the thread is at depth zero, as it is during a `parks` call that left its section ([above](#blocking-c-calls-parks)), and otherwise goes one depth deeper, whatever stack it runs on, and leaves the section only when it returns to depth zero ([08](08-grace-periods-and-checkpoints.md#sections)), so nothing the body or a frame below it views is reclaimed under it.
+A `@c func`, an `@export` function and a closure literal converted to a `@c` pointer all have the C calling convention, and C may call any of them from any thread: each is a **C entry**. A call from C attaches the calling thread on first entry, if Rayo didn't create it and C hasn't attached it ([below](#embedding-rayo-in-a-c-program)).
 
 ## What C must uphold
 
@@ -267,8 +248,8 @@ C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligati
 - a span, or the pointer that a `mutable` parameter passes, reaches its `count` places, or one, each live, aligned for its type and holding a valid value, and writable for a `MutableSpan` or `mutable` parameter, for the whole call ([11](11-errors-and-safety.md#unsafe-code)), and a `MutableSpan` or `mutable` parameter is the only access to its memory during the call, by C or by Rayo, while nothing writes the memory a `Span` or `StringView` parameter views. A view, or a value holding one, that C returns to Rayo or writes into Rayo memory, through a `mutable` parameter, a `MutableSpan` or a pointer, addresses live memory for as long as the dependency set Rayo gives it says, by rules 3 and 4 of [02](02-views-and-dependencies.md#dependencies). A raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
 - Rayo code runs only on a stack whose bounds the runtime knows, so running out of it panics instead of writing past its end ([11](11-errors-and-safety.md#panics)):
     - C that switches a thread between stacks, as a fiber scheduler does, declares the new stack's bounds with `rayo_thread_set_stack` after each switch, back to the thread's own stack included, before Rayo code runs there ([below](#embedding-rayo-in-a-c-program));
-    - a Rayo frame that such a switch suspends resumes only on the thread it began on, whose sections, accesses and thread-locals it uses;
-    - a fiber abandoned with Rayo frames on it never returns from them: C keeps its stack allocated and unmoved for the rest of the run, what the frames own leaks, and the thread never leaves its section, so no later grace period completes;
+    - a Rayo frame that such a switch suspends resumes only on the thread it began on, whose accesses, allocator uses and thread-locals it uses;
+    - a fiber abandoned with Rayo frames on it never returns from them: C keeps its stack allocated and unmoved for the rest of the run, what the frames own leaks, and what they borrow stays borrowed, so a reset of an allocator they use panics ([06](06-memory-and-allocators.md#what-a-reset-does));
 - C that Rayo calls uses no more stack than the call checks is left ([above](#the-stack-a-c-call-needs)), or runs on a stack of its own;
 - control leaves a Rayo frame for good only when the frame returns, apart from the stack switches above, and its memory stays allocated until then: C never `longjmp`s over one, unwinds through one, ends its thread beneath one, or frees or reuses a stack that holds one;
 - C never unloads the program's code, or frees memory that its runtime or globals use, unless `rayo_shutdown` has returned `true` ([below](#embedding-rayo-in-a-c-program));
@@ -306,12 +287,12 @@ A C program can embed Rayo, calling it through exported functions and these C ex
 | Function | Purpose |
 | --- | --- |
 | `void rayo_init(void)` | Runs startup, once: the calling thread's thread-locals and the other globals' initializers, in startup order ([07](07-concurrency.md#initialization-at-startup)) |
-| `bool rayo_shutdown(void)` | Reclaims pending retired memory, destroys the calling thread's thread-locals and objects (below), reclaims what that retired, and closes entry, within a time limit ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)), and returns whether the runtime has stopped (below) |
+| `bool rayo_shutdown(void)` | Shuts the runtime down: destroys the calling thread's thread-locals and objects (below), and closes entry ([07](07-concurrency.md#shutdown)), and returns whether the runtime has stopped (below) |
 | `void rayo_thread_attach(void)`, `void rayo_thread_detach(void)` | Attach and detach threads Rayo didn't create, such as a middleware library's callback thread. Attaching an attached thread, or detaching one that isn't, does nothing |
 | `void rayo_thread_set_stack(void* low, void* high)` | Declares the bounds of the stack the calling thread has just switched to, such as a fiber's, before it runs Rayo code there |
 
 - **`rayo_init`.** A second call, or an entry from another thread before it has finished, panics. C that an initializer calls may call back into Rayo on the same thread, and the runtime checks guard each global it reads. When it returns, the threads the initializers started with `Runtime.startThread`, which were queued, start.
-- **`rayo_shutdown`.** Only the calling thread's thread-locals and objects are destroyed ([07](07-concurrency.md#global-state)): any other thread still attached, the one that called `rayo_init` included, keeps its copies, which leak. An entry from a C thread afterwards panics, except a nested one ([07](07-concurrency.md#initialization-at-startup)): at a depth other than zero it goes one depth deeper as before ([08](08-grace-periods-and-checkpoints.md#sections)), and during a `parks` call that left its section it parks for good ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). It returns `true` only when nothing can run Rayo code or the runtime's code again: the runtime's own threads have ended, every thread `Runtime.startThread` started has ended, and no thread has a Rayo frame on any of its stacks. Only then may C unload the program's code ([above](#what-c-must-uphold)).
-- **Attaching threads.** Attaching is also implicit on first entry ([above](#threads-and-sections)), and initializes the thread's thread-locals. Detaching destroys them and the thread's objects, on that thread ([07](07-concurrency.md#global-state)). A thread that exits without detaching, or is still attached when another calls `rayo_shutdown`, leaks them instead. Both enter Rayo as a call from C does, with the same checks ([08](08-grace-periods-and-checkpoints.md#sections)), so after `rayo_shutdown` either one fails as such an entry does (above).
-- **Not from inside Rayo.** `rayo_thread_detach` and `rayo_shutdown` panic, before they do anything, on a thread with a Rayo frame on any of its stacks, a suspended fiber's included, whether inside a call into Rayo or parked in a `parks` call that Rayo made, since those frames may still use what they destroy.
+- **`rayo_shutdown`.** Only the calling thread's thread-locals and objects are destroyed ([07](07-concurrency.md#global-state)): any other thread still attached, the one that called `rayo_init` included, keeps its copies, which leak. An entry from a C thread afterwards panics, except a nested one, which is let in as before ([07](07-concurrency.md#initialization-at-startup)). It returns `true` only when nothing can run Rayo code or the runtime's code again: every thread `Runtime.startThread` started has ended, and no thread has a Rayo frame on any of its stacks. Only then may C unload the program's code ([above](#what-c-must-uphold)).
+- **Attaching threads.** Attaching is also implicit on first entry ([above](#c-entries-and-threads)), and initializes the thread's thread-locals. Detaching destroys them and the thread's objects, on that thread ([07](07-concurrency.md#global-state)). A thread that exits without detaching, or is still attached when another calls `rayo_shutdown`, leaks them instead. Both enter Rayo as a call from C does, with the same checks ([above](#c-entries-and-threads)), so after `rayo_shutdown` either one fails as such an entry does (above).
+- **Not from inside Rayo.** `rayo_thread_detach` and `rayo_shutdown` panic, before they do anything, on a thread with a Rayo frame on any of its stacks, a suspended fiber's included, whether inside a call into Rayo or in a C call that Rayo made, since those frames may still use what they destroy.
 - **Detaching on return.** `Runtime.detachOnReturn()`, called on a thread Rayo didn't create, detaches it when the thread next returns to C with no Rayo frame on any of its stacks, as `rayo_thread_detach` would there. On a thread Rayo started, which tears down when its body returns, it does nothing. So a `@c func` that is the start routine of a thread made through the C API tears its thread down with no C of its own.
