@@ -208,4 +208,6 @@ Six principles decide Rayo's trade-offs. [14](docs/14-decisions.md) records the 
 | [15 Soundness](docs/15-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
 | [Hard cases](docs/hard-cases.md) | Systems patterns the spec is tested against |
 
+The reference compiler, `rayoc`, is built from this repository: [TOOLCHAIN.md](TOOLCHAIN.md) says how, and what it implements so far.
+
 Examples live in [`examples/`](examples/): [a gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system.
