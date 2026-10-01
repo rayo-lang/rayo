@@ -390,7 +390,7 @@ let all: Span<String> = names.span        // a view: borrows the list's elements
 let firstTwo = names[0..<2]               // also a Span
 ```
 
-The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpan` and `StaticString`, `Name`, the object pointers and `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](02-views-and-dependencies.md#dependencies)), are language types. The other rows, the owning collections and `Handle`, are std's ([14](14-decisions.md) D12), except `SoA<T>`, which is builtin ([below](#struct-of-arrays-soat)). Every owning collection is move-only, and each one that allocates carries an allocator ([06](06-memory-and-allocators.md#how-values-record-their-allocator)).
+The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpan` and `StaticString`, `Name`, the object pointers and `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](02-views-and-dependencies.md#dependencies)), are language types. The other rows, the owning collections and `Handle`, are std's ([12](12-compilation-model.md#what-the-spec-defines)), except `SoA<T>`, which is builtin ([below](#struct-of-arrays-soat)). Every owning collection is move-only, and each one that allocates carries an allocator ([06](06-memory-and-allocators.md#how-values-record-their-allocator)).
 
 | Type | Owning? | Notes |
 | --- | --- | --- |

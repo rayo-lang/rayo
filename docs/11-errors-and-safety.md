@@ -267,7 +267,7 @@ let n = a + b             // overflow check: without it, the sum wraps, which is
 
 **Checks come in two classes:**
 
-- **Memory-safety checks**, bounds checks among them, make safe code sound. They are **on in every build**, and only `unchecked` code can strip them ([below](#choosing-checks-for-a-module-or-a-scope), [14](14-decisions.md) D8).
+- **Memory-safety checks**, bounds checks among them, make safe code sound. They are **on in every build**, and only `unchecked` code can strip them ([below](#choosing-checks-for-a-module-or-a-scope)).
 - **Diagnostic checks** catch logic bugs whose failure is still memory-safe, such as wrapping arithmetic.
 
 **Each diagnostic check is on or off where code is written**, by the innermost of an enclosing `@checks`, the module's settings and the profile default, and an enclosing `unchecked` block turns every one off (below). `target.checks` holds those that are on ([10](10-compile-time.md#static-if-and-conditional-compilation)).

@@ -45,7 +45,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
     - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([11](docs/11-errors-and-safety.md#unsafe-code)).
 
   No build setting turns the memory-safety checks off. Bounds checks stay on in shipping builds ([11](docs/11-errors-and-safety.md#check-levels)).
-- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([12](docs/12-compilation-model.md#what-a-target-must-provide), [09](docs/09-c-interop.md#what-the-runtime-needs-from-the-platform), [14](docs/14-decisions.md) D4). Rayo calls C and exports C directly. It has no C++ interop.
+- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([12](docs/12-compilation-model.md#what-a-target-must-provide), [09](docs/09-c-interop.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
 
 ## Why Rayo
 
@@ -58,7 +58,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, [14](docs/14-decisions.md) records each design decision and the alternatives it rejected, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
+The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
 
 | Doc | Covers |
 | --- | --- |
@@ -75,7 +75,6 @@ The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory mod
 | [11 Errors and safety](docs/11-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/11-errors-and-safety.md#unsafe-code), [check levels](docs/11-errors-and-safety.md#check-levels), build profiles |
 | [12 Compilation model](docs/12-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/12-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/12-compilation-model.md#what-the-language-leaves-open) |
 | [13 Grammar](docs/13-grammar.md) | EBNF grammar |
-| [14 Decisions](docs/14-decisions.md) | The design decisions (D0–D19) with the alternatives they rejected, and open questions (Q1–Q3) |
 | [15 Soundness](docs/15-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
 | [Hard cases](docs/hard-cases.md) | Systems patterns the spec is tested against |
 
@@ -94,7 +93,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 
 - **Ask questions and report problems** in [GitHub issues](https://github.com/rayo-lang/rayo/issues). A rule that is hard to follow, two parts of the spec that disagree, and a program the spec accepts that isn't safe are each worth an issue.
 - **Find work** in the issues labeled [`good first issue`](https://github.com/rayo-lang/rayo/labels/good%20first%20issue), [`help wanted`](https://github.com/rayo-lang/rayo/labels/help%20wanted) or [`ready-for-human`](https://github.com/rayo-lang/rayo/labels/ready-for-human).
-- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A new design decision gets a record in `docs/adr/`, numbered from `0001`; decisions D0–D19 came before it and stay in [14](docs/14-decisions.md). A spec change is reviewed against the soundness argument in [15](docs/15-soundness.md) and the criteria of the [hard cases](docs/hard-cases.md).
+- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A spec change is reviewed against the soundness argument in [15](docs/15-soundness.md) and the criteria of the [hard cases](docs/hard-cases.md).
 - **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI builds and tests on Linux with Swift 6.4, and a change must pass there. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 
