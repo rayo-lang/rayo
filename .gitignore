@@ -1,4 +1,6 @@
 .build/
 .swiftpm/
 .DS_Store
-.claude/
+.claude/*
+!.claude/skills
+!.claude/settings.json
