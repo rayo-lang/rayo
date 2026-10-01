@@ -1,0 +1,162 @@
+// A small gameplay module: enemies that chase players, damage them on
+// contact, and despawn through a command buffer. Shows pools and handles,
+// exclusivity-friendly patterns, attributes, tasks, and reflection.
+
+import std.math
+import std.pool
+import std.jobs                                     // forEachInParallel
+import std.tasks
+import std.serialize                                // Transient attribute, read by std's reflective serializer
+import engine.editor                                // the engine's own tools library: Bounds attribute, DebugUI
+import engine.diagnostics                           // log, the engine's log sink
+
+// MARK: - Data
+
+struct Tuning: Attribute {}                         // user attribute: shows up in the tuning panel
+
+struct Player(
+    var pos: Vec3,
+    var hp: Float = 100,
+)
+
+enum EnemyKind: UInt8 { case grunt, runner, brute }
+
+@reflect(private)                                   // std's serializer and the editor, in other modules, see every field
+struct Enemy(
+    var kind: EnemyKind,
+    var pos: Vec3,
+    var vel: Vec3 = .zero,
+    @Bounds(0, 500) @Tuning var hp: Float = 100,
+    @Bounds(0, 20)  @Tuning var speed: Float = 4,
+    var target: Handle<Player>?,                    // goes stale if the player is removed
+    @Transient var path: List<Vec3> = [],           // skipped by the save-game serializer
+)
+
+enum Command {
+    case despawn(Handle<Enemy>)
+    case spawn(EnemyKind, at: Vec3)
+    case damagePlayer(Handle<Player>, amount: Float)
+}
+
+public struct World(
+    var players = Pool<Player>(capacity: 8),
+    var enemies = Pool<Enemy>(capacity: 4096),
+    var commands = List<Command>(),
+    var clock: Double = 0,
+    var viewport: IVec2 = .zero,
+)
+
+extension World: TimeSource {                       // lets tasks stepped with a World use seconds(_:)
+    var now: Double { copy clock }                  // simulation time, not wall time, copied out
+}
+
+// MARK: - Systems
+
+/// Picks the closest player for each enemy that has lost its target.
+func acquireTargets(_ world: mutable World) {
+    for var e in &world.enemies where e.target == nil || world.players[e.target!] == nil {
+        var best: Handle<Player>? = nil
+        var bestDist: Float = .infinity
+        for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
+            let d = distanceSquared(p.pos, e.pos)
+            if d < bestDist { bestDist = d; best = h }
+        }
+        e.target = best
+    }
+}
+
+/// Moves enemies toward their targets, in parallel across enemies on std's job system.
+func steer(_ world: mutable World, dt: Float) {
+    world.enemies.forEachInParallel { e in              // not mutating, so it may run on many threads at once
+        guard let t = e.target, let p = world.players[t] else {     // players: read-only capture
+            e.vel *= 0.9
+            return
+        }
+        let toTarget = p.pos - e.pos
+        e.vel = lerp(e.vel, toTarget.normalized * e.speed, 0.2)
+        e.pos += e.vel * dt
+    }
+}
+
+/// Resolves contact damage. Mutations to other pools go through the command buffer.
+func contact(_ world: mutable World) {
+    for (h, e) in world.enemies.entries {
+        guard let t = e.target, let p = world.players[t] else { continue }
+        if distanceSquared(p.pos, e.pos) < 1 {
+            // 't' borrows e.target, so the command gets a copy; 'h' is the loop's own handle, so it moves in.
+            world.commands.append(.damagePlayer(copy t, amount: damage(for: e.kind)))
+            world.commands.append(.despawn(h))
+        }
+    }
+}
+
+func damage(for kind: EnemyKind) -> Float {
+    return when kind {
+        .grunt  -> 5
+        .runner -> 3
+        .brute  -> 20
+    }
+}
+
+/// Applies deferred structural changes once all iteration is over.
+func applyCommands(_ world: mutable World) {
+    let commands = world.commands.take()              // moves the contents out; world.commands is left empty
+    for c in commands {                               // 'c' borrows each command in place
+        when c {
+            .despawn(let h) ->
+                world.enemies.remove(h)               // every copy of h goes stale at once
+            .spawn(let kind, let pos) ->              // 'let' parts borrow the payload
+                world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))
+            .damagePlayer(let h, let amount) ->
+                world.players[h]?.hp -= amount        // silently skipped if the player is gone
+        }
+    }
+}
+
+// MARK: - A scripted sequence spanning frames
+
+task func waveSpawner(count: owned Int, every interval: owned Float, around center: owned Vec3) with (world: mutable World) {
+    for i in 0..<count {
+        let angle = Float(i) / Float(count) * 2 * .pi
+        let pos = center + Vec3(cos(angle), 0, sin(angle)) * 12
+        world.commands.append(.spawn(if i % 5 == 0 { .brute } else { .grunt }, at: pos))
+        await seconds(interval)                       // no borrows are live here
+    }
+    await until { w in w.enemies.isEmpty }            // the resume parameter is lent to the condition on each poll
+    log("wave cleared at t=\(world.clock)")           // interpolation into the log sink: no allocation
+}
+
+// MARK: - Frame entry
+
+// main (examples/platform/) holds the Game in an object and reaches it only through these functions.
+public struct Game(
+    var world = World(),
+    var scripts = TaskSet<World>(capacity: 64),
+)
+
+public func newGame(viewport: IVec2) -> UniquePointer<Game> {
+    var game = Game()
+    game.world.viewport = copy viewport               // 'viewport' is a borrowed parameter
+    game.scripts.start(waveSpawner(count: 10, every: 2, around: .zero))   // the first wave; tick steps it each frame
+    return UniquePointer(consume game)
+}
+
+public func tick(_ game: mutable Game, dt: Float) {
+    game.world.clock += dt                            // Float widens to Double implicitly
+    acquireTargets(&game.world)
+    steer(&game.world, dt: dt)
+    contact(&game.world)
+    game.scripts.step(&game.world)                    // one task step per frame
+    applyCommands(&game.world)
+}
+
+// MARK: - Editor tuning panel, generated from reflection
+
+func drawTuning<T>(_ value: mutable T, _ ui: mutable DebugUI) {
+    static for field in T.fields where field.has(Tuning.self) {
+        static if field.type == Float {
+            let bounds = field.attribute(Bounds.self) ?? Bounds(0, 1)
+            ui.slider(field.name, &value[field], min: bounds.min, max: bounds.max)
+        }
+    }
+}

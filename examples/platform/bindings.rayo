@@ -1,0 +1,94 @@
+// The game's platform module: safe Rayo wrappers over the platform SDK's C API
+// (platform.h), and main, which runs the game. This is the only module in the game
+// that uses 'unsafe'; the build declares the gameplay modules @safe.
+
+import std.math
+import std.pool
+import std.queue                         // MpscQueue
+import gameplay                          // Game, newGame, tick (examples/gameplay/)
+import c "platform.h" as plat where prefix: "platform_"   // every imported function is unsafe to call
+
+// A function-like macro wrapped in inline C, since macros aren't imported.
+extern c """
+    #include "platform.h"
+    static inline float pad_deadzone(float v) { return PLATFORM_PAD_DEADZONE(v); }
+    """
+extern c func pad_deadzone(_ v: Float) -> Float
+
+// MARK: - Safe wrappers
+
+struct Pad(
+    var leftStick: Vec2,
+    var rightStick: Vec2,
+    var buttons: plat.button,                // imported as a flag set (flag_enum)
+)
+
+func now() -> Double { unsafe plat.time_seconds() }       // no pointers, no preconditions
+
+func log(_ level: Int32, _ text: StringView) {
+    unsafe { plat.log(level, text.cchars.baseAddress, UInt(text.cchars.count)) }
+}
+
+func pad(_ index: Int32) -> Pad? {
+    precondition(index >= 0 && index < plat.PLATFORM_MAX_PADS)   // prefix stripping is case-sensitive
+    var raw = plat.pad()                      // C struct, zero-initialized
+    let ok = unsafe { plat.poll_pad(index, ptr(to: &raw)) }
+    guard ok && raw.connected else { return nil }
+    return Pad(
+        leftStick:  Vec2(unsafe pad_deadzone(raw.left_stick[0]), unsafe pad_deadzone(raw.left_stick[1])),
+        rightStick: Vec2(raw.right_stick[0], raw.right_stick[1]),   // Simd's initializer borrows its lanes and copies them
+        buttons:    plat.button(rawValue: copy raw.buttons)   // uint32_t field, uint32_t-backed C enum
+    )
+}
+
+// MARK: - Async file loading into a pool of requests
+
+enum LoadState { case pending, done(List<UInt8>), failed(Int32) }
+
+struct Loads(
+    var requests = Pool<LoadState>(capacity: 256),
+)
+
+// Called by the SDK on its I/O thread. The request is identified by its handle,
+// packed into the user pointer, so no Rayo pointer crosses into C. A call from C
+// attaches the middleware thread on first use and enters a section (09).
+@c func onFileLoaded(_ user: *Void?, _ data: *UInt8?, _ len: UInt, _ error: Int32) {
+    guard let h = Handle<LoadState>(bits: UInt64(UInt(bitPattern: user))) else { return }   // nil only for generation 0, which no real handle has
+    var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
+    if error == 0, let data {
+        result = .done(unsafe List(copying: data, count: Int(len)))    // copied with the current allocator
+    }
+    completedLoads.push((h, consume result))                           // Synchronized: safe from any thread
+}
+
+let completedLoads = MpscQueue<(Handle<LoadState>, LoadState)>(capacity: 256)
+
+func requestFile(_ path: StaticString, _ loads: mutable Loads) -> Handle<LoadState> {
+    let h = loads.requests.insert(.pending)
+    unsafe { plat.read_file_async(path.cString, onFileLoaded, .init(bitPattern: UInt(h.bits))) }
+    return h
+}
+
+/// Called once per frame by main.
+func pumpLoads(_ loads: mutable Loads) {
+    while let (h, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
+        loads.requests[h]? = consume result   // optional assignment: skipped (and result dropped) if the request was cancelled
+    }
+}
+
+// MARK: - The program
+
+// The game lives in an object, which gameplay builds.
+func main() {
+    unsafe plat.window_create(1280, 720, "Rayo".cString)       // the window lives as long as the process
+    let game = newGame(viewport: IVec2(1280, 720))
+    var loads = Loads()
+    var last = now()
+    while true {
+        let t = now()
+        pumpLoads(&loads)
+        tick(&game.value, dt: Float(t - last))                  // one checked access for the whole frame
+        last = t
+        checkpoint                                                // between frames: retired memory can be reclaimed
+    }
+}

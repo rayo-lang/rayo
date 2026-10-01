@@ -1,0 +1,113 @@
+// A job-parallel particle and cloth simulation on std's job system. Shows SoA
+// storage, fork-join, parallel loops, reductions, a scratch arena, and
+// where the borrow and closure-kind rules reject a data race.
+
+import std.math
+import std.memory                        // Arena
+import std.jobs                          // join, forEachInParallel, parallelReduce
+import engine.debug                      // the engine's DebugDraw
+
+struct Particle(
+    var pos: Vec3,
+    var vel: Vec3,
+    var life: Float,
+)
+
+struct ClothVertex(
+    var pos: Vec3,
+    var prev: Vec3,
+    var pinned: Bool,
+)
+
+struct Sim(
+    var particles = SoA<Particle>(capacity: 200_000),
+    var cloth = List<ClothVertex>(),
+    var clothConstraints = List<(a: Int32, b: Int32, rest: Float)>(),
+    var wind: Vec3 = [2, 0, 0.5],
+    var stats = SimStats(),
+)
+
+struct SimStats(
+    var alive: Int = 0,
+    var maxSpeed: Float = 0,
+)
+
+func step(_ sim: mutable Sim, dt: Float) {
+    let gravity: Vec3 = [0, -9.81, 0]
+
+    // Independent systems run as two jobs. The checker proves that the two closures
+    // touch disjoint places, as it does for any two arguments of one call: particles
+    // and cloth are written by one closure each; wind is only read, so both share it.
+    join({ integrateParticles(&sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
+         { integrateCloth(&sim.cloth, gravity: gravity, wind: sim.wind, dt: dt) })
+
+    // Uncommenting this is a compile error:
+    //
+    // join({ integrateParticles(&sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
+    //      { sim.wind += [0.1, 0, 0] })
+    //
+    // error: 'sim.wind' is written by the second argument while the first reads it
+
+    relaxCloth(&sim.cloth, sim.clothConstraints.span, iterations: 4)
+    sim.stats = gatherStats(sim.particles)
+}
+
+func integrateParticles(_ ps: mutable SoA<Particle>, gravity: Vec3, wind: Vec3, dt: Float) {
+    ps.forEachInParallel(batch: 1024) { p in     // per job: a disjoint slice of each column
+        p.vel += (gravity + wind) * dt
+        p.pos += p.vel * dt
+        p.life -= dt
+    }
+    ps.removeAll { $0.life <= 0 }                // single-threaded compaction after the join
+}
+
+func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec3, dt: Float) {
+    let accel = gravity + wind
+    verts.forEachInParallel { v in
+        if v.pinned { return }
+        let next = v.pos + (v.pos - v.prev) * 0.99 + accel * (dt * dt)   // Verlet
+        v.prev = copy v.pos                      // 'v' is a mutable parameter, which can't be moved from, so its position is copied
+        v.pos = next                             // 'next' is a local: it moves in
+    }
+}
+
+// Constraint relaxation touches pairs of vertices, so iterations can't be split
+// into disjoint element ranges. It stays single-threaded, and the checker agrees:
+// a parallel loop over the constraints would have to write the captured 'verts',
+// which makes its body a 'mutating' closure, one that can't run on many threads at once.
+func relaxCloth(_ verts: mutable List<ClothVertex>, _ cs: Span<(a: Int32, b: Int32, rest: Float)>, iterations: Int) {
+    for _ in 0..<iterations {
+        for c in cs {
+            if var (a, b) = &verts[Int(c.a), Int(c.b)] {          // checked: c.a != c.b
+                let delta = b.pos - a.pos
+                let len = delta.length
+                guard len > 1e-6 else { continue }
+                let fix = delta * (0.5 * (len - c.rest) / len)
+                if !a.pinned { a.pos += fix }
+                if !b.pinned { b.pos -= fix }
+            }
+        }
+    }
+}
+
+func gatherStats(_ ps: SoA<Particle>) -> SimStats {
+    // Each job folds its slice starting from the identity (0), and the partial
+    // results are combined with 'max'.
+    let maxSpeed = ps.vel.parallelReduce(Float(0), combine: max) { acc, v in max(acc, v.length) }
+    return SimStats(alive: ps.count, maxSpeed: maxSpeed)
+}
+
+// Frame memory: an arena that the game's main loop resets once per frame, with
+// frameArena.reset(), after the frame's jobs have finished.
+let frameArena = Allocator.register(Arena(size: 64.mb))
+
+// Scratch memory for a debug overlay, released for free at the next reset.
+func debugDraw(_ sim: Sim, _ draw: mutable DebugDraw) {
+    using allocator = frameArena {
+        var lines = List<(Vec3, Vec3)>(reservingCapacity: sim.clothConstraints.count)
+        for c in sim.clothConstraints {                 // 'sim' is borrowed, so the positions are copied
+            lines.append((copy sim.cloth[Int(c.a)].pos, copy sim.cloth[Int(c.b)].pos))
+        }
+        draw.lines(lines.span, color: .yellow)
+    }
+}
