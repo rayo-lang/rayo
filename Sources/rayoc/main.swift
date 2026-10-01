@@ -21,7 +21,18 @@ func readFile(_ path: String) -> String? {
     return String(decoding: bytes, as: UTF8.self)
 }
 
+/// Writes all of `text` to `descriptor`, retrying after a partial or interrupted write.
+func writeAll(_ text: String, to descriptor: Int32) {
+    var bytes = Array(text.utf8)[...]
+    while !bytes.isEmpty {
+        let written = bytes.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
+        if written < 0 && errno == EINTR { continue }
+        if written <= 0 { return }
+        bytes = bytes.dropFirst(written)
+    }
+}
+
 let result = Driver.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile)
-fputs(result.output, stdout)
-fputs(result.errors, stderr)
+writeAll(result.output, to: STDOUT_FILENO)
+writeAll(result.errors, to: STDERR_FILENO)
 exit(result.exitCode)
