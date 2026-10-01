@@ -2,7 +2,7 @@
 
 ## Grace periods: how deferred memory is reclaimed
 
-Some safe operations make memory unreachable while a view, on any thread, may still be reading it: resetting an arena, unregistering an allocator, and publishing a new `Published` value. A value destroyed, or memory made unreachable, while something may still use it is **retired** instead of freed: its `deinit`s and its release wait until nothing can still see it. For a thread-bound object, that is its own thread's accesses and pins ([03](03-handles-and-objects.md#destroying-an-object)). A thread is **inside a section** while it runs Rayo code that might hold a view.
+Some safe operations make memory unreachable while a view, on any thread, may still be reading it: resetting an arena and unregistering an allocator. A value destroyed, or memory made unreachable, while something may still use it is **retired** instead of freed: its `deinit`s and its release wait until nothing can still see it. For a thread-bound object, that is its own thread's accesses and pins ([03](03-handles-and-objects.md#destroying-an-object)). A thread is **inside a section** while it runs Rayo code that might hold a view.
 
 **Retired memory that a view may still be reading is reclaimed only after every thread has been outside a section at some moment since it was retired. That span is a grace period.** Outside exit, no thread waits for another to reclaim memory ([below](#at-exit-reclaim-then-close-entry)).
 
@@ -51,12 +51,11 @@ Three kinds of call run one depth deeper, since outer Rayo frames may still hold
 - a thread destroying an object through its owner while no access or pin holds it ([03](03-handles-and-objects.md#destroying-an-object));
 - a thread in its teardown, which destroys the objects it still has ([07](07-concurrency.md#global-state));
 - a creating thread whose new object a reset or an unregistration destroyed while it was being created ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators));
-- a thread that `deinit`s were queued to ([below](#deinits-queued-to-a-thread)): a thread-bound object's home thread, and the thread that retired a pinned value that isn't `Sendable` ([03](03-handles-and-objects.md#pinning-for-c));
-- a thread that drops the last `Shared` snapshot of a retired `Published` value after its grace period ([07](07-concurrency.md#snapshots-one-time-values-and-waits)).
+- a thread that `deinit`s were queued to ([below](#deinits-queued-to-a-thread)): a thread-bound object's home thread, and the thread that retired a pinned value that isn't `Sendable` ([03](03-handles-and-objects.md#pinning-for-c)).
 
 **The reclaimer** is a runtime thread, which the runtime may start when startup ends, or a thread that calls `Runtime.reclaim(budget:)`. Whether the runtime thread exists, and how often it wakes, is runtime policy; where it exists, it keeps reclaiming while memory whose grace period has passed is pending. `Runtime.reclaim(budget:)` reclaims what is ready on the calling thread for up to `budget` of time, whether or not a runtime thread exists, and never waits for a grace period. At exit, the exiting thread is the reclaimer ([below](#at-exit-reclaim-then-close-entry)).
 
-**The `deinit`s given to the reclaimer run on the reclaiming thread**: a retired `Published` value that no snapshot holds, a pinned `Sendable` value that isn't a thread-bound object's, and an unregistered allocator's implementation once its waits pass ([06](06-memory-and-allocators.md#unregistering-an-allocator)). A thread-bound object's `deinit`, and those of other values that aren't `Sendable`, are queued to their own thread instead. A `deinit` that touches a `@threadlocal var` sees the reclaiming thread's copy.
+**The `deinit`s given to the reclaimer run on the reclaiming thread**: a pinned `Sendable` value that isn't a thread-bound object's, and an unregistered allocator's implementation once its waits pass ([06](06-memory-and-allocators.md#unregistering-an-allocator)). A thread-bound object's `deinit`, and those of other values that aren't `Sendable`, are queued to their own thread instead. A `deinit` that touches a `@threadlocal var` sees the reclaiming thread's copy.
 
 ### Deinits queued to a thread
 

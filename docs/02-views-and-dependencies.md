@@ -108,7 +108,7 @@ Rule 4 tells the caller that `lines` now borrows `source`, and rule 5 checks ins
 
 - the borrowed or `mutable` parameters and their dependency sets, except that what is stored into a `mutable` parameter depends on another `mutable` parameter itself only when a `where` item names it (rule 4);
 - the sets carried in by scoped `owned` parameters, which belong to the caller and flow back through rules 3 and 4;
-- **static storage**: global `let`s and `const`s ([07](07-concurrency.md#global-state)), and the views that the `Synchronized` values in them lend, such as a lock guard, `Once.get()` or a `Published` read ([07](07-concurrency.md#the-synchronized-contract)). Such a global is never moved or destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). What a C entry returns to C, or stores into what C lent it, may depend on less ([09](09-c-interop.md#c-representations)).
+- **static storage**: global `let`s and `const`s ([07](07-concurrency.md#global-state)), and the views that the `Synchronized` values in them lend, such as a lock guard or `Once.get()` ([07](07-concurrency.md#the-synchronized-contract)). Such a global is never moved or destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). What a C entry returns to C, or stores into what C lent it, may depend on less ([09](09-c-interop.md#c-representations)).
 
 ```swift
 func name() -> StringView {
