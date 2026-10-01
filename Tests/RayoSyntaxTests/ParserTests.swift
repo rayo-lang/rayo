@@ -307,8 +307,156 @@ struct ErrorTests {
         ("func f() { let y = x! }", "1:21: error: force unwrapping isn't supported yet"),
         ("func f() { let r = 0..<n }", "1:21: error: '..<' isn't supported yet"),
         ("func f() { let y = if a { 1 } else { 2 } }", "1:20: error: 'if' as an expression isn't supported yet"),
+        ("func f() { let y = when x {} }", "1:20: error: 'when' as an expression isn't supported yet"),
+        ("struct S<T>(var x: T)", "1:9: error: a generic struct isn't supported yet"),
+        ("@reflect\nstruct S {}", "1:1: error: an attribute isn't supported yet"),
+        ("struct S {\n    @inline func f() {}\n}", "2:5: error: an attribute isn't supported yet"),
+        ("func f() {\n    @checks(.all)\n    do { g() }\n}", "2:5: error: an attribute isn't supported yet"),
+        ("func f() where T: P {}", "1:10: error: a 'where' clause isn't supported yet"),
+        ("func f() { do {} catch {} }", "1:18: error: 'catch' isn't supported yet"),
+        ("func f() { if a, b {} }", "1:16: error: a condition list isn't supported yet"),
+        ("func f(_ p: *Int) {}", "1:13: error: a raw pointer type isn't supported yet"),
+        ("func f(_ p: any P) {}", "1:13: error: 'any' isn't supported yet"),
+        ("func f(_ a: (Int,)) {}", "1:13: error: a tuple type isn't supported yet"),
+        ("func f() { let t = (a, b) }", "1:22: error: a tuple isn't supported yet"),
+        ("func f() { let t = () }", "1:20: error: the empty tuple isn't supported yet"),
+        ("func f() { let y = x ?? z }", "1:22: error: '??' isn't supported yet"),
     ])
     func unsupported(source: String, expected: String) {
         #expect(errors(source) == [expected])
     }
+
+    @Test("malformed declarations, types and statements", arguments: [
+        ("let x = 1", "1:1: error: expected 'struct' or 'func' to begin a declaration, found 'let'"),
+        ("struct S(var x) {}", "1:15: error: expected ':' and a type, or '=' and a default, found ')'"),
+        ("struct S(x: Int)", "1:10: error: expected 'var' or 'let' to begin a field, found 'x'"),
+        ("struct S { let x = 1 }", "1:12: error: expected a method or 'deinit', found 'let'"),
+        ("func f() -> Int", "1:16: error: expected '{' to begin a block, found the end of the file"),
+        ("func f(_ a: [n of Int]) {}", "1:14: error: expected the inline array's count, found 'n'"),
+        ("func f(_ a: [3 Int]) {}", "1:16: error: expected 'of' in an inline array type, found 'Int'"),
+        ("func f(_ a: List<>) {}", "1:18: error: expected a type, found '>'"),
+        ("func f() { owned x = 1 }", "1:18: error: expected 'let' or 'var' after 'owned', found 'x'"),
+        ("func f() { for i 0..<n {} }", "1:18: error: expected 'in' after the loop variable, found '0'"),
+        ("func f() { x.1 }", "1:14: error: expected a member name after '.', found '1'"),
+    ])
+    func malformed(source: String, expected: String) {
+        #expect(errors(source) == [expected])
+    }
+}
+
+struct SyntaxTreeTests {
+    @Test("a node's range covers its source text")
+    func ranges() throws {
+        let source = "func f() {\n    let x = foo(a, b).c + -d\n    run(n) { tick() }\n    (a + b)\n}"
+        let (parsed, _) = Parser.parse(source)
+        let function = try #require(parsed.declarations.first.flatMap { declaration -> FuncDecl? in
+            if case .function(let function) = declaration { return function } else { return nil }
+        })
+        let statements = function.body.statements
+        #expect(text(function.range, in: source) == source)
+        #expect(text(statements[0].range, in: source) == "let x = foo(a, b).c + -d")
+        if case .binding(let binding) = statements[0].kind, let value = binding.value {
+            #expect(text(value.range, in: source) == "foo(a, b).c + -d")
+        } else {
+            Issue.record("expected a binding with a value")
+        }
+        #expect(text(statements[1].range, in: source) == "run(n) { tick() }")
+        #expect(text(statements[2].range, in: source) == "(a + b)")
+    }
+
+    @Test("every expression in a file has its own id")
+    func uniqueIDs() {
+        let source = """
+            struct S(var x: Int = f(1)) {
+                func g() -> Int { h { [copy y] (a: Int) in a + y }[0] }
+            }
+            func k() {
+                var v = List<Int>(capacity: (2))
+                if v.isEmpty { while -v.count > 0 { v.append(copy x) } }
+                for i in 0..<n { v[i] = consume w; each(v) { $0 } }
+            }
+            """
+        let (parsed, diagnostics) = Parser.parse(source)
+        #expect(diagnostics.map(\.description) == [])
+        let ids = expressionIDs(in: parsed)
+        #expect(ids.count > 20)
+        #expect(Set(ids).count == ids.count)
+    }
+
+    @Test("a member name may be a keyword, and a field's type may come from its default")
+    func keywordsAndDefaults() {
+        #expect(body("x.init") == "(. x init)")
+        #expect(file("struct S(var x = 0)") == "(struct S(var x = 0))")
+    }
+}
+
+private func text(_ range: SourceRange, in source: String) -> String {
+    String(decoding: Array(source.utf8)[range.start.offset..<range.end.offset], as: UTF8.self)
+}
+
+private func expressionIDs(in file: SourceFile) -> [ExprID] {
+    var ids: [ExprID] = []
+    func visit(_ expr: Expr) {
+        ids.append(expr.id)
+        switch expr.kind {
+        case .intLiteral, .boolLiteral, .name, .selfRef:
+            break
+        case .member(let base, _, _):
+            visit(base)
+        case .index(let base, let arguments), .call(let base, let arguments):
+            visit(base)
+            arguments.forEach { visit($0.value) }
+        case .unary(_, let operand), .lend(let operand), .copy(let operand), .consume(let operand):
+            visit(operand)
+        case .binary(_, let left, let right):
+            visit(left)
+            visit(right)
+        case .arrayLiteral(let elements):
+            elements.forEach(visit)
+        case .closure(let closure):
+            visit(closure.body)
+        }
+    }
+    func visit(_ block: Block) {
+        for statement in block.statements {
+            switch statement.kind {
+            case .binding(let binding):
+                binding.value.map(visit)
+            case .assign(let target, _, let value):
+                visit(target)
+                visit(value)
+            case .expression(let expr):
+                visit(expr)
+            case .ifStmt(let condition, let then, let otherwise):
+                visit(condition)
+                visit(then)
+                otherwise.map(visit)
+            case .whileStmt(let condition, let body):
+                visit(condition)
+                visit(body)
+            case .forRange(_, _, let lower, let upper, let body):
+                visit(lower)
+                visit(upper)
+                visit(body)
+            case .returnStmt(let value):
+                value.map(visit)
+            case .breakStmt, .continueStmt:
+                break
+            case .doBlock(let block):
+                visit(block)
+            }
+        }
+    }
+    func visit(_ function: FuncDecl) { visit(function.body) }
+    for declaration in file.declarations {
+        switch declaration {
+        case .function(let function):
+            visit(function)
+        case .structure(let structure):
+            structure.fields.compactMap(\.defaultValue).forEach(visit)
+            structure.methods.forEach(visit)
+            structure.deinitBody.map(visit)
+        }
+    }
+    return ids
 }

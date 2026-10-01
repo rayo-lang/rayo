@@ -75,6 +75,30 @@ struct NewlineTests {
         #expect(tokens("a\n\n// note\n\nb") == ["a", "⏎", "b"])
         #expect(tokens("\n\na") == ["a"])
     }
+
+    @Test("a line continues after ',' outside brackets")
+    func commaContinues() {
+        #expect(tokens("a,\nb") == ["a", ",", "b"])
+    }
+
+    @Test("a line that starts with 'where', 'catch' or 'throws' joins the one above", arguments: [
+        "where", "catch", "throws",
+    ])
+    func keywordJoins(keyword: String) {
+        #expect(tokens("a\n\(keyword) b") == ["a", keyword, "b"])
+    }
+
+    @Test("a line that is an attribute continues into the declaration below it", arguments: [
+        ("@reflect\nstruct S", ["@", "reflect", "struct", "S"]),
+        ("@packed(4)\nstruct S", ["@", "packed", "(", "4", ")", "struct", "S"]),
+        ("@ui.Bounds\nfunc f", ["@", "ui", ".", "Bounds", "func", "f"]),
+        ("@checks(.all)\ndo", ["@", "checks", "(", ".", "all", ")", "do"]),
+        ("f(x)\ng()", ["f", "(", "x", ")", "⏎", "g", "(", ")"]),
+        ("a.b\nc", ["a", ".", "b", "⏎", "c"]),
+    ])
+    func attributeContinues(source: String, expected: [String]) {
+        #expect(tokens(source) == expected)
+    }
 }
 
 struct TokenTests {
@@ -119,10 +143,36 @@ struct TokenTests {
         #expect(lexed.map(\.spaceBefore) == [false, false, false, true, false])
     }
 
-    @Test("what isn't supported yet is reported where it starts")
-    func unsupported() {
-        #expect(lexErrors("let s = \"hi\"") == ["1:9: error: string literals aren't supported yet"])
-        #expect(lexErrors("let f = 1.5") == ["1:9: error: floating-point literals aren't supported yet"])
-        #expect(lexErrors("let x = 12ab") == ["1:9: error: invalid digit in integer literal"])
+    @Test("lexical errors are reported where they start", arguments: [
+        ("let s = \"hi\"", "1:9: error: string literals aren't supported yet"),
+        ("let f = 1.5", "1:9: error: floating-point literals aren't supported yet"),
+        ("let x = 12ab", "1:9: error: invalid digit in integer literal"),
+        ("let x = 0x", "1:9: error: expected digits after the radix prefix"),
+        ("a # b", "1:3: error: unexpected character"),
+        ("$x", "1:1: error: unexpected character"),
+        ("`abc", "1:1: error: unterminated '`' identifier"),
+        ("é", "1:1: error: unexpected character"),
+    ])
+    func errors(source: String, expected: String) {
+        #expect(lexErrors(source) == [expected])
+    }
+
+    @Test("a column counts characters, not bytes")
+    func columns() {
+        #expect(lexErrors("é é") == ["1:1: error: unexpected character", "1:3: error: unexpected character"])
+    }
+
+    @Test("a string literal is skipped whole, escaped quotes included, and lexing goes on after it")
+    func stringSkipped() {
+        let (lexed, diagnostics) = Lexer.tokenize("f(\"a\\\"b\", c)")
+        #expect(diagnostics.count == 1)
+        #expect(lexed.map(\.description) == ["f", "(", "invalid token", ",", "c", ")", "end of file"])
+    }
+
+    @Test("an unterminated string literal ends at its line")
+    func unterminatedString() {
+        let (lexed, diagnostics) = Lexer.tokenize("let s = \"abc\nx")
+        #expect(diagnostics.count == 1)
+        #expect(lexed.map(\.description) == ["let", "s", "=", "invalid token", "newline", "x", "end of file"])
     }
 }

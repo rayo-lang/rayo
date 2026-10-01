@@ -223,6 +223,7 @@ public struct Lexer {
             case .newline:
                 if let open = brackets.last, open == .lparen || open == .lbracket { continue }
                 if let previous = result.last, continuesLine(previous) { continue }
+                if endsInAttribute(result) { continue }
                 if i + 1 < raw.count, joinsLine(raw[i + 1]) { continue }
                 if result.isEmpty || result.last?.kind == .newline { continue }
             default:
@@ -236,7 +237,36 @@ public struct Lexer {
     static func continuesLine(_ token: Token) -> Bool {
         guard case .punct(let p) = token.kind else { return false }
         return p.isBinaryOperator || p.isAssignment || p == .arrow || p == .comma
-            || p == .lparen || p == .lbracket || p == .lbrace || p == .at
+            || p == .lparen || p == .lbracket || p == .lbrace
+    }
+
+    /// Whether `tokens` ends in an attribute: `@`, a name that may have `.` parts, and optional
+    /// arguments in parentheses, as in `@reflect`, `@ui.Bounds` and `@packed(4)`.
+    static func endsInAttribute(_ tokens: [Token]) -> Bool {
+        var i = tokens.count - 1
+        if i >= 0, tokens[i].isPunct(.rparen) {
+            var depth = 0
+            while i >= 0 {
+                if tokens[i].isPunct(.rparen) { depth += 1 }
+                if tokens[i].isPunct(.lparen) { depth -= 1 }
+                if depth == 0 { break }
+                i -= 1
+            }
+            i -= 1
+        }
+        while i >= 1, isName(tokens[i]) {
+            if tokens[i - 1].isPunct(.at) { return true }
+            guard tokens[i - 1].isPunct(.dot) else { return false }
+            i -= 2
+        }
+        return false
+    }
+
+    private static func isName(_ token: Token) -> Bool {
+        switch token.kind {
+        case .identifier, .keyword: return true
+        default: return false
+        }
     }
 
     static func joinsLine(_ token: Token) -> Bool {

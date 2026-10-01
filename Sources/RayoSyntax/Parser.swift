@@ -207,7 +207,12 @@ public struct Parser {
         }
     }
 
+    private mutating func rejectAttribute() throws(Failure) {
+        if current.isPunct(.at) { throw unsupported("an attribute", at: current.range) }
+    }
+
     private mutating func parseDeclaration() throws(Failure) -> Declaration {
+        try rejectAttribute()
         if current.isKeyword(.struct) { return .structure(try parseStruct()) }
         if current.isKeyword(.func) { return .function(try parseFunction(selfConvention: nil)) }
         throw fail("expected 'struct' or 'func' to begin a declaration")
@@ -286,6 +291,7 @@ public struct Parser {
     }
 
     private mutating func parseMember() throws(Failure) -> Member {
+        try rejectAttribute()
         if current.isKeyword(.deinit) {
             let keyword = advance().range
             return .deinitializer(try parseBlock(), keyword: keyword)
@@ -448,6 +454,7 @@ public struct Parser {
     }
 
     private mutating func parseStatement() throws(Failure) -> Stmt {
+        try rejectAttribute()
         let start = current.range
         let kind: StmtKind
         if current.isKeyword(.owned) || current.isKeyword(.let) || current.isKeyword(.var) {

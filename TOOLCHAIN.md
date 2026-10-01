@@ -32,5 +32,7 @@ Generics, optionals, accessors, `rebind`, objects, arenas, threads and C come af
 | Path | Holds |
 | --- | --- |
 | `Sources/RayoSyntax` | The lexer, the parser, the syntax tree and its text dump |
-| `Sources/rayoc` | The command-line driver |
+| `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files |
+| `Sources/rayoc` | The executable: reads files and writes the driver's output and errors |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
+| `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
