@@ -42,7 +42,7 @@ unsafe {                                             // unsafe tier: raw memory,
 
 **Decision.** There are three tiers ([01](01-values-and-ownership.md#tiers-of-checking)): **static**, checked by the compiler for free; **dynamic**, a visible runtime check; and **`unsafe`**, which nothing checks, for code that is inherently unsafe. A pattern can land in the dynamic tier because the static checker can't prove it, but it is never forbidden for that reason, and never forced into `unsafe`.
 
-**Why.** Dynamic checks are cheap, and they are visible in the type, which keeps Rayo's first design pillar, visible costs ([README](../README.md)).
+**Why.** Dynamic checks are cheap, and they are visible in the type, which keeps Rayo's first design pillar, visible costs ([Why Rayo](why-rayo.md#design-pillars)).
 
 **Rejected.**
 
