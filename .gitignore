@@ -4,3 +4,4 @@
 .claude/*
 !.claude/skills
 !.claude/settings.json
+__pycache__/

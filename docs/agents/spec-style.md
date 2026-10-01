@@ -40,6 +40,10 @@ A rule says what holds. A short reason may follow when it helps a reader apply t
 - A bullet may open with a bold label that names its case: `- **Owning values.** These are …`.
 - A colon, a comma or a second sentence does the work of a dash.
 
+## Checks
+
+`python3 scripts/check_docs.py`, which CI runs, checks every link and anchor, the layout and the dashes. It also counts each file's sentences over 40 words and paragraphs over 120, which may never rise above `scripts/readability-baseline.json`. A rewrite that lowers them commits the lower baseline, written by `--update-baseline`.
+
 ## Example
 
 Before, the opening of chapter 01, with its links shown as plain text:
