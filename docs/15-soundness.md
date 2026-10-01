@@ -96,7 +96,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 - **a store into a `mutable` parameter `p` that depends on a place overlapping `p`**, since the caller's set for `p` would have to name `p` itself;
 - **a store through a parameter's exclusive dependencies that depends on the parameter's own storage**, which absorption never reports.
 
-**Static storage is always allowed**, since it is never moved or destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Published.current` and `Once.get()` by data never written again and freed only after a grace period ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in global `let`s that the path rule accepts, since returning to C at depth zero ends the section ([09](09-c-interop.md#c-representations)).
+**Static storage is always allowed**, since it is never moved or destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in global `let`s that the path rule accepts, since returning to C at depth zero ends the section ([09](09-c-interop.md#c-representations)).
 
 **A scoped `mutable` parameter counts as used at every exit**, so no path out, an error's included, frees what the callee just stored a view of.
 

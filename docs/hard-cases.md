@@ -772,7 +772,7 @@ An event-loop server handles requests on worker threads for weeks. Each worker h
 
 A `@noalloc` callback with a real-time deadline, called by a C library on its own thread, reads a `Published` configuration, as an audio callback reads its mixer settings.
 
-- **Must hold:** a callback that reads the configuration through `current`, taking no snapshot, never runs another thread's retired values' `deinit`s or frees, and never waits on reclamation.
+- **Must hold:** a callback that reads the configuration never waits, and runs no `deinit` and frees nothing that another thread's `publish` left to it. State how it keeps from dropping the last owner of a replaced configuration.
 - **Must accept** a `@noalloc` function that calls a DSP closure it takes as a `@noalloc (mutable MutableSpan<Float>) -> Void`, drops a `Closure<@noalloc () -> Void>` it owns, and calls a `@c noalloc` pointer a C plugin handed over.
 - **Must accept** callbacks on the C library's thread that use a `@threadlocal` scratch buffer, which the thread's first entry initializes and its detach destroys. State what the first callback may allocate, and how a `@noalloc` callback avoids it.
 

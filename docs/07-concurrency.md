@@ -211,7 +211,7 @@ log.lock { msgs in
 
 ### Snapshots, one-time values and waits
 
-- **`Published<T: Frozen & Sendable>`** is read-copy-update. `p.current` lends a read-only view of the current value without waiting, and `p.snapshot()` returns a `Shared<T>` to keep. `p.publish(v)` swaps in a new value and **retires** the old one, which is destroyed once a grace period has passed and no snapshot of it remains ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)), so views taken before the swap stay valid.
+- **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
 - **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
 - **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits are declared `@parks` ([08](08-grace-periods-and-checkpoints.md#blocking-waits)). `g = cv.wait(consume g)` unlocks, parks, relocks after it wakes, and returns a new guard. `g` can be consumed only after the last use of every view derived from it, so no view of the protected data survives the unlock. The mutex is in the consumed guard's dependency set, so the wait borrows both the condvar and the mutex, and is a checkpoint only under 08's rule for lock guards ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)), as for `var g = m.lock()` of a global `m` followed by `g = cv.wait(consume g)` on a global `cv`.
 
@@ -227,7 +227,7 @@ The language defines the contract that the types above share, the marker protoco
 - **takes elements in and hands them out as owned values**, each handed out after, in happens-before order, the call that took it in, and lends views of them only as the next bullets allow;
 - **grants a view only while no conflicting view of the same data is live, on any thread**: an exclusive guard or closure argument while no other view is live, and a shared one while no exclusive one is. Each view it grants happens after the end of every conflicting view it granted before. A request that would conflict with a view its own thread holds panics or blocks, and never succeeds, so a re-entrant lock can't satisfy the contract;
 - **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or `.system` heap state that the lock points to and keeps allocated while the guard lives, even while its thread is parked outside its section ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them), [08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow));
-- **lends a view of its interior only under a lock**, through a closure it runs or a `@guard` guard it returns, as `Mutex` and `RwLock` do, **or as a read-only view of data that its non-`mutating` methods never write again, except through that data's own synchronization, and never free before a grace period**, as `Published.current` and `Once.get()` lend;
+- **lends a view of its interior only under a lock**, through a closure it runs or a `@guard` guard it returns, as `Mutex` and `RwLock` do, **or as a read-only view of data that its non-`mutating` methods never write again, except through that data's own synchronization, and never free before the value itself is destroyed**, as `Once.get()` lends;
 - **is bitwise-movable whenever nothing borrows it**: the language moves a value only when nothing borrows it, and an `unsafe Synchronized` conformance promises that the unborrowed value keeps no pointer to itself and has no address registered anywhere. Moving or destroying it stays sound even when a guard it returned is never destroyed ([11](11-errors-and-safety.md#unsafe-code)), as when the guard sits in a stale container; its lock then stays held.
 
 Declaring a conformance to `Synchronized` requires `unsafe`, because the compiler can't verify the implementation: `struct SpinQueue<T>(…): unsafe Synchronized { … }`, or `extension T: unsafe Synchronized {}` ([11](11-errors-and-safety.md#safe-modules)).
@@ -241,7 +241,7 @@ let config = Published(GameConfig())           // global; safe from any thread
 let godMode = Atomic(false)
 @threadlocal var scratch = List<Int>()
 
-func damageScale() -> Float { copy config.current.damageScale }   // a read-only view that never waits, then a copy
+func damageScale() -> Float { copy config.snapshot().value.damageScale }   // an owner that never waits, then a copy
 func debugMenuSet(_ c: owned GameConfig) { config.publish(c) }      // readers see old or new, never torn
 
 func grow() { scratch.append(0) }              // modify access to this thread's 'scratch'
