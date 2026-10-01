@@ -86,7 +86,6 @@ The spec has one chapter per topic, in [`docs/`](docs/). To learn the memory mod
 | [`docs/`](docs/) | The spec, the hard cases, and [Why Rayo](docs/why-rayo.md) |
 | [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system |
 | `Sources/`, `Tests/` | `rayoc` and its tests. [TOOLCHAIN.md](TOOLCHAIN.md#layout) says what each module does |
-| [`reviews/`](reviews/) | The record of the spec's review rounds: what each round found, and the reviewers' prompts |
 | [`AGENTS.md`](AGENTS.md), [`.agents/skills/`](.agents/skills/) | The project rules, and the workflows that AI coding agents follow in this repository |
 
 ## Contribute
