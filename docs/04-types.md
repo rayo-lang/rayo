@@ -331,14 +331,14 @@ let hp = enemies[h]?.hp ?? 0         // looks at the element's hp in place, or a
 
 **An optional stores `nil` in a niche, a bit pattern `T` never uses, when `T` has one, and then costs no extra bytes.** These types have one:
 
-- raw pointers, `@c` function pointers, `Box`es and object owners, whose `nil` is null;
-- weak pointers and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([12](12-compilation-model.md#modules-and-names)), and its generation is never 0 ([03](03-handles-and-objects.md#pools-and-handles));
+- raw pointers, `@c` function pointers, `Box`es, object owners and counted owners, whose `nil` is null;
+- weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([12](12-compilation-model.md#modules-and-names)), and its generation is never 0 ([03](03-handles-and-objects.md#pools-and-handles));
 - an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([09](09-c-interop.md#structs-unions-and-enums));
 - a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([09](09-c-interop.md#structs-unions-and-enums)).
 
 An optional itself has none, and neither has an open imported C enum ([09](09-c-interop.md#structs-unions-and-enums)) or `Bool`, so C reading a Rayo `Bool`'s byte as a `bool` always finds 0 or 1.
 
-**No niche lies inside a `Synchronized` value**, at any depth ([07](07-concurrency.md#the-synchronized-contract)), since other threads write its bytes, as a `Mutex<Handle<T>>`'s `Handle` is written under the lock, while reading a tag is a plain load. So `Mutex<Handle<T>>?` and `Atomic<ConcurrentWeakPointer<T>>?` keep their tag outside, in the form below.
+**No niche lies inside a `Synchronized` value**, at any depth ([07](07-concurrency.md#the-synchronized-contract)), since other threads write its bytes, as a `Mutex<Handle<T>>`'s `Handle` is written under the lock, while reading a tag is a plain load. So `Mutex<Handle<T>>?` and `Atomic<WeakShared<T>>?` keep their tag outside, in the form below.
 
 Without a niche, `T?` is laid out as a struct of `T` followed by a `Bool` saying whether it holds a value, so an exported C header can declare it as that struct ([09](09-c-interop.md#c-representations)).
 
@@ -402,8 +402,8 @@ The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpa
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](03-handles-and-objects.md#pools-and-handles)) |
 | `StablePool<T>` | yes | Stable and pinnable element addresses |
 | `UniquePointer<T>`, `WeakPointer<T>` | yes / no | An object on one thread, with checked weak pointers to it ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) |
-| `ConcurrentUniquePointer<T>`, `ConcurrentWeakPointer<T>` | yes / no | An object that several threads use, with a lock built in ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)) |
-| `Slice<T>` | no | Checked long-lived view into a buffer held by a concurrent object ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)) |
+| `Shared<T>`, `LocalShared<T>`, `WeakShared<T>` | yes / yes / no | Counted owners of a value that many places hold, and checked weak links to a `Shared` one ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)) |
+| `Slice<T>` | no | Checked long-lived view into a buffer behind a `Shared` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)) |
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([below](#struct-of-arrays-soat)) |
 | `String` | yes | UTF-8 bytes, allocator |
 | `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
@@ -570,7 +570,7 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // Span<UInt8> to Span<Ver
 - structs with no `deinit` whose stored fields are all `Pod`, all **as visible as the struct**, and none `unsafe`, and whose primary initializer is as visible as the struct too and not `unsafe` ([above](#initializers)). An imported bitfield counts as [09](09-c-interop.md#structs-unions-and-enums) says;
 - unions with no `deinit`, named or anonymous in a struct ([09](09-c-interop.md#structs-unions-and-enums)), whose members are all `Pod`, all as visible as the union, and none `unsafe`.
 
-`Bool`, Rayo enums, closed C enums, pointers, `Handle`s, weak pointers, `Name` and owners of memory are not `Pod`. Nor is a `Synchronized` type or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](07-concurrency.md#the-synchronized-contract)), nor a type the compiler builds, a closure literal's or a task's state or an interpolated literal's value, whose fields nothing names ([10](10-compile-time.md#what-reflection-can-read)). `@pod` waives only the visibility and `unsafe` conditions, so it is a compile error on any of these, and on a struct or union that has a `deinit` or holds a type that isn't `Pod`.
+`Bool`, Rayo enums, closed C enums, pointers, `Handle`s, weak pointers, weak links, `Name` and owners of memory are not `Pod`. Nor is a `Synchronized` type or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](07-concurrency.md#the-synchronized-contract)), nor a type the compiler builds, a closure literal's or a task's state or an interpolated literal's value, whose fields nothing names ([10](10-compile-time.md#what-reflection-can-read)). `@pod` waives only the visibility and `unsafe` conditions, so it is a compile error on any of these, and on a struct or union that has a `deinit` or holds a type that isn't `Pod`.
 
 **The visibility and `unsafe` conditions protect invariants.** A field is as visible as its struct when it is `public` or the struct isn't, and a primary initializer is unless the struct is `public` and its header says `private init` ([12](12-compilation-model.md#modules-and-names)). A `public` `Fraction`, whose `private init` makes every other module pass the nonzero-denominator check, or a `struct SlotIndex(public unsafe let raw: UInt32)` or `struct SlotIndex unsafe init(public let raw: UInt32)` that `unchecked` code trusts, must not be forged from bytes, so it is `Pod` only through `@pod`, which states that every bit pattern is valid.
 

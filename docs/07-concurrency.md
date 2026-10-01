@@ -22,10 +22,9 @@ Threads, locks and job systems are libraries. The language gives them the checki
 **Only `Sendable` values reach another thread** ([next](#what-may-cross-threads-sendable)). Everything else stays on its own thread, where exclusivity and the dynamic tier check all its aliases. Safe code on two threads can reach the same memory only through:
 
 1. **borrows**, which a library lends to another thread only for the length of a call, where exclusivity governs them statically ([below](#lending-work-to-other-threads));
-2. **concurrent objects**, each of whose accesses takes the object's lock, or, for a lock-free object, reads a value that is `Frozen`, so never written, or `Synchronized`, so written only through its own synchronization ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert));
-3. **`Synchronized` types and channel ends**, which synchronize themselves ([below](#atomics-and-locks), [below](#queues-and-channels));
-4. **`Shared<T>`**, which is deeply immutable ([06](06-memory-and-allocators.md));
-5. **`const`s, global `let`s and immortal data**, which every thread reads through shared borrows ([below](#global-state)); immortal data is the bytes a `StaticSpan` or `StaticString` views, which nothing writes once a value names them.
+2. **`Synchronized` types and channel ends**, which synchronize themselves ([below](#atomics-and-locks), [below](#queues-and-channels));
+3. **`Shared<T>`**, whose value is `Frozen`, so never written, or `Synchronized`, so written only through its own synchronization ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
+4. **`const`s, global `let`s and immortal data**, which every thread reads through shared borrows ([below](#global-state)); immortal data is the bytes a `StaticSpan` or `StaticString` views, which nothing writes once a value names them.
 
 Every other global that safe code can use is thread-local ([below](#global-state)). Reading a value from many threads at once needs nothing special, as a parallel loop shows:
 
@@ -54,10 +53,10 @@ Thread.start { [move hud] in draw(hud) }                 // error: 'Hud' isn't S
 
 - **A struct, enum, tuple, union or array** is `Sendable` when every stored field, payload and element is. For a generic type, the fields are checked with its type arguments substituted, so `Pair<Enemy>` of two `Enemy` fields is, and no `Tagged<T>` that also holds a `WeakPointer<Widget>` is, whatever `T` is.
 - **A closure** is `Sendable` when every capture's type is, whether captured by reference or owned, and a value of a `@sendable` function type, or a `Closure` of one, is `Sendable` ([05](05-protocols-generics-and-closures.md#function-typed-values)). A C function pointer is `Sendable`.
-- **`any P` and `mutable any P`** are `Sendable` only when `P` refines `Sendable`, or when they are written with `& Sendable`, which accepts only `Sendable` types ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). `ConcurrentUniquePointer`, `ConcurrentWeakPointer` and their existential forms always are, since a concurrent object's value must be ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)).
+- **`any P` and `mutable any P`** are `Sendable` only when `P` refines `Sendable`, or when they are written with `& Sendable`, which accepts only `Sendable` types ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
 - **Raw pointers**, and anything that holds one, aren't `Sendable`, unless its type declares `unsafe Sendable` or `unsafe Synchronized` ([below](#the-synchronized-contract)). **`UniquePointer` and `WeakPointer`** ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)), **lock guards** ([02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them)), and anything that holds one of them never are: their marks and locks belong to one thread, so declaring either on such a type breaks its promise ([11](11-errors-and-safety.md#unsafe-code)).
 - **std's owning containers** (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`), **the builtin `SoA`, and the views** `Span`, `MutableSpan`, `StringView`, `StaticSpan`, `StaticString`, `Borrow` and `MutableRef` each hold a raw pointer, so none derives `Sendable`. Each declares `unsafe Sendable` when every type it holds is `Sendable`: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's or view's elements. The pointer in each names memory the value owns alone, immortal literal bytes, or memory it views under the borrow rules, so moving or lending the value moves or lends exactly what it holds. So `List<Enemy>` is `Sendable`, and `List<WeakPointer<Enemy>>` isn't.
-- **`Shared<T>`, `Sender<T>`, `Receiver<T>` and `Pin<T>`** are `Sendable` when `T` is, a `LocalPin<T>` never is ([03](03-handles-and-objects.md#pinning-for-c)), and `Synchronized` types, `Future<T>` among them, always are ([below](#the-synchronized-contract)).
+- **`Shared<T>`, `WeakShared<T>`, `Sender<T>`, `Receiver<T>` and `Pin<T>`** are `Sendable` when `T` is, a `LocalShared<T>` or a `LocalPin<T>` never is ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners), [03](03-handles-and-objects.md#pinning-for-c)), and `Synchronized` types, `Future<T>` among them, always are ([below](#the-synchronized-contract)).
 - **`~Sendable`** in a conformance list opts out a type that must stay on one thread although its fields could move, such as the id of an OpenGL texture or a window.
 - **`unsafe Sendable`** promises, unchecked, that values of a type whose fields aren't all `Sendable` may be moved to other threads and shared with them, as for a wrapper over a raw pointer into a thread-safe C library, or a handle to heap state that synchronizes itself, as a channel end is ([11](11-errors-and-safety.md#safe-modules)). It can't cover an object pointer or lock guard the type holds (above).
 
@@ -66,7 +65,7 @@ Thread.start { [move hud] in draw(hud) }                 // error: 'Hud' isn't S
 - a thread body's captures ([below](#what-a-thread-can-share));
 - what a job system lends to its threads and hands back ([below](#the-librarys-promise));
 - the contents of a `Synchronized` value, such as a queue's items or a `Future`'s result, except the raw pointers its `unsafe` code answers for ([below](#the-synchronized-contract));
-- the value of a concurrent object ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert));
+- the value of a `Shared` whose owners or weak links cross threads ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
 - every global that safe code reaches ([below](#global-state)).
 
 A `Channel`'s items needn't be: the ends of one whose items aren't `Sendable` aren't either, so both stay on one thread.
@@ -179,7 +178,7 @@ std's atomics, locks, queues, snapshots, one-time values and blocking primitives
 
 **Atomics.** `Atomic<T>` holds a copyable, padding-free value of 1, 2, 4 or 8 bytes, such as an integer, `Bool`, float, pointer or `Handle<T>`, since a compare-and-swap compares every byte ([04](04-types.md#plain-data-pod-and-bit-casts)). Each operation takes an explicit ordering, as in `counter.add(1, .relaxed)`, and is lock-free: none blocks or waits for another thread. **Rayo uses the C++20 memory model:** the orderings `.relaxed`, `.acquire`, `.release`, `.acqRel` and `.seqCst` mean what they mean there, and so does a data race, which safe code can't write ([above](#why-safe-code-cant-race)). An ordering is a `const` argument, and one the operation doesn't accept is a compile error: a load takes `.relaxed`, `.acquire` or `.seqCst`, a store `.relaxed`, `.release` or `.seqCst`, a read-modify-write any of the five, and a compare-and-swap's failure ordering `.relaxed`, `.acquire` or `.seqCst`. `AtomicArray<T>` is a fixed-size array of atomics.
 
-**Creation happens before use.** Creating a concurrent object, registering an allocator and interning a `Name` happen before every use through a value that names them, however that value reached the using thread, even through a `.relaxed` atomic: the check each use makes synchronizes with the creation.
+**Creation happens before use.** Creating a `Shared` value, registering an allocator and interning a `Name` happen before every use through a value that names them, however that value reached the using thread, even through a `.relaxed` atomic: the check each use makes synchronizes with the creation.
 
 ### Locks: `Mutex` and `RwLock`
 
@@ -222,7 +221,7 @@ The language defines the contract that the types above share, the marker protoco
 
 - **is move-only** (the conformance implies `~Copyable`), so every thread synchronizes on the same memory;
 - **holds no niche** ([04](04-types.md#optionals));
-- **is derived, with no promise**, for an inline array whose element type is `Synchronized`, and for a struct or tuple with at least one stored field that is `Synchronized` or a concurrent object's owner, and every other stored field one of those, or `Frozen`, `Sendable` and unscoped. Its non-`mutating` methods can then change it only through those elements or fields, and an owner's object only through that object's own lock or value. So `Services(log: Mutex(…), config: Published(…), mixer: ConcurrentUniquePointer(AudioMixer()))` can be a lock-free object's value ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert));
+- **is derived, with no promise**, for an inline array whose element type is `Synchronized`, and for a struct or tuple with at least one stored field that is `Synchronized` or a `Shared` of a `Synchronized` value, and every other stored field one of those, or `Frozen`, `Sendable` and unscoped. Its non-`mutating` methods can then change it only through those elements or fields, and a `Shared`'s value only through that value's own synchronization. So `Services(log: Mutex(…), config: Published(…), mixer: Shared(Mutex(AudioMixer())))` can be a `Shared`'s value ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
 - **has unscoped contents that are `Sendable` or raw pointers**, which it hands to other threads: `Mutex<Span<T>>` and `Mutex<WeakPointer<T>>` are compile errors, and `Mutex<List<T>>` is fine when `T` is `Sendable`. So the type is itself `Sendable`. A raw pointer handed over this way, as by `Atomic<*T>` or an allocator's `Allocation`, is used only in `unsafe` code, which answers for what it points at ([11](11-errors-and-safety.md#unsafe-code));
 - **keeps what its synchronization writes out of safe code's reach**: every stored field that its non-`mutating` methods write is `unsafe` or itself `Synchronized`, so no safe access by name, reflection, `SoA` column, protocol witness or derived `==` or `hash(into:)` reads it with a plain load ([05](05-protocols-generics-and-closures.md#conformances), [10](10-compile-time.md#reflection-and-access-control)). For the same reason it is never `Frozen` or `Pod` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability), [04](04-types.md#plain-data-pod-and-bit-casts));
 - **takes elements in and hands them out as owned values**, each handed out after, in happens-before order, the call that took it in, and lends views of them only as the next bullets allow;
@@ -253,7 +252,7 @@ func scan() {
 
 **Every global that safe code reaches has a `Sendable` type, except a `@threadlocal var`** ([above](#what-may-cross-threads-sendable)). A bare global `var` and an imported C variable may have any unscoped type, since every access to one is `unsafe` and answers for which threads touch it. Safe code can use:
 
-- `const`s, and `let`s of any `Sendable` type. Code reaches one only through shared borrows, with no access checks, only the check that its initializer has run where the compiler can't prove it ([below](#initialization-at-startup)). What it holds changes only through its own synchronization: a `Synchronized` value's, such as an `Atomic`, `Mutex`, `Published` or `Once`, or a concurrent object's lock ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert));
+- `const`s, and `let`s of any `Sendable` type. Code reaches one only through shared borrows, with no access checks, only the check that its initializer has run where the compiler can't prove it ([below](#initialization-at-startup)). What it holds changes only through its own synchronization: a `Synchronized` value's, such as an `Atomic`, `Mutex`, `Published` or `Once`, or a `Shared`'s count and its value's own ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
 - `@threadlocal var`s: each thread has its own copy. `@threadlocal` marks only a `var`.
 
 A global is declared at a file's top level or as a static member of a type. A variable declared directly in a function body is a local, and is never `static` or `@threadlocal`. A static stored `let`, `var` or `@threadlocal var` is never declared where one declaration stands for many instances: in a generic type or an extension of one, a protocol extension or a type nested in any of these, or in a type or extension local to a function with several instantiations, such as a generic function, a function with a `some P` parameter or a method of a generic type. Each instance would need its own, initialized in no one module's turn ([below](#initialization-at-startup)). A `static const` is evaluated at compile time for each.
@@ -345,22 +344,21 @@ enum Poll<Output, Failure: Error> {
     case waiting          // a stepper may skip me until someone calls the waker I stored
 }
 
-struct Waker private init(        // made by whatever steps the task
-    let target: ConcurrentWeakPointer<any WakeTarget>,
+struct Waker(                     // made by whatever steps the task
+    let target: WeakShared<any WakeTarget>,
     let id: UInt64,
-): Copyable {                     // Sendable, derived: it holds only a concurrent weak pointer and an id
-    init(checking target: ConcurrentWeakPointer<any WakeTarget>, id: UInt64) { … }   // panics if 'target' names a lockable object
+): Copyable {                     // Sendable, derived: it holds only a weak link and an id
     func wake() { … }             // any thread, including C callbacks; nothing once the target is gone
 }
 
-protocol WakeTarget: Sendable {   // reached only by shared access, so it mutates only through Synchronized fields
-    func wake(id: UInt64)         // called from any thread, C callbacks and real-time threads included
+protocol WakeTarget: Synchronized {   // reached only by shared access, so it changes only through its own synchronization
+    func wake(id: UInt64)             // called from any thread, C callbacks and real-time threads included
 }
 ```
 
 `await x` evaluates to `x`'s `Output` once it is done. For the dependency rules it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement: the value, and an error that `try await` throws, depend exclusively on the resume parameter, and on `x`'s storage unless `x` is a `task func`'s call, whose result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](02-views-and-dependencies.md#dependencies)). An awaitable whose `Failure` isn't `Never` is awaited with `try await`, and `.failed(e)` throws `e` there ([11](11-errors-and-safety.md)). A `task func` is an awaitable of its return and error types.
 
-**Only its owner's `step` resumes a task, but a step needn't visit every task.** A **pending** task is polled every step. A **waiting** task isn't: its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel, and the next `step` after a wake resumes it. `wake()` calls its target's `wake(id:)` through the lock-free `read` of a concurrent object ([03](03-handles-and-objects.md#objects-shared-across-threads-concurrentuniquepointert)), so reaching the target takes no lock and never waits, though `wake(id:)` itself may, and making a `Waker` whose target is a lockable object panics. Waking a destroyed target does nothing. A poll may still come at any step, woken or not, so `poll` returns a correct result whenever it is called, and a wake is only a hint, which may reach a target for an id it no longer runs, since a `Waker` may outlive its task.
+**Only its owner's `step` resumes a task, but a step needn't visit every task.** A **pending** task is polled every step. A **waiting** task isn't: its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel, and the next `step` after a wake resumes it. `wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), so reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread. A poll may still come at any step, woken or not, so `poll` returns a correct result whenever it is called, and a wake is only a hint, which may reach a target for an id it no longer runs, since a `Waker` may outlive its task.
 
 std's awaitables include `until { ctx in cond }`, `Future<T>`, whose `Output` is `T`, and **timed waits**: `func seconds<C: TimeSource>(_ s: Double) -> Seconds<C>`, whose `Context` `C` gives the program's own time through `TimeSource`'s `var now: Double { get }`. So `openDoor`'s `seconds(0.5)` counts simulation time once the game declares `extension Game: TimeSource { var now: Double { copy simulationTime } }`.
 
