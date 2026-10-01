@@ -13,7 +13,7 @@ print(lines[0])
 
 The undefined behavior of [11](11-errors-and-safety.md#unsafe-code) is an access outside a live allocation, a misaligned access, a read of an invalid value, a data race, a write to memory Rayo treats as immutable, and the failure of a check that `unchecked` removed. Safe code has no `unchecked` block, and its memory-safety checks are on in every build ([11](11-errors-and-safety.md#check-levels)), so the last never happens. These rule out the rest:
 
-- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live or retired but not yet released ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)), so nothing it reads or writes has been reused.
+- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([11](11-errors-and-safety.md#unsafe-code)), so nothing it reads or writes has been freed or reused.
 - **Valid.** A place that safe code reads, lends or destroys holds a valid value of its type, at an address aligned for it.
 - **Exclusive.** While a mutable access to a place is live, nothing reaches an overlapping place except through it. While a shared access is live, nothing writes the place, except a `Synchronized` value through its own synchronization. Static data, a frozen `const` and a `Frozen` value behind a `Shared` or a `LocalShared` are shared for good.
 - **Owned.** A value has one owner, except the value behind a counted owner, which its owners share. It is destroyed at most once, and used neither after its destruction nor after it moves out.
@@ -54,13 +54,13 @@ The checker sees names, not memory, so it knows which places a view reaches only
 
 ### Covered
 
-**Whatever memory a value can reach beyond its own storage and what it owns, along any path safe code can follow, its dependency set holds a place whose storage holds or owns that memory, exclusively when the value can write it, or a dynamic access that guards it; or the memory is static storage, or is released only after a grace period.**
+**Whatever memory a value can reach beyond its own storage and what it owns, along any path safe code can follow, its dependency set holds a place whose storage holds or owns that memory, exclusively when the value can write it, or a dynamic access that guards it; or the memory is static storage.**
 
 Covered gives:
 
 - **Live** for memory an owner releases: the release is a mutable access to a place in the set of every live value that reaches the memory, so it conflicts.
 - **Exclusive** through views: two live values that reach one place both name it, so an exclusive one conflicts with any other use.
-- **Live** for memory released only after a grace period: a value that reaches it without owning it is scoped and dies inside its section ([below](#grace-periods-and-checkpoints)), and one that owns it checks at each open ([below](#memory-and-allocators)).
+- **Live** for memory a reset or an unregistration releases: a value that reaches it without owning it depends on the open that lent it, which counts as a use of the allocator until that value's last use, so the reset or unregistration panics first, and one that owns it checks at each open ([below](#memory-and-allocators)).
 
 The rules keep Covered for each value they make, given that the values they start from are covered.
 
@@ -96,7 +96,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 - **a store into a `mutable` parameter `p` that depends on a place overlapping `p`**, since the caller's set for `p` would have to name `p` itself;
 - **a store through a parameter's exclusive dependencies that depends on the parameter's own storage**, which absorption never reports.
 
-**Static storage is always allowed**, since it is never moved or destroyed ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in global `let`s that the path rule accepts, since returning to C at depth zero ends the section ([09](09-c-interop.md#c-representations)).
+**Static storage is always allowed**, since it is never moved or destroyed ([07](07-concurrency.md#shutdown)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage, since nothing in Rayo holds what it borrowed once it returns ([09](09-c-interop.md#c-representations)).
 
 **A scoped `mutable` parameter counts as used at every exit**, so no path out, an error's included, frees what the callee just stored a view of.
 
@@ -115,7 +115,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 - **A `deinit` may read and write what its value borrows**, so the borrows of a value with one last until its destruction ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). A generic value may have one, so it counts unless constrained `Copyable` or `TrivialFree`.
 - **A destruction can't use a part of the value itself**, since the `deinit` holds all of `self` owned and may change one part before it reads another.
 - **`PlainDeinit` uses only what its elements' destruction uses**, since its `deinit` only destroys what it owns alone and frees its buffers.
-- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-retired-objects)), so skipping one can only leak, and `unsafe` code allows for that ([11](11-errors-and-safety.md#unsafe-code)).
+- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so skipping one can only leak, and `unsafe` code allows for that ([11](11-errors-and-safety.md#unsafe-code)).
 
 ### Precise dependencies
 
@@ -125,7 +125,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 ### `rebind`
 
 - **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind)). A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
-- **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object only retires its value, whose memory waits for the mark ([03](03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
+- **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object panics, since the mark is live ([03](03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
 - **No step targets an access-bound projection**, since each step would nest another suspended accessor.
 
 ### Projections and accessors
@@ -152,7 +152,7 @@ This section keeps **Covered**, **Exclusive** and **Race-free**.
 ## Generic code and existentials
 
 - **Generic code is checked once, at the safe bound** ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). An unconstrained type parameter may be move-only, scoped, a mutable view, not `Sendable`, and have a `deinit` whose destruction is a use, so a body that checks under those assumptions is sound for every instantiation. Each constraint, such as `Copyable`, `~Scoped`, `TrivialFree` or `Sendable`, relaxes one assumption, and every instantiation meets it. Members a `static if` or `static for` generates are taken at the same bound ([10](10-compile-time.md#generated-members-are-checked-per-instantiation)).
-- **A witness keeps its requirement's promises**: conventions, `where` clauses, storage or access-bound projections, `@parks`, `@entry` and `@noalloc`. So generic code relies only on the requirement.
+- **A witness keeps its requirement's promises**: conventions, `where` clauses, storage or access-bound projections, and `@noalloc`. So generic code relies only on the requirement.
 - **Markers are unconditional** ([05](05-protocols-generics-and-closures.md#conformances)). Generic code derives copyability, sendability and scope from fields, type arguments and these declarations for every type argument at once, so no instantiation can differ from what it checked.
 - **`any P` is a view** ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)): made from a shared borrow, or from `&x` as a `mutable any P`, so the rules above apply to it. An unscoped existential, such as `Box<any P>`, forgets its value's type and what that type carries, so the type must be `~Scoped`. An existential is `Sendable`, `Frozen` or `TrivialFree` only when its protocols say so, since it hides a type that may not be.
 
@@ -163,10 +163,10 @@ Each mechanism checks at each use what the static tier can't see, and a failure 
 - **Handles** ([03](03-handles-and-objects.md#pools-and-handles)). A pool's subscript checks the slot's generation, and a slot whose generation would wrap is abandoned, so a stale handle reads `nil` for good. A forged one reaches `nil` or some live element of that pool: **Live** and **Valid**, if not the element meant. The subscript is a storage projection of the pool, so removing an element conflicts statically with every live view of one.
 - **Object liveness** ([03](03-handles-and-objects.md#destroying-an-object)). A weak pointer names its object by a generation that no other object of the run gets, so it never reaches a later object. An owner whose object a reset or an unregistration destroyed is stale, and an access through it panics.
 - **Object marks** ([03](03-handles-and-objects.md#dynamic-exclusivity)). Weak pointers are aliases the checker can't see, so each access takes a mark, held as rule 6 says, and a conflicting one panics before it touches the value: **Exclusive**. The counts can't wrap.
-- **Destruction retires.** It never waits and never frees under an access: the `deinit` runs once, when no access is live and no pin holds the value, and the memory is kept until it has finished ([03](03-handles-and-objects.md#destroying-an-object)).
-- **Thread-bound objects stay home.** Their marks aren't atomic, so owners, weak pointers and `LocalPin`s aren't `Sendable`, `WeakPointer(bits:)` and `adopt` check the home thread, a home thread's identity is never reused, the `deinit` runs on that thread, and a thread's objects end in its teardown, on it ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)): **Race-free**.
+- **Destruction never frees under an access.** Destroying an object while an access to it is live panics, and a pin leaves the `deinit` and the release to the last pin's drop, so the `deinit` runs once, when no access is live and no pin holds the value, and the memory is freed after it ([03](03-handles-and-objects.md#destroying-an-object)).
+- **Thread-bound objects stay home.** Their marks aren't atomic, so owners, weak pointers and `LocalPin`s aren't `Sendable`, `WeakPointer(bits:)` and `adopt` check the home thread, a home thread's identity is never reused, the `deinit` runs on that thread, since a reset or an unregistration on another panics instead, and a thread's objects end in its teardown, on it ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)): **Race-free**.
 - **Counted owners** ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). A `Shared`'s count is atomic, and a `LocalShared`'s never leaves its thread, so the value is destroyed once, by the drop that takes the count to zero, after every other owner's drop in happens-before order: **Owned** and **Live**. A weak link names its value by a generation that no other `Shared` value of the run gets, and `upgrade()` adds an owner only while the count is above zero, in one atomic step, so it never reaches a destroyed or a later value. A `Waker` reaches its target through such an upgrade.
-- **Pins** ([03](03-handles-and-objects.md#pinning-for-c)). A pin keeps its memory from being freed or reused, the waiting `deinit` runs after the last pin drops, and each drop happens before the release that waited for it. A pin doesn't make the value immutable: Rayo code still writes it through its owner, under the rules above.
+- **Pins** ([03](03-handles-and-objects.md#pinning-for-c)). A pin keeps its memory from being freed or reused: a destruction leaves the `deinit` and the release to the last pin's drop, which happens on a thread the value may be destroyed on, and a reset or an unregistration panics while a pin into its memory lives. Each drop happens before the release that waited for it. A pin doesn't make the value immutable: Rayo code still writes it through its owner, under the rules above.
 - **`Slice`** ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). It reaches its buffer only through a scoped span per use, so it may be stored anywhere. Each `read()` or `lock()` upgrades its weak link and checks the storage's word, and for a locked buffer takes the lock and checks the current length, alignment or count under it. The span then holds the owner and the lock. `T` is `Pod` over initialized bytes, so every element read is **Valid**, and a `MutableSpan` also needs `T` padding-free, so a store leaves no uninitialized byte another slice reads.
 - **Thread-locals** ([07](07-concurrency.md#global-state)). Each access to a thread's copy takes a mark, as an object's does. The copy is initialized before any other code of its thread runs and marked dead before it is destroyed, so a later `deinit` that reaches it panics.
 - **Locks** ([07](07-concurrency.md#locks-mutex-and-rwlock)). Taking a lock that the thread holds in a conflicting way panics, lent work the lending thread runs included, so no thread gets a second exclusive view.
@@ -175,30 +175,18 @@ Each mechanism checks at each use what the static tier can't see, and a failure 
 
 This section keeps **Live** for memory released out of band, by a reset or an unregistration.
 
-- **Every release happens at a point the code shows** ([06](06-memory-and-allocators.md)): an owner's release is a mutable access, checked statically, and any other release retires the memory first.
-- **An open checks the storage's word** ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). A reset can't find the values it invalidates, so every access that reaches their storage checks first. An open fails whenever a grace period may have passed since the reset: the reset began before the opening thread's section, or before a checkpoint or `await` it passed. What an open lends then reads intact memory until its last use, since its views are scoped and the memory waits for a grace period. A container's words cover all of its storage.
+- **Every release happens at a point the code shows** ([06](06-memory-and-allocators.md)): an owner's release, the last of a counted value's owners included, is a mutable access, checked statically, and a reset or an unregistration first checks that nothing uses the memory (below).
+- **An open checks the storage's word, and counts as a use while what it lends lives** ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). A reset can't find the values it invalidates, so every access that reaches their storage checks first, and it can't find their views, so each open counts itself until the last use of what depends on it, as rule 6 holds a dynamic access. A reset or an unregistration makes the storage stale before it reads the counts, so an open racing it either fails or is counted. A container's words cover all of its storage.
+- **Uses are counted on every thread.** Lent work's views depend on the lender's opens, which count until the lending call returns, and its own opens count on the thread that makes them ([07](07-concurrency.md#the-librarys-promise)). A parked thread keeps its counts.
 - **A word is never issued twice** ([06](06-memory-and-allocators.md#how-values-record-their-allocator)): the limits on registrations and resets panic, so a stale word never passes again, outside the `deinit`s that may open what they own.
-- **A reset retires its blocks** ([06](06-memory-and-allocators.md#what-a-reset-does)). The runtime, not the arena, decides what is stale, by stamps it issues in order and never twice. A block is handed back only after a grace period, once no pin or retired value lies in it, and a grace period after every `deinit` that may open it has finished. Unregistering waits the same way ([06](06-memory-and-allocators.md#unregistering-an-allocator)).
-- **Destroying a stale value never touches its memory** ([06](06-memory-and-allocators.md#stale-values-and-retired-objects)), so its elements' `deinit`s are skipped and what they owned leaks.
-- **A retired object's `deinit` may open what a later reset made stale.** That memory is held until a grace period after the `deinit` finishes, and a value made stale before the object was retired still fails, since its memory may already be reused.
+- **A reset frees its blocks only once nothing uses them** ([06](06-memory-and-allocators.md#what-a-reset-does)). The runtime, not the arena, decides what is stale, by stamps it issues in order and never twice. It panics while a counted open, a pin, an accessed object or another thread's object still uses the memory, or while another reset or unregistration that reaches it runs, and frees the blocks only after the `deinit`s it runs have returned. Unregistering checks, and waits for its `deinit`s, the same way ([06](06-memory-and-allocators.md#unregistering-an-allocator)).
+- **Destroying a stale value never touches its memory** ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so its elements' `deinit`s are skipped and what they owned leaks.
+- **An object's `deinit` that a reset or an unregistration runs may open what that reset or unregistration made stale.** The memory is freed only after the `deinit` returns, and a value an earlier reset made stale still fails, since its memory may already be reused.
 - **Backing chains are fixed and acyclic** ([06](06-memory-and-allocators.md#allocators-over-other-allocators)), so a reset or an unregistration reaches everything built on it, and no arena or heap draws from an arena, whose reset would reuse memory under it.
 - **`AllocatorImpl` is a promise** ([06](06-memory-and-allocators.md#what-conforming-promises)): disjoint allocations, no reuse after handing a block over, and truthful reports. It is `Synchronized`, since any thread allocates ([06](06-memory-and-allocators.md#allocators-and-threads)).
 - **A `Shared<T>` holds a `Frozen` or `Synchronized` value, and a `LocalShared<T>` a `Frozen` one** ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), so what many owners reach is never written, or written only through its own synchronization, apart from the count, which no reader observes. `Frozen` is derived only for types with no interior mutability, and nothing holding a `Synchronized` value is `Frozen` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)).
-- **`release` forgets only a `TrivialFree` value** ([06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)), whose destruction would only free memory, which the reset then retires.
+- **`release` forgets only a `TrivialFree` value** ([06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)), whose destruction would only free memory, which the reset then frees.
 - **A failed allocation panics or throws** ([06](06-memory-and-allocators.md#allocation-failure)), so no operation goes on with memory it didn't get.
-
-## Grace periods and checkpoints
-
-This section keeps **Live** for memory a grace period releases.
-
-- **Retired memory is released only after every thread has been outside a section since** ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)).
-- **No view of it outlives its section.** It is scoped, so it can't be stored in a global, an unscoped type, an object or a thread-local, and no borrow is live across a checkpoint or an `await` ([02](02-views-and-dependencies.md#scoped-values)). The places that may stay borrowed across a checkpoint meet the path rule (below). C is told the same: what a C entry hands back never views memory a grace period frees ([09](09-c-interop.md#c-representations)).
-- **A checkpoint never releases a view held below it** ([08](08-grace-periods-and-checkpoints.md#where-a-checkpoint-can-go)). It appears only at an entry body's top level and takes effect only at depth one, and a call that might hold one, an `@entry` function or a call through an entry function value, is allowed only where a checkpoint could go, so its caller always sees it.
-- **The path rule keeps what a checkpoint lets stay borrowed out of reclaimable memory** ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)). Such a place is of unscoped type, so it views nothing, and lies in a global, which is never freed, or in the entry body's own storage, which stays where it is while the body waits, reached through stored fields, elements and payloads with no projection. An owning value reached through it is checked again at its next open.
-- **A parked thread touches only its park word** ([08](08-grace-periods-and-checkpoints.md#writing-a-parking-wait-the-parks-promise)), which lies in a path-rule place or in `.system` state, and re-enters its section before it reads anything else. A guard it consumes ends its access before the park and takes it again through the lock. This is the `@parks` promise.
-- **A queued `deinit` runs where nothing of its thread is borrowed** ([08](08-grace-periods-and-checkpoints.md#deinits-queued-to-a-thread)): at an outermost section entry, where only path-rule places are, which a `deinit` reaches only through a shared borrow, synchronization or a mark. So it never runs under code that holds what it destroys.
-- **No global is destroyed** ([08](08-grace-periods-and-checkpoints.md#at-exit-reclaim-then-close-entry)), since a thread may still read one after entry closes, and whatever the exit's time limit cuts short leaks.
-- **Lent work views what its lender's section protects.** The lender stays inside its section while it waits ([07](07-concurrency.md#the-librarys-promise)).
 
 ## Threads
 
@@ -214,14 +202,14 @@ This section keeps **Race-free**. Only `Sendable` values reach another thread, a
     - every field its synchronization writes is `unsafe` or `Synchronized`, so safe code never reads one with a plain load, and the type is never `Frozen` or `Pod`;
     - values taken in and handed out owned, in happens-before order;
     - no view granted while a conflicting one is live, on any thread, which a re-entrant lock can't meet;
-    - guards declared `@guard`, so each is released on the thread that took it, pointing only into the lock, so a parked waiter's lock stays allocated;
-    - views of its interior only under a lock, or of data never written again except through its own synchronization and freed only after a grace period;
+    - guards declared `@guard`, so each is released on the thread that took it, pointing only into the lock, which keeps what they view allocated;
+    - views of its interior only under a lock, or of data never written again except through its own synchronization and never freed before the value is destroyed;
     - bitwise-movable whenever unborrowed, since the language moves only unborrowed values.
 - **A channel's ends** are `mutating` on each side, so exclusivity makes one consumer and one producer at a time, statically ([07](07-concurrency.md#queues-and-channels)).
 - **`Shared<T>`**, which is never written ([above](#memory-and-allocators)).
 - **`const`s, global `let`s and immortal data**, read through shared borrows and changed only through their own synchronization ([07](07-concurrency.md#global-state)).
 - **No other global is reachable from safe code.** A bare global `var` needs `unsafe`, and a `@threadlocal var` gives each thread its own copy. A static stored member is never declared where one declaration stands for many instances.
-- **Startup is single-threaded** ([07](07-concurrency.md#initialization-at-startup)), its end happens before every other thread's first section, and a global read before its initializer has run is caught, statically where the calls are visible and at run time otherwise.
+- **Startup is single-threaded** ([07](07-concurrency.md#initialization-at-startup)), its end happens before every later entry into Rayo code on another thread, and a global read before its initializer has run is caught, statically where the calls are visible and at run time otherwise.
 - **Atomics follow the C++20 memory model** ([07](07-concurrency.md#atomics-and-locks)), and the creation of a `Shared` value, an allocator or a `Name` happens before every use of it, however the value naming it arrived.
 - **A task holds no borrow across an `await`** ([07](07-concurrency.md#semantics)). Its owner may move or destroy its state between steps. Its own locals are worked out again on resuming, since only its body reaches them, and its resume parameter is lent anew at each step. Its parameters are owned and unscoped, a `defer` live across an `await` uses only its state, and a finished task panics when polled.
 
@@ -241,7 +229,7 @@ This section keeps **Valid**.
 
 ## Compile time and reflection
 
-- **Evaluation checks what run time trusts** ([10](10-compile-time.md#running-code-at-compile-time-const)): every raw access and every memory-safety check an `unchecked` block removes, on one thread, in one section.
+- **Evaluation checks what run time trusts** ([10](10-compile-time.md#running-code-at-compile-time-const)): every raw access and every memory-safety check an `unchecked` block removes, on one thread.
 - **A frozen value is never written or destroyed** ([10](10-compile-time.md#consts-that-reach-run-time)), since it lies in read-only data. So it is `Frozen` with no bookkeeping, `TrivialFree`, holds nothing that exists only at run time, such as a weak pointer or an allocator id, holds no stale owning value, points only at memory freezing copies or at immortal data, and views only static data. It is `Sendable`, since every thread may read it.
 - **Reflection grants nothing a name doesn't** ([10](10-compile-time.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. A reflective projection is a storage or access-bound projection exactly as the field is ([10](10-compile-time.md#what-reflection-can-read)).
 - **Generated declarations are checked as written ones** ([10](10-compile-time.md#generated-members-are-checked-per-instantiation)), and generic code takes them at the safe bound ([above](#generic-code-and-existentials)).
@@ -270,9 +258,7 @@ The argument above assumes that `unsafe` code and C keep the invariants for thei
 | `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)) | [Destruction as a use](#destruction-as-a-use) |
 | `AllocatorImpl` ([06](06-memory-and-allocators.md#what-conforming-promises)) | [Memory and allocators](#memory-and-allocators) |
 | `@pod` ([04](04-types.md#plain-data-pod-and-bit-casts)) | `Pod` |
-| `@parks` ([08](08-grace-periods-and-checkpoints.md#writing-a-parking-wait-the-parks-promise)) | [Grace periods](#grace-periods-and-checkpoints) |
 | The library's lending promise ([07](07-concurrency.md#the-librarys-promise)) | Borrows lent for a call ([Threads](#threads)) |
-| What a `parks` C call's arguments point at stays allocated ([09](09-c-interop.md#blocking-c-calls-parks)) | [Grace periods](#grace-periods-and-checkpoints) |
 | `Box.adopt` takes back a leaked `Box<T>` once ([06](06-memory-and-allocators.md#owning-boxes)) | Owned |
 | `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([11](11-errors-and-safety.md#safe-modules)) | Valid, the stack check |
 

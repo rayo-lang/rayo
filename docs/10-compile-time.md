@@ -57,7 +57,7 @@ func makeSinTable() -> [1024 of Float] {
 
 - calls no C function, whether imported or declared `extern c`;
 - accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
-- starts no thread, and reaches no parking wait, `checkpoint`, `Runtime.park`, `Runtime.wake` or `Runtime.reclaim`;
+- starts, parks and wakes no thread: it reaches no blocking wait, `Runtime.park` or `Runtime.wake`;
 - makes no volatile access, and no access through a pointer made from an integer;
 - reads no clock.
 
@@ -67,7 +67,7 @@ A `const` whose initializer does anything else is a compile error, while a globa
 - **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([11](11-errors-and-safety.md#check-levels)), so an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
 - **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what [11](11-errors-and-safety.md#unsafe-code) asks of an access through a raw pointer, and every memory-safety check an `unchecked` block removes still runs, so an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([11](11-errors-and-safety.md#check-levels)).
 - **Allocation works.** At compile time the current allocator is a compile-time heap, so containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. `.system` allocates from the compile-time heap too. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
-- **One thread, one section.** Evaluation runs on one thread, as one section, so no `const`'s value depends on thread timing, and what evaluation retires is reclaimed only when it ends.
+- **One thread.** Evaluation runs on one thread, so no `const`'s value depends on thread timing.
 - **Evaluation is bounded.** A `const`'s evaluation that runs past the toolchain's limit is a compile error, so a runaway loop fails the build instead of hanging it; a global `let`'s leaves the global to startup ([07](07-concurrency.md#initialization-at-startup)).
 - **No cycles.** A `const` whose evaluation reads itself, directly or through other `const`s, is a compile error.
 
@@ -257,7 +257,7 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
       So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity [09](09-c-interop.md#importing-headers) gives it;
     - **the type's own generic arguments**, a value argument by its value, and whether it is an unscoped existential, so `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<(any P)>` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch));
     - **a type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, with, in place of a name, its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded. So a generic `task func`'s state differs for each of the function's generic arguments, and each element of a `static for` has its own;
-    - **a structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part holding its kind, the identities of the types in it, with aliases and parentheses resolved, and every other fact of its form: a tuple's labels; an inline array's count; an existential's `any` or `mutable any`, and its protocols, as a set; a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, `@entry`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written, its thrown type, `Never` when none is written, and each parameter's `keep` and convention; an error union's members, as a set. So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
+    - **a structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part holding its kind, the identities of the types in it, with aliases and parentheses resolved, and every other fact of its form: a tuple's labels; an inline array's count; an existential's `any` or `mutable any`, and its protocols, as a set; a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written, its thrown type, `Never` when none is written, and each parameter's `keep` and convention; an error union's members, as a set. So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
 
   The id stays the same from build to build while that identity does. No two types of one program share an id: a build in which two identities would hash to one id fails. So within one program an id match is exact, and a type-erased container can trust it. Across builds, two different identities share an id only by a 64-bit hash collision, which no build checks.
 - **`T.layoutId`** hashes `T`'s own representation, its layout, the scalar type each part holds, so that `Int8` and `Bool` differ, and an enum's cases, tags and raw values, and those of the types of its stored fields, elements and payloads, recursively, including through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, it changes, barring a 64-bit hash collision, whenever any of those does, so a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
@@ -501,7 +501,7 @@ func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
 ```
 
 - **Where they go.** Reflection reads a user attribute only on a field, a type or an enum case, so one on any other declaration is a compile error. A declaration may take one attribute type several times, as in `@Requires(Physics.self) @Requires(Render.self)`, which `attributes(Requires.self)` lists.
-- **Built-in attributes** are reserved names: `@align`, `@c`, `@checks`, `@converts`, `@entry`, `@export`, `@guard`, `@inline`, `@noalloc`, `@nonexhaustive`, `@opaque`, `@packed`, `@parks`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
+- **Built-in attributes** are reserved names: `@align`, `@c`, `@checks`, `@converts`, `@export`, `@guard`, `@inline`, `@noalloc`, `@nonexhaustive`, `@opaque`, `@packed`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
 
 ## Runtime type info
 
@@ -543,7 +543,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 **A build declares the settings that change what code means:**
 
 - the modules, in a list whose order startup follows where imports leave it open, each with its name, unique in the build, and its source files, in an order that sets the source order of its declarations ([07](07-concurrency.md#initialization-at-startup)). A generated declaration stands, in that order, where the `static if` or `static for` that generates it does, a `static for`'s in element order;
-- which of the modules form the prelude ([12](12-compilation-model.md#modules-and-names)), and whether the build is a program, with the module whose `main` it runs ([08](08-grace-periods-and-checkpoints.md#where-a-checkpoint-can-go)), or a library that a C program embeds ([09](09-c-interop.md#embedding-rayo-in-a-c-program));
+- which of the modules form the prelude ([12](12-compilation-model.md#modules-and-names)), and whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([09](09-c-interop.md#embedding-rayo-in-a-c-program));
 - for each module, whether it is `@safe` ([11](11-errors-and-safety.md#safe-modules)), and its diagnostic check settings ([11](11-errors-and-safety.md#choosing-checks-for-a-module-or-a-scope));
 - the build profile and the target, which `target` exposes ([above](#static-if-and-conditional-compilation));
 - the flags that `target.flag` reads, each a `const` `Bool`, `Int` or `StaticString`;

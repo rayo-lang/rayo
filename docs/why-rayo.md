@@ -57,7 +57,7 @@ Six principles decide Rayo's trade-offs.
 
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
-| GC pauses at times you don't choose | No GC. Memory is released at points visible in source: a scope end, an overwrite, a `consume`, a removal from a container, a `publish`, a thread's end, an arena reset or an unregistration. Memory a view may still be reading is retired there and freed once none can read it, on a runtime thread where the runtime starts one, in `Runtime.reclaim` calls the program places, or at exit on the exiting thread, and outside exit no thread waits for it. | [03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md), [08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed) |
+| GC pauses at times you don't choose | No GC. Memory is released at points visible in source: a scope end, an overwrite, a `consume`, a removal from a container, the drop of a counted value's last owner, a thread's end, an arena reset or an unregistration. A reset or an unregistration never frees memory a view, on any thread, may still read: it panics instead. | [03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#arena-safety-checked-values-and-checked-resets) |
 | Closed platforms such as consoles and iOS forbid JIT, so C# reaches them only through a separate ahead-of-time toolchain, such as IL2CPP, with its own runtime | Same answer as for Rust's closed-platform targets | [12](12-compilation-model.md#what-a-target-must-provide) |
 
 ## A taste
@@ -131,7 +131,6 @@ func main() {
         steer(&world, dt: Float(now - last)) // '&' marks a mutable borrow
         scripts.step(&world)                // runs each script to its next await that isn't done
         last = now
-        checkpoint                          // between frames, no borrows are held: retired memory can be reclaimed
     }
 }
 ```
@@ -143,5 +142,4 @@ What it shows:
 - **Stepped tasks.** `openDoor` pauses at `await` and continues when its owner steps it, here once per pass of the main loop. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](07-concurrency.md#semantics)).
 - **Reflection and attributes.** `Bounds` is an ordinary struct used as an attribute. The editor finds it by reflecting over `Enemy`'s fields, and `@reflect(private)` lets it see fields that aren't public ([10](10-compile-time.md)).
 - **C, called directly.** `import c` makes a header's declarations available, and every call into C is `unsafe` ([09](09-c-interop.md)).
-- **Checkpoints.** Memory a view may still read when the program lets go of it, such as an arena's after a reset, is **retired**, and reused once every thread has been outside its **section** at some moment since the retirement: outside one, a thread holds no view of such memory. In a long-running loop, `checkpoint` ends the thread's section and begins another ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)).
 

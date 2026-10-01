@@ -15,7 +15,7 @@ Terms the cases and criteria use:
 - A `Handle<T>` is a small checked index into a pool of `T`s.
 - A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked stored reference to it. Both stay on the thread that made the object. A `Shared<T>` is a counted owner of a value that several threads share, which never changes or synchronizes itself, as a `Mutex` does, and a `WeakShared<T>` is a checked link to one that doesn't keep it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)).
 - A **`Sendable`** type is one whose values may reach another thread. The compiler derives it from what the type holds, every `Synchronized` type is one, and a type can opt out with `~Sendable` or promise it with `unsafe Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
-- A thread runs Rayo code inside a **section**, and a long-lived thread body leaves its section at a **checkpoint**, between units of work. Memory made unreachable while a view may still read it is **retired**, and reclaimed only once every thread has been outside a section since ([08](08-grace-periods-and-checkpoints.md#grace-periods-how-deferred-memory-is-reclaimed)). A **parked** thread is blocked in a wait, such as on a queue or a condition variable.
+- A **parked** thread is blocked in a wait, such as on a queue or a condition variable.
 
 Each case describes what the code is trying to do, and then lists its pass criteria:
 
@@ -339,7 +339,7 @@ A parallel loop's body calls a function that itself runs a parallel loop through
 
 - **Must hold:** the inner call is checked by the same rules as the outer one, and the language adds no rule for nesting.
 - **Must accept** a library that runs inner work on the threads already waiting in its joins. State what the language requires of work a library runs on a thread that is waiting in its own join.
-- **Must hold:** `Future.wait()` runs no other code inline, except, as a checkpoint, its own thread's queued `deinit`s ([08](08-grace-periods-and-checkpoints.md#deinits-queued-to-a-thread)).
+- **Must hold:** `Future.wait()` runs no other code inline.
 - State what happens when lent work run on a waiting thread takes a lock that thread holds, so a library knows what running unrelated work inline costs.
 
 ### C6 · Allocation inside lent work
@@ -362,14 +362,14 @@ A closure panics on a worker thread in the middle of a parallel loop. Separately
 An arena shared by several threads is reset by one of them while two others are in the middle of allocating from it, and a third is creating a `Shared` value in it.
 
 - Each allocation racing the reset is ordered before it, and goes stale, or after it, and stays valid; state the rule that orders it.
-- The reset must not wait for the other threads.
+- The reset must not wait for the other threads. State what it does while another thread still uses the arena's memory.
 
 ### C12 · A job and thread library written in Rayo (also C13, C15)
 
-A team writes its own job system in Rayo: worker threads, `join`, and a parallel loop over a collection type it can split into disjoint parts. It writes its workers twice, once over `Runtime.startThread` and once over the platform's thread API through `import c`, with a `@c func` start routine. Workers run bodies of type `Closure<consuming @sendable @entry () -> Void>` from a list, and one worker parks on a queue it owns between jobs. The list, the queue and the bodies' captures were created while an arena was the current allocator, and the arena is reset while the workers are parked.
+A team writes its own job system in Rayo: worker threads, `join`, and a parallel loop over a collection type it can split into disjoint parts. It writes its workers twice, once over `Runtime.startThread` and once over the platform's thread API through `import c`, with a `@c func` start routine. Workers run bodies of type `Closure<consuming @sendable () -> Void>` from a list, and one worker parks on a queue it owns between jobs. The list, the queue and the bodies' captures were created while an arena was the current allocator, and the arena is reset while the workers are parked.
 
 - **Must accept** the job system with its unverified part as small as possible, and state what it promises. The workers over `Runtime.startThread` need no `unsafe`, and those over the C API no `unsafe` beyond the C thread call.
-- **Must accept** the parked workers, with their bodies' checkpoints taking effect and retired memory reclaimed while they wait.
+- **Must accept** the parked workers. **Must hold:** the reset never frees memory a parked worker still uses; state what it does instead, and what each worker sees when it next uses what the arena held.
 
 ### C14 · A single-consumer queue whose consumer moves
 
@@ -434,7 +434,7 @@ Every crossing between Rayo and C is unsafe by definition ([09](09-c-interop.md)
 A C library stores a `void* user` per registered item and calls a callback on its own threads with two of those pointers, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole (`pool = StablePool()`), and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool`, which is initialized at startup, never placed in static data ([10](10-compile-time.md#consts-that-reach-run-time)), has one of its elements pinned for C.
 
 - **Must accept** an idiom whose `unsafe` part is only the C calls. State what the Rayo side must provide: stable addresses of whatever `user` points to, and thread safety.
-- **Must hold:** C's address stays valid for as long as its pin lives, and replacing the pool or resetting the arena doesn't run the element's `deinit` before C is done with it. The global element's address is valid for the whole run.
+- **Must hold:** C's address stays valid for as long as its pin lives, and replacing the pool or resetting the arena never runs the element's `deinit` or frees its memory before C is done with it. State what a reset does while a pin into the arena lives. The global element's address is valid for the whole run.
 - State what C sees when Rayo code assigns a new value to a pinned element.
 - **Must accept** moving the `Pin` of a `Sendable` `StablePool` element to an I/O completion thread that drops it there.
 
@@ -464,7 +464,7 @@ struct R {
 Code in another language binds to Rayo through its generated C header: it reads a `List` of structs and calls Rayo functions with strings.
 
 - The generated header must be enough to bind to.
-- **Must accept** an idiom for reading the list whose obligations on the caller's side are easy to state and keep, even when the list's storage came from an arena that is later reset or a heap that is later unregistered, and when the runtime reclaims memory on its own.
+- **Must accept** an idiom for reading the list whose obligations on the caller's side are easy to state and keep, even when the list's storage came from an arena that is later reset or a heap that is later unregistered.
 - The caller calls back an `@export` function that takes a span and a weak pointer to the list, whose body appends to the list. State what the caller may pass as the span.
 - **Must accept** an `@export` function that builds a `String` in the current thread's scratch arena and gives the caller an owner that stays valid until the caller frees it through the header's function.
 
@@ -547,7 +547,7 @@ A hot reloader swaps code and migrates live state while a program runs. It is a 
 A field with a default is added to a struct while many values of it are alive, in a pool inside an object that `main` owns.
 
 - **Must hold:** safe code can't learn a value's address, only immortal data's, unless `unsafe` code or C gives it a raw pointer. Its stored links are handles, weak pointers, owners, `Slice`s, `Pin`s, `RawAllocation`s, `Allocator` ids, `StaticSpan`s and `StaticString`s, `String`s that still use a literal's bytes, `Closure`s and `@c` pointers, which name code, and raw pointers, which only `unsafe` code or C makes.
-- **Must hold:** at a checkpoint a thread holds no borrow and no dynamic access, except what a qualifying parking wait or entry call borrows under the path rule ([08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)).
+- **Must hold:** a thread with no Rayo frame on any of its stacks holds no borrow and no dynamic access.
 - **Must hold:** a type's fields, their layout and their defaults are known to the compiler, and readable through reflection ([10](10-compile-time.md)).
 
 ### G3 · What C holds
@@ -560,7 +560,7 @@ C holds `user` pointers to pinned elements and a `@c` callback pointer, as in E1
 
 Tasks in a `TaskSet` are suspended, and a `Thread.loop` thread is parked waiting for its next item.
 
-- **Must hold:** a task suspends only at `await`, holding no borrow and no dynamic access there; a thread leaves its section only at a checkpoint or by returning to depth zero, holding no borrow and no dynamic access there except what a qualifying wait or entry call borrows under the path rule ([07](07-concurrency.md#semantics), [08](08-grace-periods-and-checkpoints.md#what-a-wait-may-borrow)).
+- **Must hold:** a task suspends only at `await`, holding no borrow and no dynamic access there ([07](07-concurrency.md#semantics)). State what a parked thread holds while it waits.
 
 ---
 
@@ -747,25 +747,25 @@ Write a state machine with five states, timers and transitions, such as an enemy
 
 ---
 
-## K. Reclamation in practice
+## K. Freeing memory in practice
 
 ### K1 · A program that runs once
 
 A command-line tool runs once. It starts threads, runs work on a job system, publishes shared settings through `Published`, drops the last owners of `Shared` values, and resets arenas.
 
 - **Must accept** every construct.
-- **Must hold:** the program can have retired memory reclaimed while it runs, not only at exit, through the runtime's reclaimer thread where there is one, or `Runtime.reclaim` calls it places. State which the solution relies on.
-- State which thread runs retired values' `deinit`s, and when.
+- **Must hold:** memory is freed while the program runs, not only at exit, with no runtime thread and no call the program must place for it.
+- State which thread runs each `deinit`, and when.
 
 ### K2 · A long-running server
 
 An event-loop server handles requests on worker threads for weeks. Each worker has its own scratch arena, which it resets after each request, and connection handshakes are written as `task`s stepped by the event loop.
 
 - **Must accept** per-request scratch memory, stepped tasks, and a time-based wait driven by the server's own clock.
-- Retired memory must stay bounded as long as each worker returns to its event loop between requests, whether that loop is a C library's that calls Rayo back, or Rayo code, a library's `@entry` function included, that idles in `epoll_wait` or on a futex, and the runtime's reclaimer thread, or the program's own `Runtime.reclaim` calls, reclaim it.
+- Memory must stay bounded as long as each worker returns to its event loop between requests, whether that loop is a C library's that calls Rayo back, or Rayo code that idles in `epoll_wait` or on a futex.
+- **Must hold:** what a worker holds while it waits for its next request never makes its arena's next reset panic.
 - State what the `unsafe` call to `epoll_wait` promises about the event buffer it hands the kernel, and show a buffer that keeps that promise simply.
-- **Must accept** as waits that let reclamation proceed: an `@entry` worker loop parking on a `Receiver` it owns; `@entry consuming func run()` parking on `self.inbox`; a thread parking on the `rx` of `var (tx, rx) = Channel<Job>.make(…)`; `if var r = &rx { r.waitPop() }` on an owned optional receiver; `results.append(rx.waitPop())` on owned locals; a `@parks` queue wait built from a `Mutex` and a `Condvar`; and `extern c parks func wait_input(_ ms: CInt) -> CInt` over inline C.
-- **Must accept** `@entry mutating func run()` called on an engine in a local of the entry body, which the body uses afterwards; `using allocator = frameArena { while running { work(); frameArena.reset(); checkpoint } }`; and a wait inside a loop over a borrowed collection, as a wait that just blocks.
+- **Must accept** `using allocator = frameArena { while running { work(); frameArena.reset() } }`, and a wait inside a loop over a borrowed collection.
 - **Must accept** in the handshake tasks `total += await next()` and `results[i] = await fetch(i)` on a task's own locals; `let s = await peek(); print(s[0].hp)`, where `peek` returns a view of the resume parameter's data; a `defer` live across an `await` that uses only the task's owned locals; and an `await` inside `using allocator = a { … }`.
 
 ### K3 · A real-time callback
@@ -778,8 +778,8 @@ A `@noalloc` callback with a real-time deadline, called by a C library on its ow
 
 ### K4 · Cleanup at exit
 
-A program retires an arena object whose `deinit` flushes a log file, by resetting its arena, then returns from `main` a millisecond later, before anything has reclaimed it.
+A program destroys an arena object whose `deinit` flushes a log file, by resetting its arena, then returns from `main` a millisecond later.
 
-- **Must hold:** the `deinit` runs before the process exits, whether a runtime thread or the program's own calls do reclamation.
-- Define what happens when another thread is stuck in a section at exit, or C still holds a pin.
+- **Must hold:** the `deinit` runs before the process exits.
+- Define what happens at exit to a thread that is still running, and to memory C still holds a pin into.
 - **Must accept** without a panic a `Shared` value whose last owner is a `@threadlocal var` of the thread that runs `main`, whose `deinit` builds an interpolated `String` before it flushes, and a thread-bound object leaked to C whose `deinit` appends to a `List` it owns, destroyed when its thread's body returns.

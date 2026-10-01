@@ -51,7 +51,7 @@ struct Loads(
 
 // Called by the SDK on its I/O thread. The request is identified by its handle,
 // packed into the user pointer, so no Rayo pointer crosses into C. A call from C
-// attaches the middleware thread on first use and enters a section (09).
+// attaches the middleware thread on first use (09).
 @c func onFileLoaded(_ user: *Void?, _ data: *UInt8?, _ len: UInt, _ error: Int32) {
     guard let h = Handle<LoadState>(bits: UInt64(UInt(bitPattern: user))) else { return }   // nil only for generation 0, which no real handle has
     var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
@@ -89,6 +89,5 @@ func main() {
         pumpLoads(&loads)
         tick(&game.value, dt: Float(t - last))                  // one checked access for the whole frame
         last = t
-        checkpoint                                                // between frames: retired memory can be reclaimed
     }
 }
