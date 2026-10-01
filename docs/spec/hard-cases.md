@@ -1,12 +1,12 @@
 # Hard cases
 
-This file is a validation suite for the Rayo spec (the numbered chapters in `docs/`). Each case names a capability that systems code needs, chosen because a mainstream language forbids it, makes it painful, or makes it unsafe. A case's examples show one instance of the capability, and its criteria hold for every instance. For each case, a validator writes the Rayo code the spec allows and judges it against the case's pass criteria. The spec is the only source of truth: a case that needs a feature the spec doesn't define fails.
+This file is a validation suite for the Rayo spec (the numbered chapters beside it). Each case names a capability that systems code needs, chosen because a mainstream language forbids it, makes it painful, or makes it unsafe. A case's examples show one instance of the capability, and its criteria hold for every instance. For each case, a validator writes the Rayo code the spec allows and judges it against the case's pass criteria. The spec is the only source of truth: a case that needs a feature the spec doesn't define fails.
 
 The cases test Rayo's governing rule: **no reasonable systems pattern is forbidden**, and each lands in the cheapest of the three [tiers](01-values-and-ownership.md#tiers-of-checking) that can check it.
 
 ## How to validate
 
-Each case is a capability, with the patterns that exercise it, and a validator grades it with a verdict (below). The cases test what the rules let code express; why everything they accept is sound is argued in [15](15-soundness.md).
+Each case is a capability, with the patterns that exercise it, and a validator grades it with a verdict (below). The cases test what the rules let code express; why everything they accept is sound is argued in [13](13-soundness.md).
 
 Terms the cases and criteria use:
 
@@ -31,7 +31,7 @@ For every case, report the **tier** the natural solution lands in, and one verdi
 | **Solved with cost** | It's expressible, but only in a more expensive tier than it should need (a run-time check the compiler could have proven, a copy, a restructuring), or with more ceremony than the same code in C++, C# or Swift. Name the cost. |
 | **Forced unsafe** | A pattern that isn't inherently unsafe can only be written with `unsafe`. **This counts as a failure.** Cases marked *(inherently unsafe)* are exempt: there `unsafe` is expected, and the question is how small and auditable it can be. |
 | **Forbidden** | The pattern can't be written at all, even with `unsafe`. Always a failure. |
-| **Unsound** | Code the spec accepts as safe produces a data race, use-after-free, dangling view or other undefined behavior, with C and `unsafe` code that keep exactly what the spec asks of them ([09](09-c-interop.md#what-c-must-uphold), [11](11-errors-and-safety.md#unsafe-code)). It breaks a step of [15](15-soundness.md). **Always the most severe finding.** |
+| **Unsound** | Code the spec accepts as safe produces a data race, use-after-free, dangling view or other undefined behavior, with C and `unsafe` code that keep exactly what the spec asks of them ([08](08-c-interop.md#what-c-must-uphold), [10](10-errors-and-safety.md#unsafe-code)). It breaks a step of [13](13-soundness.md). **Always the most severe finding.** |
 
 Writing `copy` where the code makes a copy isn't ceremony: Rayo requires copies to be written out ([01](01-values-and-ownership.md#values)). An extra copy that C++, C# or Swift wouldn't make is a cost.
 
@@ -427,11 +427,11 @@ One part of a program may use at most a fixed amount of memory. Its budget wrapp
 
 ## E. C interop
 
-Every crossing between Rayo and C is unsafe by definition ([09](09-c-interop.md)), so these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
+Every crossing between Rayo and C is unsafe by definition ([08](08-c-interop.md)), so these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
 
 ### E1 · C holding pointers into Rayo memory
 
-A C library stores a `void* user` per registered item and calls a callback on its own threads with two of those pointers, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole (`pool = StablePool()`), and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool`, which is initialized at startup, never placed in static data ([10](10-compile-time.md#consts-that-reach-run-time)), has one of its elements pinned for C.
+A C library stores a `void* user` per registered item and calls a callback on its own threads with two of those pointers, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole (`pool = StablePool()`), and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool`, which is initialized at startup, never placed in static data ([09](09-compile-time.md#consts-that-reach-run-time)), has one of its elements pinned for C.
 
 - **Must accept** an idiom whose `unsafe` part is only the C calls. State what the Rayo side must provide: stable addresses of whatever `user` points to, and thread safety.
 - **Must hold:** C's address stays valid for as long as its pin lives, and replacing the pool or resetting the arena never runs the element's `deinit` or frees its memory before C is done with it. State what a reset does while a pin into the arena lives. The global element's address is valid for the whole run.
@@ -497,7 +497,7 @@ A C library's function recurses deeply, and a plugin's callback is documented to
 
 A loop over many values does vector arithmetic, such as `pos += vel * dt; vel = lerp(...)`.
 
-- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([12](12-compilation-model.md#runtime-costs)).
+- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([11](11-compilation-model.md#runtime-costs)).
 - **Must accept** generic vector code over `T: VectorSpace` whose requirement calls reach `@inline` operators, each running in place in every build, and `@inline` functions that call each other in a cycle through a generic witness.
 
 ### F2 · Generic code size
@@ -531,13 +531,13 @@ A computation must give bit-identical results on every machine, as a lockstep si
 
 A hash function divides by a value read from a file, negates and divides `Int.min`, and shifts by a count computed at run time that can reach the bit width. It also converts a `Double` read from the file to `Int`, NaN included, or to a `Float` out of its range, converts a `UInt` count to `Int32`, and shifts negative values and `Int.max` left.
 
-- Every result must be defined in every build, a value or a panic, never undefined behavior, and the cost in `ship` ([11](11-errors-and-safety.md#build-profiles)) stated.
+- Every result must be defined in every build, a value or a panic, never undefined behavior, and the cost in `ship` ([10](10-errors-and-safety.md#build-profiles)) stated.
 
 ---
 
 ## G. Hot reload: a tool the language must not rule out
 
-A hot reloader swaps code and migrates live state while a program runs. It is a tool built on a runtime and toolchain layer that the spec doesn't define ([12](12-compilation-model.md#what-the-spec-defines)), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
+A hot reloader swaps code and migrates live state while a program runs. It is a tool built on a runtime and toolchain layer that the spec doesn't define ([11](11-compilation-model.md#what-the-spec-defines)), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
 
 - **Solved** means every property the case names holds in the spec.
 - A rule of the spec that breaks one, such as a way for safe code to keep the address of a value it doesn't own, is the finding.
@@ -548,13 +548,13 @@ A field with a default is added to a struct while many values of it are alive, i
 
 - **Must hold:** safe code can't learn a value's address, only immortal data's, unless `unsafe` code or C gives it a raw pointer. Its stored links are handles, weak pointers, owners, `Slice`s, `Pin`s, `RawAllocation`s, `Allocator` ids, `StaticSpan`s and `StaticString`s, `String`s that still use a literal's bytes, `Closure`s and `@c` pointers, which name code, and raw pointers, which only `unsafe` code or C makes.
 - **Must hold:** a thread with no Rayo frame on any of its stacks holds no borrow and no dynamic access.
-- **Must hold:** a type's fields, their layout and their defaults are known to the compiler, and readable through reflection ([10](10-compile-time.md)).
+- **Must hold:** a type's fields, their layout and their defaults are known to the compiler, and readable through reflection ([09](09-compile-time.md)).
 
 ### G3 · What C holds
 
 C holds `user` pointers to pinned elements and a `@c` callback pointer, as in E1, and code in another language binds to a generated header that contains a `@c` struct.
 
-- **Must hold:** every address C can hold is visible in the program: a `Pin`, a `RawAllocation`, such as a leaked box's, a `@c` function pointer, an `@export` symbol, a `StaticSpan` or `StaticString`, a `Span`, `MutableSpan` or `StringView` an exported or `@c` function returns, a `List`, `String` or `TrailingArray` returned to C ([09](09-c-interop.md#c-representations)), or anything `unsafe` code passed to C. A leaked object crosses as its weak pointer's bits, not an address. Every layout C sees is one that a generated header or C's own header declares.
+- **Must hold:** every address C can hold is visible in the program: a `Pin`, a `RawAllocation`, such as a leaked box's, a `@c` function pointer, an `@export` symbol, a `StaticSpan` or `StaticString`, a `Span`, `MutableSpan` or `StringView` an exported or `@c` function returns, a `List`, `String` or `TrailingArray` returned to C ([08](08-c-interop.md#c-representations)), or anything `unsafe` code passed to C. A leaked object crosses as its weak pointer's bits, not an address. Every layout C sees is one that a generated header or C's own header declares.
 
 ### G4 · Suspended code
 

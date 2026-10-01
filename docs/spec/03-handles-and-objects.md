@@ -23,7 +23,7 @@ std declares `Handle` as follows; `pool[h]` is an optional projection ([02](02-v
 }
 ```
 
-`Handle` is 8-aligned, so C holds it as a `uint64_t` ([09](09-c-interop.md#c-representations)), and `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has, as its generation is never 0 ([04](04-types.md#optionals)). Its primary initializer is private, so it isn't `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and other modules build one only through `init?(bits:)`.
+`Handle` is 8-aligned, so C holds it as a `uint64_t` ([08](08-c-interop.md#c-representations)), and `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has, as its generation is never 0 ([04](04-types.md#optionals)). Its primary initializer is private, so it isn't `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and other modules build one only through `init?(bits:)`.
 
 - **A `Pool<T>`** stores its elements densely. `pool[h]` is `nil` once the element is removed, and stays `nil`: a slot whose generation would wrap is abandoned, never reused, so a handle never names a later element. Removal makes every copy of the handle stale at once, and may move the last element into the hole. A forged handle reads `nil` or some live element of that pool.
 - **A `StablePool<T>`** abandons slots the same way, and never moves an element, so a pool element has a stable address there, and `stablePool.pin(h)` can hand it to C ([below](#pinning-for-c)). Its `T` is `~Scoped` ([02](02-views-and-dependencies.md#scoped-values)), since an unscoped pin keeps an element, and its `deinit`, waiting past every scope.
@@ -56,7 +56,7 @@ Every access to an object's value, through the owner or any weak pointer, is che
 
 - **Marks.** A **read access**, any shared use of the value such as a `read` projection, a `let` binding or a borrowing method call, holds a shared mark, and a **modify access**, any change such as a `modify` projection, a `var` binding of `&place` or a `mutating` call, an exclusive mark, until the last use of every value that depends on it (rule 6 in [02](02-views-and-dependencies.md#dependencies)).
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destroying the object while any access to it is live panics too ([below](#destroying-an-object)).
-- **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([11](11-errors-and-safety.md#what-panics)), and so does creating an object when no generation is left ([below](#destroying-an-object)).
+- **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([10](10-errors-and-safety.md#what-panics)), and so does creating an object when no generation is left ([below](#destroying-an-object)).
 
 ### Sharing across threads
 

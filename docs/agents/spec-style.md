@@ -1,6 +1,6 @@
 # Writing the spec
 
-The numbered chapters in `docs/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
+The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
 
 The spec is **precise and plain**: every rule stated exactly, in words a reader takes in once. Precision comes from defined terms and complete lists, never from packing more clauses into a sentence.
 

@@ -1,4 +1,4 @@
-# 15 · Soundness
+# 13 · Soundness
 
 ```swift
 var lines = List<StringView>()
@@ -11,15 +11,15 @@ print(lines[0])
 
 ## The invariants
 
-The undefined behavior of [11](11-errors-and-safety.md#unsafe-code) is an access outside a live allocation, a misaligned access, a read of an invalid value, a data race, a write to memory Rayo treats as immutable, and the failure of a check that `unchecked` removed. Safe code has no `unchecked` block, and its memory-safety checks are on in every build ([11](11-errors-and-safety.md#check-levels)), so the last never happens. These rule out the rest:
+The undefined behavior of [10](10-errors-and-safety.md#unsafe-code) is an access outside a live allocation, a misaligned access, a read of an invalid value, a data race, a write to memory Rayo treats as immutable, and the failure of a check that `unchecked` removed. Safe code has no `unchecked` block, and its memory-safety checks are on in every build ([10](10-errors-and-safety.md#check-levels)), so the last never happens. These rule out the rest:
 
-- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([11](11-errors-and-safety.md#unsafe-code)), so nothing it reads or writes has been freed or reused.
+- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([10](10-errors-and-safety.md#unsafe-code)), so nothing it reads or writes has been freed or reused.
 - **Valid.** A place that safe code reads, lends or destroys holds a valid value of its type, at an address aligned for it.
 - **Exclusive.** While a mutable access to a place is live, nothing reaches an overlapping place except through it. While a shared access is live, nothing writes the place, except a `Synchronized` value through its own synchronization. Static data, a frozen `const` and a `Frozen` value behind a `Shared` or a `LocalShared` are shared for good.
 - **Owned.** A value has one owner, except a reference-counted value, which its owners share. It is destroyed at most once, and used neither after its destruction nor after it moves out.
 - **Race-free.** Two accesses to the same bytes on different threads, at least one a write, are ordered by happens-before ([07](07-concurrency.md#atomics-and-locks)), unless both are atomic accesses of the same size at the same address.
 
-These are what [11](11-errors-and-safety.md#unsafe-code) asks of `unsafe` code, stated for all code. The sections below show that safe code keeps them, given that `unsafe` code and C keep them too and keep the promises the spec lets them make ([The unsafe boundary](#the-unsafe-boundary)).
+These are what [10](10-errors-and-safety.md#unsafe-code) asks of `unsafe` code, stated for all code. The sections below show that safe code keeps them, given that `unsafe` code and C keep them too and keep the promises the spec lets them make ([The unsafe boundary](#the-unsafe-boundary)).
 
 ## Ownership
 
@@ -92,11 +92,11 @@ The rules keep Covered for each value they make, given that the values they star
 
 Rule 5 checks each body against what its signature tells callers, so a caller's sets are covered without seeing the body. What it rejects is what rules 3 and 4 couldn't report:
 
-- **a view of what the function owns or began**: its locals, the storage its `owned` parameters own, a thread-local, and a dynamic or projection access begun inside it, each released or ended when the call returns. The non-`mutable` parameters of a C entry count as owned, since C passes them by value ([09](09-c-interop.md#calling-rayo-from-c));
+- **a view of what the function owns or began**: its locals, the storage its `owned` parameters own, a thread-local, and a dynamic or projection access begun inside it, each released or ended when the call returns. The non-`mutable` parameters of a C entry count as owned, since C passes them by value ([08](08-c-interop.md#calling-rayo-from-c));
 - **a store into a `mutable` parameter `p` that depends on a place overlapping `p`**, since the caller's set for `p` would have to name `p` itself;
 - **a store through a parameter's exclusive dependencies that depends on the parameter's own storage**, which absorption never reports.
 
-**Static storage is always allowed**, since it is never moved or destroyed ([07](07-concurrency.md#shutdown)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage, since nothing in Rayo holds what it borrowed once it returns ([09](09-c-interop.md#c-representations)).
+**Static storage is always allowed**, since it is never moved or destroyed ([07](07-concurrency.md#shutdown)). The views a `Synchronized` global lends are kept by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](07-concurrency.md#the-synchronized-contract)). What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage, since nothing in Rayo holds what it borrowed once it returns ([08](08-c-interop.md#c-representations)).
 
 **A scoped `mutable` parameter counts as used at every exit**, so no path out, an error's included, frees what the callee just stored a view of.
 
@@ -115,7 +115,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 - **A `deinit` may read and write what its value borrows**, so the borrows of a value with one last until its destruction ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). A generic value may have one, so it counts unless constrained `Copyable` or `TrivialFree`.
 - **A destruction can't use a part of the value itself**, since the `deinit` holds all of `self` owned and may change one part before it reads another.
 - **`PlainDeinit` uses only what its elements' destruction uses**, since its `deinit` only destroys what it owns alone and frees its buffers.
-- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so skipping one can only leak, and `unsafe` code allows for that ([11](11-errors-and-safety.md#unsafe-code)).
+- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so skipping one can only leak, and `unsafe` code allows for that ([10](10-errors-and-safety.md#unsafe-code)).
 
 ### Precise dependencies
 
@@ -151,7 +151,7 @@ This section keeps **Covered**, **Exclusive** and **Race-free**.
 
 ## Generic code and existentials
 
-- **Generic code is checked once, at the safe bound** ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). An unconstrained type parameter may be move-only, scoped, a mutable view, not `Sendable`, and have a `deinit` whose destruction is a use, so a body that checks under those assumptions is sound for every instantiation. Each constraint, such as `Copyable`, `~Scoped`, `TrivialFree` or `Sendable`, relaxes one assumption, and every instantiation meets it. Members a `static if` or `static for` generates are taken at the same bound ([10](10-compile-time.md#generated-members-are-checked-per-instantiation)).
+- **Generic code is checked once, at the safe bound** ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). An unconstrained type parameter may be move-only, scoped, a mutable view, not `Sendable`, and have a `deinit` whose destruction is a use, so a body that checks under those assumptions is sound for every instantiation. Each constraint, such as `Copyable`, `~Scoped`, `TrivialFree` or `Sendable`, relaxes one assumption, and every instantiation meets it. Members a `static if` or `static for` generates are taken at the same bound ([09](09-compile-time.md#generated-members-are-checked-per-instantiation)).
 - **A witness keeps its requirement's promises**: conventions, `where` clauses, storage or access-bound projections, and `@noalloc`. So generic code relies only on the requirement.
 - **Markers are unconditional** ([05](05-protocols-generics-and-closures.md#conformances)). Generic code derives copyability, sendability and scope from fields, type arguments and these declarations for every type argument at once, so no instantiation can differ from what it checked.
 - **`any P` is a view** ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)): made from a shared borrow, or from `&x` as a `mutable any P`, so the rules above apply to it. An unscoped existential, such as `Box<any P>`, forgets its value's type and what that type carries, so the type must be `~Scoped`. An existential is `Sendable`, `Frozen` or `TrivialFree` only when its protocols say so, since it hides a type that may not be.
@@ -225,29 +225,29 @@ This section keeps **Valid**.
 - **A whole store may write padding**, so a `TrailingArray`'s header, whose tail padding may hold elements, is written field by field, and a `Synchronized` value never shares bytes with either side ([04](04-types.md#variable-sized-structs-trailingarray)).
 - **Text is UTF-8.** String ranges are checked on scalar boundaries ([04](04-types.md#strings)).
 - **Arithmetic** ([04](04-types.md#integer-overflow-division-and-shifts)). An overflow that wraps gives a wrong value, never an invalid one, and the next bounds check still catches a wrong index. Division by zero and converting NaN or an out-of-range float are memory-safety checks.
-- **Imports keep C's meaning** ([09](09-c-interop.md#structs-unions-and-enums)). A struct Rayo can't lay out exactly imports as `@opaque`, a zeroing `init()` exists only where all-zero bytes are valid, and an enum is closed only where its header says so, holding any value of its underlying type otherwise.
+- **Imports keep C's meaning** ([08](08-c-interop.md#structs-unions-and-enums)). A struct Rayo can't lay out exactly imports as `@opaque`, a zeroing `init()` exists only where all-zero bytes are valid, and an enum is closed only where its header says so, holding any value of its underlying type otherwise.
 
 ## Compile time and reflection
 
-- **Evaluation checks what run time trusts** ([10](10-compile-time.md#running-code-at-compile-time-const)): every raw access and every memory-safety check an `unchecked` block removes, on one thread.
-- **A frozen value is never written or destroyed** ([10](10-compile-time.md#consts-that-reach-run-time)), since it lies in read-only data. So it is `Frozen` with no bookkeeping, `TrivialFree`, holds nothing that exists only at run time, such as a weak pointer or an allocator id, holds no stale owning value, points only at memory freezing copies or at immortal data, and views only static data. It is `Sendable`, since every thread may read it.
-- **Reflection grants nothing a name doesn't** ([10](10-compile-time.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. A reflective projection is a storage or access-bound projection exactly as the field is ([10](10-compile-time.md#what-reflection-can-read)).
-- **Generated declarations are checked as written ones** ([10](10-compile-time.md#generated-members-are-checked-per-instantiation)), and generic code takes them at the safe bound ([above](#generic-code-and-existentials)).
+- **Evaluation checks what run time trusts** ([09](09-compile-time.md#running-code-at-compile-time-const)): every raw access and every memory-safety check an `unchecked` block removes, on one thread.
+- **A frozen value is never written or destroyed** ([09](09-compile-time.md#consts-that-reach-run-time)), since it lies in read-only data. So it is `Frozen` with no bookkeeping, `TrivialFree`, holds nothing that exists only at run time, such as a weak pointer or an allocator id, holds no stale owning value, points only at memory freezing copies or at immortal data, and views only static data. It is `Sendable`, since every thread may read it.
+- **Reflection grants nothing a name doesn't** ([09](09-compile-time.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. A reflective projection is a storage or access-bound projection exactly as the field is ([09](09-compile-time.md#what-reflection-can-read)).
+- **Generated declarations are checked as written ones** ([09](09-compile-time.md#generated-members-are-checked-per-instantiation)), and generic code takes them at the safe bound ([above](#generic-code-and-existentials)).
 
 ## Checks and panics
 
-- **Memory-safety checks are on in every build** ([11](11-errors-and-safety.md#check-levels)), and only `unchecked` code, which isn't safe code, removes them. Each fails before the access it guards.
+- **Memory-safety checks are on in every build** ([10](10-errors-and-safety.md#check-levels)), and only `unchecked` code, which isn't safe code, removes them. Each fails before the access it guards.
 - **A diagnostic check guards nothing memory depends on**: with it off, a wrong value still meets every memory-safety check.
-- **A panic never returns and never unwinds** ([11](11-errors-and-safety.md#what-a-panic-does)), so no frame's borrows end early, no `deinit` runs on a half-changed value, and work lent from the panicking thread still finds its memory. Other threads may run briefly, which `unsafe` code allows for by leaving shared state valid wherever it can panic.
-- **No frame is written past its stack's end** ([11](11-errors-and-safety.md#what-panics)): every function checks its stack on entry, and every call into C checks the need its target declares.
+- **A panic never returns and never unwinds** ([10](10-errors-and-safety.md#what-a-panic-does)), so no frame's borrows end early, no `deinit` runs on a half-changed value, and work lent from the panicking thread still finds its memory. Other threads may run briefly, which `unsafe` code allows for by leaving shared state valid wherever it can panic.
+- **No frame is written past its stack's end** ([10](10-errors-and-safety.md#what-panics)): every function checks its stack on entry, and every call into C checks the need its target declares.
 
 ## The unsafe boundary
 
-The argument above assumes that `unsafe` code and C keep the invariants for their own accesses ([11](11-errors-and-safety.md#unsafe-code), [09](09-c-interop.md#what-c-must-uphold)). It also rests on these promises, each of which some step relies on:
+The argument above assumes that `unsafe` code and C keep the invariants for their own accesses ([10](10-errors-and-safety.md#unsafe-code), [08](08-c-interop.md#what-c-must-uphold)). It also rests on these promises, each of which some step relies on:
 
 | Promise | What relies on it |
 | --- | --- |
-| A view made from a raw pointer reaches live, aligned, valid places, with the dependencies its signature states ([02](02-views-and-dependencies.md#precise-dependencies-opt-in), [11](11-errors-and-safety.md#unsafe-code)) | [Covered](#covered) |
+| A view made from a raw pointer reaches live, aligned, valid places, with the dependencies its signature states ([02](02-views-and-dependencies.md#precise-dependencies-opt-in), [10](10-errors-and-safety.md#unsafe-code)) | [Covered](#covered) |
 | A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](02-views-and-dependencies.md#dependencies)) | [Mutable views](#mutable-views) |
 | A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](02-views-and-dependencies.md#dependencies)) | [Rules 3 and 4](#rule-3) |
 | A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](02-views-and-dependencies.md#dependencies)) | The shallow rule ([Rule 3](#rule-3)) |
@@ -260,6 +260,6 @@ The argument above assumes that `unsafe` code and C keep the invariants for thei
 | `@pod` ([04](04-types.md#plain-data-pod-and-bit-casts)) | `Pod` |
 | The library's lending promise ([07](07-concurrency.md#the-librarys-promise)) | Borrows lent for a call ([Threads](#threads)) |
 | `Box.adopt` takes back a leaked `Box<T>` once ([06](06-memory-and-allocators.md#owning-boxes)) | Owned |
-| `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([11](11-errors-and-safety.md#safe-modules)) | Valid, the stack check |
+| `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([10](10-errors-and-safety.md#safe-modules)) | Valid, the stack check |
 
-**What `unsafe` code allows for** is part of the same boundary ([11](11-errors-and-safety.md#unsafe-code)): memory has no declared type, and a `deinit` may never run. **No `unsafe` call is hidden**, so every promise is made at a visible `unsafe` site, and a `@safe` module, which makes none ([11](11-errors-and-safety.md#safe-modules)), is sound given the modules it calls.
+**What `unsafe` code allows for** is part of the same boundary ([10](10-errors-and-safety.md#unsafe-code)): memory has no declared type, and a `deinit` may never run. **No `unsafe` call is hidden**, so every promise is made at a visible `unsafe` site, and a `@safe` module, which makes none ([10](10-errors-and-safety.md#safe-modules)), is sound given the modules it calls.

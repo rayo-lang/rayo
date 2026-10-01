@@ -1,6 +1,6 @@
-# 13 · Grammar
+# 12 · Grammar
 
-The grammar is normative for syntax only: what a program means is in chapters 01–12.
+The grammar is normative for syntax only: what a program means is in chapters 01–11.
 
 The productions don't show where one statement ends and the next begins. Newlines decide that:
 
@@ -33,14 +33,14 @@ The grammar is EBNF: `?` means optional, `*` zero or more, `+` one or more, `|` 
 ```ebnf
 identifier   = (letter | '_') (letter | digit | '_')* | '`' any-keyword '`'
              | '$' digits                                     (* implicit closure parameters: $0, $1 *)
-             | '\(' expression ')' ;                          (* computed name, from a const string (10) *)
+             | '\(' expression ')' ;                          (* computed name, from a const string (09) *)
 int-literal  = digits | '0x' hexdigits | '0b' bindigits | '0o' octdigits ;   (* '_' allowed between digits *)
 float-literal= digits '.' digits exponent? | digits exponent ;      (* '_' allowed between digits *)
 exponent     = ('e' | 'E') ('+' | '-')? digits ;
 string-lit   = '"' (char | escape | '\(' expression ')')* '"'
              | '"""' newline (char | newline | escape | '\(' expression ')')* newline (' ' | '\t')* '"""' ;
 plain-string-lit = '"' (char | escape)* '"'
-             | '"""' newline (char | newline | escape)* newline (' ' | '\t')* '"""' ;   (* no interpolation: the strings C reads (09) *)
+             | '"""' newline (char | newline | escape)* newline (' ' | '\t')* '"""' ;   (* no interpolation: the strings C reads (08) *)
 escape       = '\' ('0' | 'n' | 'r' | 't' | '\' | '"' | "'" | 'u{' hexdigits '}') ;
 comment      = '//' to-end-of-line | '/*' nested-comment '*/' ;
 ```
@@ -65,17 +65,17 @@ associatedtype subscript`.
 file          = file-item* ;
 file-item     = import | declaration | file-static-if | file-static-for | static-error ;
 file-static-if= 'static' 'if' expression '{' file-item* '}' ('else' (file-static-if | '{' file-item* '}'))? ;
-                                                                   (* top level: may include or exclude whole imports, under 10's rule for their conditions *)
+                                                                   (* top level: may include or exclude whole imports, under 09's rule for their conditions *)
 file-static-for= 'static' 'for' identifier 'in' expression ('where' expression)? '{' file-item* '}' ;
-                                                                   (* generates declarations, once per element; no import inside, at any depth (10) *)
-static-error  = 'static' 'error' '(' string-lit ')' ;              (* a compile error where this is built or instantiated (10);
+                                                                   (* generates declarations, once per element; no import inside, at any depth (09) *)
+static-error  = 'static' 'error' '(' string-lit ')' ;              (* a compile error where this is built or instantiated (09);
                                                                       each interpolated segment is a const, formatted at compile time *)
 import        = 'import' module-path ('as' identifier)?
               | 'import' 'c' plain-string-lit ('as' identifier)? ('where' 'prefix' ':' plain-string-lit)? c-import-config? ;
 c-import-config = 'unsafe' '{' c-import-rule* '}' ;                 (* asserted facts; rejected in @safe modules *)
-c-import-rule = 'noalloc' identifier (',' identifier)*             (* C functions that allocate nothing (09) *)
-              | c-stack identifier (',' identifier)*                 (* the stack those functions need (09) *)
-              | ('struct' | 'union' | 'enum') identifier 'in' plain-string-lit ;   (* the header whose reading has a type this one only declares (09) *)
+c-import-rule = 'noalloc' identifier (',' identifier)*             (* C functions that allocate nothing (08) *)
+              | c-stack identifier (',' identifier)*                 (* the stack those functions need (08) *)
+              | ('struct' | 'union' | 'enum') identifier 'in' plain-string-lit ;   (* the header whose reading has a type this one only declares (08) *)
 module-path   = identifier ('.' identifier)* ;
 
 declaration   = attribute* modifier* ( let-decl | var-decl | const-decl | func-decl | task-decl
@@ -83,7 +83,7 @@ declaration   = attribute* modifier* ( let-decl | var-decl | const-decl | func-d
               | extern-c-decl ) ;
 modifier      = 'public' | 'private' | 'static' | 'mutating' | 'consuming' | 'unsafe' ;
                                                                    (* each only where a chapter gives it a meaning, and a compile error elsewhere:
-                                                                      'public' and 'private' on a declaration outside a function body (12),
+                                                                      'public' and 'private' on a declaration outside a function body (11),
                                                                       'static' on a type's member, 'mutating' and 'consuming' on a method,
                                                                       'mutating' on a computed property or subscript (04),
                                                                       'unsafe' on a function, initializer, subscript, accessor, field or protocol.
@@ -111,8 +111,8 @@ param-clause  = '(' (param (',' param)* ','?)? ')' ;
 param         = (arg-label | '_')? identifier ':' param-convention? type ('=' expression)? ;
 arg-label     = identifier | keyword ;                            (* func index(of x: T, in s: Span<T>) *)
 param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or owned for a mutating or consuming function type, some F of one, or mutable any P (05) *)
-throws-clause = 'throws' | typed-throws ;                          (* bare 'throws' only on a non-public function with a body (11) *)
-typed-throws  = 'throws' '(' type ('|' type)* ')' ;                (* throws(IoError | ParseError): an error union (11) *)
+throws-clause = 'throws' | typed-throws ;                          (* bare 'throws' only on a non-public function with a body (10) *)
+typed-throws  = 'throws' '(' type ('|' type)* ')' ;                (* throws(IoError | ParseError): an error union (10) *)
 
 struct-decl   = 'struct' identifier generic-params? primary-init? inheritance? where-clause? ('{' member* '}')? ;
                 (* a struct's body declares no stored field: its 'var's are computed or static, and its 'let's static (04) *)
@@ -139,7 +139,7 @@ extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                       a conformance only at a file's top level (05) *)
 typealias-decl= 'typealias' identifier generic-params? '=' type ;
 extern-c-decl = 'extern' 'c' ( plain-string-lit | 'noalloc'? c-stack? 'func' identifier param-clause ('->' type)? ) ;
-c-stack       = 'stack' '(' expression ')' ;                        (* the stack, in bytes, the C function needs at most: a const Int expression (09) *)
+c-stack       = 'stack' '(' expression ')' ;                        (* the stack, in bytes, the C function needs at most: a const Int expression (08) *)
 
 member        = declaration | init-decl | deinit-decl | subscript-decl | static-if-decl | static-for-decl | static-error ;
 init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause throws-clause? where-clause? block ;
@@ -164,7 +164,7 @@ constraint    = type | '~' type ;                                 (* only ~Scope
 
 static-if-decl= 'static' 'if' expression '{' (enum-case | member)* '}' ('else' (static-if-decl | '{' (enum-case | member)* '}'))? ;
 static-for-decl= 'static' 'for' identifier 'in' expression ('where' expression)? '{' (enum-case | member)* '}' ;
-                                                                   (* generates members (10); enum-case only in an enum's own body *)
+                                                                   (* generates members (09); enum-case only in an enum's own body *)
 ```
 
 A computed name, `\(expression)`, may stand for an identifier only where a declaration is named (a type, function, variable, constant, enum case, or a parameter's name, never its argument label), after `.` in a member access or an implicit member expression, and as a primary expression that names a declaration in scope, such as a generated function it calls. Anywhere else, such as a type annotation, a pattern or an argument label, it is an error. Inside a string literal, `\(` keeps its meaning of interpolation.
@@ -176,12 +176,12 @@ type          = type-primary type-suffix* ;
 type-primary  = type-name
               | 'Self' ('.' identifier generic-args?)*             (* Self, Self.Element *)
               | '(' tuple-type-elems? ')'                          (* tuple, or Void when empty *)
-              | '(' type ('|' type)+ ')'                           (* error union (11): (IoError | ParseError)? *)
+              | '(' type ('|' type)+ ')'                           (* error union (10): (IoError | ParseError)? *)
               | '[' (expression | '_') 'of' type ']'               (* Array<T, N>, the inline array; '_' infers the count from the initializer *)
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
               | 'any' composition | 'some' composition | 'mutable' 'any' composition   (* mutable any P: the exclusive existential view *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
-                                                                   (* C function pointer (09): never throws; 'noalloc': its calls allocate nothing (05) *)
+                                                                   (* C function pointer (08): never throws; 'noalloc': its calls allocate nothing (05) *)
               | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' typed-throws? '->' type ;
                                                                    (* function type; 'unsafe' calls need 'unsafe' (05);
                                                                       'mutating' may write its captures, 'consuming' is call-once;
@@ -205,7 +205,7 @@ statement     = declaration | expression | assignment | guard-stmt
               | for-stmt | while-stmt | repeat-stmt | do-stmt                (* 'if' and 'when' are expressions *)
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
               | 'defer' block | 'unsafe' block | 'unchecked' block | using-stmt
-              | attribute+ do-stmt                                      (* only @checks(…) applies to a block (11) *)
+              | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
               | rebind-stmt | static-if-stmt | static-for-stmt | yield-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
               | static-error
