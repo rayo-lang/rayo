@@ -4,10 +4,14 @@
 - **Test-driven.** Every behaviour change runs red-green-refactor: write the test first and watch it go red for the right reason, write the least code that turns it green, then refactor while it stays green. Load the `tdd` skill before writing code.
 - **Code design and comments.** Two skills are the authority: `code-design` before you implement, `code-comments` as you write each line.
 - **Branch per change.** Commit on a branch named `impl-<feature-slug>`; when an AI model does the work, append `-via-<model>-<version>`, slugged the same way (`impl-arena-reset`, `impl-arena-reset-via-opus-5-5`). Never commit to `main`.
-- **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, or tool template that adds one. The only exception is the branch rule's `-via-` suffix.
+- **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, skill, or tool template that adds one. The only exception is the branch rule's `-via-` suffix.
 - **Pull requests** follow the `create-pr` skill.
 
 ## Agent skills
+
+### Skill sources
+
+`code-comments`, `code-design` and `create-pr` are this repo's own. The rest are copied from `mattpocock/skills` and carry local edits: read `docs/agents/skills.md` before updating or editing them.
 
 ### Issue tracker
 
@@ -19,4 +23,4 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the root; decisions D0–D19 predate `docs/adr/` and stay in `docs/14-decisions.md`. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` + `docs/adr/` at the root; decisions D0–D19 predate `docs/adr/` and stay in `docs/14-decisions.md`. See `docs/agents/domain.md`.
