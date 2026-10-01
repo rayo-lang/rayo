@@ -12,7 +12,7 @@ func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
 
-A **place** is storage that holds a value: a local, a parameter, a global, a temporary, or a field, element or projection of one of those.
+A **place** is storage that holds a value: a local, a parameter, a global or a temporary; a field or an element inside one of those; or the storage an accessor hands out from one of those, as `list[i]` hands out the list's element itself, not a copy of it ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
 
 **Every value has one owner**, which decides when the value is destroyed. The exception is a counted owner, such as `Shared<T>`, whose owners share one value ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, and the compiler checks each borrow inside the function that makes it.
 
