@@ -23,4 +23,4 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context: `GLOSSARY.md` + `docs/adr/` at the root; decisions D0–D19 predate `docs/adr/` and stay in `docs/14-decisions.md`. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` at the root; the language's decisions in `docs/14-decisions.md`, and ADRs in `docs/adr/` for built systems only. See `docs/agents/domain.md`.

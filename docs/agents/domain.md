@@ -5,15 +5,16 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** at the repo root — the glossary.
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in.
-- **`docs/14-decisions.md`** — decisions D0–D19 and the open questions, recorded before `docs/adr/` existed. Read the entries that touch your area; they carry the same weight as ADRs.
+- **`docs/14-decisions.md`** — the language's design decisions (D-entries) and open questions. Read the entries that touch your area.
+- **`docs/adr/`** — read ADRs that touch the built system you're about to work in, such as `rayoc`.
 
 If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## Where terms and decisions live
 
 - **Terms**: the language's terms are defined in the spec chapters, `docs/01-values-and-ownership.md` through `docs/15-soundness.md`. `GLOSSARY.md` names them and points into those chapters; it must not restate or contradict them.
-- **New decisions** go in `docs/adr/NNNN-<slug>.md`, numbered from `0001`. Don't append D20 or later to `docs/14-decisions.md`; it stays as the record of decisions made before `docs/adr/`.
+- **Language design decisions** are D-entries in `docs/14-decisions.md`. A new decision takes the next number; a decision that reverses an earlier one rewrites that entry, moving the old choice under **Rejected** with the reason, and the spec chapters change with it.
+- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record decisions about built systems only: code that exists, such as `rayoc`. A decision about the language, or about a system not yet built, goes in the spec instead.
 
 ## File structure
 
@@ -25,7 +26,7 @@ If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag 
 │   │   └── 0001-<slug>.md
 │   ├── 01-values-and-ownership.md     ← spec chapters, 01–15
 │   ├── …
-│   ├── 14-decisions.md                ← decisions D0–D19, open questions
+│   ├── 14-decisions.md                ← the language's decisions (D-entries), open questions
 │   ├── 15-soundness.md
 │   └── hard-cases.md
 └── examples/
