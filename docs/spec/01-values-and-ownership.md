@@ -14,7 +14,7 @@ heal(&b)                           // lends 'b' to heal, which changes it in pla
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 
-**Every value has one owner**, which decides when the value is destroyed. The exception is a counted owner, such as `Shared<T>`, whose owners share one value ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, and the compiler checks each borrow inside the function that makes it.
+**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it, and the compiler checks each borrow inside the function that makes it.
 
 **A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([below](#moving-values-out)), or through an operation that copies its operands ([below](#operations-that-copy)).
 
