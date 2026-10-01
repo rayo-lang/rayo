@@ -5,16 +5,16 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** at the repo root — the glossary.
-- **`docs/14-decisions.md`** — the language's design decisions (D-entries) and open questions. Read the entries that touch your area.
+- **The spec chapters** — the numbered files in `docs/`. Read the ones that touch your area.
 - **`docs/adr/`** — read ADRs that touch the built system you're about to work in, such as `rayoc`.
 
 If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
 ## Where terms and decisions live
 
-- **Terms**: the language's terms are defined in the spec chapters, `docs/01-values-and-ownership.md` through `docs/15-soundness.md`. `GLOSSARY.md` names them and points into those chapters; it must not restate or contradict them.
-- **Language design decisions** are D-entries in `docs/14-decisions.md`. A new decision takes the next number; a decision that reverses an earlier one rewrites that entry, moving the old choice under **Rejected** with the reason, and the spec chapters change with it.
-- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record decisions about built systems only: code that exists, such as `rayoc`. A decision about the language, or about a system not yet built, goes in the spec instead.
+- **Terms**: the language's terms are defined in the spec chapters. `GLOSSARY.md` names them and points into those chapters; it must not restate or contradict them.
+- **The language's design** is the spec chapters themselves: they state the current rules. A design change edits the chapters it touches, and keeps no separate log of decisions.
+- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record decisions about built systems only: code that exists, such as `rayoc`. A decision about the language, or about a system not yet built, changes the spec instead.
 
 ## File structure
 
@@ -24,10 +24,8 @@ If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag 
 ├── docs/
 │   ├── adr/
 │   │   └── 0001-<slug>.md
-│   ├── 01-values-and-ownership.md     ← spec chapters, 01–15
+│   ├── 01-values-and-ownership.md     ← the numbered spec chapters
 │   ├── …
-│   ├── 14-decisions.md                ← the language's decisions (D-entries), open questions
-│   ├── 15-soundness.md
 │   └── hard-cases.md
 └── examples/
 ```
@@ -40,8 +38,8 @@ If the concept you need isn't in the glossary yet, that's a signal — either yo
 
 ## Flag decision conflicts
 
-If your output contradicts an existing ADR or D-entry, surface it explicitly rather than silently overriding:
+If your output contradicts an existing ADR or a rule in the spec, surface it explicitly rather than silently overriding:
 
 > _Contradicts ADR-0007 (…) — but worth reopening because…_
 
-> _Contradicts D14 (copies are written out) — but worth reopening because…_
+> _Contradicts 01's rule that copies are written out — but worth reopening because…_

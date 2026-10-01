@@ -1,6 +1,6 @@
 ## Project rules
 
-- **Code is its own source of truth.** Comments, names and tests stand alone: state the reason itself, in place. Never reference artifacts from code — issues, PRs, specs, ADRs, D-entries, plans, review findings.
+- **Code is its own source of truth.** Comments, names and tests stand alone: state the reason itself, in place. Never reference artifacts from code — issues, PRs, specs, ADRs, plans, review findings.
 - **Test-driven.** Every behaviour change runs red-green-refactor: write the test first and watch it go red for the right reason, write the least code that turns it green, then refactor while it stays green. Load the `tdd` skill before writing code.
 - **Code design and comments.** Two skills are the authority: `code-design` before you implement, `code-comments` as you write each line.
 - **Branch per change.** Commit on a branch named `impl-<feature-slug>`; when an AI model does the work, append `-via-<model>-<version>`, slugged the same way (`impl-arena-reset`, `impl-arena-reset-via-opus-5-5`). Never commit to `main`.
@@ -23,4 +23,4 @@ Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context: `GLOSSARY.md` at the root; the language's decisions in `docs/14-decisions.md`, and ADRs in `docs/adr/` for built systems only. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` at the root, the spec chapters in `docs/`, and ADRs in `docs/adr/` for built systems only. See `docs/agents/domain.md`.
