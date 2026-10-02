@@ -86,7 +86,7 @@ Besides `copy`, `clone()` and taking a copyable `const`, these operations copy t
 - a `Simd` initializer or lane read ([04](04-types.md#simd-and-math));
 - an inline array's `.init(repeating:)` ([04](04-types.md#tuples-ranges-and-arrays));
 - `using allocator = a`, which reads the id in `a` ([06](06-memory-and-allocators.md#the-current-allocator));
-- a widening conversion ([below](#bindings));
+- a widening conversion ([below](#conversions));
 - an `as` pattern on a place ([04](04-types.md#matching-with-when-and-choosing-with-if));
 - a change through a `get` and `set` pair, which copies a copyable `owned` subscript argument for the `get` ([02](02-views-and-dependencies.md#get-and-set-accessors)).
 
@@ -103,7 +103,7 @@ One copy is deferred: a `String` made from a literal uses the literal's bytes un
 Some values that the code doesn't declare still count as locals, and take their place in that order:
 
 - **Parameters.** A function's `owned` parameters and a `consuming` method's `self` count as locals of its body declared before the others: `self` first, then the parameters in order.
-- **Hidden locals.** A **hidden local** is one the language declares to keep a value that a statement can't name, such as a `when` subject ([below](#bindings)) or a loop's sequence ([04](04-types.md#iteration)):
+- **Hidden locals.** A **hidden local** is one the language declares to keep a value that a statement can't name, such as a `when` subject ([below](#conditions-and-patterns)) or a loop's sequence ([04](04-types.md#iteration)):
     - a closure literal's counts as declared just before the local it was made for, in the order the literals are made ([05](05-protocols-generics-and-closures.md#function-typed-values));
     - a `rebind`'s counts as the binding whose value it took ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind));
     - those of a `guard`, a `when` arm, an `if case`, a `while case` and a `for` loop count as declared where the statement stands: a loop's sequence temporaries in evaluation order, then its iterator ([04](04-types.md#iteration)).
@@ -130,7 +130,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 | Convention | Declared as | Call site | Callee receives |
 | --- | --- | --- | --- |
 | borrowed (default) | `_ x: T` | `f(x)` | A shared borrow ([below](#borrowed-arguments)) |
-| mutable | `_ x: mutable T` | `f(&x)` | A mutable borrow of a [changeable place](#bindings) |
+| mutable | `_ x: mutable T` | `f(&x)` | A mutable borrow of a [changeable place](#changeable-places) |
 | owned | `_ x: owned T` | `f(x)` | The value: a place moves in, whatever its type, and `f(copy x)` passes a copy |
 
 - **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, unless the callee moves it on. A `consuming` method's `self` is held the same way.
@@ -199,7 +199,7 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 
 ## Bindings
 
-A local binding says what it does with what it is given, in a parameter's words. `let` and `var` say only whether the binding may change what it holds. A binding of a place borrows it, and `owned` takes the value out instead:
+**A local binding says what it does with what it is given, in a parameter's words.** `let` and `var` say only whether the binding may change what it holds. A binding of a place borrows it, and `owned` takes the value out instead.
 
 ```swift
 var enemies = loadEnemies()
@@ -213,16 +213,30 @@ var e = enemies[0]                 // error: a bare 'var' of a place
 
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
-| `let x = place` | `_ x: T` | Shared **borrow** of `place`, of any type. `place` can't be changed, moved or destroyed while `x` is live, and views taken from `x` depend on `place` itself. A place in a temporary's own storage, such as `makeEnemy().pos`, dies with its statement, so the binding owns that value instead, moving it out as [Moving values out](#moving-values-out) allows; where that can't move it, the binding is a compile error unless written `copy` or `.clone()`. A place that a `where yield outlives self` projection yields from a temporary, such as `makeSpan()[0]`, lies outside it, so the binding borrows it, depending on what the temporary carries ([02](02-views-and-dependencies.md#dependencies)). | None |
-| `var x = &place` | `_ x: mutable T` | Mutable **borrow** of a changeable place (below); `place` is reachable only through `x` while `x` is live | None |
-| `owned let x = place` / `owned var x = place` | `_ x: owned T` | **Move** from a place the code owns ([Moving values out](#moving-values-out)); `place` can't be used until given a new value | `memcpy` at most |
-| `let x = copy place` / `var x = copy place` | | Independent **copy** of a copyable value; `.clone()` for a move-only one | `memcpy` |
-| `let x = f()` / `var x = f()` | | Owns the value, including a move-only scoped value such as a `MutableSpan` or a lock guard ([02](02-views-and-dependencies.md#scoped-values)); `consume x` ends it early. The same for any value that isn't a place: a literal, an operator's result, `copy place`, `consume place` | None |
-| `var x = place` | | Compile error. A `const` of a copyable type is the exception, and gives the `var` a new value ([Constants](#moving-values-out)) | |
+| `let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
+| `var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
+| `owned let x = place`, `owned var x = place` | `_ x: owned T` | A **move** from a place the code owns ([below](#moving-values-out)): `place` can't be used until it gets a new value | A `memcpy` at most |
+| `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `.clone()` | A `memcpy` |
+| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](02-views-and-dependencies.md#scoped-values)); `consume x` ends it early | None |
+| `var x = place` | | A compile error, except for a `const` of a copyable type, which gives the `var` a new value ([below](#moving-values-out)) | |
 
-On a binding of a value, `owned` changes nothing. A binding that owns can be moved on, and a `let` still can't be changed. Neither borrowing form may bind an under-aligned place, which is a compile error ([04](04-types.md#packed-structs-and-under-aligned-places)).
+- **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. On such a binding, `owned` changes nothing. A binding that owns its value can move it on, and a `let` still can't change it.
+- **Views taken from a `let` of a place depend on the place itself** ([02](02-views-and-dependencies.md#dependencies)).
+- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [Moving values out](#moving-values-out) allows. Where that can't move it, the binding is a compile error unless it is written with `copy` or `.clone()`.
+- **A place that a `where yield outlives self` projection yields from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](02-views-and-dependencies.md#dependencies)).
+- **Neither borrowing form may bind an under-aligned place**: that is a compile error ([04](04-types.md#packed-structs-and-under-aligned-places)).
 
-**Changing a place while a `let` of it is used is a compile error**, or, for a place reached through an object or a thread-local, a panic (below). A `Synchronized` value still changes through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)). A `let` of a stored field is another name for it, a `let` of a property whose accessor is a `get` owns the returned value, and one of a `read` projection borrows what it yields ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). So changing a field to a computed property, or back, never silently changes what a `let` of it sees: where the two would differ, the stored form is a compile error:
+### What a `let` of a place sees
+
+**Changing a place while a `let` of it is used is a compile error.** For a place reached through an object or a thread-local, it is a panic instead ([below](#how-long-a-borrow-lasts)). A `Synchronized` value still changes through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)).
+
+**Making a field computed, or stored, never silently changes what a `let` of it sees.**
+
+- A `let` of a stored field is another name for the field.
+- A `let` of a property whose accessor is a `get` owns the value the `get` returns.
+- A `let` of a `read` projection borrows what it yields ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+
+Where the stored and the computed forms would differ, the stored form is a compile error:
 
 ```swift
 extension Enemy { var isDead: Bool { hp <= 0 } }   // computed
@@ -236,26 +250,88 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 }
 ```
 
-**Conditions and patterns** follow the same rules. `if let e = world.enemies[h]` looks, `if var e = &world.enemies[h]` changes in place, and `if let v = pool.take(h)` owns the value it moves out; `guard` and `while` are the same. `if let x` is short for `if let x = x`, and `guard let x` for `guard let x = x`. `while` has no short form, since the unwrapped `x` would shadow the optional for the whole body, which then couldn't change it to end the loop. `var` has none either, since its `&` must be written. In a `when`:
+### How long a borrow lasts
 
-- **A `let` part looks at what it matches, and a `var` part changes it in place.** For a `var` part the subject is marked `&`: `when &shape { .circle(var r) -> r *= 2; else -> {} }`.
+**A borrow lasts until its last use, not to the end of the scope.** Once `boss` above is last used, `enemies` is free again. Where destroying the value that holds the borrow is a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), that destruction is its last use.
+
+**A `let` of a dynamic place holds its access until its last use.** A dynamic place is one reached through a thread-bound object's owner or weak pointer, or a thread-local, and the `let` holds that dynamic access (rule 6 in [02](02-views-and-dependencies.md#dependencies)). So a call in between that changes the object panics.
+
+### Conditions and patterns
+
+**Conditions and patterns bind as bindings do.** `if let e = world.enemies[h]` looks, `if var e = &world.enemies[h]` changes in place, and `if let v = pool.take(h)` owns the value it moves out. `guard` and `while` work the same way.
+
+**`if let x` is short for `if let x = x`, and `guard let x` for `guard let x = x`.** `while` has no short form, since the unwrapped `x` would shadow the optional for the whole body, which then couldn't change it to end the loop. `var` has none either, since its `&` must be written.
+
+**In a `when`, each part of a pattern binds as a binding does:**
+
+- **A `let` part looks at what it matches, and a `var` part changes it in place.** For a `var` part, the subject is marked `&`: `when &shape { .circle(var r) -> r *= 2; else -> {} }`.
 - **An `owned` part takes what it matches out of a subject the code owns.** It moves as a field is moved out ([below](#moving-values-out)): only when no type on the path to it declares a `deinit`, except in that type's own `deinit`, and only once its arm is chosen.
 - **When the subject is a value, every part owns what it matches.**
-- **A `deinit` on the path keeps a value subject whole.** In an arm where, in any of its patterns, a type on the path to a part declares a `deinit`, whichever pattern matched, the value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's `let` parts look at it and its `var` parts change it in place, so the `deinit` runs on the changed value, and nothing moves out of it. The subject still takes no `&`, since the hidden local is the arm's own. A subject in a temporary's own storage that can't be moved out, such as `connect().state` where `Conn` declares a `deinit`, keeps the whole temporary in that hidden local the same way.
+- **A `deinit` on the path keeps a value subject whole.** This holds in an arm where any of its patterns has, on the path to a part, a type that declares a `deinit`, whichever pattern matched. The value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's `let` parts look at it, and its `var` parts change it in place, so the `deinit` runs on the changed value, and nothing moves out of it. The subject still takes no `&`, since the hidden local is the arm's own.
+- **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
 
-`if case`, `guard case` and `while case` bind the same way, with the value after `=` as the subject, and a `guard`'s hidden local lives to the end of the enclosing scope, as the names it binds do.
+**`if case`, `guard case` and `while case` bind the same way**, with the value after `=` as the subject. A `guard`'s hidden local lives to the end of the enclosing scope, as the names it binds do.
 
-Every binding also follows these rules:
+**`for` patterns bind elements in place**, and own what the iterator hands out as a value of its own, such as a `Range`'s `Int` ([04](04-types.md#iteration)).
 
-- **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, borrowing, lending for change, moving or returning it, it does with that arm's last expression, as if it stood there. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](10-errors-and-safety.md#unsafe-code)). `let e = if first { enemies[0] } else { enemies[1] }` borrows one of the two, and what depends on `e` depends on both ([02](02-views-and-dependencies.md#dependencies)). `var t = if left { &a } else { &b }` lends one for change, and `owned let v = if c { p } else { q }` moves from the one chosen, so each is moved on its own path ([Moving values out](#moving-values-out)). When some arms name places and others give values, as in `let e = if c { enemies[0] } else { makeEnemy() }`, each value is kept in a hidden local declared where the binding is and destroyed with it if its arm ran. The binding is then a binding of a place, which can't be consumed, and what depends on it depends on every arm's place and on those hidden locals.
-- **A borrow lasts until its last use, not to the end of the scope.** Once `boss` above is last used, `enemies` is free again. Where destroying the value that holds it is a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), that destruction is its last use.
-- **A converted value is a new value.** When a binding's declared type differs from its initializer's, each conversion says what it does with a place ([05](05-protocols-generics-and-closures.md#implicit-conversions)). A numeric widening reads it and makes a new value (`let total: Int = n` owns its value). Wrapping in an optional or an error union, making a `Box<T>` or an object pointer into one of an existential, and moving a closure into a `Closure` each take it, so from a place each is written as a take, or as a copy of a copyable value: `owned var target: Handle<Enemy>? = h`, or `var target: Handle<Enemy>? = copy h`. Making an `any P` from a place borrows it shared, and the binding, `let` or `var`, owns the view, so `var d: any Drawable = sprite` may later point at another value; `&place` makes a `mutable any P` instead ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
-- **A `let` of a dynamic place holds its access.** A `let` bound to a place reached through a thread-bound object's owner or weak pointer, or a thread-local, holds that dynamic access until its last use (rule 6, [02](02-views-and-dependencies.md#dependencies)), so a call in between that changes the object panics.
-- **`for` patterns bind elements in place**, and own what the iterator hands out as a value of its own, such as a `Range`'s `Int` ([04](04-types.md#iteration)).
-- **`&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. The places are: a `mutable` argument; the right side of a `var`, `if var`, `guard var` or `while var` that binds a place, or of a pattern with a `var` part bound to a place; the target of a `rebind` of a `var` ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind)); a loop's sequence whose elements it changes, which may be a temporary the loop keeps in a hidden local ([04](04-types.md#iteration)), as in `for (i, var e) in &makeEnemies().enumerated()`; a `when` subject that is a place, or a `case` condition's value that is one, with a `var` part; the last expression of an `if` or `when` arm whose position lends a place for change, as in `var t = if left { &a } else { &b }`; a place holding a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value, made into a new function value ([05](05-protocols-generics-and-closures.md#implicit-conversions)); a place a `modify` projection's `yield` lends ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)); and a place made into a `mutable any P`, as in `var v: mutable any Damageable = &boss`, or holding one that lends a new view of its value ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). What follows `&` is a changeable place, or a member of one that has a mutable form. Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change.
-    - Where a method or property has a shared and a mutable form of one name, the operand of `&` picks the mutable one ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)): `var lives = &particles.life` binds an [`SoA`](04-types.md#struct-of-arrays-soat) column as a `MutableSpan<Float>` it owns, where `let lives = particles.life` gets a `Span<Float>`.
-    - **A binding of a value lends nothing, so it takes no `&`.** A call result lent for change as a `mutable` argument or a loop's sequence takes `&` as any changeable place does: it is a temporary, which its statement owns, or the loop for a sequence (above), so `heal(&makeEnemy())` changes an enemy the statement then destroys. A call result bound to a name is owned by its binding, including an **owned exclusive view**, a move-only scoped value ([02](02-views-and-dependencies.md#scoped-values)) such as the guard in `var g = registry.lock()`, which changes the registry through it. A `zip` marks its own arguments: `for (var v, f) in zip(&vels, forces)`.
-- **Only a changeable place can be changed, or lent with `&`.** A place is changeable when it is a `var` that owns its value; a temporary, which its statement owns ([02](02-views-and-dependencies.md#dependencies)); the place a `var` given `&place` names, through that binding; a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer; an owned capture of a `mutating` or `consuming` closure; or a `var` field, an element, a `modify` projection ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), or a property or subscript with a `set` ([02](02-views-and-dependencies.md#get-and-set-accessors)), of a changeable place. Everything else is read-only, and so is whatever is reached through it: a `let`, owning or borrowing, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So `let x = makeEnemy(); var y = &x` is rejected, as `heal(&x)` is. There are four exceptions. Two are checked at run time: a `@threadlocal var`, which its own thread changes under a dynamic mark on each access ([07](07-concurrency.md#global-state)), and an object's value, which is changeable whatever holds its owner or weak pointer, since each access takes a dynamic mark (`let r = renderer.weak(); r.value?.submit(mesh)` is fine, [03](03-handles-and-objects.md#dynamic-exclusivity)). The third is a `Synchronized` value, whose non-`mutating` methods change it through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)). The fourth is `unsafe` code, which may change a bare global `var` or an imported C variable ([07](07-concurrency.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](10-errors-and-safety.md#unsafe-code)).
+### `if` and `when` as values
+
+**An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, lends it for change, moves it or returns it. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](10-errors-and-safety.md#unsafe-code)).
+
+- `let e = if first { enemies[0] } else { enemies[1] }` borrows one of the two, and what depends on `e` depends on both ([02](02-views-and-dependencies.md#dependencies)).
+- `var t = if left { &a } else { &b }` lends one for change.
+- `owned let v = if c { p } else { q }` moves from the one chosen, so each is moved only on its own path ([below](#moving-values-out)).
+
+**When some arms name places and others give values, each value is kept in a hidden local**, as in `let e = if c { enemies[0] } else { makeEnemy() }`. The hidden local is declared where the binding is, and destroyed with it if its arm ran. The binding is then a binding of a place, which can't be consumed. What depends on it depends on every arm's place, and on those hidden locals.
+
+### Conversions
+
+**A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](05-protocols-generics-and-closures.md#implicit-conversions)):
+
+- **A numeric widening reads the place** and makes a new value, so `let total: Int = n` owns its value.
+- **These conversions take the value:** wrapping it in an optional or an error union, making a `Box<T>` or an object pointer into one of an existential, and moving a closure into a `Closure`. So from a place, each is written as a move, with `owned` or `consume`, or as a copy of a copyable value: `owned var target: Handle<Enemy>? = h`, or `var target: Handle<Enemy>? = copy h`.
+- **Making an `any P` from a place borrows the place shared**, and the binding, `let` or `var`, owns the view. So `var d: any Drawable = sprite` may later point at another value. `&place` makes a `mutable any P` instead ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+
+### Changeable places
+
+**Only a changeable place can be changed, or lent with `&`.** A place is **changeable** when it is:
+
+- a `var` that owns its value;
+- a temporary, which its statement owns ([02](02-views-and-dependencies.md#dependencies));
+- the place that a `var` given `&place` names, through that binding;
+- a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer;
+- an owned capture of a `mutating` or `consuming` closure;
+- a `var` field, an element, a `modify` projection ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), or a property or subscript with a `set` ([02](02-views-and-dependencies.md#get-and-set-accessors)), of a changeable place.
+
+**Everything else is read-only, and so is whatever is reached through it**: a `let`, owning or borrowing, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So `let x = makeEnemy(); var y = &x` is rejected, as `heal(&x)` is.
+
+**There are four exceptions**, the first two checked at run time:
+
+- **A `@threadlocal var`**, which its own thread changes under a dynamic mark on each access ([07](07-concurrency.md#global-state)).
+- **An object's value**, which is changeable whatever holds its owner or weak pointer, since each access takes a dynamic mark ([03](03-handles-and-objects.md#dynamic-exclusivity)). So `let r = renderer.weak(); r.value?.submit(mesh)` is fine.
+- **A `Synchronized` value**, whose non-`mutating` methods change it through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)).
+- **`unsafe` code**, which may change a bare global `var` or an imported C variable ([07](07-concurrency.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](10-errors-and-safety.md#unsafe-code)).
+
+### Lending a place for change
+
+**`&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`:
+
+- a `mutable` argument;
+- the right side of a `var`, `if var`, `guard var` or `while var` that binds a place, or of a pattern with a `var` part bound to a place;
+- the target of a `rebind` of a `var` ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind));
+- a loop's sequence whose elements the loop changes, which may be a temporary the loop keeps in a hidden local ([04](04-types.md#iteration)), as in `for (i, var e) in &makeEnemies().enumerated()`;
+- a `when` subject that is a place, or a `case` condition's value that is one, with a `var` part;
+- the last expression of an `if` or `when` arm whose position lends a place for change, as in `var t = if left { &a } else { &b }`;
+- a place holding a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value, made into a new function value ([05](05-protocols-generics-and-closures.md#implicit-conversions));
+- a place that a `modify` projection's `yield` lends ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors));
+- a place made into a `mutable any P`, as in `var v: mutable any Damageable = &boss`, or holding one that lends a new view of its value ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+
+**What follows `&` is a changeable place, or a member of one that has a mutable form.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change.
+
+- **`&` picks a mutable form.** Where a method or property has a shared and a mutable form of one name, the operand of `&` picks the mutable one ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). So `var lives = &particles.life` binds an [`SoA`](04-types.md#struct-of-arrays-soat) column as a `MutableSpan<Float>` it owns, where `let lives = particles.life` gets a `Span<Float>`.
+- **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an **owned exclusive view**: a move-only scoped value ([02](02-views-and-dependencies.md#scoped-values)), such as the guard in `var g = registry.lock()`, which changes the registry through it.
+- **A call result lent for change takes `&`, as any changeable place does**, when it is a `mutable` argument or a loop's sequence. It is a temporary, which its statement owns, or which the loop owns, for a sequence. So `heal(&makeEnemy())` changes an enemy that the statement then destroys.
+- **A `zip` marks its own arguments**: `for (var v, f) in zip(&vels, forces)`.
 
 ## Moving values out
 
@@ -286,7 +362,7 @@ let old = replace(&player.inventory, with: List())    // the way to take it: lea
 - a local that owns its value: a `let` or `var` bound to a value, including an owned exclusive view such as `var lives = &particles.life`, or declared `owned`;
 - an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
 - a temporary, such as a call result passed to an `owned` parameter;
-- a field of one of those, through stored fields only, named or reached by reflection ([09](09-compile-time.md#what-reflection-can-read)), when no type along the path declares a `deinit`: `take(makeHolder().items)` moves `items` out, destroying the other fields at the end of the statement, and is an error when `makeHolder()`'s type has a `deinit`. A pattern takes an enum's payload under the same condition ([Bindings](#bindings));
+- a field of one of those, through stored fields only, named or reached by reflection ([09](09-compile-time.md#what-reflection-can-read)), when no type along the path declares a `deinit`: `take(makeHolder().items)` moves `items` out, destroying the other fields at the end of the statement, and is an error when `makeHolder()`'s type has a `deinit`. A pattern takes an enum's payload under the same condition ([above](#conditions-and-patterns));
 - a stored field of `self`, or a part of an enum `self`'s payload through an `owned` pattern, in that type's own `deinit`; the fields and parts it doesn't consume are destroyed after it, last-declared first;
 - the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches **`discard self`**. That statement ends `self` without its `deinit`, destroying the fields and parts it hasn't consumed, last-declared first, so `consuming func close() throws(IoError)` on a `File` whose `deinit` closes it closes the file once, and a wrapper's `consuming func intoItems() -> List<T>` hands its list out.
 

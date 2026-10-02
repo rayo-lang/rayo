@@ -11,7 +11,7 @@ Use of a value by code that doesn't own it: a **shared** borrow only reads it, a
 _Avoid_: loan
 
 **Changeable place**:
-A place that may be changed or lent with `&`, such as a `var` that owns its value, a temporary or a `mutable` parameter ([01](docs/spec/01-values-and-ownership.md#bindings)).
+A place that may be changed or lent with `&`, such as a `var` that owns its value, a temporary or a `mutable` parameter ([01](docs/spec/01-values-and-ownership.md#changeable-places)).
 
 **Consume**:
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership.md#moving-values-out)).

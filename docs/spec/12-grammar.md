@@ -343,7 +343,7 @@ let hp = copy target?.hp                     // optional chaining
 let tail = xs[3...]                          // postfix: attached to 3, and closed by ']'
 ```
 
-**The `&` prefix** marks a place lent for change, and is valid only in the positions [01](01-values-and-ownership.md#bindings) lists, such as a `mutable` argument, a binding, pattern or loop sequence that lends a place, and an `if` or `when` arm's value that stands in one.
+**The `&` prefix** marks a place lent for change, and is valid only in the positions [01](01-values-and-ownership.md#lending-a-place-for-change) lists, such as a `mutable` argument, a binding, pattern or loop sequence that lends a place, and an `if` or `when` arm's value that stands in one.
 
 **Operators as values.** A bare operator is allowed only as a whole argument (`reduce(0, +)`). Elsewhere it's written parenthesized, `(+)`. The overload is chosen by the expected function type, using the bounded lookup of [05](05-protocols-generics-and-closures.md#operators).
 
