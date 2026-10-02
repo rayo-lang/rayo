@@ -11,7 +11,7 @@ Use of a value by code that doesn't own it: a **shared** borrow only reads it, a
 _Avoid_: loan
 
 **Changeable place**:
-A place that may be changed or lent with `&`, such as a `var` that owns its value, a temporary or a `mutable` parameter ([01](docs/spec/01-values-and-ownership.md#bindings)).
+A place that may be changed or lent with `&`, such as a `var` that owns its value, a temporary or a `mutable` parameter ([01](docs/spec/01-values-and-ownership.md#changeable-places)).
 
 **Consume**:
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership.md#moving-values-out)).
@@ -20,7 +20,7 @@ To move a value out of a place the code owns, implicitly or with `consume place`
 A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership.md#copies)).
 
 **Copyable**:
-A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#copies)).
+A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#copyable-types)).
 _Avoid_: trivially copyable, bitwise-copyable
 
 **Hidden local**:
@@ -31,7 +31,7 @@ The rule that nothing else reaches a place while it is mutably borrowed, and not
 _Avoid_: aliasing XOR mutability
 
 **Maybe-initialized**:
-Said of a place that holds a value on only some of the paths that reach a point, so it can't be used until it is assigned ([01](docs/spec/01-values-and-ownership.md#moving-values-out)).
+Said of a place that holds a value on only some of the paths that reach a point, so it can't be used until it is assigned ([01](docs/spec/01-values-and-ownership.md#places-that-hold-no-value)).
 _Avoid_: conditionally initialized
 
 **Move**:
@@ -39,7 +39,7 @@ Taking a value from a place, which hands it to a new owner and leaves the place 
 _Avoid_: transfer, destructive copy
 
 **Move-only**:
-A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#copies)).
+A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#copyable-types)).
 _Avoid_: non-copyable, linear, affine
 
 **Overlap**:
@@ -64,20 +64,20 @@ _Avoid_: safety level, mode
 ### Views and dependencies
 
 **Absorption**:
-The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies.md#rule-4-absorption)).
 
 **Access-bound projection**:
-A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies.md#access-bound-projections)).
 
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
 _Avoid_: lifetime, region, loan set
 
 **Dynamic access**:
-An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies.md#rule-6-dynamic-accesses)).
 
 **Full statement**:
-A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies.md#temporaries)).
 _Avoid_: full-expression
 
 **Guard type**:
@@ -85,7 +85,7 @@ A type declared `@guard`, whose values hold a lock for as long as they live, as 
 _Avoid_: lock token
 
 **Mutable view**:
-A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies.md#mutable-views)).
 _Avoid_: exclusive reference
 
 **Optional projection**:
@@ -102,16 +102,16 @@ A value of a type that conforms to `Scoped`, which stays within the scope that l
 _Avoid_: non-escaping value, lifetime-bound value
 
 **Sealed type**:
-A concrete type that holds, at any depth, no function value, closure, `any P`, `some P`, interpolated literal, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A concrete type that holds, at any depth, no function value, closure, `any P`, `some P`, interpolated literal, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies.md#closure-calls)).
 
 **Shallow type**:
-A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies.md#shallow-values)).
 
 **Static storage**:
-Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies.md#rule-5-the-callee-side)).
 
 **Storage projection**:
-A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies.md#storage-projections)).
 
 **View**:
 A value that borrows memory something else owns, such as a `Span` or a `StringView` ([02](docs/spec/02-views-and-dependencies.md#scoped-values)).
@@ -142,7 +142,7 @@ A `Pin<T>` or a `LocalPin<T>`, which keeps a `StablePool` element or an object a
 An access to an object's value that holds a shared mark (a read) or an exclusive mark (a modify) until nothing that depends on it is used ([03](docs/spec/03-handles-and-objects.md#dynamic-exclusivity)).
 
 **Stale**:
-Said of a handle whose element was removed ([03](docs/spec/03-handles-and-objects.md#pools-and-handles)), or of a value whose storage a reset or an unregistration invalidated ([06](docs/spec/06-memory-and-allocators.md#what-a-reset-does)); using one reads `nil` or panics, and never reaches freed memory.
+Said of a handle whose element was removed ([03](docs/spec/03-handles-and-objects.md#pools-and-handles)), or of a value whose storage a reset or an unregistration invalidated ([06](docs/spec/06-memory-and-allocators.md#what-a-reset-does)). Using one reads `nil` or panics, and never reaches freed memory.
 _Avoid_: dangling (what a stale link never is), expired
 
 **Weak pointer**:
@@ -181,10 +181,10 @@ _Avoid_: misaligned (a misaligned access is undefined behavior)
 Whether a function type only reads its captures, changes them (`mutating`) or consumes them (`consuming`) ([05](docs/spec/05-protocols-generics-and-closures.md#closure-kinds)).
 
 **Compile-time code**:
-Code the compiler checks at each instantiation instead of once, such as `static if` branches, `static for` bodies, `const` expressions and reflection on a type parameter ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+The parts of generic code the compiler checks at each instantiation instead of once: `static if` branches, `static for` bodies and static closures, `const` expressions and reflection on a type parameter, members generated from generic parameters, and computed names ([05](docs/spec/05-protocols-generics-and-closures.md#checking-generic-code)).
 
 **Default**:
-A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures.md#protocol-extensions)).
 
 **Existential**:
 A value of type `any P` or `mutable any P`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
@@ -198,9 +198,17 @@ _Avoid_: function pointer (a `@c` type)
 A protocol with no requirements that states a property of a type, such as `Copyable`, `Scoped` or `Sendable`; the compiler derives some, such as `Copyable` and `Sendable`, from what a type holds ([05](docs/spec/05-protocols-generics-and-closures.md#conformances)).
 _Avoid_: marker trait, tag protocol
 
+**Type value**:
+`T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures.md#value-parameters-and-type-values)).
+_Avoid_: metatype
+
 **Unscoped closure**:
 A `Closure<F>`, which owns its captures, and so may outlive the scope that made it ([05](docs/spec/05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 _Avoid_: escaping closure, boxed closure
+
+**Value parameter**:
+A generic parameter declared `let`, which takes a `const` value of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>` ([05](docs/spec/05-protocols-generics-and-closures.md#value-parameters-and-type-values)).
+_Avoid_: const generic
 
 **Witness**:
 The member, or for an associated type the type, that meets one requirement of a protocol in a conformance ([05](docs/spec/05-protocols-generics-and-closures.md#conformances)).
@@ -256,10 +264,11 @@ An ordered token the runtime gives each block an arena hands out memory from, wh
 _Avoid_: epoch, generation (a handle's)
 
 **Static allocator**:
-The allocator of the values in static data, which never allocates or frees at run time ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
+The allocator of the values in read-only data, which never allocates or frees at run time ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
 
-**Static data**:
+**Read-only data**:
 The memory that holds `const`s and the global `let`s evaluated at compile time, which nothing writes or frees ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
+_Avoid_: static data
 
 **TrivialFree**:
 A type whose destruction does nothing but free memory ([06](docs/spec/06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)).
@@ -302,10 +311,10 @@ _Avoid_: concurrent type
 
 **Task**:
 The value a `task func` call returns: a coroutine whose size is known at compile time, which its owner steps until it finishes ([07](docs/spec/07-concurrency.md#task-functions-explicitly-stepped-coroutines)).
-_Avoid_: async function, future (a `Future` is one awaitable)
+_Avoid_: async function, future (a `Future` is one awaitable), state machine value
 
 **Teardown**:
-The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency.md#global-state)).
+The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency.md#thread-teardown)).
 
 ### C interop
 
@@ -327,7 +336,7 @@ An imported C enum, which may hold any value of its underlying type unless its h
 Said of a value that can be frozen: copied into read-only data, where it stays unchanged for the whole run, as a `const` that reaches run time must be ([09](docs/spec/09-compile-time.md#consts-that-reach-run-time)).
 
 **Immortal data**:
-Read-only bytes that nothing writes or frees, such as a literal's, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time.md#staticspan-views-of-immortal-data)).
+Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time.md#staticspan-views-of-immortal-data)).
 
 **Reaches run time**:
 Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, or an attribute argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time.md#consts-that-reach-run-time)).
@@ -336,6 +345,9 @@ Said of a `const` named anywhere but in a `const` initializer, a `static if` or 
 A closure whose body is instantiated once per field, as the argument of `T.construct` or `T.makeCase` ([09](docs/spec/09-compile-time.md#constructing-values-reflectively)).
 
 ### Errors and safety
+
+**Allocation**:
+One block of storage that accesses stay inside, and that is live or freed as a whole ([10](docs/spec/10-errors-and-safety.md#allocations)). It is storage an allocator gave out, a local, a temporary or a global, or memory that C, the platform or a device provides.
 
 **Build profile**:
 One of `dev`, `profile` and `ship`, each with its own default set of diagnostic checks ([10](docs/spec/10-errors-and-safety.md#build-profiles)).
@@ -364,12 +376,12 @@ _Avoid_: exception
 Code that uses an operation needing `unsafe`, such as dereferencing a raw pointer or calling C, whose soundness the code promises instead of the compiler ([10](docs/spec/10-errors-and-safety.md#unsafe-code)).
 
 **Unsafe protocol**:
-A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a contract the compiler can't check ([10](docs/spec/10-errors-and-safety.md#safe-modules)).
+A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a contract the compiler can't check ([10](docs/spec/10-errors-and-safety.md#unverified-promises)).
 
 **Unverified promise**:
-A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety.md#safe-modules)).
+A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety.md#unverified-promises)).
 
 ### Compilation
 
 **Prelude**:
-The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#modules-and-names)).
+The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude)).

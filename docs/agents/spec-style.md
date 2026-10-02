@@ -2,7 +2,7 @@
 
 The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
 
-The spec is **precise and plain**: every rule stated exactly, in words a reader takes in once. Precision comes from defined terms and complete lists, never from packing more clauses into a sentence.
+The spec is **precise, plain and explained**: every rule stated exactly, with the reason it holds, in words a reader takes in once. Precision comes from defined terms and complete lists, never from packing more clauses into a sentence. Being a reference is a reason to be exact, not a reason to be terse: a reader who looks a rule up should understand it, not only find it.
 
 ## Sentences
 
@@ -11,6 +11,7 @@ The spec is **precise and plain**: every rule stated exactly, in words a reader 
 - **The thing as the subject of a verb.** "`list[i]` hands out the list's element", not "the place an accessor yields from one".
 - **Common words for common ideas.** Where programmers already have a word, use it: *reference counting*, not *counted owner*. Coin a term only for an idea with no common name, and define it.
 - **Present tense, about what is.** Never "now", "no longer" or "previously".
+- **Inline code is for names and short expressions**: a type, a keyword, an operator, or a few tokens such as `copy x`, `list[i]` or `T: Copyable`. A declaration, a signature or a statement goes in a code block, with what it shows in a trailing comment, never inside a sentence as in "as `struct S<T>(…): Scoped, ~Copyable` does".
 
 ## Paragraphs and sections
 
@@ -29,9 +30,12 @@ The spec is **precise and plain**: every rule stated exactly, in words a reader 
 - **Links** read `([06](06-memory-and-allocators.md#anchor))` across chapters, and `([above](#anchor))` or `([below](#anchor))` within one.
 - **Anchors are part of the interface.** A pull request that renames a heading updates every link to it.
 
-## Reasons
+## Explaining
 
-A rule says what holds. A short reason may follow when it helps a reader apply the rule, as in "since a copyable type owns no heap memory". The case for the design, and comparisons with other languages, belong in `why-rayo.md`.
+- **Say why a rule holds, where it isn't obvious.** The reason is what would go wrong without the rule, in this language's terms: "it declares no `deinit`, since each copy would run it". It follows the rule, in a clause or a sentence of its own. The case for the design against other languages belongs in `why-rayo.md`.
+- **A reason is the spec's own.** It comes from this chapter or the section the rule links to. A rule whose reason the spec doesn't give is stated without one, never with a guess.
+- **Explain a group before listing it.** A list opens with what its items share, and each item says how it fits, as "**Lock guards.** A `@guard` type holds a lock for as long as it lives, and a copy would release it a second time". A bare list of constructs leaves the reader to work out why they belong together.
+- **Plain words before notation.** Name an idea in words before using its syntax as a noun: "always move-only", not "its kind makes it move-only".
 
 ## Lists and punctuation
 
@@ -59,3 +63,26 @@ After:
 > **A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const`, or through an operation that copies its operands (below).
 
 The after version defines a place by example, names reference counting by its common name, and moves the full list of copying operations to a section of its own.
+
+A second example, from 01's copy rules. Before:
+
+> Copyable types conform to the derived marker protocol **`Copyable`**. Listing it, as `struct Handle<T>(…): Copyable` does, asks the compiler to confirm it.
+>
+> Every other type is **move-only**: one that declares a `deinit`, has a move-only field or payload, or lists **`~Copyable`**, as `struct MutableSpan<Element>(…): Scoped, ~Copyable` does. So is a type whose kind makes it move-only:
+>
+> - a `Synchronized` or `@guard` type (07, 02);
+> - a `mutating` or `consuming` function value (05);
+
+After:
+
+> **A type is copyable only when a copy of its bytes is a second, independent value.** That needs the bytes to be all there is to the value: it owns nothing outside them, and nothing has to run when it is destroyed. A type is **copyable** when:
+>
+> - all its fields and payloads are copyable;
+> - it declares no `deinit`, since each copy would run it, and two copies would release one resource twice;
+>
+> **Some types are move-only whatever their fields, since a second copy would break what the type promises:**
+>
+> - **`Synchronized` types.** A `Synchronized` type, such as `Mutex` or `Atomic<Int>`, exists once, so every thread that shares it synchronizes on the same memory (07).
+> - **Lock guards.** A `@guard` type holds a lock for as long as it lives, and a copy would release the lock a second time (02).
+
+The after version says what makes a type copyable before listing the conditions, gives each condition and each move-only type its reason, and moves the declarations into a code block.

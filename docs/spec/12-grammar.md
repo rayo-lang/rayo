@@ -1,8 +1,18 @@
 # 12 · Grammar
 
-The grammar is normative for syntax only: what a program means is in chapters 01–11.
+**The grammar is normative for syntax only: what a program means is in chapters 01 to 11.** It gives the syntax as EBNF productions, and the notes at the end settle the choices that the productions alone leave open ([below](#notes)).
 
-The productions don't show where one statement ends and the next begins. Newlines decide that:
+**The productions use these EBNF symbols:**
+
+- `?` marks an optional part;
+- `*` repeats a part zero or more times, and `+` one or more times;
+- `|` separates alternatives;
+- `'x'` is a literal token;
+- text between `(*` and `*)` is a comment.
+
+**The chapters' examples are sometimes sketches, not source.** They show a declaration without its body, or with `…` in it, where the body doesn't matter.
+
+## Where statements end
 
 ```swift
 let total = base +              // a line that ends in a binary operator continues
@@ -19,14 +29,36 @@ else { wait() }                 // a line that starts with 'else' joins the one 
 x = 1; y = 2                    // ';' separates statements on one line
 ```
 
-**Newlines end statements, and `;` separates statements on one line.** The rules below decide where a newline doesn't end a statement, and where an arm of a `when` begins:
+**Newlines end statements, and `;` separates statements on one line.** The productions don't show where one statement ends and the next begins, so the rules below decide where a newline doesn't end a statement, and where an arm of a `when` begins:
 
 - **Inside brackets, newlines are whitespace.** Where the innermost unclosed bracket is `(` or `[`, a newline never ends anything, so an argument list or array literal can span lines and close on a line of its own. Where it is `{`, the other rules apply.
-- **A line continues** when it ends in a binary operator (a `>` that closes generic arguments isn't one), `=` or a compound assignment, `->`, `,`, `(`, `[`, `{`, or an attribute (`@reflect` on its own line applies to the declaration below it).
-- **The next line joins the current one** when it starts with `.` (method chaining), a binary operator other than the prefix-capable `-`, `&`, `..<` and `...`, or with `else`, `catch`, `where`, `throws` or `->`, so a signature can wrap before its result. So a line that starts with `-x` or `..<n` starts a new statement, unless the line above continues.
-- **In a `when` body, a line starts a new arm when it reaches `->` outside brackets and braces, alone or with the lines that continue its patterns and guard**: those that start with `where` or `->`, and each line after one ending in `,`. A line that is itself such a continuation starts none. This rule comes before the one on a leading `.`, so `.idle -> …` and `else -> …` begin arms, and so do `.chase(let t)` on one line and `where t.isBoss -> "fleeing"` on the next, together. Any other line in the body follows the rules above, so an arm's body can continue on the next line. A function type in a `when` body, after `as` or inside generic arguments, is parenthesized, as in `f as ((Int) -> Int)`, so its `->` never starts an arm.
+- **A line continues** when it ends in one of these:
+    - a binary operator, though a `>` that closes generic arguments isn't one;
+    - `=` or a compound assignment;
+    - `->`, `,`, `(`, `[` or `{`;
+    - an attribute, so `@reflect` on its own line applies to the declaration below it.
+- **The next line joins the current one** when it starts with one of these:
+    - `.`, for method chaining;
+    - a binary operator, except `-`, `&`, `..<` and `...`, which can also be prefix operators;
+    - `else`, `catch`, `where`, `throws` or `->`, so a signature can wrap before its result.
 
-The grammar is EBNF: `?` means optional, `*` zero or more, `+` one or more, `|` alternation, and `'x'` a literal token. Text between `(*` and `*)` is a comment. Where the productions alone leave a choice open, [Notes](#notes) at the end settles it. The chapters' examples sometimes show a declaration without its body, or with `…` in it, where the body doesn't matter; those are sketches, not source.
+  So a line that starts with `-x` or `..<n` starts a new statement, unless the line above continues.
+- **In a `when` body, a line starts a new arm when it reaches `->` outside brackets and braces.** It may reach it alone, or with the lines that continue its patterns and guard: those that start with `where` or `->`, and each line after one ending in `,`. A line that is itself such a continuation starts no arm. This rule comes before the one on how the next line starts, so `.idle -> …` and `else -> …` begin arms. A pattern and a guard on the next line begin one arm together, as `.chase(let t)` does below.
+- **Any other line in a `when` body** follows the rules above, so an arm's body can continue on the next line. A function type in a `when` body, after `as` or inside generic arguments, is parenthesized, so its `->` never starts an arm.
+
+```swift
+let label = when state {
+    .idle -> "idle"                     // starts with '.' and reaches '->': a new arm
+    .chase(let t)
+        where t.isBoss -> "fleeing"     // a pattern, and its guard on the next line: one arm
+    .chase -> "chasing"
+    else -> "stuck"                     // starts with 'else' and reaches '->': a new arm
+}
+let pick = when mode {
+    .fast -> quick as ((Int) -> Int)    // parenthesized, the function type's '->' starts no arm
+    else -> careful as ((Int) -> Int)
+}
+```
 
 ## Lexical
 
@@ -45,19 +77,51 @@ escape       = '\' ('0' | 'n' | 'r' | 't' | '\' | '"' | "'" | 'u{' hexdigits '}'
 comment      = '//' to-end-of-line | '/*' nested-comment '*/' ;
 ```
 
-A source file is UTF-8, and one that isn't is a compile error. `\u{…}` holds one to eight hex digits naming a Unicode scalar value, 0 to D7FF or E000 to 10FFFF, and stands for its UTF-8 encoding; any other value is a compile error. A `-` is always an operator; [04](04-types.md#literals) says when a prefix one is checked with its literal as one value.
+**A source file is UTF-8, and one that isn't is a compile error.**
 
-`any-keyword` is any keyword or contextual keyword below. A multi-line string holds the lines between its delimiters, each with the closing `"""` line's indentation removed, and joined by `\n`: the newlines after the opening `"""` and before the closing one aren't part of it. After `.` in a member access, an integer literal ends before the next `.`, so `t.0.1` is two element accesses.
+**A `\u{…}` escape stands for the UTF-8 encoding of the Unicode scalar value it names**, since a string is UTF-8 bytes ([04](04-types.md#strings)). It holds one to eight hex digits, naming a value from 0 to D7FF or from E000 to 10FFFF. Any other value is a compile error.
 
-Keywords: `let var const func task struct enum protocol extension typealias import public private
+**A `-` is always an operator.** 04 says when a prefix one is checked with its literal as one value, so that `-128` fits an `Int8` ([04](04-types.md#literals)).
+
+**`any-keyword` is any keyword or contextual keyword below**, so either kind, written in backticks, is an identifier.
+
+**A multi-line string holds the lines between its delimiters**, each with the closing `"""` line's indentation removed, and joined by `\n`. The newlines after the opening `"""` and before the closing one aren't part of it:
+
+```swift
+let banner = """
+    Wave 3
+      Boss incoming
+    """                         // "Wave 3\n  Boss incoming"
+```
+
+**After `.` in a member access, an integer literal ends before the next `.`**, so `t.0.1` is two element accesses, not one with the float literal `0.1`.
+
+**The keywords are these:** `let var const func task struct enum protocol extension typealias import public private
 init deinit self Self if else guard when case for in while repeat break continue return
 throw throws try catch do defer static mutable owned consuming copy consume mutating any some
 where with await yield unsafe unchecked using extern as is nil true false
 associatedtype subscript`.
 
-`read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard` are contextual keywords: they are keywords only in the positions below and can be used as identifiers anywhere else. `union` is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call. `keep` is a keyword only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses. `error` is a keyword only after `static`, `prefix` only in an `import c … where` clause, `noalloc` only at the start of a rule inside an import config or after `extern c`, and `stack` only at the start of such a rule, after `extern c` or its `noalloc`, or after `@c` in a type. `borrows` and `outlives` are keywords only in a `where` clause, right after an item's subject: a requirement starts with a type, which a dotted path such as `out.items` also parses as, and the token after it tells a `borrows-item` from a constraint. `rebind` is a keyword only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and `to` only after `rebind` and that identifier. `discard` is a keyword only at the start of a statement when `self` follows it.
+**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard`. Some of those positions are narrow:
 
-**Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword: `func index(of x: T, in s: Span<T>)` is called as `index(of: x, in: s)`. An argument's label is always followed by `:`, and a parameter's external label by its internal name and then `:`, with the convention after the `:`, so a keyword label is never ambiguous.
+- **`union`** is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call;
+- **`keep`** only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses;
+- **`error`** only after `static`;
+- **`prefix`** only in an `import c … where` clause;
+- **`noalloc`** only at the start of a rule inside an import config, or after `extern c`;
+- **`stack`** only at the start of such a rule, after `extern c` or its `noalloc`, or after `@c` in a type;
+- **`borrows`** and **`outlives`** only in a `where` clause, right after an item's subject. A requirement starts with a type, and a dotted path such as `out.items` parses as a type too, so the token after it tells a `borrows-item` from a constraint;
+- **`rebind`** only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and **`to`** only after `rebind` and that identifier;
+- **`discard`** only at the start of a statement when `self` follows it.
+
+**Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword:
+
+```swift
+func index<T: Equatable>(of x: T, in s: Span<T>) -> Int?    // 'of' and 'in' as external labels
+let i = index(of: h, in: handles.span)                      // and as argument labels
+```
+
+**A keyword label is never ambiguous.** An argument's label is always followed by `:`, and a parameter's external label by its internal name and then `:`, with the convention after the `:`.
 
 ## Files and declarations
 
@@ -167,7 +231,13 @@ static-for-decl= 'static' 'for' identifier 'in' expression ('where' expression)?
                                                                    (* generates members (09); enum-case only in an enum's own body *)
 ```
 
-A computed name, `\(expression)`, may stand for an identifier only where a declaration is named (a type, function, variable, constant, enum case, or a parameter's name, never its argument label), after `.` in a member access or an implicit member expression, and as a primary expression that names a declaration in scope, such as a generated function it calls. Anywhere else, such as a type annotation, a pattern or an argument label, it is an error. Inside a string literal, `\(` keeps its meaning of interpolation.
+**A computed name, `\(expression)`, lets generated code name declarations with a `const` string** ([09](09-compile-time.md#computed-names)). It may stand for an identifier only in these places:
+
+- where a declaration is named: a type, function, variable, constant or enum case, or a parameter's name, never its argument label;
+- after `.` in a member access or an implicit member expression;
+- as a primary expression that names a declaration in scope, such as a generated function it calls.
+
+**Anywhere else, such as a type annotation, a pattern or an argument label, a computed name is an error.** Inside a string literal, `\(` keeps its meaning of interpolation.
 
 ## Types
 
@@ -243,7 +313,7 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 
 ## Expressions
 
-Precedence from lowest to highest. Binary operators are left-associative, except `??` and `->` in types, which are right-associative.
+**The table lists precedence levels from lowest to highest.** Binary operators are left-associative, except `??` and `->` in types, which are right-associative.
 
 | Level | Operators |
 | --- | --- |
@@ -302,7 +372,9 @@ enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identi
 expression-pattern = expression ;                                  (* 0..<10 ->, maxHp ->, "jump" -> *)
 ```
 
-- **A bare identifier** in a `when` arm, an `if case`, `guard case` or `while case`, or a `catch` pattern that isn't under `let` or `var` is an expression pattern. Under a binding kind, and in `for`, `let` and `var` patterns, which must always match ([04](04-types.md#matching-with-when-and-choosing-with-if)), it binds a new name.
+**Three forms in a pattern have two readings each, and these rules choose between them:**
+
+- **A bare identifier** in a `when` arm, an `if case`, `guard case` or `while case`, or a `catch` pattern that isn't under `let` or `var` is an expression pattern, which compares with an existing value. Under a binding kind, and in `for`, `let` and `var` patterns, which must always match ([04](04-types.md#matching-with-when-and-choosing-with-if)), it binds a new name.
 - **`.name` and `T.name` in a pattern** are enum patterns. Where the subject's type, or `T`, has no case `name`, `.name` or `T.name` without a payload is an expression pattern of that member, compared with `==`, as `Int.max ->` is.
 - **`as` in a pattern.** `let e as E` is always a type pattern, and a cast inside an expression pattern is parenthesized: `(0 as Int32) -> …`.
 
@@ -310,63 +382,109 @@ expression-pattern = expression ;                                  (* 0..<10 ->,
 
 ### Blocks and closure literals
 
-**A closure literal is never a statement.** A `{` at the start of a statement begins a closure literal, and one used as a whole statement, which would never run, is a compile error; `do { … }` groups statements:
+**A closure literal is never a statement.** A `{` at the start of a statement begins a closure literal, and one used as a whole statement is a compile error, since it would never run. `do { … }` groups statements instead:
 
 ```swift
 { reset() }         // error: this closure would never run
 do { reset() }      // groups statements, and runs them
 ```
 
-**A `{` right after a `when` arm's `->` begins a block**, as the `{` after an `if` condition, an `else` or a `when` subject does, and the block's value is its last expression ([04](04-types.md#matching-with-when-and-choosing-with-if)). An arm whose value is a closure writes it in parentheses: `.retry -> ({ attempt() })`. A `{` right after `when` begins its body, so that `when` has no subject; a subject that is a closure literal is written in parentheses, `when ({ … }) { … }`.
+**A `{` right after a `when` arm's `->` begins a block**, as the `{` after an `if` condition, an `else` or a `when` subject does. The block's value is its last expression ([04](04-types.md#matching-with-when-and-choosing-with-if)). So an arm whose value is a closure writes it in parentheses.
 
-**A block's last expression can't start with `.` on a line of its own**, since that line joins the one above (the newline rules at the top of this chapter): in `if open { playSound()` followed by `.open }` on the next line, the value would be `playSound().open`. An implicit member on a line of its own as a block's value is written in parentheses: `(.open)`.
+**A `{` right after `when` begins its body, so that `when` has no subject.** A subject that is a closure literal is written in parentheses:
 
-**No trailing closures in condition positions.** In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure. To pass a closure there, parenthesize the call:
+```swift
+when action {
+    .retry -> { attempt() }       // a block: the arm's value is what attempt() returns
+    else -> ({ attempt() })       // a closure literal, in parentheses: the arm's value is the closure
+}
+when { … }                        // '{' right after 'when' begins the body: no subject
+when ({ … }) { … }                // a closure literal as the subject, in parentheses
+```
+
+**A block's last expression can't start with `.` on a line of its own**, since that line joins the one above ([above](#where-statements-end)). An implicit member on a line of its own as a block's value is written in parentheses:
+
+```swift
+let shown: DoorState = if open {
+    playSound()
+    (.open)                   // written '.open', this line would join the one above: 'playSound().open'
+} else { .closed }
+```
+
+**In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
 ```swift
 for x in items.filter { $0.alive } { use(x) }     // error: '{ $0.alive }' is read as the loop's body
 for x in items.filter({ $0.alive }) { use(x) }   // the closure is inside the call's parentheses
 ```
 
-- Those expressions are the ones after `if`, `while`, `when`, `for … in`, `using … =`, `static if` and `static for … in`, and the patterns after `catch`. A `guard`'s conditions are followed by `else`, so closures work there as usual.
-- So is every `where` clause that precedes a block: `for … where`, `static for … where`, `catch … where`, and the `where` of a declaration.
-- A `when` arm's tests and `where` guard are followed by `->`, so closures work there as usual.
+**These are the expressions that a block follows:**
 
-**`unsafe` before `{`** in expression position is an `unsafe-block-expr`, not `unsafe` applied to a closure literal, which is written `unsafe ({ … })`. As a statement, `unsafe { … }` is an ordinary unsafe block.
+- **Conditions and subjects**: the expressions after `if`, `while`, `when`, `for … in`, `using … =`, `static if` and `static for … in`, and the patterns after `catch`.
+- **`where` clauses before a block**: `for … where`, `static for … where`, `catch … where`, and the `where` of a declaration.
+
+**Where `else` or `->` follows instead of a block, closures work as usual**: in a `guard`'s conditions, and in a `when` arm's tests and `where` guard.
+
+**In expression position, `unsafe` before `{` begins an `unsafe-block-expr`**, an unsafe block whose value is its last expression, not `unsafe` applied to a closure literal, which is written `unsafe ({ … })`. As a statement, `unsafe { … }` is an ordinary unsafe block:
+
+```swift
+let now = unsafe { platform_time_seconds() }      // an unsafe block, whose value is the call's
+let clock = unsafe ({ platform_time_seconds() })  // 'unsafe' applied to a closure literal
+unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an ordinary unsafe block
+```
 
 ### Operators and punctuation
 
-**The range operators, and `?`.** Rayo has no ternary operator, so a `?` after an operand is always postfix optional chaining. Whitespace separates prefix `..<x` and postfix `x...` from the binary range operators. Between two operands, with whitespace on both sides or on neither, as in `0..<n`, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side, whitespace, a bracket or punctuation, as in `xs[3...]` and `xs[..<n]`.
+**A `?` after an operand is always postfix optional chaining**, since Rayo has no ternary operator.
+
+**Whitespace tells the prefix and postfix range operators, as in `..<x` and `x...`, from the binary ones.** Between two operands, with whitespace on both sides or on neither, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side: whitespace, a bracket or punctuation.
 
 ```swift
-let hp = copy target?.hp                     // optional chaining
-let tail = xs[3...]                          // postfix: attached to 3, and closed by ']'
+let hp = copy target?.hp            // '?' after an operand: optional chaining
+let all = 0..<n                     // between two operands, with whitespace on neither side: binary
+let tail = xs[3...]                 // attached to 3 only, and closed by ']': postfix
+let head = xs[..<n]                 // attached to n only: prefix
 ```
 
-**The `&` prefix** marks a place lent for change, and is valid only in the positions [01](01-values-and-ownership.md#bindings) lists, such as a `mutable` argument, a binding, pattern or loop sequence that lends a place, and an `if` or `when` arm's value that stands in one.
+**The `&` prefix marks a place lent for change.** It is valid only in the positions that 01 lists ([01](01-values-and-ownership.md#lending-a-place-for-change)), such as a `mutable` argument, a binding, pattern or loop sequence that lends a place, and an `if` or `when` arm's value that stands in one.
 
-**Operators as values.** A bare operator is allowed only as a whole argument (`reduce(0, +)`). Elsewhere it's written parenthesized, `(+)`. The overload is chosen by the expected function type, using the bounded lookup of [05](05-protocols-generics-and-closures.md#operators).
+**An operator can be passed as a function value.** Bare, it is allowed only as a whole argument, as in `reduce(0, +)`. Elsewhere it is written in parentheses, `(+)`. The expected function type chooses the overload, using 05's bounded lookup ([05](05-protocols-generics-and-closures.md#operators)).
 
 ```swift
 let total = counts.reduce(0, +)         // a bare operator as a whole argument
 let add: (Int, Int) -> Int = (+)        // anywhere else, in parentheses
 ```
 
-**Generic arguments and `<`.** `<` both compares and opens generic arguments, and the parser tells the two apart without knowing what any name means. In expression position, `identifier <` starts generic arguments only if the tokens up to the matching `>` parse as `generic-args`, and the token after `>` is one of `(`, `.`, `)`, `]`, `,`, `:`, `;`, `?`, `!`, `{`, a newline, or an operator that can't begin an operand, `==`, `!=`, `&&`, `||` or `??`, as in `static if T == List<Int> || T == Set<Int>`. Otherwise `<` is the comparison operator.
+**`<` both compares and opens generic arguments, and the parser tells the two apart without knowing what any name means.** In expression position, `identifier <` starts generic arguments only if both of these hold:
+
+- the tokens up to the matching `>` parse as `generic-args`;
+- the token after `>` is one of `(`, `.`, `)`, `]`, `,`, `:`, `;`, `?`, `!`, `{`, a newline, or an operator that can't begin an operand: `==`, `!=`, `&&`, `||` or `??`.
+
+**Otherwise `<` is the comparison operator.**
 
 ```swift
-let xs = List<Int>()          // '<Int>' parses as generic arguments, and '(' follows
-if a < b, c > d { … }         // two comparisons: 'd' can't follow generic arguments
-f(a < b, c > (d))             // a generic call 'a<b, c>(d)': written '(c > d)', it is two comparisons
+let xs = List<Int>()                              // '<Int>' parses as generic arguments, and '(' follows
+if a < b, c > d { … }                             // two comparisons: 'd' can't follow generic arguments
+f(a < b, c > (d))                                 // a generic call 'a<b, c>(d)': written '(c > d)', it is two comparisons
+static if T == List<Int> || T == Set<Int> { … }   // '||' can't begin an operand, so '<Int>' is generic arguments
 ```
 
-- While generic arguments are being parsed, in a type or after an `identifier <` that starts them, a `>>`, `>>=` or `>=` token is split into `>` followed by the rest, so `var b: Box<Int>= a` declares a `Box<Int>`. So `SpscQueue<Shared<Snapshot>>(capacity: 3)` closes two argument lists.
+**While generic arguments are being parsed, a `>>`, `>>=` or `>=` token is split into `>` followed by the rest.** That holds for generic arguments in a type, and for those after an `identifier <` that starts them:
+
+```swift
+var b: Box<Int>= a                                // '>=' splits, so 'b' is a Box<Int>
+let q = SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing two argument lists
+```
 
 ### Parentheses and conventions in types
 
-In a type, `(` can open a function type's parameters, an error union, a tuple, or a single parenthesized type. Before a type, `mutable` can be a parameter convention or part of the type.
+**In a type, `(` and `mutable` each have more than one reading.** A `(` can open a function type's parameters, an error union, a tuple, or a single parenthesized type. Before a type, `mutable` can be a parameter convention or part of the type.
 
-**Parenthesized types.** Every `(` in a type is decided with the same bounded lookahead as generic arguments ([above](#operators-and-punctuation)). When the matching `)` is followed by `throws` or `->`, the list is a function type's parameters, and `(IoError | ParseError) -> Void` takes one union parameter, except in a `when` arm's patterns, where the first `->` outside brackets is the arm's arrow, so `let x as (A | B) -> …` binds an error union. Otherwise `(A | B)` is an error union and `(A, B)` a tuple. A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple, except that `(any P)` after `mutable` or as the type argument of `Box` or an object pointer keeps the shared view apart from the form `any` makes there (below).
+**Every `(` in a type is decided with the same bounded lookahead as generic arguments** ([above](#operators-and-punctuation)):
+
+- **Function type parameters.** When the matching `)` is followed by `throws` or `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter. The exception is a `when` arm's patterns, where the first `->` outside brackets is the arm's arrow, so a pattern such as `let e as (A | B)` binds an error union there.
+- **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
+- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple. The exception is `(any P)` after `mutable`, or as the type argument of `Box` or an object pointer, which keeps the shared view apart from the form `any` makes there (below).
 
 ```swift
 typealias OnError = (IoError | ParseError) -> Void    // ')' then '->': one error-union parameter
@@ -374,19 +492,33 @@ typealias Failure = (IoError | ParseError)            // an error union
 typealias Hit = (target: Handle<Enemy>, damage: Float) // a tuple
 typealias Count = (Int)                               // just Int, not a one-element tuple
 typealias Single = (Int,)                             // a one-element tuple
+
+when failure {
+    let e as (IoError | ParseError) -> report(e)      // in an arm's patterns, the first '->' is the arm's
+    else -> retry()
+}
 ```
 
-**`mutable any`.** In a parameter's type, `mutable` directly followed by `any` is always the exclusive existential view type ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). The `mutable` convention on a shared existential view is written `mutable (any P)`:
+**In a parameter's type, `mutable` directly followed by `any` is always the exclusive existential view type** ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). The `mutable` convention on a shared existential view is written `mutable (any P)`, which lets a callee reassign which value the caller's shared view refers to:
 
 ```swift
 func strike(_ d: mutable any Damageable) { ... }        // the exclusive existential view type
 func retarget(_ d: mutable (any Damageable)) { ... }    // the mutable convention on a shared existential view
 ```
 
-**A type in an expression.** An expression names a type by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). Any other type is parenthesized there: `(Int, Float).self`, `(*Int).size`. A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `mutable any`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first: after `typealias Pair = (Int, Float)`, `Pair.construct { … }` is an expression.
+**An expression names a type in two ways**: by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](05-protocols-generics-and-closures.md#value-parameters-and-type-values)).
 
-**Unscoped existentials.** In the type argument of `Box` or an object pointer, `any` right after `<` makes the unscoped existential ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). Parenthesized, `Box<(any P)>` is a box holding a shared existential view.
+**Any other type in an expression is parenthesized.** A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `mutable any`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first:
+
+```swift
+let size = (*Int).size                // '*' starts as only a type can
+let pair = (Int, Float).self          // ')' is followed by '.self'
+typealias Pair = (Int, Float)
+let p = Pair.construct { … }          // any other such type is named through a typealias
+```
+
+**In the type argument of `Box` or an object pointer, `any` right after `<` makes the unscoped existential** ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). The unscoped existentials are types of their own, which binding a type parameter never makes. So the box that `Box<T>` gives with `T` bound to `any P` is written apart, as `Box<(any P)>`: a box holding a shared existential view.
 
 ### Trailing commas
 
-**Trailing commas** are allowed in every comma-separated list closed by `)`, `]` or `>`, as the productions show.
+**Every comma-separated list closed by `)`, `]` or `>` allows a trailing comma**, as the productions show. With one, a parenthesized single expression or type, outside a call's arguments and a function type's parameters, is a one-element tuple, as `(x,)` and `(Int,)` are ([above](#parentheses-and-conventions-in-types)).
