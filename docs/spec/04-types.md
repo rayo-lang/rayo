@@ -19,7 +19,7 @@ log("scale \(scale)")                             // formatted straight into the
 
 ## Numbers
 
-Integers are fixed-width and two's complement, and floating-point numbers are IEEE 754 binary floats.
+**Integers are fixed-width and two's complement, and floating-point numbers are IEEE 754 binary floats.**
 
 ```swift
 let hp = 100               // Int
@@ -41,7 +41,7 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 | `Half` | 16-bit | |
 | `Bool` | 1 byte | |
 
-**Literals.** `1_000`, `0xFF`, `0o17`, `0b1010`, `1e-3`, each typed by its context ([Literals](#literals)).
+**A number literal takes its type from its context**: `1_000`, `0xFF`, `0o17`, `0b1010`, `1e-3` ([below](#literals)).
 
 ### Conversions
 
@@ -62,13 +62,15 @@ let g: Int64 = d                 // error: Int and Int64 never convert implicitl
 - `Half → Float → Double`;
 - `Int8`, `Int16`, `UInt8` and `UInt16` to `Float`, and `Int32` and `UInt32` to `Double`.
 
-`Int` and `UInt` are distinct 64-bit types that sit where `Int64` and `UInt64` do: `Int32` widens to `Int`, and `UInt32` to `UInt` and `Int`. `Int` and `Int64` never convert implicitly into each other, since neither is wider.
+**`Int` and `UInt` are distinct 64-bit types that sit where `Int64` and `UInt64` do**: `Int32` widens to `Int`, and `UInt32` to `UInt` and `Int`. `Int` and `Int64` never convert implicitly into each other, since neither is wider.
 
-Anything else is explicit, and **the explicit forms are defined for every input**, except a float-to-integer conversion of NaN or an out-of-range value inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#check-levels)):
+**Every other conversion between number types is explicit, and the explicit forms are defined for every input but one:**
 
 - **Between integer types.** The unlabeled `Int32(x)` checks that the value fits: it panics where overflow checks are on, and keeps the low bits where they are off. `truncating:` always keeps the low bits, and `clamping:` saturates.
 - **From a floating-point value.** `Int(f)` rounds toward zero and panics on NaN or on a value whose integer part doesn't fit, in every build, since targets' conversion instructions disagree on those. `Int(clamping: f)` saturates, and maps NaN to `0`.
 - **To a floating-point type.** `Float(d)` of an `Int`, `Float(x)` of a `Double` and `Half(f)` of a `Float` round to nearest, and an out-of-range value becomes an infinity of its sign, as IEEE 754 defines.
+
+That one is a float-to-integer conversion of NaN or an out-of-range value inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#check-levels)).
 
 ### Integer overflow, division and shifts
 
@@ -86,7 +88,13 @@ func step(_ x: Int32, _ n: Int32) {
 
 - **Overflow.** `+ - *` and unary `-` panic on overflow where overflow checks are on, and wrap where they are off ([10](10-errors-and-safety.md#check-levels)). `&+ &- &*` always wrap, and `+| -| *|` saturate.
 - **Division.** `/` rounds toward zero, and `a % b` has `a`'s sign. Division and remainder by zero panic in every build. `Int.min / -1`, in every signed width, follows the overflow rule, wrapping to `Int.min` where checks are off, and `Int.min % -1` is `0` in every build.
-- **Shifts.** The count may be of any integer type, and the result has the shifted value's type, so neither operand widens to the other: `b << n` for a `UInt8` `b` and an `Int` `n` is a `UInt8`. An untyped shifted value never takes its type from the count: it takes the expected type, else its default, `Int`, so `let mask: UInt64 = 1 << bit` shifts a `UInt64` for a `UInt8` `bit`, not a `UInt8` that then widens. `>>` is arithmetic on a signed type and logical on an unsigned one. A negative count shifts the other way: `x << -n` is `x >> n`. A count whose magnitude is at least the bit width, `Int.min` included, shifts every bit out, giving `0`, or all ones for a right shift of a negative value. A left shift drops bits past the top whatever the sign, so it never overflows. `&<<` and `&>>` use only the count's low bits, `count & (bitWidth - 1)`, as an unsigned amount.
+- **Shifts.** The count may be of any integer type, and the result has the shifted value's type, so neither operand widens to the other: `b << n` for a `UInt8` `b` and an `Int` `n` is a `UInt8`.
+    - An untyped shifted value never takes its type from the count. It takes the expected type, else its default, `Int`. So `let mask: UInt64 = 1 << bit` shifts a `UInt64` for a `UInt8` `bit`, not a `UInt8` that then widens.
+    - `>>` is arithmetic on a signed type and logical on an unsigned one.
+    - A negative count shifts the other way: `x << -n` is `x >> n`.
+    - A count whose magnitude is at least the bit width, `Int.min` included, shifts every bit out. That gives `0`, or all ones for a right shift of a negative value.
+    - A left shift drops bits past the top whatever the sign, so it never overflows.
+    - `&<<` and `&>>` use only the count's low bits, `count & (bitWidth - 1)`, as an unsigned amount.
 
 ### Floating point
 
@@ -95,11 +103,13 @@ let p = a * b + c       // rounds twice, after * and after +: never fused into o
 let q = (a + b) + c     // never reassociated into a + (b + c), which can round differently
 ```
 
-**Every `Half`, `Float` and `Double` operation, and every floating-point `Simd` lane operation, is one IEEE 754 operation rounded to its own type, in every build.** Nothing is kept in wider precision, contracted, reassociated or otherwise rewritten, and subnormals are never flushed. So `+ - * /`, square root, comparisons and conversions are bit-identical on every target, toolchain and build. Left open are which NaN a NaN result is, and functions IEEE 754 doesn't require to be correctly rounded, such as `sin`. C or `unsafe` code that changes the thread's floating-point environment, such as to flush subnormals or trap on an invalid operation, makes every floating-point result on that thread the platform's until the environment is restored.
+**Every `Half`, `Float` and `Double` operation, and every floating-point `Simd` lane operation, is one IEEE 754 operation rounded to its own type, in every build.** Nothing is kept in wider precision, contracted, reassociated or otherwise rewritten, and subnormals are never flushed. So `+ - * /`, square root, comparisons and conversions are bit-identical on every target, toolchain and build. Left open are which NaN a NaN result is, and functions IEEE 754 doesn't require to be correctly rounded, such as `sin`.
+
+**C or `unsafe` code that changes its thread's floating-point environment, such as to flush subnormals or trap on an invalid operation, makes every floating-point result on that thread the platform's until the environment is restored.**
 
 ## SIMD and math
 
-The language builds in `Simd<T, N>`, the vectors that map to the target's vector hardware, and `std.math` builds the rest in ordinary Rayo:
+**The language builds in `Simd<T, N>`, the vectors that map to the target's vector hardware, and `std.math` builds the rest in ordinary Rayo:**
 
 ```swift
 let v: Vec3 = [1, 2, 3]
@@ -111,23 +121,26 @@ a.xz = v.xy                               // swizzles: read any lanes, assign la
 let lo = select(a < Vec4(repeating: 4), a, Vec4.zero)   // a comparison gives a Simd<Bool, 4> mask
 ```
 
-- `Simd<T, N>` is builtin, over a number type `T`, or `Bool` for masks, with 2, 3, 4, 8 or 16 lanes, stored with no padding and aligned to its size, except the 3-lane form ([below](#vec3-and-three-lane-vectors)). Generic code may name `Simd<T, N>` for its own `T` and `N`: these conditions are checked where they are known, at each instantiation, as a `static error` is ([09](09-compile-time.md#static-if-and-conditional-compilation)), and the lane operations need a concrete `T`. `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
-- Operators are element-wise, comparisons return `Simd<Bool, N>` masks for `select(mask, a, b)`, and a scalar broadcasts: `v * 2`, `2 * v`. A mask's `any` and `all` reduce it to a `Bool`: `if (a < b).all { … }`. Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
-- Swizzles, such as `v.zyx` and `v.xxxx`, are properties naming lanes among the first four, `x`, `y`, `z` and `w`. They are assignable when no lane repeats: `v.xz = p`. A swizzle of one lane is a `T`, and of 2 to 4 lanes a `Simd<T, k>`. Naming a lane the vector doesn't have, such as `w` of a 3-lane vector, is a compile error. A lane is read and assigned by swizzle or by index, `v[i]`, which panics when `i` is out of range, but never viewed: no span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](02-views-and-dependencies.md#shallow-values)).
-- Literals and initializers: `[1, 2, 3, 4]`, `Vec4.zero`, `Vec4(repeating: 1)`, and `Simd<T, N>(a, b, …)`, which takes its `N` lanes in order, unlabeled and borrowed, and copies them: `Vec2(x, y)`, `IVec2(1280, 720)`.
+- **`Simd<T, N>` is builtin, over a number type `T`, or `Bool` for masks, with 2, 3, 4, 8 or 16 lanes.** It is stored with no padding and aligned to its size, except the 3-lane form ([below](#vec3-and-three-lane-vectors)). Generic code may name `Simd<T, N>` for its own `T` and `N`. Its `T` and lane count are then checked where they are known, at each instantiation, as a `static error` is ([09](09-compile-time.md#static-if-and-conditional-compilation)), and the lane operations need a concrete `T`. `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
+- **Operators are element-wise.** Comparisons return `Simd<Bool, N>` masks for `select(mask, a, b)`, and a scalar broadcasts: `v * 2`, `2 * v`. A mask's `any` and `all` reduce it to a `Bool`: `if (a < b).all { … }`. Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
+- **Swizzles are properties naming lanes among the first four**, `x`, `y`, `z` and `w`, as `v.zyx` and `v.xxxx` do. They are assignable when no lane repeats: `v.xz = p`. A swizzle of one lane is a `T`, and of 2 to 4 lanes a `Simd<T, k>`. Naming a lane the vector doesn't have, such as `w` of a 3-lane vector, is a compile error.
+- **A lane is read and assigned by swizzle or by index, but never viewed.** `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](02-views-and-dependencies.md#shallow-values)).
+- **Literals and initializers**: `[1, 2, 3, 4]`, `Vec4.zero`, `Vec4(repeating: 1)`, and `Simd<T, N>(a, b, …)`, which takes its `N` lanes in order, unlabeled and borrowed, and copies them: `Vec2(x, y)`, `IVec2(1280, 720)`.
 
 **`Simd` operations never become calls at run time, in any build**, since they are builtin. A library type gets the same by declaring its operations `@inline` ([11](11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
 ### `Vec3` and three-lane vectors
 
-Three-lane vectors come in two layouts:
+**Three-lane vectors come in two layouts:**
 
 ```swift
 struct Light(var pos: Vec3, var radius: Float)              // 16 bytes: three floats, then one
 struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the vector alone takes 16, aligned to 16
 ```
 
-`Simd<T, 3>` has `Simd<T, 4>`'s size and alignment, and its fourth lane is padding: it is `Pod` when `T` is, but never padding-free ([Plain data](#plain-data-pod-and-bit-casts)). `Vec3` is `std.math`'s struct of three floats, 12 bytes with no padding, written in ordinary Rayo:
+**`Simd<T, 3>` has `Simd<T, 4>`'s size and alignment, and its fourth slot is padding.** `Simd<T, 3>` is `Pod` when `T` is, but never padding-free ([below](#plain-data-pod-and-bit-casts)).
+
+**`Vec3` is `std.math`'s struct of three floats**, 12 bytes with no padding, written in ordinary Rayo:
 
 ```swift
 public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral {
