@@ -34,18 +34,18 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Key ideas
 
-- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows its arguments, unless a parameter is declared `owned`. Copies are written out: `copy x` for a copyable value, `x.clone()` for one that owns heap memory ([01](docs/01-values-and-ownership.md)).
-- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it, so Rayo needs no lifetime annotations ([01](docs/01-values-and-ownership.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/02-views-and-dependencies.md#scoped-values)).
-- **Links that live longer are checked at each use.** A link that must outlive a function, such as an enemy's target, is a `Handle<T>` into a `Pool<T>`, or a `WeakPointer<T>` to an object that a `UniquePointer<T>` owns. A link to something that is gone reads `nil`: it can go stale, but it never dangles. A link owns nothing, so cycles can't leak ([03](docs/03-handles-and-objects.md)).
-- **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/07-concurrency.md#what-may-cross-threads-sendable)).
-- **Allocators are values the code can name.** Every heap allocation goes through one, and every collection records which one. An arena releases everything at once when it is reset, and that stays safe: a collection that outlives the reset panics when code next reaches its contents, and never reads reused memory ([06](docs/06-memory-and-allocators.md)).
-- **Each check has a tier and a cost** ([01](docs/01-values-and-ownership.md#tiers-of-checking)):
+- **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows its arguments, unless a parameter is declared `owned`. Copies are written out: `copy x` for a copyable value, `x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
+- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it, so Rayo needs no lifetime annotations ([01](docs/spec/01-values-and-ownership.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies.md#scoped-values)).
+- **Links that live longer are checked at each use.** A link that must outlive a function, such as an enemy's target, is a `Handle<T>` into a `Pool<T>`, or a `WeakPointer<T>` to an object that a `UniquePointer<T>` owns. A link to something that is gone reads `nil`: it can go stale, but it never dangles. A link owns nothing, so cycles can't leak ([03](docs/spec/03-handles-and-objects.md)).
+- **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/spec/07-concurrency.md#what-may-cross-threads-sendable)).
+- **Allocators are values the code can name.** Every heap allocation goes through one, and every collection records which one. An arena releases everything at once when it is reset, and that stays safe: a collection that outlives the reset panics when code next reaches its contents, and never reads reused memory ([06](docs/spec/06-memory-and-allocators.md)).
+- **Each check has a tier and a cost** ([01](docs/spec/01-values-and-ownership.md#tiers-of-checking)):
     - **static:** the compiler checks values, moves, borrows and scoped views, at no run-time cost;
     - **dynamic:** handles, weak pointers, `Slice`s, locks and a few others are checked at each use, at a small cost that their type or declaration shows;
-    - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([11](docs/11-errors-and-safety.md#unsafe-code)).
+    - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([10](docs/spec/10-errors-and-safety.md#unsafe-code)).
 
-  No build setting turns the memory-safety checks off. Bounds checks stay on in shipping builds ([11](docs/11-errors-and-safety.md#check-levels)).
-- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([12](docs/12-compilation-model.md#what-a-target-must-provide), [09](docs/09-c-interop.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
+  No build setting turns the memory-safety checks off. Bounds checks stay on in shipping builds ([10](docs/spec/10-errors-and-safety.md#check-levels)).
+- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide), [08](docs/spec/08-c-interop.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
 
 ## Why Rayo
 
@@ -58,30 +58,32 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/`](docs/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. [15](docs/15-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/hard-cases.md) are the systems patterns the spec is tested against.
+The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. [13](docs/spec/13-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/spec/hard-cases.md) are the systems patterns the spec is tested against.
 
 | Doc | Covers |
 | --- | --- |
-| [01 Values and ownership](docs/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
-| [02 Views and dependencies](docs/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and `read`, `modify`, `get` and `set` accessors |
-| [03 Handles and objects](docs/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |
-| [04 Types](docs/04-types.md) | Numbers, [SIMD](docs/04-types.md#simd-and-math), structs, enums and [`when`](docs/04-types.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |
-| [05 Protocols, generics and closures](docs/05-protocols-generics-and-closures.md) | Protocols, generics, `any P`, operators, [equality and ordering](docs/05-protocols-generics-and-closures.md#equality-and-ordering), closures and function types, implicit conversions |
-| [06 Memory and allocators](docs/06-memory-and-allocators.md) | Allocator values and their contract, scoped default allocators, arena safety, `Box`, [`Shared` and `LocalShared`](docs/06-memory-and-allocators.md#sharedt-data-with-many-owners), [releasing values without destroying them](docs/06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree) |
-| [07 Concurrency](docs/07-concurrency.md) | Race freedom, [`Sendable`](docs/07-concurrency.md#what-may-cross-threads-sendable), [lending work to other threads](docs/07-concurrency.md#lending-work-to-other-threads), [threads](docs/07-concurrency.md#work-that-outlives-the-caller-threads), [locks and `Synchronized`](docs/07-concurrency.md#atomics-and-locks), [global state](docs/07-concurrency.md#global-state), [stepped tasks](docs/07-concurrency.md#semantics) |
-| [09 C interop](docs/09-c-interop.md) | `import c`, layout, pointers, callbacks, exports and generated headers, [embedding Rayo in a C program](docs/09-c-interop.md#the-platform-and-embedding-rayo-in-c) |
-| [10 Compile time](docs/10-compile-time.md) | `const`, `static if` and `static for`, reflection, attributes, conditional compilation, [generating declarations](docs/10-compile-time.md#generating-declarations) |
-| [11 Errors and safety](docs/11-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/11-errors-and-safety.md#unsafe-code), [check levels](docs/11-errors-and-safety.md#check-levels), build profiles |
-| [12 Compilation model](docs/12-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/12-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/12-compilation-model.md#what-the-language-leaves-open) |
-| [13 Grammar](docs/13-grammar.md) | EBNF grammar |
-| [15 Soundness](docs/15-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
-| [Hard cases](docs/hard-cases.md) | Systems patterns the spec is tested against |
+| [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
+| [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and `read`, `modify`, `get` and `set` accessors |
+| [03 Handles and objects](docs/spec/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |
+| [04 Types](docs/spec/04-types.md) | Numbers, [SIMD](docs/spec/04-types.md#simd-and-math), structs, enums and [`when`](docs/spec/04-types.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |
+| [05 Protocols, generics and closures](docs/spec/05-protocols-generics-and-closures.md) | Protocols, generics, `any P`, operators, [equality and ordering](docs/spec/05-protocols-generics-and-closures.md#equality-and-ordering), closures and function types, implicit conversions |
+| [06 Memory and allocators](docs/spec/06-memory-and-allocators.md) | Allocator values and their contract, scoped default allocators, arena safety, `Box`, [`Shared` and `LocalShared`](docs/spec/06-memory-and-allocators.md#sharedt-data-with-many-owners), [releasing values without destroying them](docs/spec/06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree) |
+| [07 Concurrency](docs/spec/07-concurrency.md) | Race freedom, [`Sendable`](docs/spec/07-concurrency.md#what-may-cross-threads-sendable), [lending work to other threads](docs/spec/07-concurrency.md#lending-work-to-other-threads), [threads](docs/spec/07-concurrency.md#work-that-outlives-the-caller-threads), [locks and `Synchronized`](docs/spec/07-concurrency.md#atomics-and-locks), [global state](docs/spec/07-concurrency.md#global-state), [stepped tasks](docs/spec/07-concurrency.md#semantics) |
+| [08 C interop](docs/spec/08-c-interop.md) | `import c`, layout, pointers, callbacks, exports and generated headers, [embedding Rayo in a C program](docs/spec/08-c-interop.md#the-platform-and-embedding-rayo-in-c) |
+| [09 Compile time](docs/spec/09-compile-time.md) | `const`, `static if` and `static for`, reflection, attributes, conditional compilation, [generating declarations](docs/spec/09-compile-time.md#generating-declarations) |
+| [10 Errors and safety](docs/spec/10-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/spec/10-errors-and-safety.md#unsafe-code), [check levels](docs/spec/10-errors-and-safety.md#check-levels), build profiles |
+| [11 Compilation model](docs/spec/11-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/spec/11-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/spec/11-compilation-model.md#what-the-language-leaves-open) |
+| [12 Grammar](docs/spec/12-grammar.md) | EBNF grammar |
+| [13 Soundness](docs/spec/13-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
+| [Hard cases](docs/spec/hard-cases.md) | Systems patterns the spec is tested against |
 
 ## Repository layout
 
 | Path | Holds |
 | --- | --- |
-| [`docs/`](docs/) | The spec, the hard cases, and [Why Rayo](docs/why-rayo.md) |
+| [`docs/spec/`](docs/spec/) | The spec and the hard cases |
+| [`docs/`](docs/) | [Why Rayo](docs/why-rayo.md), and the [agent docs](docs/agents/) the project rules point to |
+| [`GLOSSARY.md`](GLOSSARY.md) | The spec's terms, each with a one-sentence description and a link to its definition |
 | [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system |
 | `Sources/`, `Tests/` | `rayoc` and its tests. [TOOLCHAIN.md](TOOLCHAIN.md#layout) says what each module does |
 | [`AGENTS.md`](AGENTS.md), [`.agents/skills/`](.agents/skills/) | The project rules, and the workflows that AI coding agents follow in this repository |
@@ -92,7 +94,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 
 - **Ask questions and report problems** in [GitHub issues](https://github.com/rayo-lang/rayo/issues). A rule that is hard to follow, two parts of the spec that disagree, and a program the spec accepts that isn't safe are each worth an issue.
 - **Find work** in the issues labeled [`good first issue`](https://github.com/rayo-lang/rayo/labels/good%20first%20issue), [`help wanted`](https://github.com/rayo-lang/rayo/labels/help%20wanted) or [`ready-for-human`](https://github.com/rayo-lang/rayo/labels/ready-for-human).
-- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A spec change is reviewed against the soundness argument in [15](docs/15-soundness.md) and the criteria of the [hard cases](docs/hard-cases.md).
+- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A spec change is reviewed against the soundness argument in [13](docs/spec/13-soundness.md) and the criteria of the [hard cases](docs/spec/hard-cases.md).
 - **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI builds and tests on Linux with Swift 6.4, and a change must pass there. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 

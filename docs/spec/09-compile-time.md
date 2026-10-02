@@ -1,4 +1,4 @@
-# 10 · Compile time
+# 09 · Compile time
 
 A network replication layer sends only the fields of an object that changed since the last update. For every type it needs a record with one optional per replicated field, under that field's name, and a function that fills the record in. In Rayo each is written once, for every type:
 
@@ -64,8 +64,8 @@ func makeSinTable() -> [1024 of Float] {
 A `const` whose initializer does anything else is a compile error, while a global `let`'s runs at startup instead ([07](07-concurrency.md#initialization-at-startup)).
 
 - **What runs is what counts.** A function with a branch that reads a global `let` still runs in the compiler on an input that never takes that branch.
-- **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([11](11-errors-and-safety.md#check-levels)), so an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
-- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what [11](11-errors-and-safety.md#unsafe-code) asks of an access through a raw pointer, and every memory-safety check an `unchecked` block removes still runs, so an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([11](11-errors-and-safety.md#check-levels)).
+- **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([10](10-errors-and-safety.md#check-levels)), so an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
+- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what [10](10-errors-and-safety.md#unsafe-code) asks of an access through a raw pointer, and every memory-safety check an `unchecked` block removes still runs, so an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](10-errors-and-safety.md#check-levels)).
 - **Allocation works.** At compile time the current allocator is a compile-time heap, so containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. `.system` allocates from the compile-time heap too. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
 - **One thread.** Evaluation runs on one thread, so no `const`'s value depends on thread timing.
 - **Evaluation is bounded.** A `const`'s evaluation that runs past the toolchain's limit is a compile error, so a runaway loop fails the build instead of hanging it; a global `let`'s leaves the global to startup ([07](07-concurrency.md#initialization-at-startup)).
@@ -101,7 +101,7 @@ func setUp(_ world: mutable World) {
 }
 ```
 
-**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in static data does ([07](07-concurrency.md#initialization-at-startup)). Freezing copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, into read-only data aligned at least as the allocation was, as one allocation ([11](11-errors-and-safety.md#unsafe-code)). It points each pointer at the same offset in the copy, and makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none. An address that evaluation turned into an integer names nothing at run time ([11](11-errors-and-safety.md#unsafe-code)).
+**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in static data does ([07](07-concurrency.md#initialization-at-startup)). Freezing copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, into read-only data aligned at least as the allocation was, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). It points each pointer at the same offset in the copy, and makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
 
 - **Its views are static storage.** Its `.span` is a `Span` of static storage, which rule 5 lets any function return ([02](02-views-and-dependencies.md#dependencies)).
 - **Unscoped views.** For a `List` or an `[N of T]` reached from a `const` through stored fields and storage projections, as `enemyPresets[i].name` is, the compiler also provides a `staticSpan` property, and for a `String` a `staticString` property. It returns an unscoped `StaticSpan<T>` or `StaticString`, which may be kept anywhere because what it views is never freed ([below](#staticspan-views-of-immortal-data)).
@@ -141,16 +141,16 @@ func store<T>(_ value: T, into w: mutable Writer) {
 
 **Conditions must be `const`. The branch not taken is parsed but not type-checked, so it can mention symbols that only exist on another platform.**
 
-- **At the top level**, `static if` can include or exclude declarations and whole `import` and `import c` statements. A condition that guards an import reads only literals, `const`s of modules imported outside any `static if`, and the prelude's `target`, never a declaration of the module's own that shadows it ([12](12-compilation-model.md#modules-and-names)), so which modules a file imports never depends on what an import provides or on the module's own declarations. No `import` goes inside a `static for`, at any depth.
+- **At the top level**, `static if` can include or exclude declarations and whole `import` and `import c` statements. A condition that guards an import reads only literals, `const`s of modules imported outside any `static if`, and the prelude's `target`, never a declaration of the module's own that shadows it ([11](11-compilation-model.md#modules-and-names)), so which modules a file imports never depends on what an import provides or on the module's own declarations. No `import` goes inside a `static for`, at any depth.
 - **Per instantiation.** In generic code, a branch is checked only for the instantiations whose condition holds ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). That lets `store` call `w.bytes(of:)`, which accepts only a padding-free `Pod` type ([04](04-types.md#plain-data-pod-and-bit-casts)). `T.isPaddingFree` is a reflection query ([below](#what-reflection-can-read)).
 - **Refusing an instantiation or a build.** `static error("…")` turns a branch that must not be instantiated or built into a compile error with that message, as the serializer [below](#static-reflection) does. It stands where a statement, a member, a field or a top-level declaration can, as in `static if !target.flag("sse4") { static error("needs SSE4") }`.
 
-**`target`** is a `const` the prelude declares ([12](12-compilation-model.md#modules-and-names)). It exposes:
+**`target`** is a `const` the prelude declares ([11](11-compilation-model.md#modules-and-names)). It exposes:
 
 - `platform`, `arch` and `endian`;
 - `profile`: `.dev`, `.profile` or `.ship`;
-- `checks`: the set of diagnostic checks that are on where it is read, as `@checks` names them ([11](11-errors-and-safety.md#check-levels));
-- `cStackReserve`: the stack, in bytes, that a call into C checks is left, unless the C function called declares its own need with `stack(n)` ([09](09-c-interop.md#the-stack-a-c-call-needs));
+- `checks`: the set of diagnostic checks that are on where it is read, as `@checks` names them ([10](10-errors-and-safety.md#check-levels));
+- `cStackReserve`: the stack, in bytes, that a call into C checks is left, unless the C function called declares its own need with `stack(n)` ([08](08-c-interop.md#the-stack-a-c-call-needs));
 - flags the build defines: `target.flag("editor")`, or `target.flag("poolSize")` for one holding a number, with the type and value the build gives it ([below](#what-a-build-declares)). Reading a flag the build doesn't declare is a compile error, and `target.hasFlag("editor")`, a `const` `Bool`, says whether it declares one, so a library can read a flag that only some builds define inside `static if target.hasFlag("editor") { … }`.
 
 ## Static reflection
@@ -242,9 +242,9 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
 | `value[case: c]` | A projection of case `c`'s payload, as a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](04-types.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case (read, `modify` on a changeable place, or `consume`, which moves the payload out only when `value` holds `c`, as an `owned` pattern does) |
 
 - **Projections.** `value[field]` lends the field in place, as an accessor that yields does ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). It is a storage projection, which a view can outlive, except on an imported bitfield or an under-aligned field, which go through a temporary, so it is access-bound there. Every `value[field]` is checked per instantiation, for one field ([05](05-protocols-generics-and-closures.md#protocols-and-generics)), so generic code sees a storage projection or an access-bound one exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
-- **Imported bitfields.** `T.fields` lists them with the types they import as. `field.offset` is the storage unit's offset, `field.bitRange` locates the field within it, and the field is read and written through its accessors ([09](09-c-interop.md#structs-unions-and-enums)).
+- **Imported bitfields.** `T.fields` lists them with the types they import as. `field.offset` is the storage unit's offset, `field.bitRange` locates the field within it, and the field is read and written through its accessors ([08](08-c-interop.md#structs-unions-and-enums)).
 - **Anonymous members.** An imported struct's anonymous union or struct member is listed in `T.fields` as **one field of its type**, never as separate fields, so a union's members, which overlap, stay one place ([below](#tuples-field-lists-and-queries)).
-- **Types reflection can't see into.** A type the compiler builds, a closure literal's or a task's state or an interpolated literal's value; a language type whose layout is left open ([12](12-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type; and every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector, `StaticString` or `Name`, has no fields or cases to reflect: `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
+- **Types reflection can't see into.** A type the compiler builds, a closure literal's or a task's state or an interpolated literal's value; a language type whose layout is left open ([11](11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type; and every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector, `StaticString` or `Name`, has no fields or cases to reflect: `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
 - **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type:
     - **a declared type** has one part for each declaration from its module inward to itself: a module, type, extension, function, property, subscript, accessor, block, closure literal, `static if` branch or `static for` element. A part holds everything that tells its declaration apart from the others its scope may hold, so two declarations that may coexist never share a part:
         - its kind and its name;
@@ -254,7 +254,7 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
         - for a block, closure or branch, which has no name, its position in the scope around it;
         - every compile-time argument the declaration's body is instantiated with: its generic arguments, written or implied, such as `Self` and each `some P` parameter's type, a `static for` element's index, the field a static closure's body is instantiated for ([below](#constructing-values-reflectively)), and the element a compile-time list's `filter` or `map` closure is instantiated for ([below](#enumerating-a-modules-types)).
 
-      So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity [09](09-c-interop.md#importing-headers) gives it;
+      So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity [08](08-c-interop.md#importing-headers) gives it;
     - **the type's own generic arguments**, a value argument by its value, and whether it is an unscoped existential, so `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<(any P)>` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch));
     - **a type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, with, in place of a name, its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded. So a generic `task func`'s state differs for each of the function's generic arguments, and each element of a `static for` has its own;
     - **a structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part holding its kind, the identities of the types in it, with aliases and parentheses resolved, and every other fact of its form: a tuple's labels; an inline array's count; an existential's `any` or `mutable any`, and its protocols, as a set; a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written, its thrown type, `Never` when none is written, and each parameter's `keep` and convention; an error union's members, as a set. So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
@@ -329,11 +329,11 @@ func deserializeEnum<T>(_ r: mutable Reader) throws(LoadError) -> T {
 }
 ```
 
-**`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](04-types.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([09](09-c-interop.md#structs-unions-and-enums)), or a tuple type, and even then false when the type:
+**`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](04-types.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](08-c-interop.md#structs-unions-and-enums)), or a tuple type, and even then false when the type:
 
 - is marked `@opaque`;
 - has stored fields the use site can't see (`private` ones, without `@reflect(private)`);
-- has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([11](11-errors-and-safety.md#unsafe-code));
+- has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](10-errors-and-safety.md#unsafe-code));
 - has a primary initializer the use site can't call: a `private init` one, from another module, whatever `@reflect(private)` shows. The private fields `@reflect(private)` shows count as `public` here, so they don't stop the call.
 
 `T.makeCase` does the same for one enum case's payload, and applies to every case of an enum reflection can see into, since a case and its payload are as visible as the enum.
@@ -415,8 +415,8 @@ enum AnyEvent {                                           // one case per event 
 **`static if` and `static for` work where declarations go, in a struct's header, in the body of a struct, enum, union or extension, never a protocol, and at a file's top level, and generate whatever may appear there:**
 
 - in a struct's header, stored fields ([04](04-types.md#structs));
-- in such a body, any member ([13](13-grammar.md#files-and-declarations)): computed properties, a union's stored members, constants, methods, initializers, subscripts, nested types and type aliases, an enum's cases, and a `deinit`, which is still the type's only one;
-- at the top level, any declaration ([13](13-grammar.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern c` blocks and `extern c func` declarations. A top-level `static if` can also include or exclude `import` statements, `import c` ones included ([above](#static-if-and-conditional-compilation)).
+- in such a body, any member ([12](12-grammar.md#files-and-declarations)): computed properties, a union's stored members, constants, methods, initializers, subscripts, nested types and type aliases, an enum's cases, and a `deinit`, which is still the type's only one;
+- at the top level, any declaration ([12](12-grammar.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern c` blocks and `extern c func` declarations. A top-level `static if` can also include or exclude `import` statements, `import c` ones included ([above](#static-if-and-conditional-compilation)).
 
 ### Computed names
 
@@ -427,7 +427,7 @@ struct Merged<A, B>(                                      // Merged<Enemy, Playe
 )
 ```
 
-A generated declaration needs a name that comes from the element it was made for. **`\(e)` stands for the identifier that `e`, a `const` string, spells.** It may appear only where [13](13-grammar.md#files-and-declarations) allows, and the string must be a valid identifier, so `Columns<(Transform, Velocity)>` is an error: a tuple element's `field.name` is its position, `0`. Generated declarations that end up with the same name conflict exactly as written ones would, so two stored fields of one name are a compile error, as in `Merged` above, and functions may overload ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
+A generated declaration needs a name that comes from the element it was made for. **`\(e)` stands for the identifier that `e`, a `const` string, spells.** It may appear only where [12](12-grammar.md#files-and-declarations) allows, and the string must be a valid identifier, so `Columns<(Transform, Velocity)>` is an error: a tuple element's `field.name` is its position, `0`. Generated declarations that end up with the same name conflict exactly as written ones would, so two stored fields of one name are a compile error, as in `Merged` above, and functions may overload ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
 
 ### Generated declarations are ordinary declarations
 
@@ -535,7 +535,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 **`StaticSpan<T>` is a view of immortal read-only data: the program image, or runtime tables that are never freed. So unlike `Span` it is unscoped.**
 
 - Its `T` is `~Scoped`, as an unscoped type's contents are ([02](02-views-and-dependencies.md#scoped-values)), and has only values that could be frozen ([above](#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
-- Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([09](09-c-interop.md#what-c-must-uphold)).
+- Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](08-c-interop.md#what-c-must-uphold)).
 - The data is never written either, so `StaticSpan` is `Frozen`, through the `unsafe Frozen` conformance the language declares for it ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)).
 
 ## What a build declares
@@ -543,8 +543,8 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 **A build declares the settings that change what code means:**
 
 - the modules, in a list whose order startup follows where imports leave it open, each with its name, unique in the build, and its source files, in an order that sets the source order of its declarations ([07](07-concurrency.md#initialization-at-startup)). A generated declaration stands, in that order, where the `static if` or `static for` that generates it does, a `static for`'s in element order;
-- which of the modules form the prelude ([12](12-compilation-model.md#modules-and-names)), and whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([09](09-c-interop.md#embedding-rayo-in-a-c-program));
-- for each module, whether it is `@safe` ([11](11-errors-and-safety.md#safe-modules)), and its diagnostic check settings ([11](11-errors-and-safety.md#choosing-checks-for-a-module-or-a-scope));
+- which of the modules form the prelude ([11](11-compilation-model.md#modules-and-names)), and whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
+- for each module, whether it is `@safe` ([10](10-errors-and-safety.md#safe-modules)), and its diagnostic check settings ([10](10-errors-and-safety.md#choosing-checks-for-a-module-or-a-scope));
 - the build profile and the target, which `target` exposes ([above](#static-if-and-conditional-compilation));
 - the flags that `target.flag` reads, each a `const` `Bool`, `Int` or `StaticString`;
-- for each `import c`, the header it reads and each header its config block names, and for it and each `extern c` block, the preprocessor definitions its C is read with ([09](09-c-interop.md#importing-headers)).
+- for each `import c`, the header it reads and each header its config block names, and for it and each `extern c` block, the preprocessor definitions its C is read with ([08](08-c-interop.md#importing-headers)).

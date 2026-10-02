@@ -42,7 +42,7 @@ var more = primes.clone()                            // the clone's buffer comes
 more.append(1009)                                    // and grows there, as any list's does
 ```
 
-**Values in static data carry the static allocator, which never allocates or frees at run time.** They are the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [10](10-compile-time.md#consts-that-reach-run-time)). Nothing consumes or mutates a value in static data, so it is never grown, and it is never destroyed ([10](10-compile-time.md#consts-that-reach-run-time)).
+**Values in static data carry the static allocator, which never allocates or frees at run time.** They are the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [09](09-compile-time.md#consts-that-reach-run-time)). Nothing consumes or mutates a value in static data, so it is never grown, and it is never destroyed ([09](09-compile-time.md#consts-that-reach-run-time)).
 
 ## Allocators and threads
 
@@ -91,11 +91,11 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 - **A failure panics.**
 - **Counting uses.** An open of storage from any allocator but `.system`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends: the last use of everything that depends on what it lends ([02](02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
 - **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). An open and a reset or unregistration on two threads are ordered one way or the other: either the open comes first, and the reset or unregistration panics while what it lends is live, or the reset or unregistration comes first, and the open fails.
-- **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([11](11-errors-and-safety.md#check-levels)).
+- **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#check-levels)).
 
 ### Stale values, and the `deinit`s a reset runs
 
-**Destroying a stale value never touches its memory**, except in the `deinit` of an object that a reset or an unregistration destroys (below). It skips both the free and its elements' `deinit`s, so a `deinit` may never run ([11](11-errors-and-safety.md#unsafe-code)), and anything those elements owned outside the invalidated allocator leaks.
+**Destroying a stale value never touches its memory**, except in the `deinit` of an object that a reset or an unregistration destroys (below). It skips both the free and its elements' `deinit`s, so a `deinit` may never run ([10](10-errors-and-safety.md#unsafe-code)), and anything those elements owned outside the invalidated allocator leaks.
 
 **An object's `deinit` that a reset or an unregistration runs can still read what it owns from that allocator:**
 
@@ -137,9 +137,9 @@ props.append(p)                     // panics: 'props' came from an unregistered
 
 ## How values record their allocator
 
-**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets; a container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([09](09-c-interop.md)).
+**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets; a container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
 
-- **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([11](11-errors-and-safety.md#unsafe-code)).
+- **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([10](10-errors-and-safety.md#unsafe-code)).
 - **A stale word never passes.** Storage that a reset or an unregistration invalidated fails its check for good, however many allocators are registered, reset and unregistered later, outside the `deinit`s that a reset or an unregistration runs ([above](#stale-values-and-the-deinits-a-reset-runs)).
 - **Limits.** How many allocators may be registered at once and over the program's run, and how many times one may be reset, are implementation-defined. Registering or resetting past a limit panics, in every build, so a word is never issued twice.
 
@@ -179,7 +179,7 @@ unsafe protocol AllocatorImpl: Synchronized {          // must be callable from 
     var kind: AllocatorKind { get }                    // a wrapper passes its backing's allocations through
     var backing: Allocator? { get }                    // the one allocator this draws its memory from, or nil
     // The rest are unsafe to call: containers reach allocate, reallocate and free through the Allocator id's
-    // allocateRaw, reallocateRaw and freeRaw (11), an implementation reaches its backing's through the id's
+    // allocateRaw, reallocateRaw and freeRaw (10), an implementation reaches its backing's through the id's
     // forwarding methods (below), and only the runtime calls the reset hooks.
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?   // address, plus the arena block it lies in, if any
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
@@ -229,7 +229,7 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 
 | Type | Semantics |
 | --- | --- |
-| `Box<T>` | Unique owning pointer, move-only. `Box.leak`, for a `T: ~Scoped`, gives up ownership and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([11](11-errors-and-safety.md#unsafe-code)), for C to hold. `Box.adopt` (`unsafe`) takes it back, and its caller promises that it came from leaking a `Box<T>` and is adopted at most once |
+| `Box<T>` | Unique owning pointer, move-only. `Box.leak`, for a `T: ~Scoped`, gives up ownership and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](10-errors-and-safety.md#unsafe-code)), for C to hold. `Box.adopt` (`unsafe`) takes it back, and its caller promises that it came from leaking a `Box<T>` and is adopted at most once |
 | `UniquePointer<T>` | Unique owner of an object, on one thread; hands out checked `WeakPointer<T>`s ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) |
 | `Shared<T>` | Reference-counted pointer to a `Frozen` or `Synchronized` `T`, with an atomic count; hands out checked `WeakShared<T>`s |
 | `LocalShared<T>` | Reference-counted pointer to a `Frozen` `T`, with a plain count, on one thread |
@@ -265,7 +265,7 @@ log.value.lock { $0.append(m) }
 **The compiler derives `Frozen` for types with no interior mutability:** no `Synchronized` fields (no `Mutex`, `Atomic` or queue), no object owners (whose objects are mutable through weak pointers), no raw pointers, and no `Closure`s. **Nothing that is or holds a `Synchronized` value, at any depth, is `Frozen`**, whatever the `Synchronized` type's own fields look like, since its non-`mutating` methods write it ([07](07-concurrency.md#the-synchronized-contract)), and declaring `: unsafe Frozen` on such a type is a compile error.
 
 - **What it covers.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer, a weak link or a handle in it only names another value, which isn't part of it and may change.
-- **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`, an unverified promise ([11](11-errors-and-safety.md#safe-modules)) that nothing writes what it holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes, and that nothing at all writes a value of it frozen into read-only data ([10](10-compile-time.md#consts-that-reach-run-time)). So a type that writes bookkeeping must keep its values from being freezable, as a `Shared` does by not being `TrivialFree`. The language makes it for `StaticSpan` and `StaticString`, which point into immortal read-only data.
+- **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`, an unverified promise ([10](10-errors-and-safety.md#safe-modules)) that nothing writes what it holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes, and that nothing at all writes a value of it frozen into read-only data ([09](09-compile-time.md#consts-that-reach-run-time)). So a type that writes bookkeeping must keep its values from being freezable, as a `Shared` does by not being `TrivialFree`. The language makes it for `StaticSpan` and `StaticString`, which point into immortal read-only data.
 - **Existentials.** An existential has no fields to check, so `any P` and `mutable any P` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names a buffer the container owns alone, written only by its `mutating` methods, which need exclusive access that no shared borrow of a `Frozen` holder grants, apart from a `StablePool`'s pin counts (below), or, in a `String` made from a literal, immortal bytes nothing writes ([04](04-types.md#literals)).
 - **`Shared<T>` and `LocalShared<T>`.** Each is `Frozen` when its `T` is: its count is bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
@@ -313,12 +313,12 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 }
 ```
 
-**An operation of the language's, or of a std type the language names, such as `Box` or `Shared` ([12](12-compilation-model.md#modules-and-names)), that allocates panics when its allocator can't make the allocation.** Those that build or grow a value at run time also have a fallible form, which throws `AllocError`, the prelude's error for an allocation its allocator couldn't make, or returns `nil`:
+**An operation of the language's, or of a std type the language names, such as `Box` or `Shared` ([11](11-compilation-model.md#modules-and-names)), that allocates panics when its allocator can't make the allocation.** Those that build or grow a value at run time also have a fallible form, which throws `AllocError`, the prelude's error for an allocation its allocator couldn't make, or returns `nil`:
 
 - `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
 - the builtin `SoA`'s growing operations, such as `try rows.tryAppend(x)` ([04](04-types.md#struct-of-arrays-soat));
-- `Name(interning:)` ([04](04-types.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([11](11-errors-and-safety.md#unsafe-code)).
+- `Name(interning:)` ([04](04-types.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](10-errors-and-safety.md#unsafe-code)).
 
 **`@noalloc` on a function makes any call in it that may allocate a compile error:**
 
@@ -332,9 +332,9 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 
 **What may allocate.** In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate, such as integer arithmetic or indexing a span. That includes the calls the language makes for the code ([05](05-protocols-generics-and-closures.md#functions-and-closures)), so `[1, 2] as List<_>` is an error there ([04](04-types.md#literals)). A call through a function value may allocate unless its type is `@noalloc` ([05](05-protocols-generics-and-closures.md#function-typed-values)). A call through `any P`, and a requirement call in generic code, may allocate unless the protocol declares the requirement `@noalloc`, which every witness to it must then be.
 
-**Destruction and C.** Destroying a value may allocate unless each `deinit` it runs, at any depth, is `@noalloc` or `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), since freeing memory isn't allocating. So destroying a value of a type parameter, or of a type that hides its value's `deinit`, such as a `Box<any P>` or a `Closure`, may allocate unless the type is `TrivialFree` ([below](#releasing-a-value-without-destroying-it-trivialfree)), or is a `Closure` whose function type is `@noalloc`, since only captures whose destruction passes the check move into one ([05](05-protocols-generics-and-closures.md#function-typed-values)). Dropping an object's owner may allocate, since it may run the object's `deinit`, and so may dropping a `Pin` or a `LocalPin`, since the last pin to drop runs the `deinit` its destruction left waiting. A call to C may allocate unless the import or the `extern c func` declares the function `noalloc` ([09](09-c-interop.md#c-calls-in-noalloc-code-noalloc)), or it goes through a `@c noalloc` pointer ([05](05-protocols-generics-and-closures.md#c-function-pointers)).
+**Destruction and C.** Destroying a value may allocate unless each `deinit` it runs, at any depth, is `@noalloc` or `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), since freeing memory isn't allocating. So destroying a value of a type parameter, or of a type that hides its value's `deinit`, such as a `Box<any P>` or a `Closure`, may allocate unless the type is `TrivialFree` ([below](#releasing-a-value-without-destroying-it-trivialfree)), or is a `Closure` whose function type is `@noalloc`, since only captures whose destruction passes the check move into one ([05](05-protocols-generics-and-closures.md#function-typed-values)). Dropping an object's owner may allocate, since it may run the object's `deinit`, and so may dropping a `Pin` or a `LocalPin`, since the last pin to drop runs the `deinit` its destruction left waiting. A call to C may allocate unless the import or the `extern c func` declares the function `noalloc` ([08](08-c-interop.md#c-calls-in-noalloc-code-noalloc)), or it goes through a `@c noalloc` pointer ([05](05-protocols-generics-and-closures.md#c-function-pointers)).
 
-**Attaching a thread isn't covered.** A `@c` or `@export` function's first entry on a thread Rayo didn't create attaches that thread, which runs its thread-local initializers ([09](09-c-interop.md#calling-rayo-from-c)), and they may allocate, in a `@noalloc` function too.
+**Attaching a thread isn't covered.** A `@c` or `@export` function's first entry on a thread Rayo didn't create attaches that thread, which runs its thread-local initializers ([08](08-c-interop.md#calling-rayo-from-c)), and they may allocate, in a `@noalloc` function too.
 
 ## Releasing a value without destroying it: `TrivialFree`
 
@@ -347,4 +347,4 @@ levelArena.reset()                                           // what the arena h
 
 `TrivialFree` is a language marker protocol that the compiler **derives**, as it derives `Frozen`, for a type whose destruction does nothing but free memory: every `deinit` in it, at any depth, is `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). So it holds no object owner, which destroys its object, no `Pin` or `LocalPin`, which unpins, and no reference-counted pointer such as a `Shared`. A value whose `deinit` its type hides counts too: `Box<any P>` is `TrivialFree` only when `P` refines `TrivialFree` or it is written `Box<any P & TrivialFree>`, as for `Frozen` ([above](#frozen-types-with-no-interior-mutability)), and a `consuming` function value and a `Closure<F>`, which may own handed-over captures ([05](05-protocols-generics-and-closures.md#function-typed-values)), never are.
 
-`release` forgets the value instead of destroying it, and `reset` makes the memory reusable. Anything the value owns that didn't come from the arena leaks, and `release` `assert`s that nothing does ([11](11-errors-and-safety.md#assert-and-precondition)).
+`release` forgets the value instead of destroying it, and `reset` makes the memory reusable. Anything the value owns that didn't come from the arena leaks, and `release` `assert`s that nothing does ([10](10-errors-and-safety.md#assert-and-precondition)).

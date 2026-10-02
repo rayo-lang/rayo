@@ -1,4 +1,4 @@
-# 11 · Errors and safety
+# 10 · Errors and safety
 
 A **recoverable error**, such as a missing file, is a typed value that the caller must handle. A **bug**, such as dereferencing a stale handle, **panics** ([below](#panics)).
 
@@ -29,7 +29,7 @@ A function that can fail in an expected way reports the failure to its caller as
 enum LoadError: Error {
     case notFound(path: StaticString)
     case corrupt(offset: Int)
-    case unknownCase(Name)                  // reflective loaders (10)
+    case unknownCase(Name)                  // reflective loaders (09)
     case badValue(field: StaticString)
     case outOfMemory
 }
@@ -68,7 +68,7 @@ typealias Failure = (IoError | ParseError)
 
 **`throws(IoError | ParseError)` names an error union: a tagged union with one member per error type**, laid out like an enum whose cases carry the members.
 
-- **One set, one type.** Members are flattened and deduplicated by identity, and ordered by their `T.id`s, which no two types share ([10](10-compile-time.md#what-reflection-can-read)), so the same set of types is the same type, with the same layout, everywhere in a program. `Never` is dropped from a union with other members, so `(Never | IoError)` is `IoError`, and a union of one type is that type.
+- **One set, one type.** Members are flattened and deduplicated by identity, and ordered by their `T.id`s, which no two types share ([09](09-compile-time.md#what-reflection-can-read)), so the same set of types is the same type, with the same layout, everywhere in a program. `Never` is dropped from a union with other members, so `(Never | IoError)` is `IoError`, and a union of one type is that type.
 - **An ordinary type.** Outside `throws` and a function type's parameters, a union is written in parentheses, as `lastError` and `Failure` are above. A value of one of its members, or of a union whose members it all has, converts to it implicitly, so `report.lastError = e` stores an `IoError` ([05](05-protocols-generics-and-closures.md#implicit-conversions)). It conforms to `Error`, is `Copyable`, `Sendable`, `Frozen` and `TrivialFree` exactly when every member is, and is scoped when any member is. Like a Rayo enum, it is never `Pod`, since a tag that no member uses is no value of it ([04](04-types.md#plain-data-pod-and-bit-casts)). Its values are matched with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)).
 - **Binding a type parameter in a union.** Where a union holds one type parameter, as `throws(E | IoError)` does, an argument binds it to the members of the argument's error type that the union's other members don't name, or to `Never` when none is left: a closure that throws `(ParseError | IoError)` binds `E` to `ParseError`, and one that throws only `IoError`, or nothing, binds it to `Never`. A union holding two type parameters binds neither.
 
@@ -126,7 +126,7 @@ precondition(count < capacity, "queue full")     // panics if the caller broke t
 let share = total / players                      // panics if players is 0, in every build
 ```
 
-**A panic is reported through the platform ([09](09-c-interop.md#what-the-runtime-needs-from-the-platform)), and never returns.**
+**A panic is reported through the platform ([08](08-c-interop.md#what-the-runtime-needs-from-the-platform)), and never returns.**
 
 ### What panics
 
@@ -135,17 +135,17 @@ The language and the runtime panic on the following, in every build unless noted
 - `fatalError("…")`, `precondition(cond, "…")`, `x!` on `nil`, `try!` on an error;
 - a failing `assert(cond)`, where assertions are checked ([below](#assert-and-precondition));
 - out-of-bounds indexing, and a string range off a Unicode scalar boundary ([04](04-types.md#strings));
-- integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([09](09-c-interop.md#structs-unions-and-enums)), only where overflow checks are on ([04](04-types.md#integer-overflow-division-and-shifts));
+- integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([08](08-c-interop.md#structs-unions-and-enums)), only where overflow checks are on ([04](04-types.md#integer-overflow-division-and-shifts));
 - division or remainder by zero, and converting NaN or an out-of-range floating-point value to an integer with the unlabeled form;
 - an access through, or a pin taken through, a stale object owner, opening an owning value whose allocator was reset or unregistered since ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)), conflicting accesses to a thread-bound object or a thread-local, and destroying a thread-bound object while an access to it is live ([03](03-handles-and-objects.md#destroying-an-object));
-- running out of stack: a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included, and a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([09](09-c-interop.md#the-stack-a-c-call-needs)), each caught before anything is written past the stack's end;
+- running out of stack: a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included, and a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](08-c-interop.md#the-stack-a-c-call-needs)), each caught before anything is written past the stack's end;
 - a count kept for safety that would overflow: the reader counts of an object, a thread-local and an `RwLock` ([03](03-handles-and-objects.md#dynamic-exclusivity), [07](07-concurrency.md#locks-mutex-and-rwlock)), pin counts ([03](03-handles-and-objects.md#pinning-for-c)), a thread's counts of its uses of an allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)), and the counts behind `Shared`, `LocalShared`, `Published` snapshots, and `Sender`, `Receiver` and `Future` values ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners), [07](07-concurrency.md#queues-and-channels)); and creating an object or a `Shared` value when no generation is left ([03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
 - an allocation that fails in a plain form, such as `UniquePointer(v)` or a closure context past the inline budget ([06](06-memory-and-allocators.md#allocation-failure));
 - any operation through an unregistered `Allocator` id, apart from the frees and growths that [06](06-memory-and-allocators.md#unregistering-an-allocator) allows from the `deinit`s its unregistration runs, a reset or a `release` through one that isn't an arena, a reset past the implementation's limit on resets, a reset or an unregistration while anything still uses the memory it would free, or while another that reaches that memory is running ([06](06-memory-and-allocators.md#what-a-reset-does)), unregistering `.system` ([06](06-memory-and-allocators.md#unregistering-an-allocator)), and registering an allocator whose backing is unregistered, whose backing chain breaks a rule of [06](06-memory-and-allocators.md#allocators-over-other-allocators), or past the implementation's limit ([06](06-memory-and-allocators.md#how-values-record-their-allocator));
 - taking a lock's exclusive access on a thread that holds either kind of access to it, or either kind on a thread that holds its exclusive one, for a `Mutex` or an `RwLock` ([07](07-concurrency.md#locks-mutex-and-rwlock)), and `lock()` on a `Slice` of a bare `Shared<Blob>` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
 - overlapping calls on one side of a single-producer or single-consumer queue ([07](07-concurrency.md#queues-and-channels));
 - reading a global before its initializer has run, and using a thread-local before its thread's copy is initialized or after it is destroyed;
-- entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](07-concurrency.md#initialization-at-startup)), calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks ([09](09-c-interop.md#embedding-rayo-in-a-c-program));
+- entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](07-concurrency.md#initialization-at-startup)), calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
 - a wait during startup that would park with no timeout ([07](07-concurrency.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](07-concurrency.md#starting-a-thread-runtimestartthread));
 - polling a task that has already finished ([07](07-concurrency.md#semantics));
 - interning a `Name` whose hash another text already has ([04](04-types.md#collections-and-strings));
@@ -175,7 +175,7 @@ mutating func push(_ item: owned Item) {
 
 ## Unsafe code
 
-These need `unsafe`: dereferencing or offsetting a raw pointer, converting an integer to a pointer, taking an address with `ptr(to:)`, the raw-memory operations, and resizing or freeing a raw allocation (below); calls into C, through `@c` pointers, and to `unsafe` functions; using a field declared `unsafe`, such as `Span`'s `baseAddress` ([02](02-views-and-dependencies.md#scoped-values)), by name, through reflection or as a `SoA` column; accessing a bare global `var` ([07](07-concurrency.md#global-state)) or an imported C variable ([09](09-c-interop.md#what-imports-as-what)); converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](05-protocols-generics-and-closures.md#c-function-pointers)); and reading a union member where [04](04-types.md#untagged-unions) requires it:
+These need `unsafe`: dereferencing or offsetting a raw pointer, converting an integer to a pointer, taking an address with `ptr(to:)`, the raw-memory operations, and resizing or freeing a raw allocation (below); calls into C, through `@c` pointers, and to `unsafe` functions; using a field declared `unsafe`, such as `Span`'s `baseAddress` ([02](02-views-and-dependencies.md#scoped-values)), by name, through reflection or as a `SoA` column; accessing a bare global `var` ([07](07-concurrency.md#global-state)) or an imported C variable ([08](08-c-interop.md#what-imports-as-what)); converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](05-protocols-generics-and-closures.md#c-function-pointers)); and reading a union member where [04](04-types.md#untagged-unions) requires it:
 
 ```swift
 unsafe {
@@ -188,7 +188,7 @@ let now = unsafe plat.time_seconds()                                // one expre
 unsafe func blit(_ dst: *UInt8, _ src: *UInt8, _ n: Int) { ... }   // callers need unsafe too
 ```
 
-`unsafe` before an expression is an `unsafe` block around its operand, as the precedence table of [13](13-grammar.md#expressions) binds it, so `unsafe a.pointee + b.pointee` covers only `a.pointee`. A block covers all the code written inside it, including the bodies of closure literals there. An `unsafe func`'s body is no `unsafe` block: it writes `unsafe` where it needs it, as any function does.
+`unsafe` before an expression is an `unsafe` block around its operand, as the precedence table of [12](12-grammar.md#expressions) binds it, so `unsafe a.pointee + b.pointee` covers only `a.pointee`. A block covers all the code written inside it, including the bodies of closure literals there. An `unsafe func`'s body is no `unsafe` block: it writes `unsafe` where it needs it, as any function does.
 
 **No `unsafe` call is hidden.** An `unsafe` declaration of any kind, a function, initializer, operator, subscript or accessor, is used only inside `unsafe`, or through an `unsafe` function type, an `unsafe` requirement or a `: unsafe P` conformance. An imported or `extern c` function is used only inside `unsafe`, or through a `@c` pointer, whose calls need `unsafe` ([05](05-protocols-generics-and-closures.md#c-function-pointers)). So a call the language makes on the code's behalf, such as a `@converts` initializer under `try` ([above](#propagating-errors-with-try)) or the `==` of an expression pattern ([04](04-types.md#matching-with-when-and-choosing-with-if)), is allowed only where the call written out would be.
 
@@ -226,7 +226,7 @@ An `unsafe` block marks code whose correctness the compiler takes on trust. Chec
 - **Memory has no declared type.** A raw pointer of any type may alias memory also reached as another type.
 - **A `deinit` may never run.** Destroying a stale value skips its elements' `deinit`s ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so `unsafe` code stays sound when a value it hands out, a guard included, is never destroyed.
 
-**Taking an address.** `unsafe func ptr<T>(to place: mutable T) -> *T` returns the address of the place lent to it, as in `ptr(to: &particles[0])`, and its shared form, `ptr(to: x)`, of a place it borrows. It is builtin, and the call's `&` chooses the form, as for a method's forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). It is never a function value: it converts to no function type or `Closure` and binds no `some F`, so every call of it is direct. The access ends with the call, since a raw pointer is unscoped. The place must be storage that a view could outlive: a variable, a stored field or element, or a storage projection ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), never an access-bound projection or an under-aligned place ([04](04-types.md#packed-structs-and-under-aligned-places)), which reach the call only as a temporary the call would outlive; either is a compile error. An object's value or a thread-local qualifies, but the dynamic access the call takes ends with it, so no mark guards later uses of the address: they keep the rules on raw accesses above, and stay in bounds only while the object, or the thread's copy, lives. An under-aligned field's address is its enclosing place's plus `field.offset` ([10](10-compile-time.md#what-reflection-can-read)). Its argument, borrowed or not, is always the caller's place, never a copy ([01](01-values-and-ownership.md#parameters)).
+**Taking an address.** `unsafe func ptr<T>(to place: mutable T) -> *T` returns the address of the place lent to it, as in `ptr(to: &particles[0])`, and its shared form, `ptr(to: x)`, of a place it borrows. It is builtin, and the call's `&` chooses the form, as for a method's forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). It is never a function value: it converts to no function type or `Closure` and binds no `some F`, so every call of it is direct. The access ends with the call, since a raw pointer is unscoped. The place must be storage that a view could outlive: a variable, a stored field or element, or a storage projection ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), never an access-bound projection or an under-aligned place ([04](04-types.md#packed-structs-and-under-aligned-places)), which reach the call only as a temporary the call would outlive; either is a compile error. An object's value or a thread-local qualifies, but the dynamic access the call takes ends with it, so no mark guards later uses of the address: they keep the rules on raw accesses above, and stay in bounds only while the object, or the thread's copy, lives. An under-aligned field's address is its enclosing place's plus `field.offset` ([09](09-compile-time.md#what-reflection-can-read)). Its argument, borrowed or not, is always the caller's place, never a copy ([01](01-values-and-ownership.md#parameters)).
 
 **Raw memory.**
 
@@ -245,17 +245,17 @@ An `unsafe` block marks code whose correctness the compiler takes on trust. Chec
 
 ### `@safe` modules
 
-A module the build declares `@safe` ([10](10-compile-time.md#what-a-build-declares)) is restricted to the safe subset: every construct whose correctness the compiler takes on trust is an error anywhere in it. It can still call safe wrappers that other modules built with `unsafe`. It rejects:
+A module the build declares `@safe` ([09](09-compile-time.md#what-a-build-declares)) is restricted to the safe subset: every construct whose correctness the compiler takes on trust is an error anywhere in it. It can still call safe wrappers that other modules built with `unsafe`. It rejects:
 
 - `unsafe` blocks, expressions, functions and conformances, `@pod`, `@export` functions, `import c` config blocks and `extern c func` declarations. The conformances, those attributes, the config blocks and those declarations are the **unverified promises**:
     - `@pod`, which states that every bit pattern of a struct or union is valid ([04](04-types.md#plain-data-pod-and-bit-casts));
-    - `@export` on a function, a promise about its C name and callers ([09](09-c-interop.md#calling-rayo-from-c));
+    - `@export` on a function, a promise about its C name and callers ([08](08-c-interop.md#calling-rayo-from-c));
     - a conformance to an **`unsafe protocol`**, a contract the compiler can't check ([05](05-protocols-generics-and-closures.md#conformances)). The language's own are `Sendable` and `Synchronized` ([07](07-concurrency.md)), `Frozen` and `AllocatorImpl` ([06](06-memory-and-allocators.md)), and `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). A conformance the compiler derives itself, such as `Frozen` for a type with no interior mutability or `Sendable` for a type whose fields are all `Sendable`, is no promise;
     - a conformance written `: unsafe P` because a witness is an `unsafe` field, a union member that isn't safe to read, a static stored `var` that isn't `@threadlocal`, which also promises that its accesses never race, or an `unsafe` declaration meeting a safe requirement ([05](05-protocols-generics-and-closures.md#conformances)), or because its derived `==` or `hash(into:)` reads such a field or member ([05](05-protocols-generics-and-closures.md#equality-and-ordering));
-    - a rule in an `import c` config block, each an assertion about the header's C: `noalloc` ([09](09-c-interop.md#c-calls-in-noalloc-code-noalloc)), `stack` ([09](09-c-interop.md#the-stack-a-c-call-needs)), and `struct`, `union` or `enum S in "h"` ([09](09-c-interop.md#importing-headers)). A `stack` in a `@c` function pointer type is no promise, since a function converts to the type only when the type declares at least the function's need;
-    - an `extern c func` declaration, an assertion about its module's `extern c` code or a linked library ([09](09-c-interop.md#inline-c));
+    - a rule in an `import c` config block, each an assertion about the header's C: `noalloc` ([08](08-c-interop.md#c-calls-in-noalloc-code-noalloc)), `stack` ([08](08-c-interop.md#the-stack-a-c-call-needs)), and `struct`, `union` or `enum S in "h"` ([08](08-c-interop.md#importing-headers)). A `stack` in a `@c` function pointer type is no promise, since a function converts to the type only when the type declares at least the function's need;
+    - an `extern c func` declaration, an assertion about its module's `extern c` code or a linked library ([08](08-c-interop.md#inline-c));
 - `unchecked` blocks ([below](#check-levels));
-- `extern c` blocks of C code ([09](09-c-interop.md#inline-c)).
+- `extern c` blocks of C code ([08](08-c-interop.md#inline-c)).
 
 ## Check levels
 
@@ -269,7 +269,7 @@ let n = a + b             // overflow check: without it, the sum wraps, which is
 - **Memory-safety checks**, bounds checks among them, make safe code sound. They are **on in every build**, and only `unchecked` code can strip them ([below](#choosing-checks-for-a-module-or-a-scope)).
 - **Diagnostic checks** catch logic bugs whose failure is still memory-safe, such as wrapping arithmetic.
 
-**Each diagnostic check is on or off where code is written**, by the innermost of an enclosing `@checks`, the module's settings and the profile default, and an enclosing `unchecked` block turns every one off (below). `target.checks` holds those that are on ([10](10-compile-time.md#static-if-and-conditional-compilation)).
+**Each diagnostic check is on or off where code is written**, by the innermost of an enclosing `@checks`, the module's settings and the profile default, and an enclosing `unchecked` block turns every one off (below). `target.checks` holds those that are on ([09](09-compile-time.md#static-if-and-conditional-compilation)).
 
 ### Choosing checks for a module or a scope
 
@@ -285,10 +285,10 @@ unchecked {                        // bounds and the table's other checks off he
 **Diagnostic checks can be chosen per module and per scope.**
 
 - **Per scope**, for a function, a type's members or a `do` block: `@checks(…)`, which takes `.all`, `.none`, or a set of the diagnostic checks in the table below, `.overflow` and `.assert`, as in `@checks([.overflow])`, and sets exactly those on for its scope, replacing what encloses it.
-- **Per module**, with the same values, in the build's settings ([10](10-compile-time.md#what-a-build-declares)).
+- **Per module**, with the same values, in the build's settings ([09](09-compile-time.md#what-a-build-declares)).
 - **In `@safe` modules too**, since they only choose diagnostic checks.
 
-**What `unchecked` removes.** An `unchecked` block removes every check in the table below that the code written inside it performs, and those of the `@inline` functions it calls, whose bodies become part of it ([12](12-compilation-model.md#functions-that-are-never-calls-inline)), such as a collection's subscript. It removes none of the other functions it calls, and none of the panics [above](#what-panics) that the table doesn't list. A diagnostic check it removes acts as where it is off: an overflow wraps or truncates, and `assert` doesn't evaluate its condition. Any other removed check's failure is undefined behavior. It removes no synchronization, since a lock and an atomic operation are the operation itself, and a check that also orders memory, as a single-sided queue's side check does ([07](07-concurrency.md#queues-and-channels)), keeps that ordering when its failure test is removed.
+**What `unchecked` removes.** An `unchecked` block removes every check in the table below that the code written inside it performs, and those of the `@inline` functions it calls, whose bodies become part of it ([11](11-compilation-model.md#functions-that-are-never-calls-inline)), such as a collection's subscript. It removes none of the other functions it calls, and none of the panics [above](#what-panics) that the table doesn't list. A diagnostic check it removes acts as where it is off: an overflow wraps or truncates, and `assert` doesn't evaluate its condition. Any other removed check's failure is undefined behavior. It removes no synchronization, since a lock and an atomic operation are the operation itself, and a check that also orders memory, as a single-sided queue's side check does ([07](07-concurrency.md#queues-and-channels)), keeps that ordering when its failure test is removed.
 
 ### The checks
 
@@ -307,7 +307,7 @@ unchecked {                        // bounds and the table's other checks off he
 | Entry from C before startup or after shutdown | memory safety | on | on | on |
 | Polling a finished task | memory safety | on | on | on |
 | Integer division and remainder by zero, and float-to-integer conversion of NaN or an out-of-range value | memory safety | on | on | on |
-| Integer overflow on `+ - *`, unary `-`, `Int.min / -1`, unlabeled integer conversions whose value doesn't fit, and imported bitfield writes that don't fit the width ([09](09-c-interop.md#structs-unions-and-enums)) | diagnostic | on | on | off: wraps or truncates ([04](04-types.md#integer-overflow-division-and-shifts)) |
+| Integer overflow on `+ - *`, unary `-`, `Int.min / -1`, unlabeled integer conversions whose value doesn't fit, and imported bitfield writes that don't fit the width ([08](08-c-interop.md#structs-unions-and-enums)) | diagnostic | on | on | off: wraps or truncates ([04](04-types.md#integer-overflow-division-and-shifts)) |
 | `x!` on `nil`, and `try!` on an error | memory safety | on | on | on |
 | `precondition` | memory safety | on | on | on |
 | `unreachable()` reached | memory safety | on | on | on |
