@@ -54,7 +54,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 Every access to an object's value, through the owner or any weak pointer, is checked:
 
-- **Marks.** A **read access**, any shared use of the value such as a `read` projection, a `let` binding or a borrowing method call, holds a shared mark, and a **modify access**, any change such as a `modify` projection, a `var` binding of `&place` or a `mutating` call, an exclusive mark, until the last use of every value that depends on it (rule 6 in [02](02-views-and-dependencies.md#dependencies)).
+- **Marks.** A **read access**, any shared use of the value such as a `read` projection, a `let` binding or a borrowing method call, holds a shared mark, and a **modify access**, any change such as a `modify` projection, a `var` binding of `&place` or a `mutating` call, an exclusive mark, until the last use of every value that depends on it (rule 6 in [02](02-views-and-dependencies.md#rule-6-dynamic-accesses)).
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destroying the object while any access to it is live panics too ([below](#destroying-an-object)).
 - **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([10](10-errors-and-safety.md#what-panics)), and so does creating an object when no generation is left ([below](#destroying-an-object)).
 

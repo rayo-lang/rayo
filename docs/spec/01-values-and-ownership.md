@@ -147,7 +147,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 
 **A default value makes an argument optional.** With `func spawn(_ kind: Kind, at pos: Vec3 = .zero)`, a call may leave out `at:`.
 
-- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](02-views-and-dependencies.md#dependencies)).
+- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](02-views-and-dependencies.md#rule-5-the-callee-side)).
 - **A call that leaves the argument out calls that function** in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)).
 - **A `mutable` parameter has no default**, since it stands for a place of the caller's.
 - **A field's default works the same way** in the primary initializer ([04](04-types.md#initializers)).
@@ -160,9 +160,9 @@ remember(copy e.pos)                                    // a copy moves in, and 
 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address. A `Closure<F>` counts, since its captures may hold one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 - **The argument of `ptr(to:)`**, whose result is its address ([10](10-errors-and-safety.md#unsafe-code)).
-- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#dependencies)).
+- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#rule-4-absorption)).
 
-[Rules 3 and 4](02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](02-views-and-dependencies.md#dependencies). An `Int` or a `List<Int>` result views nothing.
+[Rules 3 and 4](02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](02-views-and-dependencies.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
 
 **Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention.
 
@@ -183,7 +183,7 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 3. **As it begins, it runs the accessors those places reach**, in the order the places were worked out, receiver first. These are the `read` and `modify` projections, and the `get` of each `get` and `set` pair that the call lends for change ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
 4. **When it returns, it ends those accesses in reverse order**, running the code after each `yield` and calling each `set`. An access-bound projection's access that the result still depends on is the exception: it ends at that value's last use ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
 
-**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](02-views-and-dependencies.md#dependencies)). So in `items.insert(x, at: items.count)`, `count`'s `get` has returned before `insert` borrows `items`.
+**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](02-views-and-dependencies.md#rule-3-call-results)). So in `items.insert(x, at: items.count)`, `count`'s `get` has returned before `insert` borrows `items`.
 
 **Working out a place never accesses it**, except for an optional chain (`?.`) or a force unwrap (`!`) in a borrowed or `mutable` argument. Unwrapping reads the optional, so the borrow up to that point begins there, and lasts until the call returns. So `damage(&world.enemies[h]!, by: reinforce(&world.enemies))` is a conflict.
 
@@ -221,9 +221,9 @@ var e = enemies[0]                 // error: a bare 'var' of a place
 | `var x = place` | | A compile error, except for a `const` of a copyable type, which gives the `var` a new value ([below](#constants)) | |
 
 - **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. On such a binding, `owned` changes nothing. A binding that owns its value can move it on, and a `let` still can't change it.
-- **Views taken from a `let` of a place depend on the place itself** ([02](02-views-and-dependencies.md#dependencies)).
+- **Views taken from a `let` of a place depend on the place itself** ([02](02-views-and-dependencies.md#rule-1-projection)).
 - **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [What can be moved from](#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy` or `.clone()`.
-- **A place that a `where yield outlives self` projection yields from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](02-views-and-dependencies.md#dependencies)).
+- **A place that a `where yield outlives self` projection yields from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](02-views-and-dependencies.md#temporaries)).
 - **Neither borrowing form may bind an under-aligned place**: that is a compile error ([04](04-types.md#packed-structs-and-under-aligned-places)).
 
 ### What a `let` of a place sees
@@ -254,7 +254,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 
 **A borrow lasts until its last use, not to the end of the scope.** Once `boss` above is last used, `enemies` is free again. Where destroying the value that holds the borrow is a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), that destruction is its last use.
 
-**A `let` of a dynamic place holds its access until its last use.** A dynamic place is one reached through a thread-bound object's owner or weak pointer, or a thread-local, and the `let` holds that dynamic access (rule 6 in [02](02-views-and-dependencies.md#dependencies)). So a call in between that changes the object panics.
+**A `let` of a dynamic place holds its access until its last use.** A dynamic place is one reached through a thread-bound object's owner or weak pointer, or a thread-local, and the `let` holds that dynamic access (rule 6 in [02](02-views-and-dependencies.md#rule-6-dynamic-accesses)). So a call in between that changes the object panics.
 
 ### Conditions and patterns
 
@@ -297,7 +297,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 **Only a changeable place can be changed, or lent with `&`.** A place is **changeable** when it is:
 
 - a `var` that owns its value;
-- a temporary, which its statement owns ([02](02-views-and-dependencies.md#dependencies));
+- a temporary, which its statement owns ([02](02-views-and-dependencies.md#temporaries));
 - the place that a `var` given `&place` names, through that binding;
 - a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer;
 - an owned capture of a `mutating` or `consuming` closure;

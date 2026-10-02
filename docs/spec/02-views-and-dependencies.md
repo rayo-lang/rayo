@@ -63,7 +63,7 @@ So `List<StringView>`, `Map<StringView, Int>`, `Optional<Span<T>>` and `(StringV
 - an associated type, such as `C.Iterator`;
 - a type whose members a `static if` or `static for` generates from a generic parameter, type or value.
 
-A value of such a type follows the dependency rules as if it were scoped, so rule 5 applies when it is returned or stored ([below](#dependencies)).
+A value of such a type follows the dependency rules as if it were scoped, so rule 5 applies when it is returned or stored ([below](#rule-5-the-callee-side)).
 
 **Code that must let a `T` outlive its scope requires `T: ~Scoped`**, which every unscoped type satisfies. So `Mutex.lock` is `func lock<R: ~Scoped>(_ body: consuming (mutable T) -> R) -> R`. The closure can compute any unscoped result from the protected data. It can't smuggle out a view of it as its result, which would be scoped, or through its captures, since its parameter isn't declared `keep` ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)).
 
@@ -73,7 +73,7 @@ A value of such a type follows the dependency rules as if it were scoped, so rul
 - objects' values;
 - a leaked `Box`'s value, which a `RawAllocation` holds with no borrows ([06](06-memory-and-allocators.md#owning-boxes));
 - unscoped closures' captures;
-- the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [below](#dependencies)) can't track what goes in ([07](07-concurrency.md#the-synchronized-contract));
+- the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [below](#rule-4-absorption)) can't track what goes in ([07](07-concurrency.md#the-synchronized-contract));
 - the concrete type in every conversion to an unscoped existential (`Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`), since erasure would hide what the value borrows;
 - task parameters and a `task func` method's `self`, which a task keeps in its state ([07](07-concurrency.md#semantics));
 - the elements of a `StaticSpan`, which outlive every scope ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
@@ -104,44 +104,160 @@ source.append("x")                               // error: source is borrowed by
 print(lines.count)
 ```
 
-A scoped value's **dependency set** is the places, and the dynamic accesses, it borrows from, each marked **shared** or **exclusive**; what a value **carries** is its dependency set. Until the value's last use, every place in the set counts as borrowed with that kind. The compiler works the set out inside one function body, from six rules:
+A scoped value's **dependency set** is the places and dynamic accesses it borrows from, each marked **shared** or **exclusive**. What a value **carries** is its dependency set.
 
-1. **Projection:** a view taken from a place depends on that place.
-2. **Transitivity:** a value derived from a scoped value inherits that value's whole dependency set.
-3. **Call results:** a scoped result depends on what the call was given.
-4. **Absorption:** after a call, every scoped `mutable` argument takes on what the other arguments borrow.
-5. **The callee side:** a function can return, throw or store only what its caller lent it.
-6. **Dynamic accesses:** an access to an object, a `Slice` or a thread-local lasts until nothing uses it.
+**Until a value's last use, every place in its set counts as borrowed, with its kind.** The compiler works the set out inside one function body, from six rules:
+
+1. **Projection:** a view taken from a place depends on that place ([below](#rule-1-projection)).
+2. **Transitivity:** a value derived from a scoped value inherits that value's whole dependency set ([below](#rule-2-transitivity)).
+3. **Call results:** a scoped result depends on what the call was given ([below](#rule-3-call-results)).
+4. **Absorption:** after a call, every scoped `mutable` argument takes on what the other arguments borrow ([below](#rule-4-absorption)).
+5. **The callee side:** a function can return, throw or store only what its caller lent it ([below](#rule-5-the-callee-side)).
+6. **Dynamic accesses:** an access to an object, a `Slice` or a thread-local lasts until nothing uses it ([below](#rule-6-dynamic-accesses)).
 
 Rule 4 tells the caller that `lines` now borrows `source`, and rule 5 checks inside `splitLines` that it stored nothing else, so neither needs an annotation.
 
-**Rule 1 · Projection. A view taken from a place depends on that place.** It is shared for a read projection such as `pool[h]` or `list[i]`, exclusive for a `modify` projection ([below](#projections-read-and-modify-accessors)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3.
+#### Rule 1: Projection
 
-- **Through a shared view, the place drops out where declared.** A `get` declared **`where return outlives self`** ([below](#staying-valid-after-a-parameter-moves-on-outlives)), or a projection declared `where yield outlives self`, gives a sub-view that is a narrower copy of the shared view, so it depends only on what the view carries, not on the variable holding it: `rest = rest[1...]` can reassign an iterator's span while an element taken from it is live, and `Token(text: src[start..<pos])` depends on the text, not on the lexer's field. Verification ([below](#staying-valid-after-a-parameter-moves-on-outlives)) rejects the claim for a view of data the type holds inline, such as a `[4 of Int]` field, which depends on `self` itself.
+**A view taken from a place depends on that place.** It depends shared for a read projection such as `pool[h]` or `list[i]`, and exclusively for a `modify` projection ([below](#projections-read-and-modify-accessors)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3 ([below](#rule-3-call-results)).
+
+- **Through a shared view, the place drops out where declared.** A `get` declared `where return outlives self`, or a projection declared `where yield outlives self`, gives a sub-view that is a narrower copy of the shared view ([below](#staying-valid-after-a-parameter-moves-on-outlives)). So the sub-view depends only on what the view carries, not on the variable holding it. `rest = rest[1...]` can then reassign an iterator's span while an element taken from it is live, and `Token(text: src[start..<pos])` depends on the text, not on the lexer's field. Verification rejects the claim for a view of data the type holds inline, such as a `[4 of Int]` field, which depends on `self` itself.
 - **Through a place that owns its value, or an exclusive view, projections depend on the place itself.**
-- **Through an access-bound projection, a view depends on the access.** Such a projection, one with no `yield` item in its `where` clause, may yield a temporary, so a view of it depends on the **access**, held as rule 6 holds a dynamic access ([Projections](#projections-read-and-modify-accessors)). The access is in the yielded value's own set, so it follows every value derived from it, even where the place drops out, and keeps the places the accessor was given lent ([below](#projections-read-and-modify-accessors)).
+- **Through an access-bound projection, a view depends on the access.** An access-bound projection, one with no `yield` item in its `where` clause, may yield a temporary ([below](#projections-read-and-modify-accessors)). So a view of it depends on the **access**, which is held as rule 6 holds a dynamic access. The access is in the yielded value's own set, so it follows every value derived from it, even where the place drops out. It also keeps the places the accessor was given lent.
 
-**Rule 2 · Transitivity. A value derived from a scoped value inherits that value's dependency set.** A copy or a sub-view inherits it whole, and a stored field or tuple element inherits that field's set where the caller keeps one ([Naming a field](#naming-a-field)).
+#### Rule 2: Transitivity
 
-**Rule 3 · Call results. A scoped result depends on what the call was given.** It depends on every borrowed or `mutable` argument, `self` included, both **the argument place and its dependency set**, and on the sets of scoped `owned` arguments. A `mutable` argument's place is held exclusively and a borrowed one's shared, and each set keeps its own kinds, so a view taken through a borrowed `MutableSpan` still holds what the span holds exclusively. A **thrown error** is a result too: what a `catch` binds depends on the arguments the same way.
+**A value derived from a scoped value inherits that value's dependency set.** A copy or a sub-view inherits it whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([below](#naming-a-field)).
 
-- **Calling a closure.** It is a call whose `self` is the closure: borrowed for a non-`mutating` closure, `mutable` for a `mutating` one, `owned` for a `consuming` one ([05](05-protocols-generics-and-closures.md#closure-kinds)). A closure never lends out its owned captures (rule 5), so the result depends on its **dependency set**: what it captures by reference, and what its owned captures carry. `let get = { src.view }; let v = get()` makes `v` depend on `src`.
-- **Only a value whose type can hold a function value can depend on a closure's storage.** A function-typed argument depends on its closure's storage as well as on what the closure carries ([05](05-protocols-generics-and-closures.md#function-typed-values)). No call of a closure returns anything depending on its own storage (rule 5), and nothing else sees into it, so only a value holding the function value can reach it. So the storage is a dependency of a result, or of an absorbing argument (rule 4), unless that value's type is **sealed**: a concrete type in which nothing, at any depth of fields, elements, payloads and type arguments, is a function type, a closure's concrete type, an interpolated literal's type ([04](04-types.md#strings)), a `some P` or an `any P`, owned or a view, a type parameter or an associated type. What the closure carries always flows. So `func names(_ t: Span<Token>) -> List<StringView> { t.map { copy $0.text } }` compiles: the list depends on what `t` views, not on the literal.
-- **A place captured exclusively ties the result to the closure.** When a call that doesn't consume the closure returns a result depending on a place the closure captures exclusively (the place itself, not what it carries), the result also depends, exclusively, on the function value and the storage it views, whatever the result's type, as a `mutating` method's result depends on `self`. The sealed-type exemption never removes this. With `var grow = { () -> Span<Int> in buf.append(0); return buf.span }`, `let a = grow(); grow()` conflicts while `a` is live, and `{ reader.readLine() }` stays lending. The tie also binds a call that is passed a `mutating` closure, or a new view of one, without consuming the closure itself, such as `once(&grow)` for `func once(_ f: consuming () -> Span<Int>) -> Span<Int>`: its result and absorbing arguments depend, exclusively, on that closure's storage whenever they may depend on a place it captures exclusively, so `let a = once(&grow); grow()` conflicts too.
-- **The tie follows what the caller can see.** A local with no type annotation, initialized with a closure literal, has the literal's own anonymous type ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)) and never holds another closure, so for a call on it the compiler knows what the result depends on and ties it only when that is an exclusively captured place: a tokenizer closure that advances a captured `pos` and returns views of a shared `src` hands out tokens that outlive the next call. Everywhere else the body is out of sight (a local declared with a function type, a closure parameter, a stored or generic closure, `some F`, an element of a list of closures), and the tie applies to every call of a `mutating` function value, since it may carry an exclusive dependency: `func twice(_ f: mutable (mutating () -> Span<Int>))` can't hold `f()`'s result across a second `f()`.
-- **A shallow value lends only what it carries.** A copyable type that holds no inline array, at any depth, is **shallow**, scoped or not: `Int`, a `Range`, `Vec3`, a `Simd` vector, whose lanes are never viewed ([04](04-types.md#simd-and-math)), `Span`, `StringView`, [`Borrow<T>`](04-types.md#iteration), a shared `any P`, a non-`mutating` function value, a `Token` of a `StringView` and an `Int`, and tuples and `Optional`s of those. Safe code can view a shallow value's own bytes only through an `any P` made from it, a closure capturing it by reference or an interpolated literal borrowing it, and only an **unsealed** type, one that isn't sealed, can hold any of these. So when a result, or an absorbing argument, has a sealed type, a shallow argument contributes only its dependency set, not the argument place, whatever its convention and whether it is a variable, a parameter or a temporary, and an unscoped shallow argument contributes nothing.
-    - So `splitLines(source.view, into: &lines)` leaves only `source` borrowed, `let r = grid.row(y + 1)` depends on `grid` alone, `parts.append(data[0..<n])` makes a `List<Span<Float>>` depend on `data` alone, and `func nearest(_ es: Span<Enemy>, to p: Vec3) -> Borrow<Enemy>? { es.min(by: { … }) }` returns what `es` views.
-    - A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements, so a result keeps depending on the argument place, as every result of an unsealed type does.
-    - A function value, or a closure of concrete type taken through a `some F` parameter or a type parameter constrained to a function type, absorbs when received `owned`, at the call, only what a call of it can store through its `keep` parameters ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)), so its type counts as sealed there when every `keep` parameter's type is: `forEachLine(src.view) { line in lines.append(copy line) }` leaves only `src` borrowed. One passed `mutable`, which the callee may replace with another closure, stays unsealed.
-    - In generic code, a type is shallow only if it is for every type argument its constraints allow: `Span<T>` is; `T`, `T?`, `(T, Int)`, an associated type, and a struct whose fields a `static if` or `static for` generates aren't.
-    - `unsafe` code that views a shallow value's bytes with `ptr(to:)` promises never to return or store that view where a sealed type holds it.
-    - `unsafe` code that keeps a value through a raw pointer, one it reads after the call that gave it the value returns, promises that the holding type says what it holds, since this rule and rule 4 read only types: scoped if the value is, as a field `*T` makes it for a `T`, and unsealed if it is, or may be, a closure, a function value or an `any P` (as a type parameter, an associated type or a `some P` may be). It also promises that what it later hands out of that storage, as a result, a yield or a store through a `mutable` parameter, borrows nothing that the handing-out call's dependencies, by these rules and its `where` items, don't give it. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only `~Scoped` values ([07](07-concurrency.md#queues-and-channels)).
-- **Mutable views need an exclusive input.** A **mutable view** is a value through which what it views can be changed: a `MutableSpan`, a `MutableRef`, a `mutable any P`, a lock guard, a `mutating` or `consuming` function value, a closure with an exclusive capture, or a value holding one. A scoped value that only holds shared views, as `List<StringView>` does, is none, and so is a function value made from a named function or from a literal that captures nothing, which views no storage. A function returning one must take a `mutable` argument or an `owned` mutable view, such as `func rest(_ s: owned MutableSpan<T>) -> MutableSpan<T>`, unless it is itself `unsafe` (next). A borrowed `MutableSpan` doesn't qualify, since a second view could then write what the first still reads.
-    - **`unsafe` code answers for its own.** The signature's shape is not enough for it, since it can take a dummy `mutable` argument: `unsafe` code that builds a mutable view, a `MutableSpan`, a `MutableRef`, or a type of its own, declared `~Copyable`, that changes what it views through a raw pointer, promises that everything the view can change lies in a `mutable` argument's place or in storage that place owns, or is reached through an exclusive dependency that an argument passed `mutable` or `owned` carries, and never only through a borrowed argument or what one carries. In an `unsafe` function, such as `S.trailing(at:count:)` ([08](08-c-interop.md#what-imports-as-what)), that promise is its caller's: that nothing else reaches what the view can change while it lives ([10](10-errors-and-safety.md#unsafe-code)).
-    - **Two exceptions, both enforced at run time.** A value that depends on an exclusive dynamic access its call begins (rule 6) may come from a shared input, as the span a `Slice`'s `lock()` returns does ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). And a value of a guard type ([below](#lock-guards-are-released-on-the-thread-that-took-them)), whose exclusivity its `Synchronized` type enforces: a `Synchronized` method may return one from a shared `self` (`Mutex.lock()`), and any function may pass one on: `func lockRegistry(_ s: Services) -> MutexGuard<Registry> { s.registry.lock() }`.
-- **Temporaries.** An argument that isn't a place, like `makeArray()` in `first(makeArray())`, is a temporary. An `owned` parameter takes it over, so only its set flows. Passed borrowed or `mutable`, `self` included, it lives to the end of its **full statement**, and a value depending on it can't outlive that: `let x = first(makeArray())` is an error if `x` is used later. A **full statement** is a statement, except that each of these is one of its own: a condition of an `if`, `guard`, `while` or `repeat … while`, a `when` subject, the condition of each arm of a `when` without a subject, and a `where` guard of a `when` arm or a `catch`, so its temporaries die before the body runs, unless [01](01-values-and-ownership.md#conditions-and-patterns) keeps a value subject in a hidden local. So `if let x = first(makeArray()) { use(x) }` is an error too. A scoped temporary gets no exemption, since it may hold data inline that a borrowed callee lends out. Only its set flows when it is shallow and the result or absorbing argument is sealed (above), or when the callee's `where` clause says the result, or what it yields, `outlives` the parameter it is passed for ([below](#precise-dependencies-opt-in)), as a `where return outlives self` `get` or a `where yield outlives self` projection does, so `arr.span.min(by: …)` and `src.view[a..<b]` leave only `arr` and `src` borrowed; an unscoped shallow temporary contributes nothing. Two exceptions: a `for` loop's sequence expression keeps its temporaries in hidden mutable locals until the loop ends, and a closure literal can be kept in a hidden local of a local's scope ([05](05-protocols-generics-and-closures.md#function-typed-values)).
+#### Rule 3: Call results
 
-**Rule 4 · Absorption. After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow**, and so do an `owned` argument that is a mutable view and a `modify`'s yield (below). It takes the places and sets of the borrowed ones, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3. So `tokens.append(Token(text: src.view))` makes `tokens` depend on `src`, and `lexer.lex(into: &tokens)` leaves `lexer` and `tokens` free of each other. Another `mutable` argument's place flows in only when a `where` item names it ([below](#precise-dependencies-opt-in)), as for a function that keeps views of one argument in another: `func chunks(_ data: mutable List<Float>, into work: mutable List<MutableSpan<Float>>) where work borrows data`. Assigning a whole new value replaces the set of a variable that owns its value, and assigning a stored field replaces that field's set ([below](#naming-a-field)), where the place assigned is known: through a binding that may name one of several places, as after `var r = if flip { &d1 } else { &d2 }` or a `rebind` on one path, the assignment adds to each place's set. Any other change to part of a value, such as to an element, adds to it.
+**A scoped result depends on what the call was given:**
+
+- on every borrowed or `mutable` argument, `self` included: both **the argument place and its dependency set**;
+- on the sets of scoped `owned` arguments.
+
+**A `mutable` argument's place is held exclusively, and a borrowed one's shared.** Each set keeps its own kinds, so a view taken through a borrowed `MutableSpan` still holds what the span holds exclusively.
+
+**A thrown error is a result too**: what a `catch` binds depends on the arguments the same way.
+
+##### Closure calls
+
+**Calling a closure is a call whose `self` is the closure.** `self` is borrowed for a non-`mutating` closure, `mutable` for a `mutating` one and `owned` for a `consuming` one ([05](05-protocols-generics-and-closures.md#closure-kinds)). A closure never lends out its owned captures (rule 5), so the result depends on the closure's dependency set: what it captures by reference, and what its owned captures carry. So `let get = { src.view }; let v = get()` makes `v` depend on `src`.
+
+**Only a value whose type can hold a function value can depend on a closure's storage.** A function-typed argument depends on its closure's storage, as well as on what the closure carries ([05](05-protocols-generics-and-closures.md#function-typed-values)). No call of a closure returns anything depending on its own storage (rule 5), and nothing else sees into it. So only a value holding the function value can reach the storage.
+
+**The storage a function-typed argument views is a dependency of the call's result, or of an absorbing argument (rule 4), unless that value's type is sealed.** A **sealed** type is a concrete type in which nothing is one of these, at any depth of fields, elements, payloads and type arguments:
+
+- a function type, or a closure's concrete type;
+- an interpolated literal's type ([04](04-types.md#strings));
+- a `some P` or an `any P`, owned or a view;
+- a type parameter or an associated type.
+
+Every other type is **unsealed**. What the closure carries always flows. So `func names(_ t: Span<Token>) -> List<StringView> { t.map { copy $0.text } }` compiles: the list depends on what `t` views, not on the literal.
+
+**A place captured exclusively ties the result to the closure.** Take a call that doesn't consume the closure, and returns a result depending on a place the closure captures exclusively: the place itself, not what it carries. The result then also depends, exclusively, on the function value and the storage it views, whatever the result's type, as a `mutating` method's result depends on `self`. The sealed-type exemption never removes this tie.
+
+```swift
+var grow = { () -> Span<Int> in buf.append(0); return buf.span }
+let a = grow()
+grow()                           // error: 'grow' is borrowed by 'a' (used below)
+use(a)
+```
+
+`{ reader.readLine() }` stays lending the same way.
+
+**The tie also binds a call that is passed a `mutating` closure, or a new view of one, without consuming the closure itself.** Its result and absorbing arguments depend, exclusively, on that closure's storage whenever they may depend on a place the closure captures exclusively. So with `func once(_ f: consuming () -> Span<Int>) -> Span<Int>`, `let a = once(&grow); grow()` conflicts too.
+
+**The tie follows what the caller can see:**
+
+- **A local closure literal.** A local with no type annotation, initialized with a closure literal, has the literal's own anonymous type ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)) and never holds another closure. So for a call on it, the compiler knows what the result depends on, and ties it only when that is an exclusively captured place. A tokenizer closure that advances a captured `pos` and returns views of a shared `src` hands out tokens that outlive the next call.
+- **Everywhere else, the body is out of sight**, as in a local declared with a function type, a closure parameter, a stored or generic closure, a `some F`, or an element of a list of closures. There the tie applies to every call of a `mutating` function value, since it may carry an exclusive dependency. So `func twice(_ f: mutable (mutating () -> Span<Int>))` can't hold `f()`'s result across a second `f()`.
+
+##### Shallow values
+
+A copyable type that holds no inline array, at any depth, is **shallow**, scoped or not. Shallow types include:
+
+- `Int`, a `Range` and `Vec3`;
+- a `Simd` vector, whose lanes are never viewed ([04](04-types.md#simd-and-math));
+- `Span`, `StringView` and [`Borrow<T>`](04-types.md#iteration);
+- a shared `any P`, and a non-`mutating` function value;
+- a `Token` of a `StringView` and an `Int`;
+- tuples and `Optional`s of those.
+
+**When a result or an absorbing argument has a sealed type, a shallow argument contributes only its dependency set**, not the argument place. Safe code can view a shallow value's own bytes only through an `any P` made from it, a closure capturing it by reference, or an interpolated literal borrowing it. Only an unsealed type can hold any of these.
+
+The rule holds whatever the argument's convention, and whether it is a variable, a parameter or a temporary. To such a result, an unscoped shallow argument contributes nothing. For example:
+
+- `splitLines(source.view, into: &lines)` leaves only `source` borrowed;
+- `let r = grid.row(y + 1)` depends on `grid` alone;
+- `parts.append(data[0..<n])` makes a `List<Span<Float>>` depend on `data` alone;
+- `func nearest(_ es: Span<Enemy>, to p: Vec3) -> Borrow<Enemy>? { es.min(by: { … }) }` returns what `es` views.
+
+**A value that holds an inline array, such as a matrix of four `Vec4` columns, can lend its elements.** So a result keeps depending on the argument place, as every result of an unsealed type does.
+
+**A function value received `owned` absorbs, at the call, only what a call of it can store through its `keep` parameters** ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)). So its type counts as sealed there when every `keep` parameter's type is. The same holds for a closure of concrete type received `owned` through a `some F` parameter, or through a type parameter constrained to a function type. So `forEachLine(src.view) { line in lines.append(copy line) }` leaves only `src` borrowed. One passed `mutable`, which the callee may replace with another closure, stays unsealed.
+
+**In generic code, a type is shallow only if it is for every type argument its constraints allow.** `Span<T>` is. `T`, `T?`, `(T, Int)`, an associated type, and a struct whose fields a `static if` or `static for` generates aren't.
+
+**Two kinds of `unsafe` code make promises these rules rely on:**
+
+- **Code that views a shallow value's bytes with `ptr(to:)`** promises never to return or store that view where a sealed type holds it.
+- **Code that keeps a value through a raw pointer**, reading it after the call that gave it the value returns, promises that the holding type says what it holds, since rules 3 and 4 read only types. The type must be scoped if the value is, as a field `*T` makes it for a `T`. It must be unsealed if the value is, or may be, a closure, a function value or an `any P`, as a type parameter, an associated type or a `some P` may be.
+
+**Code that keeps a value through a raw pointer also promises what it hands out of that storage.** What it later hands out borrows nothing that the handing-out call's dependencies don't give it, by the dependency rules and its `where` items. That covers a result, a yield, and a store through a `mutable` parameter. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only `~Scoped` values ([07](07-concurrency.md#queues-and-channels)).
+
+##### Mutable views
+
+**Mutable views need an exclusive input.** A **mutable view** is a value through which what it views can be changed:
+
+- a `MutableSpan`, a `MutableRef` or a `mutable any P`;
+- a lock guard;
+- a `mutating` or `consuming` function value, or a closure with an exclusive capture;
+- a value holding one of these.
+
+**A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
+
+**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view**, such as `func rest(_ s: owned MutableSpan<T>) -> MutableSpan<T>`. A borrowed `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
+
+**`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable` argument. This covers a `MutableSpan`, a `MutableRef`, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable` argument's place, or in storage that place owns, or is reached through an exclusive dependency that an argument passed `mutable` or `owned` carries. It promises too that none of it is reached only through a borrowed argument or what one carries.
+
+**In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](10-errors-and-safety.md#unsafe-code)). `S.trailing(at:count:)` is one such function ([08](08-c-interop.md#what-imports-as-what)).
+
+**Two kinds of mutable view may come from a shared input, since their exclusivity is enforced at run time:**
+
+- **A value that depends on an exclusive dynamic access its call begins** (rule 6), as the span a `Slice`'s `lock()` returns does ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)).
+- **A value of a guard type** ([below](#lock-guards-are-released-on-the-thread-that-took-them)), whose exclusivity its `Synchronized` type enforces. A `Synchronized` method may return one from a shared `self`, as `Mutex.lock()` does, and any function may pass one on: `func lockRegistry(_ s: Services) -> MutexGuard<Registry> { s.registry.lock() }`.
+
+##### Temporaries
+
+**An argument that isn't a place is a temporary**, like `makeArray()` in `first(makeArray())`. An `owned` parameter takes it over, so only its set flows.
+
+**A temporary passed borrowed or `mutable`, `self` included, lives to the end of its full statement**, and a value depending on it can't outlive that. So `let x = first(makeArray())` is an error if `x` is used later.
+
+A **full statement** is a statement, except that each of these is a full statement of its own:
+
+- a condition of an `if`, `guard`, `while` or `repeat … while`;
+- a `when` subject;
+- the condition of each arm of a `when` without a subject;
+- a `where` guard of a `when` arm or a `catch`.
+
+So the temporaries of each of these die before the body runs, unless a value subject is kept in a hidden local ([01](01-values-and-ownership.md#conditions-and-patterns)). That makes `if let x = first(makeArray()) { use(x) }` an error too.
+
+**A scoped temporary gets no exemption**, since it may hold data inline that a borrowed callee lends out. Only its set flows in two cases:
+
+- when it is shallow, and the result or absorbing argument is sealed ([above](#shallow-values));
+- when the callee's `where` clause says the result, or what it yields, `outlives` the parameter it is passed for ([below](#precise-dependencies-opt-in)), as a `where return outlives self` `get` or a `where yield outlives self` projection does.
+
+So `arr.span.min(by: …)` and `src.view[a..<b]` leave only `arr` and `src` borrowed. An unscoped shallow temporary contributes nothing.
+
+**Two kinds of temporary can be kept in hidden locals instead:**
+
+- a `for` loop's sequence expression keeps its temporaries in hidden mutable locals until the loop ends;
+- a closure literal can be kept in a hidden local of a local's scope ([05](05-protocols-generics-and-closures.md#function-typed-values)).
+
+#### Rule 4: Absorption
+
+**After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow**, and so do an `owned` argument that is a mutable view and a `modify`'s yield (below). It takes the places and sets of the borrowed ones, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3. So `tokens.append(Token(text: src.view))` makes `tokens` depend on `src`, and `lexer.lex(into: &tokens)` leaves `lexer` and `tokens` free of each other. Another `mutable` argument's place flows in only when a `where` item names it ([below](#precise-dependencies-opt-in)), as for a function that keeps views of one argument in another: `func chunks(_ data: mutable List<Float>, into work: mutable List<MutableSpan<Float>>) where work borrows data`. Assigning a whole new value replaces the set of a variable that owns its value, and assigning a stored field replaces that field's set ([below](#naming-a-field)), where the place assigned is known: through a binding that may name one of several places, as after `var r = if flip { &d1 } else { &d2 }` or a `rebind` on one path, the assignment adds to each place's set. Any other change to part of a value, such as to an element, adds to it.
 
 - **Stores through an exclusive view reach what it views.** A dependency added to an exclusive view, or to a place reached through one, is also added to **every place the view depends on exclusively**, transitively: by assignment through the view (`v = tmp.span` in `for var v in &views`), by absorption into it (`fill(&left, tmp.span)` on a `split` half), or by storing a borrow into a list of exclusive views (`d = &crate`). Each time, the collection the view came from now depends on `tmp` or `crate`. Writing a whole new value through an exclusive view adds and never replaces.
     - If such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies, whatever convention brought the view in: a `mutable` parameter, an `owned` `MutableSpan`, a `mutable any P`, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable` parameter, by rule 5 and by its use at every exit (below).
@@ -151,7 +267,9 @@ Rule 4 tells the caller that `lines` now borrows `source`, and rule 5 checks ins
 - **Calling a closure.** Its `mutable` arguments absorb the closure's dependency set, as its `self` (rule 3): with `let put: (mutable List<StringView>) -> Void = { o in o.append(src.view) }`, `put(&out)` makes `out` depend on `src`. One that absorbs a place the closure captures exclusively also depends on the closure, exclusively, unless the call consumes it, decided by what the caller can see. The closure itself absorbs **only what its `keep` arguments carry**, never the argument places ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)), a `mutating` closure into itself and so into the places it depends on exclusively. Its other parameters are call-scoped, so nothing it was lent reaches its captures.
 - **A projection access.** It is a call to its accessor, with the subscript's arguments and `self`, and a `modify`'s yield is one more `mutable` argument, since the code after the `yield` may store what the caller wrote there: a subscript's `mutable` parameter absorbs it ([Projections](#projections-read-and-modify-accessors)).
 
-**Rule 5 · The callee side. A function can return, throw or store only what its caller lent it.** A returned or thrown scoped value, and anything stored into a scoped `mutable` parameter, may depend only on:
+#### Rule 5: The callee side
+
+**A function can return, throw or store only what its caller lent it.** A returned or thrown scoped value, and anything stored into a scoped `mutable` parameter, may depend only on:
 
 - the borrowed or `mutable` parameters and their dependency sets, except that what is stored into a `mutable` parameter depends on another `mutable` parameter itself only when a `where` item names it (rule 4);
 - the sets carried in by scoped `owned` parameters, which belong to the caller and flow back through rules 3 and 4;
@@ -178,7 +296,9 @@ Rule 5 rejects:
 - **Owned captures** are always an `owned` parameter's own storage, whatever the closure's kind, since a closure may be called through a view of its storage, and a call through a `consuming` type ends that view and destroys a `consuming` closure's captures ([05](05-protocols-generics-and-closures.md#closure-kinds), [05](05-protocols-generics-and-closures.md#function-typed-values)). So a result or a store may depend on what they carry, never on the captures themselves: `{ [move s] in s.view }` is an error.
 - **A store into a capture** may depend on places captured by shared reference, on what any capture carries, on what parameters declared `keep` carry ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)), and on static storage. It may not depend on a place the closure captures **exclusively**, unless the closure is `consuming`, since the next call may change or free it: `{ buf.append(1); views.append(buf.span) }` is an error. So `entries.map { $0.name.view }` may return what depends on its parameter, but can't store it.
 
-**Rule 6 · Dynamic accesses. An access to an object, a `Slice` or a thread-local lasts until nothing uses it.** An access to an object's value, through its owner or a weak pointer, to a `Slice`'s buffer, through its `read()` or `lock()` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)), or to a thread-local `var`, is itself a dependency. A view derived from it (`r.value!.items.span`) or passed through a call (`first(r.value!)`) depends on it, and **the access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. An access-bound projection's access is held the same way, its accessor suspended at the `yield`.
+#### Rule 6: Dynamic accesses
+
+**An access to an object, a `Slice` or a thread-local lasts until nothing uses it.** An access to an object's value, through its owner or a weak pointer, to a `Slice`'s buffer, through its `read()` or `lock()` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)), or to a thread-local `var`, is itself a dependency. A view derived from it (`r.value!.items.span`) or passed through a call (`first(r.value!)`) depends on it, and **the access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. An access-bound projection's access is held the same way, its accessor suspended at the `yield`.
 
 **A site in a loop holds one access at a time.** Each time a site in a loop's body or its `while` condition begins a dynamic access, or an access-bound projection's access, no value that depends on the access it began the last time may be used from then on. So `for w in nodes { names.append(w.value!.name.view) }` is an error, since every pass would keep its own access: the second pass's `append` uses `names`, which depends on the first pass's. A `rebind` step through objects may begin its access while its own target still depends on the previous one, since the step moves the target to the new access ([below](#pointing-a-name-at-another-place-rebind)).
 
@@ -349,7 +469,7 @@ func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }       // OK:
 ```
 
 - **The claim is verified.** Every `yield` must name a place reached through stored fields and other storage projections from what the item names (`self`, another parameter, or static storage), never a local, a temporary, a bitfield or an under-aligned field. A place reached through a raw pointer, such as a `List`'s buffer or a lock guard's protected value, can only be yielded from `unsafe` code, which promises that it lies in storage the named parameter owns or views, and that the code after the `yield` treats it as the next rule says.
-- **The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), and otherwise at the end of the full statement that begins it ([Dependencies](#dependencies)). The access can end while a view of the yield lives on, so what runs after the `yield`, a `defer` block or a local's destruction included, treats the yielded place as still borrowed: it never changes it, and after a `modify` never reads it either. `modify { yield &items; items = List() }` is an error, and so is `modify { yield &items; spy.append(items[0].view) }`.
+- **The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), and otherwise at the end of the full statement that begins it ([above](#temporaries)). The access can end while a view of the yield lives on, so what runs after the `yield`, a `defer` block or a local's destruction included, treats the yielded place as still borrowed: it never changes it, and after a `modify` never reads it either. `modify { yield &items; items = List() }` is an error, and so is `modify { yield &items; spy.append(items[0].view) }`.
 - **Projections of views.** On an exclusive view type, such as `MutableSpan` or `MutableRef`, a view of the yield depends on the view variable itself (rule 1): `func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.view }` depends on `s`, and through it on what `s` views. On a view type that `outlives` accepts ([above](#staying-valid-after-a-parameter-moves-on-outlives)), `where yield outlives self` says the yield is reached through what the view carries.
 - **Standard projections.** Collection and pool subscripts, `Box.value`, `MutableRef.value` and every lock guard's `.value` are `where yield borrows self`; the projections of `Span`, `StringView` and `Borrow` are `where yield outlives self`, and a `MutableSpan`'s element projections `where yield borrows self`. Properties that build a view, such as `span`, sub-span ranges and an `SoA` column, whose view depends on its column alone ([04](04-types.md#struct-of-arrays-soat)), are `get`s returning a view, not projections (rule 3). `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`. The `.value` of a `UniquePointer` or a `WeakPointer` depends on its access (rule 6).
 - **Protocols carry the clause.** A requirement `var pos: Vec3 { read modify }` is access-bound unless declared `var pos: Vec3 where yield borrows self { read modify }`, and a witness must satisfy it. A stored field witnesses either kind, except an under-aligned field or an imported bitfield, which goes through a temporary and so witnesses only an access-bound requirement, and subject to [05](05-protocols-generics-and-closures.md#conformances)'s rules on `let`, hidden, static, `unsafe` and union-member fields. An optional projection meets one only when the requirement's own declared type is written as an optional, `U?`, so that generic code treats it as an optional projection too, never when an associated type or a type parameter turns out to be an optional, or when the requirement is written `Optional<U>`, which asks for a whole place. A projection that yields a tuple of places meets none. So generic code can return a view of a requirement's yield only from a storage projection.

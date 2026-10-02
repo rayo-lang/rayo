@@ -64,7 +64,7 @@ _Avoid_: safety level, mode
 ### Views and dependencies
 
 **Absorption**:
-The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies.md#rule-4-absorption)).
 
 **Access-bound projection**:
 A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
@@ -74,10 +74,10 @@ The places and dynamic accesses a scoped value borrows from, each shared or excl
 _Avoid_: lifetime, region, loan set
 
 **Dynamic access**:
-An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies.md#rule-6-dynamic-accesses)).
 
 **Full statement**:
-A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies.md#temporaries)).
 _Avoid_: full-expression
 
 **Guard type**:
@@ -85,7 +85,7 @@ A type declared `@guard`, whose values hold a lock for as long as they live, as 
 _Avoid_: lock token
 
 **Mutable view**:
-A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies.md#mutable-views)).
 _Avoid_: exclusive reference
 
 **Optional projection**:
@@ -102,13 +102,13 @@ A value of a type that conforms to `Scoped`, which stays within the scope that l
 _Avoid_: non-escaping value, lifetime-bound value
 
 **Sealed type**:
-A concrete type that holds, at any depth, no function value, closure, `any P`, `some P`, interpolated literal, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A concrete type that holds, at any depth, no function value, closure, `any P`, `some P`, interpolated literal, type parameter or associated type; every other type is **unsealed** ([02](docs/spec/02-views-and-dependencies.md#closure-calls)).
 
 **Shallow type**:
-A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies.md#shallow-values)).
 
 **Static storage**:
-Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
+Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies.md#rule-5-the-callee-side)).
 
 **Storage projection**:
 A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
