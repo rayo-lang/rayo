@@ -447,7 +447,7 @@ step(&columns.pos, columns.vel.span, dt)                  // two fields of one v
 **Generic code sees such a type at its safe bound.** Whatever its generated members could change, generic code assumes they do:
 
 - **When they may include a `deinit` or a stored field**, it may have a `deinit` that isn't `PlainDeinit`, at any depth, so there it may be move-only, destroying it counts as a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), nothing moves out of it ([01](01-values-and-ownership.md#what-can-be-moved-from)), and it isn't `Pod` or `TrivialFree`.
-- **When they may include a stored field**, that field may be of any type, so it may be scoped, as a type parameter may ([02](02-views-and-dependencies.md#scoped-values)), and it isn't sealed, shallow, `Frozen` or `Sendable` either.
+- **When they may include a stored field**, that field may be of any type, so it may be scoped, as a type parameter may ([02](02-views-and-dependencies.md#generic-code-and-scoped)), and it isn't sealed, shallow, `Frozen` or `Sendable` either.
 - **When they may include an enum case**, a `when` over it ends in `else`.
 
 A `where` clause that states a property, such as `where Res<T>: Copyable`, lets the code rely on it, and each caller's type arguments must meet it.
@@ -534,7 +534,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 
 **`StaticSpan<T>` is a view of immortal read-only data: the program image, or runtime tables that are never freed. So unlike `Span` it is unscoped.**
 
-- Its `T` is `~Scoped`, as an unscoped type's contents are ([02](02-views-and-dependencies.md#scoped-values)), and has only values that could be frozen ([above](#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
+- Its `T` is `~Scoped`, as an unscoped type's contents are ([02](02-views-and-dependencies.md#generic-code-and-scoped)), and has only values that could be frozen ([above](#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
 - Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](08-c-interop.md#what-c-must-uphold)).
 - The data is never written either, so `StaticSpan` is `Frozen`, through the `unsafe Frozen` conformance the language declares for it ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)).
 

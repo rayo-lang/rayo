@@ -272,7 +272,7 @@ log.value.lock { $0.append(m) }
 
 ## Long-lived views into long-lived buffers
 
-For a view that has to be stored in long-lived state, which a scoped `Span` can't be ([02](02-views-and-dependencies.md#scoped-values)), the buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`, and the view is a checked **`Slice<T>`**:
+For a view that has to be stored in long-lived state, which a scoped `Span` can't be ([02](02-views-and-dependencies.md#where-a-scoped-value-can-go)), the buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`, and the view is a checked **`Slice<T>`**:
 
 ```swift
 let package = Shared(try Blob.load("level3.pak"))       // Blob: fixed-size bytes, 16-byte-aligned unless asked

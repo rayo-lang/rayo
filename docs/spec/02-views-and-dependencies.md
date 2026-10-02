@@ -10,7 +10,23 @@ let body: Span<Vertex> = mesh.vertices.span   // borrows the list's elements, re
 var hot = &heat.span                          // a MutableSpan<Float>: borrows them mutably
 ```
 
-A view of memory that can be freed must stay within the scope that lent it. A type whose values must do so conforms to the marker protocol **`Scoped`**, and a **scoped value** is any value of such a type, such as `Span<T>`, `MutableSpan<T>`, `StringView`, `Borrow<T>`, `MutableRef<T>`, the iterators of collections, spans and strings, lock guards, the existential views `any P` and `mutable any P`, function-typed values, and the types of closure literals that capture by reference or hold a scoped capture ([05](05-protocols-generics-and-closures.md#functions-and-closures)). An iterator that borrows nothing, such as a `Range`'s, is unscoped, so a task may `await` inside `for i in 0..<n`. A view that holds a **mutable** borrow is also `~Copyable`, since two copies would be two mutable aliases:
+**A view of memory that can be freed must stay within the scope that lent it.** A type whose values must do so conforms to the marker protocol **`Scoped`**, and any value of such a type is a **scoped value**. Among them are:
+
+- the views `Span<T>`, `MutableSpan<T>`, `StringView`, `Borrow<T>` and `MutableRef<T>`;
+- the iterators of collections, spans and strings;
+- lock guards;
+- the existential views `any P` and `mutable any P`;
+- function-typed values, and closure literals that capture by reference or hold a scoped capture ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
+
+**An iterator that borrows nothing is unscoped**, such as a `Range`'s. So a task may `await` inside `for i in 0..<n`.
+
+**A view needn't be scoped when nothing can free its memory while it reads it.** A `StaticSpan<T>` is unscoped, since it views immortal data ([09](09-compile-time.md#staticspan-views-of-immortal-data)). So is a `Slice<T>`, which reads its buffer only through a scoped span it hands out for each use ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped.
+
+**Making a view from a raw pointer requires `unsafe`.** Safe code gets views only from what owns the memory.
+
+**A type may be scoped without borrowing anything**, such as a profiling zone. It then can't be kept in a global or an unscoped type, or across an `await` ([below](#where-a-scoped-value-can-go)).
+
+**A view that holds a mutable borrow is also `~Copyable`**, since two copies would be two mutable aliases:
 
 ```swift
 struct Span<Element>(                                  // shared view: copyable
@@ -24,19 +40,50 @@ struct MutableSpan<Element>(                           // exclusive view: move-o
 ): Scoped, ~Copyable
 ```
 
-A type may be scoped without borrowing anything, such as a profiling zone, which then can't be kept in a global or an unscoped type, or across an `await` (below). A view needn't be scoped when nothing can free its memory while it reads it: a `StaticSpan<T>` views immortal data ([09](09-compile-time.md#staticspan-views-of-immortal-data)), and a `Slice<T>` reads its buffer only through a scoped span it hands out for each use ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped. Making a view from a raw pointer requires `unsafe`; safe code gets views only from what owns the memory.
+### Where a scoped value can go
 
-**Where a scoped value can't go.** It can live in locals, parameters, and the fields, elements, payloads and captures of other scoped values. It can't be stored in an unscoped type, or anywhere else that requires `~Scoped` (below), such as a global, or live across an `await` ([07](07-concurrency.md#semantics)). A struct, enum or union with a field or payload whose type is scoped where the type is declared must be declared `Scoped`. A generic type is scoped when a stored field or payload is, once its type arguments are substituted, its associated types resolved and its `static if` and `static for` members generated, as `Sendable` is checked ([07](07-concurrency.md#what-may-cross-threads-sendable)), a raw pointer `*T` counting as scoped when `T` is. So `List<StringView>`, `Map<StringView, Int>`, `Optional<Span<T>>` and `(StringView, Int)` are scoped, the collections among them still owning their heap memory, while `Handle<Token>` and `Type<StringView>` aren't, since neither holds what its argument names. `struct Cursor<C: Collection>(var it: C.Iterator)` needn't be declared `Scoped`, but `Cursor<List<Int>>` is scoped, since a list's iterator is. The exceptions are the types that erase a type, `Box<any P>`, the object pointers, reference-counted pointers and weak links to `any P`, and `Closure<F>`: their argument names the kind of value they erased, which is always unscoped, so they are unscoped ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch), [05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)). Binding a type parameter to `any P` never makes an unscoped existential ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+**A scoped value can live in locals, parameters, and the fields, elements, payloads and captures of other scoped values.** It can't be stored in an unscoped type, or anywhere else that requires `~Scoped` ([below](#generic-code-and-scoped)), such as a global. It can't live across an `await` either ([07](07-concurrency.md#semantics)).
 
-**Generic code and `~Scoped`.** An unconstrained type parameter may be scoped, and so may a type that depends on one, such as an associated type (`C.Iterator`), or a type whose members a `static if` or `static for` generates from a generic parameter, type or value. So a value of such a type follows the dependency rules as if it were scoped: rule 5 ([below](#dependencies)) applies when it is returned or stored. Code that must let a `T` outlive its scope requires **`T: ~Scoped`**, which every unscoped type satisfies. So `Mutex.lock` is `func lock<R: ~Scoped>(_ body: consuming (mutable T) -> R) -> R`: the closure can compute any unscoped result from the protected data, but can't smuggle out a view of it, as its result, which would be scoped, or through its captures, since its parameter isn't declared `keep` ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)). `~Scoped` is also required implicitly wherever a value can outlive the function that stores it, or be reached without its borrows:
+### Which types are scoped
 
-- globals, `@threadlocal var`s included, objects' values, a leaked `Box`'s value, which a `RawAllocation` holds with no borrows ([06](06-memory-and-allocators.md#owning-boxes)), and unscoped closures' captures;
+**A type with a scoped field or payload is scoped:**
+
+- **Declared types.** A struct, enum or union with a field or payload whose type is scoped where the type is declared must be declared `Scoped`.
+- **Generic types.** A generic type is scoped when a stored field or payload is, once its type arguments are substituted, its associated types resolved and its `static if` and `static for` members generated. This is checked as `Sendable` is ([07](07-concurrency.md#what-may-cross-threads-sendable)).
+- **Raw pointers.** A field or payload of raw pointer type `*T` counts as scoped when `T` is.
+
+So `List<StringView>`, `Map<StringView, Int>`, `Optional<Span<T>>` and `(StringView, Int)` are scoped, though the collections among them still own their heap memory. `Handle<Token>` and `Type<StringView>` aren't, since neither holds what its argument names. `struct Cursor<C: Collection>(var it: C.Iterator)` needn't be declared `Scoped`, but `Cursor<List<Int>>` is scoped, since a list's iterator is.
+
+**The generic types that erase a type are the exceptions, and are unscoped.** These are `Box<any P>`, the object pointers, reference-counted pointers and weak links to `any P` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)), and `Closure<F>` ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)). Their argument names the kind of value they erased, which is always unscoped. Binding a type parameter to `any P` never makes an unscoped existential ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+
+### Generic code and `~Scoped`
+
+**An unconstrained type parameter may be scoped**, and so may a type that depends on one, such as:
+
+- an associated type, such as `C.Iterator`;
+- a type whose members a `static if` or `static for` generates from a generic parameter, type or value.
+
+A value of such a type follows the dependency rules as if it were scoped, so rule 5 applies when it is returned or stored ([below](#dependencies)).
+
+**Code that must let a `T` outlive its scope requires `T: ~Scoped`**, which every unscoped type satisfies. So `Mutex.lock` is `func lock<R: ~Scoped>(_ body: consuming (mutable T) -> R) -> R`. The closure can compute any unscoped result from the protected data. It can't smuggle out a view of it as its result, which would be scoped, or through its captures, since its parameter isn't declared `keep` ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)).
+
+**`~Scoped` is also required implicitly wherever a value can outlive the function that stores it, or be reached without its borrows:**
+
+- globals, `@threadlocal var`s included;
+- objects' values;
+- a leaked `Box`'s value, which a `RawAllocation` holds with no borrows ([06](06-memory-and-allocators.md#owning-boxes));
+- unscoped closures' captures;
 - the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [below](#dependencies)) can't track what goes in ([07](07-concurrency.md#the-synchronized-contract));
 - the concrete type in every conversion to an unscoped existential (`Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`), since erasure would hide what the value borrows;
 - task parameters and a `task func` method's `self`, which a task keeps in its state ([07](07-concurrency.md#semantics));
 - the elements of a `StaticSpan`, which outlive every scope ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
 
-**`~` means "not"**, before three marker protocols only ([01](01-values-and-ownership.md#copies)). In a conformance list, `~Copyable` and `~Sendable` opt a type out of a derived conformance ([07](07-concurrency.md#what-may-cross-threads-sendable)). In a constraint, `T: ~Scoped` requires that `T` isn't scoped. An unconstrained type parameter may be move-only, scoped, and not `Sendable`, so none of those needs a `~`.
+**In a type, `~` means "not", and comes only before `Copyable`, `Sendable` and `Scoped`** ([01](01-values-and-ownership.md#copies)).
+
+- In a conformance list, `~Copyable` and `~Sendable` opt a type out of a derived conformance ([07](07-concurrency.md#what-may-cross-threads-sendable)).
+- In a constraint, `T: ~Scoped` requires that `T` isn't scoped.
+
+An unconstrained type parameter may be move-only, scoped and not `Sendable`, so none of those needs a `~`.
 
 ### Dependencies
 
@@ -144,7 +191,7 @@ g.value += 1                                  // g's last use written out
 owned var n = consume m                       // error: destroying g at scope end still uses m
 ```
 
-A few values act when destroyed, as a lock guard unlocks its mutex, so **destroying a value is a use** when it is, or holds at any depth, one of these, a field `*T` holding a `T` as it does for [scopedness](#scoped-values):
+A few values act when destroyed, as a lock guard unlocks its mutex, so **destroying a value is a use** when it is, or holds at any depth, one of these, a field `*T` holding a `T` as it does for [scopedness](#which-types-are-scoped):
 
 - a value whose type declares a `deinit` that isn't `PlainDeinit` (below);
 - a `consuming` function value, which may own handed-over captures in the storage it views ([05](05-protocols-generics-and-closures.md#function-typed-values));

@@ -26,7 +26,7 @@ std declares `Handle` as follows; `pool[h]` is an optional projection ([02](02-v
 `Handle` is 8-aligned, so C holds it as a `uint64_t` ([08](08-c-interop.md#c-representations)), and `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has, as its generation is never 0 ([04](04-types.md#optionals)). Its primary initializer is private, so it isn't `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and other modules build one only through `init?(bits:)`.
 
 - **A `Pool<T>`** stores its elements densely. `pool[h]` is `nil` once the element is removed, and stays `nil`: a slot whose generation would wrap is abandoned, never reused, so a handle never names a later element. Removal makes every copy of the handle stale at once, and may move the last element into the hole. A forged handle reads `nil` or some live element of that pool.
-- **A `StablePool<T>`** abandons slots the same way, and never moves an element, so a pool element has a stable address there, and `stablePool.pin(h)` can hand it to C ([below](#pinning-for-c)). Its `T` is `~Scoped` ([02](02-views-and-dependencies.md#scoped-values)), since an unscoped pin keeps an element, and its `deinit`, waiting past every scope.
+- **A `StablePool<T>`** abandons slots the same way, and never moves an element, so a pool element has a stable address there, and `stablePool.pin(h)` can hand it to C ([below](#pinning-for-c)). Its `T` is `~Scoped` ([02](02-views-and-dependencies.md#generic-code-and-scoped)), since an unscoped pin keeps an element, and its `deinit`, waiting past every scope.
 
 ## Objects and weak pointers: `UniquePointer<T>` and `WeakPointer<T>`
 
