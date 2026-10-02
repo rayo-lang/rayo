@@ -16,23 +16,42 @@ using allocator = scratch {                       // everything built in here us
 scratch.reset()                                   // everything the arena handed out is freed at once
 ```
 
-Every heap allocation goes through an allocator the code can name, and every release happens at a point the code shows, where a value is destroyed: a scope end, an overwrite, a `consume`, a removal from a container, the drop of the last owner of a reference-counted value ([below](#sharedt-data-with-many-owners)) or of the last pin ([03](03-handles-and-objects.md#pinning-for-c)), a thread's end ([07](07-concurrency.md#global-state)), an arena reset or an unregistration. No release frees memory that a view, on any thread, may still read: a reset or an unregistration checks first, and panics instead ([below](#arena-safety-checked-values-and-checked-resets)).
+**Every heap allocation goes through an allocator the code can name, and every release happens at a point the code shows**, where a value is destroyed:
+
+- a scope end, an overwrite or a `consume`;
+- a removal from a container;
+- the drop of the last owner of a reference-counted value ([below](#sharedt-data-with-many-owners)), or of the last pin ([03](03-handles-and-objects.md#pinning-for-c));
+- a thread's end ([07](07-concurrency.md#global-state));
+- an arena reset or an unregistration.
+
+**No release frees memory that a view, on any thread, may still read**: a reset or an unregistration checks first, and panics instead ([below](#arena-safety-checked-values-and-checked-resets)).
 
 ## Allocator values
 
 **An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it, so the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.system` are the same type.
 
-- `.system`, the platform's general-purpose heap, has a fixed id and is never unregistered, so its storage never goes stale: `Allocator.unregister(.system)` panics. `Allocator.system` is a `static const`, so code takes it with no `copy` ([01](01-values-and-ownership.md#constants)): `Budgeted(inner: .system, …)`.
-- Every other registered allocator, such as an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`, is library code implementing `AllocatorImpl` ([below](#writing-an-allocator-allocatorimpl)).
+- **`.system`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `Allocator.unregister(.system)` panics. `Allocator.system` is a `static const`, so code takes it with no `copy` ([01](01-values-and-ownership.md#constants)): `Budgeted(inner: .system, …)`.
+- **Every other registered allocator is library code implementing `AllocatorImpl`** ([below](#writing-an-allocator-allocatorimpl)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`.
 
-**Kinds.** A **heap**, such as `.system` or a TLSF heap, frees each allocation individually. An **arena** hands out memory from blocks and frees nothing individually: freeing into it is a no-op, and a **reset** frees everything it handed out at once ([below](#what-a-reset-does)). A **wrapper**, such as a budget or a tracking allocator, passes another allocator's allocations through and keeps accounts of them. An allocator may draw its memory from one other allocator, its **backing**, such as the allocator a wrapper wraps ([below](#allocators-over-other-allocators)).
+**Every registered allocator is of one of three kinds:**
+
+- A **heap**, such as `.system` or a TLSF heap, frees each allocation individually.
+- An **arena** hands out memory from blocks and frees nothing individually. Freeing into it is a no-op, and a **reset** frees everything it handed out at once ([below](#what-a-reset-does)).
+- A **wrapper**, such as a budget or a tracking allocator, passes another allocator's allocations through and keeps accounts of them.
+
+An allocator may draw its memory from one other allocator, its **backing**, such as the allocator a wrapper wraps ([below](#allocators-over-other-allocators)).
 
 ## The current allocator
 
-**Every thread has a current allocator, a thread-local that starts as `.system`, which constructors of allocating types record when they aren't given one, and which a closure's conversion into a `Closure` uses ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).** It is consulted only then, a `clone()` included: a collection grows and frees through the allocator it was built with for its whole life, and `using allocator = .system { kept = scratch.clone() }` copies a value out of an arena.
+**Every thread has a current allocator**, a thread-local that starts as `.system`. It is consulted only in two cases:
 
-- `using allocator = a { … }` makes `a` the current allocator for the block, and restores the previous one on exit, including early return. It reads the id in `a` once, on entry, with no `copy` written, as a `static const` is taken ([01](01-values-and-ownership.md#constants)), and holds no borrow of `a`, so the block may contain an `await`, and reassigning `a` inside it doesn't change the block's allocator.
-- A task suspended inside the block restores its owner's current allocator at the `await`, and makes `a` current again when it resumes ([07](07-concurrency.md#task-functions-explicitly-stepped-coroutines)). Destroying it while it is suspended there changes no thread's current allocator.
+- a constructor of an allocating type records it when it isn't given an allocator, and so does `clone()`;
+- a closure's conversion into a `Closure` uses it ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
+
+A collection grows and frees through the allocator it was built with for its whole life. A clone takes the current allocator, so `using allocator = .system { kept = scratch.clone() }` copies a value out of an arena.
+
+- **`using allocator = a { … }` makes `a` the current allocator for the block**, and restores the previous one on exit, including early return. It reads the id in `a` once, on entry, so reassigning `a` inside the block doesn't change the block's allocator. The read needs no `copy` written, as a `static const` is taken ([01](01-values-and-ownership.md#constants)). It holds no borrow of `a`, so the block may contain an `await`.
+- **A task suspended inside the block restores its owner's current allocator at the `await`, and makes `a` current again when it resumes** ([07](07-concurrency.md#task-functions-explicitly-stepped-coroutines)). Destroying it while it is suspended there changes no thread's current allocator.
 
 ### The static allocator
 
@@ -46,7 +65,7 @@ more.append(1009)                                    // and grows there, as any 
 
 ## Allocators and threads
 
-**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `Allocator` id, including lent work ([07](07-concurrency.md#lending-work-to-other-threads)). `AllocatorImpl` refines `Synchronized` ([07](07-concurrency.md#the-synchronized-contract)): its methods are non-`mutating`, and change what they change through their own synchronization: atomics, a lock, or state kept per thread inside the implementation.
+**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `Allocator` id, including lent work ([07](07-concurrency.md#lending-work-to-other-threads)). `AllocatorImpl` refines `Synchronized` ([07](07-concurrency.md#the-synchronized-contract)): its methods are non-`mutating`. They change what they change through their own synchronization: atomics, a lock, or state kept per thread inside the implementation.
 
 ## Arena safety: checked values and checked resets
 
@@ -68,13 +87,24 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ### What a reset does
 
-**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it. It never waits.** It panics, in every build, while any thread still uses the arena's memory: an open of a value in it whose borrow is live ([below](#opening-an-owning-value-checks-it)), a pin into it ([03](03-handles-and-objects.md#pinning-for-c)), or an object in it that an access holds or whose home thread is another thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). It panics while another reset or unregistration that reaches the same memory is still running, on any thread, as one that a `deinit` it runs calls is ([below](#allocators-over-other-allocators)). It also panics through an unregistered id ([below](#unregistering-an-allocator)), past the reset limit ([below](#how-values-record-their-allocator)), and through an allocator whose kind isn't `.arena`, `.system` included, since `reset()` and `release` ([below](#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
+**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it. It never waits.** It panics instead, in every build, in these cases:
+
+- **Any thread still uses the arena's memory**, through:
+  - an open of a value in it whose borrow is live ([below](#opening-an-owning-value-checks-it));
+  - a pin into it ([03](03-handles-and-objects.md#pinning-for-c));
+  - an object in it that an access holds, or whose home thread is another thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
+- **Another reset or unregistration that reaches the same memory is still running**, on any thread ([below](#allocators-over-other-allocators)). So a reset that a `deinit` calls panics when the reset or unregistration running that `deinit` reaches the same memory.
+- **The id is unregistered** ([below](#unregistering-an-allocator)).
+- **The reset would exceed the arena's reset limit** ([below](#how-values-record-their-allocator)).
+- **The allocator's kind isn't `.arena`**, `.system` included, since `reset()` and `release` ([below](#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
+
+What a reset changes, and what it costs:
 
 - **Values.** Every value allocated from the arena before the reset is **stale** from then on, including through a wrapper over it ([below](#allocators-over-other-allocators)), and every value allocated after it is valid. An allocation racing the reset is ordered before it or after it.
 - **Objects.** It destroys every object whose value lies in the arena, running their `deinit`s on the resetting thread before it frees their memory ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Cost.** A reset is O(1) in the number of values in the arena, and runs one `deinit` for each object in it that has one.
 
-**The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a **stamp**, an ordered token the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. Registering an arena calls `attachFresh(stamp:)` with its first stamp, and a reset calls the `AllocatorImpl` hooks ([below](#writing-an-allocator-allocatorimpl)) in this order, with a new stamp `s` later than every earlier one:
+**The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a stamp. A **stamp** is an ordered token that the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. Registering an arena calls `attachFresh(stamp:)` with its first stamp. A reset takes a new stamp `s`, later than every earlier one, and calls the `AllocatorImpl` hooks ([below](#writing-an-allocator-allocatorimpl)) in this order:
 
 1. `attachFresh(stamp: s)`: the arena serves new allocations from spare blocks, which it stamps `s`, or, with none, from new ones from its backing memory.
 2. `backingDidSwitch(stamp: s)` on every wrapper over the arena.
@@ -84,13 +114,20 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ### Opening an owning value checks it
 
-**Opening an owning value checks that no reset or unregistration has invalidated its storage since it was allocated**, since a reset can't find the values allocated in the arena, which may be anywhere. **And for as long as what it lends is live, the open counts as a use of the allocator, which a reset or an unregistration checks for.**
+**Opening an owning value checks that no reset or unregistration has invalidated its storage since it was allocated.** The check is made when the value is opened, since a reset can't find the values allocated in the arena, which may be anywhere. **For as long as what it lends is live, the open also counts as a use of the allocator**, which a reset or an unregistration checks for.
 
 - **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense: its object is checked at each use, and destroyed by a reset, as [03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators) says.
-- **Opening.** An open is any access that reaches storage the value owns: reading or projecting what it holds, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header, taking a span of it, iterating it, growing it, or calling a `Closure` whose context is out of line.
+- **Opening.** An open is any access that reaches storage the value owns:
+  - reading or projecting what it holds, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header;
+  - taking a span of it;
+  - iterating it;
+  - growing it;
+  - calling a `Closure` whose context is out of line.
 - **A failure panics.**
 - **Counting uses.** An open of storage from any allocator but `.system`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends: the last use of everything that depends on what it lends ([02](02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
-- **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). An open and a reset or unregistration on two threads are ordered one way or the other: either the open comes first, and the reset or unregistration panics while what it lends is live, or the reset or unregistration comes first, and the open fails.
+- **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). An open and a reset or unregistration on two threads are ordered one way or the other:
+  - the open comes first, and the reset or unregistration panics while what the open lends is live;
+  - or the reset or unregistration comes first, and the open fails.
 - **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#check-levels)).
 
 ### Stale values, and the `deinit`s a reset runs
@@ -113,7 +150,7 @@ using allocator = levelArena {
 levelArena.reset()                            // destroys the doors; each deinit can still read its 'name'
 ```
 
-- **What it owns stays usable to it.** While such a `deinit` runs, opening a value that this reset or unregistration of the object's allocator, or of one it is built over ([below](#allocators-over-other-allocators)), made stale succeeds on the thread running it, and freeing one releases it into the allocator it came from. A value an earlier reset made stale still fails, since its memory may already be reused.
+- **What it owns stays usable to it.** While such a `deinit` runs, the thread running it can open a value that this reset or unregistration made stale. That holds for a reset or unregistration of the object's allocator, or of one it is built over ([below](#allocators-over-other-allocators)). Freeing such a value from that `deinit` releases it into the allocator it came from. A value an earlier reset made stale still fails, since its memory may already be reused.
 - **The memory is still there.** A reset frees its old blocks only after every such `deinit` has returned ([step 5](#what-a-reset-does)), and an unregistration destroys the implementation only then ([below](#unregistering-an-allocator)), so what an open lent inside one has ended first.
 
 ## Unregistering an allocator
@@ -128,16 +165,23 @@ props.append(p)                     // panics: 'props' came from an unregistered
 
 **`Allocator.unregister(a)` ends an allocator.**
 
-- **It checks first, as a reset does.** It panics while any thread still uses its memory, or the memory of an allocator unregistered with it: an open whose borrow is live, a pin, or an object that an access holds or whose home thread is another thread, and while another reset or unregistration that reaches that memory is still running ([above](#what-a-reset-does)).
+- **It checks first, as a reset does** ([above](#what-a-reset-does)). It panics while any thread still uses its memory, or the memory of an allocator unregistered with it, through:
+  - an open whose borrow is live;
+  - a pin;
+  - an object that an access holds, or whose home thread is another thread.
+
+  It also panics while another reset or unregistration that reaches that memory is still running.
 - **Its values go stale.** Heap or arena alike, its values go stale and its objects are destroyed, their `deinit`s running on the unregistering thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Every allocator whose backing chain includes it is unregistered with it.
-- **An unregistered id stays invalid.** Every allocator operation through it panics, in every build, however many allocators are registered later: allocating through it, resetting it and unregistering it again. The exceptions are freeing or growing, from the `deinit` of an object the unregistration destroys, a value that the unregistration made stale ([above](#stale-values-and-the-deinits-a-reset-runs)), and a forwarding `free` from the `deinit` of a wrapper unregistered with it, which does nothing (below).
+- **An unregistered id stays invalid.** Every allocator operation through it panics, in every build, however many allocators are registered later: allocating through it, resetting it and unregistering it again. The exceptions are:
+  - freeing or growing a value that the unregistration made stale, from the `deinit` of an object the unregistration destroys ([above](#stale-values-and-the-deinits-a-reset-runs));
+  - a forwarding `free` from the `deinit` of a wrapper unregistered with it, which does nothing (below).
 - **Then the implementation is destroyed.** Once those `deinit`s have returned, it and every allocator unregistered with it are destroyed, those built on it first, releasing their memory.
 
-  Destroying a wrapper frees nothing in its backing on its own: what it passed through stays allocated there unless its `deinit` frees it through the forwarding `free` ([below](#allocators-over-other-allocators)), which does nothing when the backing was unregistered with it, since the backing's own destruction then releases that memory.
+  **Destroying a wrapper frees nothing in its backing on its own.** What it passed through stays allocated there unless its `deinit` frees it through the forwarding `free` ([below](#allocators-over-other-allocators)). That `free` does nothing when the backing was unregistered with the wrapper, since the backing's own destruction then releases that memory.
 
 ## How values record their allocator
 
-**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets; a container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
+**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets. A container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
 
 - **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([10](10-errors-and-safety.md#unsafe-code)).
 - **A stale word never passes.** Storage that a reset or an unregistration invalidated fails its check for good, however many allocators are registered, reset and unregistered later, outside the `deinit`s that a reset or an unregistration runs ([above](#stale-values-and-the-deinits-a-reset-runs)).
@@ -145,7 +189,7 @@ props.append(p)                     // panics: 'props' came from an unregistered
 
 ### A container's words must cover all of its storage
 
-Every open of a container must fail whenever [Opening an owning value checks it](#opening-an-owning-value-checks-it) says an open of the storage it reaches, or of storage it needs to reach that, fails. So every owning container, std's, the builtin `SoA` or a user `unsafe` core, keeps words that cover all of its storage. A container of several allocations, such as a `Map`'s index and entries, may take them all from one allocator and record the word of the oldest, or keep one word per allocation, and a `StablePool`, which can't move its elements, keeps a word per page ([03](03-handles-and-objects.md#pools-and-handles)).
+**An open of a container must fail whenever an open of the storage it reaches would fail, or of storage it needs to reach that** ([above](#opening-an-owning-value-checks-it)). So every owning container keeps words that cover all of its storage, whether it is std's, the builtin `SoA` or a user `unsafe` core. A container of several allocations, such as a `Map`'s index and entries, may take them all from one allocator and record the word of the oldest, or keep one word per allocation. A `StablePool`, which can't move its elements, keeps a word per page ([03](03-handles-and-objects.md#pools-and-handles)).
 
 ## Allocators over other allocators
 
@@ -157,12 +201,14 @@ var props = List<Prop>(allocator: propBudget)    // counted against the budget, 
 levelArena.reset()                               // 'props' goes stale with the arena memory under it
 ```
 
-**Any allocator may declare a `backing`, the one allocator it draws its memory from**, such as the allocator a budget wraps or the heap of device memory an arena takes its blocks from, so that a reset or an unregistration reaches everything built on it. What it reports depends on its kind:
+**Any allocator may declare a `backing`, the one allocator it draws its memory from.** Examples are the allocator a budget wraps, and the heap of device memory an arena takes its blocks from. Declaring it lets a reset or an unregistration of the backing reach everything built on it. What an allocator reports depends on its kind:
 
-- A **wrapper** passes its backing's `Allocation` through unchanged, block included, so an object's value or a `StablePool` page allocated through a wrapper over an arena is tied to its arena block like any other ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Its allocations record the wrapper, so growth and frees go through its accounting, and it passes each call on through its backing id's forwarding methods ([below](#writing-an-allocator-allocatorimpl)), which call the backing's implementation with the same arguments and return its result unchanged. They are `unsafe`, and their caller promises to be an implementation calling its own `backing`, since what they return carries no allocator word; they panic through an unregistered id as every allocator operation does, apart from the frees and growths [Unregistering an allocator](#unregistering-an-allocator) allows.
+- A **wrapper** passes its backing's `Allocation` through unchanged, block included. So an object's value or a `StablePool` page allocated through a wrapper over an arena is tied to its arena block like any other ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Its allocations record the wrapper, so growth and frees go through its accounting.
+
+    It passes each call on through its backing id's forwarding methods ([below](#writing-an-allocator-allocatorimpl)), which call the backing's implementation with the same arguments and return its result unchanged. They are `unsafe`, and their caller promises to be an implementation calling its own `backing`, since what they return carries no allocator word. They panic through an unregistered id as every allocator operation does, apart from the frees and growths that unregistering allows ([above](#unregistering-an-allocator)).
     - **Over an arena**, its allocations are valid until a reset frees the arena memory under them or the wrapper is unregistered. `backingDidSwitch` and `backingDidFree` tell it when memory stops existing, so it can keep its accounts per stamp.
     - **Over a heap**, its allocations go stale when it or the heap is unregistered.
-- An **arena or heap with a backing**, such as an arena over device memory or a TLSF heap carved out of a larger one, draws from its backing and hands out memory of its own: an arena in its own blocks, which its own resets free, and a heap whose values go stale when it is unregistered. It keeps what it drew as long as it likes, so its backing chain must not include an arena, whose reset would reuse that memory under it.
+- An **arena or heap with a backing** draws from its backing and hands out memory of its own, as an arena over device memory or a TLSF heap carved out of a larger one does. Such an arena hands it out in its own blocks, which its own resets free. Such a heap's values go stale when it is unregistered. Either keeps what it drew as long as it likes, so its backing chain must not include an arena, whose reset would reuse that memory under it.
 - An allocator with **no `backing`** draws from `.system`, which is never reset or unregistered, or from platform memory it reserved ([below](#what-conforming-promises)), so no other allocator's reset or unregistration reaches what it handed out.
 
 **Chains are fixed and acyclic.**
@@ -172,7 +218,7 @@ levelArena.reset()                               // 'props' goes stale with the 
 
 ## Writing an allocator: `AllocatorImpl`
 
-An implementation hands out memory and reports what it handed out. The runtime decides when that memory stops being valid ([above](#what-a-reset-does)).
+**An implementation hands out memory and reports what it handed out.** The runtime decides when that memory stops being valid ([above](#what-a-reset-does)).
 
 ```swift
 unsafe protocol AllocatorImpl: Synchronized {          // must be callable from any thread
