@@ -20,7 +20,7 @@ To move a value out of a place the code owns, implicitly or with `consume place`
 A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership.md#copies)).
 
 **Copyable**:
-A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#copies)).
+A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership.md#copyable-types)).
 _Avoid_: trivially copyable, bitwise-copyable
 
 **Hidden local**:
@@ -39,7 +39,7 @@ Taking a value from a place, which hands it to a new owner and leaves the place 
 _Avoid_: transfer, destructive copy
 
 **Move-only**:
-A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#copies)).
+A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership.md#copyable-types)).
 _Avoid_: non-copyable, linear, affine
 
 **Overlap**:
