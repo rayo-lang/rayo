@@ -456,7 +456,7 @@ put(&out)                               // 'out' now depends on 'src'
 
 **Static storage** is global `let`s and `const`s ([07](07-concurrency.md#global-state)), and the views that the `Synchronized` values in them lend, such as a lock guard or `Once.get()` ([07](07-concurrency.md#the-synchronized-contract)). Such a global is never moved or destroyed ([07](07-concurrency.md#shutdown)), so any function may return a view of it.
 
-**What a C entry returns to C, or stores into what C lent it, may depend on less** ([08](08-c-interop.md#c-representations)), since nothing in Rayo holds what it borrowed once it returns.
+**What a C entry returns to C, or stores into what C lent it, may depend on less** ([08](08-c-interop.md#what-a-c-entry-hands-back-to-c)), since nothing in Rayo holds what it borrowed once it returns.
 
 ```swift
 func name() -> StringView {
