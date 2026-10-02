@@ -423,7 +423,7 @@ levelArena.release(replace(&world.level, with: Level()))     // requires Level: 
 levelArena.reset()                                           // what the arena holds goes stale, and its memory is freed
 ```
 
-**The compiler derives `TrivialFree`, a language marker protocol, for a type whose destruction does nothing but free memory**, as it derives `Frozen`: one in which every `deinit`, at any depth, is `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). So such a type holds none of these:
+**The compiler derives `TrivialFree`, a marker protocol, for a type whose destruction does nothing but free memory**, as it derives `Frozen`: one in which every `deinit`, at any depth, is `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). So such a type holds none of these:
 
 - an object owner, which destroys its object;
 - a `Pin` or `LocalPin`, which unpins;

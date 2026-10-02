@@ -15,7 +15,7 @@ Thread.scope { s in                                        // threads that may b
 }                                                          // the spawned thread has finished here
 ```
 
-**Threads, locks and job systems are libraries.** The language gives them the checking rules below, and one marker, `Sendable`, for what may cross threads. The runtime starts, parks and wakes threads ([below](#starting-a-thread-runtimestartthread), [below](#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([below](#task-functions-explicitly-stepped-coroutines)).
+**Threads, locks and job systems are libraries.** The language gives them the checking rules below, and the marker protocol `Sendable` for what may cross threads. The runtime starts, parks and wakes threads ([below](#starting-a-thread-runtimestartthread), [below](#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([below](#task-functions-explicitly-stepped-coroutines)).
 
 ## Why safe code can't race
 

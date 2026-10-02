@@ -73,7 +73,15 @@ A `const` whose initializer does anything else is a compile error, while a globa
 
 ### Consts that reach run time
 
-A `const` can allocate while the compiler builds it, but the running program has no compile-time heap. So a `const` that **reaches run time**, named outside compile-time code (`const` initializers, `static if` and `static for` conditions and lists, and attribute arguments), whether or not that code runs, is copied into the program's read-only data:
+A `const` can allocate while the compiler builds it, but the running program has no compile-time heap. So a `const` that reaches run time is copied into the program's read-only data.
+
+A `const` **reaches run time** when code names it anywhere but in these places, whether or not the code that names it ever runs:
+
+- a `const` initializer;
+- the condition or list of a `static if` or `static for`;
+- an attribute argument.
+
+Here `enemyPresets` reaches run time, since `presets()` names it, even if nothing calls `presets()`:
 
 ```swift
 struct Preset(var name: String, var hp: Float) {

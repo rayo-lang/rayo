@@ -181,7 +181,7 @@ _Avoid_: misaligned (a misaligned access is undefined behavior)
 Whether a function type only reads its captures, changes them (`mutating`) or consumes them (`consuming`) ([05](docs/spec/05-protocols-generics-and-closures.md#closure-kinds)).
 
 **Compile-time code**:
-Code the compiler checks at each instantiation instead of once, such as `static if` branches, `static for` bodies, `const` expressions and reflection on a type parameter ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+The parts of generic code the compiler checks at each instantiation instead of once: `static if` branches, `static for` bodies and static closures, `const` expressions and reflection on a type parameter, members generated from generic parameters, and computed names ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
 
 **Default**:
 A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
@@ -198,9 +198,17 @@ _Avoid_: function pointer (a `@c` type)
 A protocol with no requirements that states a property of a type, such as `Copyable`, `Scoped` or `Sendable`; the compiler derives some, such as `Copyable` and `Sendable`, from what a type holds ([05](docs/spec/05-protocols-generics-and-closures.md#conformances)).
 _Avoid_: marker trait, tag protocol
 
+**Type value**:
+`T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+_Avoid_: metatype
+
 **Unscoped closure**:
 A `Closure<F>`, which owns its captures, and so may outlive the scope that made it ([05](docs/spec/05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 _Avoid_: escaping closure, boxed closure
+
+**Value parameter**:
+A generic parameter declared `let`, which takes a `const` value of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>` ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+_Avoid_: const generic
 
 **Witness**:
 The member, or for an associated type the type, that meets one requirement of a protocol in a conformance ([05](docs/spec/05-protocols-generics-and-closures.md#conformances)).
