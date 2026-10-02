@@ -113,7 +113,7 @@ Where destroying a value uses what it borrows ([02](02-views-and-dependencies.md
 
 ## Parameters
 
-A parameter says what the function does with its argument: looks at it (the default), changes it in place, or keeps it:
+**A parameter's convention says what the function does with its argument**: looks at it (the default), changes it in place, or keeps it.
 
 ```swift
 func length(_ v: Vec3) -> Float { ... }                 // borrows v: reads it, can't change it
@@ -129,23 +129,45 @@ remember(copy e.pos)                                    // a copy moves in, and 
 
 | Convention | Declared as | Call site | Callee receives |
 | --- | --- | --- | --- |
-| borrowed (default) | `_ x: T` | `f(x)` | Shared borrow (below) |
-| mutable | `_ x: mutable T` | `f(&x)` | Mutable borrow |
-| owned | `_ x: owned T` | `f(x)` | Ownership: a place moves in, whatever its type; `f(copy x)` passes a copy |
+| borrowed (default) | `_ x: T` | `f(x)` | A shared borrow ([below](#borrowed-arguments)) |
+| mutable | `_ x: mutable T` | `f(&x)` | A mutable borrow of a [changeable place](#bindings) |
+| owned | `_ x: owned T` | `f(x)` | The value: a place moves in, whatever its type, and `f(copy x)` passes a copy |
 
-- **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it, and it is destroyed at the end of the call unless moved on. A `consuming` method's `self` is held the same way.
-- **Some parameters are received `owned` with no `owned` written.** They are, unless declared `mutable`, a parameter of `mutating` or `consuming` function type, or of a type parameter constrained to one, written `some F` or named, since a borrowed one could never be called ([05](05-protocols-generics-and-closures.md#closure-kinds)); and a `mutable any P`, which is a view of its own ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
-- **Methods use the same conventions for `self`.** A plain `func` borrows it, a `mutating func` takes it `mutable`, a `consuming func` `owned`. A struct's primary initializer takes its fields `owned` ([04](04-types.md#initializers)), so `World(enemies: enemies)` moves `enemies` in.
-- **Conventions line up across an indirection.** A protocol witness, a function converted to a function type, and a function type converted to another declare each parameter and `self` with the convention of what they stand for ([05](05-protocols-generics-and-closures.md#implicit-conversions)).
-- **A default value makes an argument optional.** In `func spawn(_ kind: Kind, at pos: Vec3 = .zero)`, a call may leave out `at:`. The default is checked where it is declared, as the body of a function with no parameters that returns the parameter's type and doesn't throw, so it names no other parameter and no `self`, and a view it returns views only static storage ([02](02-views-and-dependencies.md#dependencies)). A call that leaves the argument out calls that function in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)). A `mutable` parameter has no default, since it stands for a place of the caller's. A field's default works the same way in the primary initializer ([04](04-types.md#initializers)).
+- **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, unless the callee moves it on. A `consuming` method's `self` is held the same way.
+- **Methods use the same conventions for `self`.** A plain `func` borrows it, a `mutating func` takes it `mutable`, and a `consuming func` takes it `owned`. A struct's primary initializer takes its fields `owned` ([04](04-types.md#initializers)), so `World(enemies: enemies)` moves `enemies` in.
+- **Conventions line up across an indirection.** A protocol witness, a function converted to a function type, and a function type converted to another declare each parameter, and `self`, with the convention of what they stand for ([05](05-protocols-generics-and-closures.md#implicit-conversions)).
+- **A `mutable` argument's changes always reach the caller's place**, even when it is lent through a temporary that is written back, as a bitfield or an under-aligned field is ([04](04-types.md#packed-structs-and-under-aligned-places)).
 
-**Safe code in the callee can't change, keep or take the address of a borrowed argument, and nothing else changes it before the call returns** ([exclusivity](#the-law-of-exclusivity)), except through a `Synchronized` value it holds ([07](07-concurrency.md#the-synchronized-contract)). So the callee may see a copy of its bits or the caller's place, which it can't tell apart, and the compiler chooses. Three kinds of borrowed argument are always the caller's place:
+**Some parameters are received `owned` with no `owned` written**, unless they are declared `mutable`:
 
-- one that is or holds a `Synchronized` value at any depth, since its identity is its address. A `Closure<F>` counts, since its captures may hold one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
-- the argument of `ptr(to:)`, whose result is its address ([10](10-errors-and-safety.md#unsafe-code));
-- one whose own storage the result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) or an absorbing argument (rule 4: a `mutable` argument, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan` or a `mutating` closure) may still view after the call. [Rules 3 and 4](02-views-and-dependencies.md#dependencies), and the accessor's `where yield` clause, tell which from the signature's types and from which arguments are [shallow](02-views-and-dependencies.md#dependencies): an `Int` or a `List<Int>` result views nothing.
+- a parameter of a `mutating` or `consuming` function type, or of a type parameter constrained to one, written `some F` or named, since a borrowed one could never be called ([05](05-protocols-generics-and-closures.md#closure-kinds));
+- a `mutable any P`, which is a view of its own ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
 
-Which arguments these are follows from the signature alone: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention. An added `keep` changes none of this, and every function-type conversion keeps conventions and which arguments are places ([05](05-protocols-generics-and-closures.md#implicit-conversions)), so a call through a function value, which `ptr(to:)` is never ([10](10-errors-and-safety.md#unsafe-code)), passes its arguments as a direct call would. A `mutable` argument's changes always reach the caller's place, even when it is lent through a temporary that is written back, as a bitfield or an under-aligned field is ([04](04-types.md#packed-structs-and-under-aligned-places)).
+### Default arguments
+
+**A default value makes an argument optional.** With `func spawn(_ kind: Kind, at pos: Vec3 = .zero)`, a call may leave out `at:`.
+
+- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](02-views-and-dependencies.md#dependencies)).
+- **A call that leaves the argument out calls that function** in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)).
+- **A `mutable` parameter has no default**, since it stands for a place of the caller's.
+- **A field's default works the same way** in the primary initializer ([04](04-types.md#initializers)).
+
+### Borrowed arguments
+
+**Safe code in the callee can't change, keep or take the address of a borrowed argument, and nothing else changes it before the call returns** ([below](#the-law-of-exclusivity)). The exception is a `Synchronized` value the argument holds, which changes through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)).
+
+**So the callee may see a copy of the argument's bits or the caller's place, and the compiler chooses.** The callee can't tell them apart. These borrowed arguments are always the caller's place:
+
+- **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address. A `Closure<F>` counts, since its captures may hold one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
+- **The argument of `ptr(to:)`**, whose result is its address ([10](10-errors-and-safety.md#unsafe-code)).
+- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#dependencies)).
+
+[Rules 3 and 4](02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](02-views-and-dependencies.md#dependencies). An `Int` or a `List<Int>` result views nothing.
+
+**Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention.
+
+- **Adding `keep` to a parameter changes none of this** ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)).
+- **A call through a function value passes its arguments as a direct call would**, since every function-type conversion keeps the conventions, and which arguments are places ([05](05-protocols-generics-and-closures.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](10-errors-and-safety.md#unsafe-code)).
 
 ### Evaluation order, and when a call's borrows begin
 
@@ -154,11 +176,26 @@ items.append(items.count)     // fine: items.count is read, and done, before app
 f(&x, x)                      // error: two borrows of x overlap for the whole call
 ```
 
-**Evaluation is left to right, and a call's borrows begin with the call.** A call evaluates its callee, then its receiver, then its arguments. Evaluating a borrowed or `mutable` argument means working out which place it names, base first, then indices, left to right, and so does evaluating an `owned` argument or a `consuming` receiver that names a place. Only then does the call begin, with every borrow it passes, each lasting until it returns, and every value it takes from a place: `builder.finish(builder.count)` reads `count` before `finish` takes `builder`. As it begins, it runs the accessors those places reach, `read` and `modify` projections and the `get` of a `get` and `set` pair it lends for change ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), in the order the places were worked out, receiver first; when it returns, it ends those accesses in reverse order, running the code after each `yield` and calling each `set`, except an access-bound projection's access that its result still depends on, which ends at that value's last use ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). Any other `get` an argument or receiver reaches makes a value, whether the call then borrows it, changes it as a mutable form's view, takes it or calls a method on it, so it runs as that argument or receiver is evaluated, and its result keeps what it depends on borrowed (rule 3 in [02](02-views-and-dependencies.md#dependencies)): in `items.insert(x, at: items.count)`, `count`'s `get` has returned before `insert` borrows `items`.
+**Evaluation is left to right, and a call's borrows begin with the call.** A call runs in this order:
 
-Working out a place never accesses it, except an optional chain (`?.`) or force unwrap (`!`) in a borrowed or `mutable` argument: it reads the optional, so the borrow up to that point begins right there and lasts until the call returns. `damage(&world.enemies[h]!, by: reinforce(&world.enemies))` is therefore a conflict.
+1. **It evaluates its callee, then its receiver, then its arguments.** Evaluating a borrowed or `mutable` argument works out which place it names: its base first, then its indices, left to right. An `owned` argument or a `consuming` receiver that names a place is worked out the same way.
+2. **Then the call begins.** Every borrow it passes begins, and lasts until the call returns, and every value it takes leaves its place. So `builder.finish(builder.count)` reads `count` before `finish` takes `builder`.
+3. **As it begins, it runs the accessors those places reach**, in the order the places were worked out, receiver first. These are the `read` and `modify` projections, and the `get` of each `get` and `set` pair that the call lends for change ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+4. **When it returns, it ends those accesses in reverse order**, running the code after each `yield` and calling each `set`. An access-bound projection's access that the result still depends on is the exception: it ends at that value's last use ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
 
-The same order holds for operator operands, tuple and array literal elements, interpolated string segments, and assignment, which works out its left place, evaluates its right side, then writes. A compound assignment `a ⊕= b` works out `a`'s place once, evaluates `b`, then reads the place, applies `⊕` and writes the result back ([05](05-protocols-generics-and-closures.md#operators)). `&&`, `||` and `??` evaluate their right side only when the left doesn't decide, and optional chaining skips the rest of the chain, arguments included, at a `nil`. An assignment whose left side has an optional chain or a force unwrap, as in `pool[h]?.hp = 0` or `requests[h]? = v`, a compound one included, works out its left place up to the first `?.`, `?` or `!`, evaluates its right side, and only then reads the optional and works out the rest. So `pool[a]?.hp = copy pool[b]!.hp` and `world.enemies[h]?.hp -= reinforce(&world.enemies)` compile, and when the chain stops at a `nil`, the right side's value is dropped.
+**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](02-views-and-dependencies.md#dependencies)). So in `items.insert(x, at: items.count)`, `count`'s `get` has returned before `insert` borrows `items`.
+
+**Working out a place never accesses it**, except for an optional chain (`?.`) or a force unwrap (`!`) in a borrowed or `mutable` argument. Unwrapping reads the optional, so the borrow up to that point begins there, and lasts until the call returns. So `damage(&world.enemies[h]!, by: reinforce(&world.enemies))` is a conflict.
+
+**These keep the same left-to-right order:**
+
+- operator operands, the elements of tuple and array literals, and the segments of an interpolated string;
+- an assignment, which works out its left place, evaluates its right side, then writes;
+- a compound assignment `a ⊕= b`, which works out `a`'s place once, evaluates `b`, then reads the place, applies `⊕` and writes the result back ([05](05-protocols-generics-and-closures.md#operators)).
+
+**Some operands are skipped.** `&&`, `||` and `??` evaluate their right side only when the left doesn't decide. Optional chaining skips the rest of the chain at a `nil`, arguments included.
+
+**An assignment through `?.`, `?` or `!` reads the optional only after evaluating its right side.** When the left side holds one, as in `pool[h]?.hp = 0` or `requests[h]? = v`, the assignment works out its left place up to the first of them. Then it evaluates its right side, and only then reads the optional and works out the rest. A compound assignment does the same. So `pool[a]?.hp = copy pool[b]!.hp` and `world.enemies[h]?.hp -= reinforce(&world.enemies)` compile, and when the chain stops at a `nil`, the right side's value is dropped.
 
 ## Bindings
 

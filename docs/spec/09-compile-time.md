@@ -53,7 +53,7 @@ func makeSinTable() -> [1024 of Float] {
 }
 ```
 
-**A `const` initializer is evaluated at compile time**, and checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](01-values-and-ownership.md#parameters)). **Any function can run at compile time if what it executes, on that input:**
+**A `const` initializer is evaluated at compile time**, and checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](01-values-and-ownership.md#default-arguments)). **Any function can run at compile time if what it executes, on that input:**
 
 - calls no C function, whether imported or declared `extern c`;
 - accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
