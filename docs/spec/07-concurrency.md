@@ -24,7 +24,7 @@ Thread.scope { s in                                        // threads that may b
 1. **borrows**, which a library lends to another thread only for the length of a call, where exclusivity governs them statically ([below](#lending-work-to-other-threads));
 2. **`Synchronized` types and channel ends**, which synchronize themselves ([below](#atomics-and-locks), [below](#queues-and-channels));
 3. **`Shared<T>`**, whose value is `Frozen`, so never written, or `Synchronized`, so written only through its own synchronization ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
-4. **`const`s, global `let`s and immortal data**, which every thread reads through shared borrows ([below](#global-state)). Immortal data is what a `StaticSpan` or `StaticString` views, and nothing writes it once a value names it ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
+4. **`const`s, global `let`s and immortal data**, which every thread reads through shared borrows ([below](#global-state)). Immortal data, such as what a `StaticSpan` or `StaticString` views, is never written once a value names it ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
 
 Every other global that safe code can use is thread-local ([below](#global-state)). Reading a value from many threads at once needs nothing special, as a parallel loop shows:
 

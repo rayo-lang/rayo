@@ -336,7 +336,7 @@ An imported C enum, which may hold any value of its underlying type unless its h
 Said of a value that can be frozen: copied into read-only data, where it stays unchanged for the whole run, as a `const` that reaches run time must be ([09](docs/spec/09-compile-time.md#consts-that-reach-run-time)).
 
 **Immortal data**:
-Read-only bytes that nothing writes or frees, such as a literal's, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time.md#staticspan-views-of-immortal-data)).
+Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time.md#staticspan-views-of-immortal-data)).
 
 **Reaches run time**:
 Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, or an attribute argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time.md#consts-that-reach-run-time)).

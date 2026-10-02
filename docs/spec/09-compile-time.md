@@ -477,11 +477,11 @@ enum AnyEvent {                                           // one case per event 
 }
 ```
 
-**`static if` and `static for` work where declarations go, in a struct's header, in the body of a struct, enum, union or extension, never a protocol, and at a file's top level, and generate whatever may appear there:**
+**`static if` and `static for` work in three places where declarations go, and generate whatever may appear there:**
 
 - in a struct's header, stored fields ([04](04-types.md#structs));
-- in such a body, any member ([12](12-grammar.md#files-and-declarations)): computed properties, a union's stored members, constants, methods, initializers, subscripts, nested types and type aliases, an enum's cases, and a `deinit`, which is still the type's only one;
-- at the top level, any declaration ([12](12-grammar.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern c` blocks and `extern c func` declarations. A top-level `static if` can also include or exclude `import` statements, `import c` ones included ([above](#static-if-and-conditional-compilation)).
+- in the body of a struct, enum, union or extension, never a protocol, any member ([12](12-grammar.md#files-and-declarations)). That covers computed properties, a union's stored members, constants, methods, initializers, subscripts, nested types and type aliases, an enum's cases, and a `deinit`, which is still the type's only one;
+- at a file's top level, any declaration ([12](12-grammar.md#files-and-declarations)): structs, unions, enums, protocols and type aliases; functions and `task` functions; constants; global `let`s and `var`s, `@threadlocal var`s included; extensions; and `extern c` blocks and `extern c func` declarations. A top-level `static if` can also include or exclude `import` statements, `import c` ones included ([above](#static-if-and-conditional-compilation)).
 
 ### Computed names
 
@@ -492,7 +492,11 @@ struct Merged<A, B>(                                      // Merged<Enemy, Playe
 )
 ```
 
-A generated declaration needs a name that comes from the element it was made for. **`\(e)` stands for the identifier that `e`, a `const` string, spells.** It may appear only where [12](12-grammar.md#files-and-declarations) allows, and the string must be a valid identifier, so `Columns<(Transform, Velocity)>` is an error: a tuple element's `field.name` is its position, `0`. Generated declarations that end up with the same name conflict exactly as written ones would, so two stored fields of one name are a compile error, as in `Merged` above, and functions may overload ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
+A generated declaration needs a name that comes from the element it was made for. **`\(e)` stands for the identifier that `e`, a `const` string, spells.**
+
+- `\(e)` may appear only where the grammar allows ([12](12-grammar.md#files-and-declarations)).
+- The string must be a valid identifier. So `Columns<(Transform, Velocity)>` is an error: a tuple element's `field.name` is its position, `0`.
+- Generated declarations that end up with the same name conflict exactly as written ones would. So two stored fields of one name are a compile error, as in `Merged` above, and functions may overload ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
 
 ### Generated declarations are ordinary declarations
 
@@ -507,11 +511,15 @@ step(&columns.pos, columns.vel.span, dt)                  // two fields of one v
 
 ### Generated members are checked per instantiation
 
-**A type whose header or body generates declarations from its type parameters has members that depend on its type arguments, so each instantiation is checked on its own, as a `static for` body is ([05](05-protocols-generics-and-closures.md#protocols-and-generics)).** Concrete code names the members directly: `delta.hp`, `columns.pos`. Generic code over `Delta<T>` reaches them through reflection or a computed name, as `diff` does, and an error there is reported at the instantiation. Generic code that uses none of this is still checked once, at its definition.
+**A type whose header or body generates declarations from its type parameters is checked per instantiation**, as a `static for` body is ([05](05-protocols-generics-and-closures.md#protocols-and-generics)), since such a type's members depend on its type arguments. Concrete code names the members directly: `delta.hp`, `columns.pos`. Generic code over `Delta<T>` reaches them through reflection or a computed name, as `diff` does, and an error there is reported at the instantiation. Generic code that uses none of this is still checked once, at its definition.
 
 **Generic code sees such a type at its safe bound.** Whatever its generated members could change, generic code assumes they do:
 
-- **When they may include a `deinit` or a stored field**, it may have a `deinit` that isn't `PlainDeinit`, at any depth, so there it may be move-only, destroying it counts as a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), nothing moves out of it ([01](01-values-and-ownership.md#what-can-be-moved-from)), and it isn't `Pod` or `TrivialFree`.
+- **When they may include a `deinit` or a stored field**, it may have a `deinit` that isn't `PlainDeinit`, at any depth. So there:
+    - it may be move-only;
+    - destroying it counts as a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it));
+    - nothing moves out of it ([01](01-values-and-ownership.md#what-can-be-moved-from));
+    - it isn't `Pod` or `TrivialFree`.
 - **When they may include a stored field**, that field may be of any type, so it may be scoped, as a type parameter may ([02](02-views-and-dependencies.md#generic-code-and-scoped)), and it isn't sealed, shallow, `Frozen` or `Sendable` either.
 - **When they may include an enum case**, a `when` over it ends in `else`.
 
@@ -533,7 +541,14 @@ struct Node(
 A generated type's members come from lists of other declarations, and **generation reads each list only once it is final**, so it runs in dependency order:
 
 - **Module lists.** Only imported modules' lists, and a module's own `declaredTypes`, drive generation ([above](#enumerating-a-modules-types)).
-- **Fields, cases and other facts.** A list of fields or cases is complete once every member it depends on is. Generation is a cycle, and a compile error, when a declaration that any `static if` or `static for` generates, directly or through other generated declarations or the `const`s they feed, could change a list that a `static for` iterates or a fact that a `static if` or `static for` reads: a conformance, whether a type is copyable, or its layout. The declaration may be a member, a top-level declaration, an extension or a conformance, and the test is on what it could change, whether or not its branch is taken. `static if Echo.conforms(Copyable.self) { deinit { … } }` inside `Echo` is one, and so is `static if !Foo.conforms(Printable.self) { extension Foo: Printable { … } }`. A type that only holds a type generated from it is fine: `Delta<Node>` iterates the fields `Node` declares.
+- **Fields and cases.** A list of fields or cases is complete once every member it depends on is.
+
+**Generation is a cycle, and a compile error, when a generated declaration could change one of these:**
+
+- a list that a `static for` iterates;
+- a fact that a `static if` or `static for` reads: a conformance, whether a type is copyable, or its layout.
+
+A generated declaration here is one that any `static if` or `static for` generates, directly or through other generated declarations or the `const`s they feed. It may be a member, a top-level declaration, an extension or a conformance. The test is on what it could change, whether or not its branch is taken. `static if Echo.conforms(Copyable.self) { deinit { … } }` inside `Echo` makes generation a cycle, and so does `static if !Foo.conforms(Printable.self) { extension Foo: Printable { … } }`. A type that only holds a type generated from it is fine: `Delta<Node>` iterates the fields `Node` declares.
 
 ## Attributes
 
@@ -554,7 +569,7 @@ struct Enemy(
 )
 ```
 
-**An attribute is any struct that conforms to `Attribute`. Its arguments must be `const`**, and its value freezable, since `typeInfo` puts it in read-only data ([below](#runtime-type-info)) as a `const` that reaches run-time code is frozen ([above](#consts-that-reach-run-time)). Reflection reads it on a field, a type or an enum case ([table](#what-reflection-can-read)). An editor's inspector, for example:
+**An attribute is any struct that conforms to `Attribute`, and its arguments must be `const`.** Its value must be freezable, since `typeInfo` puts it in read-only data ([below](#runtime-type-info)) the way a `const` that reaches run time is frozen ([above](#consts-that-reach-run-time)). Reflection reads an attribute on a field, a type or an enum case ([above](#what-reflection-can-read)). An editor's inspector, for example:
 
 ```swift
 func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
@@ -570,7 +585,7 @@ func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
 
 ## Runtime type info
 
-For code that walks types **at run time**, `typeInfo(T.self)` materializes a `TypeInfo`, a record in read-only data built from the same reflection and attributes, as a module other than `T`'s sees them ([above](#reflection-and-access-control)), so a type has one record wherever it is made:
+For code that walks types **at run time**, `typeInfo(T.self)` materializes a `TypeInfo`, a record in read-only data. The record is built from the same reflection and attributes, as a module other than `T`'s sees them ([above](#reflection-and-access-control)), so a type has one record wherever it is made:
 
 ```swift
 public struct TypeInfo private init(    // Frozen, derived: every field is Frozen
@@ -593,11 +608,13 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 }
 ```
 
-**Only `typeInfo` builds a `TypeInfo`, `FieldInfo`, `CaseInfo` or `AttributeInfo`**, whose initializers are private to the module that declares them, so each record describes its type truthfully. **An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding: `a[as: Tooltip.self]` is an optional projection of the `Tooltip` it holds, `nil` for another attribute type.
+**Only `typeInfo` builds a `TypeInfo`, `FieldInfo`, `CaseInfo` or `AttributeInfo`**, whose initializers are private to the module that declares them, so each record describes its type truthfully.
+
+**An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding: `a[as: Tooltip.self]` is an optional projection of the `Tooltip` it holds, `nil` for another attribute type.
 
 ### `StaticSpan`: views of immortal data
 
-**`StaticSpan<T>` is a view of immortal data, so unlike `Span` it is unscoped.** **Immortal data** is read-only memory that is never freed: the program image, or runtime tables.
+**`StaticSpan<T>` is a view of immortal data, so unlike `Span` it is unscoped.** **Immortal data** is memory that is never freed, and that nothing writes once a value names it: the program image, or runtime tables.
 
 - Its `T` is `~Scoped`, as an unscoped type's contents are ([02](02-views-and-dependencies.md#generic-code-and-scoped)), and has only values that could be frozen ([above](#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
 - Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](08-c-interop.md#what-c-must-uphold)).
@@ -608,7 +625,8 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 **A build declares the settings that change what code means:**
 
 - the modules, in a list whose order startup follows where imports leave it open, each with its name, unique in the build, and its source files, in an order that sets the source order of its declarations ([07](07-concurrency.md#initialization-at-startup)). A generated declaration stands, in that order, where the `static if` or `static for` that generates it does, a `static for`'s in element order;
-- which of the modules form the prelude ([11](11-compilation-model.md#modules-and-names)), and whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
+- which of the modules form the prelude ([11](11-compilation-model.md#modules-and-names));
+- whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
 - for each module, whether it is `@safe` ([10](10-errors-and-safety.md#safe-modules)), and its diagnostic check settings ([10](10-errors-and-safety.md#choosing-checks-for-a-module-or-a-scope));
 - the build profile and the target, which `target` exposes ([above](#static-if-and-conditional-compilation));
 - the flags that `target.flag` reads, each a `const` `Bool`, `Int` or `StaticString`;
