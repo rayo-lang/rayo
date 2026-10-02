@@ -434,7 +434,7 @@ let locks: [8 of Mutex<Int>] = .init(generating: { _ in Mutex(0) })   // one cal
 
 ## Collections and strings
 
-Rayo separates collections that own their elements, like `List`, from views that borrow elements something else owns, like `Span`, which are scoped ([02](02-views-and-dependencies.md#scoped-values)):
+**Rayo separates collections that own their elements, like `List`, from views that borrow elements something else owns, like `Span`**, which are scoped ([02](02-views-and-dependencies.md#scoped-values)):
 
 ```swift
 var names = List<String>()                // owns its buffer: move-only, allocated through an allocator
@@ -444,13 +444,21 @@ let all: Span<String> = names.span        // a view: borrows the list's elements
 let firstTwo = names[0..<2]               // also a Span
 ```
 
-The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpan` and `StaticString`, `Name`, the object pointers and `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)), are language types. The other rows, the owning collections and `Handle`, are std's ([11](11-compilation-model.md#what-the-spec-defines)), except `SoA<T>`, which is builtin ([below](#struct-of-arrays-soat)). Every owning collection is move-only, and each one that allocates carries an allocator ([06](06-memory-and-allocators.md#how-values-record-their-allocator)).
+**These rows of the table below are language types:**
+
+- the scoped views `Span`, `MutableSpan` and `StringView`;
+- the immortal `StaticSpan` and `StaticString`;
+- `Name`;
+- the object pointers;
+- `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)).
+
+The other rows, such as the owning collections and `Handle`, are std's ([11](11-compilation-model.md#what-the-spec-defines)), except `SoA<T>`, which is builtin ([below](#struct-of-arrays-soat)). Every owning collection is move-only, and each one that allocates carries an allocator ([06](06-memory-and-allocators.md#how-values-record-their-allocator)).
 
 | Type | Owning? | Notes |
 | --- | --- | --- |
 | `List<T>` | yes | Growable, with the allocator it came from ([06](06-memory-and-allocators.md#how-values-record-their-allocator)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
-| `StaticSpan<T>` | no (immortal) | ptr + count into **immortal** read-only data, copyable and unscoped ([09](09-compile-time.md#staticspan-views-of-immortal-data)) |
+| `StaticSpan<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](09-compile-time.md#staticspan-views-of-immortal-data)) |
 | `Map<K, V>`, `Set<T>` | yes | Hash map and set |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](03-handles-and-objects.md#pools-and-handles)) |
@@ -461,14 +469,21 @@ The scoped views `Span`, `MutableSpan` and `StringView`, the immortal `StaticSpa
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([below](#struct-of-arrays-soat)) |
 | `String` | yes | UTF-8 bytes, allocator |
 | `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
-| `StaticString` | no (immortal) | Text in immortal read-only data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](09-compile-time.md#consts-that-reach-run-time)) |
+| `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](09-compile-time.md#consts-that-reach-run-time)) |
 | `Name` | no | 64-bit interned hash of a text (below) |
 
-**A `Name` is made only from a text.** `let n: Name = "jump"` hashes at compile time, as `Name(s)` does for a `const` string, and `Name(s)` of any other string interns at run time, copying the text into `.system` memory whatever the current allocator is; `n.text` is a `StaticString`, since interned text is never freed. Every `Name` the build makes at compile time, by a literal, a `const` or a compile-time evaluation, is in the interner with its text from startup. No two texts share a `Name`. A build in which two constant names would share one fails. At run time, `Name(s)` panics when another text already has `s`'s hash or interning runs out of memory, and `Name(interning: s)` returns `nil` in both cases.
+**A `Name` is made only from a text:**
+
+- `let n: Name = "jump"` hashes at compile time, as `Name(s)` does for a `const` string;
+- `Name(s)` of any other string, and `Name(interning: s)`, intern at run time, copying the text into `.system` memory whatever the current allocator is.
+
+`n.text` is a `StaticString`, since interned text is never freed. Every `Name` the build makes at compile time, by a literal, a `const` or a compile-time evaluation, is in the interner with its text from startup.
+
+**No two texts share a `Name`.** A build in which two constant names would share one fails. At run time, `Name(s)` panics when another text already has `s`'s hash or interning runs out of memory, and `Name(interning: s)` returns `nil` in both cases.
 
 ### Strings
 
-A string is UTF-8 bytes, and formatting writes straight to wherever the text is going:
+**A string is UTF-8 bytes, and formatting writes straight to wherever the text is going:**
 
 ```swift
 log("hp \(hp)")                           // written into the log's sink: no allocation
@@ -479,7 +494,7 @@ for g in label.graphemes { … }            // user-perceived characters, throug
 
 - **Strings are indexed by byte offset.** Unicode scalars and graphemes are explicit views, `s.scalars` and `s.graphemes`. A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics, so every string holds whole UTF-8 sequences ([10](10-errors-and-safety.md#what-panics)).
 - **Every string literal is null-terminated.** So `"abc".cString` passes to C at no cost. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
-- **Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), borrowing each, and is a scoped value of a type the compiler builds. That type is `Formattable`, writing its text and each segment in turn into the sink it is given, and every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
+- **Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), borrowing each, and is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given. Every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
 
     ```swift
     protocol TextSink { mutating func write(_ text: StringView) where self borrows static }
@@ -490,7 +505,7 @@ for g in label.graphemes { … }            // user-perceived characters, throug
 
 ### Literals
 
-A literal has no type until something expects one, so `[1, 2, 3]`, `"jump"` and `0.5` become whatever their context asks for:
+**A literal has no type until something expects one**, so `[1, 2, 3]`, `"jump"` and `0.5` become whatever their context asks for:
 
 ```swift
 let v: Vec3 = [1, 2, 3]                   // a Vec3: exactly 3 elements
@@ -514,16 +529,35 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
-- **A literal allocates only where its type is written.** A conformance whose initializer is `@noalloc` ([06](06-memory-and-allocators.md#allocation-failure)), as those of the number types, `Array`, `Simd`, `InlineList`, `StaticString`, `StringView`, `String` and `std.math`'s `Vec3` and matrices are, applies wherever the type is expected, and so does one whose literals convert at compile time (below), as `Name`'s do. std's `String` takes a literal without allocating: it records the current allocator, as every `String` does, and is checked against it at each open like any other ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)), but uses the literal's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator. One whose initializer isn't `@noalloc`, as `List`'s, `Set`'s and `Map`'s aren't, applies only where that type is spelled at the literal: in the annotation of the declaration the literal is part of, a field's included, or in an `as` applied to it. `_` stands for what the literal fills in, as in `List<_>`. Anywhere else, such as a `List` parameter, a `return`, or an assignment to an existing `List`, the literal is an error, so `spawnAll([a, b])` can't allocate unseen. `@noalloc` code takes none of these, and generic code converts a literal to its `T` only where it writes `T`, since `T`'s initializer may allocate.
-- **An array literal's elements arrive inline.** They come as an owned `[N of Element]` whose count is known at compile time, never as a heap buffer, so a type refuses a count it can't hold at compile time: `Simd<T, N>` takes exactly `N` elements, `Vec3` exactly 3 and `InlineList<T, 8>` at most 8, through `static if` and `static error` ([09](09-compile-time.md#static-if-and-conditional-compilation)). Passed where an `[N of T]` with an unbound `N` or `T` is expected, as for `List([1, 2, 3])`, a literal binds `N` to its count and `T` as it does with no context.
-- **An integer or float literal is checked against the type it becomes.** A prefix `-` applied directly to it, where an operand begins, is checked with it as one value, so `let lo: Int8 = -128` fits, while `n-1` still subtracts; a postfix member applies to the literal first, so `-128.abs` is `-(128.abs)`. It must fit the conformer's `IntegerLiteralType`, at compile time, and a float literal is rounded once, to its `FloatLiteralType`, which is `Half`, `Float` or `Double`.
-- **With no context, a literal has a default type.** An integer literal is an `Int`, a floating-point literal a `Double`, a string literal a `StaticString`, a dictionary literal an `[N of (K, V)]`, and an array literal an `[N of T]`. Its `T` is the type of its typed elements, which must agree. When every element is a literal, they take one default together: `Double` for number literals if any is a floating-point one, and `Int` if none is, and for literals of one other kind that kind's default, so `["a", "b"]` is a `[2 of StaticString]`. Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` or `[:]` needs a context.
-- **A literal of constants converts at compile time.** That is a literal whose elements, at any depth, are literals or `const`s, and it converts when its initializer can run at compile time ([09](09-compile-time.md#running-code-at-compile-time-const)) and the value it builds owns nothing outside its own bytes: no allocation, no object, no `Synchronized` value, no `Allocator` id but `.system`, and no pointer but a `StaticString` or `StaticSpan`. `Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify, and each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](01-values-and-ownership.md#constants)). So `let jump: Name = "jump"` costs nothing at run time. Any other literal runs its initializer on each evaluation: a `List`'s allocates from the current allocator, and a `String`'s only records it. Either way, when the initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
+- **A literal allocates only where its type is written.** A conformance applies wherever the type is expected when either of these holds:
+    - its initializer is `@noalloc` ([06](06-memory-and-allocators.md#allocation-failure)), as those of the number types, `Array`, `Simd`, `InlineList`, `StaticString`, `StringView`, `String` and `std.math`'s `Vec3` and matrices are;
+    - its literals convert at compile time (below), as `Name`'s do.
+
+  A conformance that meets neither, as `List`'s, `Set`'s and `Map`'s don't, applies only where that type is spelled at the literal. It is spelled there in the annotation of the declaration the literal is part of, a field's included, or in an `as` applied to it. `_` stands for what the literal fills in, as in `List<_>`. Anywhere else, such as a `List` parameter, a `return`, or an assignment to an existing `List`, the literal is an error. So `spawnAll([a, b])` can't allocate unseen. `@noalloc` code takes none of these, and generic code converts a literal to its `T` only where it writes `T`, since `T`'s initializer may allocate.
+
+  **std's `String` takes a literal without allocating.** It records the current allocator, as every `String` does, and is checked against it at each open like any other ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). But it uses the literal's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
+- **An array literal's elements arrive inline.** They come as an owned `[N of Element]` whose count is known at compile time, never as a heap buffer. So a type refuses a count it can't hold at compile time, through `static if` and `static error` ([09](09-compile-time.md#static-if-and-conditional-compilation)): `Simd<T, N>` takes exactly `N` elements, `Vec3` exactly 3 and `InlineList<T, 8>` at most 8. Passed where an `[N of T]` with an unbound `N` or `T` is expected, as for `List([1, 2, 3])`, a literal binds `N` to its count and `T` as it does with no context.
+- **An integer or float literal is checked against the type it becomes.** A prefix `-` applied directly to it, where an operand begins, is checked with it as one value, so `let lo: Int8 = -128` fits, while `n-1` still subtracts. A postfix member applies to the literal first, so `-128.abs` is `-(128.abs)`. It must fit the conformer's `IntegerLiteralType`, at compile time, and a float literal is rounded once, to its `FloatLiteralType`, which is `Half`, `Float` or `Double`.
+- **With no context, a literal has a default type.** An integer literal is an `Int`, a floating-point literal a `Double`, a string literal a `StaticString`, a dictionary literal an `[N of (K, V)]`, and an array literal an `[N of T]`. Its `T` is the type of its typed elements, which must agree. When every element is a literal, they take one default together:
+    - for number literals, `Double` if any is a floating-point one, and `Int` if none is;
+    - for literals of one other kind, that kind's default, so `["a", "b"]` is a `[2 of StaticString]`.
+
+  Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` or `[:]` needs a context.
+- **A literal of constants converts at compile time.** A literal of constants is one whose elements, at any depth, are literals or `const`s. It converts when its initializer can run at compile time ([09](09-compile-time.md#running-code-at-compile-time-const)) and the value it builds owns nothing outside its own bytes:
+    - no allocation;
+    - no object;
+    - no `Synchronized` value;
+    - no `Allocator` id but `.system`;
+    - no pointer but a `StaticString` or `StaticSpan`.
+
+  `Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](01-values-and-ownership.md#constants)). So `let jump: Name = "jump"` costs nothing at run time.
+
+  Any other literal runs its initializer on each evaluation: a `List`'s allocates from the current allocator, and a `String`'s only records it. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 - **`true` and `false` are only `Bool`, and `nil` only an optional.**
 
 ### Iteration
 
-A `for` loop borrows each element where it is, so iterating never copies:
+**A `for` loop borrows each element where it is, so iterating never copies:**
 
 ```swift
 var total: Float = 0
@@ -552,20 +586,28 @@ protocol ConsumingSequence {                    // what a loop over a whole valu
 }
 ```
 
-A collection's iterator yields `Borrow<T>`, a copyable, scoped shared view of one element, its mutable iterator `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`, and its consuming iterator each `T` itself. A pattern binds through the view's `value`, so move-only elements iterate like any others.
+**A collection's shared and mutable iterators yield views of its elements, and its consuming iterator yields the elements themselves:**
 
-**How a loop runs.** A sequence that is a place (a variable, a stored field, or a `read` or `modify` projection such as `.value`) is iterated where it is. Anything else, such as `a.enumerated()`, is a whole value, which is moved into a hidden `var` that lives until the loop ends, as is every temporary in the sequence expression, each into its own, in evaluation order: in `for (i, var e) in &makeEnemies().enumerated()` the list is a hidden mutable local. An adaptor in a hidden local keeps its collection borrowed for the whole loop. Each element is bound in place when it lives in the collection, and owned when the iterator hands it out as a value of its own ([01](01-values-and-ownership.md#conditions-and-patterns)). With `S` for what is iterated:
+- its iterator yields `Borrow<T>`, a copyable, scoped shared view of one element;
+- its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`;
+- its consuming iterator yields each `T` itself.
+
+A pattern binds through the view's `value`, so move-only elements iterate like any others.
+
+**A sequence that is a place is iterated where it is.** Such a place is a variable, a stored field, or a `read` or `modify` projection such as `.value`. Anything else, such as `a.enumerated()`, is a whole value. It is moved into a hidden `var` that lives until the loop ends. So is every temporary in the sequence expression, each into its own, in evaluation order: in `for (i, var e) in &makeEnemies().enumerated()` the list is a hidden mutable local. An adaptor in a hidden local keeps its collection borrowed for the whole loop.
+
+**Each element is bound in place when it lives in the collection, and owned when the iterator hands it out as a value of its own** ([01](01-values-and-ownership.md#conditions-and-patterns)). With `S` for what is iterated:
 
 - A loop over `&s` runs `var it = S.makeMutableIterator(); while var r = it.next() { bind pattern to r′; body }`, holding `S`, and through it the collection, exclusively. The `&` selects this form, and is required to change elements, as it is in any binding ([01](01-values-and-ownership.md#lending-a-place-for-change)).
 - A loop over a whole value, such as a call result or `consume x`, whose type conforms to `ConsumingSequence` runs `var it = S.makeConsumingIterator(); while let b = it.next() { bind pattern to b′; body }`. The iterator takes `S`, so `for b in consume jobs { finish(b) }` hands each job over, and the iterator's `deinit` destroys the elements a `break`, `return` or `throw` leaves. `[N of T]` conforms, as std's owning collections do.
 - Every other loop runs `var it = S.makeIterator(); while let b = it.next() { bind pattern to b′; body }`.
 - `b′` is `b.value` for a `Borrow`, borrowing the element in place, and `r′` is `&r.value` for a `MutableRef`. Any other element, such as a range's `Int` or a chunk, is a value the iterator hands out: `b′` is `consume b`, `r′` is `consume r`, and the loop variable owns it for the iteration, as in `for i in 0..<n { ids.append(i) }`. So `for var` without `&` over elements that live in `s` binds a `var` part to a place without `&`, a compile error ([01](01-values-and-ownership.md#lending-a-place-for-change)).
-- The pattern binds part by part: through `.value` for a `Borrow` or `MutableRef` part, read-only for a part without `var` and in place for a `var` part, and directly, owned, for any other part. So `for (h, var e) in &pool.entries` binds `e` in place and gives `h` its own handle ([01](01-values-and-ownership.md#the-law-of-exclusivity)), and a `zip` with `&` arguments hands out `MutableRef` parts itself, so `for (var v, f) in zip(&vels, forces)` needs no `&` of its own.
+- The pattern binds part by part: through `.value` for a `Borrow` or `MutableRef` part, read-only for a part without `var` and in place for a `var` part, and directly, owned, for any other part. So `for (h, var e) in &pool.entries` binds `e` in place and gives `h` its own handle ([01](01-values-and-ownership.md#the-law-of-exclusivity)). A `zip` with `&` arguments hands out `MutableRef` parts itself, so `for (var v, f) in zip(&vels, forces)` needs no `&` of its own.
 - A `where c` after the sequence, as in `for var e in &enemies where e.hp > 0`, runs the body as `if c { body }`, with the pattern bound.
 
-**Other loops.** `while` takes conditions as `if` does, except that `let x` has no short form there ([01](01-values-and-ownership.md#conditions-and-patterns)), and `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
+**`while` takes conditions as `if` does**, except that `let x` has no short form there ([01](01-values-and-ownership.md#conditions-and-patterns)). `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
 
-**Which elements outlive the iteration** follows from the dependency rules ([02](02-views-and-dependencies.md#dependencies)):
+**Which elements outlive the iteration follows from the dependency rules** ([02](02-views-and-dependencies.md#dependencies)):
 
 ```swift
 var names = List<StringView>()
@@ -573,13 +615,13 @@ for s in table.entries { names.append(s.name.view) }    // fine: each element de
 for var chunk in &data.chunks(64) { scale(&chunk) }       // one MutableSpan<Float> at a time
 ```
 
-A mutable iterator lends: its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so keeping a chunk past its iteration, or holding two, is a compile error. `split(at:)` gives two at once.
+**A mutable iterator lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call. So keeping a chunk past its iteration, or holding two, is a compile error. `split(at:)` gives two at once.
 
-**`zip`** is builtin, since no generic function takes a varying number of arguments with per-argument conventions. `zip(a, &b, c)` borrows `&` arguments exclusively and the rest shared, hands out tuples, and stops at the shortest, so every element is in bounds. A `zip` with an `&` argument is a move-only exclusive view whose only iteration is the consuming one, so a loop over a place holding one is written `for (var x, y) in consume z`, and no two iterators hand out its `MutableRef`s.
+**`zip` is builtin**, since no generic function takes a varying number of arguments with per-argument conventions. `zip(a, &b, c)` borrows `&` arguments exclusively and the rest shared, hands out tuples, and stops at the shortest, so every element is in bounds. A `zip` with an `&` argument is a move-only exclusive view whose only iteration is the consuming one. So a loop over a place holding one is written `for (var x, y) in consume z`, and no two iterators hand out its `MutableRef`s.
 
 ### Shared, mutable and consuming forms of one method
 
-One name can have a shared and a mutable form, each picked by its context:
+**One name can have a shared and a mutable form, each picked by its context:**
 
 ```swift
 for (i, e) in items.enumerated() { … }           // shared: (Int, Borrow<Item>) elements
@@ -589,22 +631,31 @@ var lives = &particles.life                      // MutableSpan<Float>
 particles.life.sort()                            // only the mutable form has sort(), so it is used
 ```
 
-**A type may declare a non-`mutating` and a `mutating` method or property with the same name and parameters, and each use picks one by its access context alone**, with no search. A `mutating` computed property or subscript, as in `mutating var life: MutableSpan<Float> { get { … } }`, has accessors that take `self` exclusively. The context is exclusive for an operand of `&` ([01](01-values-and-ownership.md#lending-a-place-for-change)), an assignment's target and a receiver only the exclusive form can serve (below). Everywhere else it is shared, so a value of the mutable form is written with `&`, as in `func lives(_ p: mutable Particles) -> MutableSpan<Float> { &p.life }` or `Cols(life: &p.life)`.
+**A type may declare a non-`mutating` and a `mutating` method or property with the same name and parameters, and each use picks one by its access context alone**, with no search. A `mutating` computed property or subscript, as in `mutating var life: MutableSpan<Float> { get { … } }`, has accessors that take `self` exclusively. The context is exclusive for these:
+
+- an operand of `&` ([01](01-values-and-ownership.md#lending-a-place-for-change));
+- an assignment's target;
+- a receiver only the exclusive form can serve (below).
+
+Everywhere else it is shared, so a value of the mutable form is written with `&`, as in `func lives(_ p: mutable Particles) -> MutableSpan<Float> { &p.life }` or `Cols(life: &p.life)`.
 
 **For a call's receiver, the least access wins**: the shared form when its declared result has a member that fits, so `data[0..<n].split(at: m)` splits a `Span`, and the exclusive form only otherwise, as for `particles.life.sort()`. `var whole = &data[0..<n]` forces the exclusive form.
 
-**Consuming counterparts.** A `consuming` method may share a `mutating` one's name and parameters:
+**A `consuming` method may share a `mutating` one's name and parameters:**
 
 ```swift
 var (a, b) = s.split(at: m)             // 's' is a place: the mutating form lends two halves
 var (c, d) = (consume s).split(at: m)   // a whole value: the consuming form hands them over
 ```
 
-A receiver that is a whole value, a call result (a `get` accessor's or subscript's included) or `consume x`, picks the `consuming` form. A receiver that is a place, a variable, a stored field even of a temporary, or a `read` or `modify` projection, picks the `mutating` form, or, where a shared form exists too, the one its access context picks (above). So `s.split(at: m)` on a `MutableSpan` lends two halves that depend on `s` exclusively, and `(consume s).split(at: m)` hands them over, carrying only what `s` carried (rule 3, [02](02-views-and-dependencies.md#rule-3-call-results)). A shared `Span`'s `split(at:)` is declared `where return outlives self`, so it needs no pair.
+- **A receiver that is a whole value picks the `consuming` form**: a call result, a `get` accessor's or subscript's included, or `consume x`.
+- **A receiver that is a place picks the `mutating` form**, or, where a shared form exists too, the one its access context picks (above). A place here is a variable, a stored field even of a temporary, or a `read` or `modify` projection.
+
+So `s.split(at: m)` on a `MutableSpan` lends two halves that depend on `s` exclusively. `(consume s).split(at: m)` hands them over, carrying only what `s` carried, by rule 3 ([02](02-views-and-dependencies.md#rule-3-call-results)). A shared `Span`'s `split(at:)` is declared `where return outlives self`, so it needs no pair.
 
 ### Plain data: `Pod` and bit casts
 
-A type where any bytes make a valid value is **`Pod`** ("plain old data"), so bytes from a file or a packet can be used as one:
+**A type where any bytes make a valid value is `Pod`** ("plain old data"), so bytes from a file or a packet can be used as one:
 
 ```swift
 public struct Vertex(public var pos: Vec3, public var normal: Vec3, public var uv: Vec2)     // every field Pod and public: Pod
@@ -624,18 +675,30 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // Span<UInt8> to Span<Ver
 - structs with no `deinit` whose stored fields are all `Pod`, all **as visible as the struct**, and none `unsafe`, and whose primary initializer is as visible as the struct too and not `unsafe` ([above](#initializers)). An imported bitfield counts as [08](08-c-interop.md#structs-unions-and-enums) says;
 - unions with no `deinit`, named or anonymous in a struct ([08](08-c-interop.md#structs-unions-and-enums)), whose members are all `Pod`, all as visible as the union, and none `unsafe`.
 
-`Bool`, Rayo enums, closed C enums, pointers, `Handle`s, weak pointers, weak links, `Name` and owners of memory are not `Pod`. Nor is a `Synchronized` type or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](07-concurrency.md#the-synchronized-contract)), nor a type the compiler builds, a closure literal's or a task's state or an interpolated literal's value, whose fields nothing names ([09](09-compile-time.md#what-reflection-can-read)). `@pod` waives only the visibility and `unsafe` conditions, so it is a compile error on any of these, and on a struct or union that has a `deinit` or holds a type that isn't `Pod`.
+**These are not `Pod`:**
 
-**The visibility and `unsafe` conditions protect invariants.** A field is as visible as its struct when it is `public` or the struct isn't, and a primary initializer is unless the struct is `public` and its header says `private init` ([11](11-compilation-model.md#modules-and-names)). A `public` `Fraction`, whose `private init` makes every other module pass the nonzero-denominator check, or a `struct SlotIndex(public unsafe let raw: UInt32)` or `struct SlotIndex unsafe init(public let raw: UInt32)` that `unchecked` code trusts, must not be forged from bytes, so it is `Pod` only through `@pod`, which states that every bit pattern is valid.
+- `Bool`, Rayo enums, closed C enums, pointers, `Handle`s, weak pointers, weak links, `Name` and owners of memory;
+- a `Synchronized` type, or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](07-concurrency.md#the-synchronized-contract));
+- a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value ([09](09-compile-time.md#what-reflection-can-read)).
 
-**Padding.** Padding bytes are uninitialized, and a type with none is **padding-free**, which the `const` `T.isPaddingFree` reports ([09](09-compile-time.md#what-reflection-can-read)). A union is padding-free when every member is and fills it exactly; bytes a member doesn't cover, including tail padding from `@align(N)`, count as padding. An enum, an optional included, is padding-free when each of its values sets every byte, so bytes that a case's payload doesn't fill, or that a `nil` leaves unset, count as padding: `UInt8?` isn't padding-free, and `Handle<T>?`, whose `nil` is all zero, is. In an imported struct or union, so are the bitfield bits [08](08-c-interop.md#structs-unions-and-enums) lists.
+**`@pod` waives only the visibility and `unsafe` conditions.** So it is a compile error on the types listed as not `Pod`, and on a struct or union that has a `deinit` or holds a type that isn't `Pod`.
+
+**The visibility and `unsafe` conditions protect invariants.** A field is as visible as its struct when it is `public` or the struct isn't, and a primary initializer is unless the struct is `public` and its header says `private init` ([11](11-compilation-model.md#modules-and-names)). A type that guards an invariant must not be forged from bytes. One is a `public` `Fraction`, whose `private init` makes every other module pass the nonzero-denominator check. Another is a `struct SlotIndex(public unsafe let raw: UInt32)` or `struct SlotIndex unsafe init(public let raw: UInt32)` that `unchecked` code trusts. Each fails the conditions, so it is `Pod` only through `@pod`, which states that every bit pattern is valid.
+
+**Padding bytes are uninitialized, and a type with none is padding-free**, which the `const` `T.isPaddingFree` reports ([09](09-compile-time.md#what-reflection-can-read)).
+
+- **Unions.** A union is padding-free when every member is and fills it exactly. Bytes a member doesn't cover, including tail padding from `@align(N)`, count as padding.
+- **Enums.** An enum, an optional included, is padding-free when each of its values sets every byte. So bytes that a case's payload doesn't fill, or that a `nil` leaves unset, count as padding: `UInt8?` isn't padding-free, and `Handle<T>?`, whose `nil` is all zero, is.
+- **Bitfields.** In an imported struct or union, the bitfield bits [08](08-c-interop.md#structs-unions-and-enums) lists count as padding too.
+
+**Casts between `Pod` types depend on padding:**
 
 - **Bit casts.** `U(bitPattern: t)` between `Pod` types of equal size is safe when `t`'s type is padding-free.
 - **Span casts.** `span.reinterpret(as: Vertex.self)` views a span of a `Pod` type `A` as a `Span<U>?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. A shared cast needs `A` padding-free, so every byte read is initialized. A mutable cast needs both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see `A`.
 
 ### Variable-sized structs: `TrailingArray`
 
-`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s, as a network packet or a C API with a flexible array member wants.
+**`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s**, as a network packet or a C API with a flexible array member wants.
 
 ```swift
 var msg = TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
@@ -646,12 +709,18 @@ msg.elements[0..<4].copy(from: payload[0..<4]) // MutableSpan<UInt8> over the tr
 It is move-only, and owns its allocation, whose element count is fixed when it is made. It has a C representation when its header and element types both have one ([08](08-c-interop.md#c-representations)).
 
 - **Layout.** The header starts the allocation, which is aligned for both types, and the elements follow, one `Element` stride apart, from the first multiple of `Element`'s alignment at or after the header's size. The allocation is at least as large as the header's size and as the elements' end, so the whole header lies inside it.
-- **Elements in the header's tail padding.** When the header is a struct or tuple, and neither it nor `Element` is or holds a `Synchronized` value, the elements start instead **where C puts a flexible array member of `Element`s after the header's fields**, in place of any the header declares: for a Rayo header, at the first multiple of `Element`'s alignment at or after the end of its last field ([above](#structs)), and for an imported one, at the offset the target's C ABI gives that member. That offset must be a multiple of `Element`'s alignment: a packed imported header whose member C places lower, as `#pragma pack(1)` can, is a compile error as a `TrailingArray` header, since its elements couldn't be both where C reads them and aligned. So they can start inside the header's tail padding, or inside the storage unit of a bitfield that ends an imported header. A `Synchronized` value may write any of its bytes through a shared borrow, padding included, while the other side is read with plain loads, so with one on either side the two never share bytes.
+- **Elements in the header's tail padding.** When the header is a struct or tuple, and neither it nor `Element` is or holds a `Synchronized` value, the elements start instead where C puts a flexible array member of `Element`s after the header's fields. They replace any such member the header declares, and start:
+    - for a Rayo header, at the first multiple of `Element`'s alignment at or after the end of its last field ([above](#structs));
+    - for an imported one, at the offset the target's C ABI gives that member.
+
+  That offset must be a multiple of `Element`'s alignment. A packed imported header whose member C places lower, as `#pragma pack(1)` can, is a compile error as a `TrailingArray` header, since its elements couldn't be both where C reads them and aligned. So the elements can start inside the header's tail padding, or inside the storage unit of a bitfield that ends an imported header.
+
+  A `Synchronized` value may write any of its bytes through a shared borrow, padding included, while the other side is read with plain loads. So with one on either side, the two never share bytes.
 - **The header.** `msg.header`'s `read` lends it in place. Its `modify` yields it from a temporary and writes it back whole, except a struct or tuple header, which it writes field by field, each bitfield through its accessor, so the header's tail padding is never written. A view from the `modify` is access-bound ([02](02-views-and-dependencies.md#access-bound-projections)). Code that reaches the header through a pointer, C or `unsafe` Rayo, writes it the same way ([10](10-errors-and-safety.md#unsafe-code)).
 
 ### Struct of arrays: `SoA<T>`
 
-`SoA<T>` stores each field of a struct `T`, or each element of a tuple `T`, in its own buffer, so a loop reads only the fields it touches, still with field syntax:
+**`SoA<T>` stores each field of a struct `T`, or each element of a tuple `T`, in its own buffer**, so a loop reads only the fields it touches, still with field syntax:
 
 ```swift
 var particles = SoA<Particle>(capacity: 100_000)  // or SoA<Particle>(), as for List
@@ -662,11 +731,11 @@ for var p in &particles {              // p is a row: one place per field
 }
 ```
 
-`SoA<T>` is builtin. Its columns are `T`'s stored fields in declaration order, private ones included, as `T.fields` lists them ([09](09-compile-time.md#static-reflection)). A tuple's columns are `s.0`, `s.1`, and so on, and an anonymous union is one field, so its members share a column. `SoA`'s own members, such as `count`, `capacity` and `append`, hide a field of the same name, whose column `s[field: f]` still reaches.
+**`SoA<T>` is builtin, and its columns are `T`'s stored fields in declaration order**, private ones included, as `T.fields` lists them ([09](09-compile-time.md#static-reflection)). A tuple's columns are `s.0`, `s.1`, and so on, and an anonymous union is one field, so its members share a column. `SoA`'s own members, such as `count`, `capacity` and `append`, hide a field of the same name, whose column `s[field: f]` still reaches.
 
-**Columns are views.** `s.life` returns a `Span` of the column's buffer in a shared context and a `MutableSpan` in an exclusive one ([above](#shared-mutable-and-consuming-forms-of-one-method)), which a binding such as `var lives = &particles.life` owns ([01](01-values-and-ownership.md#lending-a-place-for-change)). The view depends on that column alone, a part of `s` disjoint from the other columns as a stored field is from its siblings ([01](01-values-and-ownership.md#which-places-overlap)), so `&s.pos` and `s.vel` can be held at once. `s[field: f]` returns one column, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of columns, and marked `&`, gives each in the kind of its pattern element: in `let (var ts, vs) = &table.rows[fields: (tf, vf)]`, `ts` is a `MutableSpan` and `vs` a `Span`.
+**Columns are views.** `s.life` returns a `Span` of the column's buffer in a shared context and a `MutableSpan` in an exclusive one ([above](#shared-mutable-and-consuming-forms-of-one-method)), which a binding such as `var lives = &particles.life` owns ([01](01-values-and-ownership.md#lending-a-place-for-change)). The view depends on that column alone, a part of `s` disjoint from the other columns as a stored field is from its siblings ([01](01-values-and-ownership.md#which-places-overlap)), so `&s.pos` and `s.vel` can be held at once. `s[field: f]` returns one column, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of columns. Marked `&`, `s[fields:]` gives each column in the kind of its pattern element: in `let (var ts, vs) = &table.rows[fields: (tf, vf)]`, `ts` is a `MutableSpan` and `vs` a `Span`.
 
-**Rows.** Each element a `for` loop over `s` hands out, and `s[i]`, is a **row**: a view of one index across every column, shared or, through `&`, exclusive, as `Borrow<T>` and `MutableRef<T>` are for other collections ([Iteration](#iteration)). It has one projection per field of `T`, named as the field is, which lends that field's place in its column. Those places are disjoint, as a struct's stored fields are ([01](01-values-and-ownership.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
+**Each element a `for` loop over `s` hands out, and `s[i]`, is a row.** A **row** is a view of one index across every column. It is shared or, through `&`, exclusive, as `Borrow<T>` and `MutableRef<T>` are for other collections ([above](#iteration)). It has one projection per field of `T`, named as the field is, which lends that field's place in its column. Those places are disjoint, as a struct's stored fields are ([01](01-values-and-ownership.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
 
 **Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](09-compile-time.md#reflection-and-access-control)), a column is a `MutableSpan`, and a row's field can be written, only for a `var` field that could be assigned there, so a `let` field's column is a `Span` even in an exclusive context. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this. A growing operation grows every column or none: when an allocation fails, `tryAppend` throws, and `append` panics, with every column as it was ([06](06-memory-and-allocators.md#allocation-failure)).
 

@@ -189,7 +189,7 @@ Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such a
 | `MutableSpan<T>` | `struct { T* ptr; int64_t count; }` |
 | `mutable T` parameter | `T*` |
 | `Void` or `Never` as a result | `void`, and `_Noreturn` for `Never` |
-| `StaticSpan<T>`, `StaticString` | `struct { const T* ptr; int64_t count; }`, with `char` as a `StaticString`'s `T`: immortal read-only data, which C may keep. A `StaticString`'s bytes are followed by a NUL, so its `cString` passes to C as a `const char*` |
+| `StaticSpan<T>`, `StaticString` | `struct { const T* ptr; int64_t count; }`, with `char` as a `StaticString`'s `T`: immortal data, which C may keep. A `StaticString`'s bytes are followed by a NUL, so its `cString` passes to C as a `const char*` |
 | struct | the C struct its layout gives ([04](04-types.md#structs)), each field in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | `struct { T0 _0; T1 _1; … }`, the C struct its layout gives ([04](04-types.md#tuples-ranges-and-arrays)), each element in its representation |
