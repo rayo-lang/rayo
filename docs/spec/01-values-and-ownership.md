@@ -393,7 +393,7 @@ The alternatives are `copy place` and `place.clone()`, and, through an exclusive
 
 ### Constants
 
-**A `const` is a place in read-only data that lives as long as the program.** A view of it is static storage, which any function may return ([09](09-compile-time.md#consts-that-reach-run-time)).
+**A `const` that reaches run time is a place in read-only data that lives as long as the program** ([09](09-compile-time.md#consts-that-reach-run-time)). A view of it is static storage, which any function may return.
 
 **A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `var` bound to one gets a new value, as in `var lives = maxLives`. A `let` of one still borrows it. A `const` of a move-only type can only be borrowed or cloned.
 

@@ -53,7 +53,9 @@ func makeSinTable() -> [1024 of Float] {
 }
 ```
 
-**A `const` initializer is evaluated at compile time**, and checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](01-values-and-ownership.md#default-arguments)). **Any function can run at compile time if what it executes, on that input:**
+**A `const` initializer is evaluated at compile time.** It is checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](01-values-and-ownership.md#default-arguments)).
+
+**Any function can run at compile time if what it executes, on the input it gets:**
 
 - calls no C function, whether imported or declared `extern c`;
 - accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
@@ -65,7 +67,7 @@ A `const` whose initializer does anything else is a compile error, while a globa
 
 - **What runs is what counts.** A function with a branch that reads a global `let` still runs in the compiler on an input that never takes that branch.
 - **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([10](10-errors-and-safety.md#check-levels)), so an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
-- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what [10](10-errors-and-safety.md#unsafe-code) asks of an access through a raw pointer, and every memory-safety check an `unchecked` block removes still runs, so an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](10-errors-and-safety.md#check-levels)).
+- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what an access through a raw pointer must satisfy ([10](10-errors-and-safety.md#unsafe-code)), and every memory-safety check an `unchecked` block removes still runs. So an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](10-errors-and-safety.md#check-levels)).
 - **Allocation works.** At compile time the current allocator is a compile-time heap, so containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. `.system` allocates from the compile-time heap too. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
 - **One thread.** Evaluation runs on one thread, so no `const`'s value depends on thread timing.
 - **Evaluation is bounded.** A `const`'s evaluation that runs past the toolchain's limit is a compile error, so a runaway loop fails the build instead of hanging it; a global `let`'s leaves the global to startup ([07](07-concurrency.md#initialization-at-startup)).
@@ -109,7 +111,13 @@ func setUp(_ world: mutable World) {
 }
 ```
 
-**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in read-only data does ([07](07-concurrency.md#initialization-at-startup)). Freezing copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, into read-only data aligned at least as the allocation was, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). It points each pointer at the same offset in the copy, and makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
+**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in read-only data does ([07](07-concurrency.md#initialization-at-startup)). Freezing does three things:
+
+- It copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). The copy is in read-only data, aligned at least as the allocation was.
+- It points each pointer into a copied allocation at the same offset in its copy. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
+- It makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none.
+
+A frozen `const` has these properties:
 
 - **Its views are static storage.** Its `.span` is a `Span` of static storage, which rule 5 lets any function return ([02](02-views-and-dependencies.md#rule-5-the-callee-side)).
 - **Unscoped views.** For a `List` or an `[N of T]` reached from a `const` through stored fields and storage projections, as `enemyPresets[i].name` is, the compiler also provides a `staticSpan` property, and for a `String` a `staticString` property. It returns an unscoped `StaticSpan<T>` or `StaticString`, which may be kept anywhere because what it views is never freed ([below](#staticspan-views-of-immortal-data)).
@@ -117,13 +125,13 @@ func setUp(_ world: mutable World) {
 
 **What can be frozen.** A `const` that reaches run time must be **freezable**, or it is a compile error. A freezable value:
 
-- is `Frozen`: nothing writes what it holds or owns through a shared borrow ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), and nothing ever mutates a value in read-only data. A type declared `: unsafe Frozen` promises that nothing writes a frozen value of it, bookkeeping included. So it holds no `Synchronized` value, and a global `let` of a `Synchronized` type is initialized at startup, in memory its methods can write ([07](07-concurrency.md#initialization-at-startup));
+- is `Frozen`: nothing writes what it holds or owns through a shared borrow ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), and nothing ever mutates a value in read-only data. A type declared `: unsafe Frozen` promises that nothing writes a frozen value of it, bookkeeping included. So a freezable value holds no `Synchronized` value, and a global `let` of a `Synchronized` type is initialized at startup, in memory its methods can write ([07](07-concurrency.md#initialization-at-startup));
 - is `TrivialFree` ([06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)). A frozen value is never destroyed, which skips only frees, and those free nothing under the static allocator. So a `Shared` or a `LocalShared` isn't freezable, although it may be `Frozen`: its count is written at run time, and its `deinit` isn't `PlainDeinit`;
 - holds no `StablePool`, whose pin counts are written at run time, as `Shared`'s count is ([03](03-handles-and-objects.md#pinning-for-c));
 - holds no weak pointer or weak link at any depth, since the objects and `Shared` values they name exist only at run time ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). So a `Slice` or a `Waker`, which holds a weak link, isn't freezable either;
 - holds no `Allocator` id but `.system`, since an allocator registered at compile time doesn't exist at run time. So a global `let` that registers one, such as `let frameArena = Allocator.register(Arena(size: 64.mb))`, is initialized at startup;
 - holds no stale owning value: every owning value in it would pass an open when evaluation ends ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it));
-- reaches, through its raw pointers, only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, what a `StaticSpan` or `StaticString` views, another `const`'s frozen data, type metadata and code. Never freed memory, and never a pointer made from an integer that evaluation got from a pointer; one made from an integer that never was an address, such as a device register's, is frozen as it is;
+- reaches, through its raw pointers, only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, what a `StaticSpan` or `StaticString` views, another `const`'s frozen data, type metadata and code. It reaches no freed memory, and no raw pointer it holds or reaches is made from an integer that evaluation got from a pointer. A pointer made from an integer that never was an address, such as a device register's, is frozen as it is;
 - is unscoped ([02](02-views-and-dependencies.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](05-protocols-generics-and-closures.md#function-typed-values)): freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a `StaticSpan` or a `StaticString` (above);
 - has a `Sendable` type, as every global that safe code reaches does ([07](07-concurrency.md#global-state)).
 
@@ -147,11 +155,16 @@ func store<T>(_ value: T, into w: mutable Writer) {
 }
 ```
 
-**Conditions must be `const`. The branch not taken is parsed but not type-checked, so it can mention symbols that only exist on another platform.**
+**The branch a `static if` doesn't take is parsed but not type-checked**, so it can mention symbols that only exist on another platform. Conditions must be `const`.
 
-- **At the top level**, `static if` can include or exclude declarations and whole `import` and `import c` statements. A condition that guards an import reads only literals, `const`s of modules imported outside any `static if`, and the prelude's `target`, never a declaration of the module's own that shadows it ([11](11-compilation-model.md#modules-and-names)), so which modules a file imports never depends on what an import provides or on the module's own declarations. No `import` goes inside a `static for`, at any depth.
+- **At the top level**, `static if` can include or exclude declarations and whole `import` and `import c` statements. A condition that guards an import reads only these:
+    - literals;
+    - `const`s of modules imported outside any `static if`;
+    - the prelude's `target`, never a declaration of the module's own that shadows it ([11](11-compilation-model.md#modules-and-names)).
+
+  So which modules a file imports never depends on what an import provides or on the module's own declarations. No `import` goes inside a `static for`, at any depth.
 - **Per instantiation.** In generic code, a branch is checked only for the instantiations whose condition holds ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). That lets `store` call `w.bytes(of:)`, which accepts only a padding-free `Pod` type ([04](04-types.md#plain-data-pod-and-bit-casts)). `T.isPaddingFree` is a reflection query ([below](#what-reflection-can-read)).
-- **Refusing an instantiation or a build.** `static error("…")` turns a branch that must not be instantiated or built into a compile error with that message, as the serializer [below](#static-reflection) does. It stands where a statement, a member, a field or a top-level declaration can, as in `static if !target.flag("sse4") { static error("needs SSE4") }`.
+- **Refusing an instantiation or a build.** `static error("…")` turns a branch that must not be instantiated or built into a compile error with that message, as the complete serializer does ([below](#static-reflection)). It stands where a statement, a member, a field or a top-level declaration can, as in `static if !target.flag("sse4") { static error("needs SSE4") }`.
 
 **`target`** is a `const` the prelude declares ([11](11-compilation-model.md#modules-and-names)). It exposes:
 
@@ -159,7 +172,7 @@ func store<T>(_ value: T, into w: mutable Writer) {
 - `profile`: `.dev`, `.profile` or `.ship`;
 - `checks`: the set of diagnostic checks that are on where it is read, as `@checks` names them ([10](10-errors-and-safety.md#check-levels));
 - `cStackReserve`: the stack, in bytes, that a call into C checks is left, unless the C function called declares its own need with `stack(n)` ([08](08-c-interop.md#the-stack-a-c-call-needs));
-- flags the build defines: `target.flag("editor")`, or `target.flag("poolSize")` for one holding a number, with the type and value the build gives it ([below](#what-a-build-declares)). Reading a flag the build doesn't declare is a compile error, and `target.hasFlag("editor")`, a `const` `Bool`, says whether it declares one, so a library can read a flag that only some builds define inside `static if target.hasFlag("editor") { … }`.
+- flags the build defines: `target.flag("editor")`, or `target.flag("poolSize")` for one holding a number, with the type and value the build gives it ([below](#what-a-build-declares)). Reading a flag the build doesn't declare is a compile error. `target.hasFlag("editor")`, a `const` `Bool`, says whether the build declares that flag. So a library can read a flag that only some builds define inside `static if target.hasFlag("editor") { … }`.
 
 ## Static reflection
 
