@@ -123,7 +123,7 @@ Rule 4 tells the caller that `lines` now borrows `source`, and rule 5 checks ins
 
 - **Through a shared view, the place drops out where declared.** A `get` declared `where return outlives self`, or a projection declared `where yield outlives self`, gives a sub-view that is a narrower copy of the shared view ([below](#staying-valid-after-a-parameter-moves-on-outlives)). So the sub-view depends only on what the view carries, not on the variable holding it. `rest = rest[1...]` can then reassign an iterator's span while an element taken from it is live, and `Token(text: src[start..<pos])` depends on the text, not on the lexer's field. Verification rejects the claim for a view of data the type holds inline, such as a `[4 of Int]` field, which depends on `self` itself.
 - **Through a place that owns its value, or an exclusive view, projections depend on the place itself.**
-- **Through an access-bound projection, a view depends on the access.** An access-bound projection, one with no `yield` item in its `where` clause, may yield a temporary ([below](#projections-read-and-modify-accessors)). So a view of it depends on the **access**, which is held as rule 6 holds a dynamic access. The access is in the yielded value's own set, so it follows every value derived from it, even where the place drops out. It also keeps the places the accessor was given lent.
+- **Through an access-bound projection, a view depends on the access.** An access-bound projection, one with no `yield` item in its `where` clause, may yield a temporary ([below](#access-bound-projections)). So a view of it depends on the **access**, which is held as rule 6 holds a dynamic access. The access is in the yielded value's own set, so it follows every value derived from it, even where the place drops out. It also keeps the places the accessor was given lent.
 
 #### Rule 2: Transitivity
 
@@ -426,7 +426,7 @@ use(syms)
 **An item's subject, what depends, is one of these:**
 
 - `return`, for the result and any thrown error;
-- `yield`, for what an accessor yields ([below](#projections-read-and-modify-accessors));
+- `yield`, for what an accessor yields ([below](#storage-projections));
 - a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
 
 **An item says what its subject depends on:**
@@ -524,7 +524,7 @@ use(e)
 
 ### Pointing a name at another place: `rebind`
 
-A binding of a place is a name for that place, so `=` on it writes the place: after `var cur = &tree.root`, `cur = Node()` replaces the node in `tree.root`. A cursor walking down a structure moves the name itself with `rebind … to …`:
+**A binding of a place is a name for that place, so `=` on it writes the place.** After `var cur = &tree.root`, `cur = Node()` replaces the node in `tree.root`. A cursor walking down a structure moves the name itself with `rebind … to …`:
 
 ```swift
 struct Node(var value: Int = 0, var children: List<Box<Node>> = [])
@@ -538,13 +538,32 @@ cur.children.append(Box(Node(value: 0)))
 tree.root.value = 1                              // error if placed before the last use of 'cur'
 ```
 
-`rebind x to p` makes the local `x` name the place `p` from then on, as if declared with it there. `x` is a local declared in the same function or closure body, not a parameter or a capture. `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `var`, unmarked for a `let`, which still changes nothing. **`=` never rebinds**: `cur = &child` is a compile error; `rebind` does that. `&p` is a value only where it makes a view of a type of its own: a `mutable any P`, a function value made from a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value ([05](05-protocols-generics-and-closures.md#implicit-conversions)), or the mutable form of a `get`, such as `&list.span` ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). Then `x = &p` writes that view into the place `x` names, as `d = &crate` does in a `for var d` loop, and `x` still names the same place.
+**`rebind x to p` makes the local `x` name the place `p` from then on**, as if declared with it there.
 
-- **A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use.
-- **Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
-- **Through objects, the cursor holds one mark.** A step through an object's owner or weak pointer, such as `rebind cur to &cur.children[i].value` with children held by `UniquePointer`s, takes the new object's access (rule 6), which **replaces** the previous object's access in `x`'s set, so the cursor holds a mark only on the object it stands on, however deep the walk. The previous access ends once nothing else depends on it. That is safe because the new place lies in another object's value, guarded by the new mark: if an alias removes the child from the previous object, destroying the object the cursor stands on panics ([03](03-handles-and-objects.md#destroying-an-object)), and any other alias reaching it still conflicts.
-- **No target through an access-bound projection.** Each step would nest another suspended access ([below](#projections-read-and-modify-accessors)), so such a target is an error.
-- **A binding that owns its value can be rebound.** The first `rebind` of one, such as `var cur = buildTree()` or `var lives = &particles.life`, hands the value to a hidden local of the binding's scope, destroyed at its end, and the value stays where it is, so views already taken from it stay valid and depend on that local, and a lock guard handed over this way stays locked until the scope ends. `x` then names a place, so it can't be consumed. When a path or a loop pass may skip the `rebind`, `x` can't be consumed after it on any path, and the hidden local is maybe-initialized ([01](01-values-and-ownership.md#places-that-hold-no-value)).
+- `x` is a local declared in the same function or closure body, not a parameter or a capture.
+- `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `var`, and unmarked for a `let`, which still changes nothing.
+
+**`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` is a value only where it makes a view of a type of its own:
+
+- a `mutable any P`;
+- a function value made from a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value ([05](05-protocols-generics-and-closures.md#implicit-conversions));
+- the mutable form of a `get`, such as `&list.span` ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)).
+
+Then `x = &p` writes that view into the place `x` names, as `d = &crate` does in a `for var d` loop, and `x` still names the same place.
+
+**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use.
+
+**Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
+
+**Through objects, the cursor holds one mark.** A step through an object's owner or weak pointer takes the new object's access ([above](#rule-6-dynamic-accesses)), as `rebind cur to &cur.children[i].value` does with children held by `UniquePointer`s. That access **replaces** the previous object's access in `x`'s set, so the cursor holds a mark only on the object it stands on, however deep the walk. The previous access ends once nothing else depends on it.
+
+This is safe because the new place lies in another object's value, guarded by the new mark. If an alias removes the child from the previous object, destroying the object the cursor stands on panics ([03](03-handles-and-objects.md#destroying-an-object)), and any other alias reaching it still conflicts.
+
+**A target reached through an access-bound projection is an error**, since each step would nest another suspended access ([below](#access-bound-projections)).
+
+**A binding that owns its value can be rebound.** The first `rebind` of one, such as `var cur = buildTree()` or `var lives = &particles.life`, hands the value to a hidden local of the binding's scope, destroyed at its end. The value stays where it is, so views already taken from it stay valid and depend on that local. A lock guard handed over this way stays locked until the scope ends.
+
+**After the first `rebind` of a binding that owns its value, `x` names a place, so it can't be consumed.** When a path or a loop pass may skip the `rebind`, `x` can't be consumed after it on any path, and the hidden local is maybe-initialized ([01](01-values-and-ownership.md#places-that-hold-no-value)).
 
 ## Projections: `read` and `modify` accessors
 
@@ -563,15 +582,48 @@ if var e = &world.enemies[h] { e.hp = 0 }
 let pos = world.enemies[h]!.pos              // borrows through the read projection; '!' panics on a stale handle
 ```
 
-A `read` accessor lends a place for reading and a `modify` accessor for changing. An accessor whose declared type is written `T?` is an **optional projection**, yielding either a place of type `T` or `nil`. One written `Optional<T>`, or with a type alias of an optional, yields a whole place of that enum type, such as a stored optional field, so `node.next = nil` and `node.next.take()` work through it. Only the `?` written in the declaration makes an optional projection.
+**A `read` accessor lends a place for reading, and a `modify` accessor for changing.**
 
-**An optional projection, an optional chain, or a tuple of places, is a place only in its parts.** An optional projection's place is the `T` that `?.`, `!`, `x? = v`, `??`, a `let` or `var` condition or a pattern unwraps, and so is the place of an optional chain through a place, since `a?.b` names the `b` inside `a`'s payload and no `B?` lies in memory. A tuple of places, from `yield (&a, &b)` or `value[fields:]` ([09](09-compile-time.md#tuples-field-lists-and-queries)), is used element by element, as a pattern binds them. No such `T?` or tuple exists in memory, so none can be assigned as a whole, or lent with `&` or bound as a place except by a condition or pattern that unwraps or destructures it, or used as a `mutating` or `consuming` receiver such as `take()`, or passed as an argument other than a copy. An optional projection or chain may still be compared with `nil`, and, when `T` is copyable, copied wherever a copy is accepted ([01](01-values-and-ownership.md#parameters)), as in `let hp = copy target?.hp` and as `a ?? b` with an optional `b` needs, since it hands on `a` whole ([04](04-types.md#optionals)).
+An accessor whose declared type is written `T?` is an **optional projection**, yielding either a place of type `T` or `nil`. **Only the `?` written in the declaration makes an optional projection.** An accessor whose type is written `Optional<T>`, or with a type alias of an optional, yields a whole place of that enum type, such as a stored optional field. So `node.next = nil` and `node.next.take()` work through it.
 
-**A `read` or `modify` accessor yields exactly once on every path that returns normally**, which the compiler checks. So `yield` stands only in a `read` or `modify` body itself, never in a closure literal, a nested function, a local type's or extension's members or a `defer` block inside it, nor where a loop could run it again, and an optional projection yields `nil` on the paths that have no place to yield.
+**An optional projection, an optional chain, or a tuple of places, is a place only in its parts:**
 
-**Access-bound projections.** An accessor may yield a temporary: a value computed on the spot, a bitfield's bits read out of its bytes ([08](08-c-interop.md#structs-unions-and-enums)), or an under-aligned field copied to an aligned place ([04](04-types.md#packed-structs-and-under-aligned-places)). So by default a projection is **access-bound**: the accessor stays suspended at its `yield` until the last use of every value that depends on the access, as for a dynamic access (rule 6), and then runs the code after it, such as a `modify`'s write-back. Meanwhile the accessor keeps `self` and its subscript arguments lent as the access began them, shared for a `read` and exclusively for a `modify` or a `get` and `set` change, so what depends on the access depends on those places too, whatever the shallow rule, `outlives` or `copy` drops from its set. A view of it works like any view within the function, but can't leave it (rule 5).
+- **An optional projection's place is the unwrapped `T`**: the `T` that `?.`, `!`, `x? = v`, `??`, a `let` or `var` condition or a pattern unwraps.
+- **So is the place of an optional chain through a place**, since `a?.b` names the `b` inside `a`'s payload and no `B?` lies in memory.
+- **A tuple of places is used element by element**, as a pattern binds them. It comes from `yield (&a, &b)` or `value[fields:]` ([09](09-compile-time.md#tuples-field-lists-and-queries)).
 
-**Storage projections.** An accessor declared **`where yield borrows self`** yields part of `self`'s storage, so a view of it depends on `self`, as a view of a stored field does, and can outlive the access. Any `yield` item makes a storage projection of what the item names:
+**No such `T?` or tuple exists in memory, so none can be:**
+
+- assigned as a whole;
+- lent with `&` or bound as a place, except by a condition or pattern that unwraps or destructures it;
+- used as a `mutating` or `consuming` receiver, such as `take()`;
+- passed as an argument other than a copy.
+
+**An optional projection or chain may still be compared with `nil`.** When `T` is copyable, an optional projection or chain may also be copied wherever a copy is accepted ([01](01-values-and-ownership.md#parameters)), as in `let hp = copy target?.hp`. `a ?? b` with an optional `b` needs that copy, since it hands on `a` whole ([04](04-types.md#optionals)).
+
+**A `read` or `modify` accessor yields exactly once on every path that returns normally**, which the compiler checks. So an optional projection yields `nil` on the paths that have no place to yield. And `yield` stands only in a `read` or `modify` body itself, never where a loop could run it again, and never in one of these inside the body:
+
+- a closure literal or a nested function;
+- a local type's or extension's members;
+- a `defer` block.
+
+### Access-bound projections
+
+**By default a projection is access-bound**, since an accessor may yield a temporary:
+
+- a value computed on the spot;
+- a bitfield's bits read out of its bytes ([08](08-c-interop.md#structs-unions-and-enums));
+- an under-aligned field copied to an aligned place ([04](04-types.md#packed-structs-and-under-aligned-places)).
+
+An **access-bound** projection's accessor stays suspended at its `yield` until the last use of every value that depends on the access, as for a dynamic access ([above](#rule-6-dynamic-accesses)). Then it runs the code after the `yield`, such as a `modify`'s write-back.
+
+**Meanwhile the accessor keeps `self` and its subscript arguments lent as the access began them**: shared for a `read`, and exclusively for a `modify` or a `get` and `set` change. So what depends on the access depends on those places too, whatever the shallow rule, `outlives` or `copy` drops from its set.
+
+**A view of an access-bound projection works like any view within the function, but can't leave it** ([above](#rule-5-the-callee-side)).
+
+### Storage projections
+
+**An accessor declared `where yield borrows self` yields part of `self`'s storage**, so a view of it depends on `self`, as a view of a stored field does, and can outlive the access. Any `yield` item makes a **storage projection** of what the item names:
 
 ```swift
 struct Flags(var bits: UInt32) {
@@ -583,11 +635,35 @@ struct Inventory(var items: List<Item>) {
 func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }       // OK: a storage projection
 ```
 
-- **The claim is verified.** Every `yield` must name a place reached through stored fields and other storage projections from what the item names (`self`, another parameter, or static storage), never a local, a temporary, a bitfield or an under-aligned field. A place reached through a raw pointer, such as a `List`'s buffer or a lock guard's protected value, can only be yielded from `unsafe` code, which promises that it lies in storage the named parameter owns or views, and that the code after the `yield` treats it as the next rule says.
-- **The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), and otherwise at the end of the full statement that begins it ([above](#temporaries)). The access can end while a view of the yield lives on, so what runs after the `yield`, a `defer` block or a local's destruction included, treats the yielded place as still borrowed: it never changes it, and after a `modify` never reads it either. `modify { yield &items; items = List() }` is an error, and so is `modify { yield &items; spy.append(items[0].view) }`.
-- **Projections of views.** On an exclusive view type, such as `MutableSpan` or `MutableRef`, a view of the yield depends on the view variable itself (rule 1): `func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.view }` depends on `s`, and through it on what `s` views. On a view type that `outlives` accepts ([above](#staying-valid-after-a-parameter-moves-on-outlives)), `where yield outlives self` says the yield is reached through what the view carries.
-- **Standard projections.** Collection and pool subscripts, `Box.value`, `MutableRef.value` and every lock guard's `.value` are `where yield borrows self`; the projections of `Span`, `StringView` and `Borrow` are `where yield outlives self`, and a `MutableSpan`'s element projections `where yield borrows self`. Properties that build a view, such as `span`, sub-span ranges and an `SoA` column, whose view depends on its column alone ([04](04-types.md#struct-of-arrays-soat)), are `get`s returning a view, not projections (rule 3). `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`. The `.value` of a `UniquePointer` or a `WeakPointer` depends on its access (rule 6).
-- **Protocols carry the clause.** A requirement `var pos: Vec3 { read modify }` is access-bound unless declared `var pos: Vec3 where yield borrows self { read modify }`, and a witness must satisfy it. A stored field witnesses either kind, except an under-aligned field or an imported bitfield, which goes through a temporary and so witnesses only an access-bound requirement, and subject to [05](05-protocols-generics-and-closures.md#conformances)'s rules on `let`, hidden, static, `unsafe` and union-member fields. An optional projection meets one only when the requirement's own declared type is written as an optional, `U?`, so that generic code treats it as an optional projection too, never when an associated type or a type parameter turns out to be an optional, or when the requirement is written `Optional<U>`, which asks for a whole place. A projection that yields a tuple of places meets none. So generic code can return a view of a requirement's yield only from a storage projection.
+**The compiler verifies the claim.** Every `yield` must name a place reached through stored fields and other storage projections from what the item names: `self`, another parameter, or static storage. It must never name a local, a temporary, a bitfield or an under-aligned field.
+
+**Only `unsafe` code can yield a place reached through a raw pointer**, such as a `List`'s buffer or a lock guard's protected value. That code promises that the place lies in storage the named parameter owns or views, and that the code after the `yield` treats it as still borrowed (below).
+
+**The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)). Otherwise both happen at the end of the full statement that begins it ([above](#temporaries)).
+
+**The code after the `yield` treats the yielded place as still borrowed**, since the access can end while a view of the yield lives on. That code, a `defer` block or a local's destruction included, never changes the place, and after a `modify` never reads it either. So `modify { yield &items; items = List() }` is an error, and so is `modify { yield &items; spy.append(items[0].view) }`.
+
+**On an exclusive view type, a view of the yield depends on the view variable itself** ([above](#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So `func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.view }` depends on `s`, and through it on what `s` views.
+
+**On a view type that `outlives` accepts, `where yield outlives self` says the yield is reached through what the view carries** ([above](#staying-valid-after-a-parameter-moves-on-outlives)).
+
+**Standard projections:**
+
+- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element projections are `where yield borrows self`.
+- The projections of `Span`, `StringView` and `Borrow` are `where yield outlives self`.
+- `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`.
+- The `.value` of a `UniquePointer` or a `WeakPointer` depends on its access ([above](#rule-6-dynamic-accesses)).
+- Properties that build a view, such as `span`, sub-span ranges and an `SoA` column, are `get`s returning a view, not projections ([above](#rule-3-call-results)). An `SoA` column's view depends on its column alone ([04](04-types.md#struct-of-arrays-soat)).
+
+### Projections in protocols
+
+**Protocols carry the clause.** A requirement `var pos: Vec3 { read modify }` is access-bound unless declared `var pos: Vec3 where yield borrows self { read modify }`, and a witness must satisfy it. So generic code can return a view of a requirement's yield only from a storage projection.
+
+**A stored field witnesses either kind, except an under-aligned field or an imported bitfield**, subject to [05](05-protocols-generics-and-closures.md#conformances)'s rules on `let`, hidden, static, `unsafe` and union-member fields. Such a field goes through a temporary, so it witnesses only an access-bound requirement.
+
+**An optional projection meets a `read` or `modify` requirement only when the requirement's own declared type is written as an optional, `U?`**, so that generic code treats it as an optional projection too. It never meets one where an associated type or a type parameter turns out to be an optional, or where the requirement is written `Optional<U>`, which asks for a whole place.
+
+**A projection that yields a tuple of places meets no `read` or `modify` requirement.**
 
 ### `get` and `set` accessors
 
@@ -603,9 +679,24 @@ a.degrees = 90                               // calls set
 a.degrees += 45                              // calls get, then set with the sum
 ```
 
-A computed property or subscript may return a value from a `get`, as a body with no accessor keyword does, and take one in a `set`, which receives the assigned value as an `owned` parameter named `newValue`. A declaration's accessors are a `get`, a `get` and a `set`, a `read`, or a `read` and a `modify`.
+**A computed property or subscript may return a value from a `get`, and take one in a `set`.** A body with no accessor keyword returns a value as a `get` does. A `set` receives the assigned value as an `owned` parameter named `newValue`.
 
-- **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](05-protocols-generics-and-closures.md#operators)). Any other change, such as binding `var d = &a.degrees`, passing it as a `mutable` argument or calling a `mutating` method on it, calls `get`, lends the result, and calls `set` with it once the access ends, so it is access-bound, as a `modify` that yields a temporary is. That `set` call is checked as if written there, so the change is an error when the `get`'s result may depend on `self` or on a `mutable` argument of the access, which `set` changes while its `newValue` still views it.
-- **Both calls take the subscript's arguments.** They are worked out once, when a compound assignment or another change calls `get` and then `set`: a borrowed or `mutable` argument is lent to each in turn, and a copyable `owned` one is copied for the `get`. So such an access is a compile error when an `owned` parameter's type is move-only, since one value can't move into two calls.
-- **Requirements.** A `get`, yielding its result as a temporary, meets an access-bound `{ read }` requirement, and a `get` and a `set` meet an access-bound `{ read modify }` one when the `get`'s result can't depend on `self` or on a `mutable` parameter and no `owned` parameter's type is move-only, so that the pair of calls is always valid. A `{ get }` requirement is met by a `get`, and `{ get set }` by a `get` and a `set`. When the value's type is copyable, a stored field that [05](05-protocols-generics-and-closures.md#conformances) allows, or a storage projection, also meets them, and so do an access-bound `read`, for `{ get }`, and an access-bound `read` and `modify`, for `{ get set }`, when the type is also unscoped, the `read`'s yield copied as the `get` and the `modify` serving as the `set`; a scoped yield's copy would carry an access that ends inside the witness, which rule 5 rejects. An optional projection, or one that yields a tuple of places, meets `{ get }` but never `{ get set }`, since it has no whole value that a `set` could write ([above](#projections-read-and-modify-accessors)).
+**A declaration's accessors are a `get`, a `get` and a `set`, a `read`, or a `read` and a `modify`.**
+
+**Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](05-protocols-generics-and-closures.md#operators)).
+
+**Any other change calls `get`, lends the result, and calls `set` with it once the access ends.** Such changes include binding `var d = &a.degrees`, passing it as a `mutable` argument, and calling a `mutating` method on it. So the change is access-bound, as a `modify` that yields a temporary is ([above](#access-bound-projections)).
+
+**That `set` call is checked as if written there.** So the change is an error when the `get`'s result may depend on `self` or on a `mutable` argument of the access, which `set` changes while its `newValue` still views it.
+
+**Both calls take the subscript's arguments**, worked out once when a compound assignment or another change calls `get` and then `set`. A borrowed or `mutable` argument is lent to each in turn, and a copyable `owned` one is copied for the `get`. So such an access is a compile error when an `owned` parameter's type is move-only, since one value can't move into two calls.
+
+**Requirements:**
+
+- **A `get` meets an access-bound `{ read }` requirement**, yielding its result as a temporary.
+- **A `get` and a `set` meet an access-bound `{ read modify }` requirement when the `get`'s result can't depend on `self` or on a `mutable` parameter, and no `owned` parameter's type is move-only**, so that the pair of calls is always valid.
+- **A `get` meets `{ get }`, and a `get` and a `set` meet `{ get set }`.**
+- **When the value's type is copyable, a stored field that [05](05-protocols-generics-and-closures.md#conformances) allows, or a storage projection, also meets `{ get }` and `{ get set }`.**
+- **When the value's type is copyable and unscoped, an access-bound `read` meets `{ get }`, and an access-bound `read` and `modify` meet `{ get set }`.** The `read`'s yield is copied as the `get`, and the `modify` serves as the `set`. A scoped yield's copy would carry an access that ends inside the witness, which rule 5 rejects.
+- **An optional projection, or one that yields a tuple of places, meets `{ get }` but never `{ get set }`**, since it has no whole value that a `set` could write ([above](#projections-read-and-modify-accessors)).
 

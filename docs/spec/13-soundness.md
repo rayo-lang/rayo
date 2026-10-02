@@ -68,7 +68,7 @@ The rules keep Covered for each value they make, given that the values they star
 
 - **Projection.** A view taken from a place reaches only that place's storage and what it owns, so it depends on the place.
 - **Sub-views of a shared view** (`where return outlives self`, `where yield outlives self`) depend only on what the view carries. Verification checks the two facts that make this safe: nothing the view carries can be changed through it, since its type holds no mutable view, or end with it, since destroying it is no use ([02](02-views-and-dependencies.md#staying-valid-after-a-parameter-moves-on-outlives)). A view of data the type holds inline still depends on `self`.
-- **Access-bound projections** may yield a temporary in the accessor's frame. A view of one depends on the access, which keeps the accessor suspended, so its frame and the places it was lent stay as they were until the view's last use ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). The access began in this function, so rule 5 keeps such a view inside it.
+- **Access-bound projections** may yield a temporary in the accessor's frame. A view of one depends on the access, which keeps the accessor suspended, so its frame and the places it was lent stay as they were until the view's last use ([02](02-views-and-dependencies.md#access-bound-projections)). The access began in this function, so rule 5 keeps such a view inside it.
 - **Transitivity.** A derived value reaches nothing its source can't. A struct's or tuple's per-field sets only split that reach by stored field ([02](02-views-and-dependencies.md#naming-a-field)).
 
 ### Rule 3
@@ -130,7 +130,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 
 ### Projections and accessors
 
-- **A storage projection's yield is verified to be storage of what its `where` item names** ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)), so a view of it depends on that, as a view of a stored field does. `unsafe` code that yields through a raw pointer promises the same.
+- **A storage projection's yield is verified to be storage of what its `where` item names** ([02](02-views-and-dependencies.md#storage-projections)), so a view of it depends on that, as a view of a stored field does. `unsafe` code that yields through a raw pointer promises the same.
 - **After a `yield`, the accessor treats the yielded place as borrowed**, since a view of it may outlive the access: it never changes it, and after a `modify` never reads it.
 - **An accessor yields exactly once on every normal path**, so the caller always gets one place.
 - **An optional projection or a tuple of places exists only in its parts.** No `T?` or tuple of them lies in memory, so nothing writes, lends or views one whole.
@@ -251,7 +251,7 @@ The argument above assumes that `unsafe` code and C keep the invariants for thei
 | A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](02-views-and-dependencies.md#mutable-views)) | [Mutable views](#mutable-views) |
 | A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](02-views-and-dependencies.md#shallow-values)) | [Rules 3 and 4](#rule-3) |
 | A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](02-views-and-dependencies.md#shallow-values)) | The shallow rule ([Rule 3](#rule-3)) |
-| A storage projection's yield through a raw pointer lies in storage the named parameter owns or views ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) | [Projections](#projections-and-accessors) |
+| A storage projection's yield through a raw pointer lies in storage the named parameter owns or views ([02](02-views-and-dependencies.md#storage-projections)) | [Projections](#projections-and-accessors) |
 | `unsafe Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)) | [Threads](#threads) |
 | `unsafe Synchronized` ([07](07-concurrency.md#the-synchronized-contract)) | [Threads](#threads), Exclusive |
 | `unsafe Frozen` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)) | `Shared`, `LocalShared`, freezing |

@@ -160,7 +160,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address. A `Closure<F>` counts, since its captures may hold one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 - **The argument of `ptr(to:)`**, whose result is its address ([10](10-errors-and-safety.md#unsafe-code)).
-- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#rule-4-absorption)).
+- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#storage-projections)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#rule-4-absorption)).
 
 [Rules 3 and 4](02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](02-views-and-dependencies.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
 
@@ -181,7 +181,7 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 1. **It evaluates its callee, then its receiver, then its arguments.** Evaluating a borrowed or `mutable` argument works out which place it names: its base first, then its indices, left to right. An `owned` argument or a `consuming` receiver that names a place is worked out the same way.
 2. **Then the call begins.** Every borrow it passes begins, and lasts until the call returns, and every value it takes leaves its place. So `builder.finish(builder.count)` reads `count` before `finish` takes `builder`.
 3. **As it begins, it runs the accessors those places reach**, in the order the places were worked out, receiver first. These are the `read` and `modify` projections, and the `get` of each `get` and `set` pair that the call lends for change ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
-4. **When it returns, it ends those accesses in reverse order**, running the code after each `yield` and calling each `set`. An access-bound projection's access that the result still depends on is the exception: it ends at that value's last use ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+4. **When it returns, it ends those accesses in reverse order**, running the code after each `yield` and calling each `set`. An access-bound projection's access that the result still depends on is the exception: it ends at that value's last use ([02](02-views-and-dependencies.md#access-bound-projections)).
 
 **Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](02-views-and-dependencies.md#rule-3-call-results)). So in `items.insert(x, at: items.count)`, `count`'s `get` has returned before `insert` borrows `items`.
 

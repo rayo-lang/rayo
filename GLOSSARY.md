@@ -67,7 +67,7 @@ _Avoid_: safety level, mode
 The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies.md#rule-4-absorption)).
 
 **Access-bound projection**:
-A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies.md#access-bound-projections)).
 
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
@@ -111,7 +111,7 @@ A copyable type that holds no inline array at any depth ([02](docs/spec/02-views
 Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies.md#rule-5-the-callee-side)).
 
 **Storage projection**:
-A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies.md#projections-read-and-modify-accessors)).
+A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies.md#storage-projections)).
 
 **View**:
 A value that borrows memory something else owns, such as a `Span` or a `StringView` ([02](docs/spec/02-views-and-dependencies.md#scoped-values)).
