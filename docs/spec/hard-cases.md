@@ -206,7 +206,10 @@ A callback registered now must mutate program state when it fires later, as a UI
 
 - **Must accept** a safe idiom, spelled out, such as a handle plus an event queue, or a context passed at fire time.
 - **Must accept** the factory returning its closure as a `Closure<() -> Int>`.
-- **Must accept** a local holding a function value made from a literal, such as `let put: (mutable List<StringView>) -> Void = { … }` or `let h = Handler(onClick: { … })`, used for the rest of its scope; a named function or operator stored as a function value and called long after; and a literal that captures nothing as a parameter's default or as a returned plain function type.
+- **Must accept** each of these:
+    - a local holding a function value made from a literal, such as `let put: (mutable List<StringView>) -> Void = { … }` or `let h = Handler(onClick: { … })`, used for the rest of its scope;
+    - a named function or operator stored as a function value and called long after;
+    - a literal that captures nothing as a parameter's default or as a returned plain function type.
 - **Must accept** a local tokenizer closure that advances a captured position and returns views of a shared source, with two tokens live at once.
 - **Must accept** a `mutating` closure local that owns a moved-in list, passed to a function taking `consuming () -> Void` and then called again, its list destroyed once.
 - **Must accept** a closure kept by its concrete type in a generic struct, as `let r = wrap({ [move s] in s.count })` does, with its field passed to a function that takes a plain function type.
@@ -284,7 +287,8 @@ A move-only value, such as an item that owns a `String` description, moves from 
 
 - **Must accept** moving it without cloning. If the values live in a pool and the containers hold handles, show that instead, and state which is idiomatic.
 - **Must accept** the same moves through `replace(&slot, with:)`, `swap`, an `Optional` field's `take()` or `remove(at:)`.
-- **Must accept** moving a field out of an owned local, or out of a call result as in `give(makeLoot().item)`, whose type has no `deinit`, with the rest destroyed at the scope's or statement's end; and a `deinit` handing a field, or a `List` in its enum's own payload, to another owner.
+- **Must accept** moving a field out of an owned local, or out of a call result as in `give(makeLoot().item)`, whose type has no `deinit`. The rest is destroyed at the scope's or statement's end.
+- **Must accept** a `deinit` handing a field, or a `List` in its enum's own payload, to another owner.
 - **Must accept** `consuming func close() throws(IoError)` on a file whose `deinit` closes it, closing it once on every path, and a wrapper's `consuming func intoItems() -> List<T>` that moves its field out.
 - **Must accept** `builder.finish(builder.count)` for a `consuming` `finish`, and `adopt(list, list.count)` for an `owned` first parameter.
 - **Must accept** matching a temporary whose type has a `deinit`, as in `when connect().state { .open(let buf) -> … }`, and changing a payload in place, as in `when connect() { .open(var b) -> b.append(0) … }`.
@@ -385,7 +389,10 @@ A program has three kinds of state:
 2. an object that several threads all change, such as an audio mixer;
 3. the id of a C resource, a `UInt32` that is valid only on one thread, such as an OpenGL texture's.
 
-- **Must accept** the tree with no synchronization on any access, the shared object with every access marked as a lock at the call and its sharing and its lock written in its type, and the resource id as a type that stays on its thread although its only field is an integer.
+- **Must accept** each of these:
+    - the tree, with no synchronization on any access;
+    - the shared object, with every access marked as a lock at the call, and its sharing and its lock written in its type;
+    - the resource id, as a type that stays on its thread although its only field is an integer.
 
 ---
 
@@ -412,7 +419,7 @@ An allocator is exhausted in the middle of a batch of allocations, such as a str
 
 ### M4 · Memory valid until an external event
 
-Code writes a large batch of data into memory that a C API mapped: a pointer with a stated alignment, valid until an event that follows an action the program takes, such as a GPU fence that signals after the program submits the batch.
+Code writes a large batch of data into memory that a C API mapped. The API gives a pointer with a stated alignment, valid until an event that follows an action the program takes, such as a GPU fence that signals after the program submits the batch.
 
 - **Must accept** safe Rayo code writing through a view whose validity is enforced in every build.
 - The unsafe surface must be a small wrapper.
@@ -455,7 +462,11 @@ struct R {
 };
 ```
 
-- **Must accept** each imported with its exact layout; reading either member of a union of same-size plain-data members, and reading a file header that contains such a union as plain bytes; a C enum the header doesn't declare closed holding any value of its underlying type, including in a `@safe` module that matches it with `when`, with no undefined behavior.
+- **Must accept** each of these:
+    - each type imported with its exact layout;
+    - reading either member of a union of same-size plain-data members;
+    - reading a file header that contains such a union as plain bytes;
+    - a C enum the header doesn't declare closed holding any value of its underlying type, with no undefined behavior, including in a `@safe` module that matches it with `when`.
 - **Must accept** imported structs under the borrow rules: union members read and written by value, and two closures of one `join` writing bitfields in different C memory locations of one struct, or a bitfield and a neighboring field.
 - **Must accept** reflection, serialization and `SoA` over an imported struct with bitfields, and a `@packed` struct conforming to a protocol whose `read`/`modify` property its under-aligned field provides, used from generic code.
 
@@ -480,7 +491,9 @@ C holds references to Rayo objects of different types as `uint64_t`s, and may pa
 
 - **Must accept** an entry point that defends itself against that mistake, so the wrong object is never accessed as the other type, in any build, with no `unsafe` in the Rayo code.
 - **Must accept** C holding references to objects of different types as `uint64_t` and passing them to one Rayo function that takes any object conforming to a protocol.
-- **Must accept** a `@c func` callback taking two `WeakShared<T>`s, registered with a C library whose callback type takes two `uint64_t`s and that calls it on its own threads, and the same with `WeakPointer<T>` for a library that calls back on the thread that drives it. State what the C library must uphold in each.
+- **Must accept** a `@c func` callback taking two `WeakShared<T>`s, registered with a C library whose callback type takes two `uint64_t`s, and that calls it on its own threads.
+- **Must accept** the same with `WeakPointer<T>`, for a library that calls back on the thread that drives it.
+- State what the C library must uphold in each.
 - **Must accept** `Handle` bits that C passes back as a `void* user` which addresses nothing, converted back only by `unsafe` code.
 
 ### E7 · C code that needs a large stack
@@ -554,7 +567,17 @@ A field with a default is added to a struct while many values of it are alive, i
 
 C holds `user` pointers to pinned elements and a `@c` callback pointer, as in E1, and code in another language binds to a generated header that contains a `@c` struct.
 
-- **Must hold:** every address C can hold is visible in the program: a `Pin`, a `RawAllocation`, such as a leaked box's, a `@c` function pointer, an `@export` symbol, a `StaticSpan` or `StaticString`, a `Span`, `MutableSpan` or `StringView` an exported or `@c` function returns, a `List`, `String` or `TrailingArray` returned to C ([08](08-c-interop.md#c-representations)), or anything `unsafe` code passed to C. A leaked object crosses as its weak pointer's bits, not an address. Every layout C sees is one that a generated header or C's own header declares.
+- **Must hold:** every address C can hold is visible in the program, as one of these:
+    - a `Pin`;
+    - a `RawAllocation`, such as a leaked box's;
+    - a `@c` function pointer;
+    - an `@export` symbol;
+    - a `StaticSpan` or `StaticString`;
+    - a `Span`, `MutableSpan` or `StringView` that an exported or `@c` function returns;
+    - a `List`, `String` or `TrailingArray` returned to C ([08](08-c-interop.md#c-representations));
+    - anything `unsafe` code passed to C.
+
+  A leaked object crosses as its weak pointer's bits, not an address. Every layout C sees is one that a generated header or C's own header declares.
 
 ### G4 · Suspended code
 
@@ -766,7 +789,11 @@ An event-loop server handles requests on worker threads for weeks. Each worker h
 - **Must hold:** what a worker holds while it waits for its next request never makes its arena's next reset panic.
 - State what the `unsafe` call to `epoll_wait` promises about the event buffer it hands the kernel, and show a buffer that keeps that promise simply.
 - **Must accept** `using allocator = frameArena { while running { work(); frameArena.reset() } }`, and a wait inside a loop over a borrowed collection.
-- **Must accept** in the handshake tasks `total += await next()` and `results[i] = await fetch(i)` on a task's own locals; `let s = await peek(); print(s[0].hp)`, where `peek` returns a view of the resume parameter's data; a `defer` live across an `await` that uses only the task's owned locals; and an `await` inside `using allocator = a { … }`.
+- **Must accept** these in the handshake tasks:
+    - `total += await next()` and `results[i] = await fetch(i)` on a task's own locals;
+    - `let s = await peek(); print(s[0].hp)`, where `peek` returns a view of the resume parameter's data;
+    - a `defer` live across an `await` that uses only the task's owned locals;
+    - an `await` inside `using allocator = a { … }`.
 
 ### K3 · A real-time callback
 
@@ -782,4 +809,5 @@ A program destroys an arena object whose `deinit` flushes a log file, by resetti
 
 - **Must hold:** the `deinit` runs before the process exits.
 - Define what happens at exit to a thread that is still running, and to memory C still holds a pin into.
-- **Must accept** without a panic a `Shared` value whose last owner is a `@threadlocal var` of the thread that runs `main`, whose `deinit` builds an interpolated `String` before it flushes, and a thread-bound object leaked to C whose `deinit` appends to a `List` it owns, destroyed when its thread's body returns.
+- **Must accept** without a panic a `Shared` value whose last owner is a `@threadlocal var` of the thread that runs `main`, and whose `deinit` builds an interpolated `String` before it flushes.
+- **Must accept** without a panic a thread-bound object leaked to C, whose `deinit` appends to a `List` it owns, destroyed when its thread's body returns.
