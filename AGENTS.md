@@ -5,7 +5,7 @@
 - **Code design and comments.** Two skills are the authority: `code-design` before you implement, `code-comments` as you write each line.
 - **Branch per change.** Commit on a branch named `impl-<feature-slug>`; when an AI model does the work, append `-via-<model>-<version>`, slugged the same way (`impl-arena-reset`, `impl-arena-reset-via-opus-5-5`). Never commit to `main`.
 - **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, skill, or tool template that adds one. The only exception is the branch rule's `-via-` suffix.
-- **Pull requests** follow the `create-pr` skill.
+- **Pull requests** follow the `create-pr` skill. A change that builds on an open pull request is **stacked** on it: open it with that pull request's branch as its base, then link the chain, bottom to top, with `gh stack link <pr> <pr> …` (`gh extension install github/gh-stack`). GitHub merges a stack from the bottom up and retargets what stays open.
 
 ## Agent skills
 
