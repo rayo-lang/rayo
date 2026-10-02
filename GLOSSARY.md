@@ -181,10 +181,10 @@ _Avoid_: misaligned (a misaligned access is undefined behavior)
 Whether a function type only reads its captures, changes them (`mutating`) or consumes them (`consuming`) ([05](docs/spec/05-protocols-generics-and-closures.md#closure-kinds)).
 
 **Compile-time code**:
-The parts of generic code the compiler checks at each instantiation instead of once: `static if` branches, `static for` bodies and static closures, `const` expressions and reflection on a type parameter, members generated from generic parameters, and computed names ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+The parts of generic code the compiler checks at each instantiation instead of once: `static if` branches, `static for` bodies and static closures, `const` expressions and reflection on a type parameter, members generated from generic parameters, and computed names ([05](docs/spec/05-protocols-generics-and-closures.md#checking-generic-code)).
 
 **Default**:
-A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures.md#protocol-extensions)).
 
 **Existential**:
 A value of type `any P` or `mutable any P`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
@@ -199,7 +199,7 @@ A protocol with no requirements that states a property of a type, such as `Copya
 _Avoid_: marker trait, tag protocol
 
 **Type value**:
-`T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+`T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures.md#value-parameters-and-type-values)).
 _Avoid_: metatype
 
 **Unscoped closure**:
@@ -207,7 +207,7 @@ A `Closure<F>`, which owns its captures, and so may outlive the scope that made 
 _Avoid_: escaping closure, boxed closure
 
 **Value parameter**:
-A generic parameter declared `let`, which takes a `const` value of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>` ([05](docs/spec/05-protocols-generics-and-closures.md#protocols-and-generics)).
+A generic parameter declared `let`, which takes a `const` value of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>` ([05](docs/spec/05-protocols-generics-and-closures.md#value-parameters-and-type-values)).
 _Avoid_: const generic
 
 **Witness**:
