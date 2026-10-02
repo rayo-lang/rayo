@@ -64,7 +64,7 @@ The body may change `e`, since each call gets its own element. It can't write an
 
 ### Scoped threads
 
-**`Thread.scope` starts threads that may borrow the caller's locals, and returns only when every thread its block spawned has finished** ([07](../spec/07-concurrency.md#scoped-threads)). It works like Rust's `std::thread::scope`:
+**`Thread.scope` starts threads that may borrow the caller's locals, and returns only when every thread its block spawned has finished** ([07](../spec/07-concurrency.md#scoped-threads)). Here the enemies update on another thread while this one mixes the audio:
 
 ```swift
 Thread.scope { s in
@@ -78,7 +78,7 @@ Thread.scope { s in
 
 ## What may cross threads: `Sendable`
 
-**Only a value of a `Sendable` type reaches another thread**, moved there or lent there for a call ([07](../spec/07-concurrency.md#what-may-cross-threads-sendable)). The compiler derives this marker protocol from what a type holds, as it derives `Copyable`. It plays the part of Rust's `Send` and `Sync` together.
+**Only a value of a `Sendable` type reaches another thread**, moved there or lent there for a call ([07](../spec/07-concurrency.md#what-may-cross-threads-sendable)). The compiler derives this marker protocol from what a type holds, as it derives `Copyable`.
 
 ```swift
 struct Enemy(var pos: Vec3, var vel: Vec3 = .zero, var hp: Float = 100)   // Sendable: every field is
@@ -110,7 +110,7 @@ Code that uses the HUD runs on the thread that owns it, such as a plain loop aft
 
 ### Locks: `Mutex` and `RwLock`
 
-**`Mutex<T>` owns its data, and the only way to reach the data is to lock it**, as with Rust's `Mutex` ([07](../spec/07-concurrency.md#locks-mutex-and-rwlock)). The closure form locks, runs the closure once and unlocks:
+**`Mutex<T>` owns its data, and the only way to reach the data is to lock it** ([07](../spec/07-concurrency.md#locks-mutex-and-rwlock)). The closure form locks, runs the closure once and unlocks:
 
 ```swift
 let deaths = Mutex(List<Vec3>())

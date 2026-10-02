@@ -58,7 +58,7 @@ These take what they are given, and so move it:
 
 **The callee owns an `owned` argument as a local owns its value** ([01](../spec/01-values-and-ownership.md#parameters)). `submit` may move the list on, into a queue, say. If it doesn't, the list is destroyed when `submit` returns.
 
-**A move changes the owner and nothing else.** It runs none of your code and allocates nothing. It copies at most the value's bytes, into the place that takes it. So there is no move constructor to write. Unlike C++'s `std::move`, a move leaves no object behind to use by mistake: the compiler knows the place holds nothing.
+**A move changes the owner and nothing else.** It runs none of your code and allocates nothing. It copies at most the value's bytes, into the place that takes it. So there is no move constructor to write. A move leaves no object behind to use by mistake: the compiler knows the place holds nothing.
 
 ### Copyable types move too
 

@@ -10,7 +10,7 @@ enemies.push_back(Enemy{});       // may move every enemy to a new buffer
 damage(boss, 10);                 // writes through a dangling reference
 ```
 
-Rust rejects this code, but its signatures sometimes need lifetime annotations, such as `'a`, to say how long a borrow lasts. Rayo rejects it too, and nothing in this chapter needs an annotation:
+Rayo rejects this code. It checks each function's borrows inside that function, so a signature never has to say how long a borrow lasts:
 
 ```swift
 func damage(_ e: mutable Enemy, by amount: Float) { e.hp -= amount }
@@ -43,11 +43,11 @@ enlist(grunt)                                                // moves 'grunt' in
 | mutable | `_ x: mutable T` | `f(&x)` | A **mutable borrow** of a changeable place: it changes `x` in place |
 | owned | `_ x: owned T` | `f(x)` | The value: a place moves in, and `f(copy x)` passes a copy |
 
-**A borrowed argument holds still for the whole call.** The function can't change it, keep it or take its address, and nothing else changes it before the call returns. The exception is a `Synchronized` value, such as a mutex, which changes through its own locking ([Concurrency](07-concurrency.md#shared-mutable-state)). So the compiler may pass a copy of the argument's bits or the caller's place, and the function can't tell which. C++ makes you choose between `T` and `const T&`, where Rayo picks for you, from the signature: an argument the result still views, for one, is always the caller's place ([01](../spec/01-values-and-ownership.md#borrowed-arguments)).
+**A borrowed argument holds still for the whole call.** The function can't change it, keep it or take its address, and nothing else changes it before the call returns. The exception is a `Synchronized` value, such as a mutex, which changes through its own locking ([Concurrency](07-concurrency.md#shared-mutable-state)). So the compiler may pass a copy of the argument's bits or the caller's place, and the function can't tell which. You never choose between the two: the compiler picks from the signature, and an argument the result still views, for one, is always the caller's place ([01](../spec/01-values-and-ownership.md#borrowed-arguments)).
 
 Since the function can't keep a borrowed argument, it can't move one out either. So returning a borrowed parameter's field takes `copy`, or `clone()` for a move-only one, as chapter 2 showed ([Moves and copies](02-moves-and-copies.md#places-you-dont-own)).
 
-**A `mutable` argument is the caller's place, lent for the call.** The call writes `&` before it, and every change the function makes reaches the caller's place. It works like Swift's `inout` or C#'s `ref`, which are marked at the call too.
+**A `mutable` argument is the caller's place, lent for the call.** The call writes `&` before it, and every change the function makes reaches the caller's place.
 
 **Methods use the same conventions for `self`.** A plain `func` borrows `self`, a `mutating func` takes it `mutable`, and a `consuming func` takes it `owned`. A `mutating` call takes no `&`, since its form already shows the change: `boss.takeDamage(5)`.
 
@@ -76,7 +76,7 @@ var e = enemies[0]                 // error: a bare 'var' of a place: write 'cop
 
 **A binding of a value owns it**, with no `owned` written. A call's result, a literal and `copy place` are values, so `let mesh = loadMesh()` owns its mesh.
 
-**A `let` of a stored field or an element is another name for the place, not a snapshot of it** ([01](../spec/01-values-and-ownership.md#what-a-let-of-a-place-sees)). In Swift, `let before = e.hp` copies. In Rayo it borrows, so the field can't change while `before` is used:
+**A `let` of a stored field or an element is another name for the place, not a snapshot of it** ([01](../spec/01-values-and-ownership.md#what-a-let-of-a-place-sees)). So `let before = e.hp` borrows the field rather than copying it, and the field can't change while `before` is used:
 
 ```swift
 func hit(_ e: mutable Enemy, by amount: Float) {
@@ -92,7 +92,7 @@ Writing `let before = copy e.hp` keeps the old value, and the function compiles.
 
 ## How long a borrow lasts
 
-**A borrow lasts until its last use, not to the end of its scope**, as in Rust ([01](../spec/01-values-and-ownership.md#how-long-a-borrow-lasts)). So the opening's code compiles once `boss` is done before the append:
+**A borrow lasts until its last use, not to the end of its scope** ([01](../spec/01-values-and-ownership.md#how-long-a-borrow-lasts)). So the opening's code compiles once `boss` is done before the append:
 
 ```swift
 var boss = &enemies[0]
@@ -118,7 +118,7 @@ heal(&boss, from: boss)            // error: 'boss' is lent for change and read 
 heal(&boss, from: copy boss)       // fine: the copy is made before the call begins
 ```
 
-The classic break is changing a collection while a loop walks it. In C++, a `push_back` inside a range `for` can leave the loop's iterator pointing at freed memory. In Rayo, the loop borrows the list until it ends:
+The classic break is changing a collection while a loop walks it: an append may move the elements to a new buffer, and leave the loop reading freed memory. In Rayo, the loop borrows the list until it ends:
 
 ```swift
 for e in enemies {
@@ -234,7 +234,7 @@ Every borrow in this chapter ends inside a function:
 
 So a signature tells a caller all it needs: which arguments the call reads, which it changes and which it takes. Nothing has to say how long a borrow lasts, and none of this chapter's code does.
 
-**A borrow outlives a call only inside a view**: a value, such as a `Span`, that borrows memory something else owns. None of this chapter's types is or holds one. A view is how a function hands back part of a list without copying it. In Rust, a function that returns a borrow of one of two arguments needs an annotation such as `'a` to say which. Chapter 4 covers views and what a result may borrow ([Views](04-views.md)).
+**A borrow outlives a call only inside a view**: a value, such as a `Span`, that borrows memory something else owns. None of this chapter's types is or holds one. A view is how a function hands back part of a list without copying it. Chapter 4 covers views and what a result may borrow ([Views](04-views.md)).
 
 ## In the spec
 

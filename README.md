@@ -1,6 +1,6 @@
 # Rayo
 
-Rayo is a general-purpose systems programming language. It gives the same control over memory, layout and performance as C++, and it adds memory safety: safe Rayo code can't read freed memory or race on data. It does this without a garbage collector, implicit reference counting or lifetime annotations. Its syntax is shaped like Swift's.
+Rayo is a general-purpose systems programming language. It gives the same control over memory, layout and performance as C++, and it adds memory safety: safe Rayo code can't read freed memory or race on data. It does this without a garbage collector, implicit reference counting or lifetime annotations.
 
 Game development is one of Rayo's priorities: engines and gameplay code, of the kind written in C++ today and shipped on consoles.
 

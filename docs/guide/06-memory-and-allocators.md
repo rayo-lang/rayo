@@ -30,7 +30,7 @@ var editorProps = List<Prop>(allocator: .system)     // the same type: List<Prop
 var names = List<String>()                           // no allocator given: the current one (below)
 ```
 
-**Every owning value records the allocator its storage came from.** An **owning value** is one that owns storage from an allocator, such as a `List`, a `String` or a `Box` ([06](../spec/06-memory-and-allocators.md#how-values-record-their-allocator)). It grows and frees through that allocator, so the allocator isn't part of its type. A function that takes a `List<Prop>` takes both lists above, as with C++'s `std::pmr` containers.
+**Every owning value records the allocator its storage came from.** An **owning value** is one that owns storage from an allocator, such as a `List`, a `String` or a `Box` ([06](../spec/06-memory-and-allocators.md#how-values-record-their-allocator)). It grows and frees through that allocator, so the allocator isn't part of its type. A function that takes a `List<Prop>` takes both lists above.
 
 **Every registered allocator is one of three kinds** ([06](../spec/06-memory-and-allocators.md#allocator-values)):
 
@@ -129,7 +129,7 @@ world.results.append(String("late"))                              // fine: nothi
 
 ## One owned value: `Box`
 
-**`Box<T>` owns one value in an allocation of its own**, as C++'s `unique_ptr` and Rust's `Box` do ([06](../spec/06-memory-and-allocators.md#owning-boxes)). It is move-only, and destroying it destroys its value and frees its memory. `box.value` reaches the value in place.
+**`Box<T>` owns one value in an allocation of its own** ([06](../spec/06-memory-and-allocators.md#owning-boxes)). It is move-only, and destroying it destroys its value and frees its memory. `box.value` reaches the value in place.
 
 ```swift
 var boss = Box(Enemy(pos: [0, 0, 40], hp: 5000))   // one allocation, from the current allocator
@@ -147,7 +147,7 @@ enum Tree {
 
 ### Boxes of `any P`
 
-**`Box<any P>` owns a value whose type is known only at run time** ([05](../spec/05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). An **existential**, `any P`, holds a value of any type that conforms to the protocol `P`, and calls `P`'s requirements through a table, as a C++ virtual call does. A plain `any P` only borrows its value, like a view. To own one, put it in a box. With chapter 1's `Damageable`, which `Enemy` conforms to ([Basics](01-basics.md#protocols-and-generics)):
+**`Box<any P>` owns a value whose type is known only at run time** ([05](../spec/05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)). An **existential**, `any P`, holds a value of any type that conforms to the protocol `P`, and calls `P`'s requirements through a table. A plain `any P` only borrows its value, like a view. To own one, put it in a box. With chapter 1's `Damageable`, which `Enemy` conforms to ([Basics](01-basics.md#protocols-and-generics)):
 
 ```swift
 struct Crate(var pos: Vec3, var hp: Float = 20)
@@ -165,7 +165,7 @@ The dynamic dispatch and the heap allocation both show in the type, since `any P
 
 ## Reference counting: `Shared`
 
-**`Shared<T>` lets several owners, on any threads, hold one value, and the last owner to let go destroys it** ([06](../spec/06-memory-and-allocators.md#sharedt-data-with-many-owners)). This is **reference counting**, with an atomic count, like Rust's `Arc`. Since many threads may read the value at once, it must be one of these:
+**`Shared<T>` lets several owners, on any threads, hold one value, and the last owner to let go destroys it** ([06](../spec/06-memory-and-allocators.md#sharedt-data-with-many-owners)). This is **reference counting**, with an atomic count. Since many threads may read the value at once, it must be one of these:
 
 - **`Frozen`**, so nothing changes it through a shared borrow. The compiler derives `Frozen` for a type that holds no `Synchronized` value, object owner, raw pointer or `Closure`. std's containers, such as `List`, are `Frozen` when their elements are ([06](../spec/06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)).
 - **`Synchronized`**, so it changes only through its own synchronization, as a `Mutex` does ([Concurrency](07-concurrency.md#shared-mutable-state)).
@@ -187,7 +187,7 @@ print(wet.value.roughness)                                           // 'value' 
 
 ### Weak links and `LocalShared`
 
-**A weak link names a shared value without keeping it alive.** `s.weak()` returns a **weak link**, a `WeakShared<T>`: 8 bytes and copyable, like Rust's `Weak` ([06](../spec/06-memory-and-allocators.md#sharedt-data-with-many-owners)). `w.upgrade()` returns a new owner, a `Shared<T>?`, which is `nil` once the value is destroyed:
+**A weak link names a shared value without keeping it alive.** `s.weak()` returns a **weak link**, a `WeakShared<T>`: 8 bytes and copyable ([06](../spec/06-memory-and-allocators.md#sharedt-data-with-many-owners)). `w.upgrade()` returns a new owner, a `Shared<T>?`, which is `nil` once the value is destroyed:
 
 ```swift
 let grass = Shared(Texture(pixels: loadPixels("grass.tex"), width: 256))
@@ -195,7 +195,7 @@ let cached = grass.weak()                            // WeakShared<Texture>: own
 if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' lives, or nil if the texture is gone
 ```
 
-**`LocalShared<T>` keeps a plain count, for owners on one thread**, like Rust's `Rc`. It takes a `Frozen` `T` only and hands out no weak links. It never crosses to another thread, so its count needs no atomic operation. `Shared<T>` crosses threads when its `T` is `Sendable` ([Concurrency](07-concurrency.md#what-may-cross-threads-sendable)).
+**`LocalShared<T>` keeps a plain count, for owners on one thread.** It takes a `Frozen` `T` only and hands out no weak links. It never crosses to another thread, so its count needs no atomic operation. `Shared<T>` crosses threads when its `T` is `Sendable` ([Concurrency](07-concurrency.md#what-may-cross-threads-sendable)).
 
 ## Long-lived views: `Slice`
 

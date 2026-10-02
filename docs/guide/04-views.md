@@ -38,7 +38,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 
 ## Views
 
-**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies.md#scoped-values)). Taking one copies nothing. Three views come up all the time, and each holds an address and a count, as a C++ `std::span` or a Rust slice does:
+**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies.md#scoped-values)). Taking one copies nothing. Three views come up all the time, and each holds an address and a count:
 
 - `Span<T>`, which reads a run of elements;
 - `MutableSpan<T>`, which may also change them;
@@ -74,7 +74,7 @@ struct Label(var text: StringView)                          // error: a struct w
 
 So `List<StringView>` and `List<Token>` are scoped. Each owns its buffer, but the views inside it borrow, so the list stays within the scope too.
 
-Unlike a Rust struct that holds a reference, a scoped type names no lifetime parameter. The compiler tracks what each value borrows instead, as the rest of this chapter shows.
+A scoped type's declaration says only that it is scoped, not what its values borrow. The compiler tracks that for each value, as the rest of this chapter shows.
 
 ## What a view carries
 
