@@ -358,18 +358,37 @@ g.value += 1                                  // g's last use written out
 owned var n = consume m                       // error: destroying g at scope end still uses m
 ```
 
-A few values act when destroyed, as a lock guard unlocks its mutex, so **destroying a value is a use** when it is, or holds at any depth, one of these, a field `*T` holding a `T` as it does for [scopedness](#which-types-are-scoped):
+**Destroying a value is a use when it is, or holds at any depth, one of these:**
 
 - a value whose type declares a `deinit` that isn't `PlainDeinit` (below);
 - a `consuming` function value, which may own handed-over captures in the storage it views ([05](05-protocols-generics-and-closures.md#function-typed-values));
 - a value of a type parameter, an associated type or a `some P`, unless constrained `Copyable` or `TrivialFree` ([06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)), since generic code is checked once for every type it may stand for;
 - in generic code, a value of a type whose members a `static if` or `static for` generates from its generic arguments, when those members may include a `deinit` or a stored field ([09](09-compile-time.md#generated-members-are-checked-per-instantiation)), unless a `where` clause states it `Copyable` or `TrivialFree`.
 
-Such a value stays live until it is destroyed: at scope end, when overwritten or consumed, or, if it is maybe-initialized ([01](01-values-and-ownership.md#places-that-hold-no-value)), at the scope end or assignment that destroys it if it still holds a value. Its destruction uses its whole dependency set when it is itself one of the values above, or when it is an enum, an optional included, an inline array, a `Box` or a value of a type parameter that holds one, whose parts have no sets of their own ([below](#naming-a-field)). Otherwise, for a struct or tuple, it uses only the sets the caller keeps for the stored fields and tuple elements that are or hold one, each by the same rule. It holds the dynamic accesses in those sets until then (rule 6). Any other value is live only until its last use.
+These values may act when destroyed, as a lock guard unlocks its mutex. A field `*T` holds a `T` here, as it does for [scopedness](#which-types-are-scoped).
 
-**What its destruction uses can't include a part of itself**, at any depth: that conflicts with destroying it, as moving it would, since a `deinit` takes an owned `self` and may change one part before reading another. With `struct Doc(var text: String, var first: StringView?): Scoped`, `doc.first = doc.text.view` is fine, and still is when `Doc` holds a lock guard in another field, whose destruction uses only the guard's own set. It is an error once `Doc` has a non-`PlainDeinit` `deinit`, or when the guard locks a mutex that `Doc` holds.
+**Such a value stays live until it is destroyed**: at scope end, or when it is overwritten or consumed. A maybe-initialized one ([01](01-values-and-ownership.md#places-that-hold-no-value)) stays live until the scope end or assignment that destroys it if it still holds a value. Any other value is live only until its last use.
 
-A type conforms to **`PlainDeinit`**, with `unsafe` ([10](10-errors-and-safety.md#safe-modules)), when its `deinit` only destroys what it owns alone and frees its own buffers: destroying one uses only what destroying its elements uses, and skipping its own `deinit` can only leak. Any `deinit` may be skipped, as a stale value's elements' are ([10](10-errors-and-safety.md#unsafe-code)). So a `List<StringView>`, whose std type conforms, keeps nothing borrowed when dropped at scope end, while a `List<MutexGuard<T>>` keeps its mutexes borrowed until then. An object's owner, a `Pin`, a `LocalPin` and `Shared` don't conform, since their `deinit`s change state they don't own alone.
+**Such a value's destruction uses its whole dependency set when it is itself one of the values above**, or when it holds one and is one of these, whose parts have no sets of their own ([below](#naming-a-field)):
+
+- an enum, an optional included;
+- an inline array;
+- a `Box`;
+- a value of a type parameter.
+
+**Otherwise, a struct's or tuple's destruction uses only the sets the caller keeps for the stored fields and tuple elements that are or hold one**, each by the same rule.
+
+**Either way, until its destruction, the value holds the dynamic accesses in the sets that destruction uses** (rule 6).
+
+**What a value's destruction uses can't include a part of the value**, at any depth. That conflicts with destroying it, as moving it would, since a `deinit` takes an owned `self` and may change one part before reading another. With `struct Doc(var text: String, var first: StringView?): Scoped`:
+
+- `doc.first = doc.text.view` is fine;
+- it is still fine when `Doc` holds a lock guard in another field, whose destruction uses only the guard's own set;
+- it is an error once `Doc` has a non-`PlainDeinit` `deinit`, or when the guard locks a mutex that `Doc` holds.
+
+**A type conforms to `PlainDeinit` when its `deinit` only destroys what it owns alone and frees its own buffers.** The conformance is declared with `unsafe` ([10](10-errors-and-safety.md#safe-modules)). Destroying one then uses only what destroying its elements uses, and skipping its own `deinit` can only leak. Any `deinit` may be skipped, as a stale value's elements' are ([10](10-errors-and-safety.md#unsafe-code)).
+
+So a `List<StringView>`, whose std type conforms, keeps nothing borrowed when dropped at scope end, while a `List<MutexGuard<T>>` keeps its mutexes borrowed until then. An object's owner, a `Pin`, a `LocalPin` and `Shared` don't conform, since their `deinit`s change state they don't own alone.
 
 ### Lock guards are released on the thread that took them
 
@@ -378,11 +397,13 @@ var g = registry.lock()
 Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
 
-A **guard type** is declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` (rule 3), as `MutexGuard` is. `@guard` makes it `Scoped`, `~Copyable` and `~Sendable`, and nothing that isn't `Sendable` moves to or is lent to another thread, even inside a type parameter, an existential or a closure. So a guard is dropped, or consumed as a `Condvar` wait consumes one, only on the thread that took it, as many platform mutexes require ([07](07-concurrency.md#locks-mutex-and-rwlock)).
+A **guard type** is a type declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` ([above](#mutable-views)), as `MutexGuard` is.
+
+**`@guard` makes a type `Scoped`, `~Copyable` and `~Sendable`.** Nothing that isn't `Sendable` moves to or is lent to another thread, even inside a type parameter, an existential or a closure. So a guard is dropped, or consumed as a `Condvar` wait consumes one, only on the thread that took it, as many platform mutexes require ([07](07-concurrency.md#locks-mutex-and-rwlock)).
 
 ### Precise dependencies (opt-in)
 
-By default a result depends on every argument rule 3 names, even one it only read. When that gets in the way, as with a lookup keyed by a view into a buffer you want to advance, the function says what its result borrows in its `where` clause:
+**A `where` clause can say what a function's result, an accessor's yield or an absorbing parameter depends on.** By default a result depends on every argument rule 3 names, even one it only read. The clause helps where that gets in the way, as with a lookup keyed by a view into a buffer you want to advance:
 
 ```swift
 extension SymbolTable {
@@ -402,15 +423,27 @@ lexer.advance()                                  // OK: tok's last use is above
 use(syms)
 ```
 
-- **What depends** is `return` (the result and any thrown error), `yield` (what an accessor yields, [Projections](#projections-read-and-modify-accessors)), or a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
-- **`borrows x`** makes it depend on the parameter `x` and what `x` borrows, and on no other parameter, though it may still view static storage, as rule 5 allows every function; rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject. **`borrows static`** means static storage only. **`outlives x`** means only what `x` borrows, so it stays valid after `x` changes or is gone ([below](#staying-valid-after-a-parameter-moves-on-outlives)).
-- **Several items** may name one subject, which then depends on all of them: `where return borrows self, return borrows key`. A subject no item names follows the default rules.
+**An item's subject, what depends, is one of these:**
 
-The compiler **verifies the clause in the callee**, with rule 5 restricted to what the items name, so a wrong clause is a compile error. The clause names parameters, their stored fields ([below](#naming-a-field)) or `static`, nothing more. A view that `unsafe` code builds from a raw pointer carries no dependencies to verify, so its signature's dependencies, by the default rules or the clause, are part of what that code promises.
+- `return`, for the result and any thrown error;
+- `yield`, for what an accessor yields ([below](#projections-read-and-modify-accessors));
+- a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
+
+**An item says what its subject depends on:**
+
+- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject.
+- **`borrows static`**: static storage only.
+- **`outlives x`**: only what `x` borrows, so the subject stays valid after `x` changes or is gone ([below](#staying-valid-after-a-parameter-moves-on-outlives)).
+
+**Several items may name one subject, which then depends on all of them**: `where return borrows self, return borrows key`. A subject no item names follows the default rules.
+
+**The compiler verifies the clause in the callee**, with rule 5 restricted to what the items name, so a wrong clause is a compile error. The clause names parameters, their stored fields ([below](#naming-a-field)) or `static`, nothing more.
+
+**A view that `unsafe` code builds from a raw pointer carries no dependencies to verify.** So its signature's dependencies, by the default rules or the clause, are part of what that code promises.
 
 #### Staying valid after a parameter moves on: `outlives`
 
-`where return outlives self` is how an iterator over shared elements hands out elements that outlive the iteration:
+**`where return outlives self` lets an iterator over shared elements hand out elements that outlive the iteration:**
 
 ```swift
 struct SpanIterator<T>(var rest: Span<T>): SharedIterator, Scoped {
@@ -422,15 +455,43 @@ for s in table.entries { names.append(s.name.view) }   // names depends on 'tabl
 use(names)                                              // fine; mutating 'table' here would be the error
 ```
 
-Without the clause, each element would depend exclusively on the iterator, and the next `next()` would conflict with `names`. Iterators that hand out **mutable** views ([`MutableRef`](04-types.md#iteration), or `MutableSpan` chunks) stay lending, since two live exclusive views from one iterator would alias.
+Without the clause, each element would depend exclusively on the iterator, and the next `next()` would conflict with `names`.
 
-- **`outlives x` requires that nothing `x` carries can be changed through `x` or end with it.** So `x`'s type can hold no mutable view (rule 3), and destroying one is no use ([above](#when-destroying-a-value-counts-as-using-it)); in generic code, for every type argument its constraints allow. `Span`, a span iterator and `List<StringView>` qualify, so `func copyAll(from src: List<StringView>, into dst: mutable List<StringView>) where dst outlives src` leaves `src` free once it returns, where by default `dst` would keep the borrowed `src` itself borrowed. An iterator over a `MutableSpan` could hand out a view and then replace the data under it. A read guard carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` is declared `where yield borrows self`. Inside `next()`, verification uses rule 1's shared-view case: `let b = rest.first; rest = rest[1...]; return b` gives `b` the collection's set, not the field's.
-- **Generic code sees the clause through the protocol.** `IteratorProtocol.next()` has no clause, because some iterators over shared elements lend, such as a line reader that reuses one buffer, so generic code over it treats elements as lent. The refinement **`SharedIterator`** declares `next()` `where return outlives self`, and `Collection` requires `Iterator: SharedIterator`. **A witness must satisfy its requirement's clause**, depending on no more than it declares, which the compiler checks at the conformance.
-- **A value moved out of an owner carries only what the owner carried.** `where return outlives p` is also allowed, whatever `p` carries, on a function whose result is **moved out** of the own storage of `p`, where `p` is `self` or a `mutable` parameter: `popLast()`, `remove(at:)` and `Optional.take()` with `where return outlives self`, and `replace(&place, with:)` with `where return outlives place`. A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself, and then `&p` conflicts with that dependency, so the call can't be made: what it returns depends only on what `p` carried, with the same kinds. So a worklist over a `List<MutableSpan<Float>>` works: in `while var s = work.popLast() { let p = partition(&s); let (low, high) = (consume s).split(at: p); work.append(low); work.append(high) }`, `work` stays free while `s` holds its buffer. The consuming `split(at:)` hands the halves over with what `s` carried, where the lending `s.split(at: p)` would tie them to `s` ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)).
+**Iterators that hand out mutable views stay lending**, such as one that hands out [`MutableRef`](04-types.md#iteration)s or `MutableSpan` chunks, since two live exclusive views from one iterator would alias.
+
+**`outlives x` requires that nothing `x` carries can be changed through `x` or end with it.** So `x`'s type can hold no mutable view ([above](#mutable-views)), and destroying one is no use ([above](#when-destroying-a-value-counts-as-using-it)). In generic code, this must hold for every type argument the constraints allow.
+
+- **`Span`, a span iterator and `List<StringView>` qualify.** So `func copyAll(from src: List<StringView>, into dst: mutable List<StringView>) where dst outlives src` leaves `src` free once it returns, where by default `dst` would keep the borrowed `src` itself borrowed.
+- **An iterator over a `MutableSpan` doesn't**, since it could hand out a view and then replace the data under it.
+- **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` is declared `where yield borrows self`.
+
+**Inside `next()`, verification uses rule 1's shared-view case** ([above](#rule-1-projection)): `let b = rest.first; rest = rest[1...]; return b` gives `b` the collection's set, not the field's.
+
+**Generic code sees the clause through the protocol.** `IteratorProtocol.next()` has no clause, since some iterators over shared elements lend, such as a line reader that reuses one buffer. So generic code over it treats elements as lent. The refinement **`SharedIterator`** declares `next()` `where return outlives self`, and `Collection` requires `Iterator: SharedIterator`.
+
+**A witness must satisfy its requirement's clause**, depending on no more than it declares. The compiler checks this at the conformance.
+
+**A value moved out of an owner carries only what the owner carried.** `where return outlives p` is also allowed, whatever `p` carries, on a function whose result is **moved out** of `p`'s own storage, where `p` is `self` or a `mutable` parameter:
+
+- `popLast()`, `remove(at:)` and `Optional.take()`, with `where return outlives self`;
+- `replace(&place, with:)`, with `where return outlives place`.
+
+A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself. Then `&p` conflicts with that dependency, so the call can't be made. So what such a call returns depends only on what `p` carried, with the same kinds, and a worklist over a `List<MutableSpan<Float>>` works:
+
+```swift
+while var s = work.popLast() {                  // 'work' stays free while 's' holds its buffer
+    let p = partition(&s)
+    let (low, high) = (consume s).split(at: p)  // the halves carry what 's' carried
+    work.append(low)
+    work.append(high)
+}
+```
+
+The consuming `split(at:)` hands the halves over with what `s` carried, where the lending `s.split(at: p)` would tie them to `s` ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)).
 
 #### Naming a field
 
-A value may carry borrows of several places while a result comes from one of them. So an item may name a path of a parameter's stored fields and tuple elements, and a subject may be followed by one: `return.name`, `return.0`, or `q.table` for a `mutable` parameter `q`, which then takes on what the item names in that field only:
+**An item may name a path of a parameter's stored fields and tuple elements, and a subject may be followed by one**, since a value may carry borrows of several places while a result comes from one of them. So a subject may be `return.name`, `return.0`, or `q.table` for a `mutable` parameter `q`, which then takes on what the item names in that field only:
 
 ```swift
 struct Query(
@@ -450,9 +511,16 @@ request = readRequest()                          // fine: 'e' borrows symbols, n
 use(e)
 ```
 
-- **The caller keeps a set per stored field** of a struct, and per element of a tuple, down through nested stored fields, and a value's own set is their union. A primary initializer gives each field its argument's set, and assigning a stored field replaces its set, where the place assigned is known (rule 4). A call result gets per-field sets only from `return.f` items; other fields get what a plain `return` item names, or what the default rules give the whole result. Elements, enum payloads, what a `Box` holds, and a value of a type parameter have a single set.
-- **A `mutable` argument's fields may trade what they carry**, as in a `mutating` method that swaps two fields. So after the call, each stored field of the argument, at every depth, has the union of all its fields' sets from before, plus what the call gives it. A field a `p.f` item names keeps its own set, plus what the items name, and the callee proves it took nothing from `p`'s other fields. So after `mutating func flip() { let t = copy a; a = copy b; b = t }` on a `Pair` built from `s1.view` and `s2.view`, both fields depend on `s1` and `s2`.
-- **A path goes through stored fields only**, since an accessor is an access to all of `self` ([Which places overlap](01-values-and-ownership.md#which-places-overlap)). `borrows q.table` means that field and what it borrows; `outlives q.table` only what it borrows, under the conditions above applied to the field's type. The callee proves it with the same per-field sets for its own locals.
+**The caller keeps a set per stored field of a struct, and per element of a tuple**, down through nested stored fields. A value's own set is their union.
+
+- A primary initializer gives each field its argument's set.
+- Assigning a stored field replaces its set, where the place assigned is known ([above](#rule-4-absorption)).
+- A call result gets per-field sets only from `return.f` items. Its other fields get what a plain `return` item names, or what the default rules give the whole result.
+- Elements, enum payloads, what a `Box` holds, and a value of a type parameter have a single set.
+
+**A `mutable` argument's fields may trade what they carry**, as in a `mutating` method that swaps two fields. So after the call, each stored field of the argument, at every depth, has the union of all its fields' sets from before, plus what the call gives it. A field that a `p.f` item names is the exception: it keeps its own set, plus what the items name, and the callee proves it took nothing from `p`'s other fields. After `mutating func flip() { let t = copy a; a = copy b; b = t }` on a `Pair` built from `s1.view` and `s2.view`, both fields depend on `s1` and `s2`.
+
+**A path goes through stored fields only**, since an accessor is an access to all of `self` ([01](01-values-and-ownership.md#which-places-overlap)). `borrows q.table` means that field and what it borrows. `outlives q.table` means only what it borrows, under the conditions above applied to the field's type. The callee proves the item with the same per-field sets for its own locals.
 
 ### Pointing a name at another place: `rebind`
 
