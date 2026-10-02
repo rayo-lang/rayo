@@ -50,7 +50,7 @@ extension LoadError {                                   // enables 'try' across 
 
 - **Error types.** A type a function throws conforms to `Error`, a marker protocol with no requirements; `Never` conforms too.
 - **Not throwing is throwing `Never`.** A function type that doesn't throw is the one that throws `Never` ([04](04-types.md#enums)), so a non-throwing function value binds a thrown type parameter to `Never`, as `tryMap(xs, abs)` does for `func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) throws(E) -> Int) throws(E) -> List<Int>`.
-- **Inferred errors.** A non-public function with a body may write bare `throws`, and the compiler infers the union of the error types its body can throw, as it does for a closure literal, the smallest such union where functions call each other in a cycle. A function type, a requirement and any other declaration without a body name their error type.
+- **Inferred errors.** A non-public function with a body may write bare `throws`. For such a function, the compiler infers the union of the error types its body can throw, as it does for a closure literal. Where functions call each other in a cycle, it infers the smallest such union. A function type, a requirement and any other declaration without a body name their error type.
 
 ### Error unions
 
@@ -70,13 +70,13 @@ typealias Failure = (IoError | ParseError)
 
 - **One set, one type.** Members are flattened and deduplicated by identity, and ordered by their `T.id`s, which no two types share ([09](09-compile-time.md#what-reflection-can-read)), so the same set of types is the same type, with the same layout, everywhere in a program. `Never` is dropped from a union with other members, so `(Never | IoError)` is `IoError`, and a union of one type is that type.
 - **An ordinary type.** Outside `throws` and a function type's parameters, a union is written in parentheses, as `lastError` and `Failure` are above. A value of one of its members, or of a union whose members it all has, converts to it implicitly, so `report.lastError = e` stores an `IoError` ([05](05-protocols-generics-and-closures.md#implicit-conversions)). It conforms to `Error`, is `Copyable`, `Sendable`, `Frozen` and `TrivialFree` exactly when every member is, and is scoped when any member is. Like a Rayo enum, it is never `Pod`, since a tag that no member uses is no value of it ([04](04-types.md#plain-data-pod-and-bit-casts)). Its values are matched with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)).
-- **Binding a type parameter in a union.** Where a union holds one type parameter, as `throws(E | IoError)` does, an argument binds it to the members of the argument's error type that the union's other members don't name, or to `Never` when none is left: a closure that throws `(ParseError | IoError)` binds `E` to `ParseError`, and one that throws only `IoError`, or nothing, binds it to `Never`. A union holding two type parameters binds neither.
+- **Binding a type parameter in a union.** Where a union holds one type parameter, as `throws(E | IoError)` does, an argument binds it to the members of the argument's error type that the union's other members don't name, or to `Never` when none is left. So a closure that throws `(ParseError | IoError)` binds `E` to `ParseError`, and one that throws only `IoError`, or nothing, binds it to `Never`. A union holding two type parameters binds neither.
 
 ### Propagating errors with `try`
 
 **`try f()` propagates, member by member**, and `throw e` throws `e`'s members the same way. When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing function's error type, or one of its members, or convert to it:
 
-- **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, declared `owned`: the thrown value moves in, so the new error may carry what the thrown value borrowed, never a view of the thrown value itself ([02](02-views-and-dependencies.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it neither throws nor fails. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.
+- **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, declared `owned`. The thrown value moves in, so the new error may carry what the thrown value borrowed, never a view of the thrown value itself ([02](02-views-and-dependencies.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it neither throws nor fails. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.
 - **Into a union.** When the target is a union, a thrown member that is one of its members stays itself, and otherwise exactly one of its members may convert from it. If two could, the `try` or `throw` is an error.
 - **A local lookup.** The lookup looks only at the target type, or for a generic error type at its constraints, so it stays bounded and local. With no matching initializer, the `try` is a compile error.
 
@@ -114,7 +114,7 @@ func loadOrDefault(_ path: StringView) throws(IoError) -> Level {
 
 ### Cleanup
 
-- **`defer { }` runs on every scope exit.** An error return is one, and it runs where [01](01-values-and-ownership.md#destruction)'s destruction order places it.
+- **`defer { }` runs on every scope exit.** An error return is one, and it runs where the destruction order places it ([01](01-values-and-ownership.md#destruction)).
 - **Control never leaves a `defer` block early.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`.
 - **A `defer` body is checked as if written at each point where it may run.** Those are every exit of its scope, a propagating `try` or `throw` included, and, in a `task` function, every `await` it is live across, where destroying the task runs it ([07](07-concurrency.md#semantics)). So it uses only what every one of those points allows.
 
@@ -137,15 +137,35 @@ The language and the runtime panic on the following, in every build unless noted
 - out-of-bounds indexing, and a string range off a Unicode scalar boundary ([04](04-types.md#strings));
 - integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([08](08-c-interop.md#structs-unions-and-enums)), only where overflow checks are on ([04](04-types.md#integer-overflow-division-and-shifts));
 - division or remainder by zero, and converting NaN or an out-of-range floating-point value to an integer with the unlabeled form;
-- an access through, or a pin taken through, a stale object owner, opening an owning value whose allocator was reset or unregistered since ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)), conflicting accesses to a thread-bound object or a thread-local, and destroying a thread-bound object while an access to it is live ([03](03-handles-and-objects.md#destroying-an-object));
-- running out of stack: a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included, and a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](08-c-interop.md#the-stack-a-c-call-needs)), each caught before anything is written past the stack's end;
-- a count kept for safety that would overflow: the reader counts of an object, a thread-local and an `RwLock` ([03](03-handles-and-objects.md#dynamic-exclusivity), [07](07-concurrency.md#locks-mutex-and-rwlock)), pin counts ([03](03-handles-and-objects.md#pinning-for-c)), a thread's counts of its uses of an allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)), and the counts behind `Shared`, `LocalShared`, `Published` snapshots, and `Sender`, `Receiver` and `Future` values ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners), [07](07-concurrency.md#queues-and-channels)); and creating an object or a `Shared` value when no generation is left ([03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
+- an access through, or a pin taken through, a stale object owner ([03](03-handles-and-objects.md#destroying-an-object));
+- opening an owning value whose allocator was reset or unregistered since ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it));
+- conflicting accesses to a thread-bound object ([03](03-handles-and-objects.md#dynamic-exclusivity)) or a thread-local ([07](07-concurrency.md#global-state));
+- destroying a thread-bound object while an access to it is live ([03](03-handles-and-objects.md#destroying-an-object));
+- running out of stack, each case caught before anything is written past the stack's end:
+    - a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included;
+    - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](08-c-interop.md#the-stack-a-c-call-needs));
+- a count kept for safety that would overflow:
+    - the reader counts of an object, a thread-local and an `RwLock` ([03](03-handles-and-objects.md#dynamic-exclusivity), [07](07-concurrency.md#locks-mutex-and-rwlock));
+    - pin counts ([03](03-handles-and-objects.md#pinning-for-c));
+    - a thread's counts of its uses of an allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it));
+    - the counts behind `Shared`, `LocalShared`, `Published` snapshots, and `Sender`, `Receiver` and `Future` values ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners), [07](07-concurrency.md#queues-and-channels));
+- creating an object or a `Shared` value when no generation is left ([03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
 - an allocation that fails in a plain form, such as `UniquePointer(v)` or a closure context past the inline budget ([06](06-memory-and-allocators.md#allocation-failure));
-- any operation through an unregistered `Allocator` id, apart from the frees and growths that [06](06-memory-and-allocators.md#unregistering-an-allocator) allows from the `deinit`s its unregistration runs, a reset or a `release` through one that isn't an arena, a reset past the implementation's limit on resets, a reset or an unregistration while anything still uses the memory it would free, or while another that reaches that memory is running ([06](06-memory-and-allocators.md#what-a-reset-does)), unregistering `.system` ([06](06-memory-and-allocators.md#unregistering-an-allocator)), and registering an allocator whose backing is unregistered, whose backing chain breaks a rule of [06](06-memory-and-allocators.md#allocators-over-other-allocators), or past the implementation's limit ([06](06-memory-and-allocators.md#how-values-record-their-allocator));
-- taking a lock's exclusive access on a thread that holds either kind of access to it, or either kind on a thread that holds its exclusive one, for a `Mutex` or an `RwLock` ([07](07-concurrency.md#locks-mutex-and-rwlock)), and `lock()` on a `Slice` of a bare `Shared<Blob>` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
+- these operations on allocators:
+    - any operation through an unregistered `Allocator` id, apart from the frees and growths that 06 allows from the `deinit`s its unregistration runs ([06](06-memory-and-allocators.md#unregistering-an-allocator));
+    - a reset or a `release` through an allocator that isn't an arena ([06](06-memory-and-allocators.md#what-a-reset-does));
+    - a reset past the implementation's limit on resets ([06](06-memory-and-allocators.md#what-a-reset-does));
+    - a reset or an unregistration while anything still uses the memory it would free, or while another that reaches that memory is running ([06](06-memory-and-allocators.md#what-a-reset-does));
+    - unregistering `.system` ([06](06-memory-and-allocators.md#allocator-values));
+    - registering an allocator whose backing is unregistered, or whose backing chain breaks a rule for backing chains ([06](06-memory-and-allocators.md#allocators-over-other-allocators));
+    - registering an allocator past the implementation's limit ([06](06-memory-and-allocators.md#how-values-record-their-allocator));
+- taking a lock's exclusive access on a thread that holds either kind of access to it, or either kind on a thread that holds its exclusive one, for a `Mutex` or an `RwLock` ([07](07-concurrency.md#locks-mutex-and-rwlock));
+- `lock()` on a `Slice` of a bare `Shared<Blob>` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
 - overlapping calls on one side of a single-producer or single-consumer queue ([07](07-concurrency.md#queues-and-channels));
-- reading a global before its initializer has run, and using a thread-local before its thread's copy is initialized or after it is destroyed;
-- entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](07-concurrency.md#initialization-at-startup)), calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
+- reading a global before its initializer has run ([07](07-concurrency.md#initialization-at-startup));
+- using a thread-local before its thread's copy is initialized or after it is destroyed ([07](07-concurrency.md#global-state));
+- entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](07-concurrency.md#initialization-at-startup));
+- calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
 - a wait during startup that would park with no timeout ([07](07-concurrency.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](07-concurrency.md#starting-a-thread-runtimestartthread));
 - polling a task that has already finished ([07](07-concurrency.md#semantics));
 - interning a `Name` whose hash another text already has ([04](04-types.md#collections-and-strings));
