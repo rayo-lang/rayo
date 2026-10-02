@@ -36,7 +36,7 @@ A type may be scoped without borrowing anything, such as a profiling zone, which
 - task parameters and a `task func` method's `self`, which a task keeps in its state ([07](07-concurrency.md#semantics));
 - the elements of a `StaticSpan`, which outlive every scope ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
 
-**`~` means "not"**, before three marker protocols only ([01](01-values-and-ownership.md#values)). In a conformance list, `~Copyable` and `~Sendable` opt a type out of a derived conformance ([07](07-concurrency.md#what-may-cross-threads-sendable)). In a constraint, `T: ~Scoped` requires that `T` isn't scoped. An unconstrained type parameter may be move-only, scoped, and not `Sendable`, so none of those needs a `~`.
+**`~` means "not"**, before three marker protocols only ([01](01-values-and-ownership.md#copies)). In a conformance list, `~Copyable` and `~Sendable` opt a type out of a derived conformance ([07](07-concurrency.md#what-may-cross-threads-sendable)). In a constraint, `T: ~Scoped` requires that `T` isn't scoped. An unconstrained type parameter may be move-only, scoped, and not `Sendable`, so none of those needs a `~`.
 
 ### Dependencies
 

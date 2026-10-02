@@ -12,11 +12,15 @@ func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
 
-A **place** is storage that holds a value: a local, a parameter, a global, a temporary, or a field, element or projection of one of those. A value has one owner at a time, except a reference-counted value, such as one behind a `Shared<T>`, which its owners share ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), and no second value is made unless the code says `copy` or `clone()`, takes a copyable `const` ([below](#moving-values-out)), or uses an operation defined to copy its copyable operands in: a range operator ([05](05-protocols-generics-and-closures.md#operators)), a `Simd` initializer or lane read ([04](04-types.md#simd-and-math)), an inline array's `.init(repeating:)` ([04](04-types.md#tuples-ranges-and-arrays)), `using allocator = a`, which reads the id in `a` ([06](06-memory-and-allocators.md#the-current-allocator)), a widening conversion ([below](#bindings)), an `as` pattern on a place ([04](04-types.md#matching-with-when-and-choosing-with-if)), or a change through a `get` and `set` pair, which copies a copyable `owned` subscript argument for the `get` ([02](02-views-and-dependencies.md#get-and-set-accessors)). One copy is deferred: a `String` made from a literal uses the literal's bytes until its first write or growth, and copies them then ([04](04-types.md#literals)). Code that uses a value without owning it **borrows** it, and the compiler checks every borrow inside the function that makes it.
+A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
+
+**Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it.
+
+**A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([below](#moving-values-out)), or through an operation that copies its operands ([below](#operations-that-copy)).
 
 ## Tiers of checking
 
-Every reasonable systems pattern can be written, and each mechanism lands in the cheapest **tier** that can check it. A pattern the static checker can't prove is checked in the dynamic tier: it is never forbidden for that reason, and never forced into `unsafe`.
+**Each pattern is checked in the cheapest tier that can check it.** A pattern the static checker can't prove is checked at run time, in the dynamic tier. It is never forbidden for that reason, and never forced into `unsafe`.
 
 | Tier | Mechanisms | Checked | Cost |
 | --- | --- | --- | --- |
@@ -26,22 +30,23 @@ Every reasonable systems pattern can be written, and each mechanism lands in the
 
 **Safe code** is the code of the first two tiers: everything outside `unsafe` code, `unchecked` blocks and C. It has no undefined behavior ([11](11-compilation-model.md#what-the-language-leaves-open)).
 
-## Values
-
-A Rayo type is a **value type**: outside the shared mutable state listed below, no code can watch a value change through another name. While a shared borrow of it is live, nothing changes it, and while a mutable borrow is live, nothing else can reach it ([The law of exclusivity](#the-law-of-exclusivity)). Shared mutable state exists only where a type or declaration says so: objects and their weak pointers, `Pool` and `Handle`, pins, which keep a `StablePool` from moving an element out ([03](03-handles-and-objects.md#pinning-for-c)), thread-locals ([07](07-concurrency.md#global-state)), `Synchronized` types such as `Mutex` ([07](07-concurrency.md#atomics-and-locks)), channel ends ([07](07-concurrency.md#queues-and-channels)), and, in `unsafe` code, raw pointers, bare global `var`s and imported C variables.
+## Moves
 
 ```swift
 var cmds = CommandList()
 cmds.draw(mesh)
-owned var frame = cmds            // move: 'frame' takes over, 'cmds' can't be used any more
-print(cmds.count)                 // error: 'cmds' used after move
+submit(cmds)                      // submit keeps the list: it moves out of 'cmds'
+print(cmds.count)                 // error: 'cmds' was moved
 cmds = CommandList()              // fine: a new value makes 'cmds' usable again
-submit(frame)                     // an 'owned' parameter: 'frame' moves into submit
 ```
 
-**Taking a value moves it.** An `owned` binding, an assignment, `return`, `throw`, `await`, an `owned` argument, a `consuming` method's receiver, a `[move x]` capture ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)), a global's initializer, the elements of a tuple or array literal and an enum case's payload all take a value. Taking from a place moves the value out, and the place can't be used until it is given a new value. Only a place the code owns can be moved from ([Moving values out](#moving-values-out)); taking from any other is a compile error, except from a copyable `const` ([Constants](#moving-values-out)). A local `let` of a place, or a `var` of `&place`, borrows it, and one declared `owned` takes it ([Bindings](#bindings)). A move changes the owner: it runs none of the program's code, allocates nothing, and copies at most the value's bytes, into the place that takes it.
+**Assigning a value, returning it or passing it to a function that keeps it moves it.** The new owner takes it over, and the place it came from can't be used until it gets a new value. Only a place the code owns can be moved from: moving out of a value the code only borrows is a compile error.
 
-**Copies are written out.**
+**A move changes the owner and nothing else.** It runs none of the program's code, allocates nothing, and copies at most the value's bytes, into the place that takes it.
+
+[Moving values out](#moving-values-out) lists every construct that moves a value, and every place that can be moved from.
+
+## Copies
 
 ```swift
 var spawn = copy e.pos            // copy: Vec3 is copyable, so this is a memcpy
@@ -50,11 +55,61 @@ var loadout = player.items.clone()   // clone: List owns heap memory, so this al
 var a = copy player.items         // error: 'List<Item>' is not copyable
 ```
 
-- A type is **copyable** when all its fields and enum payloads are, it declares no `deinit`, it doesn't opt out with `~Copyable`, and no rule below makes it move-only. `copy x` is a `memcpy` of its bytes, and never allocates, since a copyable type can't own heap memory. Copyable types satisfy the derived marker protocol **`Copyable`**; listing it, as `struct Handle<T>(…): Copyable` does, asks the compiler to confirm it.
-- Any other type is **move-only**: one that declares a `deinit`, has a move-only field or payload, or lists **`~Copyable`**, as `struct MutableSpan<Element>(…): Scoped, ~Copyable` does, and one that its kind makes move-only: a `Synchronized` or `@guard` type ([07](07-concurrency.md#the-synchronized-contract), [02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them)), a `mutating` or `consuming` function value ([05](05-protocols-generics-and-closures.md#closure-kinds)), a `consuming` closure literal's type or one with an exclusive or move-only capture ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)), a `Closure<F>` ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)), a `mutable any P` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)), an exclusive `SoA` row ([04](04-types.md#struct-of-arrays-soat)), or a task's state ([07](07-concurrency.md#semantics)). Every type that owns memory, such as `List`, `String`, `Box` or `Pool`, is move-only, so copying heap data is always a named call that allocates: `a.clone()`.
-- Generic code treats an unconstrained type parameter as possibly move-only, so copying a `T` requires `T: Copyable`.
+**Copies are written out.** `copy x` is a `memcpy` of a copyable value's bytes, and never allocates. A move-only value is copied with a named call, `x.clone()`, which allocates.
 
-**Destruction.** A type's `deinit` runs when an owned value's scope ends or it is overwritten. Values are destroyed in reverse order: a scope's locals in reverse order of declaration, and a statement's temporaries last-made first. A value's own `deinit` runs first, then its fields are destroyed last-declared first; an enum payload's parts, an inline array's elements and a tuple's elements are destroyed last first. A function's `owned` parameters and a `consuming` method's `self` count as locals of its body declared before the others, `self` first and then the parameters in order. A **hidden local**, which the language declares to keep a value a statement can't name, such as a `when` subject ([Bindings](#bindings)) or a loop's sequence ([04](04-types.md#iteration)), takes its place in that order too. A closure literal's counts as declared just before the local it was made for, in the order the literals are made ([05](05-protocols-generics-and-closures.md#function-typed-values)). A `rebind`'s counts as the binding whose value it took ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind)). Those of a `guard`, a `when` arm, an `if case`, a `while case` and a `for` loop count as declared where the statement stands: a loop's sequence temporaries in evaluation order, then its iterator ([04](04-types.md#iteration)). A `defer` block runs as a value declared where it stands ([10](10-errors-and-safety.md#cleanup)). Where destroying a value uses what it borrows ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), that use is checked in this order, so a lock guard declared after its mutex is released before the mutex is destroyed.
+A type is **copyable** when:
+
+- all its fields and enum payloads are copyable;
+- it declares no `deinit`;
+- it doesn't opt out with `~Copyable`;
+- its kind doesn't make it move-only (below).
+
+A copyable type can't own heap memory, which is why `copy` never allocates. Copyable types conform to the derived marker protocol **`Copyable`**. Listing it, as `struct Handle<T>(…): Copyable` does, asks the compiler to confirm it.
+
+Every other type is **move-only**: one that declares a `deinit`, has a move-only field or payload, or lists **`~Copyable`**, as `struct MutableSpan<Element>(…): Scoped, ~Copyable` does. So is a type whose kind makes it move-only:
+
+- a `Synchronized` or `@guard` type ([07](07-concurrency.md#the-synchronized-contract), [02](02-views-and-dependencies.md#lock-guards-are-released-on-the-thread-that-took-them));
+- a `mutating` or `consuming` function value ([05](05-protocols-generics-and-closures.md#closure-kinds));
+- a `consuming` closure literal's type, or one with an exclusive or move-only capture ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f));
+- a `Closure<F>` ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
+- a `mutable any P` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch));
+- an exclusive `SoA` row ([04](04-types.md#struct-of-arrays-soat));
+- a task's state ([07](07-concurrency.md#semantics)).
+
+Every type that owns memory, such as `List`, `String`, `Box` or `Pool`, is move-only, so copying heap data always takes a named call that allocates: `a.clone()`. Generic code treats an unconstrained type parameter as possibly move-only, so copying a `T` requires `T: Copyable`.
+
+### Operations that copy
+
+Besides `copy`, `clone()` and taking a copyable `const`, these operations copy their copyable operands:
+
+- a range operator ([05](05-protocols-generics-and-closures.md#operators));
+- a `Simd` initializer or lane read ([04](04-types.md#simd-and-math));
+- an inline array's `.init(repeating:)` ([04](04-types.md#tuples-ranges-and-arrays));
+- `using allocator = a`, which reads the id in `a` ([06](06-memory-and-allocators.md#the-current-allocator));
+- a widening conversion ([below](#bindings));
+- an `as` pattern on a place ([04](04-types.md#matching-with-when-and-choosing-with-if));
+- a change through a `get` and `set` pair, which copies a copyable `owned` subscript argument for the `get` ([02](02-views-and-dependencies.md#get-and-set-accessors)).
+
+One copy is deferred: a `String` made from a literal uses the literal's bytes until its first write or growth, and copies them then ([04](04-types.md#literals)).
+
+## Destruction
+
+**A value is destroyed when its owner's scope ends or when it is overwritten**, and its type's `deinit` runs then. Destruction runs in reverse order:
+
+- a scope's locals, last declared first;
+- a statement's temporaries, last made first;
+- a value's parts: its own `deinit` runs first, then its fields are destroyed, last declared first. An enum payload's parts, an inline array's elements and a tuple's elements are destroyed last first.
+
+Some values that the code doesn't declare still count as locals, and take their place in that order:
+
+- **Parameters.** A function's `owned` parameters and a `consuming` method's `self` count as locals of its body declared before the others: `self` first, then the parameters in order.
+- **Hidden locals.** A **hidden local** is one the language declares to keep a value that a statement can't name, such as a `when` subject ([below](#bindings)) or a loop's sequence ([04](04-types.md#iteration)):
+    - a closure literal's counts as declared just before the local it was made for, in the order the literals are made ([05](05-protocols-generics-and-closures.md#function-typed-values));
+    - a `rebind`'s counts as the binding whose value it took ([02](02-views-and-dependencies.md#pointing-a-name-at-another-place-rebind));
+    - those of a `guard`, a `when` arm, an `if case`, a `while case` and a `for` loop count as declared where the statement stands: a loop's sequence temporaries in evaluation order, then its iterator ([04](04-types.md#iteration)).
+- **`defer`.** A `defer` block runs as a value declared where it stands would be destroyed ([10](10-errors-and-safety.md#cleanup)).
+
+Where destroying a value uses what it borrows ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), that use is checked in this order. So a lock guard declared after its mutex is released before the mutex is destroyed.
 
 ## Parameters
 
@@ -167,7 +222,18 @@ Every binding also follows these rules:
 
 ## Moving values out
 
-A move happens wherever a value is taken ([Values](#values)). `consume place` writes one as an expression, and also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary destroyed at the end of the statement.
+**These take a value, and so move it** ([above](#moves)):
+
+- an assignment, `return`, `throw` and `await`;
+- an `owned` argument, and a `consuming` method's receiver ([above](#parameters));
+- an `owned` binding ([above](#bindings));
+- a `[move x]` capture ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
+- a global's initializer;
+- the elements of a tuple or array literal, and an enum case's payload.
+
+A copyable `const` is the exception: taking one makes a new value (below). A `let` of a place, or a `var` of `&place`, borrows the place instead ([above](#bindings)).
+
+`consume place` writes a move as an expression, and also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary destroyed at the end of the statement.
 
 ```swift
 var loot = List<Item>()
@@ -209,7 +275,7 @@ for (h, var e) in &world.enemies.entries {
 
 **While a mutable borrow of a place is live, no other access to an overlapping place may happen. While a shared borrow is live, no mutable access may happen.** Moving from a place, assigning it and destroying it are mutable accesses to it.
 
-Borrows can't escape the function body that makes them, so this is checked **statically, in every build, with no run-time checks**. Run-time exclusivity checks exist only in the dynamic tier, on objects and on thread-locals ([03](03-handles-and-objects.md#dynamic-exclusivity), [07](07-concurrency.md#global-state)), announced by their types and by `@threadlocal`, and in the locks of `Synchronized` types ([07](07-concurrency.md#atomics-and-locks)), which a `Slice` into a locked buffer also takes ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)). Changing another field during the loop is allowed:
+The compiler checks this one function at a time, from its body and the signatures of the functions it calls: a borrow never outlives the function that makes it, except as that function's signature says. The check is **static, in every build, at no run-time cost**. Changing another field during the loop is allowed:
 
 ```swift
 for (h, e) in world.enemies.entries {
@@ -217,6 +283,18 @@ for (h, e) in world.enemies.entries {
 }
 world.apply(world.commands.take())                       // take() moves the contents out, leaving it empty
 ```
+
+### State that other code can change
+
+**Only these let other code change a value between two of your uses**, and each says so in its type or declaration:
+
+- an object, through its owner or any of its weak pointers. Each access takes a mark, and a conflicting one panics ([03](03-handles-and-objects.md#dynamic-exclusivity));
+- a thread-local, declared `@threadlocal`, whose accesses are marked the same way ([07](07-concurrency.md#global-state));
+- a `Synchronized` value, such as a `Mutex`, which changes only through its own synchronization ([07](07-concurrency.md#atomics-and-locks)). A `Slice` into a locked buffer takes the buffer's lock ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
+- a channel's ends ([07](07-concurrency.md#queues-and-channels));
+- a pool's element, named by a `Handle`, which reads `nil` once the element is removed ([03](03-handles-and-objects.md#pools-and-handles));
+- a pinned element, whose address C may hold ([03](03-handles-and-objects.md#pinning-for-c));
+- in `unsafe` code, raw pointers, bare global `var`s and imported C variables, which nothing checks.
 
 ### Which places overlap
 

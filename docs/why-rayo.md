@@ -137,7 +137,7 @@ func main() {
 
 What it shows:
 
-- **Values and handles.** Game data is ordinary values in `Pool`s. An enemy's `target` is a `Handle`, so once the player is removed, `world.players[t]` reads `nil`. `hero` moves into the new enemy, and `copy clock` is a copy written out ([01](spec/01-values-and-ownership.md#values)).
+- **Values and handles.** Game data is ordinary values in `Pool`s. An enemy's `target` is a `Handle`, so once the player is removed, `world.players[t]` reads `nil`. `hero` moves into the new enemy, and `copy clock` is a copy written out ([01](spec/01-values-and-ownership.md#copies)).
 - **Race-free parallel loops.** The closure in `steer` runs on several threads at once. It compiles because it writes only its own enemy and only reads `world.players`; also writing `world.players` would be a compile error ([07](spec/07-concurrency.md#lending-work-to-other-threads)).
 - **Stepped tasks.** `openDoor` pauses at `await` and continues when its owner steps it, here once per pass of the main loop. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](spec/07-concurrency.md#semantics)).
 - **Reflection and attributes.** `Bounds` is an ordinary struct used as an attribute. The editor finds it by reflecting over `Enemy`'s fields, and `@reflect(private)` lets it see fields that aren't public ([09](spec/09-compile-time.md)).
