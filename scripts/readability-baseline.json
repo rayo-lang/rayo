@@ -15,10 +15,6 @@
     "sentences": 42,
     "paragraphs": 9
   },
-  "docs/spec/06-memory-and-allocators.md": {
-    "sentences": 9,
-    "paragraphs": 1
-  },
   "docs/spec/07-concurrency.md": {
     "sentences": 22,
     "paragraphs": 4
