@@ -388,7 +388,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 - **No borrow and no dynamic access may be live across an `await`.** That means none of these may be live there:
     - a scoped value ([02](02-views-and-dependencies.md#where-a-scoped-value-can-go));
     - a binding or pattern part that borrows a place;
-    - a borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`, unless it lies in the task's parameters or owned locals and is reached through stored fields and indices without reading an optional.
+    - a borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`. The exception is a place in the task's parameters or owned locals, reached through stored fields and indices without reading an optional.
 
   `d` above borrows the door and ends before the first `await`. So using it after the `await` is a compile error, and code there reads `game.doors[door]` again.
 

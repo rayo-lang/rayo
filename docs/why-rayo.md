@@ -6,12 +6,20 @@ The [README](../README.md) introduces Rayo. This page makes the case for it: the
 
 Six principles decide Rayo's trade-offs.
 
-1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage, and nothing copies beyond what [01](spec/01-values-and-ownership.md) lists, except that a `String` made from a literal copies the literal's bytes at its first write or growth ([04](spec/04-types.md#literals)), and a closure moved into a `Closure` puts the captures its capture list shows in an allocated context when they don't fit inline ([05](spec/05-protocols-generics-and-closures.md#unscoped-closures-closuref)). Where the compiler stages a place through a temporary, a declaration announces it: a `@packed` struct ([04](spec/04-types.md#packed-structs-and-under-aligned-places)), an imported C bitfield ([08](spec/08-c-interop.md#structs-unions-and-enums)), a property or subscript with a `set` ([02](spec/02-views-and-dependencies.md#get-and-set-accessors)), or an access-bound `read` or `modify` that yields a temporary ([02](spec/02-views-and-dependencies.md#access-bound-projections)).
+1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership.md#operations-that-copy)), with two exceptions:
+    - a `String` made from a literal copies the literal's bytes at its first write or growth ([04](spec/04-types.md#literals));
+    - a closure moved into a `Closure` puts the captures its capture list shows in an allocated context, when they don't fit inline ([05](spec/05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
+
+   Where the compiler stages a place through a temporary, a declaration announces it:
+    - a `@packed` struct ([04](spec/04-types.md#packed-structs-and-under-aligned-places));
+    - an imported C bitfield ([08](spec/08-c-interop.md#structs-unions-and-enums));
+    - a property or subscript with a `set` ([02](spec/02-views-and-dependencies.md#get-and-set-accessors));
+    - an access-bound `read` or `modify` that yields a temporary ([02](spec/02-views-and-dependencies.md#access-bound-projections)).
 2. **Nothing reasonable is forbidden; the language only chooses how to check it.** Each systems pattern lands in the cheapest [tier](spec/01-values-and-ownership.md#tiers-of-checking) that can check it, and none is forced into `unsafe` just because the checker can't prove it.
 3. **Values by default, objects when you need them.** Borrows of values are checked within one function body. Longer links are handles and weak pointers, checked at each use.
 4. **No build setting turns memory safety off; diagnostics are settings.** Bounds checks, object checks and arena checks stay on in every build, except the ones an `unchecked` block's own code performs ([10](spec/10-errors-and-safety.md#unchecked-blocks)). Diagnostic checks, such as overflow and `assert`, are on or off where code is written, by the profile's default, a module's settings or a scope's `@checks` ([10](spec/10-errors-and-safety.md#check-levels)).
 5. **Rayo calls C and exports C.** So every platform SDK is reachable. It has no C++ interop, which lets it define its semantics from scratch, and reaches C++-only APIs through a thin C wrapper.
-6. **Edit-build-run cycles are fast.** Type checking needs no search, and no build does work beyond what [11](spec/11-compilation-model.md#runtime-costs) lists, so unoptimized builds stay fast enough to test with.
+6. **Edit-build-run cycles are fast.** Type checking needs no search, and no build does work beyond what 11 lists ([11](spec/11-compilation-model.md#runtime-costs)), so unoptimized builds stay fast enough to test with.
 
 ## Problems Rayo answers
 

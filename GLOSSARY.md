@@ -142,7 +142,7 @@ A `Pin<T>` or a `LocalPin<T>`, which keeps a `StablePool` element or an object a
 An access to an object's value that holds a shared mark (a read) or an exclusive mark (a modify) until nothing that depends on it is used ([03](docs/spec/03-handles-and-objects.md#dynamic-exclusivity)).
 
 **Stale**:
-Said of a handle whose element was removed ([03](docs/spec/03-handles-and-objects.md#pools-and-handles)), or of a value whose storage a reset or an unregistration invalidated ([06](docs/spec/06-memory-and-allocators.md#what-a-reset-does)); using one reads `nil` or panics, and never reaches freed memory.
+Said of a handle whose element was removed ([03](docs/spec/03-handles-and-objects.md#pools-and-handles)), or of a value whose storage a reset or an unregistration invalidated ([06](docs/spec/06-memory-and-allocators.md#what-a-reset-does)). Using one reads `nil` or panics, and never reaches freed memory.
 _Avoid_: dangling (what a stale link never is), expired
 
 **Weak pointer**:
