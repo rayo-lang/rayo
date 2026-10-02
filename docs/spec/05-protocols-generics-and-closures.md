@@ -194,12 +194,14 @@ pos += vel * dt                                                 // pos = pos + v
 
 **Lookup is bounded: the candidates for `a ⊕ b` are the operators declared on the types of `a` and `b`, and nothing else.** Those include the defaults of protocols the types conform to, such as `Equatable`'s `!=`, and, for a type parameter, its constraints' requirements.
 
-- **The set is fixed.** The declarable operators are the ones the grammar lists ([12](12-grammar.md#files-and-declarations)), with fixed precedence. The others are built in: `&&` and `||` take `Bool`s and `??` an optional ([04](04-types.md#optionals)), each evaluating its right side only when needed, and `..<` and `...` make a range of a copyable `Comparable` type, borrowing their operands and copying them in, so `0..<count` leaves `count` usable.
+- **The set is fixed.** The declarable operators are the ones the grammar lists ([12](12-grammar.md#files-and-declarations)), with fixed precedence. The others are built in:
+    - `&&` and `||` take `Bool`s, and `??` takes an optional ([04](04-types.md#optionals)). Each evaluates its right side only when needed.
+    - `..<` and `...` make a range of a copyable `Comparable` type. They borrow their operands and copy them in, so `0..<count` leaves `count` usable.
 - **Typed operands may widen.** When both operands are typed, a candidate applies when each operand is of its parameter's type or widens to it ([04](04-types.md#conversions)). If exactly one candidate needs no widening, it wins; otherwise exactly one must apply, or the expression is ambiguous. So `clock += dt` with `clock: Double` and `dt: Float` adds two `Double`s.
 - **The parameter count decides the form.** A function with one parameter declares a prefix operator, and one with two a binary operator. `-` has both forms, `!` and `~` are only prefix, and the rest only binary.
 - **Compound assignment is shorthand.** `a ⊕= b` means `a = a ⊕ b`, with the place `a` worked out once ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)), so `hp[next()] -= 1` calls `next()` once. No type declares `+=`, so it always agrees with `+`.
 
-**Untyped operands take their type from the other side.** A literal or an implicit member expression (`2`, `0.5`, `.pi`, `.zero`) has no type until something expects one. An implicit member names a static member, case or initializer of the expected type, and where a `T?` is expected, of `T?` first and then of `T`, as `.init(bitPattern: bits)` does for a `*Void?` parameter. When one operand of `a ⊕ b` is untyped and the other typed:
+**Untyped operands take their type from the other side.** A literal or an implicit member expression (`2`, `0.5`, `.pi`, `.zero`) has no type until something expects one. An implicit member names a static member, case or initializer of the expected type. Where a `T?` is expected, it names one of `T?` first and then of `T`, as `.init(bitPattern: bits)` does for a `*Void?` parameter. When one operand of `a ⊕ b` is untyped and the other typed:
 
 - The candidates are the operators on the typed operand's type that take it in its position and whose matching parameter the untyped operand fits. `v * 2` with `v: Vec3` keeps only `*(Vec3, Float)`, so `2` is a `Float`. A shift is the exception: its untyped value never takes its type from the count ([04](04-types.md#integer-overflow-division-and-shifts)).
 - If several remain, the one whose parameter has the typed operand's own type wins; otherwise the expression is ambiguous.
@@ -207,7 +209,13 @@ pos += vel * dt                                                 // pos = pos + v
 
 Operators apply one at a time, so `Float(i) / 1024 * 2 * .pi` types each step from the one before.
 
-**Generic calls work the same way.** A call binds its type parameters from its typed arguments first, then each untyped argument takes its parameter's type. Typed arguments that bind one type parameter to different types bind it to the one the others widen to, as `max(f, d)` does to `Double` for a `Float` and a `Double`, or are an error. So `max(0, hp - amount)` binds `T` to `Float`, and `0` is a `Float`. A type parameter no typed argument binds is bound by matching the expected type against the call's result type, part by part: `let b: Float = max(0, 1)` is a `Float` call, and `let s: Seconds<Game> = seconds(0.5)` binds `C` to `Game`, as `await` does ([07](07-concurrency.md#semantics)). Otherwise it gets the literals' default: `max(0, 1)` alone is an `Int` call.
+**Generic calls work the same way.** A call binds each type parameter in the first of these ways that applies:
+
+1. From its typed arguments. Typed arguments that bind it to different types bind it to the one the others widen to, as `max(f, d)` does to `Double` for a `Float` and a `Double`, or are an error.
+2. By matching the expected type against the call's result type, part by part. So `let b: Float = max(0, 1)` is a `Float` call, and `let s: Seconds<Game> = seconds(0.5)` binds `C` to `Game`, as `await` does ([07](07-concurrency.md#semantics)).
+3. From the literals' default, so `max(0, 1)` alone is an `Int` call.
+
+Each untyped argument then takes its parameter's type. So `max(0, hp - amount)` binds `T` to `Float`, and `0` is a `Float`.
 
 ### Equality and ordering
 
@@ -227,20 +235,27 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 - **`Comparable: Equatable`** requires `<`, `<=`, `>` and `>=`. The defaults are `a > b` as `b < a`, `a <= b` as `a < b || a == b`, and `a >= b` as `b < a || a == b`, so a type with unordered values, such as `Float` with NaN, gets them right from `<` and `==` alone.
 - **`Hashable: Equatable`** requires `func hash(into hasher: mutable Hasher)`, which feeds `hasher`, std's hash state, and must give equal hashes for values that `==` calls equal.
 
-A type may replace any default with its own operator. **A struct or enum that declares `Equatable`, `Comparable` or `Hashable` gets `==` derived** when it doesn't write one and all of its fields or payloads are `Equatable`, **and for `Hashable`, `hash(into:)`** when they are all `Hashable`: field by field in header order, and for an enum, the case, then its payload. So `struct Entry(let key: Int, let h: Handle<Enemy>): Comparable` writes only `<`. `<` is never derived, since no order is right for every type.
+A type may replace any default with its own operator.
 
-**Derived code reads only what a witness could** ([above](#conformances)). A derived `==` or `hash(into:)` reads every stored field plainly, so it is derived over an `unsafe` field, or a union member that isn't safe to read, only when the conformance is declared `: unsafe P`, promising that such a read is valid and races with nothing.
+**A struct or enum that declares `Equatable`, `Comparable` or `Hashable` gets `==` derived, and for `Hashable`, `hash(into:)`.** Each is derived only when the type doesn't write it, and when all of its fields or payloads conform: to `Equatable` for `==`, and to `Hashable` for `hash(into:)`. A derived member goes field by field in header order, and for an enum, takes the case and then its payload. So `struct Entry(let key: Int, let h: Handle<Enemy>): Comparable` writes only `<`. `<` is never derived, since no order is right for every type.
 
-The integers conform to `Comparable` and `Hashable`, and `Bool`, raw pointers and `Handle`s to `Hashable`. `Half`, `Float` and `Double` conform to `Comparable`, with IEEE 754's comparisons: a NaN is unequal to every value, itself included, and unordered. `Simd` vectors don't conform, since their comparisons return masks ([04](04-types.md#simd-and-math)).
+**Derived code reads only what a witness could** ([above](#conformances)). A derived `==` or `hash(into:)` reads every stored field plainly. So it is derived over an `unsafe` field, or a union member that isn't safe to read, only when the conformance is declared `: unsafe P`. That declaration promises that such a read is valid and races with nothing.
 
+**These types come with their conformances:**
+
+- **Integers.** They are `Comparable` and `Hashable`.
+- **`Bool`, raw pointers and `Handle`s.** They are `Hashable`.
+- **`Half`, `Float` and `Double`.** They are `Comparable`, with IEEE 754's comparisons: a NaN is unequal to every value, itself included, and unordered.
 - **Enums without payloads.** They are `Hashable` without declaring it, so `e == .missing` works on any of them.
 - **Tuples and inline arrays.** A tuple is `Equatable`, `Hashable` or `Comparable` when each element is, comparing element by element in order, and `[N of T]` is the same when `T` is.
 - **Optionals.** Every optional compares with `nil`: `x == nil` and `x != nil` test for a value, whatever `T` is. `T?` is `Equatable` or `Hashable` when `T` is.
 - **Text.** `StaticString`, `StringView` and `String` are `Comparable` and `Hashable`. They compare their bytes, and order them byte by byte, a prefix before any longer text. `Name` is `Hashable` and compares its 64-bit hash.
 
+`Simd` vectors don't conform, since their comparisons return masks ([04](04-types.md#simd-and-math)).
+
 ## Functions and closures
 
-A **closure** is a value of a closure literal's concrete type ([below](#closures-by-concrete-type-some-f)). Passed for a function-type parameter, it becomes a view of itself, which may borrow locals and never allocates, and the function type says whether it only reads what it captures, writes it, or consumes it:
+A **closure** is a value of a closure literal's concrete type ([below](#closures-by-concrete-type-some-f)). Passed for a function-type parameter, it becomes a view of itself, which may borrow locals and never allocates. The function type says whether the closure only reads what it captures, writes it, or consumes it:
 
 ```swift
 func each(_ xs: Span<Enemy>, _ body: (Enemy) -> Void) { for x in xs { body(x) } }
@@ -252,14 +267,59 @@ eachMut(enemies.span) { e in if e.hp <= 0 { dead += 1 } }    // writes 'dead': a
 each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating closure where a non-mutating one is expected
 ```
 
-- **Overloads.** Functions may share a name when their argument labels or parameter types differ, and a type's methods and properties also when only their `self` convention does ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). A call keeps the candidates whose parameters its arguments match by label, in order, with parameters that have defaults free to be left out ([01](01-values-and-ownership.md#default-arguments)), then those that its arguments typed without context fit, each of the parameter's type or converting to it implicitly ([Implicit conversions](#implicit-conversions)). An argument that needs context, such as a literal, a closure literal or a `.member`, then takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. If exactly one candidate needs no conversion, it wins, and so does the one among several such candidates that alone declares no type parameters of its own, so `f(_: Int)` beats `f<T>(_: T)` for an `Int`; otherwise exactly one must remain, or the call is ambiguous. A call `T(x)` with one unlabeled literal argument makes the literal a `T`, as `x as T` does, so `Float(0)` is the `Float` zero.
-- **Calls the language makes.** Besides the calls it writes, code calls: a `deinit` that a scope's end, an overwrite or a `consume` runs, an accessor, an operator, a `@converts` or literal initializer, an expression pattern's `==` or a range pattern's `contains`, a parameter's or field's default, the calls that build an interpolated string, a `for` loop's calls to `makeIterator` or `makeMutableIterator` and to the iterator's `next`, and an `await`'s calls to its operand's `poll` ([07](07-concurrency.md#awaitables)). Each is a call whose callee is known statically, and the rules for calls apply to it.
-- **Return types.** A function declared without `->` returns `Void`, except a non-public one whose body is a single expression, which returns that expression's type, unless it is `main`, `@c`, `@export`, a `task func` or a protocol witness.
-- **Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](04-types.md#enums)). A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
-- **A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func` ([07](07-concurrency.md#semantics)).
-- **A closure captures places, not variables.** It captures as precisely as its body names them: a body that reads `world.players` borrows that field, not `world`. So a closure reading one field can be passed alongside an exclusive borrow of another, and two closures in one call may each write a different field. The captured place is the longest path the body names through the places [01](01-values-and-ownership.md#which-places-overlap) keeps apart: stored fields, reflection projections of a field known where the borrows are checked, and inline array elements at an index known there. A body that names a binding of a place captures the place the binding names, as worked out when it was bound, with the binding's dependency set and the dynamic accesses it holds, which stay held while the closure lives. The path stops before any other accessor, subscript or index, an optional chain, a force unwrap or a payload, and an object's access, which the body evaluates on each call, and before an under-aligned place, capturing the aligned place that holds it ([04](04-types.md#packed-structs-and-under-aligned-places)). A bitfield is captured through its C memory location ([08](08-c-interop.md#structs-unions-and-enums)).
-- **A closure's parameter types come from a written parameter clause or the expected type**, never from the body ([12](12-grammar.md#expressions) gives the syntax of trailing closures, `$0` and `{ x in … }`).
-- **A declaration inside a body names none of the body's locals, parameters or `self`**, whether it is a nested function, a member, accessor, initializer, `deinit` or field default of a local type, or a member of a local extension. Only closure literals capture.
+**Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
+
+1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](01-values-and-ownership.md#default-arguments)).
+2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([below](#implicit-conversions)).
+3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
+4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, so `f(_: Int)` beats `f<T>(_: T)` for an `Int`. Otherwise exactly one candidate must remain, or the call is ambiguous.
+
+A call `T(x)` with one unlabeled literal argument makes the literal a `T`, as `x as T` does, so `Float(0)` is the `Float` zero.
+
+**The language makes calls the code doesn't write, and the rules for calls apply to each.** Each one's callee is known statically. They are:
+
+- a `deinit` that a scope's end, an overwrite or a `consume` runs;
+- an accessor or an operator;
+- a `@converts` or literal initializer;
+- an expression pattern's `==`, or a range pattern's `contains`;
+- a parameter's or field's default;
+- the calls that build an interpolated string;
+- a `for` loop's calls to `makeIterator` or `makeMutableIterator`, and to the iterator's `next`;
+- an `await`'s calls to its operand's `poll` ([07](07-concurrency.md#awaitables)).
+
+**A function declared without `->` returns `Void`.** The exception is a non-public function whose body is a single expression: it returns that expression's type, unless it is `main`, `@c`, `@export`, a `task func` or a protocol witness.
+
+**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](04-types.md#enums)). A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
+
+**A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func` ([07](07-concurrency.md#semantics)).
+
+**A closure's parameter types come from a written parameter clause or the expected type**, never from the body. The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](12-grammar.md#expressions)).
+
+**Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
+
+- a nested function;
+- a member, accessor, initializer, `deinit` or field default of a local type;
+- a member of a local extension.
+
+### Capturing places
+
+**A closure captures places, not variables.** It captures as precisely as its body names them: a body that reads `world.players` borrows that field, not `world`. So a closure reading one field can be passed alongside an exclusive borrow of another, and two closures in one call may each write a different field.
+
+**The captured place is the longest path the body names through parts kept apart from their siblings** ([01](01-values-and-ownership.md#which-places-overlap)). Those parts are:
+
+- stored fields;
+- reflection projections of a field known where the borrows are checked;
+- inline array elements at an index known where the borrows are checked.
+
+**The path stops before the steps the body evaluates on each call:**
+
+- any other accessor, subscript or index;
+- an optional chain, a force unwrap or a payload;
+- an object's access.
+
+The path also stops before an under-aligned place, so the closure captures the aligned place that holds it ([04](04-types.md#packed-structs-and-under-aligned-places)). A bitfield is captured through its C memory location ([08](08-c-interop.md#structs-unions-and-enums)).
+
+**A body that names a binding of a place captures the place the binding names**, as worked out when it was bound. The capture brings the binding's dependency set and the dynamic accesses the binding holds, which stay held while the closure lives.
 
 ### Closure kinds
 
@@ -271,13 +331,24 @@ A closure's type says what it does with its captures, and the compiler infers th
 | `mutating` | `mutating (Int) -> Void` | Writes a capture |
 | `consuming` | `consuming () -> Mesh` | Moves out of a capture |
 
-- **Non-`mutating`.** Its function types accept only closures that only read their captures, shared-borrowed or owned, so a job system may run one on many threads at once ([07](07-concurrency.md#lending-work-to-other-threads)): `xs.forEachInParallel { _ in n += 1 }` is a type error, and a `sort(by:)` comparator can't write the pool it reads.
-- **`mutating`.** A literal whose body makes any mutable access to a captured place, assigning it, lending it with `&` in any position [01](01-values-and-ownership.md#lending-a-place-for-change) lists, calling a `mutating` method on it or capturing it exclusively in a nested literal, captures that place **exclusively**. A `mutating` function value is move-only, and calling it mutates the closure itself, so it is passed `mutable` or owned, and runs on one thread at a time.
-- **`consuming`.** A literal whose body moves out of a capture, with `consume input` or by taking it anywhere a value is taken ([01](01-values-and-ownership.md#moves)), owns that capture: it moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture, as `var y = copy input` does, doesn't make it `consuming`. A literal checked against a `consuming` function type, or a `some F` whose `F` is one, is `consuming` whatever its body does: its concrete type satisfies only `consuming` function types, and it is called at most once.
+- **Non-`mutating`.** Its function types accept only closures that only read their captures, shared-borrowed or owned. So a job system may run one on many threads at once ([07](07-concurrency.md#lending-work-to-other-threads)): `xs.forEachInParallel { _ in n += 1 }` is a type error, and a `sort(by:)` comparator can't write the pool it reads.
+- **`mutating`.** A literal captures a place **exclusively** when its body makes any mutable access to it:
+    - assigning it;
+    - lending it with `&`, wherever `&` may appear ([01](01-values-and-ownership.md#lending-a-place-for-change));
+    - calling a `mutating` method on it;
+    - capturing it exclusively in a nested literal.
 
-**A parameter of `mutating` or `consuming` function type, or of `some F` where `F` is one, is received owned** unless declared `mutable` ([01](01-values-and-ownership.md#parameters)). So `func lock<R: ~Scoped>(_ body: consuming (mutable T) -> R) -> R` needs no `owned`, and a function value passed there moves in. A closure passed for a function-type parameter is converted first ([below](#function-typed-values)), so a local holding a `mutating` closure is passed with `&` and stays usable after the call, while one holding a `consuming` closure is passed without `&`, and the conversion consumes it. A local passed for a `some F` parameter whose `F` is `mutating` or `consuming` moves in, unless the parameter is `mutable`.
+  A `mutating` function value is move-only, and calling it mutates the closure itself. So it is passed `mutable` or owned, and runs on one thread at a time.
+- **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](01-values-and-ownership.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture, as `var y = copy input` does, doesn't make it `consuming`.
 
-**The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is, for values only, never through `mutable` ([Implicit conversions](#implicit-conversions)), and never adding ownership ([below](#function-typed-values)).
+  A literal checked against a `consuming` function type, or a `some F` whose `F` is one, is `consuming` whatever its body does. Its concrete type satisfies only `consuming` function types, and it is called at most once.
+
+**A parameter of `mutating` or `consuming` function type, or of `some F` where `F` is one, is received owned** unless declared `mutable` ([01](01-values-and-ownership.md#parameters)). So `func lock<R: ~Scoped>(_ body: consuming (mutable T) -> R) -> R` needs no `owned`, and a function value passed there moves in.
+
+- **A closure passed for a function-type parameter is converted first** ([below](#function-typed-values)). So a local holding a `mutating` closure is passed with `&`, and stays usable after the call. A local holding a `consuming` closure is passed without `&`, and the conversion consumes it.
+- **A local passed for a `some F` parameter whose `F` is `mutating` or `consuming` moves in**, unless the parameter is `mutable`.
+
+**The kinds nest.** A non-`mutating` value is accepted where a `mutating` or `consuming` one is expected, and a `mutating` one where a `consuming` one is. That holds for values only, never through `mutable` ([below](#implicit-conversions)), and it never adds ownership ([below](#function-typed-values)).
 
 ### What a closure may keep: `keep`
 
@@ -288,11 +359,13 @@ m.lock { d in kept = d.items.span }            // error: 'd' is lent only for th
 forEachLine(src.view) { lines.append(copy $0) }   // fine: forEachLine's closure takes a 'keep' parameter
 ```
 
-**Closure parameters are call-scoped.** Nothing that depends on one may be stored into the closure's captures, by [02](02-views-and-dependencies.md#rule-5-the-callee-side)'s rules for a closure body, and a call absorbs nothing into the captures (rule 4). A closure may still return what depends on a parameter, as `entries.map { $0.name.view }` does. The call's result and `mutable` arguments still depend on what the closure captures, since the closure is the call's `self`.
+**Closure parameters are call-scoped.** Nothing that depends on one may be stored into the closure's captures, by rule 5 ([02](02-views-and-dependencies.md#rule-5-the-callee-side)) for a closure body. A call absorbs nothing into the captures, by rule 4 ([02](02-views-and-dependencies.md#rule-4-absorption)). A closure may still return what depends on a parameter, as `entries.map { $0.name.view }` does. The call's result and `mutable` arguments still depend on what the closure captures, since the closure is the call's `self`.
 
-**`keep` in the function type**, as in `func forEachLine(_ text: StringView, _ body: mutating (keep StringView) -> Void)`, lets the closure store what it derives from that parameter into its captures. It marks a borrowed or `owned` parameter, never a `mutable` one, which is the caller's place, and `keep` on it is a compile error. A call absorbs the `keep` argument's dependency set, with rule 3's kinds, into every place the closure depends on exclusively, so `lines` above ends up depending on `src`, and the calling function must be allowed that store by its own rule 5.
+**`keep` on a parameter of a function type lets the closure store what it derives from that parameter into its captures.** An example is `func forEachLine(_ text: StringView, _ body: mutating (keep StringView) -> Void)`. `keep` marks a borrowed or `owned` parameter. A `mutable` parameter is the caller's place, and `keep` on it is a compile error.
 
-- **A borrowed `keep` parameter lends only what it carries.** Its own storage belongs to the call, as a local's does, so the closure never keeps a view of the parameter itself, its bytes or what it owns, and a call absorbs only the argument's dependency set, never the argument place, which lets the caller pass a local or a temporary. So a closure that keeps views of a list's elements takes `keep Span<T>`, and one that keeps an `any P` view of the parameter, `{ s in named.append(s) }`, is rejected.
+**A call absorbs the `keep` argument's dependency set, with the kinds of rule 3, into every place the closure depends on exclusively** ([02](02-views-and-dependencies.md#rule-3-call-results)). So `lines` above ends up depending on `src`, and the calling function must be allowed that store by its own rule 5.
+
+- **A borrowed `keep` parameter lends only what it carries.** Its own storage belongs to the call, as a local's does. So the closure never keeps a view of the parameter itself, its bytes or what it owns. A call absorbs only the argument's dependency set, never the argument place, which lets the caller pass a local or a temporary. So a closure that keeps views of a list's elements takes `keep Span<T>`. One that keeps an `any P` view of the parameter, `{ s in named.append(s) }`, is rejected.
 - **A `keep owned` parameter gives the closure its value too**, which it may move into its captures with what that value carries, as `{ chunk in parts.append(chunk) }` does with a `keep owned MutableSpan<Float>`, a move-only view no borrowed parameter could give up.
 - **`keep` never changes what a callee receives.** It receives what the same parameter without `keep` would ([01](01-values-and-ownership.md#parameters)), also when a conversion adds it.
 - **`keep` is part of the type.** A closure type without it is accepted where one with it is expected, not the reverse, since a plain closure's receiver relies on nothing flowing into its captures.
@@ -311,12 +384,17 @@ var load = Hotkey(action: { [move level] in start(level.value) })  // 'level' is
 var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id' isn't listed
 ```
 
-**`Closure<F>`**, such as `Closure<mutating (Int) -> Int>`, is an unscoped, move-only value that owns every capture. It is `Sendable` only when its function type is `@sendable`, such as `Closure<mutating @sendable (Int) -> Int>` ([Function-typed values](#function-typed-values)).
+**`Closure<F>`**, such as `Closure<mutating (Int) -> Int>`, is an unscoped, move-only value that owns every capture. It is `Sendable` only when its function type is `@sendable`, such as `Closure<mutating @sendable (Int) -> Int>` ([below](#function-typed-values)).
 
-- **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable, and `self` is listed too, which only a `consuming` method can move. An unlisted capture is a compile error. A capture the body moves out of is already owned ([Closure kinds](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](07-concurrency.md#global-state)).
-- **Size.** 32 bytes, holding up to 24 bytes of captures inline. The captures are laid out as a literal's are ([below](#closures-by-concrete-type-some-f)), and they are inline when that struct's size is at most 24 bytes, its alignment is at most 8, and no capture has a layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one ([11](11-compilation-model.md#what-the-language-leaves-open)). Other captures go in an out-of-line context that the closure owns ([06](06-memory-and-allocators.md#the-current-allocator)), the one allocation a conversion makes without its type written at the literal: the capture list shows at the literal what moves in, and so whether it fits. The context comes from the current allocator. In `@noalloc` code, a conversion into a `Closure` that allocates is an error.
-- **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type, so a borrowed `Closure` is always the caller's place ([01](01-values-and-ownership.md#borrowed-arguments)), and a `@packed` struct can't hold one.
-- **An out-of-line context is checked like any owning storage** ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, such as an arena reset since, panics, and destroying it skips its captures' `deinit`s and the free, as for a stale `Box`.
+- **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](07-concurrency.md#global-state)).
+- **Size.** A `Closure` is 32 bytes, and holds up to 24 bytes of captures inline. The captures are laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). They are inline when all of these hold:
+    - the captures' struct is at most 24 bytes;
+    - its alignment is at most 8;
+    - no capture has a layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one ([11](11-compilation-model.md#what-the-language-leaves-open)).
+
+  Otherwise the captures go in an out-of-line context that the closure owns, from the current allocator ([06](06-memory-and-allocators.md#the-current-allocator)). That context is the one allocation a conversion makes without its type written at the literal: the capture list shows at the literal what moves in, and so whether it fits. In `@noalloc` code, a conversion into a `Closure` that allocates is an error.
+- **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a borrowed `Closure` is always the caller's place ([01](01-values-and-ownership.md#borrowed-arguments)), and a `@packed` struct can't hold one.
+- **An out-of-line context is checked like any owning storage** ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, as when an arena was reset since the closure was made, panics. Destroying such a `Closure` skips its captures' `deinit`s and the free, as for a stale `Box`.
 - **Calling.** A stored `Closure<mutating …>` needs `mutable` access to be called, and calling a `Closure<consuming …>` consumes it.
 
 ### Closures by concrete type: `some F`
@@ -332,11 +410,11 @@ var onHit = { hits += 1 }                           // no annotation: the litera
 var onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function type, a view of the literal
 ```
 
-**Every closure literal has its own anonymous concrete type.** A local initialized with a literal and no type annotation has that type, so it only ever holds that literal; with an annotation it has the function type. It is laid out as a struct of its captures ([04](04-types.md#structs)): the listed ones in list order, then the others, by reference or moved, in order of first use, with a capture by reference as a pointer.
+**Every closure literal has its own anonymous concrete type.** A local initialized with a literal and no type annotation has that type, so it only ever holds that literal; with an annotation it has the function type. The type is laid out as a struct of its captures ([04](04-types.md#structs)). The listed captures come first, in list order, and then the others, by reference or moved, in order of first use. A capture by reference is a pointer.
 
 - **A `some F` parameter**, for a function type `F` of any kind, is an anonymous type parameter `B: F`, and takes the literal by its concrete type. The callee is monomorphized for it, and the closure is stored by value, **never boxed or allocated, whatever its size**, like a struct whose fields are its captures. `until { ctx in … }` takes its condition this way, so an awaiting task never allocates ([07](07-concurrency.md#awaitables)).
 - **Function-type constraints.** A type satisfies `B: F`, for a function type `F`, when it is a closure's concrete type, a function type or a `Closure<G>`, and its values convert to `F` ([below](#implicit-conversions)), which the kinds decide ([above](#closure-kinds)). Generic code calls a `B` as an `F`, converts it to `F`, and, when `B: ~Scoped`, moves it into a `Closure<F>`.
-- **The captures decide whether it is scoped.** A literal's type is scoped when any capture is by reference or of a scoped type, depending on the places it captures by reference and on what its captures carry, such as a `[copy s]` of a `Span`. It is unscoped only when every capture is owned and unscoped ([02](02-views-and-dependencies.md#scoped-values)).
+- **The captures decide whether it is scoped.** A literal's type is scoped when any capture is by reference or of a scoped type, such as a `[copy s]` of a `Span`. It then depends on the places it captures by reference and on what its captures carry. It is unscoped only when every capture is owned and unscoped ([02](02-views-and-dependencies.md#scoped-values)).
 - **The captures and the kind decide whether it is copyable.** It is copyable when every capture is by shared reference, or owned and copyable, and the literal isn't `consuming`, which is called at most once.
 - **Where the type must be unscoped**, as for a parameter constrained `F: ~Scoped`, a literal owns and lists its captures, as for a `Closure`. Elsewhere it captures by reference, except what its capture list names or its body moves out of.
 
@@ -349,15 +427,30 @@ let g: @c (Int32) -> Int32 = { x in x + 1 }     // so does a literal that captur
 unsafe { print(f(4)) }                          // calling one is unsafe
 ```
 
-`@c (Int32) -> Int32` is a C function pointer, with no room for captures, and it never throws, since C can't receive an error. Literals that capture nothing and don't throw convert to it, and so do named `@c func`, `@export`, imported and `extern c` functions and `@c` values whose parameters and result have the same types and conventions, and which need no more stack than the pointer type declares ([08](08-c-interop.md#the-stack-a-c-call-needs)). Calling one is `unsafe`, since the type can't tell a Rayo function from a C one.
+**`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures, and it never throws, since C can't receive an error. Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
 
-**Inside `unsafe`, a function also converts to a `@c` type whose types differ but have the same C representations**, as `@c func onButton(_ b: Button)` does to `@c (Int32) -> Void`, or a `WeakPointer<Body>` parameter to a `UInt64` one. A `mutable T` parameter also meets a `*T` or `*T?` one there, since both cross as `T*`, so `@c func onUpdate(_ s: mutable State)` converts to `@c (*State) -> Void`. That code promises that every call through the pointer passes values valid for the function's own types, a pointer for a `mutable` parameter meeting what [08](08-c-interop.md#what-c-must-uphold) asks of one, and that every value the function returns, or writes through a `mutable` parameter or a pointer, is valid for the pointer type's, as 08 asks of C.
+- a literal that captures nothing and doesn't throw;
+- a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value, when its parameters and result have the same types and conventions as the pointer type's, and it needs no more stack than the pointer type declares ([08](08-c-interop.md#the-stack-a-c-call-needs)).
 
-**`@c noalloc (Int32) -> Int32` is a C function pointer whose calls allocate nothing**, so `@noalloc` code may call one ([06](06-memory-and-allocators.md#allocation-failure)). What converts to it allocates nothing: a named `@noalloc` function, an imported or `extern c` function declared `noalloc` ([08](08-c-interop.md#c-calls-in-noalloc-code-noalloc)), a literal whose body passes the `@noalloc` check, or another `@c noalloc` value. Inside `unsafe`, a `@c` value without the mark converts too, as a pointer C handed over does, and that code promises what `noalloc` asserts. The mark converts away, never back outside `unsafe`.
+**Inside `unsafe`, a function also converts to a `@c` type whose types differ but have the same C representations.** So `@c func onButton(_ b: Button)` converts to `@c (Int32) -> Void`, and a `WeakPointer<Body>` parameter meets a `UInt64` one. A `mutable T` parameter also meets a `*T` or `*T?` one there, since both cross as `T*`. So `@c func onUpdate(_ s: mutable State)` converts to `@c (*State) -> Void`. The `unsafe` code that makes such a conversion promises both of these:
 
-**`unsafe (UInt32) -> Void` is an unsafe function type**, whose calls need `unsafe`. An `unsafe func` declared in Rayo converts only to `unsafe` function types, to `Closure`s of them and, when it is also `@c`, to `@c` types, so no function value hides an `unsafe` call from its caller, and it satisfies a `some F` or a function-type constraint only when `F` is `unsafe`. Any Rayo function value converts to the `unsafe` form of its type, never back.
+- every call through the pointer passes values valid for the function's own types, and a pointer for a `mutable` parameter meets what 08 asks of one ([08](08-c-interop.md#what-c-must-uphold));
+- every value the function returns, or writes through a `mutable` parameter or a pointer, is valid for the pointer type's types, as 08 asks of C.
 
-**C code stays behind `@c` types.** An imported or `extern c` function, though an `unsafe func` too ([08](08-c-interop.md#what-imports-as-what)), converts only to `@c` types, which carry its stack need ([08](08-c-interop.md#the-stack-a-c-call-needs)), and a `@c` value converts only to another `@c` type, or its optional, as above: never to a Rayo function type, a `Closure` or an `unsafe` form, whose calls wouldn't check that need. A literal that calls C inside an `unsafe` block is an ordinary Rayo function: `let now: () -> Double = { unsafe { platform_time_seconds() } }`.
+**`@c noalloc (Int32) -> Int32` is a C function pointer whose calls allocate nothing**, so `@noalloc` code may call one ([06](06-memory-and-allocators.md#allocation-failure)). Only what allocates nothing converts to it:
+
+- a named `@noalloc` function;
+- an imported or `extern c` function declared `noalloc` ([08](08-c-interop.md#c-calls-in-noalloc-code-noalloc));
+- a literal whose body passes the `@noalloc` check;
+- another `@c noalloc` value.
+
+Inside `unsafe`, a `@c` value without the mark converts too, as a pointer C handed over does, and that code promises what `noalloc` asserts. The mark converts away, never back outside `unsafe`.
+
+**`unsafe (UInt32) -> Void` is an unsafe function type**, whose calls need `unsafe`. Any Rayo function value converts to the `unsafe` form of its type, never back.
+
+**An `unsafe func` declared in Rayo converts only to `unsafe` function types** and `Closure`s of them, and, when it is also `@c`, to `@c` types. So no function value hides its call from the caller. It satisfies a `some F` or a function-type constraint only when `F` is `unsafe`.
+
+**C code stays behind `@c` types.** An imported or `extern c` function is an `unsafe func` too ([08](08-c-interop.md#what-imports-as-what)), but converts only to `@c` types, which carry its stack need ([08](08-c-interop.md#the-stack-a-c-call-needs)). A `@c` value converts only to another `@c` type, or its optional, as above. Neither converts to a Rayo function type, a `Closure` or an `unsafe` form, whose calls wouldn't check that need. A literal that calls C inside an `unsafe` block is an ordinary Rayo function: `let now: () -> Double = { unsafe { platform_time_seconds() } }`.
 
 ### Function-typed values
 
@@ -369,18 +462,39 @@ func pick() -> (Int, Int) -> Int { max }                                   // fi
 func mk() -> () -> Int { let x = 5; return { [copy x] in copy x } }        // error: the result would view mk's temporary
 ```
 
-**A value of function type is a view of a closure**: of the closure's storage, where all its captures, owned ones included, live. Converting a closure, any value of a closure's concrete type (a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter), to a function type makes such a view, which depends on the storage and on what the closure carries ([02](02-views-and-dependencies.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only.
+**A value of function type is a view of a closure's storage**, where all its captures, owned ones included, live. Converting a closure to a function type makes such a view. A closure here is any value of a closure's concrete type, such as a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter. The view depends on the storage and on what the closure carries ([02](02-views-and-dependencies.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only.
 
-- **A non-`consuming` closure is borrowed as its kind needs**: a non-`mutating` one shared, whatever the function type, and a `mutating` one exclusively, so the place holding it is lent with `&` ([01](01-values-and-ownership.md#lending-a-place-for-change)), as in `run(&grow)`, and is usable again after the view's last use.
+- **A non-`consuming` closure is borrowed as its kind needs.** A non-`mutating` one is borrowed shared, whatever the function type. A `mutating` one is borrowed exclusively, so the place holding it is lent with `&` ([01](01-values-and-ownership.md#lending-a-place-for-change)), as in `run(&grow)`, and is usable again after the view's last use.
 - **A `consuming` closure is handed over.** The conversion consumes the source place ([01](01-values-and-ownership.md#moving-values-out)), and the value takes over the captures but not their memory, so it still can't outlive that memory. Calling it moves out of the captures and destroys the rest; dropping it uncalled destroys them all.
 - **Converting a function value never adds ownership.** A value accepted where a stronger kind is expected views the same storage the same way: called through a `consuming` type, a borrowed closure runs with the access it was lent, and dropping the value destroys nothing.
-- **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](10-errors-and-safety.md#unsafe-code)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to `Closure<F>` and to any function type its signature matches, of any kind, and, if it doesn't throw, throwing an error type that leaves the same arguments places (below), with parameter conventions lining up as a witness's do ([01](01-values-and-ownership.md#parameters)). It views no storage and depends on nothing, which is why `pick` compiles. An overloaded name is resolved by the expected type. A closure literal that captures nothing converts the same way, since its storage holds nothing, so `func sorted(by less: (Int, Int) -> Bool = { a, b in a < b })` and `return { x in x + 1 }` compile.
+- **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](10-errors-and-safety.md#unsafe-code)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to each of these, with parameter conventions lining up as a witness's do ([01](01-values-and-ownership.md#parameters)):
+    - `Closure<F>`, for a function type `F` its signature matches;
+    - any function type its signature matches, of any kind;
+    - if it doesn't throw, such a type throwing an error type that leaves the same arguments places ([below](#implicit-conversions)).
+
+  A named function views no storage and depends on nothing, which is why `pick` compiles. An overloaded name is resolved by the expected type. A closure literal that captures nothing converts the same way, since its storage holds nothing. So `func sorted(by less: (Int, Int) -> Bool = { a, b in a < b })` and `return { x in x + 1 }` compile.
 - **`@sendable` function types**, such as `@sendable (mutable Particle) -> Void`, hold only closures whose captures, by reference or owned, all have `Sendable` types, and their values are `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)). A named function always converts to one. A `@sendable` value converts to the same type without the mark, never the reverse, and `Closure<F>` and `some F` carry the mark the same way.
-- **`@noalloc` function types**, such as `@noalloc (mutable MutableSpan<Float>) -> Void`, hold only functions whose calls can't allocate: a `@noalloc` named function, or a literal whose body passes the `@noalloc` check ([06](06-memory-and-allocators.md#allocation-failure)). Where a call may destroy the literal's captures, the check covers that destruction too: for a `consuming` literal, and for any literal moved into a `Closure` or passed owned for a `some F`, since a call through a `consuming` type destroys what it doesn't move out. A call through one counts as a `@noalloc` call. The mark converts away as `@sendable` does, never the reverse, and `Closure<F>` and `some F` carry it the same way.
+- **`@noalloc` function types**, such as `@noalloc (mutable MutableSpan<Float>) -> Void`, hold only functions whose calls can't allocate: a `@noalloc` named function, or a literal whose body passes the `@noalloc` check ([06](06-memory-and-allocators.md#allocation-failure)). Where a call may destroy the literal's captures, the check covers that destruction too. A call may destroy them for a `consuming` literal, and for any literal moved into a `Closure` or passed owned for a `some F`, since a call through a `consuming` type destroys what it doesn't move out. A call through a `@noalloc` function type counts as a `@noalloc` call. The mark converts away as `@sendable` does, never the reverse, and `Closure<F>` and `some F` carry it the same way.
 
-**Where the storage lives.** A literal in a local's initializer, or on the right side of an assignment to a local or a path of stored fields from one, anywhere in it outside nested closure bodies (directly, as a call argument at any depth such as to a primary initializer, as an element of a tuple or array literal, or as an `if` or `when` arm's value), is kept in a **hidden local** of the local's scope when the local depends on its storage after the statement (rules 3 and 4 in [02](02-views-and-dependencies.md#dependencies)). Each such literal gets its own, holding a value only if the literal was made, and destroyed right after the local it was made for, so the value holding the view is gone first, and what the literal captured, such as a guard on an earlier local's mutex, is released before that local is destroyed. So `put` above, and `let h = Handler(onClick: { … })`, stay usable for their whole scope. A literal assigned on every pass of a loop reuses its hidden local, so a still-live copy of the previous value conflicts with the assignment.
+**A literal is kept in a hidden local when it is in one of these places, and the local there depends on its storage after the statement**, by rules 3 and 4 ([02](02-views-and-dependencies.md#dependencies)):
 
-Any other literal, such as a `return` operand or an argument in another kind of statement, is an owning temporary that lives to the end of its full statement ([02](02-views-and-dependencies.md#temporaries)). So `mk` fails, and so does appending a literal to a `List<() -> Int>` used after the statement.
+- a local's initializer;
+- the right side of an assignment to a local, or to a path of stored fields from one.
+
+Within either, the literal may be anywhere outside nested closure bodies:
+
+- directly;
+- as a call argument at any depth, such as to a primary initializer;
+- as an element of a tuple or array literal;
+- as an `if` or `when` arm's value.
+
+The hidden local ([01](01-values-and-ownership.md#destruction)) belongs to the local's scope. So `put` above, and `let h = Handler(onClick: { … })`, stay usable for their whole scope.
+
+- **Each such literal gets its own hidden local**, which holds a value only if the literal was made.
+- **Each hidden local is destroyed right after the local it was made for.** So the value holding the view is gone first, and what the literal captured, such as a guard on an earlier local's mutex, is released before that local is destroyed.
+- **A literal assigned on every pass of a loop reuses its hidden local**, so a still-live copy of the previous value conflicts with the assignment.
+
+**Any other literal is an owning temporary that lives to the end of its full statement** ([02](02-views-and-dependencies.md#temporaries)). Examples are a `return` operand and an argument in another kind of statement. So `mk` fails, and so does appending a literal to a `List<() -> Int>` used after the statement.
 
 ## Implicit conversions
 
@@ -391,19 +505,39 @@ var w: Box<any Widget> = Box(Slider(…))         // Box<Slider> to Box<any Widg
 let pickMax: (Int, Int) -> Int = max            // a named function to a function type
 ```
 
-Numbers widen along their fixed order ([Conversions](04-types.md#conversions)). **Otherwise there are six kinds of implicit conversion, each decided by the expected type alone.** All are free except moving a closure into a `Closure`, which may allocate, and an error's `@converts` initializer, which runs:
+Numbers widen along their fixed order ([04](04-types.md#conversions)). **Otherwise there are six kinds of implicit conversion, each decided by the expected type alone.** All are free except two: moving a closure into a `Closure`, which may allocate, and an error's `@converts` initializer, which runs. The six are:
 
-- **`T` → `T?`**: where a `U?` is expected, a value that converts to `U` below converts and is then wrapped, in the same local step, as a named `@c func` passed for a nullable C callback is. It takes the value ([01](01-values-and-ownership.md#conversions)).
-- **A shared borrow of a `T` that meets every protocol of the composition → `any P`**, and an exclusive borrow `&x` → `mutable any P` ([`any P`](#any-p-explicit-dynamic-dispatch)); `&v` of a changeable place holding a `mutable any P` makes a new view of the same value (below), and a shared borrow of such a place gives a shared `any P` view of the same value while the place stays borrowed shared. An existential of `P` also converts to one of `Q` when `P` implies `Q`, as `any Widget` does to `any Drawable` for `protocol Widget: Drawable`, or `any P & Sendable` to `any P`: a view stays a view, and an unscoped existential keeps its allocation. From a place, a shared view makes a new view of the same value while the place stays borrowed shared, a `mutable any P` is taken, or with `&v` lends a new view, and an unscoped existential is taken.
-- **`Box<T>` → `Box<any P>`**, and likewise for each object pointer, reference-counted pointer and weak link, such as `WeakPointer<T>` → `WeakPointer<any P>` and `Shared<T>` → `Shared<any P>`, where `T` meets every protocol of the composition, as `T: Sendable` does for `any P & Sendable`, and `T: ~Scoped`. It takes the value, moving it out of a place as an `owned` binding would ([01](01-values-and-ownership.md#moves)). `~Scoped` makes the erasure sound: the existential forgets `T` and any dependency `T` carries, so `T` must carry none ([02](02-views-and-dependencies.md#generic-code-and-scoped)).
-- **Closures to function types** ([Function-typed values](#function-typed-values)):
-    - a closure, named function or operator to a function type;
-    - a `Closure<F>` place to the function type `F`, or to any function type a value of type `F` converts to (below), borrowed as `F`'s kind needs, as a closure is ([above](#function-typed-values)). Converting a `Closure<consuming …>` consumes it but keeps its out-of-line context until the place is next assigned or its scope ends, whichever comes first, and then frees it without destroying the captures, which the function value took;
-    - a literal that captures nothing and doesn't throw, a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value, to a `@c` function pointer with the same types, or inside `unsafe` the same C representations, and the same conventions, that declares at least its stack need ([C function pointers](#c-function-pointers));
-    - a Rayo function value to a stronger kind (non-`mutating` to `mutating` or `consuming`, `mutating` to `consuming`), a non-throwing one to the same type throwing an error type that leaves the same borrowed arguments always the caller's place ([01](01-values-and-ownership.md#borrowed-arguments)), as any unscoped one does, to a type whose parameters add `keep`, to the type without `@sendable` or `@noalloc`, or to its `unsafe` form, with every parameter convention unchanged ([01](01-values-and-ownership.md#parameters)), within the limits [C function pointers](#c-function-pointers) sets for `unsafe` and C functions.
-- **Closures to `Closure<F>`** ([Unscoped closures](#unscoped-closures-closuref)): a closure literal, an owned value of a closure's concrete type, or a named function or operator moves into a `Closure`, allocating when its captures exceed the inline size. A `Closure<F>` converts to a `Closure<G>` when a function value of type `F` converts to `G` (above), keeping its context.
-- **Errors** ([10](10-errors-and-safety.md#error-unions)): a value of an error union's member, or of a union whose members it all has, to that union, taking the value as `T` → `T?` does; and under `try` or `throw`, an error to the enclosing function's error type through a `@converts` initializer ([10](10-errors-and-safety.md#propagating-errors-with-try)).
+- **`T` → `T?`.** Where a `U?` is expected, a value that converts to `U` (below) converts and is then wrapped, in the same local step, as a named `@c func` passed for a nullable C callback is. It takes the value ([01](01-values-and-ownership.md#conversions)).
+- **Existentials** ([above](#any-p-explicit-dynamic-dispatch)):
+    - A shared borrow of a `T` that meets every protocol of the composition converts to `any P`, and an exclusive borrow `&x` to `mutable any P`.
+    - `&v` of a changeable place holding a `mutable any P` makes a new view of the same value (below). A shared borrow of such a place gives a shared `any P` view of the same value, while the place stays borrowed shared.
+    - An existential of `P` converts to one of `Q` when `P` implies `Q`, as `any Widget` does to `any Drawable` for `protocol Widget: Drawable`, or `any P & Sendable` to `any P`. A view stays a view, and an unscoped existential keeps its allocation. From a place, a shared view makes a new view of the same value while the place stays borrowed shared, a `mutable any P` is taken or, with `&v`, lends a new view, and an unscoped existential is taken.
+- **`Box<T>` → `Box<any P>`**, and likewise for each object pointer, reference-counted pointer and weak link, such as `WeakPointer<T>` → `WeakPointer<any P>` and `Shared<T>` → `Shared<any P>`. `T` must meet every protocol of the composition, as `T: Sendable` does for `any P & Sendable`, and `T: ~Scoped` must hold. The conversion takes the value, moving it out of a place as an `owned` binding would ([01](01-values-and-ownership.md#moves)). `~Scoped` makes the erasure sound: the existential forgets `T` and any dependency `T` carries, so `T` must carry none ([02](02-views-and-dependencies.md#generic-code-and-scoped)).
+- **Closures to `Closure<F>`** ([above](#unscoped-closures-closuref)). A closure literal, an owned value of a closure's concrete type, or a named function or operator moves into a `Closure`, allocating when its captures exceed the inline size. A `Closure<F>` converts to a `Closure<G>` when a function value of type `F` converts to `G` (below), keeping its context.
+- **Errors** ([10](10-errors-and-safety.md#error-unions)). A value of an error union's member, or of a union whose members it all has, converts to that union, taking the value as `T` → `T?` does. Under `try` or `throw`, an error converts to the enclosing function's error type through a `@converts` initializer ([10](10-errors-and-safety.md#propagating-errors-with-try)).
+- **Closures to function types**, in the ways listed next.
 
-**`x as T` expects a `T`, as an annotation does**, so `x` takes one of these conversions or a numeric widening ([Conversions](04-types.md#conversions)), or, for a literal, becomes a `T` ([04](04-types.md#literals)). It never tests a type at run time. Anything else is explicit, such as `box.downcast(to: T.self)` ([`any P`](#any-p-explicit-dynamic-dispatch)).
+**These convert to function types** ([above](#function-typed-values)):
 
-**No conversion applies through `mutable`.** An `&` argument has exactly its parameter's type: no widening, no `T → T?`, no closure-kind or `keep` subsumption. Otherwise the callee could store, say, a `mutating` closure into a variable the caller still sees as a non-`mutating` one that a job system may call on many threads. The exceptions make new views rather than converting a variable, each lending its place until the view's last use: `&x` → `mutable any P`; `&v` for a changeable place `v` holding a `mutable any P`, a new view of the same value; `&f` → the function value of a `mutating` closure or `Closure<mutating …>` `f`; and `&f` for a changeable place `f` holding a `mutating` function value, a new view of the same closure. So a function that takes a `mutating` callback can pass it on twice, as `eachMut(a, &body); eachMut(b, &body)`.
+- A closure, named function or operator converts to a function type.
+- A `Closure<F>` place converts to the function type `F`, or to any function type a value of type `F` converts to (below). It is borrowed as `F`'s kind needs, as a closure is. Converting a `Closure<consuming …>` consumes it, but keeps its out-of-line context until the place is next assigned or its scope ends, whichever comes first. The context is then freed without destroying the captures, which the function value took.
+- A literal that captures nothing and doesn't throw, a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value converts to a `@c` function pointer type ([above](#c-function-pointers)). The pointer type must have the same types, or inside `unsafe` the same C representations, and the same conventions, and must declare at least the converted function's stack need.
+- A Rayo function value converts to each of these, with every parameter convention unchanged ([01](01-values-and-ownership.md#parameters)), within the limits that C function pointers set for `unsafe` and C functions ([above](#c-function-pointers)):
+    - a stronger kind: non-`mutating` to `mutating` or `consuming`, and `mutating` to `consuming`;
+    - for a non-throwing value, the same type throwing an error type that leaves the same borrowed arguments always the caller's place ([01](01-values-and-ownership.md#borrowed-arguments)), as any unscoped one does;
+    - a type whose parameters add `keep`;
+    - the type without `@sendable` or `@noalloc`;
+    - its `unsafe` form.
+
+**`x as T` expects a `T`, as an annotation does.** So `x` takes one of the implicit conversions above or a numeric widening ([04](04-types.md#conversions)), or, for a literal, becomes a `T` ([04](04-types.md#literals)). It never tests a type at run time. Anything else is explicit, such as `box.downcast(to: T.self)` ([above](#any-p-explicit-dynamic-dispatch)).
+
+**No conversion applies through `mutable`.** An `&` argument has exactly its parameter's type: no widening, no `T → T?`, no closure-kind or `keep` subsumption. Otherwise the callee could store, say, a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
+
+**The exceptions make new views instead of converting a variable**, and each lends its place until the view's last use:
+
+- `&x` → `mutable any P`;
+- `&v`, for a changeable place `v` holding a `mutable any P` → a new view of the same value;
+- `&f` → the function value of a `mutating` closure or `Closure<mutating …>` `f`;
+- `&f`, for a changeable place `f` holding a `mutating` function value → a new view of the same closure.
+
+So a function that takes a `mutating` callback can pass it on twice, as `eachMut(a, &body); eachMut(b, &body)`.

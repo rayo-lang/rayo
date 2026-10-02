@@ -16,7 +16,7 @@ var hot = &heat.span                          // a MutableSpan<Float>: borrows t
 - the iterators of collections, spans and strings;
 - lock guards;
 - the existential views `any P` and `mutable any P`;
-- function-typed values, and closure literals that capture by reference or hold a scoped capture ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
+- function-typed values, and closure literals that capture by reference or hold a scoped capture ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)).
 
 **An iterator that borrows nothing is unscoped**, such as a `Range`'s. So a task may `await` inside `for i in 0..<n`.
 
