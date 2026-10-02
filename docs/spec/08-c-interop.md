@@ -202,7 +202,13 @@ extern c func rsqrt(_ x: Float) -> Float             // declared for the type ch
 **An `extern c` block's C is compiled with its module, and Rayo code calls a function it defines through an `extern c func` declaration.**
 
 - The block sees the headers it includes, read with the preprocessor definitions the build declares for it ([09](09-compile-time.md#what-a-build-declares)). Every type it sees that an import also gives Rayo must read there as the import reads it, or the build fails.
-- The block is arbitrary C, so it counts as `unsafe` code. An `extern c func` declaration is an unverified promise ([10](10-errors-and-safety.md#safe-modules)): that its module's `extern c` code, or a library the build links, defines a C function of that signature, which needs at most the stack it declares ([below](#what-c-must-uphold)), and, when it is declared `noalloc`, that the function allocates nothing ([above](#c-calls-in-noalloc-code-noalloc)). Its parameter and result types have C representations, and pass as an `@export` function's do ([below](#calling-rayo-from-c)). Calling it is `unsafe`.
+- The block is arbitrary C, so it counts as `unsafe` code.
+- An `extern c func` declaration is an unverified promise ([10](10-errors-and-safety.md#safe-modules)) of these:
+    - its module's `extern c` code, or a library the build links, defines a C function of that signature;
+    - that function needs at most the stack its calls check for ([above](#the-stack-a-c-call-needs));
+    - when the declaration says `noalloc`, the function allocates nothing ([above](#c-calls-in-noalloc-code-noalloc)).
+
+  Its parameter and result types have C representations, and pass as an `@export` function's do ([below](#calling-rayo-from-c)). Calling it is `unsafe`.
 
 ## Calling Rayo from C
 
@@ -221,16 +227,27 @@ A C or C++ program uses a library written in Rayo:
 
 **`@export(c)` functions get C linkage and no mangling. Their parameters and results must have a C representation** ([below](#c-representations)).
 
-- **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads, so `@export` on a function is an unverified promise ([10](10-errors-and-safety.md#safe-modules)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
+- **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads. So `@export` on a function is an unverified promise ([10](10-errors-and-safety.md#safe-modules)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
 - **Parameters pass by value.** Each passes in its C representation, whatever its Rayo convention (borrowed or `owned`), except a `mutable` one, which passes as a pointer. The same holds for `@c func`, the form a callback takes ([below](#callbacks)).
 - **No throwing.** Neither kind of function can throw, since C has no form for it.
 - **Panics stay in Rayo.** A panic in the body is reported as any panic is ([10](10-errors-and-safety.md#panics)), and Rayo never unwinds.
 - **Not generic.** An `@export` function has no type parameters and no `some P` parameter, since C calls one symbol.
-- **A generated header.** The build writes a C header for each module, with every exported function, every `@export(c)` type and every type that the signature of an exported function, a `@c func` or an `extern c func`, or a `@c` type, of the module uses, in its C representation ([below](#c-representations)). For each `List`, `String` and `TrailingArray` type among them it declares a free function, an `@export` function that takes the value `owned` and destroys it, so a call of it enters Rayo as any call from C does ([below](#c-entries-and-threads)).
+- **A generated header.** The build writes a C header for each module. It holds these, each in its C representation ([below](#c-representations)):
+    - every exported function;
+    - every `@export(c)` type;
+    - every type that the signature of one of the module's exported functions, `@c func`s or `extern c func`s uses;
+    - every type that one of the module's `@c` types uses.
+
+  For each `List`, `String` and `TrailingArray` type among them, the header declares a free function: an `@export` function that takes the value `owned` and destroys it. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
 ### C representations
 
-Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type, or, when several import as it, as the first one the table above lists that the target has: `Int` as `ptrdiff_t`, `UInt` as `size_t` and `*T?` as `T*`. A type written with one of the C aliases, such as `CChar` or `CLong`, crosses as the C type it stands for, so `*CChar` is a `char*` in a generated header. The types in the table below cross as it gives, provided every type they are built from, such as a struct's fields or a `List<T>`'s `T`, has a C representation too. The `T` of a `Handle` or of a weak pointer to a concrete type needn't have one, since only the bits cross. A C representation has its Rayo type's size and alignment, and C has no type of size 0, so a struct with no stored fields or a `[0 of T]` has none.
+**A C representation has its Rayo type's size and alignment, and these rules give it:**
+
+- **Imported types.** Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type. When several import as it, it crosses as the first one the import table lists that the target has: `Int` as `ptrdiff_t`, `UInt` as `size_t` and `*T?` as `T*`.
+- **C aliases.** A type written with one of the C aliases, such as `CChar` or `CLong`, crosses as the C type it stands for, so `*CChar` is a `char*` in a generated header.
+- **The table below.** The types in it cross as it gives, provided every type they are built from, such as a struct's fields or a `List<T>`'s `T`, has a C representation too. The `T` of a `Handle` or of a weak pointer to a concrete type needn't have one, since only the bits cross.
+- **No size 0.** Since a C representation has its type's size and C has no type of size 0, a struct with no stored fields or a `[0 of T]` has none.
 
 | Rayo | C representation |
 | --- | --- |
@@ -252,15 +269,37 @@ Each Rayo type that a C type imports as ([above](#what-imports-as-what)), such a
 | `Handle<T>`, `WeakPointer<T>`, `WeakShared<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |
 | `List<T>`, `String` | `struct { T* ptr; int64_t count; int64_t cap; uint64_t alloc; }` (below) |
 | `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([10](10-errors-and-safety.md#unsafe-code)) |
-| `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset [04](04-types.md#variable-sized-structs-trailingarray) gives, which the generated header names |
+| `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](04-types.md#variable-sized-structs-trailingarray)), which the generated header names |
 
-- **A `Span<T>` or `StringView` handed back to C** views what it depends on ([02](02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. Once a C entry ([below](#c-entries-and-threads)) returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). So what a C entry hands back to C, its scoped result and whatever it stores into a `mutable` parameter or through a view a parameter carries, may depend only on its parameters, on `const`s, and on places in a global `let`'s own storage, reached through stored fields, inline array elements and enum payloads only: never on a lock guard, `Once.get()` or an owning value's storage, such as a global `List`'s elements, which a reset or an unregistration could free while C still holds the view.
-- **The `nil` value of a niche** is the one [04](04-types.md#optionals) gives, and the generated header names it.
+- **The `nil` value of a niche** is the one 04 gives ([04](04-types.md#optionals)), and the generated header names it.
 - **A `String` that still uses a literal's immortal bytes** ([04](04-types.md#literals)) has `cap` 0 and a non-null `ptr`.
 
-**Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes function-typed values other than `@c` pointers, weak pointers and weak links to `any P`, `Name`, any type whose layout the language or a library leaves open ([11](11-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`, and any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](07-concurrency.md#atomics-and-locks)).
+**Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes:
 
-**Handing ownership to C.** Besides a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable` parameter C lent, or that Rayo passes to an `owned` parameter of an `extern c func` or a `@c` pointer ([above](#c-representations)), ownership crosses as a weak pointer from `UniquePointer.leak` or a weak link from `Shared.leak`, which comes back through `adopt` ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), or as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](06-memory-and-allocators.md#owning-boxes)). An object or a `Shared` value reached through a protocol crosses as its weak pointer's or weak link's bits, and Rayo rebuilds the existential with `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)`.
+- function-typed values other than `@c` pointers;
+- weak pointers and weak links to `any P`;
+- `Name`;
+- any type whose layout the language or a library leaves open ([11](11-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`;
+- any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](07-concurrency.md#atomics-and-locks)).
+
+**A `Span<T>` or `StringView` handed back to C views what it depends on** ([02](02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. Once a C entry ([below](#c-entries-and-threads)) returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)). What a C entry hands back to C is its scoped result, and whatever it stores into a `mutable` parameter or through a view a parameter carries.
+
+**So what a C entry hands back to C may depend only on these:**
+
+- its parameters;
+- `const`s;
+- places in a global `let`'s own storage, reached through stored fields, inline array elements and enum payloads only.
+
+What it hands back never depends on a lock guard, `Once.get()` or an owning value's storage, such as a global `List`'s elements. A reset or an unregistration could free those while C still holds what was handed back.
+
+**Ownership crosses to C in these ways:**
+
+- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable` parameter C lent, or that Rayo passes to an `owned` parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
+- as a weak pointer from `UniquePointer.leak`, which comes back through `adopt` ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c));
+- as a weak link from `Shared.leak`, which comes back through `adopt` ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
+- as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](06-memory-and-allocators.md#owning-boxes)).
+
+An object or a `Shared` value reached through a protocol crosses as its weak pointer's or weak link's bits. Rayo rebuilds the existential with `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)`.
 
 ## Callbacks
 
@@ -281,7 +320,7 @@ A function pointer type imported from a C header has borrowed parameters, so a `
 
 ### C entries and threads
 
-A `@c func`, an `@export` function and a closure literal converted to a `@c` pointer all have the C calling convention, and C may call any of them from any thread: each is a **C entry**. A call from C attaches the calling thread on first entry, if Rayo didn't create it and C hasn't attached it ([below](#embedding-rayo-in-a-c-program)).
+**C may call a C entry from any thread.** A **C entry** is a `@c func`, an `@export` function or a closure literal converted to a `@c` pointer, all of which have the C calling convention. A call from C attaches the calling thread on first entry, if Rayo didn't create it and C hasn't attached it ([below](#embedding-rayo-in-a-c-program)).
 
 ## What C must uphold
 
@@ -290,22 +329,30 @@ C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligati
 - every value it passes, returns or writes into Rayo memory is valid for its Rayo type ([10](10-errors-and-safety.md#unsafe-code)):
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
     - a non-null pointer isn't null, a span's pointer included when its count is 0, since null is a `Span<T>?`'s `nil`;
+    - a raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
     - a `String`, `StringView` or `StaticString` holds whole UTF-8 sequences ([04](04-types.md#strings));
     - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;
     - a `StaticSpan`, a `StaticString` or a `String` with `cap` 0 points at bytes that stay valid and unwritten for the rest of the run, a `StaticString`'s followed by a NUL;
 - a move-only value's bytes are never copied to stand for a second value ([10](10-errors-and-safety.md#unsafe-code));
-- a value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](10-errors-and-safety.md#unsafe-code)): the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`;
-- a span, or the pointer that a `mutable` parameter passes, reaches its `count` places, or one, each live, aligned for its type and holding a valid value, and writable for a `MutableSpan` or `mutable` parameter, for the whole call ([10](10-errors-and-safety.md#unsafe-code)), and a `MutableSpan` or `mutable` parameter is the only access to its memory during the call, by C or by Rayo, while nothing writes the memory a `Span` or `StringView` parameter views. A view, or a value holding one, that C returns to Rayo or writes into Rayo memory, through a `mutable` parameter, a `MutableSpan` or a pointer, addresses live memory for as long as the dependency set Rayo gives it says, by rules 3 and 4 of [02](02-views-and-dependencies.md#dependencies). A raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
+- a value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](10-errors-and-safety.md#unsafe-code)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`. Its own thread is the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert));
+- spans, `mutable` parameters and the views C hands Rayo meet these ([10](10-errors-and-safety.md#unsafe-code)):
+    - a span, or the pointer that a `mutable` parameter passes, reaches its `count` places, or one. For the whole call, each of those places is live, aligned for its type and holding a valid value, and writable for a `MutableSpan` or `mutable` parameter;
+    - a `MutableSpan` or `mutable` parameter is the only access to its memory during the call, by C or by Rayo, and nothing writes the memory a `Span` or `StringView` parameter views;
+    - a view, or a value holding one, that C returns to Rayo or writes into Rayo memory, through a `mutable` parameter, a `MutableSpan` or a pointer, addresses live memory for as long as its dependency set says. Rayo gives it that set by rules 3 and 4 ([02](02-views-and-dependencies.md#dependencies));
 - Rayo code runs only on a stack whose bounds the runtime knows, so running out of it panics instead of writing past its end ([10](10-errors-and-safety.md#panics)):
     - C that switches a thread between stacks, as a fiber scheduler does, declares the new stack's bounds with `rayo_thread_set_stack` after each switch, back to the thread's own stack included, before Rayo code runs there ([below](#embedding-rayo-in-a-c-program));
     - a Rayo frame that such a switch suspends resumes only on the thread it began on, whose accesses, allocator uses and thread-locals it uses;
-    - a fiber abandoned with Rayo frames on it never returns from them: C keeps its stack allocated and unmoved for the rest of the run, what the frames own leaks, and what they borrow stays borrowed, so a reset of an allocator they use panics ([06](06-memory-and-allocators.md#what-a-reset-does));
+    - a fiber abandoned with Rayo frames on it never returns from them. C keeps its stack allocated and unmoved for the rest of the run. What the frames own leaks, and what they borrow stays borrowed, so a reset of an allocator they use panics ([06](06-memory-and-allocators.md#what-a-reset-does));
 - C that Rayo calls uses no more stack than the call checks is left ([above](#the-stack-a-c-call-needs)), or runs on a stack of its own;
-- control leaves a Rayo frame for good only when the frame returns, apart from the stack switches above, and its memory stays allocated until then: C never `longjmp`s over one, unwinds through one, ends its thread beneath one, or frees or reuses a stack that holds one;
+- control leaves a Rayo frame for good only when the frame returns, apart from the stack switches above, and its memory stays allocated until then. C never `longjmp`s over one, unwinds through one, ends its thread beneath one, or frees or reuses a stack that holds one;
 - C never unloads the program's code, or frees memory that its runtime or globals use, unless `rayo_shutdown` has returned `true` ([below](#embedding-rayo-in-a-c-program));
 - C enters Rayo only by an ordinary call, never from a signal handler or an interrupt, which could arrive while its thread is in the middle of Rayo code;
-- a value C passes to an `owned` parameter, directly or through a `@c` pointer, returns from a C function Rayo called, or writes into Rayo memory, such as through a `mutable` parameter Rayo lent it, is Rayo's from then on, so C never uses or frees it again, while one passed to a borrowed parameter stays its sender's, so C never frees or keeps one that Rayo passed it borrowed, nor passes it to an `owned` parameter;
-- C frees a `List`, `String` or `TrailingArray` that Rayo handed it ([above](#c-representations)) at most once, only through the free function the header declares for its type, and never after passing it to an `owned` parameter, returning it to Rayo or writing it into Rayo memory, and reads its elements only until the allocator its `alloc` word names is reset or unregistered ([06](06-memory-and-allocators.md#what-a-reset-does));
+- a value C hands to Rayo in one of these ways is Rayo's from then on, so C never uses or frees it again:
+    - passing it to an `owned` parameter, directly or through a `@c` pointer;
+    - returning it from a C function Rayo called;
+    - writing it into Rayo memory, such as through a `mutable` parameter Rayo lent C;
+- a value passed to a borrowed parameter stays its sender's, so C never frees or keeps one that Rayo passed it borrowed, nor passes it to an `owned` parameter;
+- C frees a `List`, `String` or `TrailingArray` that Rayo handed it ([above](#c-representations)) at most once, and only through the free function the header declares for its type. It never frees one after passing it to an `owned` parameter, returning it to Rayo or writing it into Rayo memory. It reads its elements only until the allocator its `alloc` word names is reset or unregistered ([06](06-memory-and-allocators.md#what-a-reset-does));
 - C reads Rayo-owned memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could. It writes a `TrailingArray`'s header, or a struct whose flexible array member's elements share its tail padding, field by field, never as a whole struct ([10](10-errors-and-safety.md#unsafe-code)), and never passes one to Rayo as a `mutable` parameter or in a `MutableSpan`. It never writes memory Rayo treats as immutable, such as read-only data or a `Frozen` value behind a `Shared`, which Rayo reads without a mark, and writes a `Synchronized` value only through that value's own synchronization.
 
 **Breaking one is undefined behavior**, as a wrong `unsafe` block is.
@@ -328,7 +375,14 @@ An entry point that takes the raw form, as `nav_set_mode_checked` does, converts
 
 ### What the runtime needs from the platform
 
-The runtime needs memory for `.system`, threads, the bounds of each stack Rayo code runs on, a C thread's when it attaches and a fiber's when C declares it ([above](#what-c-must-uphold)), a way to park a thread on an address and wake it, a monotonic clock for timeouts, and a way to report a panic.
+**The runtime needs these from the platform:**
+
+- memory for `.system`;
+- threads;
+- the bounds of each stack Rayo code runs on: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
+- a way to park a thread on an address and wake it;
+- a monotonic clock for timeouts;
+- a way to report a panic.
 
 ### Embedding Rayo in a C program
 
@@ -344,5 +398,5 @@ A C program can embed Rayo, calling it through exported functions and these C ex
 - **`rayo_init`.** A second call, or an entry from another thread before it has finished, panics. C that an initializer calls may call back into Rayo on the same thread, and the runtime checks guard each global it reads. When it returns, the threads the initializers started with `Runtime.startThread`, which were queued, start.
 - **`rayo_shutdown`.** Only the calling thread's thread-locals and objects are destroyed ([07](07-concurrency.md#global-state)): any other thread still attached, the one that called `rayo_init` included, keeps its copies, which leak. An entry from a C thread afterwards panics, except a nested one, which is let in as before ([07](07-concurrency.md#initialization-at-startup)). It returns `true` only when nothing can run Rayo code or the runtime's code again: every thread `Runtime.startThread` started has ended, and no thread has a Rayo frame on any of its stacks. Only then may C unload the program's code ([above](#what-c-must-uphold)).
 - **Attaching threads.** Attaching is also implicit on first entry ([above](#c-entries-and-threads)), and initializes the thread's thread-locals. Detaching destroys them and the thread's objects, on that thread ([07](07-concurrency.md#global-state)). A thread that exits without detaching, or is still attached when another calls `rayo_shutdown`, leaks them instead. Both enter Rayo as a call from C does, with the same checks ([above](#c-entries-and-threads)), so after `rayo_shutdown` either one fails as such an entry does (above).
-- **Not from inside Rayo.** `rayo_thread_detach` and `rayo_shutdown` panic, before they do anything, on a thread with a Rayo frame on any of its stacks, a suspended fiber's included, whether inside a call into Rayo or in a C call that Rayo made, since those frames may still use what they destroy.
+- **Not from inside Rayo.** `rayo_thread_detach` and `rayo_shutdown` panic, before they do anything, on a thread with a Rayo frame on any of its stacks, a suspended fiber's included. That holds whether the thread is inside a call into Rayo or in a C call that Rayo made, since its Rayo frames may still use what they destroy.
 - **Detaching on return.** `Runtime.detachOnReturn()`, called on a thread Rayo didn't create, detaches it when the thread next returns to C with no Rayo frame on any of its stacks, as `rayo_thread_detach` would there. On a thread Rayo started, which tears down when its body returns, it does nothing. So a `@c func` that is the start routine of a thread made through the C API tears its thread down with no C of its own.
