@@ -21,7 +21,7 @@ scratch.reset()                                   // everything the arena handed
 - a scope end, an overwrite or a `consume`;
 - a removal from a container;
 - the drop of the last owner of a reference-counted value ([below](#sharedt-data-with-many-owners)), or of the last pin ([03](03-handles-and-objects.md#pinning-for-c));
-- a thread's end ([07](07-concurrency.md#global-state));
+- a thread's end ([07](07-concurrency.md#thread-teardown));
 - an arena reset or an unregistration.
 
 **No release frees memory that a view, on any thread, may still read.** The compiler checks an owner's release, since destroying a value is a mutable access to its place, which no live borrow of the place allows ([01](01-values-and-ownership.md#the-law-of-exclusivity)). A reset or an unregistration frees memory that values anywhere may own, so it checks at run time first, and panics instead ([below](#arena-safety-checked-values-and-checked-resets)).

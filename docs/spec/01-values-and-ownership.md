@@ -387,7 +387,7 @@ heal(&x)                           // error: the same
 
 **There are four exceptions, each with its own way of keeping exclusivity**, the first two checked at run time:
 
-- **A `@threadlocal var`**, which its own thread changes under a dynamic mark on each access ([07](07-concurrency.md#global-state)).
+- **A `@threadlocal var`**, which its own thread changes under a dynamic mark on each access ([07](07-concurrency.md#thread-locals)).
 - **An object's value**, which is changeable whatever holds its owner or weak pointer, since each access takes a dynamic mark ([03](03-handles-and-objects.md#dynamic-exclusivity)).
 - **A `Synchronized` value**, whose non-`mutating` methods change it through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)).
 - **`unsafe` code**, which may change a bare global `var` or an imported C variable ([07](07-concurrency.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](10-errors-and-safety.md#raw-accesses)). It promises to keep exclusivity itself ([10](10-errors-and-safety.md#what-unsafe-code-upholds)).
@@ -570,7 +570,7 @@ world.apply(world.commands.take())                       // take() moves the con
 **Only these let other code change a value between two of your uses**, and each says so in its type or declaration:
 
 - **Objects.** Code changes an object through its owner or any of its weak pointers, which are aliases the static checker can't see. So each access takes a mark, and a conflicting one panics ([03](03-handles-and-objects.md#dynamic-exclusivity)).
-- **Thread-locals.** A thread-local is declared `@threadlocal`, and the static checker can't see a callee touching one, so its accesses are marked the same way ([07](07-concurrency.md#global-state)).
+- **Thread-locals.** A thread-local is declared `@threadlocal`, and the static checker can't see a callee touching one, so its accesses are marked the same way ([07](07-concurrency.md#thread-locals)).
 - **`Synchronized` values.** A value such as a `Mutex` changes only through its own synchronization ([07](07-concurrency.md#atomics-and-locks)). A `Slice` into a locked buffer takes the buffer's lock ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)).
 - **Channel ends.** A channel's two ends share one queue, which each end changes ([07](07-concurrency.md#queues-and-channels)).
 - **Pool elements.** A pool's element, named by a `Handle`, reads `nil` once the element is removed ([03](03-handles-and-objects.md#pools-and-handles)).

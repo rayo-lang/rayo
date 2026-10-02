@@ -61,7 +61,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 - **No value holding an owner or a weak pointer leaves the thread.** `UniquePointer` and `WeakPointer` aren't `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)), so no value holding one moves to or is lent to another thread.
 - **The object is destroyed only on its home thread.** A reset or an unregistration on another thread panics instead ([below](#objects-in-arenas-and-other-allocators)).
-- **A home thread's identity is never given to another thread**, not even to one that C starts after the home thread exits without detaching. So the home thread's objects are then reached from no thread, and leak: `WeakPointer(bits:)` and `adopt` read `nil` for them ([07](07-concurrency.md#global-state)).
+- **A home thread's identity is never given to another thread**, not even to one that C starts after the home thread exits without detaching. So the home thread's objects are then reached from no thread, and leak: `WeakPointer(bits:)` and `adopt` read `nil` for them ([07](07-concurrency.md#thread-teardown)).
 
 **Owners and weak pointers are 8 bytes and 8-aligned.** Their `nil` is all zero bits, so `UniquePointer<T>?` and `WeakPointer<T>?` are 8 bytes too, and a weak pointer's bits fit a C `uint64_t` ([below](#weak-pointers-as-bits-and-handing-objects-to-c)).
 
@@ -118,7 +118,7 @@ From then every weak pointer reads `nil` and no new access can begin.
 
 **A weak pointer never names a later object.** It names its object by a **generation** that no other object of the run gets. So however many objects are created and destroyed, a weak pointer to a destroyed object reads `nil` forever.
 
-**A thread's objects end with it.** Every thread-bound object belongs to its home thread wherever its owner lies, even in a stale container or in C. So the thread's teardown ([07](07-concurrency.md#global-state)) destroys its objects on it, those it leaked to C included ([below](#weak-pointers-as-bits-and-handing-objects-to-c)). Their `deinit`s run then, except the `deinit` of an object that a never-dropped pin still holds ([below](#pinning-for-c)).
+**A thread's objects end with it.** Every thread-bound object belongs to its home thread wherever its owner lies, even in a stale container or in C. So the thread's teardown ([07](07-concurrency.md#thread-teardown)) destroys its objects on it, those it leaked to C included ([below](#weak-pointers-as-bits-and-handing-objects-to-c)). Their `deinit`s run then, except the `deinit` of an object that a never-dropped pin still holds ([below](#pinning-for-c)).
 
 ### Objects in arenas and other allocators
 

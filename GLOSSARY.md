@@ -314,7 +314,7 @@ The value a `task func` call returns: a coroutine whose size is known at compile
 _Avoid_: async function, future (a `Future` is one awaitable), state machine value
 
 **Teardown**:
-The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency.md#global-state)).
+The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency.md#thread-teardown)).
 
 ### C interop
 
