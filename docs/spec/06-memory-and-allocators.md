@@ -128,11 +128,11 @@ What a reset changes, and what it costs:
 - **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). An open and a reset or unregistration on two threads are ordered one way or the other:
   - the open comes first, and the reset or unregistration panics while what the open lends is live;
   - or the reset or unregistration comes first, and the open fails.
-- **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#check-levels)).
+- **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#unchecked-blocks)).
 
 ### Stale values, and the `deinit`s a reset runs
 
-**Destroying a stale value never touches its memory**, except in the `deinit` of an object that a reset or an unregistration destroys (below). It skips both the free and its elements' `deinit`s, so a `deinit` may never run ([10](10-errors-and-safety.md#unsafe-code)), and anything those elements owned outside the invalidated allocator leaks.
+**Destroying a stale value never touches its memory**, except in the `deinit` of an object that a reset or an unregistration destroys (below). It skips both the free and its elements' `deinit`s, so a `deinit` may never run ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)), and anything those elements owned outside the invalidated allocator leaks.
 
 **An object's `deinit` that a reset or an unregistration runs can still read what it owns from that allocator:**
 
@@ -183,7 +183,7 @@ props.append(p)                     // panics: 'props' came from an unregistered
 
 **Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets. A container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
 
-- **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([10](10-errors-and-safety.md#unsafe-code)).
+- **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([10](10-errors-and-safety.md#raw-allocations)).
 - **A stale word never passes.** Storage that a reset or an unregistration invalidated fails its check for good, however many allocators are registered, reset and unregistered later, outside the `deinit`s that a reset or an unregistration runs ([above](#stale-values-and-the-deinits-a-reset-runs)).
 - **Limits.** How many allocators may be registered at once and over the program's run, and how many times one may be reset, are implementation-defined. Registering or resetting past a limit panics, in every build, so a word is never issued twice.
 
@@ -280,7 +280,7 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 | `Shared<T>` | Reference-counted pointer to a `Frozen` or `Synchronized` `T`, with an atomic count; hands out checked `WeakShared<T>`s |
 | `LocalShared<T>` | Reference-counted pointer to a `Frozen` `T`, with a plain count, on one thread |
 
-**`Box.leak` gives up a box's allocation for C to hold.** It applies to a `T: ~Scoped`, and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](10-errors-and-safety.md#unsafe-code)). `Box.adopt`, which is `unsafe`, takes it back. Its caller promises that the allocation came from leaking a `Box<T>`, and that it is adopted at most once.
+**`Box.leak` gives up a box's allocation for C to hold.** It applies to a `T: ~Scoped`, and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](10-errors-and-safety.md#raw-allocations)). `Box.adopt`, which is `unsafe`, takes it back. Its caller promises that the allocation came from leaking a `Box<T>`, and that it is adopted at most once.
 
 ### `Shared<T>`: data with many owners
 
@@ -322,7 +322,7 @@ log.value.lock { $0.append(m) }
 **Nothing that is or holds a `Synchronized` value, at any depth, is `Frozen`**, whatever the `Synchronized` type's own fields look like, since its non-`mutating` methods write it ([07](07-concurrency.md#the-synchronized-contract)). Declaring `: unsafe Frozen` on such a type is a compile error.
 
 - **What it covers.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer, a weak link or a handle in it only names another value, which isn't part of it and may change.
-- **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`. The declaration is an unverified promise ([10](10-errors-and-safety.md#safe-modules)) of two things:
+- **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`. The declaration is an unverified promise ([10](10-errors-and-safety.md#unverified-promises)) of two things:
   - nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
   - nothing at all writes a value of the type frozen into read-only data ([09](09-compile-time.md#consts-that-reach-run-time)).
 
@@ -388,7 +388,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 - `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
 - the builtin `SoA`'s growing operations, such as `try rows.tryAppend(x)` ([04](04-types.md#struct-of-arrays-soat));
-- `Name(interning:)` ([04](04-types.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](10-errors-and-safety.md#unsafe-code)).
+- `Name(interning:)` ([04](04-types.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](10-errors-and-safety.md#raw-allocations)).
 
 **`@noalloc` on a function makes any call in it that may allocate a compile error:**
 

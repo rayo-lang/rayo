@@ -346,6 +346,9 @@ A closure whose body is instantiated once per field, as the argument of `T.const
 
 ### Errors and safety
 
+**Allocation**:
+One block of storage that accesses stay inside, and that is live or freed as a whole ([10](docs/spec/10-errors-and-safety.md#allocations)). It is storage an allocator gave out, a local, a temporary or a global, or memory that C, the platform or a device provides.
+
 **Build profile**:
 One of `dev`, `profile` and `ship`, each with its own default set of diagnostic checks ([10](docs/spec/10-errors-and-safety.md#build-profiles)).
 _Avoid_: configuration, build mode
@@ -373,10 +376,10 @@ _Avoid_: exception
 Code that uses an operation needing `unsafe`, such as dereferencing a raw pointer or calling C, whose soundness the code promises instead of the compiler ([10](docs/spec/10-errors-and-safety.md#unsafe-code)).
 
 **Unsafe protocol**:
-A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a contract the compiler can't check ([10](docs/spec/10-errors-and-safety.md#safe-modules)).
+A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a contract the compiler can't check ([10](docs/spec/10-errors-and-safety.md#unverified-promises)).
 
 **Unverified promise**:
-A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety.md#safe-modules)).
+A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety.md#unverified-promises)).
 
 ### Compilation
 

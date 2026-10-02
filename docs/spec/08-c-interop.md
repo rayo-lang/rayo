@@ -100,7 +100,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 **Several rows of the table have rules of their own:**
 
 - **C's standard integer types.** `CInt`, `CLong`, `CChar` and the like, such as `CUInt` for `unsigned` and `CShort` for `short`, are type aliases. Each is the `IntN` or `UIntN` with its C type's size and signedness on the target. So `CChar` is `Int8` or `UInt8` as the target's `char` is signed or not.
-- **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. `S.trailing(at: p, count: n)`, an `unsafe` static function taking `p: *S`, gives a `MutableSpan<T>` at the member's offset from `p` without lending the struct. Its caller promises what [10](10-errors-and-safety.md#unsafe-code) asks of a span made from a raw pointer:
+- **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. `S.trailing(at: p, count: n)`, an `unsafe` static function taking `p: *S`, gives a `MutableSpan<T>` at the member's offset from `p` without lending the struct. Its caller promises what 10 asks of a span made from a raw pointer ([10](10-errors-and-safety.md#what-unsafe-code-upholds)):
     - `n` valid elements there, aligned for `T`;
     - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
 
@@ -185,7 +185,7 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
 import c "mixer.h" unsafe { noalloc mix_block, apply_gain }
 ```
 
-**`noalloc f` states that `f`, and everything it calls, allocates no memory**, from C's allocator or a Rayo one, so a `@noalloc` function may call it ([06](06-memory-and-allocators.md#allocation-failure)). Any other C function may allocate. It is asserted, not checked, so the config block that holds it is spelled `unsafe { … }` ([10](10-errors-and-safety.md#safe-modules)), and an `extern c func` declares it with `noalloc` before `func`.
+**`noalloc f` states that `f`, and everything it calls, allocates no memory**, from C's allocator or a Rayo one, so a `@noalloc` function may call it ([06](06-memory-and-allocators.md#allocation-failure)). Any other C function may allocate. It is asserted, not checked, so the config block that holds it is spelled `unsafe { … }` ([10](10-errors-and-safety.md#unverified-promises)), and an `extern c func` declares it with `noalloc` before `func`.
 
 ## Inline C
 
@@ -203,7 +203,7 @@ extern c func rsqrt(_ x: Float) -> Float             // declared for the type ch
 
 - The block sees the headers it includes, read with the preprocessor definitions the build declares for it ([09](09-compile-time.md#what-a-build-declares)). Every type it sees that an import also gives Rayo must read there as the import reads it, or the build fails.
 - The block is arbitrary C, so it counts as `unsafe` code.
-- An `extern c func` declaration is an unverified promise ([10](10-errors-and-safety.md#safe-modules)) of these:
+- An `extern c func` declaration is an unverified promise ([10](10-errors-and-safety.md#unverified-promises)) of these:
     - its module's `extern c` code, or a library the build links, defines a C function of that signature;
     - that function needs at most the stack its calls check for ([above](#the-stack-a-c-call-needs));
     - when the declaration says `noalloc`, the function allocates nothing ([above](#c-calls-in-noalloc-code-noalloc)).
@@ -227,7 +227,7 @@ A C or C++ program uses a library written in Rayo:
 
 **`@export(c)` functions get C linkage and no mangling. Their parameters and results must have a C representation** ([below](#c-representations)).
 
-- **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads. So `@export` on a function is an unverified promise ([10](10-errors-and-safety.md#safe-modules)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
+- **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads. So `@export` on a function is an unverified promise ([10](10-errors-and-safety.md#unverified-promises)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
 - **Parameters pass by value.** Each passes in its C representation, whatever its Rayo convention (borrowed or `owned`), except a `mutable` one, which passes as a pointer. The same holds for `@c func`, the form a callback takes ([below](#callbacks)).
 - **No throwing.** Neither kind of function can throw, since C has no form for it.
 - **Panics stay in Rayo.** A panic in the body is reported as any panic is ([10](10-errors-and-safety.md#panics)), and Rayo never unwinds.
@@ -268,7 +268,7 @@ A C or C++ program uses a library written in Rayo:
 | other `T?` | `struct { T value; bool has; }` |
 | `Handle<T>`, `WeakPointer<T>`, `WeakShared<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |
 | `List<T>`, `String` | `struct { T* ptr; int64_t count; int64_t cap; uint64_t alloc; }` (below) |
-| `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([10](10-errors-and-safety.md#unsafe-code)) |
+| `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([10](10-errors-and-safety.md#raw-allocations)) |
 | `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](04-types.md#variable-sized-structs-trailingarray)), which the generated header names |
 
 - **The `nil` value of a niche** is the one 04 gives ([04](04-types.md#optionals)), and the generated header names it.
@@ -326,16 +326,16 @@ A function pointer type imported from a C header has borrowed parameters, so a `
 
 C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place:
 
-- every value it passes, returns or writes into Rayo memory is valid for its Rayo type ([10](10-errors-and-safety.md#unsafe-code)):
+- every value it passes, returns or writes into Rayo memory is valid for its Rayo type ([10](10-errors-and-safety.md#raw-accesses)):
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
     - a non-null pointer isn't null, a span's pointer included when its count is 0, since null is a `Span<T>?`'s `nil`;
     - a raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
     - a `String`, `StringView` or `StaticString` holds whole UTF-8 sequences ([04](04-types.md#strings));
     - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;
     - a `StaticSpan`, a `StaticString` or a `String` with `cap` 0 points at bytes that stay valid and unwritten for the rest of the run, a `StaticString`'s followed by a NUL;
-- a move-only value's bytes are never copied to stand for a second value ([10](10-errors-and-safety.md#unsafe-code));
-- a value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](10-errors-and-safety.md#unsafe-code)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`. Its own thread is the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert));
-- spans, `mutable` parameters and the views C hands Rayo meet these ([10](10-errors-and-safety.md#unsafe-code)):
+- a move-only value's bytes are never copied to stand for a second value ([10](10-errors-and-safety.md#values-views-and-threads));
+- a value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](10-errors-and-safety.md#values-views-and-threads)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`. Its own thread is the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert));
+- spans, `mutable` parameters and the views C hands Rayo meet these ([10](10-errors-and-safety.md#what-unsafe-code-upholds)):
     - a span, or the pointer that a `mutable` parameter passes, reaches its `count` places, or one. For the whole call, each of those places is live, aligned for its type and holding a valid value, and writable for a `MutableSpan` or `mutable` parameter;
     - a `MutableSpan` or `mutable` parameter is the only access to its memory during the call, by C or by Rayo, and nothing writes the memory a `Span` or `StringView` parameter views;
     - a view, or a value holding one, that C returns to Rayo or writes into Rayo memory, through a `mutable` parameter, a `MutableSpan` or a pointer, addresses live memory for as long as its dependency set says. Rayo gives it that set by rules 3 and 4 ([02](02-views-and-dependencies.md#dependencies));
@@ -353,7 +353,7 @@ C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligati
     - writing it into Rayo memory, such as through a `mutable` parameter Rayo lent C;
 - a value passed to a borrowed parameter stays its sender's, so C never frees or keeps one that Rayo passed it borrowed, nor passes it to an `owned` parameter;
 - C frees a `List`, `String` or `TrailingArray` that Rayo handed it ([above](#c-representations)) at most once, and only through the free function the header declares for its type. It never frees one after passing it to an `owned` parameter, returning it to Rayo or writing it into Rayo memory. It reads its elements only until the allocator its `alloc` word names is reset or unregistered ([06](06-memory-and-allocators.md#what-a-reset-does));
-- C reads Rayo-owned memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could. It writes a `TrailingArray`'s header, or a struct whose flexible array member's elements share its tail padding, field by field, never as a whole struct ([10](10-errors-and-safety.md#unsafe-code)), and never passes one to Rayo as a `mutable` parameter or in a `MutableSpan`. It never writes memory Rayo treats as immutable, such as read-only data or a `Frozen` value behind a `Shared`, which Rayo reads without a mark, and writes a `Synchronized` value only through that value's own synchronization.
+- C reads Rayo-owned memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could. It writes a `TrailingArray`'s header, or a struct whose flexible array member's elements share its tail padding, field by field, never as a whole struct ([10](10-errors-and-safety.md#raw-accesses)), and never passes one to Rayo as a `mutable` parameter or in a `MutableSpan`. It never writes memory Rayo treats as immutable, such as read-only data or a `Frozen` value behind a `Shared`, which Rayo reads without a mark, and writes a `Synchronized` value only through that value's own synchronization.
 
 **Breaking one is undefined behavior**, as a wrong `unsafe` block is.
 

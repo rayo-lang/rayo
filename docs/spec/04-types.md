@@ -70,7 +70,7 @@ let g: Int64 = d                 // error: Int and Int64 never convert implicitl
 - **From a floating-point value.** `Int(f)` rounds toward zero and panics on NaN or on a value whose integer part doesn't fit, in every build, since targets' conversion instructions disagree on those. `Int(clamping: f)` saturates, and maps NaN to `0`.
 - **To a floating-point type.** `Float(d)` of an `Int`, `Float(x)` of a `Double` and `Half(f)` of a `Float` round to nearest, and an out-of-range value becomes an infinity of its sign, as IEEE 754 defines.
 
-That one is a float-to-integer conversion of NaN or an out-of-range value inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#check-levels)).
+That one is a float-to-integer conversion of NaN or an out-of-range value inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#unchecked-blocks)).
 
 ### Integer overflow, division and shifts
 
@@ -84,7 +84,7 @@ func step(_ x: Int32, _ n: Int32) {
 }
 ```
 
-**Every integer operation has a defined result, in every build and on every target**, except a division or remainder by zero inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#check-levels)).
+**Every integer operation has a defined result, in every build and on every target**, except a division or remainder by zero inside an `unchecked` block, which removes its check ([10](10-errors-and-safety.md#unchecked-blocks)).
 
 - **Overflow.** `+ - *` and unary `-` panic on overflow where overflow checks are on, and wrap where they are off ([10](10-errors-and-safety.md#check-levels)). `&+ &- &*` always wrap, and `+| -| *|` saturate.
 - **Division.** `/` rounds toward zero, and `a % b` has `a`'s sign. Division and remainder by zero panic in every build. `Int.min / -1`, in every signed width, follows the overflow rule, wrapping to `Int.min` where checks are off, and `Int.min % -1` is `0` in every build.
@@ -253,7 +253,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 ### Packed structs and under-aligned places
 
-**A `@packed` struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](10-errors-and-safety.md#unsafe-code)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
+**A `@packed` struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](10-errors-and-safety.md#raw-accesses)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
 
 ```swift
 @packed struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
@@ -716,7 +716,7 @@ It is move-only, and owns its allocation, whose element count is fixed when it i
   That offset must be a multiple of `Element`'s alignment. A packed imported header whose member C places lower, as `#pragma pack(1)` can, is a compile error as a `TrailingArray` header, since its elements couldn't be both where C reads them and aligned. So the elements can start inside the header's tail padding, or inside the storage unit of a bitfield that ends an imported header.
 
   A `Synchronized` value may write any of its bytes through a shared borrow, padding included, while the other side is read with plain loads. So with one on either side, the two never share bytes.
-- **The header.** `msg.header`'s `read` lends it in place. Its `modify` yields it from a temporary and writes it back whole, except a struct or tuple header, which it writes field by field, each bitfield through its accessor, so the header's tail padding is never written. A view from the `modify` is access-bound ([02](02-views-and-dependencies.md#access-bound-projections)). Code that reaches the header through a pointer, C or `unsafe` Rayo, writes it the same way ([10](10-errors-and-safety.md#unsafe-code)).
+- **The header.** `msg.header`'s `read` lends it in place. Its `modify` yields it from a temporary and writes it back whole, except a struct or tuple header, which it writes field by field, each bitfield through its accessor, so the header's tail padding is never written. A view from the `modify` is access-bound ([02](02-views-and-dependencies.md#access-bound-projections)). Code that reaches the header through a pointer, C or `unsafe` Rayo, writes it the same way ([10](10-errors-and-safety.md#raw-accesses)).
 
 ### Struct of arrays: `SoA<T>`
 

@@ -221,7 +221,7 @@ The rule holds whatever the argument's convention, and whether it is a variable,
 
 **`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable` argument. This covers a `MutableSpan`, a `MutableRef`, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable` argument's place, or in storage that place owns, or is reached through an exclusive dependency that an argument passed `mutable` or `owned` carries. It promises too that none of it is reached only through a borrowed argument or what one carries.
 
-**In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](10-errors-and-safety.md#unsafe-code)). `S.trailing(at:count:)` is one such function ([08](08-c-interop.md#what-imports-as-what)).
+**In an `unsafe` function, that promise is its caller's**: that nothing else reaches what the view can change while it lives ([10](10-errors-and-safety.md#raw-accesses)). `S.trailing(at:count:)` is one such function ([08](08-c-interop.md#what-imports-as-what)).
 
 **Two kinds of mutable view may come from a shared input, since their exclusivity is enforced at run time:**
 
@@ -386,7 +386,7 @@ These values may act when destroyed, as a lock guard unlocks its mutex. A field 
 - it is still fine when `Doc` holds a lock guard in another field, whose destruction uses only the guard's own set;
 - it is an error once `Doc` has a non-`PlainDeinit` `deinit`, or when the guard locks a mutex that `Doc` holds.
 
-**A type conforms to `PlainDeinit` when its `deinit` only destroys what it owns alone and frees its own buffers.** The conformance is declared with `unsafe` ([10](10-errors-and-safety.md#safe-modules)). Destroying one then uses only what destroying its elements uses, and skipping its own `deinit` can only leak. Any `deinit` may be skipped, as a stale value's elements' are ([10](10-errors-and-safety.md#unsafe-code)).
+**A type conforms to `PlainDeinit` when its `deinit` only destroys what it owns alone and frees its own buffers.** The conformance is declared with `unsafe` ([10](10-errors-and-safety.md#unverified-promises)). Destroying one then uses only what destroying its elements uses, and skipping its own `deinit` can only leak. Any `deinit` may be skipped, as a stale value's elements' are ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)).
 
 So a `List<StringView>`, whose std type conforms, keeps nothing borrowed when dropped at scope end, while a `List<MutexGuard<T>>` keeps its mutexes borrowed until then. An object's owner, a `Pin`, a `LocalPin` and `Shared` don't conform, since their `deinit`s change state they don't own alone.
 

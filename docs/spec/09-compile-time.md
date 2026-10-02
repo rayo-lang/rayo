@@ -67,7 +67,7 @@ A `const` whose initializer does anything else is a compile error, while a globa
 
 - **What runs is what counts.** A function with a branch that reads a global `let` still runs in the compiler on an input that never takes that branch.
 - **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([10](10-errors-and-safety.md#check-levels)), so an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
-- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what an access through a raw pointer must satisfy ([10](10-errors-and-safety.md#unsafe-code)), and every memory-safety check an `unchecked` block removes still runs. So an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](10-errors-and-safety.md#check-levels)).
+- **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what an access through a raw pointer must satisfy ([10](10-errors-and-safety.md#raw-accesses)), and every memory-safety check an `unchecked` block removes still runs. So an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](10-errors-and-safety.md#unchecked-blocks)).
 - **Allocation works.** At compile time the current allocator is a compile-time heap, so containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. `.system` allocates from the compile-time heap too. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
 - **One thread.** Evaluation runs on one thread, so no `const`'s value depends on thread timing.
 - **Evaluation is bounded.** A `const`'s evaluation that runs past the toolchain's limit is a compile error, so a runaway loop fails the build instead of hanging it; a global `let`'s leaves the global to startup ([07](07-concurrency.md#initialization-at-startup)).
@@ -113,8 +113,8 @@ func setUp(_ world: mutable World) {
 
 **A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in read-only data does ([07](07-concurrency.md#initialization-at-startup)). Freezing does three things:
 
-- It copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). The copy is in read-only data, aligned at least as the allocation was.
-- It points each pointer into a copied allocation at the same offset in its copy. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
+- It copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, as one allocation ([10](10-errors-and-safety.md#allocations)). The copy is in read-only data, aligned at least as the allocation was.
+- It points each pointer into a copied allocation at the same offset in its copy. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#raw-accesses)).
 - It makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none.
 
 A frozen `const` has these properties:
@@ -391,7 +391,7 @@ func deserializeEnum<T>(_ r: mutable Reader) throws(LoadError) -> T {
 
 - is marked `@opaque`;
 - has stored fields the use site can't see (`private` ones, without `@reflect(private)`);
-- has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](10-errors-and-safety.md#unsafe-code));
+- has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](10-errors-and-safety.md#what-needs-unsafe));
 - has a primary initializer the use site can't call: a `private init` one, from another module, whatever `@reflect(private)` shows. The private fields `@reflect(private)` shows count as `public` here, so they don't stop the call.
 
 `T.makeCase` does the same for one enum case's payload, and applies to every case of an enum reflection can see into, since a case and its payload are as visible as the enum.

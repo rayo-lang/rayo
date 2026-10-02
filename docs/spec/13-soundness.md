@@ -13,13 +13,13 @@ print(lines[0])
 
 The undefined behavior of [10](10-errors-and-safety.md#unsafe-code) is an access outside a live allocation, a misaligned access, a read of an invalid value, a data race, a write to memory Rayo treats as immutable, and the failure of a check that `unchecked` removed. Safe code has no `unchecked` block, and its memory-safety checks are on in every build ([10](10-errors-and-safety.md#check-levels)), so the last never happens. These rule out the rest:
 
-- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([10](10-errors-and-safety.md#unsafe-code)), so nothing it reads or writes has been freed or reused.
+- **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([10](10-errors-and-safety.md#allocations)), so nothing it reads or writes has been freed or reused.
 - **Valid.** A place that safe code reads, lends or destroys holds a valid value of its type, at an address aligned for it.
 - **Exclusive.** While a mutable access to a place is live, nothing reaches an overlapping place except through it. While a shared access is live, nothing writes the place, except a `Synchronized` value through its own synchronization. Read-only data, which holds every frozen `const`, and a `Frozen` value behind a `Shared` or a `LocalShared` are shared for good.
 - **Owned.** A value has one owner, except a reference-counted value, which its owners share. It is destroyed at most once, and used neither after its destruction nor after it moves out.
 - **Race-free.** Two accesses to the same bytes on different threads, at least one a write, are ordered by happens-before ([07](07-concurrency.md#atomics-and-locks)), unless both are atomic accesses of the same size at the same address.
 
-These are what [10](10-errors-and-safety.md#unsafe-code) asks of `unsafe` code, stated for all code. The sections below show that safe code keeps them, given that `unsafe` code and C keep them too and keep the promises the spec lets them make ([The unsafe boundary](#the-unsafe-boundary)).
+These are what [10](10-errors-and-safety.md#what-unsafe-code-upholds) asks of `unsafe` code, stated for all code. The sections below show that safe code keeps them, given that `unsafe` code and C keep them too and keep the promises the spec lets them make ([The unsafe boundary](#the-unsafe-boundary)).
 
 ## Ownership
 
@@ -115,7 +115,7 @@ Rule 5 checks each body against what its signature tells callers, so a caller's 
 - **A `deinit` may read and write what its value borrows**, so the borrows of a value with one last until its destruction ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). A generic value may have one, so it counts unless constrained `Copyable` or `TrivialFree`.
 - **A destruction can't use a part of the value itself**, since the `deinit` holds all of `self` owned and may change one part before it reads another.
 - **`PlainDeinit` uses only what its elements' destruction uses**, since its `deinit` only destroys what it owns alone and frees its buffers.
-- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so skipping one can only leak, and `unsafe` code allows for that ([10](10-errors-and-safety.md#unsafe-code)).
+- **Nothing relies on a `deinit` running.** A stale value's elements' `deinit`s are skipped ([06](06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs)), so skipping one can only leak, and `unsafe` code allows for that ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)).
 
 ### Precise dependencies
 
@@ -243,11 +243,11 @@ This section keeps **Valid**.
 
 ## The unsafe boundary
 
-The argument above assumes that `unsafe` code and C keep the invariants for their own accesses ([10](10-errors-and-safety.md#unsafe-code), [08](08-c-interop.md#what-c-must-uphold)). It also rests on these promises, each of which some step relies on:
+The argument above assumes that `unsafe` code and C keep the invariants for their own accesses ([10](10-errors-and-safety.md#what-unsafe-code-upholds), [08](08-c-interop.md#what-c-must-uphold)). It also rests on these promises, each of which some step relies on:
 
 | Promise | What relies on it |
 | --- | --- |
-| A view made from a raw pointer reaches live, aligned, valid places, with the dependencies its signature states ([02](02-views-and-dependencies.md#precise-dependencies-opt-in), [10](10-errors-and-safety.md#unsafe-code)) | [Covered](#covered) |
+| A view made from a raw pointer reaches live, aligned, valid places, with the dependencies its signature states ([02](02-views-and-dependencies.md#precise-dependencies-opt-in), [10](10-errors-and-safety.md#values-views-and-threads)) | [Covered](#covered) |
 | A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](02-views-and-dependencies.md#mutable-views)) | [Mutable views](#mutable-views) |
 | A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](02-views-and-dependencies.md#shallow-values)) | [Rules 3 and 4](#rule-3) |
 | A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](02-views-and-dependencies.md#shallow-values)) | The shallow rule ([Rule 3](#rule-3)) |
@@ -260,6 +260,6 @@ The argument above assumes that `unsafe` code and C keep the invariants for thei
 | `@pod` ([04](04-types.md#plain-data-pod-and-bit-casts)) | `Pod` |
 | The library's lending promise ([07](07-concurrency.md#the-librarys-promise)) | Borrows lent for a call ([Threads](#threads)) |
 | `Box.adopt` takes back a leaked `Box<T>` once ([06](06-memory-and-allocators.md#owning-boxes)) | Owned |
-| `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([10](10-errors-and-safety.md#safe-modules)) | Valid, the stack check |
+| `@export`, `extern c func` and the rules of an `import c` config block, each an assertion about C ([10](10-errors-and-safety.md#unverified-promises)) | Valid, the stack check |
 
-**What `unsafe` code allows for** is part of the same boundary ([10](10-errors-and-safety.md#unsafe-code)): memory has no declared type, and a `deinit` may never run. **No `unsafe` call is hidden**, so every promise is made at a visible `unsafe` site, and a `@safe` module, which makes none ([10](10-errors-and-safety.md#safe-modules)), is sound given the modules it calls.
+**What `unsafe` code allows for** is part of the same boundary ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)): memory has no declared type, and a `deinit` may never run. **No `unsafe` call is hidden**, so every promise is made at a visible `unsafe` site, and a `@safe` module, which makes none ([10](10-errors-and-safety.md#safe-modules)), is sound given the modules it calls.

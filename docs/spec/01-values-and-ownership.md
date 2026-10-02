@@ -26,7 +26,7 @@ A **place** is storage that holds a value: a local, a global, a parameter or a t
 | --- | --- | --- | --- |
 | **Static** | Values, moves, borrows (bindings and parameters), scoped values, dependencies, `rebind` | By the compiler, inside one function body | Zero |
 | **Dynamic** | `Handle<T>` into pools; `UniquePointer<T>` + `WeakPointer<T>` for objects; `WeakShared<T>` links to reference-counted values; `Slice<T>` of a buffer; thread-local `var`s; the locks of `Synchronized` types ([07](07-concurrency.md#atomics-and-locks)); an owning value's allocator word ([06](06-memory-and-allocators.md#opening-an-owning-value-checks-it)) | At each use: a stale link reads `nil` or panics instead of dangling, and conflicting uses panic or wait instead of racing | A check per use, visible in the type, or for a thread-local in its `@threadlocal` declaration |
-| **Unsafe** | `*T` raw pointers and raw memory, calls into C, `unchecked`, and the other operations [10](10-errors-and-safety.md#unsafe-code) lists | Not checked | Zero |
+| **Unsafe** | `*T` raw pointers and raw memory, calls into C, `unchecked`, and the other operations that 10 lists ([10](10-errors-and-safety.md#what-needs-unsafe)) | Not checked | Zero |
 
 **Safe code** is the code of the first two tiers: everything outside `unsafe` code, `unchecked` blocks and C. It has no undefined behavior ([11](11-compilation-model.md#what-the-language-leaves-open)).
 
@@ -159,7 +159,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 **So the callee may see a copy of the argument's bits or the caller's place, and the compiler chooses.** The callee can't tell them apart. These borrowed arguments are always the caller's place:
 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address. A `Closure<F>` counts, since its captures may hold one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
-- **The argument of `ptr(to:)`**, whose result is its address ([10](10-errors-and-safety.md#unsafe-code)).
+- **The argument of `ptr(to:)`**, whose result is its address ([10](10-errors-and-safety.md#taking-an-address)).
 - **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](02-views-and-dependencies.md#storage-projections)) or an absorbing argument may view the argument's own storage. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](02-views-and-dependencies.md#rule-4-absorption)).
 
 [Rules 3 and 4](02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](02-views-and-dependencies.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
@@ -167,7 +167,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 **Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention.
 
 - **Adding `keep` to a parameter changes none of this** ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)).
-- **A call through a function value passes its arguments as a direct call would**, since every function-type conversion keeps the conventions, and which arguments are places ([05](05-protocols-generics-and-closures.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](10-errors-and-safety.md#unsafe-code)).
+- **A call through a function value passes its arguments as a direct call would**, since every function-type conversion keeps the conventions, and which arguments are places ([05](05-protocols-generics-and-closures.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](10-errors-and-safety.md#taking-an-address)).
 
 ### Evaluation order, and when a call's borrows begin
 
@@ -310,7 +310,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 - **A `@threadlocal var`**, which its own thread changes under a dynamic mark on each access ([07](07-concurrency.md#global-state)).
 - **An object's value**, which is changeable whatever holds its owner or weak pointer, since each access takes a dynamic mark ([03](03-handles-and-objects.md#dynamic-exclusivity)). So `let r = renderer.weak(); r.value?.submit(mesh)` is fine.
 - **A `Synchronized` value**, whose non-`mutating` methods change it through its own synchronization ([07](07-concurrency.md#the-synchronized-contract)).
-- **`unsafe` code**, which may change a bare global `var` or an imported C variable ([07](07-concurrency.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](10-errors-and-safety.md#unsafe-code)).
+- **`unsafe` code**, which may change a bare global `var` or an imported C variable ([07](07-concurrency.md#global-state)), and the memory a raw pointer points at, whatever holds the pointer ([10](10-errors-and-safety.md#raw-accesses)).
 
 ### Lending a place for change
 

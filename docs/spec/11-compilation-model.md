@@ -62,7 +62,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 **The spec defines the language, the run-time behavior programs can rely on, such as what panics and the order of startup, thread teardown and exit, and the contracts libraries implement. How a toolchain or runtime implements them, and everything built on the language, is outside it.**
 
-- **Contracts** are the protocols the language calls or derives, such as `Sequence`, the literal protocols, `Equatable`, `Awaitable` and `Attribute`; every `unsafe protocol`, such as `Synchronized` and `AllocatorImpl`; and the promise of code that lends a scoped value to another thread ([07](07-concurrency.md#the-librarys-promise), [10](10-errors-and-safety.md#safe-modules)).
+- **Contracts** are the protocols the language calls or derives, such as `Sequence`, the literal protocols, `Equatable`, `Awaitable` and `Attribute`; every `unsafe protocol`, such as `Synchronized` and `AllocatorImpl`; and the promise of code that lends a scoped value to another thread ([07](07-concurrency.md#the-librarys-promise), [10](10-errors-and-safety.md#unverified-promises)).
 - **std types** appear where a rule or an example uses one, such as `List` and `String` for literals and the locks and queues for concurrency, and the spec then states what that type checks ([10](10-errors-and-safety.md#the-checks)). The rest of std's catalog, and runtime policy ([below](#what-the-language-leaves-open)), are left to libraries and implementations.
 
 ## What a target must provide
