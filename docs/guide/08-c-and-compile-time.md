@@ -56,7 +56,7 @@ func now() -> Double { plat.time_seconds() }            // error: a call into C 
 func now() -> Double { unsafe plat.time_seconds() }     // 'unsafe' before one expression covers just it
 ```
 
-**An `unsafe` block, `unsafe { … }`, marks code whose correctness the compiler takes on trust** ([10](../spec/10-errors-and-safety.md#unsafe-code)). As in Rust, it turns no check off: a list index is still checked inside it. It lets you write the operations the compiler can't check, such as a call into C, and in return you promise that each is correct. Among other things, every access through a raw pointer ([10](../spec/10-errors-and-safety.md#what-unsafe-code-upholds)):
+**An `unsafe` block, `unsafe { … }`, marks code whose correctness the compiler takes on trust** ([10](../spec/10-errors-and-safety.md#unsafe-code)). It turns no check off: a list index is still checked inside it. It lets you write the operations the compiler can't check, such as a call into C, and in return you promise that each is correct. Among other things, every access through a raw pointer ([10](../spec/10-errors-and-safety.md#what-unsafe-code-upholds)):
 
 - stays inside the allocation it points into;
 - is aligned for its type;
@@ -180,7 +180,7 @@ func makeSinTable() -> [1024 of Float] {
 }
 ```
 
-A function needs no mark to run at compile time, unlike C++'s `constexpr`. It runs there if what it executes, on the input it gets:
+A function needs no mark to run at compile time. It runs there if what it executes, on the input it gets:
 
 - calls no C function;
 - accesses no global other than a `const`;

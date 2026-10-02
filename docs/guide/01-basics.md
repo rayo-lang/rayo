@@ -1,6 +1,6 @@
 # 1 · Basics
 
-You're writing a small arena game. Enemies spawn, walk toward the player, take damage and die. This chapter writes that code, and on the way covers the parts of Rayo that look like the languages you know: functions, structs, enums, optionals, loops, closures, protocols, strings and errors.
+You're writing a small arena game. Enemies spawn, walk toward the player, take damage and die. This chapter writes that code, and on the way covers the everyday parts of Rayo: functions, structs, enums, optionals, loops, closures, protocols, strings and errors.
 
 ```swift
 import std.math
@@ -20,7 +20,7 @@ func update(_ enemies: mutable List<Enemy>, dt: Float) {
 }
 ```
 
-The syntax is close to Swift's. What isn't close to any language you know is who owns each value and how code borrows it: the `mutable` and the `&` above are part of that. Chapters 2 to 4 cover it. This chapter keeps to code where it doesn't get in the way.
+The `mutable` and the `&` above are about ownership: who owns each value, and how code borrows it. Chapters 2 to 4 cover ownership, and this chapter keeps to code where it doesn't get in the way.
 
 ## Modules and functions
 
@@ -35,7 +35,7 @@ public func lengthSquared(_ v: Vec3) -> Float {          // other modules may ca
 func armor(_ e: Enemy) -> Float { e.hp * 0.5 }          // only this module can
 ```
 
-A function's parameters have labels, as in Swift. `_` means the caller writes none, so the call is `armor(boss)`. A body that is a single expression returns its value. A public function's signature names only public types, so `armor` can't be public while `Enemy` isn't.
+A call writes each parameter's label before its argument, as in `update(&enemies, dt: 0.016)`. `_` means the caller writes none, so the call is `armor(boss)`. A body that is a single expression returns its value. A public function's signature names only public types, so `armor` can't be public while `Enemy` isn't.
 
 ## Numbers
 
@@ -169,7 +169,7 @@ spawnAll([a, b])                    // error: a List parameter would allocate wi
 
 ## Closures
 
-**A closure is a function written inline, as in Swift** ([05](../spec/05-protocols-generics-and-closures.md#functions-and-closures)). `{ e in … }` names its parameters, and `$0` is the first one when it names none. A closure passed last may follow the call's parentheses:
+**A closure is a function written inline** ([05](../spec/05-protocols-generics-and-closures.md#functions-and-closures)). `{ e in … }` names its parameters, and `$0` is the first one when it names none. A closure passed last may follow the call's parentheses:
 
 ```swift
 func each(_ xs: Span<Enemy>, _ body: (Enemy) -> Void) { for x in xs { body(x) } }
@@ -194,7 +194,7 @@ The compiler works out a closure's kind from its body. Chapter 7 shows why the k
 
 ## Protocols and generics
 
-**A protocol names what a type must have, as a Swift protocol or a Rust trait does** ([05](../spec/05-protocols-generics-and-closures.md#protocols-and-generics)). Each thing it names is a **requirement**. A type **conforms** by declaring it, in its header or in an `extension`, which adds members and conformances to a type declared elsewhere, as in Swift. The type's own members meet the requirements ([05](../spec/05-protocols-generics-and-closures.md#conformances)):
+**A protocol names what a type must have** ([05](../spec/05-protocols-generics-and-closures.md#protocols-and-generics)). Each thing it names is a **requirement**. A type **conforms** by declaring it, in its header or in an `extension`, which adds members and conformances to a type declared elsewhere. The type's own members meet the requirements ([05](../spec/05-protocols-generics-and-closures.md#conformances)):
 
 ```swift
 protocol Damageable {
@@ -215,7 +215,7 @@ func applyAoE<T: Damageable>(_ targets: mutable List<T>, amount: Float) {
 applyAoE(&enemies, amount: 25)
 ```
 
-A generic function is type-checked once, at its definition, against its constraints, as in Rust. A body that uses something `Damageable` doesn't require is an error there, not at a call. Code that runs in the compiler is the main exception ([C and compile time](08-c-and-compile-time.md)). The compiler then builds a copy for each type it is used with, as for a C++ template, so a call through `T` costs what a direct call does.
+A generic function is type-checked once, at its definition, against its constraints. A body that uses something `Damageable` doesn't require is an error there, not at a call. Code that runs in the compiler is the main exception ([C and compile time](08-c-and-compile-time.md)). The compiler then builds a copy for each type it is used with, so a call through `T` costs what a direct call does.
 
 ## Strings
 

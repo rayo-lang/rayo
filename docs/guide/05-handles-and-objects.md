@@ -7,7 +7,7 @@ struct Enemy  { Vec3 pos; Player* target; };       // dangles once the player is
 struct Widget { Widget* parent; std::vector<std::unique_ptr<Widget>> children; };
 ```
 
-Each struct keeps a link past the end of the function that made it. A view can't be that link, since a view stays inside the scope that lent it ([Views](04-views.md)). In C++, the stored pointer dangles once its target is gone. In Rust, you'd store an index, which may come to name another player, or an `Rc<RefCell<Player>>`, which keeps a player alive after it leaves.
+Each struct keeps a link past the end of the function that made it. A view can't be that link, since a view stays inside the scope that lent it ([Views](04-views.md)). A raw pointer dangles once its target is gone, as above. An index into a list may come to name another player, and a reference-counted pointer keeps a player alive after the player leaves.
 
 Rayo gives you two links that are checked each time they are used, and this chapter teaches both:
 
@@ -35,7 +35,7 @@ struct Widget(
 - **Dynamic.** Handles, objects and the other links that a value may store, and a few kinds of state, such as thread-locals and locks. Each use is checked when it runs: a stale link reads `nil` or panics instead of dangling, and conflicting uses panic or wait instead of racing.
 - **Unsafe.** Raw pointers and calls into C, which nothing checks ([C and compile time](08-c-and-compile-time.md)).
 
-**A pattern the compiler can't prove moves to the dynamic tier, never into `unsafe`.** A link that a struct keeps can outlive the function that stored it, so no one function body can check it. Rayo doesn't forbid such a link: it checks the link at each use. The check shows in the type, as a `Handle<Player>` where C++ would have a `Player*`.
+**A pattern the compiler can't prove moves to the dynamic tier, never into `unsafe`.** A link that a struct keeps can outlive the function that stored it, so no one function body can check it. Rayo doesn't forbid such a link: it checks the link at each use. The check shows in the type: a checked link to a player is a `Handle<Player>`.
 
 Code in the first two tiers is **safe code**, and it has no undefined behavior.
 
@@ -114,7 +114,7 @@ for h in dead { enemies.remove(h) }
 
 ## Objects and weak pointers
 
-**A `UniquePointer<T>` owns one value, its object, and any number of `WeakPointer<T>`s link to it** ([03](../spec/03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)). The owner is move-only, like a C++ `unique_ptr`. A **weak pointer** is 8 bytes and copyable, so you can store as many as you like:
+**A `UniquePointer<T>` owns one value, its object, and any number of `WeakPointer<T>`s link to it** ([03](../spec/03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)). The owner is move-only. A **weak pointer** is 8 bytes and copyable, so you can store as many as you like:
 
 ```swift
 var menu = UniquePointer(Widget())                     // the one owner of a new widget
@@ -134,7 +134,7 @@ m.value!.visible = false                       // panics if the menu is gone
 if m.value == nil { log("menu closed") }       // checks only that the menu lives
 ```
 
-**An object's value may change through any of its links**, even a `let` one, since each access is checked when it runs ([below](#dynamic-exclusivity)). Unlike a C++ `weak_ptr`, using a weak pointer never makes a second owner: the object still has exactly one.
+**An object's value may change through any of its links**, even a `let` one, since each access is checked when it runs ([below](#dynamic-exclusivity)). Using a weak pointer never makes a second owner: the object still has exactly one.
 
 ### Moving an owner
 
@@ -155,7 +155,7 @@ save.value?.visible = true                             // still the same widget
 
 ## Dynamic exclusivity
 
-**Each access to an object takes a mark, and an access that conflicts with a live one panics** ([03](../spec/03-handles-and-objects.md#dynamic-exclusivity)). It is the law of exclusivity from chapter 3, checked at run time, much as a Rust `RefCell` checks `borrow_mut()`:
+**Each access to an object takes a mark, and an access that conflicts with a live one panics** ([03](../spec/03-handles-and-objects.md#dynamic-exclusivity)). It is the law of exclusivity from chapter 3, checked at run time:
 
 - **A read access**, such as a `let` binding or a call to a plain method, holds a shared mark. Any number may be live at once.
 - **A modify access**, such as an assignment, a `var` binding of `&` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
@@ -206,7 +206,7 @@ toolbar.value.children.removeAll()       // instead: no child is in use, so each
 
 A widget that wants to close records that, and the code that holds its owner removes it once the access has ended.
 
-**A weak pointer owns nothing, so a cycle that runs through one keeps nothing alive.** Each widget links to its parent, and its parent owns it, yet dropping `menu` destroys the whole tree. A cycle of Rust `Rc`s or C++ `shared_ptr`s would leak instead.
+**A weak pointer owns nothing, so a cycle that runs through one keeps nothing alive.** Each widget links to its parent, and its parent owns it, yet dropping `menu` destroys the whole tree.
 
 Owners can still form a cycle: a widget moved under one of its own children would end up owning itself, and would live until its thread ends. Code that reparents checks for that first.
 

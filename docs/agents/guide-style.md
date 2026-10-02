@@ -17,7 +17,12 @@ The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, R
 - **Use the spec's terms.** Call things what `GLOSSARY.md` calls them. Bold a term where the guide first explains it, and link the spec section that defines it.
 - **Write code the spec accepts.** Every example follows the spec's rules and the grammar in 12, unless its comment says it is an error. Two shortcuts are allowed, as the guide's README says: statements beside declarations, and a body left out as `{ ... }`. Examples use the spec's running game code: `Enemy`, `world`, `Mesh`, `Pool`, `Handle`.
 - **Keep one `Enemy`.** Chapter 1 declares `Enemy(pos, vel, hp)`. A chapter that needs another field adds it to those three.
-- **Compare where it helps.** A short comparison with C++, Rust, Swift or C# helps a reader map an idea, as in "like a Rust slice, but checked at run time". The case for the design belongs in `why-rayo.md`.
+- **Rayo stands on its own.** Teach each idea in Rayo's terms, and let its merits be its own. Name another language only where the comparison makes a point the reader needs:
+    - a difference that would mislead a reader who expects that language's behavior, as a `Vec3` that moves where C++ and Swift would copy it;
+    - a definition Rayo takes from it, as the C++20 memory orderings;
+    - a bug the chapter's problem shows, as a C++ reference that dangles.
+
+  A likeness for its own sake, such as "as in Swift" or "like Rust's `Arc`", is commentary, and so is a merit argued against another language. The case for the design against other languages belongs in `why-rayo.md`.
 - **"You" is fine.** The guide talks to the reader, in the present tense.
 
 ## Links
