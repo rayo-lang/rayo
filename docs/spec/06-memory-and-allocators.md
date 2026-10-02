@@ -383,7 +383,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 }
 ```
 
-**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](11-compilation-model.md#modules-and-names)). Those operations that build or grow a value at run time also have a fallible form, which returns `nil` or throws `AllocError`, the prelude's error for an allocation its allocator couldn't make:
+**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](11-compilation-model.md#the-prelude)). Those operations that build or grow a value at run time also have a fallible form, which returns `nil` or throws `AllocError`, the prelude's error for an allocation its allocator couldn't make:
 
 - `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));

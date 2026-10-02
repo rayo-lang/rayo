@@ -384,4 +384,4 @@ A declaration the compiler takes on trust, such as an `unsafe` conformance, an `
 ### Compilation
 
 **Prelude**:
-The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#modules-and-names)).
+The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude)).

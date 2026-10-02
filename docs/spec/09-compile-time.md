@@ -160,13 +160,13 @@ func store<T>(_ value: T, into w: mutable Writer) {
 - **At the top level**, `static if` can include or exclude declarations and whole `import` and `import c` statements. A condition that guards an import reads only these:
     - literals;
     - `const`s of modules imported outside any `static if`;
-    - the prelude's `target`, never a declaration of the module's own that shadows it ([11](11-compilation-model.md#modules-and-names)).
+    - the prelude's `target`, never a declaration of the module's own that shadows it ([11](11-compilation-model.md#the-prelude)).
 
   So which modules a file imports never depends on what an import provides or on the module's own declarations. No `import` goes inside a `static for`, at any depth.
 - **Per instantiation.** In generic code, a branch is checked only for the instantiations whose condition holds ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). That lets `store` call `w.bytes(of:)`, which accepts only a padding-free `Pod` type ([04](04-types.md#plain-data-pod-and-bit-casts)). `T.isPaddingFree` is a reflection query ([below](#what-reflection-can-read)).
 - **Refusing an instantiation or a build.** `static error("…")` turns a branch that must not be instantiated or built into a compile error with that message, as the complete serializer does ([below](#static-reflection)). It stands where a statement, a member, a field or a top-level declaration can, as in `static if !target.flag("sse4") { static error("needs SSE4") }`.
 
-**`target`** is a `const` the prelude declares ([11](11-compilation-model.md#modules-and-names)). It exposes:
+**`target`** is a `const` the prelude declares ([11](11-compilation-model.md#the-prelude)). It exposes:
 
 - `platform`, `arch` and `endian`;
 - `profile`: `.dev`, `.profile` or `.ship`;
@@ -625,7 +625,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 **A build declares the settings that change what code means:**
 
 - the modules, in a list whose order startup follows where imports leave it open, each with its name, unique in the build, and its source files, in an order that sets the source order of its declarations ([07](07-concurrency.md#initialization-at-startup)). A generated declaration stands, in that order, where the `static if` or `static for` that generates it does, a `static for`'s in element order;
-- which of the modules form the prelude ([11](11-compilation-model.md#modules-and-names));
+- which of the modules form the prelude ([11](11-compilation-model.md#the-prelude));
 - whether the build is a program, with the module whose `main` it runs ([07](07-concurrency.md#shutdown)), or a library that a C program embeds ([08](08-c-interop.md#embedding-rayo-in-a-c-program));
 - for each module, whether it is `@safe` ([10](10-errors-and-safety.md#safe-modules)), and its diagnostic check settings ([10](10-errors-and-safety.md#choosing-checks-for-a-module-or-a-scope));
 - the build profile and the target, which `target` exposes ([above](#static-if-and-conditional-compilation));

@@ -373,7 +373,7 @@ let hp = enemies[h]?.hp ?? 0         // looks at the element's hp in place, or a
 **An optional stores `nil` in a niche, a bit pattern `T` never uses, when `T` has one, and then costs no extra bytes.** These types have one:
 
 - raw pointers, `@c` function pointers, `Box`es, object owners and reference-counted pointers, whose `nil` is null;
-- weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([11](11-compilation-model.md#modules-and-names)), and its generation is never 0 ([03](03-handles-and-objects.md#pools-and-handles));
+- weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([11](11-compilation-model.md#the-prelude)), and its generation is never 0 ([03](03-handles-and-objects.md#pools-and-handles));
 - an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([08](08-c-interop.md#structs-unions-and-enums));
 - a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([08](08-c-interop.md#structs-unions-and-enums)).
 
