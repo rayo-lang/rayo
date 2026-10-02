@@ -44,7 +44,7 @@ Six principles decide Rayo's trade-offs.
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
 | Porting the compiler and runtime to each closed platform under NDA | Same answer as for Rust's closed-platform targets | [12](12-compilation-model.md#what-a-target-must-provide) |
-| ARC retain/release traffic; the optimizer moves refcounts between builds | No implicit reference counting: only counted owners such as `Shared<T>` count, where the code makes an owner. Handing a value over moves it, and every copy is written out. | [01](01-values-and-ownership.md) |
+| ARC retain/release traffic; the optimizer moves refcounts between builds | No implicit reference counting: only reference-counted pointers such as `Shared<T>` count, where the code makes an owner. Handing a value over moves it, and every copy is written out. | [01](01-values-and-ownership.md) |
 | ARC cycles leak unless code marks each back-reference `weak` or `unowned` | Stored references (weak pointers, handles) own nothing, so a back-reference never keeps its target alive, and a dead target reads `nil`. | [03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert) |
 | Release cascades free big graphs synchronously | Arenas reset in O(1), and a `TrivialFree` value is released into its arena without walking it. Ownership moves, so a library can also destroy a value later or a piece at a time. | [06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree) |
 | Unspecialized generics, existentials, exclusivity and COW checks appear after harmless changes | Generics are always monomorphized, `any P` is written out and never boxes implicitly, dynamic exclusivity checks run only where a type or declaration announces them, and there is no copy-on-write, only a literal `String`'s one copy of its literal's bytes, with no count to check ([04](04-types.md#literals)). | [03](03-handles-and-objects.md#dynamic-exclusivity), [05](05-protocols-generics-and-closures.md) |
@@ -57,7 +57,7 @@ Six principles decide Rayo's trade-offs.
 
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
-| GC pauses at times you don't choose | No GC. Memory is released at points visible in source: a scope end, an overwrite, a `consume`, a removal from a container, the drop of a counted value's last owner, a thread's end, an arena reset or an unregistration. A reset or an unregistration never frees memory a view, on any thread, may still read: it panics instead. | [03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#arena-safety-checked-values-and-checked-resets) |
+| GC pauses at times you don't choose | No GC. Memory is released at points visible in source: a scope end, an overwrite, a `consume`, a removal from a container, the drop of a reference-counted value's last owner, a thread's end, an arena reset or an unregistration. A reset or an unregistration never frees memory a view, on any thread, may still read: it panics instead. | [03](03-handles-and-objects.md#destroying-an-object), [06](06-memory-and-allocators.md#arena-safety-checked-values-and-checked-resets) |
 | Closed platforms such as consoles and iOS forbid JIT, so C# reaches them only through a separate ahead-of-time toolchain, such as IL2CPP, with its own runtime | Same answer as for Rust's closed-platform targets | [12](12-compilation-model.md#what-a-target-must-provide) |
 
 ## A taste

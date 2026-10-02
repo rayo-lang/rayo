@@ -13,7 +13,7 @@ Terms the cases and criteria use:
 - A **view** is a value that borrows memory something else owns, such as a `Span<T>` of a list's elements or a `StringView` of a string's text.
 - A **scoped** value, one whose type conforms to `Scoped`, must stay within the scope that lent it, as every view that borrows memory that can be freed must ([02](02-views-and-dependencies.md#scoped-values)).
 - A `Handle<T>` is a small checked index into a pool of `T`s.
-- A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked stored reference to it. Both stay on the thread that made the object. A `Shared<T>` is a counted owner of a value that several threads share, which never changes or synchronizes itself, as a `Mutex` does, and a `WeakShared<T>` is a checked link to one that doesn't keep it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)).
+- A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked stored reference to it. Both stay on the thread that made the object. A `Shared<T>` is a reference-counted pointer to a value that several threads share, which never changes or synchronizes itself, as a `Mutex` does, and a `WeakShared<T>` is a checked link to one that doesn't keep it alive ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)).
 - A **`Sendable`** type is one whose values may reach another thread. The compiler derives it from what the type holds, every `Synchronized` type is one, and a type can opt out with `~Sendable` or promise it with `unsafe Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
 - A **parked** thread is blocked in a wait, such as on a queue or a condition variable.
 
@@ -179,7 +179,7 @@ Separately, `mutex.lock { data in … }` returns a value computed from the prote
 - **Must accept** the closure form returning an owned result, generically.
 - **Must accept** a guard moved into a closure, as in `let h = Handler(onClick: { [move g] in print(g.value.count) })`, and `let n = total({ [move g] in g.value.count })` followed by taking the same lock again.
 - **Must accept** two `Slice`s of one locked blob read at once on one thread, and a shared lock's `read` nested in its own `read`, even while a writer waits.
-- **Must accept** a struct of `Synchronized` fields and counted owners of other `Synchronized` values, such as a log `Mutex` and an audio mixer, shared by every thread with no lock of its own and used from any thread.
+- **Must accept** a struct of `Synchronized` fields and reference-counted pointers to other `Synchronized` values, such as a log `Mutex` and an audio mixer, shared by every thread with no lock of its own and used from any thread.
 
 ### A12 · Sorting with a comparator that borrows
 
