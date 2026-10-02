@@ -24,33 +24,42 @@ scratch.reset()                                   // everything the arena handed
 - a thread's end ([07](07-concurrency.md#global-state));
 - an arena reset or an unregistration.
 
-**No release frees memory that a view, on any thread, may still read**: a reset or an unregistration checks first, and panics instead ([below](#arena-safety-checked-values-and-checked-resets)).
+**No release frees memory that a view, on any thread, may still read.** The compiler checks an owner's release, since destroying a value is a mutable access to its place, which no live borrow of the place allows ([01](01-values-and-ownership.md#the-law-of-exclusivity)). A reset or an unregistration frees memory that values anywhere may own, so it checks at run time first, and panics instead ([below](#arena-safety-checked-values-and-checked-resets)).
 
 ## Allocator values
 
-**An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it, so the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.system` are the same type.
+**An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.system` are the same type.
 
-- **`.system`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `Allocator.unregister(.system)` panics. `Allocator.system` is a `static const`, so code takes it with no `copy` ([01](01-values-and-ownership.md#constants)): `Budgeted(inner: .system, …)`.
+**Every registered allocator is either `.system` or library code:**
+
+- **`.system`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `Allocator.unregister(.system)` panics. `Allocator.system` is a `static const`, so code takes it with no `copy` ([01](01-values-and-ownership.md#constants)).
 - **Every other registered allocator is library code implementing `AllocatorImpl`** ([below](#writing-an-allocator-allocatorimpl)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`.
 
-**Every registered allocator is of one of three kinds:**
+**Every registered allocator is of one of three kinds, which say how the memory it hands out goes back:**
 
 - A **heap**, such as `.system` or a TLSF heap, frees each allocation individually.
 - An **arena** hands out memory from blocks and frees nothing individually. Freeing into it is a no-op, and a **reset** frees everything it handed out at once ([below](#what-a-reset-does)).
-- A **wrapper**, such as a budget or a tracking allocator, passes another allocator's allocations through and keeps accounts of them.
+- A **wrapper**, such as a budget or a tracking allocator, passes another allocator's allocations through, so they go back as that allocator's do, and keeps accounts of them.
 
 An allocator may draw its memory from one other allocator, its **backing**, such as the allocator a wrapper wraps ([below](#allocators-over-other-allocators)).
 
 ## The current allocator
 
-**Every thread has a current allocator**, a thread-local that starts as `.system`. It is consulted only in two cases:
+**Every thread has a current allocator**, a thread-local that starts as `.system`. It lets code build values without passing an allocator to each call: a block names one, and what is built inside uses it, as at the top of this chapter. It is consulted only in two cases, both where a value is made without an allocator named:
 
 - a constructor of an allocating type records it when it isn't given an allocator, and so does `clone()`;
-- a closure's conversion into a `Closure` uses it ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
+- a closure's conversion into a `Closure` uses it for an out-of-line context ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 
-A collection grows and frees through the allocator it was built with for its whole life. A clone takes the current allocator, so `using allocator = .system { kept = scratch.clone() }` copies a value out of an arena.
+**A collection grows and frees through the allocator it was built with, for its whole life.** A clone takes the current allocator, so cloning under another one copies a value out of an arena:
 
-- **`using allocator = a { … }` makes `a` the current allocator for the block**, and restores the previous one on exit, including early return. It reads the id in `a` once, on entry, so reassigning `a` inside the block doesn't change the block's allocator. The read needs no `copy` written, as a `static const` is taken ([01](01-values-and-ownership.md#constants)). It holds no borrow of `a`, so the block may contain an `await`.
+```swift
+using allocator = .system { kept = spawns.clone() }   // 'spawns' is in an arena; the clone's buffer comes from .system
+```
+
+**`using allocator = a` makes `a` the current allocator for its block**, and restores the previous one on exit, including early return.
+
+- **It reads the id in `a` once, on entry.** So reassigning `a` inside the block doesn't change the block's allocator. The read needs no `copy` written, as a `static const` is taken ([01](01-values-and-ownership.md#constants)).
+- **It holds no borrow of `a`.** So the block may contain an `await`, across which no borrow may be live ([07](07-concurrency.md#semantics)).
 - **A task suspended inside the block restores its owner's current allocator at the `await`, and makes `a` current again when it resumes** ([07](07-concurrency.md#task-functions-explicitly-stepped-coroutines)). Destroying it while it is suspended there changes no thread's current allocator.
 
 ### The static allocator
@@ -61,11 +70,13 @@ var more = primes.clone()                            // the clone's buffer comes
 more.append(1009)                                    // and grows there, as any list's does
 ```
 
-**Values in read-only data carry the static allocator, which never allocates or frees at run time.** **Read-only data** holds the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [09](09-compile-time.md#consts-that-reach-run-time)). Nothing consumes or mutates a value in read-only data, so it is never grown, and it is never destroyed ([09](09-compile-time.md#consts-that-reach-run-time)).
+**Values in read-only data carry the static allocator, which never allocates or frees at run time.** They need an allocator, since every owning value records the one its storage came from ([below](#how-values-record-their-allocator)). **Read-only data** holds the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [09](09-compile-time.md#consts-that-reach-run-time)).
+
+**Nothing consumes or mutates a value in read-only data, so it is never grown, and it is never destroyed** ([09](09-compile-time.md#consts-that-reach-run-time)). So nothing asks the static allocator to allocate or free at run time.
 
 ## Allocators and threads
 
-**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `Allocator` id, including lent work ([07](07-concurrency.md#lending-work-to-other-threads)). `AllocatorImpl` refines `Synchronized` ([07](07-concurrency.md#the-synchronized-contract)): its methods are non-`mutating`. They change what they change through their own synchronization: atomics, a lock, or state kept per thread inside the implementation.
+**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `Allocator` id, including lent work ([07](07-concurrency.md#lending-work-to-other-threads)). So `AllocatorImpl` refines `Synchronized`, the contract under which threads share a value through shared borrows ([07](07-concurrency.md#the-synchronized-contract)). Its methods are non-`mutating`, and change its state only through its own synchronization: atomics, a lock, or state kept per thread inside the implementation.
 
 ## Arena safety: checked values and checked resets
 
@@ -85,26 +96,30 @@ levelArena.reset()            // fine: nothing uses the arena, whose memory is f
 spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' before its reset
 ```
 
+**A reset frees memory that values anywhere may still own, and it can't find those values or their views.** So two run-time checks keep it safe. The reset checks that nothing still uses the arena, which fails in the first example ([below](#what-a-reset-does)). Opening an owning value checks that no reset has invalidated its storage since it was allocated, which fails in the second ([below](#opening-an-owning-value-checks-it)).
+
 ### What a reset does
 
-**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it. It never waits.** It panics instead, in every build, in these cases:
+**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it.** It never waits: it panics instead, in every build, in these cases:
 
-- **Any thread still uses the arena's memory**, through:
+- **Any thread still uses the arena's memory.** Freeing the memory would leave that use reaching freed memory. The uses are:
   - an open of a value in it whose borrow is live ([below](#opening-an-owning-value-checks-it));
-  - a pin into it ([03](03-handles-and-objects.md#pinning-for-c));
-  - an object in it that an access holds, or whose home thread is another thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
+  - a pin into it, which holds the memory for C ([03](03-handles-and-objects.md#pinning-for-c));
+  - an object in it that an access holds, or whose home thread is another thread. Its `deinit` would run under that access, or off the one thread it may run on ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Another reset or unregistration that reaches the same memory is still running**, on any thread ([below](#allocators-over-other-allocators)). So a reset that a `deinit` calls panics when the reset or unregistration running that `deinit` reaches the same memory.
 - **The id is unregistered** ([below](#unregistering-an-allocator)).
-- **The reset would exceed the arena's reset limit** ([below](#how-values-record-their-allocator)).
+- **The reset would exceed the arena's reset limit**, which keeps a word from being issued twice ([below](#how-values-record-their-allocator)).
 - **The allocator's kind isn't `.arena`**, `.system` included, since `reset()` and `release` ([below](#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
 
-What a reset changes, and what it costs:
+**What a reset changes, and what it costs:**
 
 - **Values.** Every value allocated from the arena before the reset is **stale** from then on, including through a wrapper over it ([below](#allocators-over-other-allocators)), and every value allocated after it is valid. An allocation racing the reset is ordered before it or after it.
 - **Objects.** It destroys every object whose value lies in the arena, running their `deinit`s on the resetting thread before it frees their memory ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Cost.** A reset is O(1) in the number of values in the arena, and runs one `deinit` for each object in it that has one.
 
-**The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a stamp. A **stamp** is an ordered token that the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. Registering an arena calls `attachFresh(stamp:)` with its first stamp. A reset takes a new stamp `s`, later than every earlier one, and calls the `AllocatorImpl` hooks ([below](#writing-an-allocator-allocatorimpl)) in this order:
+**The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a stamp. A **stamp** is an ordered token that the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. The runtime decides which values are stale by the stamps of the blocks their storage lies in. Registering an arena calls `attachFresh(stamp:)` with its first stamp.
+
+**A reset takes a new stamp `s`, later than every earlier one, and calls the `AllocatorImpl` hooks ([below](#writing-an-allocator-allocatorimpl)) in this order:**
 
 1. `attachFresh(stamp: s)`: the arena serves new allocations from spare blocks, which it stamps `s`, or, with none, from new ones from its backing memory.
 2. `backingDidSwitch(stamp: s)` on every wrapper over the arena.
@@ -112,27 +127,34 @@ What a reset changes, and what it costs:
 4. It checks that nothing uses the old blocks, as above, and runs the `deinit`s of the objects in them ([below](#stale-values-and-the-deinits-a-reset-runs)).
 5. `backingDidFree(stampedBefore: s)` on every wrapper over the arena, then `freeBlocks(stampedBefore: s)` on the arena, which keeps those blocks as spares or returns them to its backing memory.
 
+**The order keeps a reset safe against a racing open and against the `deinit`s it runs.** The old values go stale (step 3) before the reset checks for uses (step 4), so an open racing the reset either fails or is counted ([below](#opening-an-owning-value-checks-it)). The old blocks are freed (step 5) only after the `deinit`s that may still read them have returned ([below](#stale-values-and-the-deinits-a-reset-runs)).
+
 ### Opening an owning value checks it
 
-**Opening an owning value checks that no reset or unregistration has invalidated its storage since it was allocated.** The check is made when the value is opened, since a reset can't find the values allocated in the arena, which may be anywhere. **For as long as what it lends is live, the open also counts as a use of the allocator**, which a reset or an unregistration checks for.
+**Opening an owning value checks that no reset or unregistration has invalidated its storage since it was allocated.** A reset can't find the values allocated in the arena, which may be anywhere, so the check is made when each value is opened instead. A failure panics.
 
-- **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense: its object is checked at each use, and destroyed by a reset, as [03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators) says.
+**The check covers every owning value, at every open:**
+
+- **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense. Its object is checked at each use instead, and destroyed by a reset ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Opening.** An open is any access that reaches storage the value owns:
   - reading or projecting what it holds, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header;
   - taking a span of it;
   - iterating it;
   - growing it;
   - calling a `Closure` whose context is out of line.
-- **A failure panics.**
-- **Counting uses.** An open of storage from any allocator but `.system`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends: the last use of everything that depends on what it lends ([02](02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
-- **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). An open and a reset or unregistration on two threads are ordered one way or the other:
+
+**For as long as what it lends is live, an open also counts as a use of the allocator**, which a reset or an unregistration checks for. A reset can't find the views of its values either, so each open counts itself until the last use of what depends on it, as a dynamic access is held ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)). The counting follows two rules:
+
+- **Counting uses.** An open of storage from any allocator but `.system`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends. That is the last use of everything that depends on what it lends ([02](02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
+- **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](07-concurrency.md#atomics-and-locks)). A reset or an unregistration makes the storage stale before it reads the counts ([above](#what-a-reset-does), [below](#unregistering-an-allocator)). So an open and a reset or unregistration on two threads are ordered one way or the other:
   - the open comes first, and the reset or unregistration panics while what the open lends is live;
   - or the reset or unregistration comes first, and the open fails.
-- **It is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#unchecked-blocks)).
+
+**The check is a memory-safety check, on in every build.** Only `unchecked` code strips it ([10](10-errors-and-safety.md#unchecked-blocks)).
 
 ### Stale values, and the `deinit`s a reset runs
 
-**Destroying a stale value never touches its memory**, except in the `deinit` of an object that a reset or an unregistration destroys (below). It skips both the free and its elements' `deinit`s, so a `deinit` may never run ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)), and anything those elements owned outside the invalidated allocator leaks.
+**Destroying a stale value never touches its memory, which may already be reused.** The exception is inside the `deinit` of an object that a reset or an unregistration destroys (below). Destroying a stale value skips both the free and its elements' `deinit`s. So a `deinit` may never run ([10](10-errors-and-safety.md#aliasing-and-skipped-deinits)), and anything those elements owned outside the invalidated allocator leaks.
 
 **An object's `deinit` that a reset or an unregistration runs can still read what it owns from that allocator:**
 
@@ -151,7 +173,7 @@ levelArena.reset()                            // destroys the doors; each deinit
 ```
 
 - **What it owns stays usable to it.** While such a `deinit` runs, the thread running it can open a value that this reset or unregistration made stale. That holds for a reset or unregistration of the object's allocator, or of one it is built over ([below](#allocators-over-other-allocators)). Freeing such a value from that `deinit` releases it into the allocator it came from. A value an earlier reset made stale still fails, since its memory may already be reused.
-- **The memory is still there.** A reset frees its old blocks only after every such `deinit` has returned ([step 5](#what-a-reset-does)), and an unregistration destroys the implementation only then ([below](#unregistering-an-allocator)), so what an open lent inside one has ended first.
+- **The memory is still there.** A reset frees its old blocks only after every such `deinit` has returned ([step 5](#what-a-reset-does)), and an unregistration destroys the implementation only then ([below](#unregistering-an-allocator)). So what an open lent inside one has ended first.
 
 ## Unregistering an allocator
 
@@ -163,33 +185,37 @@ Allocator.unregister(levelHeap)     // every value still allocated from the heap
 props.append(p)                     // panics: 'props' came from an unregistered allocator
 ```
 
-**`Allocator.unregister(a)` ends an allocator.**
+**`Allocator.unregister(a)` ends an allocator**, of any kind. A heap can't be reset, so unregistering it is how every value it handed out goes stale at once, as `props` does above.
 
-- **It checks first, as a reset does** ([above](#what-a-reset-does)). It panics while any thread still uses its memory, or the memory of an allocator unregistered with it, through:
+- **It checks first, as a reset does** ([above](#what-a-reset-does)). Like a reset, it makes its values stale before it reads the counts of uses, so an open racing it either fails or is counted. It panics while any thread still uses its memory, or the memory of an allocator unregistered with it, through:
   - an open whose borrow is live;
   - a pin;
   - an object that an access holds, or whose home thread is another thread.
 
   It also panics while another reset or unregistration that reaches that memory is still running.
-- **Its values go stale.** Heap or arena alike, its values go stale and its objects are destroyed, their `deinit`s running on the unregistering thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Every allocator whose backing chain includes it is unregistered with it.
+- **Its values go stale.** Heap or arena alike, its values go stale and its objects are destroyed, their `deinit`s running on the unregistering thread ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Every allocator whose backing chain includes it is unregistered with it, since each draws its memory from it, directly or through others ([below](#allocators-over-other-allocators)).
 - **An unregistered id stays invalid.** Every allocator operation through it panics, in every build, however many allocators are registered later: allocating through it, resetting it and unregistering it again. The exceptions are:
   - freeing or growing a value that the unregistration made stale, from the `deinit` of an object the unregistration destroys ([above](#stale-values-and-the-deinits-a-reset-runs));
   - a forwarding `free` from the `deinit` of a wrapper unregistered with it, which does nothing (below).
-- **Then the implementation is destroyed.** Once those `deinit`s have returned, it and every allocator unregistered with it are destroyed, those built on it first, releasing their memory.
+- **Then the implementation is destroyed.** Once those `deinit`s have returned, it and every allocator unregistered with it are destroyed, those built on it first, releasing their memory. This comes last, since those `deinit`s may still read what they own from it ([above](#stale-values-and-the-deinits-a-reset-runs)).
 
   **Destroying a wrapper frees nothing in its backing on its own.** What it passed through stays allocated there unless its `deinit` frees it through the forwarding `free` ([below](#allocators-over-other-allocators)). That `free` does nothing when the backing was unregistered with the wrapper, since the backing's own destruction then releases that memory.
 
 ## How values record their allocator
 
-**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets. A container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
+**Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets. The word is how the value grows and frees through its own allocator, and what an open checks ([above](#opening-an-owning-value-checks-it)). A container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](08-c-interop.md)).
 
 - **Raw allocations.** They carry their word too, which an `unsafe` core stores next to its pointer ([10](10-errors-and-safety.md#raw-allocations)).
 - **A stale word never passes.** Storage that a reset or an unregistration invalidated fails its check for good, however many allocators are registered, reset and unregistered later, outside the `deinit`s that a reset or an unregistration runs ([above](#stale-values-and-the-deinits-a-reset-runs)).
-- **Limits.** How many allocators may be registered at once and over the program's run, and how many times one may be reset, are implementation-defined. Registering or resetting past a limit panics, in every build, so a word is never issued twice.
+- **Limits.** How many allocators may be registered at once and over the program's run, and how many times one may be reset, are implementation-defined. Registering or resetting past a limit panics, in every build, so a word is never issued twice, and a stale one never passes again.
 
 ### A container's words must cover all of its storage
 
-**An open of a container must fail whenever an open of the storage it reaches would fail, or of storage it needs to reach that** ([above](#opening-an-owning-value-checks-it)). So every owning container keeps words that cover all of its storage, whether it is std's, the builtin `SoA` or a user `unsafe` core. A container of several allocations, such as a `Map`'s index and entries, may take them all from one allocator and record the word of the oldest, or keep one word per allocation. A `StablePool`, which can't move its elements, keeps a word per page ([03](03-handles-and-objects.md#pools-and-handles)).
+**An open of a container must fail whenever an open of the storage it reaches would fail, or of the storage it needs in order to reach that storage** ([above](#opening-an-owning-value-checks-it)). Otherwise the open could pass and then read a stale buffer, whose memory may already be reused. So every owning container keeps words that cover all of its storage, whether it is std's, the builtin `SoA` or a user `unsafe` core:
+
+- **One word for several allocations.** A container of several allocations, such as a `Map`'s index and entries, may take them all from one allocator and record the word of the oldest. A reset or an unregistration that makes any of them stale makes the oldest stale too.
+- **A word per allocation.** It may instead keep one word per allocation.
+- **A word per page.** A `StablePool`, which can't move its elements, keeps a word per page ([03](03-handles-and-objects.md#pools-and-handles)).
 
 ## Allocators over other allocators
 
@@ -211,22 +237,19 @@ levelArena.reset()                               // 'props' goes stale with the 
 - An **arena or heap with a backing** draws from its backing and hands out memory of its own, as an arena over device memory or a TLSF heap carved out of a larger one does. Such an arena hands it out in its own blocks, which its own resets free. Such a heap's values go stale when it is unregistered. Either keeps what it drew as long as it likes, so its backing chain must not include an arena, whose reset would reuse that memory under it.
 - An allocator with **no `backing`** draws from `.system`, which is never reset or unregistered, or from platform memory it reserved ([below](#what-conforming-promises)), so no other allocator's reset or unregistration reaches what it handed out.
 
-**Chains are fixed and acyclic.**
+**Chains are fixed and acyclic**, so a reset or an unregistration of an allocator reaches everything built on it:
 
-- `backing` names an allocator registered before it, and never changes while it is registered ([below](#what-conforming-promises)).
+- `backing` names an allocator registered before it, which rules out a cycle, and never changes while it is registered ([below](#what-conforming-promises)).
 - Registering panics when the backing is already unregistered, or when an arena or heap's backing chain includes an arena. A registration racing with its backing's unregistration is ordered before it, and unregistered with it, or after it, and panics.
 
 ## Writing an allocator: `AllocatorImpl`
 
-**An implementation hands out memory and reports what it handed out.** The runtime decides when that memory stops being valid ([above](#what-a-reset-does)).
+**An implementation hands out memory and reports what it handed out.** The runtime decides when that memory stops being valid ([above](#what-a-reset-does)). A library adds an allocator by registering a value of a type that conforms, and gets back the `Allocator` id that names it.
 
 ```swift
 unsafe protocol AllocatorImpl: Synchronized {          // must be callable from any thread
     var kind: AllocatorKind { get }                    // a wrapper passes its backing's allocations through
     var backing: Allocator? { get }                    // the one allocator this draws its memory from, or nil
-    // The rest are unsafe to call: containers reach allocate, reallocate and free through the Allocator id's
-    // allocateRaw, reallocateRaw and freeRaw (10), an implementation reaches its backing's through the id's
-    // forwarding methods (below), and only the runtime calls the reset hooks.
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?   // address, plus the arena block it lies in, if any
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func free(_ p: *Void, bytes: Int, align: Int)   // arenas: no-op
@@ -256,15 +279,21 @@ struct BlockHeader(…)                                  // runtime-defined; sta
                                                        //   An arena writes one with unsafe BlockHeader.initialize(at:stamp:)
 ```
 
+**The members other than `kind` and `backing` are `unsafe` to call, and code reaches them in three ways:**
+
+- containers reach `allocate`, `reallocate` and `free` through the `Allocator` id's `allocateRaw`, `reallocateRaw` and `freeRaw` ([10](10-errors-and-safety.md#raw-allocations));
+- an implementation reaches its backing's through the id's forwarding methods ([above](#allocators-over-other-allocators));
+- only the runtime calls the hooks a reset uses: `attachFresh`, `backingDidSwitch`, `backingDidFree` and `freeBlocks`.
+
 ### What conforming promises
 
 **Conforming to `AllocatorImpl` is an `unsafe` promise to follow this contract:**
 
-- `allocate` returns at least `bytes` bytes aligned to `align`, disjoint from every other live allocation. `reallocate` returns the same for `new` bytes, keeps the first `min(old, new)` of them, and frees the old ones when it moves them; when it returns `nil`, the old allocation stays live and unchanged.
-- `free` and `reallocate` accept every allocation of its own that it handed out and that hasn't been freed, including one stamped before a reset in progress, which the `deinit`s that reset runs may still free or grow ([above](#stale-values-and-the-deinits-a-reset-runs)). It never grows such an allocation in place: it moves it.
-- It never reuses memory on its own after handing it over, and reports blocks truthfully. An arena writes no block stamped before a reset until that reset calls `freeBlocks`.
-- `kind` and `backing` never change while it is registered.
-- It draws memory only from its declared `backing`, or, with none, from `.system` or platform memory it reserved itself, never from another registered allocator, which could be reset or unregistered under it.
+- **Allocating.** `allocate` returns at least `bytes` bytes aligned to `align`, disjoint from every other live allocation. `reallocate` returns the same for `new` bytes, keeps the first `min(old, new)` of them, and frees the old ones when it moves them. When it returns `nil`, the old allocation stays live and unchanged.
+- **Freeing and growing.** `free` and `reallocate` accept every allocation of its own that it handed out and that hasn't been freed. That includes one stamped before a reset in progress, which the `deinit`s that reset runs may still free or grow ([above](#stale-values-and-the-deinits-a-reset-runs)). It never grows such an allocation in place: it moves it.
+- **Reuse and reports.** It never reuses memory on its own after handing it over, and reports blocks truthfully, since the runtime decides by a block's stamp which values are stale ([above](#what-a-reset-does)). An arena writes no block stamped before a reset until that reset calls `freeBlocks`, since the `deinit`s that reset runs may read those blocks until then.
+- **A fixed shape.** `kind` and `backing` never change while it is registered, which keeps its backing chain fixed ([above](#allocators-over-other-allocators)).
+- **Where its memory comes from.** It draws memory only from its declared `backing`, or, with none, from `.system` or platform memory it reserved itself. It never draws from another registered allocator, which could be reset or unregistered under it.
 
 ## Owning boxes
 
@@ -273,6 +302,8 @@ enum Tree { case leaf(Int); case node(Box<Tree>, Box<Tree>) }   // recursion goe
 let rock = Shared(loadTexture("rock.tex"))                      // immutable, with any number of owners
 ```
 
+**Four types own a value through a pointer.** They differ in how many owners the value may have, and on which threads:
+
 | Type | Semantics |
 | --- | --- |
 | `Box<T>` | Unique owning pointer, move-only |
@@ -280,7 +311,9 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 | `Shared<T>` | Reference-counted pointer to a `Frozen` or `Synchronized` `T`, with an atomic count; hands out checked `WeakShared<T>`s |
 | `LocalShared<T>` | Reference-counted pointer to a `Frozen` `T`, with a plain count, on one thread |
 
-**`Box.leak` gives up a box's allocation for C to hold.** It applies to a `T: ~Scoped`, and returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](10-errors-and-safety.md#raw-allocations)). `Box.adopt`, which is `unsafe`, takes it back. Its caller promises that the allocation came from leaking a `Box<T>`, and that it is adopted at most once.
+**`Box.leak` gives up a box's allocation for C to hold.** It applies only to a box whose value type is unscoped, a `T: ~Scoped`, since a `RawAllocation` holds the value with no borrows ([02](02-views-and-dependencies.md#generic-code-and-scoped)). It returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](10-errors-and-safety.md#raw-allocations)).
+
+**`Box.adopt`, which is `unsafe`, takes it back.** Its caller promises that the allocation came from leaking a `Box<T>`, and that it is adopted at most once, since a second `adopt` would make a second owner of the value.
 
 ### `Shared<T>`: data with many owners
 
@@ -302,34 +335,45 @@ log.value.lock { $0.append(m) }
 
 **`LocalShared<T>` is the same with a plain count, for a `Frozen` `T` only, and with no weak links.** It is never `Sendable`, so all its owners stay on one thread and counting needs no atomic operation.
 
-- **Counting is visible.** Both are move-only, and each new owner takes an explicit `s.share()`. A move doesn't change the count. `s.value` lends the value read-only for as long as `s` is borrowed.
+**Both follow these rules, except where one is named:**
+
+- **Counting is visible.** Both are move-only, and each new owner takes an explicit `s.share()`, so the source shows every owner it adds. A move doesn't change the count. `s.value` lends the value read-only for as long as `s` is borrowed.
 - **The last owner destroys the value.** Dropping the owner that takes the count to zero runs the value's `deinit` and frees its memory at once, on the thread that dropped it.
 - **Immutable reference-counted values can't form cycles.** A `Frozen` value never changes, and neither does anything it owns. So a `Shared` of one can only point at values that existed before it, and nothing it owns can be changed to point back. A `Synchronized` value, though, can be changed to hold an owner of itself, as a `Shared<Mutex<Node>>` can, and that cycle leaks.
-- **Weak links.** `s.weak()` on a `Shared<T>` returns a **`WeakShared<T>`**: 8 bytes and copyable, and it doesn't keep the value alive. `w.upgrade()` returns a new owner, a `Shared<T>?`, through an atomic compare-and-swap, never waiting for another thread, and reads `nil` once the value is destroyed or its storage stale ([above](#opening-an-owning-value-checks-it)). A weak link names its value by a generation that no other `Shared` value of the run gets, so it never names a later one. `w.bits` packs it into a `UInt64`, which `WeakShared<T>(bits:)` checks as `WeakPointer<T>(bits:)` does, without the thread ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)). `WeakShared<any P>` holds an existential as `WeakPointer<any P>` does ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+- **Weak links.** `s.weak()` on a `Shared<T>` returns a **`WeakShared<T>`**: 8 bytes and copyable, and it doesn't keep the value alive. `w.upgrade()` returns a new owner, a `Shared<T>?`, through an atomic compare-and-swap, never waiting for another thread. It reads `nil` once the value is destroyed or its storage stale ([above](#opening-an-owning-value-checks-it)). A weak link names its value by a generation that no other `Shared` value of the run gets, so it never names a later one. `WeakShared<any P>` holds an existential as `WeakPointer<any P>` does ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+- **Weak links as bits.** `w.bits` packs a weak link into a `UInt64`, which `WeakShared<T>(bits:)` checks as `WeakPointer<T>(bits:)` does, without the thread ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)).
 - **Handing an owner to C.** `Shared.leak(s)` gives up the owner, keeping its count, and returns a weak link for C to hold as a `uint64_t`. `Shared.adopt(w)` returns that owner, and reads `nil` unless `w` names a live value with a leaked owner, so a forged, mistyped or repeated `adopt` is harmless. While C holds a leaked owner, the value stays at its address.
 - **Threads.** `Shared<T>` and `WeakShared<T>` are `Sendable` when `T` is, and `LocalShared<T>` never is ([07](07-concurrency.md#what-may-cross-threads-sendable)). Weak pointers and weak links don't own, so a `Frozen` value may hold them without creating cycles. A `Frozen` value that crosses threads holds only weak links, since an object's weak pointers stay on its home thread.
-- **Other counts.** `Sender`, `Receiver` and `Future` values also count their owners internally. Dropping a `Receiver` breaks the cycles that [07](07-concurrency.md#queues-and-channels) names, and the others leak.
+
+**`Sender`, `Receiver` and `Future` values also count their owners internally.** Dropping a `Receiver` breaks the cycles that [07](07-concurrency.md#queues-and-channels) names, and the others leak.
 
 ### `Frozen`: types with no interior mutability
 
-**The compiler derives `Frozen` for types with no interior mutability**: types that hold none of these:
+**Many owners can read a `Frozen` value at once, since nothing writes it through a shared borrow.** So `LocalShared` requires one, `Shared` requires one unless its value is `Synchronized` ([above](#sharedt-data-with-many-owners)), and so does freezing a value into read-only data ([09](09-compile-time.md#consts-that-reach-run-time)).
+
+**The compiler derives `Frozen` for types with no interior mutability**: types that hold none of these, each a way for what a value holds to change while it is borrowed shared:
 
 - a `Synchronized` field, such as a `Mutex`, an `Atomic` or a queue;
 - an object owner, whose object is mutable through weak pointers;
 - a raw pointer;
-- a `Closure`.
+- a `Closure`, which counts as holding a `Synchronized` value, since its captures may hold one unseen in its type ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)).
 
 **Nothing that is or holds a `Synchronized` value, at any depth, is `Frozen`**, whatever the `Synchronized` type's own fields look like, since its non-`mutating` methods write it ([07](07-concurrency.md#the-synchronized-contract)). Declaring `: unsafe Frozen` on such a type is a compile error.
 
-- **What it covers.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer, a weak link or a handle in it only names another value, which isn't part of it and may change.
-- **Declaring it.** A type the compiler can't derive it for, typically one holding a raw pointer to data that never changes, may declare `: unsafe Frozen`. The declaration is an unverified promise ([10](10-errors-and-safety.md#unverified-promises)) of two things:
-  - nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
-  - nothing at all writes a value of the type frozen into read-only data ([09](09-compile-time.md#consts-that-reach-run-time)).
+**`Frozen` covers a value's fields and the buffers it owns, not the values it names.** Nothing writes a `Frozen` value's fields, or any buffer it owns, through a shared borrow of it: only bookkeeping that no reader observes, such as a `Shared`'s count, changes under one. Its owner may still mutate it, as a `var` of it. A weak pointer, a weak link or a handle in it only names another value, which isn't part of it and may change.
 
-  So a type that writes bookkeeping must keep its values from being freezable, as a `Shared` does by not being `TrivialFree`. The language makes the promise for `StaticSpan` and `StaticString`, which point into immortal data ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
+**A type the compiler can't derive `Frozen` for may declare `: unsafe Frozen`**, typically one holding a raw pointer to data that never changes. The declaration is an unverified promise ([10](10-errors-and-safety.md#unverified-promises)) of two things:
+
+- nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
+- nothing at all writes a value of the type frozen into read-only data ([09](09-compile-time.md#consts-that-reach-run-time)).
+
+**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for `StaticSpan` and `StaticString`, which point into immortal data ([09](09-compile-time.md#staticspan-views-of-immortal-data)).
+
+**Some types hide what they hold, or hold it through a raw pointer, yet are `Frozen` according to what they hold:**
+
 - **Existentials.** An existential has no fields to check, so `any P` and `mutable any P` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](07-concurrency.md#what-may-cross-threads-sendable)).
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names one of these:
-  - a buffer the container owns alone, written only by its `mutating` methods, apart from a `StablePool`'s pin counts (below). Those methods need exclusive access that no shared borrow of a `Frozen` holder grants;
+  - a buffer the container owns alone, written only by its `mutating` methods, apart from a `StablePool`'s pin counts (below). Those methods need exclusive access, which no shared borrow of a `Frozen` value that holds the container grants;
   - in a `String` made from a literal, immortal bytes that nothing writes ([04](04-types.md#literals)).
 - **`Shared<T>` and `LocalShared<T>`.** Each is `Frozen` when its `T` is: its count is bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
 
@@ -345,20 +389,23 @@ let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.ve
 upload(m.vertices.read()!)                               // Span<Vertex>: one check, then none per element
 ```
 
-**`Slice<T>` is unscoped, copyable and `Sendable`.** It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`.
+**`Slice<T>` is unscoped, copyable and `Sendable`.** It can be unscoped because it reads its buffer only through a scoped span it hands out for each use, so nothing frees the buffer while it is read ([02](02-views-and-dependencies.md#scoped-values)). It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`.
+
+**A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction.** The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `Blob(count: n, align: 64)`.
+
+**A slice is checked when it is made, and again at each read or lock:**
 
 - **Reading and locking it.** `s.read()` gives a slice's elements as a `Span<T>?`, and `s.lock()` as a `MutableSpan<T>?`. Each is `nil` once the buffer is gone: its `Shared` value destroyed, or the buffer's storage stale after a reset or an unregistration. Each call checks the storage as an open does, reading `nil` where an open would panic ([above](#opening-an-owning-value-checks-it)).
 
   Each call upgrades the weak link, and the span holds that owner until the span's last use ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)). For a buffer under an `RwLock`, the span also holds the read lock for `read()`, or the write lock for `lock()`, until then. A slice of a bare `Shared<Blob>` is read-only: its `lock()` panics, since nothing writes a `Frozen` value.
-- **Blobs.** A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction. The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `Blob(count: n, align: 64)`.
-- **What creation checks.** `T` must be `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` throws unless all of these hold:
+- **What creation checks.** `T` must be `Pod` ([04](04-types.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` throws unless all of these hold, which put every element inside the blob, aligned for `T`:
   - the range is in bounds;
   - `T`'s alignment is at most the blob's;
   - the offset is a multiple of `T`'s alignment.
 
   Locking as a `MutableSpan<T>` also requires `T.isPaddingFree`, as a mutable span cast does ([04](04-types.md#plain-data-pod-and-bit-casts)), since a store through a padded `T` would leave bytes other slices read uninitialized.
-- **Locked blobs.** A slice of a `Shared<RwLock<Blob>>` is read and locked under the blob's lock. A write lock can replace the whole blob with a shorter or less-aligned one, as `o.value.write { $0 = Blob(count: 16) }` does. So each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the lock it takes anyway. A failure reads as `nil`. A bare `Shared<Blob>` can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
-- **Lists.** `o.slice(at:count:)` on a `Shared<RwLock<List<T>>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. A write lock can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the lock it takes. A failure reads as `nil`.
+- **Locked blobs.** A slice of a `Shared<RwLock<Blob>>` is read and locked under the blob's lock. A write lock can replace the whole blob with a shorter or less-aligned one. So each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the lock it takes anyway. A failure reads as `nil`. A bare `Shared<Blob>` can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
+- **Lists.** `slice(at:count:)` on a `Shared<RwLock<List<T>>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. A write lock can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the lock it takes. A failure reads as `nil`.
 - **Limits.** `slice` throws when the offset or the count exceeds `UInt32.max`.
 
 A `Font` owns its file's blob through a `Shared`, plus `Slice`s into it:
@@ -383,7 +430,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 }
 ```
 
-**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](11-compilation-model.md#the-prelude)). Those operations that build or grow a value at run time also have a fallible form, which returns `nil` or throws `AllocError`, the prelude's error for an allocation its allocator couldn't make:
+**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](11-compilation-model.md#the-prelude)). So no operation goes on with memory it didn't get. Those operations that build or grow a value at run time also have a fallible form, for code that can make room and try again, as `addSpawn` does. The fallible form returns `nil` or throws `AllocError`, the prelude's error for an allocation its allocator couldn't make:
 
 - `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref));
@@ -412,7 +459,7 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 
 **A call to C may allocate unless the import or the `extern c func` declares the function `noalloc` ([08](08-c-interop.md#c-calls-in-noalloc-code-noalloc)), or it goes through a `@c noalloc` pointer ([05](05-protocols-generics-and-closures.md#c-function-pointers)).**
 
-**`@noalloc` doesn't cover attaching a thread.** A `@c` or `@export` function's first entry on a thread Rayo didn't create attaches that thread. That runs its thread-local initializers ([08](08-c-interop.md#calling-rayo-from-c)), which may allocate, in a `@noalloc` function too.
+**`@noalloc` doesn't cover attaching a thread.** A `@c` or `@export` function's first entry on a thread Rayo didn't create attaches that thread. That runs its thread-local initializers ([08](08-c-interop.md#c-entries-and-threads)), which may allocate, in a `@noalloc` function too.
 
 ## Releasing a value without destroying it: `TrivialFree`
 
@@ -423,12 +470,12 @@ levelArena.release(replace(&world.level, with: Level()))     // requires Level: 
 levelArena.reset()                                           // what the arena holds goes stale, and its memory is freed
 ```
 
-**The compiler derives `TrivialFree`, a marker protocol, for a type whose destruction does nothing but free memory**, as it derives `Frozen`: one in which every `deinit`, at any depth, is `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). So such a type holds none of these:
+**The compiler derives `TrivialFree`, a marker protocol, for a type whose destruction does nothing but free memory**, as it derives `Frozen`: one in which every `deinit`, at any depth, is `PlainDeinit` ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). So such a type holds none of these, whose destruction does more:
 
 - an object owner, which destroys its object;
 - a `Pin` or `LocalPin`, which unpins;
-- a reference-counted pointer, such as a `Shared`.
+- a reference-counted pointer, such as a `Shared`, whose `deinit` changes a count that its other owners share.
 
 **A `deinit` that a type hides counts too.** `Box<any P>` is `TrivialFree` only when `P` refines `TrivialFree`, or it is written `Box<any P & TrivialFree>`, as for `Frozen` ([above](#frozen-types-with-no-interior-mutability)). A `consuming` function value and a `Closure<F>`, which may own handed-over captures ([05](05-protocols-generics-and-closures.md#function-typed-values)), never are.
 
-**`release` forgets the value instead of destroying it, and `reset` makes the memory reusable.** Anything the value owns that didn't come from the arena leaks, and `release` `assert`s that nothing does ([10](10-errors-and-safety.md#assert-and-precondition)).
+**`release` forgets the value instead of destroying it, and `reset` makes the memory reusable.** So `release` takes only a `TrivialFree` value, whose destruction would do nothing but free memory, which the reset then frees. Anything the value owns that didn't come from the arena leaks, and `release` `assert`s that nothing does ([10](10-errors-and-safety.md#assert-and-precondition)).
