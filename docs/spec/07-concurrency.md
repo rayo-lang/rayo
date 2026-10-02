@@ -284,7 +284,7 @@ log.lock { msgs in
 
 ## Global state
 
-A global is reachable from every thread, so safe code has **no unsynchronized mutable globals**: a bare global `var` needs `unsafe` to access.
+**Safe code has no unsynchronized mutable globals**, since a global is reachable from every thread. A bare global `var` needs `unsafe` to access.
 
 ```swift
 let config = Published(GameConfig())           // global; safe from any thread
@@ -302,25 +302,34 @@ func scan() {
 
 **Every global that safe code reaches has a `Sendable` type, except a `@threadlocal var`** ([above](#what-may-cross-threads-sendable)). A bare global `var` and an imported C variable may have any unscoped type, since every access to one is `unsafe` and answers for which threads touch it. Safe code can use:
 
-- `const`s, and `let`s of any `Sendable` type. Code reaches one only through shared borrows, with no access checks, only the check that its initializer has run where the compiler can't prove it ([below](#initialization-at-startup)). What it holds changes only through its own synchronization: a `Synchronized` value's, such as an `Atomic`, `Mutex`, `Published` or `Once`, or a `Shared`'s count and its value's own ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
-- `@threadlocal var`s: each thread has its own copy. `@threadlocal` marks only a `var`.
+- **`const`s, and `let`s of any `Sendable` type.** Code reaches one only through shared borrows, with no access checks, only the check that its initializer has run where the compiler can't prove it ([below](#initialization-at-startup)). What it holds changes only through its own synchronization: a `Synchronized` value's, such as an `Atomic`, `Mutex`, `Published` or `Once`, or a `Shared`'s count and its value's own ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners));
+- **`@threadlocal var`s**: each thread has its own copy. `@threadlocal` marks only a `var`.
 
-A global is declared at a file's top level or as a static member of a type. A variable declared directly in a function body is a local, and is never `static` or `@threadlocal`. A static stored `let`, `var` or `@threadlocal var` is never declared where one declaration stands for many instances: in a generic type or an extension of one, a protocol extension or a type nested in any of these, or in a type or extension local to a function with several instantiations, such as a generic function, a function with a `some P` parameter or a method of a generic type. Each instance would need its own, initialized in no one module's turn ([below](#initialization-at-startup)). A `static const` is evaluated at compile time for each.
+**A global is declared at a file's top level or as a static member of a type.** A variable declared directly in a function body is a local, and is never `static` or `@threadlocal`.
 
-- **Thread-locals** need no synchronization, but the static checker can't see a callee touching one, so each access is marked as a read or a change, and a conflicting one panics, as `grow()` does above under the loop. The marks never synchronize with another thread. A view of a thread-local is a dynamic access under rule 6 ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)).
-- **Each thread's copy** lives until the thread's teardown. Copies are initialized on their own thread, before it runs any other Rayo code, in the order globals are and under the same checks ([below](#initialization-at-startup)):
+**A static stored `let`, `var` or `@threadlocal var` is never declared where one declaration stands for many instances.** Each instance would need its own, initialized in no one module's turn ([below](#initialization-at-startup)). Those places are:
+
+- a generic type or an extension of one;
+- a protocol extension;
+- a type nested in any of these;
+- a type or extension local to a function with several instantiations, such as a generic function, a function with a `some P` parameter or a method of a generic type.
+
+A `static const` is evaluated at compile time for each instance.
+
+- **Thread-locals need no synchronization.** But the static checker can't see a callee touching one, so each access is marked as a read or a change. A conflicting access panics, as `grow()` does above under the loop. The marks never synchronize with another thread. A view of a thread-local is a dynamic access under rule 6 ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)).
+- **Each thread's copy lives until the thread's teardown.** Copies are initialized on their own thread, before it runs any other Rayo code, in the order globals are and under the same checks ([below](#initialization-at-startup)):
     - the startup thread's during startup, interleaved with the globals: the thread that runs `main`, or the one that calls `rayo_init`;
     - a thread's started with `Runtime.startThread`: before the body;
     - a C thread's when it attaches ([08](08-c-interop.md#embedding-rayo-in-a-c-program)).
 
-**A thread's teardown** destroys its copies and its objects, on that thread, once it has no other Rayo code to run: when its body returns, at shutdown on the thread that shuts down ([below](#shutdown)), or when a C thread detaches:
+**A thread's teardown destroys its copies and its objects, on that thread, once it has no other Rayo code to run.** That is when its body returns, at shutdown on the thread that shuts down ([below](#shutdown)), or when a C thread detaches. It runs these steps:
 
 1. The thread's copies are destroyed in reverse order, except those of the prelude's modules and every module they import. Each copy is marked dead before its value is destroyed, so a `deinit` that touches it later in the teardown panics, whether the copy's own destruction runs that `deinit` or a later step does.
 2. The thread's objects end ([03](03-handles-and-objects.md#destroying-an-object)).
 3. A `deinit` of step 2 may make or leak another object of the thread, so that step repeats until a round leaves nothing. No object outlives its thread.
 4. Those copies, the current allocator among them, are destroyed last, each marked dead first as in step 1.
 
-A thread that never tears down, such as a C thread that exits without detaching, leaks what its copies and objects own.
+**A thread that never tears down leaks what its copies and objects own**, as a C thread that exits without detaching does.
 
 ### Initialization at startup
 
@@ -329,31 +338,35 @@ let names = loadNames()      // runs before main, unless it can run at compile t
 let table = buildTable()     // may read 'names'; reading a global declared after it is an error
 ```
 
-**Initialization is eager and ordered.** `const`s are folded at compile time. A global `let` goes into read-only data, in every build, exactly when its initializer can run at compile time ([09](09-compile-time.md#running-code-at-compile-time-const)) and its value passes the **freezable** test ([09](09-compile-time.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`, and one that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value. No global other than a thread-local's copy, which ends in its thread's teardown, is destroyed ([below](#shutdown)) or consumed ([01](01-values-and-ownership.md#what-can-be-moved-from)).
+**Initialization is eager and ordered.** `const`s are folded at compile time. A global `let` goes into read-only data, in every build, exactly when its initializer can run at compile time ([09](09-compile-time.md#running-code-at-compile-time-const)) and its value passes the **freezable** test ([09](09-compile-time.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`. One that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value. No global is destroyed ([below](#shutdown)) or consumed ([01](01-values-and-ownership.md#what-can-be-moved-from)), other than a thread-local's copy, which ends in its thread's teardown.
 
-Every other global is initialized at **startup**, before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](08-c-interop.md)), one module at a time, each module's declarations in source order. The next module is always the first in the build's list ([09](09-compile-time.md#what-a-build-declares)) whose imports are all initialized; a module outside the prelude's modules and every module they import counts all of those as imports ([11](11-compilation-model.md#modules-and-names)).
+**Every other global is initialized at startup**, one module at a time, each module's declarations in source order. **Startup** runs before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](08-c-interop.md)). The next module is always the first in the build's list ([09](09-compile-time.md#what-a-build-declares)) whose imports are all initialized. A module outside the prelude's modules and every module they import counts all of those as imports ([11](11-compilation-model.md#modules-and-names)).
 
-- **Static check.** Reading a global that isn't initialized yet, directly or through any chain of direct calls from the initializer, is a compile error. A direct call is any whose callee is known statically, including those the language makes for the code ([05](05-protocols-generics-and-closures.md#functions-and-closures)), except a requirement call inside an imported generic body, which the module's check, made against interfaces alone ([11](11-compilation-model.md#type-checking-is-local)), can't see. Imports form no cycle ([11](11-compilation-model.md#modules-and-names)), so a chain of calls the check follows ends in the initializer's own module, at its own global or one declared after it.
+- **Static check.** Reading a global that isn't initialized yet, directly or through any chain of direct calls from the initializer, is a compile error. A direct call is any whose callee is known statically, including those the language makes for the code ([05](05-protocols-generics-and-closures.md#functions-and-closures)). A requirement call inside an imported generic body isn't one: the module's check, made against interfaces alone, can't see it ([11](11-compilation-model.md#type-checking-is-local)). Imports form no cycle ([11](11-compilation-model.md#modules-and-names)), so a chain of calls the check follows ends in the initializer's own module, at its own global or one declared after it.
 - **Run-time check, in every build.** For calls the static check doesn't follow (closures, `any P`, function pointers, and requirement calls inside imported generic bodies), reading a global before its initializer has finished panics.
 - **Read-only data.** A global in read-only data counts as initialized, for both checks, only once startup reaches its declaration, so whether its compile-time run fits the toolchain's limits never changes what a program does ([11](11-compilation-model.md#what-the-language-leaves-open)).
 - **No other threads during startup.** Initialization is single-threaded. The last initializer's return happens before every later entry into Rayo code on another thread, a queued thread's start included.
     - A thread started with `Runtime.startThread` during startup is queued until then ([above](#starting-a-thread-runtimestartthread)).
     - A wait that would park until another thread acts panics. `Thread.sleep` and waits with a timeout depend on no other thread, so they don't panic, and a wait whose condition already holds returns at once.
-- **Entry.** Entering Rayo code from C before startup has finished panics, in every build, and so does entering from a C thread after shutdown ([below](#shutdown)), except a **nested entry**, one with a Rayo frame below it on its thread, on any of the thread's stacks. During startup only the startup thread has one: an initializer may call C that calls an `@export` or `@c` function back, which is let in while the initialization check still guards every global the callback reads. After shutdown such an entry is let in as before.
+- **Entry.** Entering Rayo code from C panics, in every build, before startup has finished, and from a C thread after shutdown ([below](#shutdown)). The exception is a **nested entry**: one with a Rayo frame below it on its thread, on any of the thread's stacks.
+    - During startup only the startup thread has one. An initializer may call C that calls an `@export` or `@c` function back. That entry is let in, while the initialization check still guards every global the callback reads.
+    - After shutdown such an entry is let in as before.
 
 ### Shutdown
 
-A program's **`main`** takes no parameters, and returns `Void`, `Never`, or an `Int32` that becomes the process's exit status. The runtime shuts down when `main` returns, or when a C program that embeds Rayo calls `rayo_shutdown()` ([08](08-c-interop.md#embedding-rayo-in-a-c-program)). **At shutdown, the thread that shuts down tears down, and then entry closes:**
+A program's **`main`** takes no parameters, and returns `Void`, `Never`, or an `Int32` that becomes the process's exit status. The runtime shuts down when `main` returns, or when a C program that embeds Rayo calls `rayo_shutdown()` ([08](08-c-interop.md#embedding-rayo-in-a-c-program)).
+
+**At shutdown, the thread that shuts down tears down, and then entry closes:**
 
 1. The thread's teardown runs ([above](#global-state)), so a `deinit` that flushes or closes something runs, and sees that thread's copies, the current allocator included.
 2. Entry closes: from then on, an entry from C with no Rayo frame below it on its thread panics ([above](#initialization-at-startup)), and `Runtime.startThread` returns its body unstarted ([above](#starting-a-thread-runtimestartthread)).
 
 - **Other threads don't tear down at shutdown.** When `main` returns, the process exits, ending them where they stand. In a C program that embeds Rayo, a thread that `Runtime.startThread` started still tears down when its body returns, and an attached C thread can no longer detach ([08](08-c-interop.md#embedding-rayo-in-a-c-program)).
-- **No global is destroyed**, not even at shutdown, since a thread still running may read one; only a thread-local's copies end, each in its own thread's teardown.
+- **No global is destroyed**, not even at shutdown, since a thread still running may read one. Only a thread-local's copies end, each in its own thread's teardown.
 
 ## `task` functions: explicitly stepped coroutines
 
-A **`task func`** can suspend at `await` and continue when its owner steps it; calling one returns a **task**, the value its owner steps:
+**A `task func` can suspend at `await`, and continue when its owner steps it.** Calling one returns a **task**, the value its owner steps:
 
 ```swift
 task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
@@ -367,24 +380,36 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 }
 ```
 
-Tasks are stackless coroutines. **Each step runs the task to the next `await` whose awaitable isn't done**, whenever its owner steps it.
+**Each step runs the task to the next `await` whose awaitable isn't done**, whenever its owner steps it. Tasks are stackless coroutines.
 
 ### Semantics
 
-- **A task is a value.** Calling a `task func` runs nothing: it returns a **state machine value**, a struct whose layout the compiler computes. Its size is known statically, so **a task never allocates on its own**. It is move-only, and it borrows nothing, since its parameters are unscoped and no borrow is live across an `await` (below). It lives wherever its owner puts it: a local, a field, a parent task's state (when awaited as a sub-task), or a task set ([below](#running-tasks)).
-- **No borrow and no dynamic access may be live across an `await`.** That means no scoped value ([02](02-views-and-dependencies.md#where-a-scoped-value-can-go)), no binding or pattern part that borrows a place, and no borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`, except one in the task's own state, its parameters and owned locals, reached through stored fields and indices without reading an optional: only its body reaches that state, so the place is worked out again on resuming, from the index values already computed. So `total += await next()` on a local works, while `game.score += await pointsFor(n)` is a compile error, and `let p = await pointsFor(n)` comes first. The resume parameter is exempt, since each step lends it anew. `d` above borrows the door and ends before the first `await`, so using it after the `await` is a compile error, and code there reads `game.doors[door]` again.
+- **A task is a value.** Calling a `task func` runs nothing: it returns the task. A task is its **state**: a struct whose layout the compiler computes. Its size is known statically, so a task never allocates on its own. It is move-only, and it borrows nothing, since its parameters are unscoped and no borrow is live across an `await` (below). It lives wherever its owner puts it: a local, a field, a parent task's state when awaited as a sub-task, or a task set ([below](#running-tasks)).
+- **No borrow and no dynamic access may be live across an `await`.** That means none of these may be live there:
+    - a scoped value ([02](02-views-and-dependencies.md#where-a-scoped-value-can-go));
+    - a binding or pattern part that borrows a place;
+    - a borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`, unless it lies in the task's parameters or owned locals and is reached through stored fields and indices without reading an optional.
+
+  `d` above borrows the door and ends before the first `await`. So using it after the `await` is a compile error, and code there reads `game.doors[door]` again.
+
+  **A place in the task's own state is worked out again on resuming**, from the index values already computed, since only the task's body reaches that state. So `total += await next()` on a local works, while `game.score += await pointsFor(n)` is a compile error, and `let p = await pointsFor(n)` comes first.
+
+  **The resume parameter is exempt**, since each step lends it anew.
 - **Locals that are live across an `await`, and parameters, are stored in the state.** So they must be owned: every task parameter is declared `owned` ([01](01-values-and-ownership.md#parameters)), and its type is unscoped. A `task func` method is `consuming` or `static`, so `self` is owned too, and its type is unscoped.
-- **The resume parameter.** The `with (...)` clause declares the task's one **resume parameter**, whose type is its `Context` ([Awaitables](#awaitables)), or `Void` when there is none. It is declared `mutable`, since the owner only lends it for the step and every awaitable's `poll` takes it `mutable`, and it has no default value. The owner passes it in fresh at every step, as `scripts.step(&game)` does ([below](#running-tasks)).
-- **What a task can await.** In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`. The operand is checked expecting an `Awaitable` whose `Context` is `C`, so a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, and a closure argument gets its parameter types from it, as in `await seconds(0.5)` and `await until { [copy door] game in … }` above. `await` takes its operand as an `owned` argument is taken ([01](01-values-and-ownership.md#moving-values-out)): it moves into the task's state and is polled there, so `let mesh = await f` consumes a local future `f`.
-- **Only the task's own body suspends.** `await` appears only in a `task func`'s own body: not in any other function, nor in a closure literal, a nested function or a local type's or extension's members inside a task, since those are called, not stepped, nor in a `defer` block, which also runs when the task is destroyed.
-- **Destroying a suspended task cleans it up.** Cancelling it, or dropping it or the task set that holds it, destroys its state as leaving every open scope would: the `deinit`s of its live locals and its live `defer` blocks run, in the usual order ([10](10-errors-and-safety.md#cleanup)), and no other code does. That happens outside any step, with no resume parameter, so a `defer` that is live across an `await` may use only what exists without a step: the state's parameters and owned locals and the globals any code reaches, not the resume parameter.
+- **The resume parameter.** The `with (...)` clause declares the task's one **resume parameter**, whose type is its `Context` ([below](#awaitables)), or `Void` when there is none. It is declared `mutable`, since the owner only lends it for the step and every awaitable's `poll` takes it `mutable`. It has no default value. The owner passes it in fresh at every step, as `scripts.step(&game)` does ([below](#running-tasks)).
+- **What a task can await.** In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`. The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await seconds(0.5)`. A closure argument then gets its parameter types from that binding, as in `await until { [copy door] game in … }` above. `await` takes its operand as an `owned` argument is taken ([01](01-values-and-ownership.md#moving-values-out)): it moves into the task's state and is polled there, so `let mesh = await f` consumes a local future `f`.
+- **Only the task's own body suspends.** `await` appears only in a `task func`'s own body. It can't appear in:
+    - any other function;
+    - a closure literal, a nested function, or a local type's or extension's members inside a task, since those are called, not stepped;
+    - a `defer` block, which also runs when the task is destroyed.
+- **Destroying a suspended task cleans it up.** Cancelling it, or dropping it or the task set that holds it, destroys its state as leaving every open scope would. The `deinit`s of its live locals and its live `defer` blocks run, in the usual order ([10](10-errors-and-safety.md#cleanup)), and no other code does. That happens outside any step, with no resume parameter. So a `defer` that is live across an `await` may use only what exists without a step: the state's parameters and owned locals, and the globals any code reaches, not the resume parameter.
 - **A finished task stays finished.** Once its `poll` has returned `.done` or `.failed`, its result has moved out and its locals are destroyed, so destroying it runs nothing, and polling it again panics ([10](10-errors-and-safety.md#what-panics)).
 - **A task never holds itself.** Its state never contains a state of its own type, as it would if its body awaited a call of itself directly or through other `task func`s ([04](04-types.md#structs)); recursion goes through an owner, such as a `Box`.
 - **Results and errors.** A task returns and throws as a function does: `task func loadLevel(_ id: owned LevelId) with (ctx: mutable Loader) throws(LoadError) -> Level`. In another task, `let level = try await loadLevel(id)` yields the result or propagates the error.
 
 ### Awaitables
 
-Whatever a task waits on is an **awaitable**: a value the task polls at each step until it reports that it is done.
+**Whatever a task waits on is an awaitable**: a value the task polls at each step until it reports that it is done.
 
 ```swift
 protocol Awaitable {
@@ -413,13 +438,31 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 }
 ```
 
-`await x` evaluates to `x`'s `Output` once it is done. For the dependency rules it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement: the value, and an error that `try await` throws, depend exclusively on the resume parameter, and on `x`'s storage unless `x` is a `task func`'s call, whose result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](02-views-and-dependencies.md#rule-5-the-callee-side)). An awaitable whose `Failure` isn't `Never` is awaited with `try await`, and `.failed(e)` throws `e` there ([10](10-errors-and-safety.md)). A `task func` is an awaitable of its return and error types.
+**`await x` evaluates to `x`'s `Output` once it is done.** For the dependency rules, it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement. So the value, and an error that `try await` throws, depend, exclusively, on each of these:
 
-**Only its owner's `step` resumes a task, but a step needn't visit every task.** A **pending** task is polled every step. A **waiting** task isn't: its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel, and the next `step` after a wake resumes it. `wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)), so reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread. A poll may still come at any step, woken or not, so `poll` returns a correct result whenever it is called, and a wake is only a hint, which may reach a target for an id it no longer runs, since a `Waker` may outlive its task.
+- the resume parameter;
+- `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](02-views-and-dependencies.md#rule-5-the-callee-side)).
 
-std's awaitables include `until { ctx in cond }`, `Future<T>`, whose `Output` is `T`, and **timed waits**: `func seconds<C: TimeSource>(_ s: Double) -> Seconds<C>`, whose `Context` `C` gives the program's own time through `TimeSource`'s `var now: Double { get }`. So `openDoor`'s `seconds(0.5)` counts simulation time once the game declares `extension Game: TimeSource { var now: Double { copy simulationTime } }`.
+An awaitable whose `Failure` isn't `Never` is awaited with `try await`, and `.failed(e)` throws `e` there ([10](10-errors-and-safety.md)). A `task func` is an awaitable of its return and error types.
 
-**A suspended task's awaitable is stored in its state, so it can't hold a borrow either.** So `until`'s condition **receives the resume parameter as its argument** on every poll. `until` takes the condition by concrete type and moves it in, `func until<C, F>(_ cond: owned F) -> Until<C, F> where F: (mutable C) -> Bool, F: ~Scoped` ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)), storing it by value in the task's state, never boxed, with its captures counting against the state's size. Being unscoped, it owns and lists its captures, as `[copy door]` does. A condition that captures the resume parameter, or any other borrow, is rejected: `await until { game.isOver }` is a compile error, and `until { game in game.isOver }` takes the parameter instead.
+**Only its owner's `step` resumes a task, but a step needn't visit every task.**
+
+- A **pending** task is polled every step.
+- A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel. The next `step` after a wake resumes it.
+
+**`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). So reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread.
+
+**`poll` returns a correct result whenever it is called**, since a poll may still come at any step, woken or not. A wake is only a hint: it may reach a target for an id it no longer runs, since a `Waker` may outlive its task.
+
+**std's awaitables include these:**
+
+- `until { ctx in cond }`;
+- `Future<T>`, whose `Output` is `T`;
+- **timed waits**: `func seconds<C: TimeSource>(_ s: Double) -> Seconds<C>`, whose `Context` `C` gives the program's own time through `TimeSource`'s `var now: Double { get }`.
+
+So `openDoor`'s `seconds(0.5)` counts simulation time once the game declares `extension Game: TimeSource { var now: Double { copy simulationTime } }`.
+
+**A suspended task's awaitable is stored in its state, so it can't hold a borrow either.** So `until`'s condition receives the resume parameter as its argument on every poll. `until` takes the condition by concrete type and moves it in: `func until<C, F>(_ cond: owned F) -> Until<C, F> where F: (mutable C) -> Bool, F: ~Scoped` ([05](05-protocols-generics-and-closures.md#closures-by-concrete-type-some-f)). It stores the condition by value in the task's state, never boxed, with its captures counting against the state's size. Being unscoped, the condition owns and lists its captures, as `[copy door]` does. A condition that captures the resume parameter, or any other borrow, is rejected: `await until { game.isOver }` is a compile error, and `until { game in game.isOver }` takes the parameter instead.
 
 ### Running tasks
 
@@ -431,5 +474,5 @@ scripts.cancel(t)                                    // runs live locals' deinit
 scripts.step(&game)                                  // wherever the program steps: resumes pending and woken tasks once each
 ```
 
-std's `TaskSet.start<A: Awaitable>(_ work: owned A) where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped` takes ownership of each task it starts. A `TaskSet` isn't `Sendable`, since its type doesn't show its tasks' types, so it and its tasks stay on one thread and the tasks needn't be `Sendable`. A task value is `Sendable` when everything in its state is.
+**std's `TaskSet` takes ownership of each task it starts**, through `TaskSet.start<A: Awaitable>(_ work: owned A) where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped`. A `TaskSet` isn't `Sendable`, since its type doesn't show its tasks' types. So it and its tasks stay on one thread, and the tasks needn't be `Sendable`. A task is `Sendable` when everything in its state is.
 

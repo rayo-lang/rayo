@@ -303,7 +303,7 @@ _Avoid_: concurrent type
 
 **Task**:
 The value a `task func` call returns: a coroutine whose size is known at compile time, which its owner steps until it finishes ([07](docs/spec/07-concurrency.md#task-functions-explicitly-stepped-coroutines)).
-_Avoid_: async function, future (a `Future` is one awaitable)
+_Avoid_: async function, future (a `Future` is one awaitable), state machine value
 
 **Teardown**:
 The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency.md#global-state)).
