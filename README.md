@@ -56,6 +56,10 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 [Why Rayo](docs/why-rayo.md) makes the full case: the six design pillars, each problem Rayo answers in C++, Rust, Swift and C#, and a small game that uses most of the ideas.
 
+## Learn Rayo
+
+The [guide](docs/guide/) teaches Rayo in eight short chapters, for programmers who know C++, Rust, Swift or C#. Each chapter starts from a problem that systems code has, solves it in Rayo, and links to the spec sections that hold the full rules.
+
 ## Read the spec
 
 The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. [13](docs/spec/13-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/spec/hard-cases.md) are the systems patterns the spec is tested against.
@@ -81,6 +85,7 @@ The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glos
 
 | Path | Holds |
 | --- | --- |
+| [`docs/guide/`](docs/guide/) | The guide, which teaches the language chapter by chapter |
 | [`docs/spec/`](docs/spec/) | The spec and the hard cases |
 | [`docs/`](docs/) | [Why Rayo](docs/why-rayo.md), and the [agent docs](docs/agents/) the project rules point to |
 | [`GLOSSARY.md`](GLOSSARY.md) | The spec's terms, each with a one-sentence description and a link to its definition |
