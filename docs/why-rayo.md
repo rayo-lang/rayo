@@ -25,7 +25,7 @@ Six principles decide Rayo's trade-offs.
 | Build times: every translation unit re-parses headers and re-instantiates templates. | Modules checked against each other's public declarations, and generics type-checked once, at their definition. | [11](spec/11-compilation-model.md#type-checking-is-local) |
 | No reflection: large codebases generate metadata with header tools and macros, such as Unreal's UHT and `UPROPERTY`. | Static reflection, user-defined attributes, and `static for` over code and declarations, which [generates types](spec/09-compile-time.md#generating-declarations) as well as code. | [09](spec/09-compile-time.md) |
 | A standard library that performance-critical code routes around: implicit container copies, allocating `std::function`s, exceptions and RTTI usually off, allocators in a container's type outside `std::pmr`. Many codebases rewrite the containers (EASTL, Unreal's `TArray`). | Copying heap data, allocation and dynamic dispatch are visible in source, every owning collection takes an allocator without changing its type, and errors are typed return values. | [01](spec/01-values-and-ownership.md), [06](spec/06-memory-and-allocators.md), [10](spec/10-errors-and-safety.md) |
-| A moved-from object is "valid but unspecified", and nothing stops code from using it. | A moved-from variable or field is statically dead until it is assigned again. | [01](spec/01-values-and-ownership.md#moving-values-out) |
+| A moved-from object is "valid but unspecified", and nothing stops code from using it. | A moved-from variable or field is statically dead until it is assigned again. | [01](spec/01-values-and-ownership.md#moves) |
 
 ### Rust's problems
 

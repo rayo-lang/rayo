@@ -31,7 +31,7 @@ The rule that nothing else reaches a place while it is mutably borrowed, and not
 _Avoid_: aliasing XOR mutability
 
 **Maybe-initialized**:
-Said of a place that holds a value on only some of the paths that reach a point, so it can't be used until it is assigned ([01](docs/spec/01-values-and-ownership.md#moving-values-out)).
+Said of a place that holds a value on only some of the paths that reach a point, so it can't be used until it is assigned ([01](docs/spec/01-values-and-ownership.md#places-that-hold-no-value)).
 _Avoid_: conditionally initialized
 
 **Move**:

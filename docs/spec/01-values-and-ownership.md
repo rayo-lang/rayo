@@ -16,7 +16,7 @@ A **place** is storage that holds a value: a local, a global, a parameter or a t
 
 **Every value has one owner**, which decides when the value is destroyed. The exception is reference counting: `Shared<T>` lets several owners share one value, and the last owner to let go destroys it ([06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). Code that uses a value without owning it **borrows** it.
 
-**A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([below](#moving-values-out)), or through an operation that copies its operands ([below](#operations-that-copy)).
+**A second value exists only where the code asks for one**: with `copy` or `clone()`, by taking a copyable `const` ([below](#constants)), or through an operation that copies its operands ([below](#operations-that-copy)).
 
 ## Tiers of checking
 
@@ -215,14 +215,14 @@ var e = enemies[0]                 // error: a bare 'var' of a place
 | --- | --- | --- | --- |
 | `let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
 | `var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
-| `owned let x = place`, `owned var x = place` | `_ x: owned T` | A **move** from a place the code owns ([below](#moving-values-out)): `place` can't be used until it gets a new value | A `memcpy` at most |
+| `owned let x = place`, `owned var x = place` | `_ x: owned T` | A **move** from a place the code owns ([below](#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](02-views-and-dependencies.md#scoped-values)); `consume x` ends it early | None |
-| `var x = place` | | A compile error, except for a `const` of a copyable type, which gives the `var` a new value ([below](#moving-values-out)) | |
+| `var x = place` | | A compile error, except for a `const` of a copyable type, which gives the `var` a new value ([below](#constants)) | |
 
 - **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. On such a binding, `owned` changes nothing. A binding that owns its value can move it on, and a `let` still can't change it.
 - **Views taken from a `let` of a place depend on the place itself** ([02](02-views-and-dependencies.md#dependencies)).
-- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [Moving values out](#moving-values-out) allows. Where that can't move it, the binding is a compile error unless it is written with `copy` or `.clone()`.
+- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [What can be moved from](#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy` or `.clone()`.
 - **A place that a `where yield outlives self` projection yields from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](02-views-and-dependencies.md#dependencies)).
 - **Neither borrowing form may bind an under-aligned place**: that is a compile error ([04](04-types.md#packed-structs-and-under-aligned-places)).
 
@@ -265,7 +265,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 **In a `when`, each part of a pattern binds as a binding does:**
 
 - **A `let` part looks at what it matches, and a `var` part changes it in place.** For a `var` part, the subject is marked `&`: `when &shape { .circle(var r) -> r *= 2; else -> {} }`.
-- **An `owned` part takes what it matches out of a subject the code owns.** It moves as a field is moved out ([below](#moving-values-out)): only when no type on the path to it declares a `deinit`, except in that type's own `deinit`, and only once its arm is chosen.
+- **An `owned` part takes what it matches out of a subject the code owns.** It moves as a field is moved out ([below](#what-can-be-moved-from)): only when no type on the path to it declares a `deinit`, except in that type's own `deinit`, and only once its arm is chosen.
 - **When the subject is a value, every part owns what it matches.**
 - **A `deinit` on the path keeps a value subject whole.** This holds in an arm where any of its patterns has, on the path to a part, a type that declares a `deinit`, whichever pattern matched. The value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's `let` parts look at it, and its `var` parts change it in place, so the `deinit` runs on the changed value, and nothing moves out of it. The subject still takes no `&`, since the hidden local is the arm's own.
 - **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
@@ -344,9 +344,9 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value (below). A `let` of a place, or a `var` of `&place`, borrows the place instead ([above](#bindings)).
+A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A `let` of a place, or a `var` of `&place`, borrows the place instead ([above](#bindings)).
 
-`consume place` writes a move as an expression, and also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary destroyed at the end of the statement.
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
 ```swift
 var loot = List<Item>()
@@ -357,24 +357,61 @@ give(player.inventory)                // error if 'player' is a mutable paramete
 let old = replace(&player.inventory, with: List())    // the way to take it: leave a value behind
 ```
 
-**Only code that owns a place may move from it**, implicitly or with `consume` (**consuming** the place), and only while no borrow of it is live and no scoped value depends on it. The places are:
+### What can be moved from
 
-- a local that owns its value: a `let` or `var` bound to a value, including an owned exclusive view such as `var lives = &particles.life`, or declared `owned`;
+**Only code that owns a place may move from it, implicitly or with `consume`**, and only while no borrow of it is live and no scoped value depends on it. These places can be moved from:
+
+- a local that owns its value: a `let` or `var` bound to a value, including an owned exclusive view such as `var lives = &particles.life`, or one declared `owned`;
 - an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
 - a temporary, such as a call result passed to an `owned` parameter;
-- a field of one of those, through stored fields only, named or reached by reflection ([09](09-compile-time.md#what-reflection-can-read)), when no type along the path declares a `deinit`: `take(makeHolder().items)` moves `items` out, destroying the other fields at the end of the statement, and is an error when `makeHolder()`'s type has a `deinit`. A pattern takes an enum's payload under the same condition ([above](#conditions-and-patterns));
-- a stored field of `self`, or a part of an enum `self`'s payload through an `owned` pattern, in that type's own `deinit`; the fields and parts it doesn't consume are destroyed after it, last-declared first;
-- the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches **`discard self`**. That statement ends `self` without its `deinit`, destroying the fields and parts it hasn't consumed, last-declared first, so `consuming func close() throws(IoError)` on a `File` whose `deinit` closes it closes the file once, and a wrapper's `consuming func intoItems() -> List<T>` hands its list out.
+- a field of one of those, through stored fields only, named or reached by reflection ([09](09-compile-time.md#what-reflection-can-read)), when no type along the path declares a `deinit`;
+- a stored field of `self`, or a part of an enum `self`'s payload through an `owned` pattern, in that type's own `deinit`;
+- the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches `discard self` (below).
 
-After a field is consumed, and until it is assigned again, the whole value can't be used or passed; if the scope ends first, the fields still held are destroyed one by one, last-declared first. Only a place that holds the rest of its value has a field assigned: one that holds no value, or maybe holds one, is given a whole value, made by an initializer ([04](04-types.md#initializers)).
+**The condition on a field covers a temporary's fields and an enum's payload.** So `take(makeHolder().items)` is an error when `makeHolder()`'s type has a `deinit`, and a pattern takes an enum's payload under the same condition ([above](#conditions-and-patterns)).
 
-**Nothing else can be consumed**: not a global, `const`s included, a `let` or `var` bound to a place, a borrowed or `mutable` parameter, an owned capture outside a `consuming` closure, a collection's element, or a place reached through a weak pointer, an accessor or a subscript. The alternatives are `copy place`, `place.clone()`, or, through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)`, or a type's own `take()`, such as `Optional.take()` and `List.take()`. So such a place always holds a value, across a `throw`, an early return and an `await` too.
+These moves leave the rest of the value to be destroyed:
 
-**Constants.** A `const` is a place in read-only data that lives as long as the program, and a view of it is static storage, which any function may return ([09](09-compile-time.md#consts-that-reach-run-time)). **A `const` of a copyable type is taken without `copy`**, as a new value each time, and a `var` bound to one gets a new value (`var lives = maxLives`), while a `let` borrows it. A `const` of a move-only type can only be borrowed or cloned. A static stored member is a global or a `const` in its type's namespace, and is taken as either is: `Vec3.zero`, a copyable `static const` or a computed property, is taken with no `copy`, as in `Enemy(pos: .zero, hp: 100)`.
+- **`take(makeHolder().items)` moves `items` out of a temporary**, destroying the other fields at the end of the statement.
+- **A `deinit` that consumes some fields and parts leaves the rest to be destroyed after it**, last declared first.
+- **`discard self` ends `self` without its `deinit`**, destroying the fields and parts it hasn't consumed, last declared first. So `consuming func close() throws(IoError)` on a `File` whose `deinit` closes it closes the file once, and a wrapper's `consuming func intoItems() -> List<T>` hands its list out.
 
-**A binding declared without a value**, as in `let lo: Float, hi: Float`, holds none until it is assigned, and a `let` is assigned at most once on each path. **A place that holds a value on only some paths** is **maybe-initialized** where the paths join, and can't be used until assigned again, which the compiler proves statically. At scope end, and when a new value is assigned, its old value is destroyed exactly when there is one, and a partly moved value is tracked per field.
+**After a field is consumed, the whole value can't be used or passed until the field is assigned again.** If the scope ends first, the fields still held are destroyed one by one, last declared first.
 
-**Giving a place its value in a closure.** A closure may assign a captured place that holds no value, or maybe holds one, when it captures the place exclusively and its body assigns it before any other use, on every path. The capture carries whether the place holds a value: an assignment destroys an old value only if there is one, so a `mutating` closure called twice destroys the first value when it assigns the second. A `let` is given its value this way only by a `consuming` closure, which runs at most once. After the closure's last use, the place is maybe-initialized in the enclosing function, since the closure may never have been called.
+**Only a place that holds the rest of its value has a field assigned.** A place that holds no value, or maybe holds one, is given a whole value, made by an initializer ([04](04-types.md#initializers)).
+
+**Nothing else can be consumed.** So none of these can:
+
+- a global, `const`s included;
+- a `let` or `var` bound to a place;
+- a borrowed or `mutable` parameter;
+- an owned capture outside a `consuming` closure;
+- a collection's element;
+- a place reached through a weak pointer, an accessor or a subscript.
+
+The alternatives are `copy place` and `place.clone()`, and, through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`. So such a place always holds a value, across a `throw`, an early return and an `await` too.
+
+### Constants
+
+**A `const` is a place in read-only data that lives as long as the program.** A view of it is static storage, which any function may return ([09](09-compile-time.md#consts-that-reach-run-time)).
+
+**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `var` bound to one gets a new value, as in `var lives = maxLives`. A `let` of one still borrows it. A `const` of a move-only type can only be borrowed or cloned.
+
+**A static stored member is a global or a `const` in its type's namespace**, and is taken as either is. So `Vec3.zero`, whether a copyable `static const` or a computed property, is taken with no `copy`, as in `Enemy(pos: .zero, hp: 100)`.
+
+### Places that hold no value
+
+**A binding declared without a value holds none until it is assigned**, as in `let lo: Float, hi: Float`. A `let` is assigned at most once on each path.
+
+**A place that holds a value on only some paths is maybe-initialized where the paths join.** A **maybe-initialized** place can't be used until it is assigned again, which the compiler proves statically.
+
+**At scope end, and when a new value is assigned, the old value is destroyed exactly when there is one.** A partly moved value is tracked per field.
+
+**A closure that captures a place exclusively may give it its value**, when the place holds no value, or maybe holds one, and the closure's body assigns it before any other use on every path.
+
+- **The capture carries whether the place holds a value.** An assignment destroys an old value only if there is one. So a `mutating` closure called twice destroys the first value when it assigns the second.
+- **A `let` is given its value this way only by a `consuming` closure**, which runs at most once.
+- **After the closure's last use, the place is maybe-initialized** in the enclosing function, since the closure may never have been called.
 
 ## The law of exclusivity
 
@@ -411,22 +448,22 @@ world.apply(world.commands.take())                       // take() moves the con
 
 ### Which places overlap
 
-Places overlap by path: `world` and `world.enemies` overlap, since one contains the other.
+**Places overlap by path**: `world` and `world.enemies` overlap, since one contains the other.
 
-- **Stored fields of one value are disjoint from each other**, and so are reflection projections of distinct stored fields (`value[f1]`, `value[f2]`, [09](09-compile-time.md#what-reflection-can-read)). Two projections whose fields may be one, as those picked by `Row.field(ofType:)` in code generic over `Row` may, overlap where the borrows are checked; `value[fields: (f1, f2)]` projects both at once, checked distinct at instantiation ([09](09-compile-time.md#tuples-field-lists-and-queries)).
-- **Inline array elements at indices known to differ where the borrows are checked are disjoint**, and any other two overlap, since `a[i]` and `a[j]` may be the same element, as may `a[I]` and `a[J]` for value parameters `I` and `J` of a body checked once for all its instantiations ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). A collection's elements are reached through its subscript, an accessor (next).
-- **A user-declared computed property or subscript accessor is an access to all of `self`**, whatever it yields. So `var p = &world.physics; var r = &world.render` conflict when both are computed. An imported bitfield's generated accessors are the exception: each, like a reflection projection of the bitfield, accesses only its C memory location (below).
+- **Stored fields of one value are disjoint from each other**, and so are reflection projections of distinct stored fields, such as `value[f1]` and `value[f2]` ([09](09-compile-time.md#what-reflection-can-read)). Two projections whose fields may be one overlap where the borrows are checked, as two that `Row.field(ofType:)` picks may in code generic over `Row`. `value[fields: (f1, f2)]` projects both at once, and is checked distinct at instantiation ([09](09-compile-time.md#tuples-field-lists-and-queries)).
+- **Inline array elements at indices known to differ where the borrows are checked are disjoint.** Any other two overlap, since `a[i]` and `a[j]` may be the same element. So may `a[I]` and `a[J]`, for value parameters `I` and `J` of a body checked once for all its instantiations ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). A collection's elements are reached through its subscript, which is an accessor (next).
+- **A user-declared computed property or subscript accessor is an access to all of `self`**, whatever it yields. So `var p = &world.physics; var r = &world.render` conflict when both are computed. An imported bitfield's generated accessors are the exception: each accesses only its C memory location (below), as a reflection projection of the bitfield does.
 
-Some places share bytes, so writing one can change the other. Each of these counts as **one place**:
+**These places count as one place, since writing one can change another:**
 
-- **Unions:** the members of one union, declared `union` or `@c union` or anonymous inside a struct ([04](04-types.md#untagged-unions), [08](08-c-interop.md#structs-unions-and-enums)), and fields nested at any depth inside them. So `g(&e.f, &e.u)` and `join({ e.f = 1 }, { use(e.u) })` conflict when `f` and `u` are members of one union, and every rule that relies on disjoint fields, reflection projections and SoA splitting included, treats a union this way.
-- **Vector lanes:** the lanes of one `Simd` value ([04](04-types.md#simd-and-math)), since storing one lane may rewrite the vector. A swizzle accesses the whole vector, and for a `Simd` `v`, `join({ v.x = a }, { v.y = b })` conflicts. `Vec3`'s `x`, `y` and `z` are ordinary stored fields, which are disjoint, and its swizzles are computed properties, which access all of it (above).
-- **Enum payloads:** reaching into a payload, an optional's included, reads the tag, which may be a niche inside the payload ([04](04-types.md#optionals)). So every path into one enum value's payload, through `?.`, `!`, a pattern or reflection's `value[case:]` ([09](09-compile-time.md#what-reflection-can-read)), overlaps every other (`s?.n` and `s?.b` conflict), but one pattern that binds several parts reads the tag once, so for an optional tuple `pair`, `if var (a, b) = &pair` gives two disjoint borrows.
-- **Bitfields:** imported bitfields that form one C **memory location** ([08](08-c-interop.md#structs-unions-and-enums)): in `struct { uint32_t a : 20; uint32_t b : 20; }`, `a` and `b` are one place, although they lie in two storage units. Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places that two threads may write at once, as C11 allows.
+- **Unions.** The members of one union, declared `union` or `@c union` or anonymous inside a struct ([04](04-types.md#untagged-unions), [08](08-c-interop.md#structs-unions-and-enums)), and the fields nested at any depth inside them. So `g(&e.f, &e.u)` and `join({ e.f = 1 }, { use(e.u) })` conflict when `f` and `u` are members of one union. Every rule that relies on disjoint fields treats a union this way, reflection projections and SoA splitting included.
+- **Vector lanes.** The lanes of one `Simd` value ([04](04-types.md#simd-and-math)), since storing one lane may rewrite the vector. A swizzle accesses the whole vector, so for a `Simd` `v`, `join({ v.x = a }, { v.y = b })` conflicts. `Vec3`'s `x`, `y` and `z` are ordinary stored fields, which are disjoint, and its swizzles are computed properties, which access all of it (above).
+- **Enum payloads.** Reaching into a payload, an optional's included, reads the tag, which may be a niche inside the payload ([04](04-types.md#optionals)). So every path into one enum value's payload overlaps every other, through `?.`, `!`, a pattern or reflection's `value[case:]` ([09](09-compile-time.md#what-reflection-can-read)): `s?.n` and `s?.b` conflict. One pattern that binds several parts reads the tag once, though, so for an optional tuple `pair`, `if var (a, b) = &pair` gives two disjoint borrows.
+- **Bitfields.** Imported bitfields that form one C **memory location** ([08](08-c-interop.md#structs-unions-and-enums)). In `struct { uint32_t a : 20; uint32_t b : 20; }`, `a` and `b` are one place, although they lie in two storage units. Bitfields in different memory locations, or a bitfield and a neighboring field, are separate places, which two threads may write at once, as C11 allows.
 
 ### Two elements of one collection
 
-Two elements at once need an API that checks at run time that they are distinct:
+**Two elements at once need an API that checks at run time that they are distinct:**
 
 ```swift
 if var (a, b) = &world.enemies[h1, h2] {     // nil if h1 == h2 or either is stale

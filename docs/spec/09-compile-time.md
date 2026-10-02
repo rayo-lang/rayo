@@ -288,7 +288,7 @@ public struct Enemy(
 - **Which fields are listed.** `T.fields` lists every field inside `T`'s own module, and elsewhere only the `public` ones, or all of them when `T` is `@reflect(private)`.
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them, and, where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
 - **Writing.** `value[field]` projects for `modify` only a `var` of a changeable place ([01](01-values-and-ownership.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
-- **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](01-values-and-ownership.md#moving-values-out)): from a place the code may move from, with no `deinit` along the path, and `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
+- **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](01-values-and-ownership.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path, and `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
 - **`unsafe` fields and unions.** A field declared `unsafe`, such as `Span`'s `baseAddress`, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule of [04](04-types.md#untagged-unions).
 
 ### Constructing values reflectively
@@ -446,7 +446,7 @@ step(&columns.pos, columns.vel.span, dt)                  // two fields of one v
 
 **Generic code sees such a type at its safe bound.** Whatever its generated members could change, generic code assumes they do:
 
-- **When they may include a `deinit` or a stored field**, it may have a `deinit` that isn't `PlainDeinit`, at any depth, so there it may be move-only, destroying it counts as a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), nothing moves out of it ([01](01-values-and-ownership.md#moving-values-out)), and it isn't `Pod` or `TrivialFree`.
+- **When they may include a `deinit` or a stored field**, it may have a `deinit` that isn't `PlainDeinit`, at any depth, so there it may be move-only, destroying it counts as a use ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), nothing moves out of it ([01](01-values-and-ownership.md#what-can-be-moved-from)), and it isn't `Pod` or `TrivialFree`.
 - **When they may include a stored field**, that field may be of any type, so it may be scoped, as a type parameter may ([02](02-views-and-dependencies.md#scoped-values)), and it isn't sealed, shallow, `Frozen` or `Sendable` either.
 - **When they may include an enum case**, a `when` over it ends in `else`.
 
