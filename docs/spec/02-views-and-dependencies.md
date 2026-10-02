@@ -257,23 +257,51 @@ So `arr.span.min(by: …)` and `src.view[a..<b]` leave only `arr` and `src` borr
 
 #### Rule 4: Absorption
 
-**After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow**, and so do an `owned` argument that is a mutable view and a `modify`'s yield (below). It takes the places and sets of the borrowed ones, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3. So `tokens.append(Token(text: src.view))` makes `tokens` depend on `src`, and `lexer.lex(into: &tokens)` leaves `lexer` and `tokens` free of each other. Another `mutable` argument's place flows in only when a `where` item names it ([below](#precise-dependencies-opt-in)), as for a function that keeps views of one argument in another: `func chunks(_ data: mutable List<Float>, into work: mutable List<MutableSpan<Float>>) where work borrows data`. Assigning a whole new value replaces the set of a variable that owns its value, and assigning a stored field replaces that field's set ([below](#naming-a-field)), where the place assigned is known: through a binding that may name one of several places, as after `var r = if flip { &d1 } else { &d2 }` or a `rebind` on one path, the assignment adds to each place's set. Any other change to part of a value, such as to an element, adds to it.
+**After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow.** So do an `owned` argument that is a mutable view, and a `modify`'s yield (below). Each takes on the places and sets of the borrowed arguments, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3. So `tokens.append(Token(text: src.view))` makes `tokens` depend on `src`, and `lexer.lex(into: &tokens)` leaves `lexer` and `tokens` free of each other.
 
-- **Stores through an exclusive view reach what it views.** A dependency added to an exclusive view, or to a place reached through one, is also added to **every place the view depends on exclusively**, transitively: by assignment through the view (`v = tmp.span` in `for var v in &views`), by absorption into it (`fill(&left, tmp.span)` on a `split` half), or by storing a borrow into a list of exclusive views (`d = &crate`). Each time, the collection the view came from now depends on `tmp` or `crate`. Writing a whole new value through an exclusive view adds and never replaces.
-    - If such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies, whatever convention brought the view in: a `mutable` parameter, an `owned` `MutableSpan`, a `mutable any P`, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable` parameter, by rule 5 and by its use at every exit (below).
-    - On the caller's side, an argument passed `owned` that is itself a mutable view (rule 3), such as an `owned` `MutableSpan`, a `mutable any P` or a `mutating` closure, absorbs like a `mutable` one: `poison(consume left)` makes `views`, which `left` was split from, absorb the call's other arguments. A borrowed argument absorbs nothing, whatever it carries, since nothing is stored through a borrowed view.
-    - In generic code, a value whose type may be a mutable view counts as one for these two rules: a type parameter, an associated type, a `some P`, or a type that depends on one, unless its constraints include `Copyable` or `~Scoped`. So an `owned T` absorbs like a `mutable` argument, and what a parameter of such a type carries in counts as exclusive, so a `put(local.view)` through an `owned T: Sink` is a store into the caller's place.
-- **Creating a closure.** It counts, for these rules, as a call to a primary initializer whose arguments are its captures, which no code can name or call ([09](09-compile-time.md#what-reflection-can-read)): an exclusive by-reference capture is a `mutable` argument, a shared one borrowed, and an owned one `owned`. So `var add = { names.append(tmp.view) }` makes `names` depend on `tmp` at creation, whether or not `add` is called. A `consuming` closure's exclusive captures also take on each other's places, since its one call may store a view of one into another (rule 5).
-- **Calling a closure.** Its `mutable` arguments absorb the closure's dependency set, as its `self` (rule 3): with `let put: (mutable List<StringView>) -> Void = { o in o.append(src.view) }`, `put(&out)` makes `out` depend on `src`. One that absorbs a place the closure captures exclusively also depends on the closure, exclusively, unless the call consumes it, decided by what the caller can see. The closure itself absorbs **only what its `keep` arguments carry**, never the argument places ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)), a `mutating` closure into itself and so into the places it depends on exclusively. Its other parameters are call-scoped, so nothing it was lent reaches its captures.
-- **A projection access.** It is a call to its accessor, with the subscript's arguments and `self`, and a `modify`'s yield is one more `mutable` argument, since the code after the `yield` may store what the caller wrote there: a subscript's `mutable` parameter absorbs it ([Projections](#projections-read-and-modify-accessors)).
+**Another `mutable` argument's place flows in only when a `where` item names it** ([below](#precise-dependencies-opt-in)). A function that keeps views of one `mutable` argument in another names it, as `chunks` does: `func chunks(_ data: mutable List<Float>, into work: mutable List<MutableSpan<Float>>) where work borrows data`.
+
+**Where the place assigned is known, assigning a variable that owns its value, or a stored field, replaces that place's set** ([below](#naming-a-field)). Through a binding that may name one of several places, the assignment adds to each place's set instead, as after `var r = if flip { &d1 } else { &d2 }` or a `rebind` on one path. Any other change to part of a value, such as to an element, adds to the value's set.
+
+**Stores through an exclusive view reach what it views.** A dependency added to an exclusive view, or to a place reached through one, is also added to **every place the view depends on exclusively**, transitively. That holds whether the dependency is added:
+
+- by assignment through the view, as `v = tmp.span` in `for var v in &views`;
+- by absorption into it, as `fill(&left, tmp.span)` on a `split` half;
+- by storing a borrow into a list of exclusive views, as `d = &crate`.
+
+Each time, the collection the view came from then depends on `tmp` or `crate`. Writing a whole new value through an exclusive view adds and never replaces.
+
+**When such a place belongs to the caller, the store is a store into the caller's place, and rule 5 applies.** That holds whatever convention brought the view in: a `mutable` parameter, an `owned` `MutableSpan`, a `mutable any P`, or an owned `mutating` closure with exclusive captures. Every exclusive dependency a parameter carries in is treated like a `mutable` parameter, by rule 5 and by its use at every exit ([below](#rule-5-the-callee-side)).
+
+**On the caller's side, an `owned` argument that is a mutable view absorbs like a `mutable` one.** Examples are an `owned` `MutableSpan`, a `mutable any P` and a `mutating` closure ([above](#mutable-views)). So `poison(consume left)` makes `views`, which `left` was split from, absorb the call's other arguments. A borrowed argument absorbs nothing, whatever it carries, since nothing is stored through a borrowed view.
+
+**In generic code, a value whose type may be a mutable view counts as one where a store reaches the caller's place, and where an `owned` argument absorbs.** Such a type is a type parameter, an associated type, a `some P`, or a type that depends on one, unless its constraints include `Copyable` or `~Scoped`. So an `owned T` absorbs like a `mutable` argument. What a parameter of such a type carries in counts as exclusive, so a `put(local.view)` through an `owned T: Sink` is a store into the caller's place.
+
+**For these rules, creating a closure counts as a call to a primary initializer whose arguments are its captures.** No code can name or call that initializer ([09](09-compile-time.md#what-reflection-can-read)). The captures are passed this way:
+
+- an exclusive by-reference capture as a `mutable` argument;
+- a shared one borrowed;
+- an owned one `owned`.
+
+So `var add = { names.append(tmp.view) }` makes `names` depend on `tmp` at creation, whether or not `add` is called. A `consuming` closure's exclusive captures also take on each other's places, since its one call may store a view of one into another (rule 5).
+
+**When a closure is called, its `mutable` arguments absorb the closure's dependency set**, as its `self` ([above](#closure-calls)). So with `let put: (mutable List<StringView>) -> Void = { o in o.append(src.view) }`, `put(&out)` makes `out` depend on `src`. An argument that absorbs a place the closure captures exclusively also depends on the closure, exclusively, unless the call consumes it. What the caller can see decides this.
+
+**The closure itself absorbs only what its `keep` arguments carry**, never the argument places ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)). A `mutating` closure absorbs what its `keep` arguments carry into itself, and so into the places it depends on exclusively. Its other parameters are call-scoped, so nothing it was lent reaches its captures.
+
+**A projection access is a call to its accessor**, with the subscript's arguments and `self`. A `modify`'s yield is one more `mutable` argument, since the code after the `yield` may store what the caller wrote there: a subscript's `mutable` parameter absorbs it ([below](#projections-read-and-modify-accessors)).
 
 #### Rule 5: The callee side
 
 **A function can return, throw or store only what its caller lent it.** A returned or thrown scoped value, and anything stored into a scoped `mutable` parameter, may depend only on:
 
-- the borrowed or `mutable` parameters and their dependency sets, except that what is stored into a `mutable` parameter depends on another `mutable` parameter itself only when a `where` item names it (rule 4);
+- the borrowed or `mutable` parameters and their dependency sets, except that what is stored into a `mutable` parameter depends on another `mutable` parameter itself only when a `where` item names it ([above](#rule-4-absorption));
 - the sets carried in by scoped `owned` parameters, which belong to the caller and flow back through rules 3 and 4;
-- **static storage**: global `let`s and `const`s ([07](07-concurrency.md#global-state)), and the views that the `Synchronized` values in them lend, such as a lock guard or `Once.get()` ([07](07-concurrency.md#the-synchronized-contract)). Such a global is never moved or destroyed ([07](07-concurrency.md#shutdown)). What a C entry returns to C, or stores into what C lent it, may depend on less ([08](08-c-interop.md#c-representations)).
+- static storage.
+
+**Static storage** is global `let`s and `const`s ([07](07-concurrency.md#global-state)), and the views that the `Synchronized` values in them lend, such as a lock guard or `Once.get()` ([07](07-concurrency.md#the-synchronized-contract)). Such a global is never moved or destroyed ([07](07-concurrency.md#shutdown)).
+
+**What a C entry returns to C, or stores into what C lent it, may depend on less** ([08](08-c-interop.md#c-representations)).
 
 ```swift
 func name() -> StringView {
@@ -284,23 +312,42 @@ func name() -> StringView {
 
 Rule 5 rejects:
 
-- **a view of what the function itself owns or began**, which is a local, storage an `owned` parameter owns (not the borrows it carries), a thread-local, or a dynamic access or access-bound projection begun inside the function. The non-`mutable` parameters of an `@export` or `@c` function, or of a closure literal converted to a `@c` type, count as `owned` here, since C passes them by value ([08](08-c-interop.md#calling-rayo-from-c));
-- **anything stored into a `mutable` parameter `p` that depends on a place overlapping `p`**, such as `d.first = d.text.view` in `func index(_ d: mutable Doc)`, since rule 4 tells the caller nothing new about its own argument. In the caller's own body, `doc.first = doc.text.view` is fine: `doc` then depends on `doc.text`, and it is an error only when destroying `doc` uses that dependency ([below](#when-destroying-a-value-counts-as-using-it));
-- **anything stored through a parameter's exclusive dependencies that depends on the parameter's own storage**, which rule 4 never reports: in a `mutating` method of a struct holding `out: MutableSpan<StringView>` and `s: String`, `out[0] = s.view` is an error, while `out[0] = copy view` for a field `view: StringView` is fine.
+- **A view of what the function itself owns or began.** That is a local, storage an `owned` parameter owns but not the borrows it carries, a thread-local, or a dynamic access or access-bound projection begun inside the function. The non-`mutable` parameters of an `@export` or `@c` function, or of a closure literal converted to a `@c` type, count as `owned` here, since C passes them by value ([08](08-c-interop.md#calling-rayo-from-c)).
+- **Anything stored into a `mutable` parameter `p` that depends on a place overlapping `p`**, such as `d.first = d.text.view` in `func index(_ d: mutable Doc)`, since rule 4 tells the caller nothing new about its own argument. In the caller's own body, `doc.first = doc.text.view` is fine: `doc` then depends on `doc.text`. The assignment is an error only when destroying `doc` uses that dependency ([below](#when-destroying-a-value-counts-as-using-it)).
+- **Anything stored through a parameter's exclusive dependencies that depends on the parameter's own storage**, which rule 4 never reports. In a `mutating` method of a struct holding `out: MutableSpan<StringView>` and `s: String`, `out[0] = s.view` is an error, while `out[0] = copy view` for a field `view: StringView` is fine.
 
 **Scoped `mutable` parameters count as used at every exit**: each `return`, `throw` and propagating `try`, and the end of the body. So a callee can't store a view into `out` and then free what it points at, even on its way out with an error.
 
-**In a closure body**, the closure is checked as a method whose `self` is the closure:
+**A closure body is checked as a method whose `self` is the closure.** Its by-reference captures are places `self` depends on, shared or exclusive, and a result or a store into a `mutable` parameter may depend on them.
 
-- **By-reference captures** are places `self` depends on, shared or exclusive, and a result or a store into a `mutable` parameter may depend on them.
-- **Owned captures** are always an `owned` parameter's own storage, whatever the closure's kind, since a closure may be called through a view of its storage, and a call through a `consuming` type ends that view and destroys a `consuming` closure's captures ([05](05-protocols-generics-and-closures.md#closure-kinds), [05](05-protocols-generics-and-closures.md#function-typed-values)). So a result or a store may depend on what they carry, never on the captures themselves: `{ [move s] in s.view }` is an error.
-- **A store into a capture** may depend on places captured by shared reference, on what any capture carries, on what parameters declared `keep` carry ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep)), and on static storage. It may not depend on a place the closure captures **exclusively**, unless the closure is `consuming`, since the next call may change or free it: `{ buf.append(1); views.append(buf.span) }` is an error. So `entries.map { $0.name.view }` may return what depends on its parameter, but can't store it.
+**A closure's owned captures are always an `owned` parameter's own storage**, whatever the closure's kind. A closure may be called through a view of its storage, and a call through a `consuming` type ends that view and destroys a `consuming` closure's captures ([05](05-protocols-generics-and-closures.md#closure-kinds), [05](05-protocols-generics-and-closures.md#function-typed-values)). So a result or a store may depend on what owned captures carry, never on the captures themselves: `{ [move s] in s.view }` is an error.
+
+**A store into a capture may depend on these:**
+
+- places captured by shared reference;
+- what any capture carries;
+- what parameters declared `keep` carry ([05](05-protocols-generics-and-closures.md#what-a-closure-may-keep-keep));
+- static storage.
+
+So `entries.map { $0.name.view }` may return what depends on its parameter, but can't store it.
+
+**A store into a capture may not depend on a place the closure captures exclusively**, unless the closure is `consuming`, since the next call may change or free it. So `{ buf.append(1); views.append(buf.span) }` is an error.
 
 #### Rule 6: Dynamic accesses
 
-**An access to an object, a `Slice` or a thread-local lasts until nothing uses it.** An access to an object's value, through its owner or a weak pointer, to a `Slice`'s buffer, through its `read()` or `lock()` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers)), or to a thread-local `var`, is itself a dependency. A view derived from it (`r.value!.items.span`) or passed through a call (`first(r.value!)`) depends on it, and **the access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. An access-bound projection's access is held the same way, its accessor suspended at the `yield`.
+**An access to an object, a `Slice` or a thread-local lasts until nothing uses it.** Each of these **dynamic accesses** is itself a dependency:
 
-**A site in a loop holds one access at a time.** Each time a site in a loop's body or its `while` condition begins a dynamic access, or an access-bound projection's access, no value that depends on the access it began the last time may be used from then on. So `for w in nodes { names.append(w.value!.name.view) }` is an error, since every pass would keep its own access: the second pass's `append` uses `names`, which depends on the first pass's. A `rebind` step through objects may begin its access while its own target still depends on the previous one, since the step moves the target to the new access ([below](#pointing-a-name-at-another-place-rebind)).
+- an access to an object's value, through its owner or a weak pointer;
+- an access to a `Slice`'s buffer, through its `read()` or `lock()` ([06](06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers));
+- an access to a thread-local `var`.
+
+A view derived from the access, such as `r.value!.items.span`, or passed through a call, as in `first(r.value!)`, depends on it.
+
+**The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. An access-bound projection's access is held the same way, with its accessor suspended at the `yield`.
+
+**A site in a loop's body or `while` condition holds one access at a time.** Each time it begins a dynamic access, or an access-bound projection's access, no value that depends on the access it began the last time may be used from then on. So `for w in nodes { names.append(w.value!.name.view) }` is an error, since every pass would keep its own access: the second pass's `append` uses `names`, which depends on the first pass's.
+
+**A `rebind` step through objects is an exception to this**: it may begin its access while its own target still depends on the previous one, since the step moves the target to the new access ([below](#pointing-a-name-at-another-place-rebind)).
 
 ### When destroying a value counts as using it
 
