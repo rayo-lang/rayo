@@ -188,7 +188,9 @@ func dump<T>(_ value: T) {
 dump(Stats(hp: 100, armor: 5))                          // compiles to two log calls, for hp and armor
 ```
 
-**Every type has compile-time metadata. `static for` iterates over compile-time lists: the body is instantiated once per element, and each instance is type-checked with that element's concrete types.** The rest of its checks run on the unrolled code as [05](05-protocols-generics-and-closures.md#protocols-and-generics) says, so a move in the body moves once per element.
+**Every type has compile-time metadata.**
+
+**`static for` iterates over compile-time lists.** The body is instantiated once per element, and each instance is type-checked with that element's concrete types. The rest of the body's checks run on the unrolled code, as 05 says ([05](05-protocols-generics-and-closures.md#protocols-and-generics)), so a move in the body moves once per element.
 
 A complete serializer dispatches on the kind of type it gets, walking a struct's fields and an enum's cases with `static for`:
 
@@ -222,7 +224,7 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
 }
 ```
 
-- `Transient` is an attribute that a type's author puts on the fields a serializer should skip ([Attributes](#attributes)).
+- `Transient` is an attribute that a type's author puts on the fields a serializer should skip ([below](#attributes)).
 - `@reflect(private)` lets `serialize` see a type's private fields ([below](#reflection-and-access-control)).
 
 ### What reflection can read
@@ -246,7 +248,10 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
 
 | Expression | Meaning |
 | --- | --- |
-| `T.name`, `T.baseName`, `T.module`, `T.id` | The type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)`; the name its declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration; its module's name, empty for a structural type; each a `StaticString`; and a stable 64-bit type id that no other type of the program has (below) |
+| `T.name` | `StaticString`: the type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)` |
+| `T.baseName` | `StaticString`: the name `T`'s declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration |
+| `T.module` | `StaticString`: `T`'s module's name, empty for a structural type |
+| `T.id` | A stable 64-bit type id that no other type of the program has (below) |
 | `T.layoutId` | A 64-bit hash of every representation `T` depends on (below) |
 | `field.offset`, `field.bitRange`, `T.size`, `T.alignment` | Layout facts |
 | `T.isPaddingFree` | Whether `T`'s layout has no padding bytes ([04](04-types.md#plain-data-pod-and-bit-casts)) |
@@ -265,23 +270,53 @@ func serializeEnum<T>(_ value: T, into w: mutable Writer) {
 - **Projections.** `value[field]` lends the field in place, as an accessor that yields does ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). It is a storage projection, which a view can outlive, except on an imported bitfield or an under-aligned field, which go through a temporary, so it is access-bound there. Every `value[field]` is checked per instantiation, for one field ([05](05-protocols-generics-and-closures.md#protocols-and-generics)), so generic code sees a storage projection or an access-bound one exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
 - **Imported bitfields.** `T.fields` lists them with the types they import as. `field.offset` is the storage unit's offset, `field.bitRange` locates the field within it, and the field is read and written through its accessors ([08](08-c-interop.md#structs-unions-and-enums)).
 - **Anonymous members.** An imported struct's anonymous union or struct member is listed in `T.fields` as **one field of its type**, never as separate fields, so a union's members, which overlap, stay one place ([below](#tuples-field-lists-and-queries)).
-- **Types reflection can't see into.** A type the compiler builds, a closure literal's or a task's state or an interpolated literal's value; a language type whose layout is left open ([11](11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type; and every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector, `StaticString` or `Name`, has no fields or cases to reflect: `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
-- **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type:
-    - **a declared type** has one part for each declaration from its module inward to itself: a module, type, extension, function, property, subscript, accessor, block, closure literal, `static if` branch or `static for` element. A part holds everything that tells its declaration apart from the others its scope may hold, so two declarations that may coexist never share a part:
-        - its kind and its name;
-        - an extension's extended type and constraints;
-        - a function's, property's or subscript's whole signature, with `static`, its `self` convention, parameter labels, types and conventions, result, `throws` and `where` clause;
-        - an accessor's kind (`get`, `set`, `read`, `modify`);
-        - for a block, closure or branch, which has no name, its position in the scope around it;
-        - every compile-time argument the declaration's body is instantiated with: its generic arguments, written or implied, such as `Self` and each `some P` parameter's type, a `static for` element's index, the field a static closure's body is instantiated for ([below](#constructing-values-reflectively)), and the element a compile-time list's `filter` or `map` closure is instantiated for ([below](#enumerating-a-modules-types)).
+- **Types reflection can't see into.** These have no fields or cases to reflect:
+    - a type the compiler builds: a closure literal's or a task's state, or an interpolated literal's value;
+    - a language type whose layout is left open ([11](11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
+    - every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector, `StaticString` or `Name`.
 
-      So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity [08](08-c-interop.md#importing-headers) gives it;
-    - **the type's own generic arguments**, a value argument by its value, and whether it is an unscoped existential, so `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<(any P)>` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch));
-    - **a type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, with, in place of a name, its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded. So a generic `task func`'s state differs for each of the function's generic arguments, and each element of a `static for` has its own;
-    - **a structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part holding its kind, the identities of the types in it, with aliases and parentheses resolved, and every other fact of its form: a tuple's labels; an inline array's count; an existential's `any` or `mutable any`, and its protocols, as a set; a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written, its thrown type, `Never` when none is written, and each parameter's `keep` and convention; an error union's members, as a set. So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
+  For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
 
-  The id stays the same from build to build while that identity does. No two types of one program share an id: a build in which two identities would hash to one id fails. So within one program an id match is exact, and a type-erased container can trust it. Across builds, two different identities share an id only by a 64-bit hash collision, which no build checks.
-- **`T.layoutId`** hashes `T`'s own representation, its layout, the scalar type each part holds, so that `Int8` and `Bool` differ, and an enum's cases, tags and raw values, and those of the types of its stored fields, elements and payloads, recursively, including through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, it changes, barring a 64-bit hash collision, whenever any of those does, so a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
+**`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type. The identity is built as follows:
+
+- **A declared type** has one part for each declaration from its module inward to itself: a module, type, extension, function, property, subscript, accessor, block, closure literal, `static if` branch or `static for` element. A part holds everything that tells its declaration apart from the others its scope may hold, so two declarations that may coexist never share a part:
+    - its kind and its name;
+    - an extension's extended type and constraints;
+    - a function's, property's or subscript's whole signature, with `static`, its `self` convention, parameter labels, types and conventions, result, `throws` and `where` clause;
+    - an accessor's kind (`get`, `set`, `read`, `modify`);
+    - for a block, closure or branch, which has no name, its position in the scope around it;
+    - every compile-time argument the declaration's body is instantiated with (below).
+
+  So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](04-types.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity 08 gives it ([08](08-c-interop.md#importing-headers)).
+- **The type's own generic arguments** are part of it, a value argument by its value, and so is whether the type is an unscoped existential. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<(any P)>` ([05](05-protocols-generics-and-closures.md#any-p-explicit-dynamic-dispatch)).
+- **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
+- **A structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
+    - a tuple's labels;
+    - an inline array's count;
+    - an existential's `any` or `mutable any`, and its protocols, as a set;
+    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; its thrown type, `Never` when none is written; and each parameter's `keep` and convention;
+    - an error union's members, as a set.
+
+  So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
+
+The compile-time arguments a declaration's body is instantiated with are these:
+
+- the declaration's generic arguments, written or implied, such as `Self` and each `some P` parameter's type;
+- a `static for` element's index;
+- the field a static closure's body is instantiated for ([below](#constructing-values-reflectively));
+- the element a compile-time list's `filter` or `map` closure is instantiated for ([below](#enumerating-a-modules-types)).
+
+**The id stays the same from build to build while the type's identity does.**
+
+**No two types of one program share an id**: a build in which two identities would hash to one id fails. So within one program an id match is exact, and a type-erased container can trust it. Across builds, two different identities share an id only by a 64-bit hash collision, which no build checks.
+
+**`T.layoutId` hashes `T`'s representation, and recursively those of the types it holds.** A representation covers these:
+
+- the type's layout;
+- the scalar type each part holds, so that `Int8` and `Bool` differ;
+- an enum's cases, tags and raw values.
+
+The types it holds are those of its stored fields, elements and payloads. The recursion goes through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
 
 ### Reflection and access control
 
@@ -310,11 +345,11 @@ public struct Enemy(
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them, and, where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
 - **Writing.** `value[field]` projects for `modify` only a `var` of a changeable place ([01](01-values-and-ownership.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
 - **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](01-values-and-ownership.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path, and `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
-- **`unsafe` fields and unions.** A field declared `unsafe`, such as `Span`'s `baseAddress`, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule of [04](04-types.md#untagged-unions).
+- **`unsafe` fields and unions.** A field declared `unsafe`, such as `Span`'s `baseAddress`, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](04-types.md#untagged-unions)).
 
 ### Constructing values reflectively
 
-Loaders (save files, network replication, asset import) need the reverse of `serialize`: building a `T` field by field, including fields with no default. **Static closures** do it: closures whose body is instantiated once per field, like a `static for` body. A static closure appears only as the argument of `T.construct` or `T.makeCase`, which run its instances once each, in field order, and it is checked as that sequence of bodies, unrolled: an instance names the enclosing function's places as the body of a `static for` there would, so it may move out of one that no later instance uses, as `T.construct { static field in consume old[field] }` does with each field of an owned `old` ([above](#reflection-and-access-control)):
+Loaders (save files, network replication, asset import) need the reverse of `serialize`: building a `T` field by field, including fields with no default. **Static closures** do it: closures whose body is instantiated once per field, like a `static for` body:
 
 ```swift
 func deserialize<T>(_ r: mutable Reader) throws(LoadError) -> T {
@@ -349,6 +384,8 @@ func deserializeEnum<T>(_ r: mutable Reader) throws(LoadError) -> T {
     throw .unknownCase(tag)
 }
 ```
+
+**A static closure appears only as the argument of `T.construct` or `T.makeCase`**, which run its instances once each, in field order. It is checked as that sequence of bodies, unrolled. An instance names the enclosing function's places as the body of a `static for` there would. So it may move out of one that no later instance uses, as `T.construct { static field in consume old[field] }` does with each field of an owned `old` ([above](#reflection-and-access-control)).
 
 **`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](04-types.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](08-c-interop.md#structs-unions-and-enums)), or a tuple type, and even then false when the type:
 
@@ -411,11 +448,18 @@ const componentTypes: [_ of TypeInfo] = Module("gameplay").types
     .map { typeInfo($0.self) }                        // a const table in read-only data
 ```
 
-**`Module.current.types` and `Module("gameplay").types` are compile-time lists of a module's type declarations, usable in `static for` and in `const` evaluation. A module can list its own types and those of the modules it imports.**
+**`Module.current.types` and `Module("gameplay").types` are compile-time lists of a module's type declarations**, usable in `static for` and in `const` evaluation. A module can list its own types and those of the modules it imports.
 
 - **What a module's list holds.** Its type declarations, top-level and nested, generated ones included, that neither have generic parameters nor lie inside a generic type or a function, in source order ([below](#what-a-build-declares)), and, for another module, only its `public` ones. Each element names one type, usable as a type, as `field.type` is, so `$0.self` is its type value ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). `Module("gameplay")` takes the name the build declares for the module, never an `import … as` name.
-- **Compile-time lists.** `T.fields`, `T.cases`, a case's `payload`, a module's `types` and `declaredTypes`, a `const` inline array or `List`, and a range of `const` integers are compile-time lists; a tuple's element types are listed by its `T.fields` ([above](#tuples-field-lists-and-queries)). They support `filter`, `map`, `contains` and `count` in `const` evaluation, with closures whose parameter is a list element, each instantiated once per element, as a static closure is ([above](#constructing-values-reflectively)), without being marked `static`, since the elements may differ in type. `filter` and `map` give compile-time lists, which a `const` converts to an inline array or a `List` of their element type.
-- **Only imported lists and a module's declared types drive generation.** A module's own `types` list includes the types it generates, so no declaration may be generated from it, directly or through a `const`. `Module.current.declaredTypes` lists, in the same order, only those declared outside any `static if` or `static for`, so it may drive generation under the rule for the facts generation reads ([below](#generation-runs-in-dependency-order)): an `enum AnyEvent` can have a case per declared type that conforms to `Event`, as long as no case changes which of them do. `Module.current.types` may be read in function bodies, and in `const`s that no generating `static for` or `static if` reads, so `gameplay` could build the registry above from its own list ([below](#generation-runs-in-dependency-order)).
+- **Compile-time lists.** These are compile-time lists:
+    - `T.fields`, which for a tuple lists its element types ([above](#tuples-field-lists-and-queries));
+    - `T.cases` and a case's `payload`;
+    - a module's `types` and `declaredTypes`;
+    - a `const` inline array or `List`;
+    - a range of `const` integers.
+
+  They support `filter`, `map`, `contains` and `count` in `const` evaluation. A closure passed to one of them takes a list element as its parameter. The closure is instantiated once per element, as a static closure is ([above](#constructing-values-reflectively)), since the elements may differ in type, but it isn't marked `static`. `filter` and `map` give compile-time lists, which a `const` converts to an inline array or a `List` of their element type.
+- **Only imported lists and a module's declared types drive generation.** A module's own `types` list includes the types it generates, so no declaration may be generated from it, directly or through a `const`. `Module.current.declaredTypes` lists, in the same order, only those declared outside any `static if` or `static for`. So it may drive generation under the rule for the facts generation reads ([below](#generation-runs-in-dependency-order)). For example, an `enum AnyEvent` can have a case per type in `declaredTypes` that conforms to `Event`, as long as no case changes which of them do. `Module.current.types` may be read in function bodies, and in `const`s that no generating `static for` or `static if` reads, so `gameplay` could build the registry above from its own list ([below](#generation-runs-in-dependency-order)).
 
 ## Generating declarations
 
