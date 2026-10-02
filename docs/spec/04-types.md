@@ -160,7 +160,7 @@ It offers `Simd<Float, 3>`'s operations, so the two differ only in layout. Its f
 
 ## Structs
 
-A struct's stored fields are listed once, in its header, which is also its **primary initializer**, and the body holds everything else:
+**A struct's stored fields are listed once, in its header**, which is also its **primary initializer**. The body holds everything else:
 
 ```swift
 struct Camera(
@@ -183,9 +183,17 @@ var cam = Camera(position: .zero, fov: 70)           // the primary initializer;
 cam.look(dx: 0.1, dy: 0)
 ```
 
-The body declares computed properties, methods, subscripts, secondary initializers, a `deinit`, static members, nested types and type aliases, but never a stored field. A struct with no stored fields may leave the header out, and its primary initializer is then `init()`.
+**The body never declares a stored field.** It declares computed properties, methods, subscripts, secondary initializers, a `deinit`, static members, nested types and type aliases. A struct with no stored fields may leave the header out, and its primary initializer is then `init()`.
 
-**Layout is the header's order, always.** Each field goes at the first multiple of its alignment at or after the end of the field before it, the first at offset 0. A struct is aligned to its most-aligned field, and its size is the end of its last field rounded up to the struct's alignment; a struct with no fields has size 0 and alignment 1. A number, `Bool` or raw pointer is aligned to its size, and every other type's alignment follows from its own layout. Every Rayo target's C ABI lays out structs by these rules too ([11](11-compilation-model.md#what-a-target-must-provide)), so a struct whose fields all have C representations is shared with C as it is ([08](08-c-interop.md#c-representations)). Attributes adjust and check the layout:
+**Layout is the header's order, always:**
+
+- Each field goes at the first multiple of its alignment at or after the end of the field before it, the first at offset 0.
+- A struct is aligned to its most-aligned field, and its size is the end of its last field rounded up to the struct's alignment. A struct with no fields has size 0 and alignment 1.
+- A number, `Bool` or raw pointer is aligned to its size, and every other type's alignment follows from its own layout.
+
+Every Rayo target's C ABI lays out structs by these rules too ([11](11-compilation-model.md#what-a-target-must-provide)), so a struct whose fields all have C representations is shared with C as it is ([08](08-c-interop.md#c-representations)).
+
+**Attributes adjust and check the layout:**
 
 ```swift
 struct Header(var tag: UInt8, var size: UInt32)          // 8 bytes: 3 bytes of padding after 'tag'
@@ -193,11 +201,11 @@ struct Header(var tag: UInt8, var size: UInt32)          // 8 bytes: 3 bytes of 
 @align(16) struct Slot(var value: Float)                 // 16 bytes, 16-byte aligned
 ```
 
-- `@packed`, on a struct or a union, counts every field's alignment as 1, so the alignment is 1 and there is no padding between or after fields: a struct's sit end to end. Padding inside a field's own type stays. `@packed(N)` caps each field's alignment at `N`, a power of two. C's packed records import as these ([08](08-c-interop.md#what-imports-as-what)).
-- `@align(N)` raises the alignment to at least `N`, a power of two, and the size rounds up to it. It, `@packed` and `@packed(N)` apply only to a struct or union declaration, and are a compile error elsewhere.
-- `@c` changes no layout, and rejects fields with no C representation ([08](08-c-interop.md#c-representations)).
+- **`@packed`, on a struct or a union, counts every field's alignment as 1**, so the alignment is 1 and there is no padding between or after fields: a struct's sit end to end. Padding inside a field's own type stays. `@packed(N)` caps each field's alignment at `N`, a power of two. C's packed records import as these ([08](08-c-interop.md#what-imports-as-what)).
+- **`@align(N)` raises the alignment to at least `N`**, a power of two, and the size rounds up to it. It, `@packed` and `@packed(N)` apply only to a struct or union declaration, and are a compile error elsewhere.
+- **`@c` changes no layout**, and rejects fields with no C representation ([08](08-c-interop.md#c-representations)).
 
-**A value never contains itself.** A struct, tuple, enum or union that would hold a value of its own type inline, through its fields, payloads, optionals or inline arrays at any depth, is a compile error, and so is a task whose state would ([07](07-concurrency.md#semantics)). Recursion goes through an owner, so the allocation is visible: `case node(Box<Tree>)`.
+**A value never contains itself.** A struct, tuple, enum or union that would hold a value of its own type inline, through its fields, payloads, optionals or inline arrays at any depth, is a compile error. So is a task whose state would ([07](07-concurrency.md#semantics)). Recursion goes through an owner, so the allocation is visible: `case node(Box<Tree>)`.
 
 ### Initializers
 
@@ -210,9 +218,13 @@ struct Spawner(
 let s = Spawner(owner: nil)         // 'target' and 'cooldown' may be left out
 ```
 
-**Every value of a struct is built by its primary initializer**, except one that a `Pod` type takes from bytes ([below](#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](08-c-interop.md#structs-unions-and-enums)). Its parameters are the fields, in order and labeled by name, and a field's default makes its argument optional. A field with a default may leave its type to the default, as `var players = Pool<Player>()` does. An `unsafe` field, such as `Span`'s `baseAddress`, is given its argument only inside `unsafe`, just as naming it needs `unsafe`. A `var` declared with an optional type, `T?` written as such, with no default, unless it is `unsafe`, starts as `nil` and counts as defaulted, for the primary initializer and for reflection's `hasDefault` ([09](09-compile-time.md#what-reflection-can-read)). A `let` of optional type doesn't.
+**Every value of a struct is built by its primary initializer**, except one that a `Pod` type takes from bytes ([below](#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](08-c-interop.md#structs-unions-and-enums)). Its parameters are the fields, in order and labeled by name.
 
-A type can also offer other initializers:
+- **Defaults.** A field's default makes its argument optional. A field with a default may leave its type to the default, as `var players = Pool<Player>()` does.
+- **Optional `var`s.** A `var` declared with an optional type, `T?` written as such, with no default and not `unsafe`, starts as `nil`. It counts as defaulted, for the primary initializer and for reflection's `hasDefault` ([09](09-compile-time.md#what-reflection-can-read)). A `let` of optional type does neither.
+- **`unsafe` fields.** An `unsafe` field, such as `Span`'s `baseAddress`, is given its argument only inside `unsafe`, just as naming it needs `unsafe`.
+
+**A type can also offer other initializers:**
 
 ```swift
 public struct Fraction private init(let num: Int, let den: Int) {   // other modules can't call the primary
@@ -235,13 +247,13 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 - **The header lists fields, not parameters.** Each entry is a `var` or `let` and takes no parameter convention. The value owns its fields, so the primary initializer takes every one `owned`, and `Inventory(items: loot)` moves `loot` in unless the call says `copy loot` or `loot.clone()` ([01](01-values-and-ownership.md#parameters)). A secondary initializer is an ordinary function whose parameters are borrowed unless marked, so it passes `copy x`, or an `owned` parameter, on to the primary one, as `Fraction` does above.
 - **Before `self.init`, `self` doesn't exist.** Nothing reads or assigns a field until then, and after it `self` is a whole value, as in a `mutating` method.
 - **No value is ever half-built.** The primary initializer sets every field at once, from arguments already evaluated. An `init` that throws or returns `nil` before `self.init` has only its locals to destroy, and one that throws or returns `nil` after it destroys a whole value, running its `deinit` if the type has one.
-- **The header sets the primary initializer's access.** It is as visible as the struct unless the header says `private init(…)`, which keeps it inside the module ([11](11-compilation-model.md#modules-and-names)), so other modules build a value only through a secondary initializer, which can check an invariant such as `Fraction`'s nonzero denominator. A field that isn't `public` is a parameter only inside the module, so elsewhere the primary initializer can be called only if every such field has a default, or through `T.construct` on a `@reflect(private)` type ([09](09-compile-time.md#constructing-values-reflectively)). `unsafe init(…)` makes every call to it `unsafe`, for fields that `unsafe` code trusts, such as an index it doesn't bounds-check.
+- **The header sets the primary initializer's access.** It is as visible as the struct unless the header says `private init(…)`, which keeps it inside the module ([11](11-compilation-model.md#modules-and-names)). Other modules then build a value only through a secondary initializer, which can check an invariant such as `Fraction`'s nonzero denominator. A field that isn't `public` is a parameter only inside the module, so elsewhere the primary initializer can be called only if every such field has a default, or through `T.construct` on a `@reflect(private)` type ([09](09-compile-time.md#constructing-values-reflectively)). `unsafe init(…)` makes every call to it `unsafe`, for fields that `unsafe` code trusts, such as an index it doesn't bounds-check.
 - **Extensions may add secondary initializers.** They add no stored member or enum case.
-- **A `deinit` is declared in the type's own module.** It goes in its body, where a `static if` or `static for` may generate it, or in an **unconditional extension**, one that gives none of the type's generic arguments and has no `where` clause. An extension that gives some, such as `extension Tagged<Int>`, is conditional, as a `where` clause is. A `deinit` makes the type move-only and, unless the type conforms to `PlainDeinit`, makes destroying it a use of what it borrows ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)), which changes how every use is checked, so it follows the rule for declared markers ([05](05-protocols-generics-and-closures.md#conformances)).
+- **A `deinit` is declared in the type's own module.** It goes in its body, where a `static if` or `static for` may generate it, or in an **unconditional extension**, one that gives none of the type's generic arguments and has no `where` clause. An extension that gives some, such as `extension Tagged<Int>`, is conditional, as a `where` clause is. A `deinit` makes the type move-only and, unless the type conforms to `PlainDeinit`, makes destroying a value of it a use of what that value borrows ([02](02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)). Either effect changes how every use is checked, so every `deinit` follows the rule for declared markers ([05](05-protocols-generics-and-closures.md#conformances)).
 
 ### Packed structs and under-aligned places
 
-A `@packed` struct or union can put a field at a misaligned address, where a load or store of the field's type is invalid ([10](10-errors-and-safety.md#unsafe-code)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
+**A `@packed` struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](10-errors-and-safety.md#unsafe-code)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
 
 ```swift
 @packed struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
@@ -254,20 +266,32 @@ func sum(_ r: NetRec) -> UInt32 {
 }
 ```
 
-**Guaranteed alignment.** A variable's, or an element's of separately allocated storage (a `List`, a pool, a span), is its type's alignment. A field's is the smaller of its enclosing place's guarantee and the largest power of two dividing its offset. A tuple's element is a field ([Tuples](#tuples-ranges-and-arrays)), and an element of `[N of T]` or a `Simd` counts as one at offset `index × stride`, using the stride for a dynamic index. **A place guaranteed less than its type's alignment, at any depth, is under-aligned, and is used only by value**. So `recs[1].id` in a `List` of the 5-byte `Rec` above is under-aligned: `id` is at offset 0, but `recs[1]` itself is guaranteed only 1.
+**These places have a guaranteed alignment:**
+
+- a variable's, or an element's of separately allocated storage, such as a `List`, a pool or a span, is its type's alignment;
+- a field's is the smaller of its enclosing place's guarantee and the largest power of two dividing its offset. A tuple's element is a field ([below](#tuples-ranges-and-arrays)), and an element of `[N of T]` or a `Simd` counts as one at offset `index × stride`, using the stride for a dynamic index.
+
+**A place guaranteed less than its type's alignment, at any depth, is under-aligned, and is used only by value.** So `recs[1].id` in a `List` of the 5-byte `Rec` above is under-aligned: `id` is at offset 0, but `recs[1]` itself is guaranteed only 1.
 
 - **No views.** Any borrow of it but an argument is a compile error: a binding or pattern part bound in place, a `when` subject, a span, an `any P`, a `yield` in an accessor, or a `for` loop binding its elements in place. A closure captures the aligned place that holds it instead ([05](05-protocols-generics-and-closures.md#functions-and-closures)).
-- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A projection reached through such a receiver, or whose `where yield` clause names such an argument, is access-bound, as a bitfield's is ([02](02-views-and-dependencies.md#access-bound-projections)): the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result or thrown error (rule 3 in [02](02-views-and-dependencies.md#rule-3-call-results)) or be absorbed into another argument (rule 4).
+- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A projection reached through such a receiver, or whose `where yield` clause names such an argument, is access-bound, as a bitfield's is ([02](02-views-and-dependencies.md#access-bound-projections)): the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result or thrown error ([02](02-views-and-dependencies.md#rule-3-call-results)), or be absorbed into another argument ([02](02-views-and-dependencies.md#rule-4-absorption)).
 
 **Generic code takes the safe bound.** It is checked once, at its definition ([05](05-protocols-generics-and-closures.md#protocols-and-generics)). A path that crosses no `@packed` struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a `@packed` or `@packed(N)` struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have. So `m.payload` in a generic function over `@packed(4) struct Msg<T: Copyable>` is under-aligned, and so is `e.rec.id` over `struct Env<T>(var rec: Rec, var body: T)`, which `Env<UInt8>` misaligns.
 
 **Requirement projections stay aligned.** Generic code treats what a requirement yields as aligned, since an under-aligned field, such as `ids` witnessing a `read`/`modify` requirement of `@packed struct NetRec(…): HasIds`, witnesses it only through an aligned temporary ([02](02-views-and-dependencies.md#projections-in-protocols)), and no `yield` names an under-aligned place (above).
 
-**No `Synchronized` values inside.** A `@packed` struct can't hold inline, through its fields, elements and payloads at any depth, a `Synchronized` value ([07](07-concurrency.md#atomics-and-locks)), which a `Closure` counts as holding ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)): atomics need their alignment, and shared access to a `Synchronized` value is always in place. What a field owns out of line, such as a `List`'s elements, is aligned and doesn't count. So a field whose type depends on a type parameter must be provably free of both at the definition: `Copyable`, since anything holding either is move-only, as in `@packed struct Msg<T: Copyable>`, or `Frozen` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), as with `where T.Payload: Frozen`. A field whose type generates its fields from its parameters ([09](09-compile-time.md#generating-declarations)) is proven free of both only through a `where` clause stating that type `Copyable` or `Frozen`.
+**A `@packed` struct can't hold a `Synchronized` value inline**, through its fields, elements and payloads at any depth ([07](07-concurrency.md#atomics-and-locks)). A `Closure` counts as holding one ([05](05-protocols-generics-and-closures.md#unscoped-closures-closuref)). Atomics need their alignment, and shared access to a `Synchronized` value is always in place. What a field owns out of line, such as a `List`'s elements, is aligned and doesn't count.
+
+So the type of a field that depends on a type parameter must be provably free of `Synchronized` values and `Closure`s at the definition, by being one of these:
+
+- `Copyable`, since anything holding either is move-only, as in `@packed struct Msg<T: Copyable>`;
+- `Frozen` ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), as with `where T.Payload: Frozen`.
+
+A field whose type generates its fields from its parameters ([09](09-compile-time.md#generating-declarations)) is proven free of both only through a `where` clause stating that type `Copyable` or `Frozen`.
 
 ## Enums
 
-An enum is one of several cases, each with its own payload. Enums are Rayo's tagged unions, and a `when` takes them apart ([below](#matching-with-when-and-choosing-with-if)):
+**An enum is one of several cases, each of which may carry a payload.** Enums are Rayo's tagged unions, and a `when` takes them apart ([below](#matching-with-when-and-choosing-with-if)):
 
 ```swift
 enum Blend: UInt8 { case opaque, alpha, additive }          // plain enum with a raw type
@@ -289,9 +313,9 @@ func area(_ s: Shape) -> Float {
 
 - **Nonexhaustive enums.** `@nonexhaustive public enum` makes every `when` over it in another module end in `else`.
 - **Raw values.** A raw type, as `UInt8` is for `Blend`, is an integer type, and only an enum without payloads declares one. A case may give its raw value with `= value`, a `const` expression, and one that doesn't takes the previous case's plus one, the first `0`. Every raw value, given or taken, must fit the raw type, or the declaration is a compile error. Two cases with one raw value are a compile error. `E(rawValue:)` returns the case whose raw value it is given, or `nil`.
-- **Layout.** An enum without payloads is stored as its raw value when it declares a raw type, and otherwise as a tag numbering its cases from 0, in the smallest unsigned integer type that fits, `UInt8` for up to 256 cases, none or one included. A payload enum is that tag plus a union, except that an optional may keep its tag in a niche of its payload ([Optionals](#optionals)).
+- **Layout.** An enum without payloads is stored as its raw value when it declares a raw type. One without a raw type is stored as a tag numbering its cases from 0, in the smallest unsigned integer type that fits: `UInt8` for up to 256 cases, none or one included. A payload enum is that tag plus a union, except that an optional may keep its tag in a niche of its payload ([below](#optionals)).
 - **No cases.** An enum with no cases, such as the prelude's `Never`, has no values, and size 0. So a function whose result type is `Never`, such as `fatalError`, never returns, and it is what the rules below mean by a call that never returns.
-- **Initializers.** An enum's `init` builds its value by assigning `self` a whole value, such as a case, under the same rule as a struct's `self.init` ([above](#initializers)): at most once on every path, and exactly once on every path that returns the new value, as `LoadError`'s `@converts` initializers do ([10](10-errors-and-safety.md#typed-throws)). Before that assignment, `self` doesn't exist.
+- **Initializers.** An enum's `init` builds its value by assigning `self` a whole value, such as a case, under the same rule as a struct's `self.init` ([above](#initializers)). It assigns at most once on every path, and exactly once on every path that returns the new value, as `LoadError`'s `@converts` initializers do ([10](10-errors-and-safety.md#typed-throws)). Before that assignment, `self` doesn't exist.
 
 ### Matching with `when`, and choosing with `if`
 
@@ -318,16 +342,20 @@ let bonus = if boosted { 10 } else { 0 }
 **`when` runs the first arm that matches.** With a subject, each arm lists one or more patterns ([12](12-grammar.md#patterns)) and an optional `where` guard, which may use what the patterns bind. Without a subject, each arm is one `Bool` condition. An `else` arm matches whatever is left.
 
 - **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true, and is a compile error unless that `==` takes both operands borrowed, returns `Bool` and doesn't throw. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier compares with an existing value unless it is under `let` or `var`, where it binds a new name ([12](12-grammar.md#patterns)).
-- **Type patterns.** `is E` matches, and `let e as E` matches and binds, a subject of type `E`, such as the error of a `do` block that throws only `E`, or a member `E` of an error-union subject ([10](10-errors-and-safety.md#error-unions)). When `E` is itself an error union, as a type parameter may turn out to be, `let e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](01-values-and-ownership.md#conversions)): from a value subject, such as `when consume e` or a `catch`, it takes what the subject held, and from a place subject it copies it, so there every member it may match is `Copyable`, and generic code whose `E` is a type parameter declares `E: Copyable`. No other subject has type patterns.
-- **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing, and an expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, whose comparison is the language's own, never a user-defined `==` or `contains`. A `when` without a subject ends in `else` when its value is used.
+- **Type patterns.** `is E` matches, and `let e as E` matches and binds, a subject of type `E`, such as the error of a `do` block that throws only `E`, or a member `E` of an error-union subject ([10](10-errors-and-safety.md#error-unions)). No other subject has type patterns.
+
+  When `E` is itself an error union, as a type parameter may turn out to be, `let e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](01-values-and-ownership.md#conversions)):
+    - from a value subject, such as `when consume e` or a `catch`, it takes what the subject held;
+    - from a place subject it copies it. So there every member it may match is `Copyable`, and generic code whose `E` is a type parameter declares `E: Copyable`.
+- **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A `when` without a subject ends in `else` when its value is used.
 - **One set of names per arm.** Patterns that share an arm bind the same names, with the same types, and each name the same way: it looks, changes in place, or owns ([01](01-values-and-ownership.md#conditions-and-patterns)). No arm falls through into the next.
-- **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen, shared, or exclusively when it is marked `&`, and holds a dynamic place's access as any borrow does ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard can't change or consume the subject, every part is a shared view inside a guard, and an `owned` part takes its value only once its arm is chosen ([01](01-values-and-ownership.md#conditions-and-patterns)).
+- **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen, shared, or exclusively when it is marked `&`, and holds a dynamic place's access as any borrow does ([02](02-views-and-dependencies.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow. So a guard can't change or consume the subject, every part is a shared view inside a guard, and an `owned` part takes its value only once its arm is chosen ([01](01-values-and-ownership.md#conditions-and-patterns)).
 - **One pattern as a condition.** `if case .chase(let t) = state { … }` tests one pattern as a `when` arm does, and binds its names for the block. `guard case` and `while case` work the same way.
 - **A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
 - **Patterns that always match.** A `let` or `var` declaration, a `for` loop, and a `let` or `var` condition (whose pattern matches the optional's value) take only `_`, a name, or a tuple of these, under the binding kinds the position allows ([12](12-grammar.md#statements)).
 - **Arms and blocks have values.** An arm's body is an expression, an assignment, whose value is `Void`, or a block whose value is its last expression, as an `unsafe` block's is. An arm that ends in `return`, `throw`, `break`, `continue` or a call that never returns, such as `fatalError`, has no value and fits any type.
 - **`if` / `else` is an expression too.** Its branches are blocks with values, and an `if` used for its value has an `else`.
-- **Types.** Where the position expects a type, every arm's value takes it, as a `return` would ([05](05-protocols-generics-and-closures.md#implicit-conversions)). Where it expects none, as in a `let` with no annotation, the arms have one type: an arm that is an untyped literal, `nil` or an implicit member such as `.idle` takes the typed arms' type, and when every arm is a literal, they take one default together, as an array literal's elements do ([Literals](#literals)). Used as a statement, `when` and `if` expect no value: each arm's value is discarded, and the arms' types needn't agree.
+- **Types.** Where the position expects a type, every arm's value takes it, as a `return` would ([05](05-protocols-generics-and-closures.md#implicit-conversions)). Where it expects none, as in a `let` with no annotation, the arms have one type: an arm that is an untyped literal, `nil` or an implicit member such as `.idle` takes the typed arms' type. When every arm there is a literal, they take one default together, as an array literal's elements do ([below](#literals)). Used as a statement, `when` and `if` expect no value: each arm's value is discarded, and the arms' types needn't agree.
 - **Ownership.** The arm that runs takes the expression's position ([01](01-values-and-ownership.md#if-and-when-as-values)).
 
 ### Optionals
@@ -338,7 +366,7 @@ if let t = target { attack(t) }
 let hp = enemies[h]?.hp ?? 0         // looks at the element's hp in place, or at a 0
 ```
 
-`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`, and the two spellings differ only as a projection's declared type ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)); a `nil` pattern is `.none` and covers it. It offers `if let x`, `guard let x else { return }`, `x ?? d`, `a?.b?.c`, `x!`, and `x == nil` for any `T` ([05](05-protocols-generics-and-closures.md#equality-and-ordering)). An optional chain can be assigned through: `a?.b = v` writes only when `a` holds a value, and `x? = v` replaces `x`'s value only when it holds one ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)).
+**`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`.** `T?` and `Optional<T>` differ only as a projection's declared type ([02](02-views-and-dependencies.md#projections-read-and-modify-accessors)). A `nil` pattern is `.none` and covers it. `T?` offers `if let x`, `guard let x else { return }`, `x ?? d`, `a?.b?.c`, `x!`, and `x == nil` for any `T` ([05](05-protocols-generics-and-closures.md#equality-and-ordering)). An optional chain can be assigned through: `a?.b = v` writes only when `a` holds a value, and `x? = v` replaces `x`'s value only when it holds one ([01](01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)).
 
 **`a ?? b` chooses as an `if` does.** It evaluates `b` only when `a` is `nil`, and hands its position to `a`'s payload or to `b` as an `if` hands it to the arm that runs ([01](01-values-and-ownership.md#if-and-when-as-values)). The payload of a place is a place, and the payload of a value is a value. When `b` is a `T?` too, the position goes to `a` or `b` whole, and the result is a `T?`.
 
@@ -353,11 +381,11 @@ An optional itself has none, and neither has an open imported C enum ([08](08-c-
 
 **No niche lies inside a `Synchronized` value**, at any depth ([07](07-concurrency.md#the-synchronized-contract)), since other threads write its bytes, as a `Mutex<Handle<T>>`'s `Handle` is written under the lock, while reading a tag is a plain load. So `Mutex<Handle<T>>?` and `Atomic<WeakShared<T>>?` keep their tag outside, in the form below.
 
-Without a niche, `T?` is laid out as a struct of `T` followed by a `Bool` saying whether it holds a value, so an exported C header can declare it as that struct ([08](08-c-interop.md#c-representations)).
+**Without a niche, `T?` is laid out as a struct of `T` followed by a `Bool` saying whether it holds a value**, so an exported C header can declare it as that struct ([08](08-c-interop.md#c-representations)).
 
 ### Untagged unions
 
-An **untagged union** stores several types in the same bytes, with nothing recording which is there:
+**An untagged union stores several types in the same bytes, with nothing recording which is there:**
 
 ```swift
 union Bits { var f: Float; var u: UInt32 }          // Pod and padding-free
@@ -373,7 +401,8 @@ unsafe { use(m.byte) }     // reading a member of Mixed needs unsafe
 - **Layout.** Every member is at offset 0, and the union is sized to its largest member, rounded up to its largest alignment, as a C union is. `@c union` adds the `@c` field checks, and imported C unions arrive in this form ([08](08-c-interop.md#structs-unions-and-enums)).
 - **Members.** They are copyable, so a union never has to know which one to destroy, and are all one place for exclusivity ([01](01-values-and-ownership.md#which-places-overlap)).
 - **Initializers.** A union is built from one member, as in `Bits(f: 1.5)`, and its own `init` builds its value as an enum's does ([above](#enums)).
-- **Access.** Writing a whole new value into a member that isn't `unsafe` is safe: initializing the union with it, or assigning it. An `unsafe` member, like an `unsafe` field, is given a value only inside `unsafe` ([Structs](#initializers)). Every other access reads, since it starts from the bytes already there: a borrow, `&`, a `mutating` call, `b.u += 1` or a reflective `modify`. Reading is safe when every member's type is `Pod`, no member is `unsafe`, and the union is padding-free ([Plain data](#plain-data-pod-and-bit-casts)), and needs `unsafe` otherwise. Unlike the union's own `Pod` conformance, this doesn't ask its members to be as visible as it: a read names a member it can see, and any bytes are a valid value of that member's type.
+- **Access.** Writing a whole new value into a member that isn't `unsafe` is safe: initializing the union with it, or assigning it. An `unsafe` member, like an `unsafe` field, is given a value only inside `unsafe` ([above](#initializers)). Every other access reads, since it starts from the bytes already there: a borrow, `&`, a `mutating` call, `b.u += 1` or a reflective `modify`.
+- **Reading.** Reading is safe when every member's type is `Pod`, no member is `unsafe`, and the union is padding-free ([below](#plain-data-pod-and-bit-casts)). Otherwise it needs `unsafe`. Unlike the union's own `Pod` conformance, this doesn't ask its members to be as visible as it: a read names a member it can see, and any bytes are a valid value of that member's type.
 
 ## Tuples, ranges and arrays
 
@@ -387,9 +416,21 @@ var grid: [64 of Int] = .init(repeating: 0)  // every element is given
 let locks: [8 of Mutex<Int>] = .init(generating: { _ in Mutex(0) })   // one call per index, for a move-only type
 ```
 
-Tuples may be labeled, and are laid out as a struct of their elements in order ([Structs](#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`. Ranges, `0..<n`, `a...b`, `..<n`, `...b` and `i...`, are copyable values.
+**Tuples may be labeled, and are laid out as a struct of their elements in order** ([above](#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`.
 
-**An array, `Array<T, N>`, written `[N of T]`, is `N` values of `T` stored inline**, with no heap allocation, and is copyable when `T` is. Its length is part of its type, so every element is given when it is made: by a literal of exactly `N` elements, by `.init(repeating:)` of a copyable value, or by `.init(generating:)`, which calls a closure once per index, in order, and takes each result it returns. `[_ of T]` takes the count from the initializer. Its elements are laid out end to end, each at `index × stride`, where a type's **stride** is its size rounded up to its alignment. `N` is at least 0, and `N` times `T`'s stride fits in an `Int`, checked where both are known, as for `Simd` ([above](#simd-and-math)). It is a language type, and what an array literal makes when nothing asks for another type ([Literals](#literals)).
+**Ranges are copyable values**: `0..<n`, `a...b`, `..<n`, `...b` and `i...`.
+
+**An array, `Array<T, N>`, written `[N of T]`, is `N` values of `T` stored inline**, with no heap allocation, and is copyable when `T` is. It is a language type, and what an array literal makes when nothing asks for another type ([below](#literals)).
+
+**Its length is part of its type, so every element is given when it is made**, in one of these ways:
+
+- by a literal of exactly `N` elements;
+- by `.init(repeating:)` of a copyable value;
+- by `.init(generating:)`, which calls a closure once per index, in order, and takes each result it returns.
+
+`[_ of T]` takes the count from the initializer.
+
+**An array's elements are laid out end to end**, each at `index × stride`, where a type's **stride** is its size rounded up to its alignment. `N` is at least 0, and `N` times `T`'s stride fits in an `Int`, checked where both are known, as for `Simd` ([above](#simd-and-math)).
 
 ## Collections and strings
 
