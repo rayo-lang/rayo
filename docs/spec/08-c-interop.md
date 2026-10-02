@@ -23,18 +23,30 @@ import c "SDL3/SDL.h" as sdl                             // explicit name
 import c "vendor/fmod.h" as fmod where prefix: "FMOD_"   // strips the prefix: FMOD_System_Create → fmod.System_Create
 ```
 
-**`import c` makes a header's declarations available in a Rayo module, each as the Rayo declaration that the mapping [below](#what-imports-as-what) gives it.** `prefix:` strips a case-sensitive match from the start of each imported function, type, enumerator, macro and variable name. A name keeps its prefix when stripping it would leave text that doesn't start an identifier, as `FMOD_3D` would, or a name that collides with another. An import may end with a **config block**, `unsafe { … }`, of rules about the header's C: `stack(n)` ([below](#the-stack-a-c-call-needs)), `noalloc` ([below](#c-calls-in-noalloc-code-noalloc)) and `struct`, `union` or `enum S in "h"` ([below](#importing-headers)). Its rules name declarations by their C names, before `prefix:` is stripped.
+**`import c` makes a header's declarations available in a Rayo module**, each as the Rayo declaration that the mapping gives it ([below](#what-imports-as-what)). An import may also take these:
+
+- **`prefix:`** strips a case-sensitive match from the start of each imported function, type, enumerator, macro and variable name. A name keeps its prefix when stripping it would leave text that doesn't start an identifier, as `FMOD_3D` would, or a name that collides with another.
+- **Config blocks.** An import may end with a **config block**, `unsafe { … }`, of rules about the header's C. It holds three kinds of rule:
+    - `stack(n)` ([below](#the-stack-a-c-call-needs));
+    - `noalloc` ([below](#c-calls-in-noalloc-code-noalloc));
+    - `struct`, `union` or `enum S in "h"` (below).
+
+  Its rules name declarations by their C names, before `prefix:` is stripped.
 
 **Each `import c` reads its header with only the preprocessor definitions the build declares for that import** ([09](09-compile-time.md#what-a-build-declares)), so no other import's macros reach it.
 
 **An imported type is one type wherever it is reached from, whatever definitions it is read with.** Its identity is its kind, `struct`, `union` or `enum`, the file that defines it, and its name there:
 
 - **A tagged type's name** is its tag, before any `prefix:` is stripped.
-- **An untagged type's name** is the first typedef that names it, kept distinct from every tag. An untagged type that no typedef names is identified by its position: among the untagged types declared directly in the struct or union that holds it, together with that holder's identity, or, when nothing holds it, among its file's untagged types.
-- **A tag that another declaration shares** gives way: when a tag's identifier also names a typedef of a different type, a function, a variable or an enumerator, as in `struct Shape { … }; typedef struct { … } Shape;` or POSIX's `struct stat` and `stat()`, the other declaration takes the plain Rayo name, and the tagged type imports as `struct_Shape`, `union_Shape` or `enum_Shape`.
-- **A type that a reading only declares**, as `struct sockaddr;` does, is a type of its own, identified by the first file that declares it in the reading's include order, and imports as `@opaque`, since two libraries may each keep a private `struct buffer` and a declaration doesn't say whose it means. An import can name a header whose reading has it: `import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }` asserts, unchecked, that it is the type of that kind and tag in the reading of `"sys/socket.h"` with the import's definitions, and the build fails if that reading doesn't declare it. The named reading may only declare it too, as every public header does for a library's handle type that no header defines, such as Wayland's `struct wl_surface`, so imports that name one header for it share one opaque type.
+- **An untagged type's name** is the first typedef that names it, kept distinct from every tag. An untagged type that no typedef names is identified by its position among the untagged types declared directly in the struct or union that holds it, together with that holder's identity. One that nothing holds is identified by its position among its file's untagged types.
+- **A tag gives way to a typedef of a different type, a function, a variable or an enumerator that shares its identifier.** The other declaration takes the plain Rayo name, and the tagged type imports as `struct_Shape`, `union_Shape` or `enum_Shape`. Examples are `struct Shape { … }; typedef struct { … } Shape;` and POSIX's `struct stat` and `stat()`.
+- **A type that a reading only declares**, as `struct sockaddr;` does, is a type of its own, since two libraries may each keep a private `struct buffer`, and a declaration doesn't say whose it means. It is identified by the first file that declares it in the reading's include order, and imports as `@opaque`.
 
-So `SDL_Window` is one type whether a module imports `SDL3/SDL.h` or `SDL3/SDL_video.h`, and `typedef struct { float x, y; } Vec2;` and `typedef struct { float x, y; } Point;` are two, although their fields match. **Two readings of one identity must give it the same kind, layout, fields, cases and attributes**, or the build fails, as when one header defines a macro before including another, or two imports read it with definitions that change it. So modules that import `SDL3/SDL.h` with and without `SDL_MAIN_HANDLED` share one `SDL_Window`. An import that names a header for a type its own reading only declares takes that header's reading of the type.
+  An import can name a header whose reading has the type, as `import c "mylib.h" unsafe { struct sockaddr in "sys/socket.h" }` does. Naming a header `h` this way asserts, unchecked, that the type is the one of that kind and tag in the reading of `h` with the import's definitions. The build fails if that reading doesn't declare it. The named reading may only declare it too, as every public header does for a library's handle type that no header defines, such as Wayland's `struct wl_surface`. So imports that name one header for it share one opaque type.
+
+So `SDL_Window` is one type whether a module imports `SDL3/SDL.h` or `SDL3/SDL_video.h`, while `typedef struct { float x, y; } Vec2;` and `typedef struct { float x, y; } Point;` are two, although their fields match.
+
+**Two readings of one identity must give it the same kind, layout, fields, cases and attributes**, or the build fails. Such a failure comes, for example, when one header defines a macro before including another, or when two imports read the type with definitions that change it. So modules that import `SDL3/SDL.h` with and without `SDL_MAIN_HANDLED` share one `SDL_Window`. An import that names a header for a type its own reading only declares takes that header's reading of the type.
 
 ### Calling imported functions
 
@@ -48,7 +60,7 @@ extern c stack(512 * 1024) func solve(_ d: CInt) -> CInt         // on an extern
 typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C function pointer's type
 ```
 
-**A call into C first checks that the stack its target needs is left, and panics otherwise** ([10](10-errors-and-safety.md#what-panics)). The need is the one declared where the call's target is, as above, each `n` a `const` `Int` expression, or else `target.cStackReserve` bytes ([09](09-compile-time.md#static-if-and-conditional-compilation)). A function or pointer converts to a `@c` type that declares at least its need, never less, and a `@c` type without `stack` declares `target.cStackReserve`. A Rayo function, a `@c func`, an `@export` function or a literal needs none, since it checks its own stack on entry. Every call to C is `unsafe`, so the calling code answers for the declared need being enough.
+**A call into C first checks that the stack its target needs is left, and panics otherwise** ([10](10-errors-and-safety.md#what-panics)). The need is the one declared where the call's target is, as above, each `n` a `const` `Int` expression. When nothing is declared there, the need is `target.cStackReserve` bytes ([09](09-compile-time.md#static-if-and-conditional-compilation)). A function or pointer converts to a `@c` type that declares at least its need, never less, and a `@c` type without `stack` declares `target.cStackReserve`. A Rayo function, a `@c func`, an `@export` function or a literal needs none, since it checks its own stack on entry. Every call to C is `unsafe`, so the calling code answers for the declared need being enough.
 
 ### What imports as what
 
@@ -59,7 +71,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | `float`, `double`, `bool` | `Float`, `Double`, `Bool` |
 | `void` as a function's result | `Void` |
 | `_Float16`, where the target's C compiler has it | `Half` |
-| `int`, `long`, `char` and C's other standard integer types | `CInt`, `CLong`, `CChar` and the like, such as `CUInt` for `unsigned` and `CShort` for `short`: type aliases, each of the `IntN` or `UIntN` with its C type's size and signedness on the target, so `CChar` is `Int8` or `UInt8` as the target's `char` is signed or not |
+| `int`, `long`, `char` and C's other standard integer types | `CInt`, `CLong`, `CChar` and the like (below) |
 | `T*` | `*T?` (nullable), or `*T` when annotated `_Nonnull` or inside `NS_ASSUME_NONNULL`-style regions |
 | `const T*` | as `T*`, with the `const` dropped: Rayo has no pointer-const |
 | `void*` | `*Void?` |
@@ -67,11 +79,11 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | `__m128`, `float32x4_t`, `__m128i`, `int32x4_t` | `Simd<Float, 4>` / `Simd<Int32, 4>` ([04](04-types.md#simd-and-math)), passed by value in vector registers under the platform ABI |
 | `struct S { ... }` | `@c struct S` with the same layout, fields and bitfields ([below](#structs-unions-and-enums)) |
 | anonymous `union`/`struct` members | Their fields are accessible directly on the enclosing struct, as in C |
-| flexible array member `T data[]` | The struct `S` imports without the member, as a `TrailingArray` header; `S.trailing(at: p, count: n)`, an `unsafe` static function taking `p: *S`, gives a `MutableSpan<T>` at the member's offset from `p` without lending the struct, and its caller promises what [10](10-errors-and-safety.md#unsafe-code) asks of a span made from a raw pointer: `n` valid elements there, aligned for `T`, that nothing else reaches for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding. Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment ([04](04-types.md#variable-sized-structs-trailingarray)) |
+| flexible array member `T data[]` | The struct without the member, as a `TrailingArray` header (below) |
 | `__attribute__((packed))` / `#pragma pack(n)` / `__attribute__((aligned(n)))` | `@packed` / `@packed(n)` / `@align(n)`, with identical layout ([04](04-types.md#packed-structs-and-under-aligned-places)) |
 | incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#importing-headers)) | `@opaque struct S`: only usable as `*S` |
-| a struct or union whose members' offsets, size and alignment Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce, as with an `_Alignas`, `aligned` or `packed` member, or whose members don't all map, as with an `_Atomic` member | `@opaque` too, and a function that passes it by value, or a variable of that type, isn't imported |
-| `typedef T N;` | `typealias N = T`, except a typedef that names a tagged type by its own tag, which adds nothing, and the first typedef that names an untagged type, which names the type itself ([above](#importing-headers)), and a typedef whose attribute changes `T`'s size, alignment or representation, such as `aligned`, `packed`, `mode` or `vector_size`, which isn't imported unless it is one of the vector types above |
+| a struct or union whose layout Rayo can't reproduce, or whose members don't all map (below) | `@opaque` too |
+| `typedef T N;` | `typealias N = T`, with the exceptions below |
 | `union U` | `@c union U` |
 | `enum E { A, B }` | `@c enum E: R`, a form only imports make, with `.A`, `.B`, **open** by default |
 | anonymous `enum { A = 1 };` | a `const` of its underlying type per enumerator, and a field or variable of that enum has its underlying type |
@@ -79,15 +91,48 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | `static const` variable of an integer, floating-point or `bool` type with a constant initializer | a `const`, as a literal macro is |
 | any other variable, `extern T v;` or defined in the header | a global of type `T`, accessed only inside `unsafe`, as a bare global `var` is ([07](07-concurrency.md#global-state)). An `_Atomic`, `_Thread_local` or `volatile` variable isn't imported |
 | function pointer `R (*)(A)` | `(@c (A) -> R)?`, nullable with null as its niche, or `@c (A) -> R` when annotated `_Nonnull` or inside an `NS_ASSUME_NONNULL`-style region |
-| variadic function | callable with variadic arguments that C's default argument promotions leave as they are: an integer at least as wide as `CInt`, signed or not, a `Double` and a pointer, each with a C representation. A `Float` or a narrower integer is converted explicitly first, as in `Double(x)` or `CInt(x)`. It converts to no function type, and an `extern c func` can't declare one |
-| `#define N 16` (literal) | `const N: CInt = 16`, usable as an array length or in a `static if` condition. Its value is the C literal's, `0644` octal and `0.1f` rounded to `float`, and a negated or parenthesized literal counts as one. Its type is the one C gives the literal, suffix included, as the alias of an integer type: `16` gives a `CInt`, `16u` and `0xFFFFFFFF` a `CUInt` and a character literal a `CInt`, while `0.1f` is a `Float`, `0.1` a `Double` and a string literal a `StaticString` |
+| variadic function | callable with the variadic arguments below |
+| `#define N 16` (literal) | `const N: CInt = 16` (below) |
 | `#define F (1u << 3)` (another integer constant expression) | a `const` of the value and type C gives it, as the alias of that type: here a `CUInt` of 8 |
 | `#define` function-like macros, and other macros | Not imported |
 | `static inline` functions | Imported and called |
 
-**A C type the table doesn't map isn't imported**, such as `long double`, `_Complex`, `__int128`, `_BitInt(N)`, a vector type other than those above, or a function pointer type with a calling convention other than the platform's default, and neither is a function, typedef or variable that uses one, except through a data pointer: a pointer to such a type imports as a pointer to `Void`, as `void f(long double* p)` imports with a `*Void?` parameter.
+**Several rows of the table have rules of their own:**
 
-**An import compiles only the header's `static` and `static inline` functions that its module calls or converts to a `@c` pointer, and `static` variables that its module uses, with every such definition that these reach**, each with internal linkage. Any other definition in a header, of a function or a variable, imports as a declaration alone, so an import adds no symbol to the program and runs no C when it loads: a library's code comes from linking the library, or from an `extern c` block ([below](#inline-c)).
+- **C's standard integer types.** `CInt`, `CLong`, `CChar` and the like, such as `CUInt` for `unsigned` and `CShort` for `short`, are type aliases. Each is the `IntN` or `UIntN` with its C type's size and signedness on the target. So `CChar` is `Int8` or `UInt8` as the target's `char` is signed or not.
+- **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. `S.trailing(at: p, count: n)`, an `unsafe` static function taking `p: *S`, gives a `MutableSpan<T>` at the member's offset from `p` without lending the struct. Its caller promises what [10](10-errors-and-safety.md#unsafe-code) asks of a span made from a raw pointer:
+    - `n` valid elements there, aligned for `T`;
+    - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
+
+  Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment ([04](04-types.md#variable-sized-structs-trailingarray)).
+- **Structs and unions that import as `@opaque`.** A struct or union imports as `@opaque` when Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported.
+- **Typedefs.** `typedef T N;` imports as `typealias N = T`, except for these:
+    - a typedef that names a tagged type by its own tag, which adds nothing;
+    - the first typedef that names an untagged type, which names the type itself ([above](#importing-headers));
+    - a typedef whose attribute changes `T`'s size, alignment or representation, such as `aligned`, `packed`, `mode` or `vector_size`, which isn't imported unless it is one of the vector types above.
+- **Variadic functions.** A variadic function is callable with variadic arguments that C's default argument promotions leave as they are, each with a C representation:
+    - an integer at least as wide as `CInt`, signed or not;
+    - a `Double`;
+    - a pointer.
+
+  A `Float` or a narrower integer is converted explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern c func` can't declare one.
+- **Literal macros.** `#define N 16` imports as `const N: CInt = 16`, usable as an array length or in a `static if` condition. Its value is the C literal's, `0644` octal and `0.1f` rounded to `float`, and a negated or parenthesized literal counts as one. Its type is the one C gives the literal, suffix included, as the alias of an integer type: `16` gives a `CInt`, `16u` and `0xFFFFFFFF` a `CUInt`, and a character literal a `CInt`. By contrast, `0.1f` gives a `Float`, `0.1` a `Double`, and a string literal a `StaticString`.
+
+**A C type the table doesn't map isn't imported.** Such types include:
+
+- `long double`, `_Complex`, `__int128` and `_BitInt(N)`;
+- a vector type other than those above;
+- a function pointer type with a calling convention other than the platform's default.
+
+A function, typedef or variable that uses such a type isn't imported either, except through a data pointer. A pointer to such a type imports as a pointer to `Void`, as `void f(long double* p)` imports with a `*Void?` parameter.
+
+**An import compiles only the header's `static` definitions that its module reaches**, each with internal linkage:
+
+- the `static` and `static inline` functions its module calls or converts to a `@c` pointer;
+- the `static` variables its module uses;
+- every such definition that these reach.
+
+Any other definition in a header, of a function or a variable, imports as a declaration alone. So an import adds no symbol to the program and runs no C when it loads. A library's code comes from linking the library, or from an `extern c` block ([below](#inline-c)).
 
 ### Structs, unions and enums
 
@@ -104,7 +149,7 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
 **Bitfields** keep the layout the target ABI gives them: each holds a run of bits in a storage unit.
 
 - **Type.** A bitfield has its declared type, except an enum-typed one whose enumerators don't all survive the round trip through the field's width and the target ABI's signedness, which has the enum's raw integer type.
-- **Access.** Generated accessors read and write a bitfield through a temporary, so they are access-bound projections ([02](02-views-and-dependencies.md#access-bound-projections)). A read or a write touches only the bytes that hold its memory location's bits. A write of a value that doesn't fit the width panics where overflow checks are on, and keeps its low bits where they are off, as an unlabeled integer conversion does ([04](04-types.md#conversions)), and a read of a signed bitfield sign-extends.
+- **Access.** Generated accessors read and write a bitfield through a temporary, so they are access-bound projections ([02](02-views-and-dependencies.md#access-bound-projections)). A read or a write touches only the bytes that hold its memory location's bits. A write of a value that doesn't fit the width panics where overflow checks are on, and keeps its low bits where they are off, as an unlabeled integer conversion does ([04](04-types.md#conversions)). A read of a signed bitfield sign-extends.
 - **Places.** A **memory location** is a maximal run of adjacent nonzero-width bitfields, even across storage units, and a non-bitfield member or a zero-width bitfield ends one. The bitfields of one memory location are **one place** for exclusivity ([01](01-values-and-ownership.md#which-places-overlap)), as `buttons` and `trigger` are above.
 - **Padding.** The bits of a storage unit that no named member covers, and an unnamed bitfield's bits, are padding, which C leaves indeterminate even after initialization ([04](04-types.md#plain-data-pod-and-bit-casts)). So `Pad`, whose second storage unit has 8 bits no bitfield covers, isn't padding-free. A bitfield member of a union fills only its own bits, so `union Reg { uint32_t en : 1; uint32_t raw; }` isn't padding-free either.
 - **No niche.** A bitfield never gives an optional its niche, since its width may leave no room for the `nil` value ([04](04-types.md#optionals)).
@@ -126,7 +171,12 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
     ```
 
 - **Closed enums.** An enum the header declares closed, with `__attribute__((enum_extensibility(closed)))`, imports as a Rayo enum does: it holds only its cases, so `E(rawValue:)` fails on any other value and a `when` that covers every case needs no `else` arm.
-- **Flag enums.** A flag enum (`__attribute__((flag_enum))`) imports as a flag set: a struct holding a `rawValue` of the underlying type, with a static constant per flag, an `init()` of no flags, `==`, the bitwise operators `|`, `&`, `^` and `~` between flag sets, and `contains(_:)`.
+- **Flag enums.** A flag enum (`__attribute__((flag_enum))`) imports as a flag set: a struct holding a `rawValue` of the underlying type, with these members:
+    - a static constant per flag;
+    - an `init()` of no flags;
+    - `==`;
+    - the bitwise operators `|`, `&`, `^` and `~` between flag sets;
+    - `contains(_:)`.
 - **Shared values.** Enumerators that share a value name one value: the first imports as a case, and each later one as a static constant equal to it.
 
 ### C calls in `@noalloc` code: `noalloc`
