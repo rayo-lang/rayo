@@ -37,12 +37,12 @@ Every heap allocation goes through an allocator the code can name, and every rel
 ### The static allocator
 
 ```swift
-const primes: List<Int> = makePrimes(below: 1000)    // built by the compiler; its buffer is in static data
+const primes: List<Int> = makePrimes(below: 1000)    // built by the compiler; its buffer is in read-only data
 var more = primes.clone()                            // the clone's buffer comes from the current allocator
 more.append(1009)                                    // and grows there, as any list's does
 ```
 
-**Values in static data carry the static allocator, which never allocates or frees at run time.** They are the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [09](09-compile-time.md#consts-that-reach-run-time)). Nothing consumes or mutates a value in static data, so it is never grown, and it is never destroyed ([09](09-compile-time.md#consts-that-reach-run-time)).
+**Values in read-only data carry the static allocator, which never allocates or frees at run time.** **Read-only data** holds the `const`s, and the global `let`s evaluated at compile time that pass the freezable test ([07](07-concurrency.md#initialization-at-startup), [09](09-compile-time.md#consts-that-reach-run-time)). Nothing consumes or mutates a value in read-only data, so it is never grown, and it is never destroyed ([09](09-compile-time.md#consts-that-reach-run-time)).
 
 ## Allocators and threads
 

@@ -256,10 +256,11 @@ An ordered token the runtime gives each block an arena hands out memory from, wh
 _Avoid_: epoch, generation (a handle's)
 
 **Static allocator**:
-The allocator of the values in static data, which never allocates or frees at run time ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
+The allocator of the values in read-only data, which never allocates or frees at run time ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
 
-**Static data**:
+**Read-only data**:
 The memory that holds `const`s and the global `let`s evaluated at compile time, which nothing writes or frees ([06](docs/spec/06-memory-and-allocators.md#the-static-allocator)).
+_Avoid_: static data
 
 **TrivialFree**:
 A type whose destruction does nothing but free memory ([06](docs/spec/06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)).

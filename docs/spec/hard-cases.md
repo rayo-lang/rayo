@@ -431,7 +431,7 @@ Every crossing between Rayo and C is unsafe by definition ([08](08-c-interop.md)
 
 ### E1 · C holding pointers into Rayo memory
 
-A C library stores a `void* user` per registered item and calls a callback on its own threads with two of those pointers, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole (`pool = StablePool()`), and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool`, which is initialized at startup, never placed in static data ([09](09-compile-time.md#consts-that-reach-run-time)), has one of its elements pinned for C.
+A C library stores a `void* user` per registered item and calls a callback on its own threads with two of those pointers, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole (`pool = StablePool()`), and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool`, which is initialized at startup, never placed in read-only data ([09](09-compile-time.md#consts-that-reach-run-time)), has one of its elements pinned for C.
 
 - **Must accept** an idiom whose `unsafe` part is only the C calls. State what the Rayo side must provide: stable addresses of whatever `user` points to, and thread safety.
 - **Must hold:** C's address stays valid for as long as its pin lives, and replacing the pool or resetting the arena never runs the element's `deinit` or frees its memory before C is done with it. State what a reset does while a pin into the arena lives. The global element's address is valid for the whole run.

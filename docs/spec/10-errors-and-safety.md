@@ -217,7 +217,7 @@ An `unsafe` block marks code whose correctness the compiler takes on trust. Chec
 - **Raw accesses respect borrows and views.** `unsafe` code reads a place only where Rayo code could, and writes it, moves its value out, as `p.move()` does, or destroys the value in it, only where Rayo code with exclusive access could:
     - while a `mutable` access, an `&` binding or a mutable view is live, nothing touches the places it reaches except through it, so two `MutableSpan`s made from one pointer never overlap while both are live;
     - while a borrow, a `let` of a place or a shared view is live, nothing writes, moves out of or destroys the places it reads, except inside a `Synchronized` value, through its own operations;
-    - nothing writes memory that Rayo treats as immutable (static data, a `const`'s frozen data, and a `Frozen` value behind a `Shared` or a `LocalShared`) or that its provider made read-only, such as a C object defined `const`, a string literal's bytes or a page mapped read-only.
+    - nothing writes memory that Rayo treats as immutable (read-only data, which holds every `const`'s frozen data, and a `Frozen` value behind a `Shared` or a `LocalShared`) or that its provider made read-only, such as a C object defined `const`, a string literal's bytes or a page mapped read-only.
 
     A live parameter counts as a borrow or `mutable` access of its argument's place, since a borrowed argument may be passed as a copy ([01](01-values-and-ownership.md#borrowed-arguments)) and the compiler may assume neither kind is aliased. The views `unsafe` code makes also keep [02](02-views-and-dependencies.md#dependencies)'s promises.
 

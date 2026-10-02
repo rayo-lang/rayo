@@ -15,7 +15,7 @@ The undefined behavior of [10](10-errors-and-safety.md#unsafe-code) is an access
 
 - **Live.** Safe code accesses memory only inside an allocation, while the allocation is live ([10](10-errors-and-safety.md#unsafe-code)), so nothing it reads or writes has been freed or reused.
 - **Valid.** A place that safe code reads, lends or destroys holds a valid value of its type, at an address aligned for it.
-- **Exclusive.** While a mutable access to a place is live, nothing reaches an overlapping place except through it. While a shared access is live, nothing writes the place, except a `Synchronized` value through its own synchronization. Static data, a frozen `const` and a `Frozen` value behind a `Shared` or a `LocalShared` are shared for good.
+- **Exclusive.** While a mutable access to a place is live, nothing reaches an overlapping place except through it. While a shared access is live, nothing writes the place, except a `Synchronized` value through its own synchronization. Read-only data, which holds every frozen `const`, and a `Frozen` value behind a `Shared` or a `LocalShared` are shared for good.
 - **Owned.** A value has one owner, except a reference-counted value, which its owners share. It is destroyed at most once, and used neither after its destruction nor after it moves out.
 - **Race-free.** Two accesses to the same bytes on different threads, at least one a write, are ordered by happens-before ([07](07-concurrency.md#atomics-and-locks)), unless both are atomic accesses of the same size at the same address.
 
@@ -230,7 +230,7 @@ This section keeps **Valid**.
 ## Compile time and reflection
 
 - **Evaluation checks what run time trusts** ([09](09-compile-time.md#running-code-at-compile-time-const)): every raw access and every memory-safety check an `unchecked` block removes, on one thread.
-- **A frozen value is never written or destroyed** ([09](09-compile-time.md#consts-that-reach-run-time)), since it lies in read-only data. So it is `Frozen` with no bookkeeping, `TrivialFree`, holds nothing that exists only at run time, such as a weak pointer or an allocator id, holds no stale owning value, points only at memory freezing copies or at immortal data, and views only static data. It is `Sendable`, since every thread may read it.
+- **A frozen value is never written or destroyed** ([09](09-compile-time.md#consts-that-reach-run-time)), since it lies in read-only data. So it is `Frozen` with no bookkeeping, `TrivialFree`, holds nothing that exists only at run time, such as a weak pointer or an allocator id, holds no stale owning value, points only at memory freezing copies or at immortal data, and views only read-only data. It is `Sendable`, since every thread may read it.
 - **Reflection grants nothing a name doesn't** ([09](09-compile-time.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. A reflective projection is a storage or access-bound projection exactly as the field is ([09](09-compile-time.md#what-reflection-can-read)).
 - **Generated declarations are checked as written ones** ([09](09-compile-time.md#generated-members-are-checked-per-instantiation)), and generic code takes them at the safe bound ([above](#generic-code-and-existentials)).
 

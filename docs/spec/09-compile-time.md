@@ -101,7 +101,7 @@ func setUp(_ world: mutable World) {
 }
 ```
 
-**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in static data does ([07](07-concurrency.md#initialization-at-startup)). Freezing copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, into read-only data aligned at least as the allocation was, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). It points each pointer at the same offset in the copy, and makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
+**A `const` that reaches run time is frozen into read-only data.** It keeps its declared type, and its buffers carry the static allocator ([06](06-memory-and-allocators.md#the-static-allocator)), as a global `let` in read-only data does ([07](07-concurrency.md#initialization-at-startup)). Freezing copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, into read-only data aligned at least as the allocation was, as one allocation ([10](10-errors-and-safety.md#unsafe-code)). It points each pointer at the same offset in the copy, and makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none. An address that evaluation turned into an integer names nothing at run time ([10](10-errors-and-safety.md#unsafe-code)).
 
 - **Its views are static storage.** Its `.span` is a `Span` of static storage, which rule 5 lets any function return ([02](02-views-and-dependencies.md#rule-5-the-callee-side)).
 - **Unscoped views.** For a `List` or an `[N of T]` reached from a `const` through stored fields and storage projections, as `enemyPresets[i].name` is, the compiler also provides a `staticSpan` property, and for a `String` a `staticString` property. It returns an unscoped `StaticSpan<T>` or `StaticString`, which may be kept anywhere because what it views is never freed ([below](#staticspan-views-of-immortal-data)).
@@ -109,7 +109,7 @@ func setUp(_ world: mutable World) {
 
 **What can be frozen.** A `const` that reaches run time must be **freezable**, or it is a compile error. A freezable value:
 
-- is `Frozen`: nothing writes what it holds or owns through a shared borrow ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), and nothing ever mutates a value in static data. A type declared `: unsafe Frozen` promises that nothing writes a frozen value of it, bookkeeping included. So it holds no `Synchronized` value, and a global `let` of a `Synchronized` type is initialized at startup, in memory its methods can write ([07](07-concurrency.md#initialization-at-startup));
+- is `Frozen`: nothing writes what it holds or owns through a shared borrow ([06](06-memory-and-allocators.md#frozen-types-with-no-interior-mutability)), and nothing ever mutates a value in read-only data. A type declared `: unsafe Frozen` promises that nothing writes a frozen value of it, bookkeeping included. So it holds no `Synchronized` value, and a global `let` of a `Synchronized` type is initialized at startup, in memory its methods can write ([07](07-concurrency.md#initialization-at-startup));
 - is `TrivialFree` ([06](06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree)). A frozen value is never destroyed, which skips only frees, and those free nothing under the static allocator. So a `Shared` or a `LocalShared` isn't freezable, although it may be `Frozen`: its count is written at run time, and its `deinit` isn't `PlainDeinit`;
 - holds no `StablePool`, whose pin counts are written at run time, as `Shared`'s count is ([03](03-handles-and-objects.md#pinning-for-c));
 - holds no weak pointer or weak link at any depth, since the objects and `Shared` values they name exist only at run time ([03](03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [06](06-memory-and-allocators.md#sharedt-data-with-many-owners)). So a `Slice` or a `Waker`, which holds a weak link, isn't freezable either;
@@ -119,7 +119,7 @@ func setUp(_ world: mutable World) {
 - is unscoped ([02](02-views-and-dependencies.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](05-protocols-generics-and-closures.md#function-typed-values)): freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a `StaticSpan` or a `StaticString` (above);
 - has a `Sendable` type, as every global that safe code reaches does ([07](07-concurrency.md#global-state)).
 
-The same test decides which global `let`s go into static data ([07](07-concurrency.md#initialization-at-startup)). A `const` that doesn't reach run time, such as a list iterated by `static for`, may hold anything.
+The same test decides which global `let`s go into read-only data ([07](07-concurrency.md#initialization-at-startup)). A `const` that doesn't reach run time, such as a list iterated by `static for`, may hold anything.
 
 ## `static if` and conditional compilation
 
@@ -489,7 +489,7 @@ struct Enemy(
 )
 ```
 
-**An attribute is any struct that conforms to `Attribute`. Its arguments must be `const`**, and its value freezable, since `typeInfo` puts it in static data ([below](#runtime-type-info)) as a `const` that reaches run-time code is frozen ([above](#consts-that-reach-run-time)). Reflection reads it on a field, a type or an enum case ([table](#what-reflection-can-read)). An editor's inspector, for example:
+**An attribute is any struct that conforms to `Attribute`. Its arguments must be `const`**, and its value freezable, since `typeInfo` puts it in read-only data ([below](#runtime-type-info)) as a `const` that reaches run-time code is frozen ([above](#consts-that-reach-run-time)). Reflection reads it on a field, a type or an enum case ([table](#what-reflection-can-read)). An editor's inspector, for example:
 
 ```swift
 func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
@@ -505,7 +505,7 @@ func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
 
 ## Runtime type info
 
-For code that walks types **at run time**, `typeInfo(T.self)` materializes a `TypeInfo`, a read-only record in static data built from the same reflection and attributes, as a module other than `T`'s sees them ([above](#reflection-and-access-control)), so a type has one record wherever it is made:
+For code that walks types **at run time**, `typeInfo(T.self)` materializes a `TypeInfo`, a record in read-only data built from the same reflection and attributes, as a module other than `T`'s sees them ([above](#reflection-and-access-control)), so a type has one record wherever it is made:
 
 ```swift
 public struct TypeInfo private init(    // Frozen, derived: every field is Frozen
@@ -532,7 +532,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 
 ### `StaticSpan`: views of immortal data
 
-**`StaticSpan<T>` is a view of immortal read-only data: the program image, or runtime tables that are never freed. So unlike `Span` it is unscoped.**
+**`StaticSpan<T>` is a view of immortal data, so unlike `Span` it is unscoped.** **Immortal data** is read-only memory that is never freed: the program image, or runtime tables.
 
 - Its `T` is `~Scoped`, as an unscoped type's contents are ([02](02-views-and-dependencies.md#generic-code-and-scoped)), and has only values that could be frozen ([above](#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
 - Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](08-c-interop.md#what-c-must-uphold)).

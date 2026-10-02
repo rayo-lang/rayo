@@ -415,7 +415,7 @@ func split(_ text: StringView, by separator: StringView, into out: mutable List<
     where out borrows text                       // 'out' takes on only text, not 'separator'
 
 func builtinName(_ key: StringView) -> StringView
-    where return borrows static                  // only static data: the key doesn't stay borrowed
+    where return borrows static                  // only static storage: the key doesn't stay borrowed
 
 let tok = lexer.peek()                           // shared on lexer
 let syms = symbols.find(tok.text)                // shared on symbols only
