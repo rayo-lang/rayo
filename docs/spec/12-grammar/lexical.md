@@ -2,6 +2,8 @@
 
 [12 · Grammar](../12-grammar.md)
 
+The lexical grammar determines which tokens the parser receives. It covers names, literals, operators and the punctuation that separates or groups them.
+
 ```ebnf
 identifier   = (letter | '_') (letter | digit | '_')* | '`' any-keyword '`'
              | '$' digits                                     (* implicit closure parameters: $0, $1 *)

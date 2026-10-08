@@ -2,6 +2,8 @@
 
 [08 · C interop](../08-c-interop.md)
 
+C headers define names and types in C's terms. `import c` maps those declarations into a Rayo module, so code can name the functions and data they expose. An imported declaration retains C's calling and memory rules; code must meet those rules when it uses the declaration.
+
 ## Importing headers
 
 ```swift

@@ -2,6 +2,8 @@
 
 [09 · Compile time](../09-compile-time.md)
 
+A generic type may need different fields or cases for different type arguments. Rayo lets compile-time conditions and loops generate those declarations, so each resulting type has ordinary named members. The same constructs can generate declarations at a file's top level.
+
 ```swift
 struct Columns<Row>(                                      // a struct of arrays: one list per field of Row
     static for f in Row.fields {

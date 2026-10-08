@@ -2,6 +2,8 @@
 
 [02 · Views and dependencies](../02-views-and-dependencies.md)
 
+A dependency usually matters while the value that carries it can still be used. Destruction can extend that time when it runs code that reaches borrowed memory. Signatures can state more precise dependencies, and `rebind` changes which place a name refers to.
+
 ## When destroying a value counts as using it
 
 ```swift

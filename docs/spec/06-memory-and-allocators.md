@@ -1,5 +1,7 @@
 # 06 · Memory and allocators
 
+Values that own heap storage need somewhere to allocate it and a defined way to release it. In Rayo, an allocator names where the storage comes from, and an owning value remembers that allocator as it grows and is destroyed. An arena can reclaim many allocations at once, so resetting one also has to account for values and views that may still reach its memory.
+
 ```swift
 let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))   // a heap for level data
 let scratch = Allocator.register(Arena(size: 64.mb))        // an arena for short-lived work
@@ -15,6 +17,8 @@ using allocator = scratch {                       // everything built in here us
 
 scratch.reset()                                   // everything the arena handed out is freed at once
 ```
+
+`props` records `levelHeap` as its allocator, while `names` takes the current one. The `using` block makes `scratch` current for values built inside it; after `visible` is destroyed, `scratch.reset()` reclaims the arena's storage. A reset that would invalidate a live use panics instead.
 
 **Every heap allocation goes through an allocator the code can name, and every release happens at a point the code shows**, where a value is destroyed:
 

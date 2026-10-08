@@ -2,6 +2,8 @@
 
 [12 · Grammar](../12-grammar.md)
 
+A source file consists of imports and declarations, including declarations selected or generated at compile time. These productions define how those file-level forms and the members of a type are written.
+
 ```ebnf
 file          = file-item* ;
 file-item     = import | declaration | file-static-if | file-static-for | static-error ;

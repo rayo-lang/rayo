@@ -2,6 +2,8 @@
 
 [04 · Types](../04-types.md)
 
+Rayo normally lays out a value according to its fields. Systems code sometimes needs stronger guarantees about those bytes or a different way to store repeated values. The type's layout rules make those choices explicit, including plain data, trailing arrays and struct-of-arrays storage.
+
 ## Plain data: `Pod` and bit casts
 
 **A type where any bytes make a valid value is `Pod`** ("plain old data"), so bytes from a file or a packet can be used as one:

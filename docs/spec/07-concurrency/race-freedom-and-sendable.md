@@ -2,6 +2,8 @@
 
 [07 · Concurrency](../07-concurrency.md)
 
+Code on different threads can reach the same memory only through routes that order or separate their accesses. Rayo uses borrowing rules for work lent to a thread, and `Sendable` to limit which values can move between threads. The rules below explain why those routes keep safe code free of data races.
+
 ## Why safe code can't race
 
 **Only `Sendable` values reach another thread** ([below](#what-may-cross-threads-sendable)). Everything else stays on its own thread, where exclusivity and the dynamic tier check all its aliases ([01](../01-values-and-ownership.md#tiers-of-checking)).

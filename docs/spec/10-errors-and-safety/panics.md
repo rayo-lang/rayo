@@ -2,6 +2,8 @@
 
 [10 · Errors and safety](../10-errors-and-safety.md)
 
+A panic stops an operation that cannot continue under the language's rules. It does not return a value for the caller to handle, as a typed error does. It can follow an explicit precondition or a failed check built into an operation:
+
 ```swift
 let e = borrow enemies[h]!                       // panics if h is stale
 precondition(count < capacity, "queue full")     // panics if the caller broke the contract

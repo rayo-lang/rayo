@@ -1,5 +1,7 @@
 # 09 · Compile time
 
+Rayo can do work before a program runs when the answer depends only on information available to the compiler. It can evaluate values, inspect types, and generate declarations or code. Generated members become ordinary parts of a type and are checked for each type that uses them.
+
 A network replication layer sends only the fields of an object that changed since the last update. For every type it needs a record with one optional per replicated field, under that field's name, and a function that fills the record in. In Rayo each is written once, for every type:
 
 ```swift

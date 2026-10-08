@@ -2,6 +2,8 @@
 
 [07 · Concurrency](../07-concurrency.md)
 
+Some values must be shared even while their state changes. Atomics, locks and queues make those changes safe by coordinating access among threads. Rayo treats them as library types with a synchronization contract, rather than giving each one a separate language rule.
+
 ## Atomics and locks
 
 **std's atomics, locks, queues, snapshots, one-time values and blocking primitives implement the `Synchronized` contract** ([below](#the-synchronized-contract)). So they may be shared across threads, and change through a shared borrow, as a global `let` of one does ([Global state](global-state.md#global-state)).

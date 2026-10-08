@@ -2,6 +2,8 @@
 
 [05 · Protocols, generics and closures](../05-protocols-generics-and-closures.md)
 
+Most changes of type are written out, especially when they may lose information. A small set of conversions can instead follow from the type a context expects. The compiler performs those without a conversion expression, while preserving the ownership and borrowing rules of the value being converted.
+
 ```swift
 var target: Handle<Enemy>? = h                  // T to T?, taking h
 let seen: any Drawable = sprite                 // a shared borrow of 'sprite' to an existential view

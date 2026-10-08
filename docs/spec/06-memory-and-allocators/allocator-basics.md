@@ -2,6 +2,8 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
+An owning value remembers where its storage came from so it can grow and release that storage through the same allocator. Code may pass an allocator explicitly or use the current one, and each thread has its own current setting.
+
 ## Allocator values
 
 **An `Allocator` is a copyable id that names a registered allocator implementation.** An owning container records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.system` are the same type.

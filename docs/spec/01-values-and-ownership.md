@@ -1,5 +1,9 @@
 # 01 · Values and ownership
 
+Rayo is a general-purpose systems programming language for code that needs control over memory and layout, including game engines. Its safe code cannot read freed memory or race on data. Ownership rules, compiler checks and run-time checks provide those guarantees without a garbage collector or implicit reference counting.
+
+The foundation is how a program owns and uses values. Code can hand a value to a new owner, make a separate copy, or borrow it for a time. This chapter defines those operations and the access rules that keep them safe.
+
 ```swift
 struct Enemy(var pos: Vec3, var hp: Float)
 
@@ -11,6 +15,8 @@ c.hp = 50                          // 'b' is unchanged
 func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
+
+In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 

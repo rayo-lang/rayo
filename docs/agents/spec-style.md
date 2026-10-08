@@ -17,7 +17,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Paragraphs and sections
 
-- **Move from whole to parts.** Open a numbered chapter with the situation its construct addresses and how its main ideas fit together. Then move to examples and exact rules. Introduce names from an example only after the example shows them.
+- **Move from whole to parts.** The spec introduction says what Rayo is before explaining how to look up its rules. Chapter 01 stands on its own as a reader's first encounter with the language. Each numbered chapter opens with the situation its construct addresses and how its main ideas fit together, then moves to examples and exact rules. Introduce names from an example only after the example shows them.
 - **Give the rule a setting.** In a section whose context is already clear, a concrete case can make a rule easier to understand. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule.
 - **Make each paragraph follow one line of reasoning.** Connect a definition to the example or need that gives it meaning. Do not stack definitions or rules and leave the reader to work out how they relate.
 - **Three or more items make a list**, one item per bullet.

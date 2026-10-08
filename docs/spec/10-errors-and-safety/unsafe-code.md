@@ -2,6 +2,8 @@
 
 [10 · Errors and safety](../10-errors-and-safety.md)
 
+Safe Rayo code relies on the compiler to check its memory guarantees. Some operations, including raw pointer access and C calls, cannot be verified from their types alone. `unsafe` marks where code takes responsibility for those guarantees.
+
 ```swift
 unsafe {
     let p: *Particle = ptr(to: &particles[0])

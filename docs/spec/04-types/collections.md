@@ -2,6 +2,8 @@
 
 [04 · Types](../04-types.md)
 
+Rayo has several ways to group values. Tuples and fixed-size arrays hold their elements inside the value itself. Collections such as `List` own storage that can grow, while views such as `Span` borrow elements from another owner. Ranges and iterators let code walk these groups without changing what owns them.
+
 ## Tuples, ranges and arrays
 
 ```swift

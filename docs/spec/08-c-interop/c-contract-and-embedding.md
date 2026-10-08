@@ -2,6 +2,8 @@
 
 [08 · C interop](../08-c-interop.md)
 
+At a C boundary, Rayo can check only what the imported or exported types express. C code must uphold the memory and value guarantees that safe Rayo code would otherwise rely on the compiler to enforce. The same boundary defines what the host platform must provide when a Rayo library runs inside a C program.
+
 ## What C must uphold
 
 **C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place.** Safe Rayo code relies on C keeping them, as it relies on `unsafe` Rayo code keeping its own. They are these:

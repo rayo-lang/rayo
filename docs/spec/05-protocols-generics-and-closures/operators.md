@@ -2,6 +2,8 @@
 
 [05 · Protocols, generics and closures](../05-protocols-generics-and-closures.md)
 
+Most operators are calls written with punctuation instead of a function name; short-circuiting forms such as `&&` are built in. A declared operator determines which types it accepts, while separate rules decide how operators group in an expression and how equality and ordering work.
+
 **Operators are `static func`s declared on a type or in an extension of it, named by the operator:**
 
 ```swift

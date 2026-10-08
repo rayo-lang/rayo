@@ -1,6 +1,6 @@
 # 03 · Handles and objects
 
-**Some links between values, such as a squad's list of its members or a node's link to its parent, are checked at each use, since the static checker can't follow them.** A link checked this way reads `nil` or panics once what it names is gone, and never dangles ([01](01-values-and-ownership.md#tiers-of-checking)). This chapter defines two such links: handles into pools, and weak pointers to objects.
+Some relationships between values must last longer than a borrow: a squad keeps links to its members, and a node keeps a link to its parent. The target may be removed while those links remain, so each use has to check whether it is still there. Rayo provides handles for values in pools and weak pointers for objects. Once their target is gone, they read `nil` or panic rather than dangling ([01](01-values-and-ownership.md#tiers-of-checking)).
 
 ## Pools and handles
 

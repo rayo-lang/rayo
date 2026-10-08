@@ -2,6 +2,8 @@
 
 [02 · Views and dependencies](../02-views-and-dependencies.md#dependencies)
 
+Across a call, the caller and callee have different parts of the dependency check. The caller accounts for views the callee may store in a mutable argument; the callee verifies what it actually returns or stores. Accesses the compiler cannot prove safe from place names alone also need a run-time check that lasts as long as their views.
+
 ## Rule 4: Absorption
 
 **After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow.** This is the caller's side of rule 5 for stores. A callee can store a view into a `mutable` argument, as `append` does, and rule 5 lets it store only what its caller lent it. Absorption adds all of that to the argument's set, so the caller learns what the argument now borrows without seeing the body.

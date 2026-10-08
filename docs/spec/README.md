@@ -1,6 +1,8 @@
 # The Rayo specification
 
-Use this reference when you need to know exactly what a Rayo program means. Each numbered page leads to the rules for one topic. Longer chapters have subchapters, so you can open the part that answers your question. The chapters are organized for lookup; you do not need to read them in order. To learn the language through examples, start with the [guide](../guide/README.md).
+Rayo is a general-purpose systems programming language for programs that need control over memory, layout and run-time cost. Safe Rayo code cannot read freed memory or race on data. These guarantees require neither a garbage collector nor implicit reference counting. The rules for ownership and borrowing establish them for values; later chapters carry them through stored links, allocation and concurrency.
+
+This specification defines what a Rayo program means. Read from [chapter 01](01-values-and-ownership.md) to follow the language model from its foundations, or look up a construct when you need its exact rule. Longer chapters have subchapters so related details stay together. The [guide](../guide/README.md) teaches the language through examples.
 
 For a question about a line of code, begin with the construct you wrote. For example, if a call leaves a variable unusable, read [moves](01-values-and-ownership/moves-copies-destruction.md#moves) and [parameters](01-values-and-ownership/parameters.md#parameters). If a returned view cannot be stored, read [dependencies](02-views-and-dependencies.md#dependencies). The [glossary](../../GLOSSARY.md) helps when an error or a rule uses an unfamiliar term.
 

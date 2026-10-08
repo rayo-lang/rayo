@@ -1,6 +1,6 @@
 # 10 · Errors and safety
 
-A **recoverable error**, such as a missing file, is a typed value that the caller must handle. A **bug**, such as dereferencing a stale handle, **panics** ([Panics](10-errors-and-safety/panics.md#panics)).
+Rayo gives expected failures and broken assumptions different paths. An expected failure, such as a missing file, is a **recoverable error**: a typed value that the caller must handle. A broken assumption, such as dereferencing a stale handle, **panics** ([Panics](10-errors-and-safety/panics.md#panics)). The language also defines which checks run in each build and where code must take responsibility with `unsafe`.
 
 ```swift
 enum ConfigError: Error {
@@ -20,6 +20,8 @@ do {
 
 let pos = borrow enemies[target]!.pos     // a stale handle here is a bug: '!' panics
 ```
+
+The type in `loadConfig`'s signature tells the caller which failures it may catch. The `catch` arms handle them as values; the `!` on the last line takes the panic path if the handle has gone stale.
 
 ## Subchapters
 

@@ -2,6 +2,8 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
+An arena can free many allocations at once, even when values made from them remain in the program. A reset therefore needs more than the ordinary check at a value's destruction: code elsewhere may still hold a value or view that reaches the arena. Rayo checks both the reset and later uses of its storage at run time.
+
 ## Arena safety: checked values and checked resets
 
 ```swift

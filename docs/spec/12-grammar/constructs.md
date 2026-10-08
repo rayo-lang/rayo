@@ -2,6 +2,8 @@
 
 [12 · Grammar](../12-grammar.md)
 
+Within a declaration, the grammar describes the types, statements, expressions and patterns that make up its body. The productions below give their syntax; the earlier chapters give them meaning.
+
 ## Types
 
 ```ebnf

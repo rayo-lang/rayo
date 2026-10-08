@@ -1,6 +1,6 @@
 # 05 · Protocols, generics and closures
 
-Use a protocol when several types offer the same operation, and a generic function when the operation's code works for each of them. A closure supplies behavior at a call site. This chapter states how each is checked and when a call uses a concrete type or dynamic dispatch.
+Reusable code often depends on what a type can do rather than on one particular type. A protocol states those capabilities, generic code uses them while keeping the concrete type, and a closure lets a caller supply behavior. Their signatures determine what a call may assume and whether it uses a concrete type or dynamic dispatch.
 
 ## Subchapters
 

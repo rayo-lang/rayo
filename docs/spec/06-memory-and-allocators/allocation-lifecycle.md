@@ -2,6 +2,8 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
+An owning value cannot proceed as though an allocation succeeded when it did not, or free storage before its contents are accounted for. Rayo lets code recover from allocation failure where it asks to, and `@noalloc` rules out allocation in a function. When storage is released, the value's destruction rules decide what must run first.
+
 ## Allocation failure
 
 ```swift

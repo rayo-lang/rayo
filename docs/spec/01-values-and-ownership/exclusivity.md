@@ -2,6 +2,8 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
+When two names reach the same storage, changing it through one can invalidate what the other still uses. Rayo limits which accesses may overlap. In this loop, removing an enemy would change the collection while the loop is borrowing it:
+
 ```swift
 for (h, e) in &world.enemies.entries {
     if e.hp <= 0 {

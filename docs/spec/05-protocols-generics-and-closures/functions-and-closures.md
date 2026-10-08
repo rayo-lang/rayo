@@ -2,6 +2,8 @@
 
 [05 · Protocols, generics and closures](../05-protocols-generics-and-closures.md)
 
+Functions state what their calls accept and return. Closures also carry code together with the values or places they capture, so their type must say how a call may use that captured state. A closure may remain a concrete value, become a function-typed view, or be stored for later use.
+
 A **closure** is a value of a closure literal's concrete type ([below](#closures-by-concrete-type-some-f)). Passed for a function-type parameter, it becomes a view of itself, which may borrow locals and never allocates. The function type says whether the closure only reads what it captures, writes it, or consumes it:
 
 ```swift

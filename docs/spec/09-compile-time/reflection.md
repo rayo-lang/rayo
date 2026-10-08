@@ -2,6 +2,8 @@
 
 [09 · Compile time](../09-compile-time.md)
 
+The compiler knows a type's fields, cases and other declarations while it builds the program. Static reflection lets generic code inspect that information and produce operations checked for the actual type. The example below turns a struct's fields into separate logging calls:
+
 ```swift
 struct Stats(var hp: Float, var armor: Float)
 

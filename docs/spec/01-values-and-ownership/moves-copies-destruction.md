@@ -2,6 +2,8 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
+An assignment can hand a value to a new owner without making a second one. A copy does make a second value, which matters when either value owns resources that must later be released. Rayo keeps those operations distinct and defines when the remaining values are destroyed.
+
 ## Moves
 
 ```swift

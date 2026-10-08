@@ -2,6 +2,8 @@
 
 [04 · Types](../04-types.md)
 
+Numeric types have fixed representations, so their range, overflow and conversions can be specified exactly. SIMD values apply operations to several numbers at once, with their own layout and comparison rules.
+
 ## Numbers
 
 **Integers are fixed-width and two's complement, and floating-point numbers are IEEE 754 binary floats.**

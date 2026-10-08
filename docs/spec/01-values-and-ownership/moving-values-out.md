@@ -2,7 +2,7 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-**These take a value, and so move it** ([Moves](moves-copies-destruction.md#moves)). Each hands the value to a new owner:
+A move hands a value to a new owner and leaves its old place without that value. It can happen through familiar constructs, even when no `consume` appears. These constructs take a value and therefore move it ([Moves](moves-copies-destruction.md#moves)):
 
 - an assignment, `return`, `throw` and `await`;
 - an `owned` argument, and a `consuming` method's receiver ([Parameters](parameters.md#parameters));

@@ -2,6 +2,8 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
+When a value needs a lifetime independent of the local that created it, an owning pointer can hold it in allocated storage. `Box` has one owner; `Shared` and `LocalShared` count several. Long-lived views take a different route: they keep access to a buffer checked without copying its contents.
+
 ## Owning boxes
 
 ```swift

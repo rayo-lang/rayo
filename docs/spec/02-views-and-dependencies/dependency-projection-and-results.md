@@ -2,6 +2,8 @@
 
 [02 · Views and dependencies](../02-views-and-dependencies.md#dependencies)
 
+Dependencies begin where code makes a view of a place. They follow values derived from that view, including values returned by a function, so the caller can still tell what storage the result needs. The first three rules describe that path from source to result.
+
 ## Rule 1: Projection
 
 **A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. It depends shared for a read projection, such as `pool[h]` or `list[i]`, and exclusively for a `modify` projection ([Projections: `read` and `modify` accessors](projections-and-accessors.md#projections-read-and-modify-accessors)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3, since a `get` returns a value instead of yielding a place ([below](#rule-3-call-results)).

@@ -2,6 +2,8 @@
 
 [06 · Memory and allocators](../06-memory-and-allocators.md)
 
+An allocator has two sides: the values that use it must recognize whether their storage remains valid, and its implementation must provide and reclaim that storage. Rayo records an allocator word with each owning allocation and checks it when the value is opened. This page defines that record and the contract for allocator implementations.
+
 ## How values record their allocator
 
 **Every owning value records the allocator its storage came from in an allocator word**, which also dates the storage against that allocator's resets. The word is how the value grows and frees through its own allocator, and what an open checks ([Opening an owning value checks it](arena-safety.md#opening-an-owning-value-checks-it)). A container of several allocations may keep several ([below](#a-containers-words-must-cover-all-of-its-storage)). A word is 8 bytes and opaque: only the runtime reads it, and C sees it as a `uint64_t` ([08](../08-c-interop.md)).

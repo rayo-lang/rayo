@@ -1,5 +1,7 @@
 # 04 · Types
 
+Types tell the compiler what a value contains and which operations are valid. They also make many costs visible in Rayo: a conversion that may lose information is explicit, and an owning collection is a different type from a view of its elements. The examples below show those choices in declarations, arithmetic and iteration.
+
 ```swift
 struct Particle(var pos: Vec3, var vel: Vec3, var life: Float)     // 28 bytes, with no padding
 
@@ -12,10 +14,9 @@ var particles = SoA<Particle>(capacity: 100_000)  // one buffer per field, still
 for p in &particles {
     p.pos += p.vel * dt                           // vector math: no hidden calls
 }
-
-var widgets = List<Box<any Widget>>()             // dynamic dispatch and its heap allocation, both in the type
-log("scale \(scale)")                             // formatted straight into the log: no allocation
 ```
+
+`Particle` fixes the fields of each value. The type on `dt` gives its literal a `Float` value; widening `n` to `Int` is implicit, while converting that `Int` back to `Float` is written out because it may round. `SoA<Particle>` changes how the particles are stored, with one buffer per field, but the loop still uses the fields declared on `Particle`.
 
 ## Subchapters
 

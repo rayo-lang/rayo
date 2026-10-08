@@ -2,6 +2,8 @@
 
 [10 · Errors and safety](../10-errors-and-safety.md)
 
+Some run-time checks prevent memory errors; others catch logic mistakes that leave memory safety intact. Rayo keeps the first kind on in every build and lets code or build settings choose the second. The difference matters even for ordinary operations such as indexing and arithmetic.
+
 ## Check levels
 
 ```swift
