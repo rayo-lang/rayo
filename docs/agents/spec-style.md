@@ -1,6 +1,6 @@
 # Writing the spec
 
-The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and useful both for reading through and for looking up a rule. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. The guide introduces the language in learning order and may simplify; the spec explains the full rules.
+The unnumbered introduction and numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and useful both for reading through and for looking up a rule. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. The guide introduces the language in learning order and may simplify; the spec explains the full rules.
 
 The safety argument and hard cases in `docs/validation/` check the spec during design and implementation. They do not define language rules. If a check finds a missing rule, add it to the spec chapter that owns it.
 
@@ -17,7 +17,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Paragraphs and sections
 
-- **Move from whole to parts.** The spec introduction says what Rayo is before explaining how to look up its rules. Chapter 01 stands on its own as a reader's first encounter with the language. Each numbered chapter opens with the situation its construct addresses and how its main ideas fit together, then moves to examples and exact rules. Introduce names from an example only after the example shows them.
+- **Move from whole to parts.** The introduction says what Rayo is and how the main ideas fit together before any numbered chapter begins. Chapter 01 opens with ownership, not another introduction to the language. Each numbered chapter opens with the situation its construct addresses and how its main ideas fit together, then moves to examples and exact rules. Introduce names from an example only after the example shows them.
 - **Give the rule a setting.** In a section whose context is already clear, a concrete case can make a rule easier to understand. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule.
 - **Make each paragraph follow one line of reasoning.** Connect a definition to the example or need that gives it meaning. Do not stack definitions or rules and leave the reader to work out how they relate.
 - **Three or more items make a list**, one item per bullet.

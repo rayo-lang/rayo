@@ -62,10 +62,11 @@ The [guide](docs/guide/) teaches Rayo in eight chapters, for programmers who kno
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. The [validation documents](docs/validation/README.md) check the design's safety and the systems patterns it must support.
+The spec starts with an [Introduction](docs/spec/introduction.md), then has one chapter per topic in [`docs/spec/`](docs/spec/). The [glossary](GLOSSARY.md) says in a sentence what each term means. To learn the memory model, read 01 to 03, then 06 and 07. The [validation documents](docs/validation/README.md) check the design's safety and the systems patterns it must support.
 
 | Doc | Covers |
 | --- | --- |
+| [Introduction](docs/spec/introduction.md) | The language, its safety model and the scope of this specification |
 | [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
 | [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and `read`, `modify`, `get` and `set` accessors |
 | [03 Handles and objects](docs/spec/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |

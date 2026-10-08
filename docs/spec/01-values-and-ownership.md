@@ -1,8 +1,6 @@
 # 01 · Values and ownership
 
-Rayo is a general-purpose systems programming language for code that needs control over memory and layout, including game engines. Its safe code cannot read freed memory or race on data. Ownership rules, compiler checks and run-time checks provide those guarantees without a garbage collector or implicit reference counting.
-
-The foundation is how a program owns and uses values. Code can hand a value to a new owner, make a separate copy, or borrow it for a time. This chapter defines those operations and the access rules that keep them safe.
+Ownership answers a basic question about every value: who is responsible for it? Code can hand a value to a new owner, make a separate copy, or borrow it for a time. Those choices affect when the value is destroyed and which parts of the program may use it. This chapter defines the operations and the access rules that keep them safe.
 
 ```swift
 struct Enemy(var pos: Vec3, var hp: Float)
