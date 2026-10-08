@@ -1,6 +1,6 @@
 # Writing the spec
 
-The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
+The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and useful both for reading through and for looking up a rule. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. The guide introduces the language in learning order and may simplify; the spec explains the full rules.
 
 The safety argument and hard cases in `docs/validation/` check the spec during design and implementation. They do not define language rules. If a check finds a missing rule, add it to the spec chapter that owns it.
 
@@ -8,7 +8,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Sentences
 
-- **One rule per sentence.** Aim for under 25 words. A sentence past 40 is a list, or two rules.
+- **Let each thought run its course.** Explain what happens, why it happens and what follows in connected prose. Split a sentence when it asks the reader to hold two separate ideas at once, not just because it contains a reason or consequence. A sentence past 40 words usually needs another sentence or a list.
 - **Active voice, short words.** "The compiler rejects `f(&x, x)`", not "`f(&x, x)` is rejected". *Use*, not *utilize*; *so*, not *consequently*.
 - **The thing as the subject of a verb.** "`list[i]` hands out the list's element", not "the place an accessor yields from one".
 - **Common words for common ideas.** Where programmers already have a word, use it: *reference counting*, not *counted owner*. Coin a term only for an idea with no common name, and define it.
@@ -17,9 +17,10 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Paragraphs and sections
 
-- **Lead with the rule**, in bold, in one sentence. Its cases, exceptions and consequences follow. A short example may come first.
+- **Give the rule a setting.** Start with a concrete case when it helps the reader see the problem. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule when its context is already clear.
+- **Make each paragraph follow one line of reasoning.** Connect a definition to the example or need that gives it meaning. Do not stack definitions or rules and leave the reader to work out how they relate.
 - **Three or more items make a list**, one item per bullet.
-- **Paragraphs stay under about 120 words.** A section that needs more splits into subsections, each with its own rule.
+- **Paragraphs stay under about 120 words.** A section that needs more splits where the subject changes.
 - **An exception sits next to its rule**, so a reader who finds the rule also finds what it doesn't cover.
 - **Each rule is stated once**, in the section that owns it. Other sections link to it. A numbered landing page introduces and links its subchapters; the subchapter owns the detailed rules.
 - **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Examples use the spec's running game code, such as `Enemy`, `world` and `Mesh`.

@@ -1,8 +1,8 @@
 # Writing the guide
 
-The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. It is read front to back. The spec states every rule exactly and is read by looking things up; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
+The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. It is read front to back. The spec states every rule exactly and lets readers find the full account of a construct; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
 
-The guide follows `spec-style.md` for inline code, lists and punctuation. Its sentences are its own: the spec states one rule per sentence, for a reader looking a rule up, while the guide explains in connected prose, for a reader going from start to end.
+The guide follows `spec-style.md` for inline code, lists and punctuation. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
 
 ## Writing
 

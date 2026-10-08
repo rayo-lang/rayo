@@ -1,49 +1,39 @@
 # 02 · Views and dependencies
 
-A **view** borrows memory that another value owns. **`Scoped`** limits where a value can live. A view into memory that can be freed is scoped, but a view of immortal data can be unscoped, and a type can be scoped without borrowing memory ([Scoped values](02-views-and-dependencies/scoped-values.md#scoped-values)). The view's type says what kind of access it permits; its dependencies say which owner's memory must remain available while the view is used. This chapter defines both, then describes the accessors that lend a place or return a view.
+Splitting a string into lines need not copy its characters. Each line can view part of the original string, but then the lines need that string's memory to remain available. Rayo tracks that connection, even when a function stores the views in a collection.
 
 ## Dependencies
 
-The compiler tracks **what each scoped value borrows**:
-
 ```swift
-func visible(_ items: mutable List<Sprite>, in cells: Span<Cell>) -> MutableSpan<Sprite> { ... }
-
-var vis = visible(&sprites, in: grid.cells.span)   // vis borrows sprites (mutably) and grid.cells (shared)
-grid.cells.append(c)                               // error: grid.cells is borrowed by 'vis' (used below)
-cull(&vis)
-
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 
-var lines = List<StringView>()                   // scoped: its elements are views
-splitLines(source.view, into: &lines)            // lines now borrows source (shared)
+var lines = List<StringView>()
+splitLines(source.view, into: &lines)            // lines now borrows source
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print(lines.count)
 ```
 
-**The compiler sees names, not memory, so it learns which places a view reaches only from what the view borrows.** Above, `source.append("x")` may move the text to a larger buffer and free the old one, which `lines` still views. The compiler rejects the call because `lines` borrows `source`.
+`source.view` lends access to the characters owned by `source`; it does not make a copy. The `StringView`s stored in `lines` are views of those characters. Appending to `source` could move its buffer and free the memory the lines still use, so the compiler rejects the append. The later use of `lines` keeps that borrow live.
 
-A scoped value's **dependency set** is the places and dynamic accesses it borrows from, each marked **shared** or **exclusive**. What a value **carries** is its dependency set.
+Because the source's memory can be freed, a `StringView` is `Scoped`: it must stay within the scope that lent it, where the compiler can check its borrow. `List<StringView>` is scoped too, because it holds those views. [Scoped values](02-views-and-dependencies/scoped-values.md#scoped-values) sets out which other types have this restriction.
 
-**Until a value's last use, every place in its set counts as borrowed, with its kind.** So changing, moving or destroying such a place before then conflicts with the value, by the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+Knowing that `lines` is scoped is only part of the check. The compiler also needs to know *which* memory its views use. A scoped value's **dependency set** records the places and dynamic accesses it borrows, marking each borrow **shared** or **exclusive**. A value **carries** this set as it moves through the function. Until the value's last use, changing, moving or destroying a place it depends on must respect the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
-**The compiler works the set out inside one function body, from six rules:**
+One value can depend on several places at once. Here, `vis` borrows `sprites` exclusively and `grid.cells` shared, so growing `grid.cells` conflicts with the view even though `vis` is used to change sprites:
 
-1. **Projection:** a view taken from a place depends on that place ([Rule 1: Projection](02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
-2. **Transitivity:** a value derived from a scoped value inherits that value's whole dependency set ([Rule 2: Transitivity](02-views-and-dependencies/dependency-projection-and-results.md#rule-2-transitivity)).
-3. **Call results:** a scoped result depends on what the call was given ([Rule 3: Call results](02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)).
-4. **Absorption:** after a call, every scoped `mutable` argument takes on what the other arguments borrow ([Rule 4: Absorption](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
-5. **The callee side:** a function can return, throw or store only what its caller lent it ([Rule 5: The callee side](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
-6. **Dynamic accesses:** an access to an object, a `Slice` or a thread-local lasts until nothing uses it ([Rule 6: Dynamic accesses](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
+```swift
+func visible(_ items: mutable List<Sprite>, in cells: Span<Cell>) -> MutableSpan<Sprite> { ... }
 
-**Each body is checked alone, from the signatures of the functions it calls**, and borrows leave a function only as its signature states ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). So the rules divide the work:
+var vis = visible(&sprites, in: grid.cells.span)
+grid.cells.append(c)                               // error: grid.cells is borrowed by 'vis' (used below)
+cull(&vis)
+```
 
-- **Rules 1 and 2 follow a view inside one body**, from the place it was taken from to every value derived from it.
-- **Rules 3 and 4 carry it across a call.** From the callee's signature, they tell the caller what the result and the arguments borrow after the call.
-- **Rule 5 checks the callee's body against that signature**, so what rules 3 and 4 tell the caller holds without the caller seeing the body.
-- **Rule 6 holds a dynamic access's run-time check** until the last use of every value that depends on the access.
+The compiler begins with the place a view comes from ([Projection](02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)). If another value is made from that view, it inherits the dependencies ([Transitivity](02-views-and-dependencies/dependency-projection-and-results.md#rule-2-transitivity)). This lets the compiler follow a borrow through the body that created it.
 
-**So the example needs no annotation.** Rule 4 tells the caller that `lines` now borrows `source`, and rule 5 checks inside `splitLines` that it stored nothing else.
+A call needs one more step, because the caller sees the callee's signature rather than its body. A scoped result takes on dependencies from the arguments ([Call results](02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A scoped `mutable` argument can also take on what the other arguments borrow; this is absorption ([Absorption](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). In the string example, absorption tells the caller that `lines` now borrows `source`.
+
+The callee's body is checked against the same promise: it can return, throw or store a scoped value only if the caller can track what it borrows ([The callee side](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). That is why the caller can reject the append without inspecting `splitLines`. When a view comes through an object, a `Slice` or a thread-local, the compiler also keeps its run-time access check active for as long as the view needs it ([Dynamic accesses](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 ## Subchapters
 
