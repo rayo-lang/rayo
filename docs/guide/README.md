@@ -2,8 +2,6 @@
 
 Start with the [Introduction](introduction.md), then read the chapters in order. They follow examples from a game, adding each language feature when the code needs it. For a complete account of a rule, use the [specification](../spec/README.md); the [glossary](../../GLOSSARY.md) gives a short definition of each term.
 
-A code sample here may put statements beside declarations, or leave a body out as `{ ... }`, to keep it short. In a source file, statements go inside a function body.
-
 | Chapter | Teaches |
 | --- | --- |
 | [Introduction](introduction.md) | What Rayo is and how to learn it through this guide |

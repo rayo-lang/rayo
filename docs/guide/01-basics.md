@@ -11,7 +11,7 @@ func main() {
 }
 ```
 
-Rayo starts at `main` ([07](../spec/07-concurrency/global-state.md#initialization-at-startup)). The program has familiar pieces, but their details matter when values begin to own memory. `let` and `var` say which names may change. Number types do not silently discard information, and a function's parameters say what it may do with its arguments. The examples below leave out `main` to focus on one piece at a time.
+Rayo starts at `main` ([07](../spec/07-concurrency/global-state.md#initialization-at-startup)). The program has familiar pieces, but their details matter when values begin to own memory. `let` and `var` say which names may change. Number types do not silently discard information, and a function's parameters say what it may do with its arguments. From here on, we'll look at one part of the program at a time.
 
 ## Variables
 

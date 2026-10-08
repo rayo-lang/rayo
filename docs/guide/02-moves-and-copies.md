@@ -46,7 +46,9 @@ hits = List<Int>()              // the first list is destroyed here
 A parameter marked `owned` takes over the value passed to it ([01](../spec/01-values-and-ownership/parameters.md#parameters)):
 
 ```swift
-func archive(list: owned List<Int>) { ... }
+func archive(list: owned List<Int>) {
+    log("archived \(list.count) hits")
+}
 
 var hits = List<Int>()
 hits.append(12)
@@ -58,7 +60,7 @@ Passing `hits` to `archive` **moves** the list. `archive`'s parameter becomes it
 
 Nothing in the call marks the move, since `archive`'s declaration already says `owned`. If you miss it, the compiler tells you as soon as you use `hits` again.
 
-Moves are how Rayo frees the list's memory exactly once. A move hands the list from one owner to the next, so the list never has two owners at once. Here `archive`'s parameter ends up with it. Then either `archive` moves the list on, or the list is destroyed when `archive` returns. Either way, `hits` holds nothing when it goes out of scope, so it has nothing to destroy.
+Moves are how Rayo frees the list's memory exactly once. A move hands the list from one owner to the next, so the list never has two owners at once. Here `archive`'s parameter ends up with it. The function reads its count, then destroys the list when it returns. `hits` holds nothing when it goes out of scope, so it has nothing to destroy.
 
 A move is also cheap. The list itself is only a few bytes, which say where its heap memory is and how big it is. A move hands those bytes to the new owner, and the values on the heap stay where they are.
 

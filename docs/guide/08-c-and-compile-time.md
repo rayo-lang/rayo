@@ -164,11 +164,13 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 ## Calling Rayo from C: `@export`
 
-Say your studio's level editor, written in C++, spawns enemies through the game:
+Say your studio's level editor, written in C++, asks the game whether an enemy description is valid:
 
 ```swift
 @export(c) @c struct SpawnDesc(var pos: Vec3, var hp: Float)       // a C struct in the generated header
-@export(c, name: "game_spawn") func spawnFromEditor(_ desc: SpawnDesc) -> Bool { ... }
+@export(c, name: "game_can_spawn") func canSpawn(_ desc: SpawnDesc) -> Bool {
+    desc.hp > 0
+}
 ```
 
 **`@export(c)` gives a function C linkage and an unmangled name, so C and C++ code can call it** ([08](../spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
@@ -255,7 +257,7 @@ func endFrame(_ game: Game) {
     static if target.hasFlag("editor") {
         drawGizmos(game)                 // declared only in editor builds, which declare the flag
     }
-    static if game.paused { ... }        // error: a 'static if' condition must be a const
+    static if game.paused { return }     // error: a 'static if' condition must be a const
 }
 ```
 
@@ -335,8 +337,6 @@ struct Enemy(
     @Transient var path: List<Vec3> = [],
 )
 
-static for field in T.fields where !field.has(Transient.self) { ... }   // save skips 'target' and 'path'
-
 func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!             // this field's @Bounds, known at compile time
@@ -345,7 +345,7 @@ func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
 }
 ```
 
-**An attribute is a struct that conforms to `Attribute`** ([09](../spec/09-compile-time/attributes-and-runtime-data.md#attributes)). Reflection gives a field's name and type, but not that the field is a cache to skip, or the range an editor's slider shows. Attributes let the type's author say so.
+**An attribute is a struct that conforms to `Attribute`** ([09](../spec/09-compile-time/attributes-and-runtime-data.md#attributes)). Reflection gives a field's name and type, but not that the field is a cache to skip, or the range an editor's slider shows. Attributes let the type's author say so. The `save` function above skips `target` and `path` because both carry `@Transient`.
 
 **Reflection reads the attributes on a field.** `f.has(A.self)` says whether the field carries an `A`, and `f.attribute(A.self)` gives its value, or `nil`.
 
