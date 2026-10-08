@@ -54,7 +54,7 @@ extension World: TimeSource {                       // lets tasks stepped with a
 
 /// Picks the closest player for each enemy that has lost its target.
 func acquireTargets(_ world: mutable World) {
-    for var e in &world.enemies where e.target == nil || world.players[e.target!] == nil {
+    for var e in &world.enemies where e.target == nil || world.players[e.target] == nil {
         var best: Handle<Player>? = nil
         var bestDist: Float = .infinity
         for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
@@ -68,7 +68,7 @@ func acquireTargets(_ world: mutable World) {
 /// Moves enemies toward their targets, in parallel across enemies on std's job system.
 func steer(_ world: mutable World, dt: Float) {
     world.enemies.forEachInParallel { e in              // not mutating, so it may run on many threads at once
-        guard let t = e.target, let p = world.players[t] else {     // players: read-only capture
+        guard e.target != nil, let p = world.players[e.target] else {     // players: read-only capture
             e.vel *= 0.9
             return
         }
@@ -81,10 +81,10 @@ func steer(_ world: mutable World, dt: Float) {
 /// Resolves contact damage. Mutations to other pools go through the command buffer.
 func contact(_ world: mutable World) {
     for (h, e) in world.enemies.entries {
-        guard let t = e.target, let p = world.players[t] else { continue }
+        guard e.target != nil, let p = world.players[e.target] else { continue }
         if distanceSquared(p.pos, e.pos) < 1 {
-            // 't' borrows e.target, so the command gets a copy; 'h' is the loop's own handle, so it moves in.
-            world.commands.append(.damagePlayer(copy t, amount: damage(for: e.kind)))
+            // 'e' is borrowed, so the command gets a copy of its target; 'h' is the loop's own handle, so it moves in.
+            world.commands.append(.damagePlayer(copy e.target, amount: damage(for: e.kind)))
             world.commands.append(.despawn(h))
         }
     }

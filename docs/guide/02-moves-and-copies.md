@@ -1,279 +1,213 @@
 # 2 · Moves and copies
 
-Your renderer records a `CommandList` each frame and hands it to `submit`, which queues it for the GPU. Vertex data lives in GPU buffers, and each buffer must be released exactly once. In C++, both are easy to get wrong: a list used after `std::move` still compiles, and a buffer struct copied by accident is freed twice. In Rayo, each mistake is a compile error:
+In the first chapter, an enemy lost health when it took a hit. To keep a record of those hits, put their damage in a list. A list allocates memory on the heap for its values, and may allocate more as you add them:
 
 ```swift
-struct GpuBuffer(let id: UInt32, let size: Int) {
-    deinit { releaseGpuMemory(id) }              // runs when the buffer's owner lets go of it
-}
-
-func createBuffer(size: Int) -> GpuBuffer { ... }
-func submit(_ cmds: owned CommandList) { ... }   // 'owned': submit keeps the list
-
-var cmds = CommandList()
-cmds.draw(mesh)
-submit(cmds)                                     // the list moves into submit
-cmds.draw(mesh)                                  // error: 'cmds' was moved
-
-let vertices = createBuffer(size: 65536)
-let twin = copy vertices                         // error: 'GpuBuffer' is not copyable
+var hits = List<Int>()
+hits.append(12)
+hits.append(30)
+log("\(hits.count) hits")       // 2 hits
 ```
 
-Both errors come from one idea: every value has one owner, and the compiler tracks which place that is. This chapter shows how values change owners, how you copy one when you mean to, and when each is destroyed.
+`List<Int>()` makes an empty list of `Int`s. `append` adds a value at the end, and `count` says how many values the list holds ([04](../spec/04-types/collections.md#collections-and-strings)). `hits` is a `var`, since appending changes the list.
+
+That heap memory has to be freed when the list is no longer needed, and freed only once. If it's freed too early, something else may get that memory while the list still reads it. Freeing it twice corrupts memory, and never freeing it leaks it.
+
+Rayo frees it for you, with no garbage collector: the compiler places the code that frees it.
 
 ## Owners
 
-**Every value has one owner, which decides when the value is destroyed** ([01](../spec/01-values-and-ownership.md)). An **owner** is a place, such as a local or an `owned` parameter, or a value that owns others. Owners nest: a local owns a list, and the list owns each element.
+A list in a function's local variable is destroyed when the function returns:
 
 ```swift
-func spawnWave() {
-    var wave = List<Enemy>()                // 'wave' owns the list, and the list owns each enemy
-    wave.append(Enemy(pos: [0, 0, 5]))
-    let first = wave[0]                     // uses the enemy without owning it: the list still does
-}                                           // 'wave' ends here: the list and its enemies are destroyed
+func recordFight() {
+    var hits = List<Int>()
+    hits.append(12)
+    log("\(hits.count) hits")
+}                               // 'hits' goes out of scope, and its list is destroyed
 ```
 
-Code that uses a value without owning it **borrows** it, as `first` does, and as a parameter does by default ([01](../spec/01-values-and-ownership.md)). Chapter 3 is about borrowing ([Borrowing](03-borrowing.md)). The one exception to a single owner is reference counting: `Shared<T>` lets several owners share a value, and the last one to let go destroys it ([Memory and allocators](06-memory-and-allocators.md)).
+Every value in Rayo has an **owner**, and lives as long as its owner holds it ([01](../spec/01-values-and-ownership.md)). Here the list's owner is `hits`.
+
+A variable goes out of scope at the end of the block that declares it. Then the value it owns is **destroyed**: everything the value holds is released. For a list, that means its heap memory is freed.
+
+You never write a `free`. The compiler knows where each variable goes out of scope, and puts the code that destroys its value there ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#destruction)).
+
+A value is also destroyed when its owner is assigned another value, since nothing owns the old one any more:
+
+```swift
+var hits = List<Int>()
+hits.append(12)
+hits = List<Int>()              // the first list is destroyed here
+```
 
 ## Moves
 
-**Assigning a value, returning it or passing it to a parameter that keeps it moves it** ([01](../spec/01-values-and-ownership.md#moves)). A **move** hands the value to a new owner. The place it came from can't be used until it gets a new value:
+A parameter marked `owned` takes over the value passed to it ([01](../spec/01-values-and-ownership/parameters.md#parameters)):
 
 ```swift
-var cmds = CommandList()
-cmds.draw(mesh)
-submit(cmds)                       // moves the list into submit
-print(cmds.count)                  // error: 'cmds' was moved
-cmds = CommandList()               // a new value makes 'cmds' usable again
-cmds.draw(mesh)                    // fine
+func archive(list: owned List<Int>) {
+    log("archived \(list.count) hits")
+}
+
+var hits = List<Int>()
+hits.append(12)
+archive(list: hits)
+log("\(hits.count)")            // error: 'hits' was moved
 ```
 
-These take what they are given, and so move it:
+Passing `hits` to `archive` **moves** the list. `archive`'s parameter becomes its owner, and `hits` holds nothing any more. So using `hits` after the call is an error: there's no list in it to use ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)).
 
-- an assignment, as in `grunt.pos = spawn`;
-- `return`, which is how `createBuffer` hands back the buffer it made;
-- an argument for an `owned` parameter, such as `submit`'s;
-- an argument of a struct's primary initializer, which takes every field `owned`, since the new value owns its fields;
-- the element given to `append`, since the list keeps it.
+Nothing in the call marks the move, since `archive`'s declaration already says `owned`. If you miss it, the compiler tells you as soon as you use `hits` again.
 
-**The callee owns an `owned` argument as a local owns its value** ([01](../spec/01-values-and-ownership.md#parameters)). `submit` may move the list on, into a queue, say. If it doesn't, the list is destroyed when `submit` returns.
+Moves are how Rayo frees the list's memory exactly once. A move hands the list from one owner to the next, so the list never has two owners at once. Here `archive`'s parameter ends up with it. The function reads its count, then destroys the list when it returns. `hits` holds nothing when it goes out of scope, so it has nothing to destroy.
 
-**A move changes the owner and nothing else.** It runs none of your code and allocates nothing. It copies at most the value's bytes, into the place that takes it. So there is no move constructor to write. A move leaves no object behind to use by mistake: the compiler knows the place holds nothing.
+A move is also cheap. The list itself is only a few bytes, which say where its heap memory is and how big it is. A move hands those bytes to the new owner, and the values on the heap stay where they are.
 
-### Copyable types move too
-
-**A move is a move whatever the type, even a `Vec3` or an `Int`.** In C++ and Swift, and for Rust's `Copy` types, passing a small struct by value copies it, and the original stays usable. In Rayo, a place given to something that keeps it moves, whatever its type. A plain parameter only borrows, so it moves nothing:
+A `var` that has been moved from can be assigned a new value, and is usable again:
 
 ```swift
-var spawn = Vec3(0, 0, 5)
-var grunt = Enemy(pos: copy spawn)       // a copy moves in, and 'spawn' stays
-var brute = Enemy(pos: spawn)            // 'spawn' itself moves in
-var scout = Enemy(pos: spawn)            // error: 'spawn' was moved
-var drone = Enemy(pos: [2, 0, 5])        // fine: a new value, so no variable moves or is copied
+hits = List<Int>()
+hits.append(5)                  // fine
 ```
 
-A move never makes a second value. One exists only where the code asks for it: with `copy` or `clone()`, by taking a copyable `const` ([below](#constants)), or through one of a few operations that copy ([01](../spec/01-values-and-ownership.md#operations-that-copy)). To keep the original, pass `copy x`. To keep it without a copy, pass a new value instead, such as a literal or a call's result.
+Most parameters aren't `owned`. A plain parameter, with nothing written before its type, **borrows** its argument: it reads the value without owning it ([Borrowing](03-borrowing.md)). Passing a list to one moves nothing, so the caller still owns the list afterwards. Operators such as `-` only read their values too, and so does `\(…)` inside quotes.
+
+## Adding to a list
+
+A list owns the values in it, so `append`'s parameter is `owned`. Adding a variable's value to a list moves the value in, whatever its type:
+
+```swift
+let best = 30
+hits.append(best)
+log("best is \(best)")          // error: 'best' was moved
+```
+
+The list now owns the 30, just as a list of strings would own a string added the same way.
+
+`best` is a `let`, and it still moved. A `let` can't change, but it can hand its value over. After that, it can't be used at all. So wherever you can use a `let`, it still holds the value it started with.
+
+In C, Java or Swift, `best` would be copied quietly, since it's an `Int`. Rayo moves it instead. That's no slower: a move copies at most the same few bytes a copy would ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)).
+
+The difference is what happens to `best` afterwards. In Rayo, a value passed to an `owned` parameter moves, whatever its type. So you can tell whether a variable is still usable after a call without knowing its type. And a second value never appears unless you ask for one.
+
+A value written in the call, as in `hits.append(12)`, is made right there, so no variable gives anything up.
 
 ## Copies
 
-**Copies are written out** ([01](../spec/01-values-and-ownership.md#copies)):
-
-- **`copy x`** duplicates a copyable value's bytes, as a `memcpy`. It never allocates.
-- **`x.clone()`** copies a move-only value, such as a `List` or a `String`. It allocates, and its name says so. `List` and `String` have one, and a type of your own gets one by declaring a `clone()` method.
+To add `best` to the list and still use it afterwards, add a copy:
 
 ```swift
-var aim = copy brute.pos                 // Vec3 is copyable: a memcpy
-aim.y += 2                               // brute.pos is unchanged
-var backup = wave.clone()                // List owns heap memory: clone allocates a new buffer
-var other = copy wave                    // error: 'List<Enemy>' is not copyable
+let best = 30
+hits.append(copy best)
+log("best is \(best)")          // fine: best is 30
 ```
 
-**A type is copyable when every part of it is, and nothing opts it out.** A struct or enum is **copyable** when:
+`copy` duplicates a value's own bytes. An `Int`'s bytes are the whole value, so the copy is a second, separate number ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
 
-- all its fields and enum payloads are copyable;
-- it declares no `deinit` ([below](#destruction));
-- it doesn't list `~Copyable`;
-- it isn't of a kind that is always move-only, such as a lock guard ([Concurrency](07-concurrency.md#locks-mutex-and-rwlock)).
-
-Every other type is **move-only**. `Enemy` is copyable, since a `Vec3` and a `Float` are. A copyable type can't own heap memory, which is why `copy` never allocates. So `List`, `String`, `Box` and every other type that owns memory is move-only, and copying one takes a call that allocates.
-
-**`~Copyable` makes a type move-only although its fields could be copied.** Use it for a value that must have one owner:
+`copy` doesn't work on a list:
 
 ```swift
-struct UploadSlot(let offset: Int, let size: Int): ~Copyable   // a copy would let two uploads write one slot
+let backup = copy hits          // error: 'List<Int>' is not copyable
+let twin = hits.clone()         // a second list, sharing nothing with the first
 ```
 
-The compiler derives `Copyable` for each copyable type. It is a **marker protocol**: one with no requirements, which states a property of a type ([05](../spec/05-protocols-generics-and-closures.md#conformances)). Listing it, as `struct Handle<T>(…): Copyable` does, asks the compiler to confirm it ([Handles and objects](05-handles-and-objects.md)). A `~Copyable`, like a `deinit`, is declared in the type's own module, so all code that uses the type sees the same answer.
+`copy` would duplicate only the list's own bytes, and those don't hold its values. They only say where the values are on the heap. So a copy of them would be a second list sharing the first one's heap memory. When both lists were destroyed, that memory would be freed twice.
 
-## Destruction
+So `copy` works only on a **copyable** type, such as a number or a `Bool`. A type can be copyable only if it owns nothing outside its own bytes ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)). `List` owns heap memory, so it's **move-only**, and `copy` refuses it.
 
-**A value is destroyed when its owner's scope ends, or when its owner is given a new value** ([01](../spec/01-values-and-ownership.md#destruction)). Destruction runs in reverse order:
+To get a second list, you have to build one: allocate memory for it, and fill it with values of its own. Only the type knows what it owns and how to rebuild it, so its author writes a method for that, `clone()`. `List` has one. A move-only type you define has one only if you write it.
 
-- a scope's locals, last declared first;
-- a statement's temporaries, at the end of the statement, last made first;
-- a value's parts: its own `deinit` first, then its fields, last declared first.
+A clone is meant to be fully independent of the original: changing or destroying one never affects the other. Rayo never calls `clone()` on its own, since it runs the type's code and usually allocates.
 
-An `owned` parameter counts as a local of the function's body, declared before the body's own locals.
+## Declaring, assigning and returning
 
-### `deinit`
-
-**A `deinit` is code that runs when a value of its type is destroyed.** It goes in the struct's body, and takes no parameters:
+Declaring a variable from another one moves the value into it, the same way passing it to an `owned` parameter moves it ([01](../spec/01-values-and-ownership/bindings.md#bindings)):
 
 ```swift
-struct GpuBuffer(let id: UInt32, let size: Int) {
-    deinit { releaseGpuMemory(id) }
+let finished = hits
+log("\(hits.count)")            // error: 'hits' was moved
+```
+
+Assigning to a variable that already exists moves the value the same way. So does `return`, which moves a value out to the caller ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
+
+```swift
+func newRound() -> List<Int> {
+    var round = List<Int>()
+    round.append(0)
+    return round
 }
 
-func drawTerrain() {
-    var vertices = createBuffer(size: 65536)
-    let indices = createBuffer(size: 16384)
-    vertices = createBuffer(size: 131072)        // the first vertex buffer is released here
-}                                                 // 'indices' is released, then 'vertices'
+let current = newRound()        // 'current' owns the new list
+var older = List<Int>()
+older = current                 // older's first list is destroyed, and 'current' holds nothing
 ```
 
-**A type with a `deinit` is move-only.** A copy would run the `deinit` a second time, and release one buffer twice. A move runs no code, so only the buffer's last owner runs it. That is how `GpuBuffer` gets its guarantee: whichever place owns the buffer last releases it, once.
-
-A `deinit` is declared in the type's own module, in its body or in an extension with no conditions ([04](../spec/04-types.md#initializers)). Safe code never runs one twice, but it can skip one. After an arena is reset, destroying a list whose buffer the arena held skips its elements' `deinit`s ([Memory and allocators](06-memory-and-allocators.md#stale-values-objects-and-heaps)).
-
-## Moving out of what you own
-
-**Only code that owns a place can move a value out of it** ([01](../spec/01-values-and-ownership.md#what-can-be-moved-from)). Moving a value out, implicitly or with `consume`, is **consuming** the place ([01](../spec/01-values-and-ownership.md#moving-values-out)). These are the places code can move from:
-
-- a local that owns its value: one bound to a value, such as a call's result, or one declared `owned` (below);
-- an `owned` parameter;
-- a temporary, such as a call's result passed straight to an `owned` parameter;
-- a field of one of those, when no type on the way to it declares a `deinit` ([below](#moving-a-field-out)).
-
-### `owned let` and `consume`
-
-**A `let` of a place borrows it, and a bare `var` of one is an error.** Chapter 1 showed `let first = enemies[0]` naming an element without copying it. `owned let x = place`, or `owned var`, moves the value out instead ([01](../spec/01-values-and-ownership.md#bindings)):
+So if you need a variable's old value after changing it, copy it first:
 
 ```swift
-var current = createBuffer(size: 65536)
-owned var previous = current             // moves: 'previous' takes the buffer over
-current = createBuffer(size: 65536)      // 'current' gets a new buffer, and is usable again
-var spare = current                      // error: a bare 'var' of a place: write '&' or 'owned'
+var hp = 100
+let before = copy hp
+hp -= 10
+log("lost \(before - hp)")      // lost 10
 ```
 
-**`consume x` writes a move as an expression.** It gives up a value where nothing would take it otherwise:
+Without `copy`, the 100 would move into `before`, leaving `hp` with nothing. Then `-=` would be an error, since it reads `hp` first.
+
+To give a value a second name without moving or copying it, borrow it:
 
 ```swift
-let n = countDraws(consume cmds)         // countDraws only borrows: the list is destroyed after this statement
-consume previous                         // releases the buffer here, not at the end of the scope
+var hits = List<Int>()
+hits.append(12)
+let same = borrow hits
+log("\(same.count)")            // 1
 ```
 
-### Moving a field out
+`same` is another name for the list in `hits`. Nothing moved and nothing was copied. `hits` still owns the list, and `same` only borrows it, the way a plain parameter borrows its argument ([01](../spec/01-values-and-ownership/bindings.md#bindings)).
 
-**A field can move out of a value you own when no type on the way declares a `deinit`.** The rest of the value stays where it is, and the compiler tracks it field by field:
+A borrow comes with one restriction. `same` is a `let`, and a `let` keeps the value it started with. So the list can't change while you still use `same`:
 
 ```swift
-struct Frame(var cmds: CommandList, var number: Int)    // no deinit
-
-func finish(_ frame: owned Frame) {
-    submit(frame.cmds)               // moves the field out of 'frame'
-    log("frame \(frame.number)")     // fine: 'number' still holds its value
-    archive(frame)                   // error: 'frame.cmds' was moved
-}                                    // the fields still held are destroyed here
+let same = borrow hits
+hits.append(5)                  // error: 'hits' is borrowed by 'same' (used below)
+log("\(same.count)")
 ```
 
-Until the field gets a value again, the whole value can't be used or passed. If the scope ends first, each field still held is destroyed on its own, last declared first.
+Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including how to borrow a value to change it ([Borrowing](03-borrowing.md)).
 
-**A `deinit` keeps its value whole.** It runs on all of `self`, and would find a field missing. So moving a field out of a value whose type declares one is a compile error:
+## A value that may have moved
+
+The compiler follows every path through the code to know whether a variable still holds a value. Here the list moves on only one path:
 
 ```swift
-struct RenderPass(var cmds: CommandList, let id: Int) {
-    deinit { log("pass \(id) ended") }
+var hits = List<Int>()
+if bossFight {
+    archive(list: hits)
 }
+log("\(hits.count)")            // error: 'hits' may have been moved
+```
 
-func close(_ pass: owned RenderPass) {
-    submit(pass.cmds)                                  // error: RenderPass's deinit needs all of 'pass'
-    submit(replace(&pass.cmds, with: CommandList()))   // fine: leaves a list behind for the deinit
+When `bossFight` is true, `archive` takes the list. By the time it returns, it has destroyed the list or handed it to another owner. Either way, `hits` holds nothing, and `hits.count` would read a list that isn't there. The compiler can't know whether `bossFight` will be true, since that's decided only when the program runs. So it rejects the read.
+
+The fix is to make sure every path leaves `hits` holding a list ([01](../spec/01-values-and-ownership/moving-values-out.md#places-that-hold-no-value)):
+
+```swift
+if bossFight {
+    archive(list: hits)
+    hits = List<Int>()
 }
+log("\(hits.count)")            // fine
 ```
 
-The type's own code is the exception: its `deinit`, and a `consuming` method that ends the value with `discard self`, may move fields out. A **`consuming` method** takes `self` owned, as chapter 3 shows ([Borrowing](03-borrowing.md#three-ways-to-pass-an-argument)), and `discard self` ends the value without running its `deinit` ([01](../spec/01-values-and-ownership.md#what-can-be-moved-from)).
-
-### Places you don't own
-
-**Nothing moves out of a place the code doesn't own.** So none of these can be consumed:
-
-- a borrowed or `mutable` parameter, or a field of one;
-- a `let` or `var` that borrows a place;
-- an element of a collection, which the collection hands out through a method such as `popLast()`;
-- a global, a `const` included.
-
-The spec lists a few more ([01](../spec/01-values-and-ownership.md#what-can-be-moved-from)). This holds for copyable values too, so returning a borrowed parameter's field takes `copy`:
-
-```swift
-func aimAt(_ e: Enemy) -> Vec3 { e.pos }           // error: 'e' is borrowed, so 'e.pos' can't move out
-func aimAt(_ e: Enemy) -> Vec3 { copy e.pos }      // fine: returns a copy
-```
-
-**`replace`, `swap` and `take()` move a value out of a place you may change, and leave one behind.** A `mutable` parameter lends the caller's place for change, so the caller still owns it:
-
-```swift
-struct Renderer(var cmds: CommandList, var front: GpuBuffer, var back: GpuBuffer, var retired: List<GpuBuffer>)
-
-func endFrame(_ r: mutable Renderer) {
-    submit(r.cmds)                                   // error: the caller still owns 'r'
-    submit(replace(&r.cmds, with: CommandList()))    // moves the list out, and leaves an empty one
-    swap(&r.front, &r.back)                          // the buffers trade places: none is copied or released
-    let done = r.retired.take()                      // moves the list out, and leaves 'r.retired' empty
-}                                                    // 'done' ends here, releasing the retired buffers
-```
-
-A type may offer its own `take()`: an optional's leaves `nil`, and a list's leaves it empty. So a place you don't own always holds a value, even after an early return or a `throw`.
-
-## Places that hold no value
-
-**The compiler tracks, on every path, whether each place holds a value** ([01](../spec/01-values-and-ownership.md#places-that-hold-no-value)). A binding may start without one, and a `let` is then assigned at most once on each path:
-
-```swift
-let size: Int
-if hiRes { size = 4096 } else { size = 1024 }
-var vertices = createBuffer(size: size)      // fine: every path gave 'size' a value
-```
-
-**A place that holds a value on only some paths is maybe-initialized where they join.** A **maybe-initialized** place can't be used until it is assigned again:
-
-```swift
-var cmds = CommandList()
-if needsFlush {
-    submit(cmds)                    // moves on this path only
-}
-cmds.draw(mesh)                     // error: 'cmds' may have been moved
-```
-
-The fix gives the place a value on every path:
-
-```swift
-if needsFlush {
-    submit(cmds)
-    cmds = CommandList()            // so both paths leave 'cmds' holding a list
-}
-cmds.draw(mesh)                     // fine
-```
-
-**At the end of a scope, and when a place is assigned, its old value is destroyed if, and only if, the place still holds one.** So without its last line, the first version would destroy `cmds` at the end of its scope only on the path where `submit` didn't take it.
-
-## Constants
-
-**A `const` of a copyable type is taken as a new value each time, with no `copy`** ([01](../spec/01-values-and-ownership.md#constants)):
-
-```swift
-const maxLights = 8
-
-var lightsLeft = maxLights          // a new Int: a 'var' of a copyable const needs no 'copy'
-lightsLeft -= 1                     // maxLights is unchanged
-```
-
-`Vec3.zero` is taken the same way, so `Enemy(pos: .zero)` needs no `copy`. A `const` the program uses at run time lives in read-only data for the whole run, so nothing moves out of it or changes it. A `const` of a move-only type, such as a `List`, can only be borrowed or cloned. Chapter 8 shows how the compiler computes a `const` ([C and compile time](08-c-and-compile-time.md)).
+If `hits` isn't used again, there's nothing to fix. The compiler still places the code that destroys the list at the end of the block. Which path ran is known only when the program runs, so that code checks then whether there's a list left to destroy.
 
 ## In the spec
 
-- [01 Values and ownership](../spec/01-values-and-ownership.md#moves): moves, copies and every operation that copies, destruction order, and each place that can or can't be moved from.
-- [01 Parameters](../spec/01-values-and-ownership.md#parameters): the `owned` convention, and how a callee holds what it is given.
-- [01 Bindings](../spec/01-values-and-ownership.md#bindings): every form of `let` and `var`, with what each does to a place.
-- [04 Initializers](../spec/04-types.md#initializers): why the primary initializer moves its arguments, and where a `deinit` is declared.
-- [05 Conformances](../spec/05-protocols-generics-and-closures.md#conformances): marker protocols, and why `~Copyable` is declared with the type.
-- [06 Stale values](../spec/06-memory-and-allocators.md#stale-values-and-the-deinits-a-reset-runs): when an arena reset skips a `deinit`.
+- [01 Moves](../spec/01-values-and-ownership/moves-copies-destruction.md#moves): what a move does.
+- [01 Moving values out](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out): every construct that moves a value, and what can be moved from.
+- [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): `owned` and the other parameter conventions.
+- [01 Copies](../spec/01-values-and-ownership/moves-copies-destruction.md#copies): `copy` and `clone()`, and which types are copyable.
+- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): what each form of `let` and `var` does with what it's given.
+- [01 Destruction](../spec/01-values-and-ownership/moves-copies-destruction.md#destruction): when a value is destroyed, and in what order.
+- [01 Places that hold no value](../spec/01-values-and-ownership/moving-values-out.md#places-that-hold-no-value): how the compiler tracks what each variable holds on every path.
+- [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): `List` and the other collections.

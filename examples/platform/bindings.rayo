@@ -55,7 +55,7 @@ struct Loads(
 @c func onFileLoaded(_ user: *Void?, _ data: *UInt8?, _ len: UInt, _ error: Int32) {
     guard let h = Handle<LoadState>(bits: UInt64(UInt(bitPattern: user))) else { return }   // nil only for generation 0, which no real handle has
     var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
-    if error == 0, let data {
+    if error == 0 && data != nil {
         result = .done(unsafe List(copying: data, count: Int(len)))    // copied with the current allocator
     }
     completedLoads.push((h, consume result))                           // Synchronized: safe from any thread
