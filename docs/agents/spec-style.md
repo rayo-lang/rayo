@@ -17,7 +17,8 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Paragraphs and sections
 
-- **Give the rule a setting.** Start with a concrete case when it helps the reader see the problem. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule when its context is already clear.
+- **Move from whole to parts.** Open a numbered chapter with the situation its construct addresses and how its main ideas fit together. Then move to examples and exact rules. Introduce names from an example only after the example shows them.
+- **Give the rule a setting.** In a section whose context is already clear, a concrete case can make a rule easier to understand. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule.
 - **Make each paragraph follow one line of reasoning.** Connect a definition to the example or need that gives it meaning. Do not stack definitions or rules and leave the reader to work out how they relate.
 - **Three or more items make a list**, one item per bullet.
 - **Paragraphs stay under about 120 words.** A section that needs more splits where the subject changes.

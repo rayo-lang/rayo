@@ -1,23 +1,28 @@
 # 02 · Views and dependencies
 
-`splitLines` stores each line as a view into `source`. That saves a copy, but the views still read `source`'s characters. If `source` moves its buffer, they would point at freed memory.
+Programs often need to work with part of a value without taking ownership of it. A parser might keep the lines of a string as views of its characters; a renderer might work directly on part of a list. The string or list still owns the storage. If the owner moves or frees it while a view is in use, the view becomes invalid.
+
+When a view reaches memory that can be freed, Rayo keeps it in the scope that lent it. Its type is marked [`Scoped`](02-views-and-dependencies/scoped-values.md#scoped-values), so that limit follows it into other values. The compiler also records which storage the view depends on. Staying in scope alone would not tell it which owner must remain available, especially after a view passes through a function or is stored in a collection.
 
 ## Dependencies
+
+For example, a function can fill a list with views into a string:
 
 ```swift
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 
+var source = String("first\nsecond")
 var lines = List<StringView>()
 splitLines(source.view, into: &lines)
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print(lines.count)
 ```
 
-After `splitLines` returns, `lines` still holds views of `source`. The append could move the string's buffer, so the compiler rejects it while `lines` is still in use. The later `print` shows why the borrow has not ended yet.
+The list owns its `StringView` values, but the characters those views read still belong to `source`. Appending to `source` could move its buffer and free the old one. Because `lines` is used afterwards, the compiler rejects the append while those views still depend on the original buffer.
 
-Because the source's memory can be freed, a `StringView` is `Scoped`: it must stay within the scope that lent it, where the compiler can check its borrow. `List<StringView>` is scoped too, because it holds those views. [Scoped values](02-views-and-dependencies/scoped-values.md#scoped-values) sets out which other types have this restriction.
+`StringView` is `Scoped` under that rule, and `List<StringView>` is scoped because it holds those views.
 
-`Scoped` keeps the list inside the lending scope; it does not identify what the list borrows. For that, the compiler records a **dependency set**: every place or dynamic access the value borrows, marked **shared** or **exclusive**. The value **carries** this set as it moves through the function. Here, `lines` holds a shared borrow of `source`. Until the last use of `lines`, changing, moving or destroying `source` must respect that borrow under the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+In this example, `lines` depends on `source` through a shared borrow. More generally, a scoped value's **dependency set** records every place or dynamic access it borrows, marked **shared** or **exclusive**; the value **carries** that set as it moves through a function. Until the last use of `lines`, changing, moving or destroying `source` must respect the borrow under the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
 A view can keep several places borrowed:
 
