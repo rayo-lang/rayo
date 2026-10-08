@@ -102,7 +102,7 @@ A type whose `deinit` only destroys what it owns alone and frees its own buffers
 An accessor that yields a place instead of returning a value: a `read` or a `modify` ([02](docs/spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
 
 **Scoped value**:
-A value of a type that conforms to `Scoped`, which stays within the scope that lent it; every view whose memory could be freed while it reads it is one ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
+A value of a type that conforms to `Scoped` and must stay within its scope. A view into memory that can be freed is scoped; a scoped value need not be a view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 _Avoid_: non-escaping value, lifetime-bound value
 
 **Sealed type**:

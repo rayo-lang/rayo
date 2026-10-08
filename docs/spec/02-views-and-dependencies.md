@@ -1,6 +1,6 @@
 # 02 · Views and dependencies
 
-A view lets code work with data in place. Its type says what kind of access it permits; its dependencies say which owner's memory must remain available while the view is used. This chapter defines both, then describes the accessors that lend a place or return a view.
+A **view** borrows memory that another value owns. **`Scoped`** limits where a value can live. A view into memory that can be freed is scoped, but a view of immortal data can be unscoped, and a type can be scoped without borrowing memory ([Scoped values](02-views-and-dependencies/scoped-values.md#scoped-values)). The view's type says what kind of access it permits; its dependencies say which owner's memory must remain available while the view is used. This chapter defines both, then describes the accessors that lend a place or return a view.
 
 ## Subchapters
 

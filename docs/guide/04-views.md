@@ -61,7 +61,7 @@ let name: StringView = "grunt"            // the literal's bytes, which last for
 
 **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
 
-## Views are scoped
+## When a view is scoped
 
 ```swift
 struct Token(var text: StringView, var line: Int): Scoped   // a token views the script's text
