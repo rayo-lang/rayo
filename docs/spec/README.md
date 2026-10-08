@@ -18,8 +18,7 @@ For a question about a line of code, begin with the construct you wrote. For exa
 | A thrown error, panic, check or `unsafe` operation | [10 Errors and safety](10-errors-and-safety.md) |
 | Modules, visibility, separate compilation or target requirements | [11 Compilation model](11-compilation-model.md) |
 | Whether a sequence of tokens is valid Rayo | [12 Grammar](12-grammar.md) |
-| Why safe code avoids undefined behavior | [13 Soundness](13-soundness.md) |
 
-The [hard cases](hard-cases.md) apply the rules to systems programs where ownership, aliases and low-level memory interact. They are useful when a short example leaves a doubt about a larger design.
+The [validation documents](../validation/README.md) check the spec's safety argument and its support for demanding systems patterns. They do not define language behavior.
 
 The spec states the language's intended behavior. Code examples may leave a body out as `{ ... }` when its implementation does not affect the rule being shown; [the grammar](12-grammar.md) gives the source syntax. A numbered link at the end of a rule points to another chapter that supplies part of its meaning.

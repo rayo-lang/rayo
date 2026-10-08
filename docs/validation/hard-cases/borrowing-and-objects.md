@@ -4,11 +4,11 @@
 
 ## A. Borrowed and stored references
 
-**Borrows are checked statically within a function, with no lifetime parameters.** A view of memory that can be freed must stay within the scope that lent it, though, so a `Span` or a `StringView` can't be stored in long-lived state ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). Stored references move to the dynamic tier instead: weak pointers, `Slice` and `Handle`, each checked at each use. These cases probe both sides of that line: code that should stay free and static, and code that needs stored references but shouldn't need `unsafe`.
+**Borrows are checked statically within a function, with no lifetime parameters.** A view of memory that can be freed must stay within the scope that lent it, though, so a `Span` or a `StringView` can't be stored in long-lived state ([02](../../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Stored references move to the dynamic tier instead: weak pointers, `Slice` and `Handle`, each checked at each use. These cases probe both sides of that line: code that should stay free and static, and code that needs stored references but shouldn't need `unsafe`.
 
 ### A1 · Views into a buffer the function owns (also A4)
 
-**A tokenizer's tokens view the text they came from, instead of copying it.** A function loads a large text into an owned `String` and splits it into tokens whose text views the source. The tokens are collected into a list, filtered, and handed on. Copying each token's text into a `String` of its own would allocate once per token, since a `String` owns heap memory ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
+**A tokenizer's tokens view the text they came from, instead of copying it.** A function loads a large text into an owned `String` and splits it into tokens whose text views the source. The tokens are collected into a list, filtered, and handed on. Copying each token's text into a `String` of its own would allocate once per token, since a `String` owns heap memory ([01](../../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 
 - **Must accept** tokens that view the source without copying text, in a token list that lives as long as the function needs it.
 
@@ -25,7 +25,7 @@ forEachLine(src.view) { line in lines.append(copy line) }      // a callback
 print(lines.count)
 ```
 
-The caller has to know which text the list views. Changing that text, as `source.append` would, may move it to a larger buffer and free the old one, which the list still views ([13](../13-soundness.md)).
+The caller has to know which text the list views. Changing that text, as `source.append` would, may move it to a larger buffer and free the old one, which the list still views ([safety argument](../safety-argument.md)).
 
 The criteria below also use these patterns:
 
@@ -60,7 +60,7 @@ use(entry)
 func labelOf(_ d: any Named) -> StringView { d.label() }   // an ordinary helper over an existential view
 ```
 
-The difficulty is that, by default, a call's result depends on everything the call was lent, even an argument it only read ([02](../02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)).
+The difficulty is that, by default, a call's result depends on everything the call was lent, even an argument it only read ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)).
 
 - **Must accept** this sequence, possibly with a small annotation on `find` that the compiler checks. If the spec's answer is "restructure", count it as Solved with cost, and state how common the pattern is in parsers and lookups.
 - **Must accept** a struct holding a view of a request and a view of a table, passed to a lookup whose result depends only on the table, then the request replaced while the result is used.
@@ -68,7 +68,7 @@ The difficulty is that, by default, a call's result depends on everything the ca
 
 ### A5 · Long-lived views into a long-lived buffer
 
-**A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives**, as the components of a loaded level hold views of its package. Separately, code keeps `Slice<T>`s into a blob that several threads share under a lock, replaces the whole blob with a shorter one, and reads through an old slice. An old slice may then reach past the new blob's end ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
+**A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives**, as the components of a loaded level hold views of its package. Separately, code keeps `Slice<T>`s into a blob that several threads share under a lock, replaces the whole blob with a shorter one, and reads through an old slice. An old slice may then reach past the new blob's end ([06](../../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
 
 - **Must accept** storing those views in long-lived structs, without copying the data. Name the cost of whatever replaces the views (offsets, a shared owner): run-time checks, and bytes per view where the spec fixes a layout.
 - **Must accept** reads through slices that still fit, without re-creating them.
@@ -89,14 +89,14 @@ for (int i : path) cur = cur->children[i].get();    // re-target the cursor to a
 cur->children.push_back(std::make_unique<Node>());
 ```
 
-A cursor that binds a place can't be re-targeted with `=`, which writes the place the binding names ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
+A cursor that binds a place can't be re-targeted with `=`, which writes the place the binding names ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
 
 - **Must accept** a loop that re-targets the mutable cursor to a child each iteration.
 - **Must accept** the same walk when the children are `List<UniquePointer<Node>>` and the tree is 10,000 levels deep, without a run-time mark held per level.
 
 ### A7 · Accessors, user subscripts and columns (also part of A24)
 
-**Code needs two *computed* projections of one value mutably at once**: `modify` accessors, not stored fields ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
+**Code needs two *computed* projections of one value mutably at once**: `modify` accessors, not stored fields ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
 
 ```swift
 var p = &world.physics     // a modify accessor
@@ -158,7 +158,7 @@ struct Font {
 for chunk in data.chunks_mut(64) { simd_kernel(chunk); }
 ```
 
-Two mutable chunks from one iterator, live at once, would alias ([02](../02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
+Two mutable chunks from one iterator, live at once, would alias ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
 
 - **Must accept** safe code with no copies.
 
@@ -211,7 +211,7 @@ std::sort(targets.begin(), targets.end(), [&](Handle a, Handle b) {
 
 ### A14 · Callbacks that need context
 
-**A callback registered now must mutate program state when it fires later**, as a UI button's "on click" does. Elsewhere, a factory function builds and returns a closure that owns its captures. A callback that outlives the call that made it owns its captures instead of borrowing them ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), so it can't hold a borrow of the state it changes.
+**A callback registered now must mutate program state when it fires later**, as a UI button's "on click" does. Elsewhere, a factory function builds and returns a closure that owns its captures. A callback that outlives the call that made it owns its captures instead of borrowing them ([05](../../spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), so it can't hold a borrow of the state it changes.
 
 The criteria below use these function values:
 
@@ -235,7 +235,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag.view) } }    // a closur
 
 ### A17 · Remembering what a function saw
 
-**A function scans a local list of candidates and wants to keep the ones it picked for later calls.** It can't keep a view of its local list past the call, since the list is destroyed when the function returns ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+**A function scans a local list of candidates and wants to keep the ones it picked for later calls.** It can't keep a view of its local list past the call, since the list is destroyed when the function returns ([02](../../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
 
 - **Must accept** keeping them as owned values, such as a `List<T>` of copies, or as `Handle`s.
 
@@ -284,13 +284,13 @@ void attack(Entity& attacker, Entity& target) {
 attack(e, e);    // both parameters name one entity
 ```
 
-The law of exclusivity lets nothing else reach a place while it is mutably borrowed, so one call can't lend the same value for change twice ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+The law of exclusivity lets nothing else reach a place while it is mutably borrowed, so one call can't lend the same value for change twice ([01](../../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
 - **Must accept** an idiom that handles the aliasing case correctly and explicitly.
 
 ### B3 · A coroutine waiting on an object that is destroyed
 
-**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its owner steps explicitly ([07](../07-concurrency/tasks.md#semantics)). This one waits for an enemy to be gone:
+**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its owner steps explicitly ([07](../../spec/07-concurrency/tasks.md#semantics)). This one waits for an enemy to be gone:
 
 ```swift
 await until { [copy target] game in game.enemies[target] == nil }   // the condition, polled at each step
@@ -308,7 +308,7 @@ await until { [copy target] game in game.enemies[target] == nil }   // the condi
 
 ### B5 · Moving a value between containers
 
-**A move-only value, such as an item that owns a `String` description, moves from one container to another.** A collection's element can't simply be moved out, since its place must still hold a value for every later use ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
+**A move-only value, such as an item that owns a `String` description, moves from one container to another.** A collection's element can't simply be moved out, since its place must still hold a value for every later use ([01](../../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
 
 The criteria below use these declarations and statements:
 

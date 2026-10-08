@@ -15,7 +15,7 @@
 
 ## K. Freeing memory in practice
 
-**Memory is released at points the code shows, such as a scope's end, an arena reset or the drop of a last owner** ([06](../06-memory-and-allocators.md)). These cases follow memory through a tool that runs once, a server that runs for weeks, a real-time callback, and a program's exit.
+**Memory is released at points the code shows, such as a scope's end, an arena reset or the drop of a last owner** ([06](../../spec/06-memory-and-allocators.md)). These cases follow memory through a tool that runs once, a server that runs for weeks, a real-time callback, and a program's exit.
 
 ### K1 · A program that runs once
 
@@ -27,7 +27,7 @@
 
 ### K2 · A long-running server
 
-**An event-loop server handles requests on worker threads for weeks.** Each worker has its own scratch arena, which it resets after each request, and connection handshakes are written as `task`s stepped by the event loop. No borrow may be live across a task's `await`, since the task's owner may move or destroy its state between steps ([07](../07-concurrency/tasks.md#semantics)).
+**An event-loop server handles requests on worker threads for weeks.** Each worker has its own scratch arena, which it resets after each request, and connection handshakes are written as `task`s stepped by the event loop. No borrow may be live across a task's `await`, since the task's owner may move or destroy its state between steps ([07](../../spec/07-concurrency/tasks.md#semantics)).
 
 The criteria below use these statements, the last four in a handshake task:
 
@@ -53,7 +53,7 @@ using allocator = a { … }                   // a block with an await inside
 
 ### K3 · A real-time callback
 
-**A `@noalloc` callback with a real-time deadline, called by a C library on its own thread, reads a `Published` configuration**, as an audio callback reads its mixer settings. Dropping the last owner of a reference-counted value destroys it at once, on the thread that drops it ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
+**A `@noalloc` callback with a real-time deadline, called by a C library on its own thread, reads a `Published` configuration**, as an audio callback reads its mixer settings. Dropping the last owner of a reference-counted value destroys it at once, on the thread that drops it ([06](../../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 
 - **Must hold:** a callback that reads the configuration never waits, and runs no `deinit` and frees nothing that another thread's `publish` left to it. State how it keeps from dropping the last owner of a replaced configuration.
 - **Must accept** a `@noalloc` function that calls a DSP closure it takes as a `@noalloc (mutable MutableSpan<Float>) -> Void`, drops a `Closure<@noalloc () -> Void>` it owns, and calls a `@c noalloc` pointer a C plugin handed over.

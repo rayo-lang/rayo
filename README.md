@@ -62,7 +62,7 @@ The [guide](docs/guide/) teaches Rayo in eight chapters, for programmers who kno
 
 ## Read the spec
 
-The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. [13](docs/spec/13-soundness.md) argues why safe code has no undefined behavior, and the [hard cases](docs/spec/hard-cases.md) are the systems patterns the spec is tested against.
+The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glossary](GLOSSARY.md) says in a sentence what each of its terms means. To learn the memory model, start with 01 to 03, then read 06 and 07. The [validation documents](docs/validation/README.md) check the design's safety and the systems patterns it must support.
 
 | Doc | Covers |
 | --- | --- |
@@ -78,15 +78,14 @@ The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glos
 | [10 Errors and safety](docs/spec/10-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code), [check levels](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels), build modes |
 | [11 Compilation model](docs/spec/11-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/spec/11-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/spec/11-compilation-model.md#what-the-language-leaves-open) |
 | [12 Grammar](docs/spec/12-grammar.md) | EBNF grammar |
-| [13 Soundness](docs/spec/13-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |
-| [Hard cases](docs/spec/hard-cases.md) | Systems patterns the spec is tested against |
 
 ## Repository layout
 
 | Path | Holds |
 | --- | --- |
 | [`docs/guide/`](docs/guide/) | The guide, which teaches the language chapter by chapter |
-| [`docs/spec/`](docs/spec/) | The spec and the hard cases |
+| [`docs/spec/`](docs/spec/) | The complete language specification |
+| [`docs/validation/`](docs/validation/) | The safety argument and hard cases used to check the design |
 | [`docs/`](docs/) | [Why Rayo](docs/why-rayo.md), and the [agent docs](docs/agents/) the project rules point to |
 | [`GLOSSARY.md`](GLOSSARY.md) | The spec's terms, each with a one-sentence description and a link to its definition |
 | [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system |
@@ -99,7 +98,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 
 - **Ask questions and report problems** in [GitHub issues](https://github.com/rayo-lang/rayo/issues). A rule that is hard to follow, two parts of the spec that disagree, and a program the spec accepts that isn't safe are each worth an issue.
 - **Find work** in the issues labeled [`good first issue`](https://github.com/rayo-lang/rayo/labels/good%20first%20issue), [`help wanted`](https://github.com/rayo-lang/rayo/labels/help%20wanted) or [`ready-for-human`](https://github.com/rayo-lang/rayo/labels/ready-for-human).
-- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. A spec change is reviewed against the soundness argument in [13](docs/spec/13-soundness.md) and the criteria of the [hard cases](docs/spec/hard-cases.md).
+- **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. Review the change against the [safety argument](docs/validation/safety-argument.md) and the criteria in the [hard cases](docs/validation/hard-cases.md).
 - **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI builds and tests on Linux with Swift 6.4, and a change must pass there. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 

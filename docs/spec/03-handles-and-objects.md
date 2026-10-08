@@ -57,7 +57,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **A weak pointer never aliases a mutation.** Two weak pointers to one object are aliases the static checker can't see, so each use is checked at run time ([below](#dynamic-exclusivity)).
 
-**Each object stays on the thread that made it**, its **home thread**, so the object is **thread-bound**. Its access marks never synchronize with another thread, so these rules keep every use of it there ([13](13-soundness/runtime-and-concurrency.md#the-dynamic-tier)):
+**Each object stays on the thread that made it**, its **home thread**, so the object is **thread-bound**. Its access marks never synchronize with another thread, so these rules keep every use of it there:
 
 - **No value holding an owner or a weak pointer leaves the thread.** `UniquePointer` and `WeakPointer` aren't `Sendable` ([07](07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)), so no value holding one moves to or is lent to another thread.
 - **The object is destroyed only on its home thread.** A reset or an unregistration on another thread panics instead ([below](#objects-in-arenas-and-other-allocators)).

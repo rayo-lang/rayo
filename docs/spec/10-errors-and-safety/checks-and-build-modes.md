@@ -12,7 +12,7 @@ let n = a + b             // overflow check: without it, the sum wraps, which is
 **Checks come in two classes:**
 
 - **Memory-safety checks**, bounds checks among them, make safe code sound. They are on in every build, and only `unchecked` code can strip them ([below](#unchecked-blocks)).
-- **Diagnostic checks** catch logic bugs whose failure is still memory-safe, such as wrapping arithmetic. With one off, a wrong value still meets every memory-safety check, as a wrapped index meets the next bounds check ([13](../13-soundness/types-and-boundaries.md#checks-and-panics)).
+- **Diagnostic checks** catch logic bugs whose failure is still memory-safe, such as wrapping arithmetic. With one off, a wrong value still meets every memory-safety check, as a wrapped index meets the next bounds check.
 
 **Each diagnostic check is on or off where code is written.** The innermost of these decides it:
 

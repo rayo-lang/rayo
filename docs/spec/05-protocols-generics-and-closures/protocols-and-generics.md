@@ -58,7 +58,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 }
 ```
 
-**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things. So a body that passes is sound for every instantiation ([13](../13-soundness/runtime-and-concurrency.md#generic-code-and-existentials)).
+**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things. So a body that passes is sound for every instantiation.
 
 **So a generic fails at an instantiation only in these cases, where the arguments decide the outcome:**
 
@@ -179,7 +179,7 @@ for w in &widgets { w.value.update(dt) }           // mutable any Widget: mutati
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
 
-**`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so ([13](../13-soundness/runtime-and-concurrency.md#generic-code-and-existentials)).
+**`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.
 
 **A `Shared`'s value must be `Frozen` or `Synchronized`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and an existential is `Frozen` only when its protocols say so, as for `Sendable`. So a `Shared`'s existential is `Shared<any P & Frozen>`, or `Shared<any P>` for a `P` that inherits `Frozen` or `Synchronized`, as `WakeTarget` inherits `Synchronized` ([07](../07-concurrency/tasks.md#awaitables)).
 

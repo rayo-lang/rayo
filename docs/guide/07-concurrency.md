@@ -312,4 +312,4 @@ scripts.step(&game)                                        // resumes pending an
 - [07 Global state](../spec/07-concurrency/global-state.md#global-state): thread-locals, startup, thread teardown and shutdown.
 - [07 Task functions](../spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines): awaitables, wakers, and `TaskSet`.
 - [05 Closure kinds](../spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds) and [unscoped closures](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref): what decides a closure's kind, and capture lists.
-- [Hard cases](../spec/hard-cases/concurrency-and-memory.md#c-concurrency): concurrency patterns the design must accept, such as nested parallelism and errors in lent work.
+- [Hard cases](../validation/hard-cases/concurrency-and-memory.md#c-concurrency): concurrency patterns the design must accept, such as nested parallelism and errors in lent work.

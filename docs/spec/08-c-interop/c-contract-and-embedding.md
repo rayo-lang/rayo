@@ -4,7 +4,7 @@
 
 ## What C must uphold
 
-**C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place.** The argument that safe code is sound assumes C keeps them, as it assumes `unsafe` code keeps its own ([13](../13-soundness/types-and-boundaries.md#the-unsafe-boundary)). They are these:
+**C that calls Rayo, that Rayo calls, or that reaches Rayo memory has the obligations that `unsafe` Rayo code would have in its place.** Safe Rayo code relies on C keeping them, as it relies on `unsafe` Rayo code keeping its own. They are these:
 
 - **Valid values.** Every value C passes, returns or writes into Rayo memory is valid for its Rayo type ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)):
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;

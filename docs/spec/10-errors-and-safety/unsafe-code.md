@@ -38,7 +38,7 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 - converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
 - reading a union member where 04 requires it, since what another member's write left there may not be a valid value of it ([04](../04-types/enums.md#untagged-unions)).
 
-**No `unsafe` call is hidden**, so every promise that `unsafe` code makes is made at a visible `unsafe` site ([13](../13-soundness/types-and-boundaries.md#the-unsafe-boundary)).
+**No `unsafe` call is hidden**, so every promise that `unsafe` code makes is made at a visible `unsafe` site.
 
 - **An `unsafe` declaration** is used only inside `unsafe`, or through an `unsafe` function type, an `unsafe` requirement or a `: unsafe P` conformance. That holds for an `unsafe` declaration of any kind: a function, an initializer, an operator, a subscript or an accessor.
 - **An imported or `extern c` function** is used only inside `unsafe`, or through a `@c` pointer, whose calls need `unsafe` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
@@ -56,7 +56,7 @@ So a call the language makes on the code's behalf is allowed only where the call
 
 ## What `unsafe` code upholds
 
-**`unsafe` code keeps the rules of this section.** They are the invariants that make safe code free of undefined behavior, stated for `unsafe` code. Safe code keeps them by the rules of the other chapters, and its soundness assumes that `unsafe` code and C keep them too ([13](../13-soundness.md#the-invariants)).
+**`unsafe` code keeps the rules of this section.** They are the invariants that make safe code free of undefined behavior, stated for `unsafe` code. Safe code keeps them by the rules of the other chapters, and relies on `unsafe` code and C keeping them too.
 
 The rules say what an allocation is, what each access through a raw pointer must satisfy, and what the values and views that `unsafe` code leaves behind promise to the code that uses them.
 
@@ -78,7 +78,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 
 **An access through a raw pointer must satisfy each of these, and breaking any of them is undefined behavior.** Together they say where the access may land, what it must find there, how much it may write, and how it is ordered against other threads:
 
-- **In bounds.** `p + n` stays inside the allocation `p` was derived from, or one past its end. An access lies wholly inside that allocation while it is live, so nothing it reads or writes has been freed or reused ([13](../13-soundness.md#the-invariants)).
+- **In bounds.** `p + n` stays inside the allocation `p` was derived from, or one past its end. An access lies wholly inside that allocation while it is live, so nothing it reads or writes has been freed or reused.
 - **Aligned.** The address is a multiple of `T`'s alignment, since a misaligned load or store faults on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 - **Valid.** A read as `T` finds a valid `T` there. What is valid depends on the type:
     - for a padding-free `Pod` type ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), any initialized bytes;
@@ -93,27 +93,27 @@ The rules say what an allocation is, what each access through a raw pointer must
 **Raw accesses respect borrows and views.** `unsafe` code reads a place only where Rayo code could. It writes a place, moves its value out, as `p.move()` does, or destroys the value in it, only where Rayo code with exclusive access could. These rules apply the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)) to raw accesses:
 
 - **Under a mutable access.** While a `mutable` access, an `&` binding or a mutable view is live, nothing touches the places it reaches except through it. So two `MutableSpan`s made from one pointer never overlap while both are live, since one could write what the other still reads ([02](../02-views-and-dependencies/dependency-rules/projection-and-results.md#mutable-views)).
-- **Under a borrow.** While a borrow, a borrowing binding or a shared view is live, nothing writes, moves out of or destroys the places it reads. The exception is the places inside a `Synchronized` value, which its own operations may write, move out of or destroy. Any other write could free what the borrow still reads, as appending to a `String` may move its text and free the buffer a view of it reads ([13](../13-soundness.md)).
+- **Under a borrow.** While a borrow, a borrowing binding or a shared view is live, nothing writes, moves out of or destroys the places it reads. The exception is the places inside a `Synchronized` value, which its own operations may write, move out of or destroy. Any other write could free what the borrow still reads, as appending to a `String` may move its text and free the buffer a view of it reads.
 - **Under narrowing.** While a place is narrowed, nothing makes it `nil` except the code that narrowed it, through one of the events that end the narrowing ([04](../04-types/enums.md#narrowing)). That code uses the payload without checking again.
 - **Immutable memory.** Nothing writes memory that Rayo treats as immutable: read-only data, which holds every `const`'s frozen data, and a `Frozen` value behind a `Shared` or a `LocalShared`. Rayo reads such memory without a mark ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)). Nothing writes memory that its provider made read-only either, such as a C object defined `const`, a string literal's bytes or a page mapped read-only.
 
 **A live parameter counts as a borrow or `mutable` access of its argument's place.** The compiler may assume that neither kind is aliased. It may also pass a borrowed argument as a copy of its bits, so the callee may see a copy rather than the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-**The views `unsafe` code makes keep the promises that 02 states for dependencies** ([02](../02-views-and-dependencies/dependency-rules.md#dependencies)). The compiler sees names, not memory, so a view's dependency set is all it knows of which places the view reaches ([13](../13-soundness/dependencies.md#dependencies)).
+**The views `unsafe` code makes keep the promises that 02 states for dependencies** ([02](../02-views-and-dependencies/dependency-rules.md#dependencies)). The compiler sees names, not memory, so a view's dependency set is all it knows of which places the view reaches.
 
 ### Values, views and threads
 
 **These rules cover the values, views and threads that `unsafe` code hands on to other code:**
 
-- **Places hold valid values.** Whenever Rayo code may next read, lend or destroy a place as `T`, it holds a valid `T`. So a write through a pointer of another type leaves one there. A place that `p.move()` or `p.deinitialize()` emptied is initialized again before its owner uses or destroys it. Otherwise the owner would use or destroy a value that has moved out or been destroyed already ([13](../13-soundness.md#the-invariants)).
+- **Places hold valid values.** Whenever Rayo code may next read, lend or destroy a place as `T`, it holds a valid `T`. So a write through a pointer of another type leaves one there. A place that `p.move()` or `p.deinitialize()` emptied is initialized again before its owner uses or destroys it. Otherwise the owner would use or destroy a value that has moved out or been destroyed already.
 - **Views reach live, aligned, valid places.** This holds for a span, `Borrow` or `MutableRef` that `unsafe` code makes from a raw pointer, and for a borrowed or `mutable` argument that it passes through one. For as long as such a view or argument lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. Such a mutable view's places, and such a `mutable` argument's, are also writable. A span reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
-- **A move-only value has one owner.** Its bytes stand for one value. After they are copied to a second place, only one of the two is used or destroyed as that type again, as `p.move()` leaves only the destination. Two places standing for it would be two owners of what it holds, two mutable aliases, or a guard that unlocks twice ([13](../13-soundness/ownership-and-borrows.md#ownership)).
+- **A move-only value has one owner.** Its bytes stand for one value. After they are copied to a second place, only one of the two is used or destroyed as that type again, as `p.move()` leaves only the destination. Two places standing for it would be two owners of what it holds, two mutable aliases, or a guard that unlocks twice.
 - **A panic leaves shared state valid.** Wherever `unsafe` code can panic, what other threads can reach through it is valid, as if the code had stopped there, since other threads may run briefly after a panic ([What a panic does](panics.md#what-a-panic-does)). A queue's links and a lock's word are such state.
 - **Values that aren't `Sendable` stay on their thread.** Such a value is used, lent and destroyed only on the thread whose code made it, or, for a thread-bound object, on its home thread ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). That holds whatever `unsafe` code or C passes it through, since only on that thread do exclusivity and the dynamic tier check all of its aliases ([07](../07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)). A value that only the raw pointers it holds keep from being `Sendable` may cross, and each access through those pointers follows the rules on raw accesses ([above](#raw-accesses)).
 
 ## Aliasing and skipped `deinit`s
 
-Two more facts are part of the boundary between `unsafe` and safe code ([13](../13-soundness/types-and-boundaries.md#the-unsafe-boundary)):
+Two more facts are part of the boundary between `unsafe` and safe code:
 
 **Memory has no declared type.** A raw pointer of any type may alias memory also reached as another type, and `unsafe` code may rely on that.
 
@@ -175,7 +175,7 @@ Plain assignment through `p.pointee` assumes initialized memory and destroys the
 
 ## `@safe` modules
 
-**A module the build declares `@safe` ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) is restricted to the safe subset.** Every construct whose correctness the compiler takes on trust is an error anywhere in it. It can still call safe wrappers that other modules built with `unsafe`. So it makes no promise of its own, and is sound given the modules it calls ([13](../13-soundness/types-and-boundaries.md#the-unsafe-boundary)).
+**A module the build declares `@safe` ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) is restricted to the safe subset.** Every construct whose correctness the compiler takes on trust is an error anywhere in it. It can still call safe wrappers that other modules built with `unsafe`. So it makes no promise of its own, and is sound given the modules it calls.
 
 **A `@safe` module rejects:**
 

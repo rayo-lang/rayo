@@ -4,11 +4,11 @@
 
 ## E. C interop
 
-**Every crossing between Rayo and C is unsafe by definition.** C has the obligations that `unsafe` Rayo code would have in its place ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and a C header can't say that a pointer outlives a call, or that a buffer holds `n` elements ([08](../08-c-interop/imports-and-inline-c.md#calling-imported-functions)). So these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
+**Every crossing between Rayo and C is unsafe by definition.** C has the obligations that `unsafe` Rayo code would have in its place ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and a C header can't say that a pointer outlives a call, or that a buffer holds `n` elements ([08](../../spec/08-c-interop/imports-and-inline-c.md#calling-imported-functions)). So these cases are exempt from **Forced unsafe** on the C side. They check two things: the mapping is precise enough to bind real C APIs, and the Rayo wrapper's `unsafe` part stays small, with obligations that are easy to state and keep.
 
 ### E1 · C holding pointers into Rayo memory
 
-**A C library stores a `void* user` per registered item, and calls a callback on its own threads with two of those pointers**, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole by assigning it a new one, and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool` has one of its elements pinned for C. That pool is initialized at startup, never placed in read-only data, since its pin counts are written at run time ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+**A C library stores a `void* user` per registered item, and calls a callback on its own threads with two of those pointers**, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole by assigning it a new one, and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool` has one of its elements pinned for C. That pool is initialized at startup, never placed in read-only data, since its pin counts are written at run time ([09](../../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 ```swift
 pool = StablePool()      // assigns a new pool: the old one is destroyed while C may still hold its elements' addresses
@@ -36,7 +36,7 @@ struct R {
 };
 ```
 
-A packed struct can put a field at a misaligned address, where a load or store of the field's type is invalid ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)). And C lets an enum hold any value of its underlying type, not only its cases ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+A packed struct can put a field at a misaligned address, where a load or store of the field's type is invalid ([04](../../spec/04-types/structs.md#packed-structs-and-under-aligned-places)). And C lets an enum hold any value of its underlying type, not only its cases ([08](../../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
 
 - **Must accept** each of these:
     - each type imported with its exact layout;
@@ -74,7 +74,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E7 · C code that needs a large stack
 
-**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack panics before anything is written past the stack's end, so a call into C first checks that the stack its target needs is left ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack panics before anything is written past the stack's end, so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 
 - **Must accept** calling each, within C's obligations, by declaring its need where the function or the pointer type is declared.
 
@@ -82,7 +82,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ## F. Performance
 
-**No build of a program does work at run time that its source doesn't show**, beyond the calls the language makes for it ([11](../11-compilation-model.md#runtime-costs)). These cases test that promise in hot loops and dispatch, what monomorphized generics cost in code size, and that arithmetic has one defined result on every target.
+**No build of a program does work at run time that its source doesn't show**, beyond the calls the language makes for it ([11](../../spec/11-compilation-model.md#runtime-costs)). These cases test that promise in hot loops and dispatch, what monomorphized generics cost in code size, and that arithmetic has one defined result on every target.
 
 ### F1 · Vector math in unoptimized builds
 
@@ -93,12 +93,12 @@ pos += vel * dt          // vector arithmetic on each value
 vel = lerp(…)            // a call to a small math function
 ```
 
-- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([11](../11-compilation-model.md#runtime-costs)).
+- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([11](../../spec/11-compilation-model.md#runtime-costs)).
 - **Must accept** generic vector code over `T: VectorSpace` whose requirement calls reach `@inline` operators, each running in place in every build, and `@inline` functions that call each other in a cycle through a generic witness.
 
 ### F2 · Generic code size
 
-**A generic type such as `List<T>` is instantiated for hundreds of element types.** Generics are monomorphized: each set of type arguments gets its own compiled copy ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
+**A generic type such as `List<T>` is instantiated for hundreds of element types.** Generics are monomorphized: each set of type arguments gets its own compiled copy ([05](../../spec/05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
 
 - State the code-size strategy and its compile-time cost.
 - State whether shared (non-monomorphized) instantiation is possible.
@@ -116,7 +116,7 @@ func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conformi
 
 ### F4 · Bounds checks in hot loops
 
-**A kernel indexes `src[i + k]` inside a nested loop.** Bounds checks are memory-safety checks, on in every build, and only `unchecked` code strips them ([10](../10-errors-and-safety/checks-and-build-modes.md#check-levels)).
+**A kernel indexes `src[i + k]` inside a nested loop.** Bounds checks are memory-safety checks, on in every build, and only `unchecked` code strips them ([10](../../spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
 
 - Show how to reach check-free code: safe if possible, `unchecked` if not, with the audit surface stated.
 
@@ -133,15 +133,15 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 
 ### F6 · Integer and float edge cases
 
-**A hash function meets the edge cases of integer and float arithmetic.** It divides by a value read from a file, negates and divides `Int.min`, and shifts by a count computed at run time that can reach the bit width. It also converts a `Double` read from the file to `Int`, NaN included, or to a `Float` out of its range, converts a `UInt` count to `Int32`, and shifts negative values and `Int.max` left. Targets' conversion instructions disagree on some of these, such as NaN converted to an integer ([04](../04-types/numbers-and-math.md#conversions)).
+**A hash function meets the edge cases of integer and float arithmetic.** It divides by a value read from a file, negates and divides `Int.min`, and shifts by a count computed at run time that can reach the bit width. It also converts a `Double` read from the file to `Int`, NaN included, or to a `Float` out of its range, converts a `UInt` count to `Int32`, and shifts negative values and `Int.max` left. Targets' conversion instructions disagree on some of these, such as NaN converted to an integer ([04](../../spec/04-types/numbers-and-math.md#conversions)).
 
-- Every result must be defined in every build, a value or a panic, never undefined behavior, and the cost in `release` builds ([10](../10-errors-and-safety/checks-and-build-modes.md#build-modes)) stated.
+- Every result must be defined in every build, a value or a panic, never undefined behavior, and the cost in `release` builds ([10](../../spec/10-errors-and-safety/checks-and-build-modes.md#build-modes)) stated.
 
 ---
 
 ## G. Hot reload: a tool the language must not rule out
 
-**A hot reloader swaps code and migrates live state while a program runs.** It is a tool built on a runtime and toolchain layer that the spec doesn't define ([11](../11-compilation-model.md#what-the-spec-defines)), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
+**A hot reloader swaps code and migrates live state while a program runs.** It is a tool built on a runtime and toolchain layer that the spec doesn't define ([11](../../spec/11-compilation-model.md#what-the-spec-defines)), so these cases don't ask how it works. They check that the language keeps it possible: each names language properties a reloader would build on.
 
 - **Solved** means every property the case names holds in the spec.
 - A rule of the spec that breaks one, such as a way for safe code to keep the address of a value it doesn't own, is the finding.
@@ -156,7 +156,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
     - `Closure`s and `@c` pointers, which name code;
     - raw pointers, which only `unsafe` code or C makes.
 - **Must hold:** a thread with no Rayo frame on any of its stacks holds no borrow and no dynamic access.
-- **Must hold:** a type's fields, their layout and their defaults are known to the compiler, and readable through reflection ([09](../09-compile-time.md)).
+- **Must hold:** a type's fields, their layout and their defaults are known to the compiler, and readable through reflection ([09](../../spec/09-compile-time.md)).
 
 ### G3 · What C holds
 
@@ -169,7 +169,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
     - an `@export` symbol;
     - a `StaticSpan` or `StaticString`;
     - a `Span`, `MutableSpan` or `StringView` that an exported or `@c` function returns;
-    - a `List`, `String` or `TrailingArray` returned to C ([08](../08-c-interop/calling-rayo-from-c.md#ownership-that-crosses-to-c));
+    - a `List`, `String` or `TrailingArray` returned to C ([08](../../spec/08-c-interop/calling-rayo-from-c.md#ownership-that-crosses-to-c));
     - anything `unsafe` code passed to C.
 
   A leaked object crosses as its weak pointer's bits, not an address. Every layout C sees is one that a generated header or C's own header declares.
@@ -178,6 +178,6 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 
 **Tasks in a `TaskSet` are suspended, and a `Thread.loop` thread is parked waiting for its next item.**
 
-- **Must hold:** a task suspends only at `await`, holding no borrow and no dynamic access there ([07](../07-concurrency/tasks.md#semantics)). State what a parked thread holds while it waits.
+- **Must hold:** a task suspends only at `await`, holding no borrow and no dynamic access there ([07](../../spec/07-concurrency/tasks.md#semantics)). State what a parked thread holds while it waits.
 
 ---

@@ -8,7 +8,7 @@ precondition(count < capacity, "queue full")     // panics if the caller broke t
 let share = total / players                      // panics if players is 0, in every build
 ```
 
-**A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and never returns.** Nothing unwinds, so no frame's borrows end early, no `deinit` runs on a half-changed value, and work the panicking thread lent out still finds its memory ([13](../13-soundness/types-and-boundaries.md#checks-and-panics)).
+**A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and never returns.** Nothing unwinds, so no frame's borrows end early, no `deinit` runs on a half-changed value, and work the panicking thread lent out still finds its memory.
 
 ## What panics
 
