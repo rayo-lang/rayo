@@ -1,13 +1,12 @@
 # 5 · Handles and objects
 
-Your enemies now chase players. Each enemy keeps its target from one frame to the next, and a player can leave the game at any time. The game's menus are a tree of widgets, where each widget knows its parent and can move to a new one. In C++ you might write:
+The game's enemies now chase players. Each enemy must remember its target from one frame to the next, even though a player may leave at any time. A short borrow, like the views in chapter 4, cannot do that job. In C++ you might keep a pointer instead:
 
 ```cpp
-struct Enemy  { Vec3 pos; Player* target; };       // dangles once the player is deleted
-struct Widget { Widget* parent; std::vector<std::unique_ptr<Widget>> children; };
+struct Enemy { Vec3 pos; Player* target; };       // dangles once the player is deleted
 ```
 
-The enemy needs a link it can use in a later frame. The widget needs one after its parent moves elsewhere. Each familiar choice has a cost:
+The enemy needs a link it can use in a later frame. Each familiar choice has a cost:
 
 - a view stays within the scope that lent it, so it cannot serve as this long-lived link ([Views](04-views.md));
 - a raw pointer can dangle once its target is gone;
@@ -22,13 +21,7 @@ struct Enemy(
     var pos: Vec3,
     var vel: Vec3 = .zero,
     var hp: Float = 100,
-    var target: Handle<Player>?,                       // a handle into a pool of players
-)
-
-struct Widget(
-    var parent: WeakPointer<Widget>?,                  // a link that reads nil once its widget is gone
-    var children = List<UniquePointer<Widget>>(),      // the child widgets, each owned here
-    var visible = true,
+    var target: Handle<Player>? = nil,                 // a handle into a pool of players
 )
 ```
 
@@ -106,6 +99,16 @@ for h in dead { enemies.remove(h) }
 
 ## Objects and weak pointers
 
+The game's menus have a different shape. A menu is a tree of widgets: each widget owns its children, while a child keeps a link back to its parent. A widget can move to another menu without breaking that link. Here the owning pointer keeps the widget in one place, and a weak pointer lets its children find it:
+
+```swift
+struct Widget(
+    var parent: WeakPointer<Widget>? = nil,            // nil once the parent is gone
+    var children = List<UniquePointer<Widget>>(),      // owns the child widgets
+    var visible = true,
+)
+```
+
 ```swift
 var menu = UniquePointer(Widget())                     // the one owner of a new widget
 let m: WeakPointer<Widget> = menu.weak()               // a link to it
@@ -163,15 +166,13 @@ save.value?.visible = true                             // still the same widget
 
 **Comparing a weak pointer's `value` with `nil` takes no mark**, so it never conflicts.
 
-**Two weak pointers to one object are aliases the compiler can't see.** Here the attacker and the target may be the same fighter, as when a fighter's own spell hits it:
+**Two weak pointers to one object are aliases the compiler can't see.** The menu might hold two links that happen to name the same widget. Trying to show it through one link while hiding it through the other conflicts:
 
 ```swift
-struct Fighter(var hp: Float = 100, var stamina: Float = 100)
-
-func attack(_ attacker: WeakPointer<Fighter>, _ target: WeakPointer<Fighter>) {
-    guard var a = &attacker.value else { return }      // a modify access, held while 'a' is used
-    target.value?.hp -= 10                             // panics when both name one fighter: 'a' holds its mark
-    a.stamina -= 10
+func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
+    guard var panel = &shown.value else { return }   // a modify access, held while 'panel' is used
+    hidden.value?.visible = false                   // panics if both links name one widget
+    panel.visible = true
 }
 ```
 
@@ -182,15 +183,15 @@ func attack(_ attacker: WeakPointer<Fighter>, _ target: WeakPointer<Fighter>) {
 **Keep each access short, and code that may alias works.** An access that nothing uses afterwards ends with its statement:
 
 ```swift
-func attack(_ attacker: WeakPointer<Fighter>, _ target: WeakPointer<Fighter>) {
-    attacker.value?.stamina -= 10                      // this access ends here
-    target.value?.hp -= 10                             // fine, even when both name one fighter
+func switchPanels(_ shown: WeakPointer<Widget>, _ hidden: WeakPointer<Widget>) {
+    shown.value?.visible = true                       // this access ends here
+    hidden.value?.visible = false                     // fine, even when both links name one widget
 }
 ```
 
 **A `let` that borrows an object's value holds a read access the same way**, so changing the object while the `let` is still in use panics ([01](../spec/01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)).
 
-**Elements of a pool need no marks.** `&fighters[h1, h2]` lends two of them at once, and is `nil` when both handles name one fighter or either is stale ([01](../spec/01-values-and-ownership/exclusivity.md#two-elements-of-one-collection)).
+**Elements of a pool need no marks.** `&players[h1, h2]` lends two of them at once, and is `nil` when both handles name one player or either is stale ([01](../spec/01-values-and-ownership/exclusivity.md#two-elements-of-one-collection)).
 
 ## Destroying an object
 

@@ -1,6 +1,6 @@
 # 4 · Views
 
-You're writing the loader for the arena game's scripts. It reads a script file into a `String` and splits it into lines for the parser. Copying every line would cost memory and time, so each line should be a view: an address and a length inside the loaded text. In C++ you'd reach for a `std::string_view`, and this is the bug it invites:
+So far, the game has kept numbers in a hit list, and functions have borrowed that list while they use it. The game also loads scripts that tell its enemies what to do. A loader reads a script into a `String` and splits it into lines for the parser. Copying every line would cost memory and time, so each line should refer to the loaded text. In C++ you'd reach for a `std::string_view`, and this is the bug it invites:
 
 ```cpp
 std::string source = readText("arena.script");
@@ -47,9 +47,9 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 - `StringView`, which reads UTF-8 text.
 
 ```swift
-let all: Span<Enemy> = enemies.span       // the list's elements, read-only
-let firstTwo = enemies[0..<2]             // a range of them: also a Span<Enemy>
-var hot = &enemies.span                   // a MutableSpan<Enemy>: '&' asks for the mutable form
+let all: Span<Int> = hits.span            // the hit list's elements, read-only
+let firstTwo = hits[0..<2]               // a range of them: also a Span<Int>
+var editable = &hits.span                // a MutableSpan<Int>: '&' asks for the mutable form
 let text: StringView = source.view        // the string's bytes
 let word = text[0..<5]                    // a range of bytes: also a StringView
 let name: StringView = "grunt"            // the literal's bytes, which last for the whole run
@@ -95,9 +95,9 @@ let tok = Token(text: word, line: 1)      // so does the token that holds it
 source.append("!")                        // error: 'source' is borrowed by 'tok' (used below)
 log(tok.text)
 
-var hot = &enemies.span                   // carries 'enemies', exclusive
-let n = enemies.count                     // error: 'enemies' is borrowed by 'hot' (used below)
-hot[0].hp = 0
+var editable = &hits.span                // carries 'hits', exclusive
+let n = hits.count                       // error: 'hits' is borrowed by 'editable' (used below)
+editable[0] = 0
 ```
 
 **Until the value's last use, every place in its set counts as borrowed**, with its kind, and the law of exclusivity applies to it ([Borrowing](03-borrowing.md)).

@@ -1,6 +1,6 @@
 # 2 · Moves and copies
 
-A list keeps its values on the heap. It allocates memory there for them, and allocates more as you add values:
+In the first chapter, an enemy lost health when it took a hit. To keep a record of those hits, put their damage in a list. A list allocates memory on the heap for its values, and may allocate more as you add them:
 
 ```swift
 var hits = List<Int>()

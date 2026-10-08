@@ -2,7 +2,7 @@
 
 A function can do one of three things with a value you pass it: read it, change it, or keep it. In Rayo, each parameter says which ([01](../spec/01-values-and-ownership/parameters.md#parameters)).
 
-A function that adds up a list of hits only reads the list, and one that heals a player changes the player's health. Neither keeps what it's given. Both borrow it instead: they use your value while the call runs, and you keep owning it. Only a function that keeps the value, such as `archive`, takes it from you ([Moves and copies](02-moves-and-copies.md#moves)).
+A function that adds up the game's list of hits only reads it, and one that heals an enemy changes its health. Neither keeps what it's given. Both borrow it instead: they use your value while the call runs, and you keep owning it. Only a function that keeps the value, such as `archive`, takes it from you ([Moves and copies](02-moves-and-copies.md#moves)).
 
 A borrow can go wrong if the memory it reads is freed while the borrow still uses it. Say code borrows one of the values in a list, and then the list grows. Growing may transfer the list's values to a bigger block of memory, and free the old one. The borrow would be left dangling, reading memory that no longer holds the value. The compiler rejects code like this when it compiles it, so the program never runs with a dangling borrow ([01](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
@@ -118,20 +118,20 @@ func heal(hp: mutable Int) {
     hp += 20
 }
 
-var playerHp = 40
-heal(hp: &playerHp)
-log("hp \(playerHp)")           // hp 60
+var enemyHp = 40
+heal(hp: &enemyHp)
+log("hp \(enemyHp)")            // hp 60
 ```
 
-`heal` borrows `playerHp` so that it can change it, and every change it makes to `hp` happens to `playerHp` itself. This is a **mutable borrow**. Since `heal` must reach `playerHp` itself, it gets `playerHp`'s address underneath. You never see that address: inside `heal`, you read and assign `hp` directly.
+`heal` borrows `enemyHp` so that it can change it, and every change it makes to `hp` happens to `enemyHp` itself. This is a **mutable borrow**. Since `heal` must reach `enemyHp` itself, it gets `enemyHp`'s address underneath. You never see that address: inside `heal`, you read and assign `hp` directly.
 
-With `&`, you lend `playerHp` to `heal`, and leaving the `&` out is an error:
+With `&`, you lend `enemyHp` to `heal`, and leaving the `&` out is an error:
 
 ```swift
-heal(hp: playerHp)              // error: a mutable argument needs '&'
+heal(hp: enemyHp)               // error: a mutable argument needs '&'
 ```
 
-The `&` is there so that you can see the change. A move needs no mark, since the compiler stops you if you use the variable again. A change gives no such warning. `playerHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `&` are the ones it may change.
+The `&` is there so that you can see the change. A move needs no mark, since the compiler stops you if you use the variable again. A change gives no such warning. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `&` are the ones it may change.
 
 The value before the dot needs no `&`, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change)).
 
@@ -153,7 +153,7 @@ func healTwice(hp: mutable Int) {
 }
 ```
 
-Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from its caller, such as `playerHp`. Underneath, `heal` gets the same address that `healTwice` got.
+Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from its caller, such as `enemyHp`. Underneath, `heal` gets the same address that `healTwice` got.
 
 ## Borrowing in a declaration
 

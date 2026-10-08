@@ -1,6 +1,6 @@
 # 8 · C and compile time
 
-Your game runs on a console whose SDK is a C library with a header, `platform.h`. Through it you open a window, poll the gamepads and hear from the audio thread. You also want save games, without a hand-written saver for `Enemy` that falls behind each time `Enemy` gains a field:
+The same game now runs on a console whose SDK is a C library with a header, `platform.h`. Through it you open a window, poll the gamepads and hear from the audio thread. You also want save games without rewriting the saver each time `Enemy` gains a field. Its current target and cached path should not be saved, so `@Transient` marks those fields to skip:
 
 ```swift
 import c "platform.h" as plat where prefix: "platform_"   // the SDK's C API, as Rayo declarations
@@ -9,11 +9,12 @@ struct Enemy(
     var pos: Vec3,
     var vel: Vec3 = .zero,
     var hp: Float = 100,
+    @Transient var target: Handle<Player>? = nil,       // a live player link, not part of a save game
     @Transient var path: List<Vec3> = [],                 // a cache: rebuilt after loading, never saved
 )
 
 unsafe plat.window_create(1280, 720, "Rayo".cString)      // a direct call into C, which you vouch for
-save(boss, into: &file)                                   // writes pos, vel and hp, found by reflection
+save(boss.value, into: &file)                             // writes pos, vel and hp, found by reflection
 ```
 
 Rayo calls C directly, with no glue code. Where C can't promise something, you promise it yourself, and Rayo marks that code `unsafe`. You write `save` once for every type, with code the compiler runs while it builds your program: `const`, `static if`, and reflection over a type's fields.
@@ -284,7 +285,7 @@ func save<T>(_ value: T, into w: mutable Writer) {
         value.serialize(into: &w)                       // List, String and Map conform in std
     } else static if T.isConstructible {                // a struct whose fields this code all sees
         w.beginObject(T.name)
-        static for field in T.fields {                  // unrolled: one copy of the body per field
+        static for field in T.fields where !field.has(Transient.self) {   // skip live links and caches
             w.key(field.name)
             save(value[field], into: &w)                // each copy checked with its own field's type
         }
@@ -307,7 +308,7 @@ func save<T>(_ value: T, into w: mutable Writer) {
 
 **In generic code, the compiler checks a `static if` branch only for the types that take it.** So `w.bytes(of:)`, which accepts only a padding-free `Pod` type, compiles in its branch. The `static error` fires only for a type that reaches the last branch.
 
-**`Enemy` takes the third branch.** It isn't `Pod`, since its `List` owns memory, and it doesn't conform to `Serializable`. The loop unrolls into the keys `pos`, `vel`, `hp` and `path`. The first three save their bytes, since `Vec3` and `Float` are padding-free `Pod` types, and `path`, a `List`, saves itself.
+**`Enemy` takes the third branch.** It isn't `Pod`, since its `List` owns memory, and it doesn't conform to `Serializable`. The loop visits `pos`, `vel` and `hp`, skipping the `@Transient` target and path. Those three fields save their bytes, since `Vec3` and `Float` are padding-free `Pod` types.
 
 **`T.isConstructible` is true only where this code sees every field of `T`.** So a type with fields hidden from `save`, which is neither plain data nor `Serializable`, stops at the `static error` instead of saving part of its state.
 
@@ -329,11 +330,12 @@ struct Bounds(let min: Float, let max: Float): Attribute {
 struct Enemy(
     var pos: Vec3,
     var vel: Vec3 = .zero,
-    @Bounds(0, 500) var hp: Float = 100,
+    @Bounds(0, 5000) var hp: Float = 100,
+    @Transient var target: Handle<Player>? = nil,
     @Transient var path: List<Vec3> = [],
 )
 
-static for field in T.fields where !field.has(Transient.self) { ... }   // save's loop, which skips 'path'
+static for field in T.fields where !field.has(Transient.self) { ... }   // save skips 'target' and 'path'
 
 func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
     static for f in T.fields where f.has(Bounds.self) {

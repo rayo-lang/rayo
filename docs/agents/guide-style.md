@@ -19,6 +19,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 
 - **Welcome before teaching.** The introduction says what Rayo is, who this path is for, and how the examples will grow. Chapter 1 begins with the first program rather than repeating that welcome.
 - **Start from a problem.** A chapter opens with something a systems programmer needs to do, in a few sentences and a short code sample, and builds the solution step by step.
+- **Keep the game continuous.** Reuse the enemies, hit list and other situations earlier chapters have introduced. When a new part of the game matters, connect it to what the reader already knows before adding its code. Repeated declarations retain earlier fields and add only what the new problem needs.
 - **Build on earlier chapters only.** A chapter uses what the chapters before it taught, and what it teaches itself. A later topic may be named in passing, with a link to its chapter.
 - **End with the spec.** The last section, `## In the spec`, lists the spec sections behind the chapter, each with a few words on what it adds.
 - **What the reader needs at that point, and no more.** A chapter teaches each idea as far as the reader uses it there. A detail that matters only later goes in the chapter that needs it, or stays in the spec.
@@ -36,7 +37,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 - **Simplify, never contradict.** The guide may leave out cases, but what it says is true as stated. Where it leaves out a case a reader is likely to hit, it says so and links to the spec.
 - **Use the spec's terms.** Call things what `GLOSSARY.md` calls them, and link the spec section that defines each where the guide first explains it.
 - **Write code the spec accepts.** Every example follows the spec's rules and the grammar in 12, unless its comment says it is an error. Two shortcuts are allowed, as the guide's README says: statements beside declarations, and a body left out as `{ ... }`. Examples use the spec's running game code: `Enemy`, `world`, `Mesh`, `Pool`, `Handle`.
-- **Keep one `Enemy`.** Chapter 1 declares `Enemy(pos, vel, hp)`. A chapter that needs another field adds it to those three.
+- **Keep one `Enemy`.** Chapter 1 declares `Enemy(pos, vel, hp)`. Later declarations retain those fields and any fields added in between.
 - **Rayo stands on its own.** Teach each idea in Rayo's terms, and let its merits be its own. Name another language only where the comparison makes a point the reader needs:
     - a difference that would mislead a reader who expects that language's behavior, as a `Vec3` that moves where C++ and Swift would copy it;
     - a definition Rayo takes from it, as the C++20 memory orderings;

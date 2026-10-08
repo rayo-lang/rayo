@@ -1,6 +1,6 @@
 # 6 · Memory and allocators
 
-Your game uses memory at two speeds. The level's props, meshes and names live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
+The game now needs memory at two speeds. Its meshes, the shapes it draws, live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
 
 ```swift
 let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))   // the level's data
@@ -21,14 +21,14 @@ In C++, a pointer that survives into the next frame is a silent use-after-free: 
 ## Allocators are values
 
 ```swift
-var levelProps = List<Prop>(allocator: levelHeap)    // grows and frees through levelHeap, for its whole life
-var editorProps = List<Prop>(allocator: .system)     // the same type: List<Prop>
+var levelMeshes = List<Mesh>(allocator: levelHeap)   // grows and frees through levelHeap, for its whole life
+var editorMeshes = List<Mesh>(allocator: .system)    // the same type: List<Mesh>
 var names = List<String>()                           // no allocator given: the current one (below)
 ```
 
 Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. You pass that id when you want to choose where a value's storage lives. `.system` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 
-A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelProps` and `editorProps` have the same type, `List<Prop>`, despite using different heaps: a function that takes a `List<Prop>` accepts either.
+A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `List<Mesh>` accepts either.
 
 **Every registered allocator is one of three kinds:**
 
@@ -70,18 +70,18 @@ The current allocator belongs to the running thread. Work lent to another thread
 - **A reset panics while anything, on any thread, still uses the arena's memory.** It never waits.
 
 ```swift
-var hits = List<Vec3>(allocator: frameArena)
-hits.append(.zero)
+var positions = List<Vec3>(allocator: frameArena)
+positions.append(.zero)
 
-let pts = hits.span         // a view into the arena's memory: a use of the arena while 'pts' is live
+let pts = positions.span    // a view into the arena's memory: a use of the arena while 'pts' is live
 frameArena.reset()          // panics: 'pts' is used below
 print(pts[0])
 ```
 
 ```swift
-print(hits[0])              // this use of the arena ends with its statement
+print(positions[0])         // this use of the arena ends with its statement
 frameArena.reset()          // fine: nothing uses the arena, and its memory is freed
-hits.append(.zero)          // panics: 'hits' was allocated in 'frameArena' before its reset
+positions.append(.zero)     // panics: 'positions' was allocated in 'frameArena' before its reset
 ```
 
 Finish using the arena's memory before you reset it, and copy out anything the next frame needs ([below](#keeping-results-past-a-reset)). If worker threads use the arena, wait for their jobs to finish first. A reset while a job still reads it panics.
@@ -129,21 +129,27 @@ world.results.append(String("late"))                              // fine: nothi
 
 ## One owned value: `Box`
 
-```swift
-enum Tree {
-    case leaf(Int)
-    case node(Box<Tree>, Box<Tree>)                 // a tree holds its children through boxes
-}
+The game gives its boss an allocation of its own:
 
+```swift
 var boss = Box(Enemy(pos: [0, 0, 40], hp: 5000))   // one allocation, from the current allocator
-boss.value.takeDamage(250)                          // changes the enemy in place
+boss.value.hp -= 250                                 // changes the enemy in place
 ```
 
 **`Box<T>` owns one value in an allocation of its own** ([06](../spec/06-memory-and-allocators/owning-values.md#owning-boxes)). It's move-only, and destroying it destroys its value and frees its memory.
 
 **`box.value` reaches the value in place**, to read it or change it.
 
-**A recursive type goes through a `Box`.** A value never contains itself, so a type that holds values of its own type holds them through owners, and the allocation shows in the type ([04](../spec/04-types/structs.md#structs)).
+A `Box` also lets the game store a branching decision tree. A `Tree` value cannot directly contain another whole `Tree` value, since that would make its size endless. Boxes hold the child values in separate allocations:
+
+```swift
+enum Tree {
+    case leaf(Int)
+    case node(Box<Tree>, Box<Tree>)                 // the child trees live in separate allocations
+}
+```
+
+**A recursive type goes through a `Box`.** The allocation shows in the type ([04](../spec/04-types/structs.md#structs)).
 
 ### Boxes of `any P`
 
@@ -151,9 +157,17 @@ boss.value.takeDamage(250)                          // changes the enemy in plac
 
 **A plain `any P` only borrows its value, as a view does.** To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
 
-Chapter 1's `Damageable` lets enemies and crates take damage from one list:
+The game already has enemies that take damage. To put them in one list with breakable crates, give both types the same `Damageable` behavior:
 
 ```swift
+protocol Damageable {
+    mutating func takeDamage(_ amount: Float)
+}
+
+extension Enemy: Damageable {
+    mutating func takeDamage(_ amount: Float) { hp -= amount }
+}
+
 struct Crate(var pos: Vec3, var hp: Float = 20)
 extension Crate: Damageable {
     mutating func takeDamage(_ amount: Float) { hp -= amount }

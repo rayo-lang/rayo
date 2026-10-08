@@ -1,17 +1,16 @@
 # 7 · Concurrency
 
-Each frame, ten thousand enemies move, and the game needs their total hp. One core is too slow, so the work spreads over all of them. In C++ the obvious version compiles, and races:
+The game's enemies now number in the thousands. Each frame, they move, and the game needs their total health. Chapter 5 used a pool where lasting handles mattered; this update uses a list so the job system can split its elements among cores. In C++ an ordinary parallel loop can compile even when it races:
 
 ```cpp
 float total = 0;
 std::for_each(std::execution::par, enemies.begin(), enemies.end(), [&](Enemy& e) {
     e.pos += e.vel * dt;
     total += e.hp;                        // every thread writes 'total'
-    enemies[e.target].hp -= e.damage;     // two threads may write one enemy at once
 });
 ```
 
-The compiler says nothing about the race. A frame now and then loses some damage, or a count comes out wrong. In Rayo the same work reads like this:
+The compiler says nothing about the race. A frame now and then reports the wrong total. In Rayo, each parallel worker can change only its own enemy, and a separate reduction adds up their health:
 
 ```swift
 import std.jobs                                         // join, forEachInParallel, parallelReduce
@@ -27,7 +26,7 @@ func totalHp(_ enemies: List<Enemy>) -> Float {
 }
 ```
 
-`parallelReduce` splits the work and merges the results: each job sums its own slice from `0`, and `+` combines the partial sums. Writing `total` from the loop's body doesn't compile in Rayo, and neither does damaging another enemy there. The rules that reject both are the borrowing rules you already know ([Borrowing](03-borrowing.md)), applied across threads.
+`parallelReduce` splits the work and merges the results: each job sums its own slice from `0`, and `+` combines the partial sums. Writing `total` from the loop's body doesn't compile in Rayo. The borrowing rules you already know ([Borrowing](03-borrowing.md)) also keep a worker from changing an enemy it wasn't given.
 
 ## Lending work to other threads
 
@@ -79,12 +78,11 @@ Thread.scope { s in
 ## What may cross threads: `Sendable`
 
 ```swift
-struct Enemy(var pos: Vec3, var vel: Vec3 = .zero, var hp: Float = 100)   // Sendable: every field is
 struct Hud(var root: WeakPointer<Widget>)               // not Sendable: holds a weak pointer
 struct GLTexture(let id: UInt32): ~Sendable             // opts out: the id is valid only on the GL thread
 ```
 
-`Enemy` can cross to another thread because its three fields can. `Hud` cannot: a weak pointer belongs to its object's home thread. The marker protocol **`Sendable`** records this distinction. Only a `Sendable` value may move to another thread or be lent to one for a call ([07](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+The `Enemy` from chapter 5 can cross to another thread because its fields can, including its handle to a player. `Hud` cannot: it holds a weak pointer to a menu widget from that chapter, and a weak pointer belongs to its object's home thread. The marker protocol **`Sendable`** records this distinction. Only a `Sendable` value may move to another thread or be lent to one for a call ([07](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 
 The compiler works out `Sendable` from what a type holds, as it does for `Copyable`:
 
