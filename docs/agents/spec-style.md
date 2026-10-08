@@ -1,6 +1,6 @@
 # Writing the spec
 
-The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
+The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. A long chapter keeps its numbered landing page and places related rules in subchapter files beneath a directory of the same name. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
 
 The spec is **precise, plain and explained**: every rule stated exactly, with the reason it holds, in words a reader takes in once. Precision comes from defined terms and complete lists, never from packing more clauses into a sentence. Being a reference is a reason to be exact, not a reason to be terse: a reader who looks a rule up should understand it, not only find it.
 
@@ -19,7 +19,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **Three or more items make a list**, one item per bullet.
 - **Paragraphs stay under about 120 words.** A section that needs more splits into subsections, each with its own rule.
 - **An exception sits next to its rule**, so a reader who finds the rule also finds what it doesn't cover.
-- **Each rule is stated once**, in the section that owns it. Other sections link to it.
+- **Each rule is stated once**, in the section that owns it. Other sections link to it. A numbered landing page introduces and links its subchapters; the subchapter owns the detailed rules.
 - **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Examples use the spec's running game code, such as `Enemy`, `world` and `Mesh`.
 
 ## Terms and links
@@ -28,7 +28,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **A chapter follows its construct, not a teaching order.** A rule may use a term defined later; on the term's first use in a section, it links to its definition.
 - **One link per idea.** A sentence carrying more than two links is a list: give each item its own bullet and link.
 - **Links** read `([06](06-memory-and-allocators.md#anchor))` across chapters, and `([above](#anchor))` or `([below](#anchor))` within one.
-- **Anchors are part of the interface.** A pull request that renames a heading updates every link to it.
+- **Anchors are part of the interface.** A pull request that moves or renames a heading updates every link to it. In a subchapter, links to a sibling subchapter use its file name; links to another numbered chapter go up one directory.
 
 ## Explaining
 

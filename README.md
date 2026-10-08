@@ -19,12 +19,12 @@ var a = Enemy(pos: .zero, hp: 100)
 var b = copy a                     // a copy, written out: Enemy is copyable, so this is a memcpy
 b.hp = 50                          // changes only 'b'
 heal(&a)                           // a borrow: heal changes 'a' in place, without copying it
-let spot = a.pos                   // also a borrow: 'a.pos' can't change while 'spot' is in use
+let spot = borrow a.pos            // also a borrow: 'a.pos' can't change while 'spot' is in use
 
 var names = List<String>()         // an empty list, which owns the buffer it allocates as it grows
 names.append("grunt")
 var backup = names.clone()         // a copy of heap data is a named call, and it allocates
-owned var moved = names            // a move: using 'names' after this is a compile error
+var moved = names                  // a move: using 'names' after this is a compile error
 
 var enemies = Pool<Enemy>()
 let h = enemies.insert(b)          // 'b' moves in; h is a Handle<Enemy>, a small, copyable link to it
@@ -35,17 +35,17 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 ## Key ideas
 
 - **Every value has one owner.** Handing a value over moves it, and the place it came from can't be used until it gets a new value. A call borrows its arguments, unless a parameter is declared `owned`. Copies are written out: `copy x` for a copyable value, `x.clone()` for one that owns heap memory ([01](docs/spec/01-values-and-ownership.md)).
-- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it, so Rayo needs no lifetime annotations ([01](docs/spec/01-values-and-ownership.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies.md#scoped-values)).
+- **The compiler checks borrows inside each function.** Code that uses a value without owning it borrows it. While a value changes through one borrow, nothing else can touch it, and while a value is read, nothing can change it. No borrow escapes the function that makes it, so Rayo needs no lifetime annotations ([01](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A view, such as a `Span` of a list's elements, can't outlive the scope that lent it ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 - **Links that live longer are checked at each use.** A link that must outlive a function, such as an enemy's target, is a `Handle<T>` into a `Pool<T>`, or a `WeakPointer<T>` to an object that a `UniquePointer<T>` owns. A link to something that is gone reads `nil`: it can go stale, but it never dangles. A link owns nothing, so cycles can't leak ([03](docs/spec/03-handles-and-objects.md)).
-- **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/spec/07-concurrency.md#what-may-cross-threads-sendable)).
+- **No data races.** The same borrow rules check work handed to other threads, and only `Sendable` values can reach another thread. The compiler derives `Sendable` from what a type holds ([07](docs/spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 - **Allocators are values the code can name.** Every heap allocation goes through one, and every collection records which one. An arena releases everything at once when it is reset, and that stays safe: a collection that outlives the reset panics when code next reaches its contents, and never reads reused memory ([06](docs/spec/06-memory-and-allocators.md)).
 - **Each check has a tier and a cost** ([01](docs/spec/01-values-and-ownership.md#tiers-of-checking)):
     - **static:** the compiler checks values, moves, borrows and scoped views, at no run-time cost;
     - **dynamic:** handles, weak pointers, `Slice`s, locks and a few others are checked at each use, at a small cost that their type or declaration shows;
-    - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([10](docs/spec/10-errors-and-safety.md#unsafe-code)).
+    - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
-  No build setting turns the memory-safety checks off. Bounds checks stay on in shipping builds ([10](docs/spec/10-errors-and-safety.md#check-levels)).
-- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide), [08](docs/spec/08-c-interop.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
+  No build setting turns the memory-safety checks off. Bounds checks stay on in release builds ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
+- **Rayo runs where C runs.** Every feature can be implemented in portable C. So a 64-bit platform whose only toolchain is its vendor's C compiler, such as a console, can run Rayo if it meets a few basic requirements ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide), [08](docs/spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
 
 ## Why Rayo
 
@@ -58,7 +58,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Learn Rayo
 
-The [guide](docs/guide/) teaches Rayo in eight short chapters, for programmers who know C++, Rust, Swift or C#. Each chapter starts from a problem that systems code has, solves it in Rayo, and links to the spec sections that hold the full rules.
+The [guide](docs/guide/) teaches Rayo in eight chapters, for programmers who know C++, Rust, Swift or C#. Each chapter starts from a problem that systems code has, solves it in Rayo, and links to the spec sections that hold the full rules.
 
 ## Read the spec
 
@@ -69,13 +69,13 @@ The spec has one chapter per topic, in [`docs/spec/`](docs/spec/), and the [glos
 | [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
 | [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and `read`, `modify`, `get` and `set` accessors |
 | [03 Handles and objects](docs/spec/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |
-| [04 Types](docs/spec/04-types.md) | Numbers, [SIMD](docs/spec/04-types.md#simd-and-math), structs, enums and [`when`](docs/spec/04-types.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |
-| [05 Protocols, generics and closures](docs/spec/05-protocols-generics-and-closures.md) | Protocols, generics, `any P`, operators, [equality and ordering](docs/spec/05-protocols-generics-and-closures.md#equality-and-ordering), closures and function types, implicit conversions |
-| [06 Memory and allocators](docs/spec/06-memory-and-allocators.md) | Allocator values and their contract, scoped default allocators, arena safety, `Box`, [`Shared` and `LocalShared`](docs/spec/06-memory-and-allocators.md#sharedt-data-with-many-owners), [releasing values without destroying them](docs/spec/06-memory-and-allocators.md#releasing-a-value-without-destroying-it-trivialfree) |
-| [07 Concurrency](docs/spec/07-concurrency.md) | Race freedom, [`Sendable`](docs/spec/07-concurrency.md#what-may-cross-threads-sendable), [lending work to other threads](docs/spec/07-concurrency.md#lending-work-to-other-threads), [threads](docs/spec/07-concurrency.md#work-that-outlives-the-caller-threads), [locks and `Synchronized`](docs/spec/07-concurrency.md#atomics-and-locks), [global state](docs/spec/07-concurrency.md#global-state), [stepped tasks](docs/spec/07-concurrency.md#semantics) |
-| [08 C interop](docs/spec/08-c-interop.md) | `import c`, layout, pointers, callbacks, exports and generated headers, [embedding Rayo in a C program](docs/spec/08-c-interop.md#the-platform-and-embedding-rayo-in-c) |
-| [09 Compile time](docs/spec/09-compile-time.md) | `const`, `static if` and `static for`, reflection, attributes, conditional compilation, [generating declarations](docs/spec/09-compile-time.md#generating-declarations) |
-| [10 Errors and safety](docs/spec/10-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/spec/10-errors-and-safety.md#unsafe-code), [check levels](docs/spec/10-errors-and-safety.md#check-levels), build profiles |
+| [04 Types](docs/spec/04-types.md) | Numbers, [SIMD](docs/spec/04-types/numbers-and-math.md#simd-and-math), structs, enums and [`when`](docs/spec/04-types/enums.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |
+| [05 Protocols, generics and closures](docs/spec/05-protocols-generics-and-closures.md) | Protocols, generics, `any P`, operators, [equality and ordering](docs/spec/05-protocols-generics-and-closures/operators.md#equality-and-ordering), closures and function types, implicit conversions |
+| [06 Memory and allocators](docs/spec/06-memory-and-allocators.md) | Allocator values and their contract, scoped default allocators, arena safety, `Box`, [`Shared` and `LocalShared`](docs/spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners), [releasing values without destroying them](docs/spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree) |
+| [07 Concurrency](docs/spec/07-concurrency.md) | Race freedom, [`Sendable`](docs/spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [lending work to other threads](docs/spec/07-concurrency/thread-work.md#lending-work-to-other-threads), [threads](docs/spec/07-concurrency/thread-work.md#work-that-outlives-the-caller-threads), [locks and `Synchronized`](docs/spec/07-concurrency/synchronization.md#atomics-and-locks), [global state](docs/spec/07-concurrency/global-state.md#global-state), [stepped tasks](docs/spec/07-concurrency/tasks.md#semantics) |
+| [08 C interop](docs/spec/08-c-interop.md) | `import c`, layout, pointers, callbacks, exports and generated headers, [embedding Rayo in a C program](docs/spec/08-c-interop/c-contract-and-embedding.md#the-platform-and-embedding-rayo-in-c) |
+| [09 Compile time](docs/spec/09-compile-time.md) | `const`, `static if` and `static for`, reflection, attributes, conditional compilation, [generating declarations](docs/spec/09-compile-time/declaration-generation.md#generating-declarations) |
+| [10 Errors and safety](docs/spec/10-errors-and-safety.md) | Typed `throws`, panics, [`unsafe` code and `@safe` modules](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code), [check levels](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels), build modes |
 | [11 Compilation model](docs/spec/11-compilation-model.md) | Modules and names, local type checking, no hidden costs in any build, [what a target must provide](docs/spec/11-compilation-model.md#what-a-target-must-provide), [what the language leaves open](docs/spec/11-compilation-model.md#what-the-language-leaves-open) |
 | [12 Grammar](docs/spec/12-grammar.md) | EBNF grammar |
 | [13 Soundness](docs/spec/13-soundness.md) | Why safe code has no undefined behavior: five invariants, and the rules that keep each |

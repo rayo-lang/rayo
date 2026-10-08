@@ -5,7 +5,7 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** at the repo root — the glossary.
-- **The spec chapters** — the numbered files in `docs/spec/`. Read the ones that touch your area.
+- **The spec chapters** — the numbered pages in `docs/spec/` and any subchapters they link. Read the ones that touch your area.
 - **`docs/adr/`** — read ADRs that touch the area you're about to work in.
 
 If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
@@ -29,7 +29,9 @@ If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag 
 │   │   ├── 01-basics.md                   ← the numbered guide chapters
 │   │   └── …
 │   ├── spec/
-│   │   ├── 01-values-and-ownership.md     ← the numbered spec chapters
+│   │   ├── 01-values-and-ownership.md     ← a numbered spec chapter
+│   │   ├── 02-views-and-dependencies.md   ← a chapter's landing page
+│   │   ├── 02-views-and-dependencies/      ← its subchapters
 │   │   ├── …
 │   │   └── hard-cases.md
 │   └── why-rayo.md

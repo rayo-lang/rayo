@@ -1,247 +1,352 @@
 # 3 · Borrowing
 
-Your game passes enemies to functions all the time. `damage` changes an enemy that lives in the caller's list, such as chapter 1's `enemies`, and `heal` reads a medic to heal another enemy. In C++ both take references, and nothing stops this:
+A function can do one of three things with a value you pass it: read it, change it, or keep it. In Rayo, each parameter says which ([01](../spec/01-values-and-ownership/parameters.md#parameters)).
 
-```cpp
-void damage(Enemy& e, float amount) { e.hp -= amount; }
+A function that adds up a list of hits only reads the list, and one that heals a player changes the player's health. Neither keeps what it's given. Both borrow it instead: they use your value while the call runs, and you keep owning it. Only a function that keeps the value, such as `archive`, takes it from you ([Moves and copies](02-moves-and-copies.md#moves)).
 
-Enemy& boss = enemies[0];
-enemies.push_back(Enemy{});       // may move every enemy to a new buffer
-damage(boss, 10);                 // writes through a dangling reference
-```
+A borrow can go wrong if the memory it reads is freed while the borrow still uses it. Say code borrows one of the values in a list, and then the list grows. Growing may transfer the list's values to a bigger block of memory, and free the old one. The borrow would be left dangling, reading memory that no longer holds the value. The compiler rejects code like this when it compiles it, so the program never runs with a dangling borrow ([01](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
-Rayo rejects this code. It checks each function's borrows inside that function, so a signature never has to say how long a borrow lasts:
+## Borrowing to read
+
+Here is a function that adds up a list of hits:
 
 ```swift
-func damage(_ e: mutable Enemy, by amount: Float) { e.hp -= amount }
-func heal(_ e: mutable Enemy, from medic: Enemy) { e.hp += medic.hp * 0.1 }
+func total(list: List<Int>) -> Int {
+    var sum = 0
+    for h in list {
+        sum += h
+    }
+    return sum
+}
 
-var boss = &enemies[0]                       // 'boss' is enemies[0], lent to be changed
-enemies.append(Enemy(pos: [0, 0, 9]))        // error: 'enemies' is borrowed by 'boss' (used below)
-damage(&boss, by: 10)
+var hits = List<Int>()
+hits.append(12)
+hits.append(30)
+let damage = total(list: hits)          // 42
 ```
 
-Chapter 2 was about who owns a value. This chapter is about code that uses a value without owning it, which borrows the value ([01](../spec/01-values-and-ownership.md)).
+`list` has nothing written before its type, so `total` borrows the list to read it. This is a **shared borrow**, since any number of borrows can read the same value at once.
 
-## Three ways to pass an argument
+Inside `total`, `list` is another name for the caller's list, as `same` was another name for `hits`. `total` can read the list through it, but it can't change the list, move it or keep it.
 
-**A parameter's convention says what the function does with its argument: reads it, changes it in place, or keeps it** ([01](../spec/01-values-and-ownership.md#parameters)):
+Underneath, the compiler passes `total` either the list's address or a copy of the list's few bytes. The compiler picks one for each parameter from the function's declaration, so every caller passes it the same way. Your code works the same either way. Nothing on the heap is copied.
 
-```swift
-func length(_ v: Vec3) -> Float { ... }                      // borrowed: reads 'v'
-func damage(_ e: mutable Enemy, by amount: Float) { ... }    // mutable: changes the caller's enemy
-func enlist(_ e: owned Enemy) { ... }                        // owned: keeps the enemy
+Those bytes aren't a second list. Nothing owns them, so nothing destroys them, and the heap memory is still freed only once. They can't go stale either. `total` can only read the list, and the compiler makes sure that no other code changes it until `total` returns ([The law of exclusivity](#the-law-of-exclusivity)).
 
-let speed = length(grunt.vel)
-damage(&boss, by: 10)                                        // '&' marks the enemy lent for change
-enlist(grunt)                                                // moves 'grunt' in
-```
+An `Int` borrowed to read can be passed as a copy of its bytes the same way. So borrowing an `Int` can cost no more than copying it ([01](../spec/01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-| Convention | Declared as | Call site | The function gets |
-| --- | --- | --- | --- |
-| borrowed (default) | `_ x: T` | `f(x)` | A **shared borrow**: it reads `x` |
-| mutable | `_ x: mutable T` | `f(&x)` | A **mutable borrow** of a changeable place: it changes `x` in place |
-| owned | `_ x: owned T` | `f(x)` | The value: a place moves in, and `f(copy x)` passes a copy |
-
-**A borrowed argument holds still for the whole call.** The function can't change it, keep it or take its address, and nothing else changes it before the call returns. The exception is a `Synchronized` value, such as a mutex, which changes through its own locking ([Concurrency](07-concurrency.md#shared-mutable-state)). So the compiler may pass a copy of the argument's bits or the caller's place, and the function can't tell which. You never choose between the two: the compiler picks from the signature, and an argument the result still views, for one, is always the caller's place ([01](../spec/01-values-and-ownership.md#borrowed-arguments)).
-
-Since the function can't keep a borrowed argument, it can't move one out either. So returning a borrowed parameter's field takes `copy`, or `clone()` for a move-only one, as chapter 2 showed ([Moves and copies](02-moves-and-copies.md#places-you-dont-own)).
-
-**A `mutable` argument is the caller's place, lent for the call.** The call writes `&` before it, and every change the function makes reaches the caller's place.
-
-**Methods use the same conventions for `self`.** A plain `func` borrows `self`, a `mutating func` takes it `mutable`, and a `consuming func` takes it `owned`. A `mutating` call takes no `&`, since its form already shows the change: `boss.takeDamage(5)`.
-
-**An `owned` parameter takes the value, as chapter 2 showed.** A place passed to it moves in, even when its type is copyable, so `f(copy x)` passes a copy instead ([Moves and copies](02-moves-and-copies.md)). A struct's primary initializer and `List`'s `append` take their arguments `owned`.
-
-## Bindings of places
-
-**A local binding of a place says what it does with the place, in a parameter's words** ([01](../spec/01-values-and-ownership.md#bindings)). `let` and `var` say only whether the name may change what it holds.
+`total` can read the list, but it can't hand it over to anyone. Here is a function that tries, by returning the longer of two lists:
 
 ```swift
-let seen = enemies[0]              // a shared borrow: reads the enemy, copies nothing
-var boss = &enemies[0]             // a mutable borrow: boss.hp = 0 changes enemies[0]
-var spare = copy enemies[0]        // a second enemy, of its own
-owned var kept = spare             // a move: 'spare' can't be used until it gets a new value
-var e = enemies[0]                 // error: a bare 'var' of a place: write 'copy' or '&'
-```
-
-| Binding | Like the parameter | What it does |
-| --- | --- | --- |
-| `let x = place` | `_ x: T` | Borrows `place` shared: nothing changes, moves or destroys it while `x` is used |
-| `var x = &place` | `_ x: mutable T` | Borrows `place` mutably: nothing reaches it but through `x` while `x` is used |
-| `owned let x = place`, `owned var x = place` | `_ x: owned T` | Moves the value out of `place` |
-| `let x = copy place`, `var x = copy place` | | Makes a copy of a copyable value |
-
-**A bare `var x = place` is an error.** Say which you want: a copy, a move, or a change in place. One exception is a `const` of a copyable type, which a `var` takes as a new value, as chapter 2 showed ([01](../spec/01-values-and-ownership.md#constants)). A widening conversion makes a new value too, as in `var total: Int = small` ([01](../spec/01-values-and-ownership.md#conversions)).
-
-**A binding of a value owns it**, with no `owned` written. A call's result, a literal and `copy place` are values, so `let mesh = loadMesh()` owns its mesh.
-
-**A `let` of a stored field or an element is another name for the place, not a snapshot of it** ([01](../spec/01-values-and-ownership.md#what-a-let-of-a-place-sees)). So `let before = e.hp` borrows the field rather than copying it, and the field can't change while `before` is used:
-
-```swift
-func hit(_ e: mutable Enemy, by amount: Float) {
-    let before = e.hp
-    e.hp -= amount                 // error: 'e.hp' is borrowed by 'before' (used below)
-    log("hp \(before) to \(e.hp)")
+func longer(a: List<Int>, b: List<Int>) -> List<Int> {
+    if a.count >= b.count { return a }      // error: 'a' is only borrowed, so it can't move out
+    return b                                // error: 'b' is only borrowed, so it can't move out
 }
 ```
 
-Writing `let before = copy e.hp` keeps the old value, and the function compiles. A `let` of a computed property, such as `e.isDead`, owns the value its `get` returns.
+`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A plain parameter owns nothing. It's like a `let` that borrows, such as `let same = borrow hits`: it can't change, and it has nothing of its own to hand over.
 
-**Conditions and loops bind the same way** ([01](../spec/01-values-and-ownership.md#conditions-and-patterns)). With `var target: Enemy?`, `if let t = target` reads the enemy it holds, and `if var t = &target` changes that enemy in place. `for e in enemies` reads each element where it is, and `for var e in &enemies` changes each one in place ([04](../spec/04-types.md#iteration)).
+`longer`'s parameters have nothing written before their types, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
-## How long a borrow lasts
-
-**A borrow lasts until its last use, not to the end of its scope** ([01](../spec/01-values-and-ownership.md#how-long-a-borrow-lasts)). So the opening's code compiles once `boss` is done before the append:
+To return a list, `longer` has to build one that it owns, with `clone()` ([Moves and copies](02-moves-and-copies.md#copies)):
 
 ```swift
-var boss = &enemies[0]
-damage(&boss, by: 10)                        // the last use of 'boss': its borrow ends here
-enemies.append(Enemy(pos: [0, 0, 9]))        // fine: nothing borrows 'enemies' any more
+func longer(a: List<Int>, b: List<Int>) -> List<Int> {
+    if a.count >= b.count { return a.clone() }
+    return b.clone()
+}
 ```
 
-**A call's borrows begin when the call does, and last until it returns** ([01](../spec/01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin)). A call first evaluates its receiver and its arguments, left to right. Then it begins, and every borrow it passes begins with it. So an argument can read a place that the call then lends for change:
+A clone copies every value. A function can also hand back a view of a list it borrowed, which copies nothing ([Views](04-views.md)).
+
+An `Int` follows the same rule:
 
 ```swift
-var ids = List<Int>()
-ids.append(ids.count)             // fine: 'ids.count' is read, and done, before 'append' borrows 'ids'
+func atLeastZero(hp: Int) -> Int {
+    if hp < 0 { return 0 }
+    return hp                   // error: 'hp' is only borrowed, so it can't move out
+}
 ```
+
+For an `Int`, a copy is what you'd want anyway. Rayo still asks you to write it, since it never makes a second value unless you ask, whatever the type ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)). Here, `copy hp` copies the `Int`'s few bytes, and nothing more:
+
+```swift
+func atLeastZero(hp: Int) -> Int {
+    if hp < 0 { return 0 }
+    return copy hp
+}
+```
+
+Declaring a variable from a borrowed parameter needs a copy too, for the same reason. Here a function counts the turns of healing it takes to reach a target, and keeps a running value of its own:
+
+```swift
+func turnsToHeal(hp: Int, target: Int) -> Int {
+    var current = hp            // error: 'hp' is only borrowed, so it can't move out
+    var turns = 0
+    while current < target {
+        current += 15
+        turns += 1
+    }
+    return turns
+}
+```
+
+A declaration takes its value, as `return` does ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)), and `hp` isn't `turnsToHeal`'s to give. So `turnsToHeal` copies it:
+
+```swift
+var current = copy hp
+```
+
+## Borrowing to change
+
+A plain parameter can't be changed, so this `heal` doesn't compile:
+
+```swift
+func heal(hp: Int) {
+    hp += 20                    // error: 'hp' is borrowed, so 'heal' can't change it
+}
+```
+
+You might expect `hp` to be `heal`'s own copy, which it could change freely. Say a caller passes a variable that holds 40. `heal` would change only its copy, and the caller's variable would still hold 40 when `heal` returns. Nothing would tell you that the healing was lost. For a list, the copy would also be a hidden clone, allocating memory on every call.
+
+So a plain parameter only borrows, whether it holds an `Int` or a list. A function that wants a value of its own to change can copy or clone it, as `turnsToHeal` copies `hp` into `current`. Or it can take the value `owned`, as `archive` does. An `owned` parameter is the function's own, as a `var`'s value is, so the function can change it. The caller gives the value up in exchange.
+
+To change the caller's variable itself, the function asks for a `mutable` parameter:
+
+```swift
+func heal(hp: mutable Int) {
+    hp += 20
+}
+
+var playerHp = 40
+heal(hp: &playerHp)
+log("hp \(playerHp)")           // hp 60
+```
+
+`heal` borrows `playerHp` so that it can change it, and every change it makes to `hp` happens to `playerHp` itself. This is a **mutable borrow**. Since `heal` must reach `playerHp` itself, it gets `playerHp`'s address underneath. You never see that address: inside `heal`, you read and assign `hp` directly.
+
+With `&`, you lend `playerHp` to `heal`, and leaving the `&` out is an error:
+
+```swift
+heal(hp: playerHp)              // error: a mutable argument needs '&'
+```
+
+The `&` is there so that you can see the change. A move needs no mark, since the compiler stops you if you use the variable again. A change gives no such warning. `playerHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `&` are the ones it may change.
+
+The value before the dot needs no `&`, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change)).
+
+Whether through an `&` argument or the value before the dot, a call can change only a variable you could change yourself:
+
+```swift
+let startHp = 100
+heal(hp: &startHp)              // error: 'startHp' is a 'let', so it can't change
+let done = List<Int>()
+done.append(7)                  // error: 'done' is a 'let', so it can't change
+```
+
+A `mutable` parameter is one the function can change, so the function can lend it on:
+
+```swift
+func healTwice(hp: mutable Int) {
+    heal(hp: &hp)
+    heal(hp: &hp)
+}
+```
+
+Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from its caller, such as `playerHp`. Underneath, `heal` gets the same address that `healTwice` got.
+
+## Borrowing in a declaration
+
+A declaration can borrow too. Declaring a variable from another one moves the value, so a declaration that borrows has to say so. You've seen `let same = borrow hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+
+To borrow something to change it, write `&` before it, as in a call. Declare the name with `var`, since you'll change the value through it. Here `first` borrows `hits[0]`, which is the list's first element:
+
+```swift
+var hits = List<Int>()
+hits.append(12)
+hits.append(30)
+var first = &hits[0]
+first += 5
+log("\(hits[0])")               // 17
+```
+
+`first` is another name for `hits[0]`, so every change to `first` lands on the element ([01](../spec/01-values-and-ownership/bindings.md#bindings)). Even assigning to `first` assigns to the element: `first = 0` would set `hits[0]` to 0, rather than point `first` somewhere else.
+
+Reading an element is fine, as the `log` call does. Declaring a variable from the element itself isn't:
+
+```swift
+let top = hits[0]               // error: an element can't move out of its list
+```
+
+A declaration takes its value, and an element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, copy the element instead:
+
+```swift
+let top = copy hits[0]
+```
+
+In a list of lists, though, each element is a whole list. `copy` is an error there, since a list isn't copyable, and `clone()` would allocate a second list. A borrow reads the element where it sits, and gives it a short name:
+
+```swift
+var rounds = List<List<Int>>()
+rounds.append(hits.clone())
+let latest = borrow rounds[rounds.count - 1]
+log("\(latest.count) hits, \(total(list: latest)) damage")
+```
+
+`latest` names the last round, so the `log` call doesn't have to repeat `rounds[rounds.count - 1]`.
+
+## Changing a list while it's borrowed
+
+While `latest` borrows an element of `rounds`, `rounds` can't change:
+
+```swift
+let latest = borrow rounds[rounds.count - 1]
+rounds.append(List<Int>())      // error: 'rounds' is borrowed by 'latest' (used below)
+log("\(latest.count) hits")
+```
+
+`rounds` keeps its lists in one block of heap memory, and `latest` refers to the last of them where it sits in that block. If `append` needed more room than the block has, it would allocate a bigger block, transfer the lists to it, and free the old block. `latest` would still refer to the old block, and `latest.count` would read freed memory.
+
+The compiler can't know whether an `append` will need a bigger block, and doesn't try. While `latest` is in use, it rejects any change to `rounds`. A borrow doesn't last to the end of its block, though. It ends at its last use. So the fix is to finish with `latest` first ([01](../spec/01-values-and-ownership/bindings.md#how-long-a-borrow-lasts)):
+
+```swift
+let latest = borrow rounds[rounds.count - 1]
+log("\(latest.count) hits")
+rounds.append(List<Int>())
+```
+
+Moving a list away counts as changing it too:
+
+```swift
+let same = borrow hits
+archive(list: hits)             // error: 'hits' is borrowed by 'same' (used below)
+log("\(same.count)")
+```
+
+`same.count` would read a list that `hits` no longer holds. Assigning a new list to `hits` is an error too, since assigning changes `hits`. `same` is a `let`, so it must keep reading the list it started with.
+
+## Loops
+
+A `for` loop over `hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits. The loop only reads the list, so `h` can't change:
+
+```swift
+for h in hits {
+    h += 5                      // error: 'h' is borrowed, so the loop can't change it
+}
+```
+
+To change the elements, lend the list to the loop with `&`. Then each `h` may change its element, so `h += 5` changes `hits` ([04](../spec/04-types/collections.md#iteration)):
+
+```swift
+for h in &hits {
+    h += 5
+}
+```
+
+Since the loop borrows the whole list, its body can't change the list itself:
+
+```swift
+for h in hits {
+    if h > 20 {
+        hits.append(copy h)     // error: 'hits' is borrowed by the loop
+    }
+}
+```
+
+This is the same problem as with `latest`: `append` may transfer the values to a bigger block while the loop still reads the old one.
+
+To add values that the loop finds, collect them in a list of their own. Then add them once the loop is done:
+
+```swift
+var big = List<Int>()
+for h in hits {
+    if h > 20 { big.append(copy h) }
+}
+for b in big {
+    hits.append(copy b)
+}
+```
+
+The first loop borrows `hits` and changes `big`, which is a different list. Each `h` only borrows its element, so `big` gets a copy of it. The second loop borrows `big` and changes `hits`, which nothing borrows any more.
 
 ## The law of exclusivity
 
-**While a place is borrowed mutably, nothing else touches it, and while it is borrowed shared, nothing changes it.** This is the **law of exclusivity** ([01](../spec/01-values-and-ownership.md#the-law-of-exclusivity)). Moving a value out of a place, assigning the place and destroying it all count as changes.
+The errors with `latest`, `same` and the loop that appended to `hits` all come from one rule, the **law of exclusivity** ([01](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). It's a rule about **places**. A place is anything that holds a value, such as a variable or one element of a list.
 
-The simplest break is one call that both changes and reads a place:
+The law says that at any moment, a place can have any number of readers, or a single changer and nothing else.
+
+Every read or change of a place uses it. A borrow keeps using its place until the last line that uses the borrow. A list holds its elements, so using the list uses each of them. That's why `rounds.append` clashed with `latest`, which was still using one of the elements.
+
+Reads can happen together. A read changes nothing, so it can't spoil another read. That's why any number of shared borrows can be in use at once. Here the loop and `total` both borrow `hits` to read it at the same time, which is fine:
 
 ```swift
-heal(&boss, from: boss)            // error: 'boss' is lent for change and read by one call
-heal(&boss, from: copy boss)       // fine: the copy is made before the call begins
+for h in hits {
+    log("\(h) of \(total(list: hits))")
+}
 ```
 
-The classic break is changing a collection while a loop walks it: an append may move the elements to a new buffer, and leave the loop reading freed memory. In Rayo, the loop borrows the list until it ends:
+A change can't happen while a shared borrow is in use, even a change that frees nothing:
 
 ```swift
-for e in enemies {
-    if e.hp > 300 {
-        enemies.append(Enemy(pos: copy e.pos))       // error: 'enemies' is borrowed by the loop
+var hp = 100
+let before = borrow hp
+hp -= 10                        // error: 'hp' is borrowed by 'before' (used below)
+log("lost \(before - hp)")
+```
+
+If the change were allowed, `before` would read 90, since it's another name for `hp`, and the log would say "lost 0". With `let before = copy hp`, `before` holds a value of its own, and keeps the 100 ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+
+A mutable borrow is the strictest case. While it's in use, no other use of its place may happen at all, not even a read. That's what makes a mutable borrow **exclusive**, and it's where the law gets its name.
+
+Here `i` is an index that the program works out while it runs, and `top` borrows the first hit of the first round to change it:
+
+```swift
+var top = &rounds[0][0]
+rounds[i] = List<Int>()         // error: 'rounds' is mutably borrowed by 'top' (used below)
+top += 5
+```
+
+When `i` is 0, the assignment destroys the first round, and frees the block that holds its hits. Then `top += 5` would write to freed memory.
+
+The compiler doesn't compare indexes into a list, so even `rounds[1] = List<Int>()` is rejected here. `rounds[1]` isn't plain address arithmetic. It runs the list's own code to find the element, and that code could reach any part of the list. So a use of any element counts as a use of the whole list.
+
+A read can clash with a mutable borrow too. One call can do it alone, when it gets the same list twice:
+
+```swift
+func addAll(target: mutable List<Int>, source: List<Int>) {
+    for x in source {
+        target.append(copy x)
     }
 }
+
+addAll(target: &hits, source: hits)     // error: two borrows of 'hits' overlap for the whole call
 ```
 
-The fix is to gather the new enemies in a list of their own, and add them once the loop is done:
+The compiler doesn't look inside `addAll` to find this. Its declaration alone says that `target` may change a list while `source` reads one. Here both are `hits`, so the loop over `source` would read the list while `append` changes it. If `append` transferred the values to a bigger block, the loop would go on reading the old block, which has been freed.
+
+The fix is to give `addAll` a second list to read. A clone is worth its cost here, since `addAll` needs the values as they were before it started appending:
 
 ```swift
-var spawns = List<Enemy>()
-for e in enemies {
-    if e.hp > 300 { spawns.append(Enemy(pos: copy e.pos)) }     // another list: fine
-}
-for s in consume spawns { enemies.append(s) }                   // the first loop has ended
+addAll(target: &hits, source: hits.clone())
 ```
 
-`e.pos` is a place in the list, so the new enemy takes `copy e.pos`. Without `copy`, the primary initializer would try to move it out of the list. `for s in consume spawns` moves the list into the loop, which hands each enemy over, so `append` can take it ([04](../spec/04-types.md#iteration)).
+A call works in two steps. First, it works out its arguments, left to right. Here, `hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `&hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
 
-**The compiler checks the law one function at a time, in every build, at no run-time cost.** A few kinds of state are checked at run time instead, and each says so in its type or declaration, such as an object behind a `UniquePointer` ([Handles and objects](05-handles-and-objects.md)). `unsafe` code isn't checked at all ([01](../spec/01-values-and-ownership.md#state-that-other-code-can-change)).
+A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless an `owned` parameter takes it ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries)). `addAll` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(hits.clone())`, `append` took its clone, and `rounds` owns it.
 
-## Which places overlap
+The compiler checks the law when it compiles, in every build. So for the values in this chapter, the check costs nothing while the program runs.
 
-**The law applies to every place that overlaps the one borrowed** ([01](../spec/01-values-and-ownership.md#which-places-overlap)). Two places **overlap** when one contains the other, or when they may be the same place. So `world` and `world.enemies` overlap.
-
-**Two stored fields of one value don't overlap.** So a function can lend two fields of one struct for change at once:
-
-```swift
-struct Player(var pos: Vec3, var hp: Float = 100)
-struct World(var player: Player, var enemies: List<Enemy>)
-
-func brawl(_ player: mutable Player, _ enemies: mutable List<Enemy>) { ... }
-
-func update(_ world: mutable World) {
-    brawl(&world.player, &world.enemies)               // fine: two different fields
-    for var e in &world.enemies {
-        e.vel = world.player.pos - e.pos               // fine: the loop borrows only 'world.enemies'
-    }
-}
-```
-
-This holds for stored fields only. A computed property is an access to the whole value, whatever it returns. Places where writing one can change another count as one too, such as the members of a union and the lanes of a SIMD vector. A `Vec3`'s `x`, `y` and `z` are stored fields, so they don't overlap.
-
-**Two elements of one collection do overlap**, since `enemies[i]` and `enemies[j]` may be the same enemy. A subscript is an access to the whole collection, so even `enemies[0]` and `enemies[1]` overlap. An inline array is the exception: its elements at indices known to differ, such as `a[0]` and `a[1]`, are disjoint.
-
-**To use two elements at once, ask for both in one subscript**, which checks at run time that they differ ([01](../spec/01-values-and-ownership.md#two-elements-of-one-collection)):
-
-```swift
-heal(&enemies[i], from: enemies[j])          // error: enemies[i] and enemies[j] may be one enemy
-if var (patient, medic) = &enemies[i, j] {   // nil when i == j
-    heal(&patient, from: medic)
-}
-enemies.swapAt(i, j)                         // swaps two elements in one call
-```
-
-An index out of bounds still panics, as it does in `enemies[i]`.
-
-## Lending with `&`
-
-**`&` marks every place lent for change, in a call, a binding or a loop** ([01](../spec/01-values-and-ownership.md#lending-a-place-for-change)). The ones you meet first are:
-
-- a `mutable` argument, as in `damage(&boss, by: 10)`;
-- a `var` that binds a place, as in `var boss = &enemies[0]` or `if var t = &target`;
-- a loop that changes the elements it visits, as in `for var e in &enemies`;
-- a `when` subject that is a place, when a pattern has a `var` part, as in `when &order { .moveTo(var p) -> p.y = 0; else -> {} }`.
-
-The receiver of a `mutating` method is the exception, as above, since the call's form shows the change. That is why `&` is required: reading a call or a loop, you see every place it borrows to change.
-
-**Leaving `&` out is an error, and so is writing it where nothing is lent for change:**
-
-```swift
-damage(boss, by: 10)                    // error: a mutable argument needs '&'
-for var e in enemies { e.hp = 0 }       // error: the loop changes the elements, so 'enemies' needs '&'
-var fresh = &Enemy(pos: .zero)          // error: a new value is lent to no one, so it takes no '&'
-```
-
-### Changeable places
-
-**Only a changeable place can be changed, or lent with `&`** ([01](../spec/01-values-and-ownership.md#changeable-places)). The **changeable** places you meet most are:
-
-- a `var` that owns its value;
-- the place that a `var x = &place` names, through `x`;
-- a `mutable` or `owned` parameter, and `self` in a `mutating` method;
-- a temporary, such as a call's result;
-- a `var` field or an element of a changeable place.
-
-**Everything else is read-only, and so is whatever is reached through it**: a `let`, a borrowed parameter, `self` in a plain method, a `let` field and a `const`.
-
-```swift
-let grunt = Enemy(pos: [0, 0, 5])
-damage(&grunt, by: 10)                  // error: 'grunt' is a 'let', so it can't be changed
-
-func punish(_ e: Enemy) {
-    damage(&e, by: 10)                  // error: 'e' is borrowed, so 'punish' can't change it
-}
-func punish(_ e: mutable Enemy) {
-    damage(&e, by: 10)                  // fine: lends the caller's enemy on
-}
-```
-
-**Some state changes whatever holds it.** An object changes under run-time checks ([Handles and objects](05-handles-and-objects.md)), and a `Synchronized` value, such as a mutex, through its own locking ([Concurrency](07-concurrency.md)).
-
-## No annotations to write
-
-**A borrow never outlives the function that makes it, except as that function's signature says** ([01](../spec/01-values-and-ownership.md#the-law-of-exclusivity)). So the compiler checks each function on its own, from its body and the signatures of the functions it calls.
-
-Every borrow in this chapter ends inside a function:
-
-- A binding's borrow ends at the binding's last use.
-- A borrowed or `mutable` argument is borrowed until the call returns, and the function can't keep it.
-
-So a signature tells a caller all it needs: which arguments the call reads, which it changes and which it takes. Nothing has to say how long a borrow lasts, and none of this chapter's code does.
-
-**A borrow outlives a call only inside a view**: a value, such as a `Span`, that borrows memory something else owns. None of this chapter's types is or holds one. A view is how a function hands back part of a list without copying it. Chapter 4 covers views and what a result may borrow ([Views](04-views.md)).
+Some values bend this chapter's rules. A value that several pointers can reach can't always be checked while compiling, so it's checked while the program runs instead ([Handles and objects](05-handles-and-objects.md)). And a `Mutex` can change with no `&`, even while it's borrowed to read. Its lock lets only one piece of code use what it holds at a time, whether to read it or to change it ([Concurrency](07-concurrency.md)).
 
 ## In the spec
 
-- [01 Parameters](../spec/01-values-and-ownership.md#parameters): the three conventions, `self` in methods, default arguments, and when a borrowed argument is the caller's place.
-- [01 Evaluation order](../spec/01-values-and-ownership.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin and end.
-- [01 Bindings](../spec/01-values-and-ownership.md#bindings): every form of binding, what a `let` of a place sees, how long a borrow lasts, and how conditions and patterns bind.
-- [01 Changeable places](../spec/01-values-and-ownership.md#changeable-places): every changeable place, and the four exceptions, such as objects and `unsafe` code.
-- [01 Lending a place for change](../spec/01-values-and-ownership.md#lending-a-place-for-change): every place that takes `&`, and how `&` picks a method's mutable form.
-- [01 The law of exclusivity](../spec/01-values-and-ownership.md#the-law-of-exclusivity): which places overlap, two elements at once, and the state other code may change.
-- [04 Iteration](../spec/04-types.md#iteration): how a `for` loop borrows its sequence, and the iterators behind it.
+- [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): the three ways a function takes an argument.
+- [01 Borrowed arguments](../spec/01-values-and-ownership/parameters.md#borrowed-arguments): when a borrowed argument is passed as its bits, and when as the caller's place.
+- [01 What can be moved from](../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from): which places can be moved from, and what to do with the rest.
+- [01 Changeable places](../spec/01-values-and-ownership/bindings.md#changeable-places): every place that can be changed or lent with `&`.
+- [01 Lending a place for change](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change): every place that takes `&`, and why the value a method is called on doesn't.
+- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): `borrow` and `&` in a declaration, and how long a borrow lasts.
+- [01 Evaluation order](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin.
+- [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.
+- [02 Temporaries](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries): how long a value that nothing names lives.
+- [04 Iteration](../spec/04-types/collections.md#iteration): how a `for` loop borrows the list it runs over.

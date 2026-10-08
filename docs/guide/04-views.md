@@ -1,6 +1,6 @@
 # 4 · Views
 
-You're writing the loader for the arena game's scripts. It reads a script file into a `String` and splits it into lines for the parser. Copying every line would cost memory and time, so each line should be a view: an address and a length inside the loaded text. In C++ that is a `std::string_view`, and this is the bug it invites:
+You're writing the loader for the arena game's scripts. It reads a script file into a `String` and splits it into lines for the parser. Copying every line would cost memory and time, so each line should be a view: an address and a length inside the loaded text. In C++ you'd reach for a `std::string_view`, and this is the bug it invites:
 
 ```cpp
 std::string source = readText("arena.script");
@@ -34,14 +34,16 @@ Change `source` only after the last use of `lines`, and the code compiles:
     source.append("\n")                       // fine: nothing borrows 'source' any more
 ```
 
-The compiler never looked inside `splitLines`. Its signature alone tells the caller that `lines` may now hold views of `source`, and the compiler holds the body of `splitLines` to that same signature. This chapter shows how both sides work.
+The compiler never looked inside `splitLines`. Its signature alone tells the caller that `lines` may now hold views of `source`, and the compiler checks the body of `splitLines` against that same signature.
 
 ## Views
 
-**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies.md#scoped-values)). Taking one copies nothing. Three views come up all the time, and each holds an address and a count:
+**A view is a value that borrows memory something else owns** ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Taking one copies nothing.
+
+**You'll use three views all the time, and each holds an address and a count:**
 
 - `Span<T>`, which reads a run of elements;
-- `MutableSpan<T>`, which may also change them;
+- `MutableSpan<T>`, which can also change them;
 - `StringView`, which reads UTF-8 text.
 
 ```swift
@@ -50,40 +52,41 @@ let firstTwo = enemies[0..<2]             // a range of them: also a Span<Enemy>
 var hot = &enemies.span                   // a MutableSpan<Enemy>: '&' asks for the mutable form
 let text: StringView = source.view        // the string's bytes
 let word = text[0..<5]                    // a range of bytes: also a StringView
-let name: StringView = "grunt"            // the literal's bytes, which live for the whole run
+let name: StringView = "grunt"            // the literal's bytes, which last for the whole run
 ```
 
-A string is indexed by byte offset. A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics, so a string view always holds whole UTF-8 sequences ([04](../spec/04-types.md#strings)).
+**A string is indexed by byte offset.** A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics. So a string view always holds whole UTF-8 sequences ([04](../spec/04-types/collections.md#strings)).
 
-**`Span` and `StringView` are copyable**: a copy is a second view of the same memory. **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
+**`Span` and `StringView` are copyable**: a copy is a second view of the same memory.
+
+**A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
 
 ## Views are scoped
-
-**A view of memory that can be freed must stay within the scope that lent it.** Its type conforms to the marker protocol `Scoped`, and its values are **scoped values** ([02](../spec/02-views-and-dependencies.md#scoped-values)). A scoped value can live in locals and parameters, and inside other scoped values. It can't go where it could outlive what it borrows ([02](../spec/02-views-and-dependencies.md#where-a-scoped-value-can-go)). Among those places are:
-
-- a global;
-- a field of a type that isn't scoped;
-- a local that lives across an `await` ([Concurrency](07-concurrency.md)).
-
-**A type that holds a scoped value is scoped too.** A struct with a field of a scoped type says so with `: Scoped` ([02](../spec/02-views-and-dependencies.md#which-types-are-scoped)):
 
 ```swift
 struct Token(var text: StringView, var line: Int): Scoped   // a token views the script's text
 struct Label(var text: StringView)                          // error: a struct with a scoped field must be declared 'Scoped'
 ```
 
-So `List<StringView>` and `List<Token>` are scoped. Each owns its buffer, but the views inside it borrow, so the list stays within the scope too.
+**A view of memory that can be freed must stay within the scope that lent it** ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Inside that scope, the compiler sees every borrow, so it can reject freeing the memory while the view lives.
 
-A scoped type's declaration says only that it is scoped, not what its values borrow. The compiler tracks that for each value, as the rest of this chapter shows.
+**A type whose values must stay in their scope conforms to the marker protocol `Scoped`.** Its values are **scoped values**.
+
+**A scoped value can live in locals and parameters, and inside other scoped values.** It can't go anywhere it could outlive what it borrows ([02](../spec/02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go)), such as:
+
+- a global;
+- a field of a type that isn't scoped;
+- a local that lives across an `await`, which chapter 7 teaches ([Concurrency](07-concurrency.md)).
+
+**A type that holds a scoped value is scoped too.** A struct with a field of a scoped type says so with `: Scoped` ([02](../spec/02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
+
+**A generic type is scoped when what it holds is.** `List<StringView>` and `List<Token>` own their buffers, but the views inside them borrow, so each list must stay within the scope too.
+
+**A scoped type says only that its values must stay in their scope, not what they borrow.** The compiler works that out for each value.
 
 ## What a view carries
 
-**Each scoped value carries a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies.md#dependencies)). Until the value's last use, every place in its set counts as borrowed with that kind, and the law of exclusivity applies to it ([Borrowing](03-borrowing.md)). A value whose destruction runs code, such as a scoped struct with a `deinit`, keeps its set borrowed until it is destroyed. A `List<StringView>` doesn't: dropping it uses nothing it borrows ([02](../spec/02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it)).
-
-Within a function, two rules fill the set:
-
-- **A view taken from a place borrows that place.** `source.view` borrows `source` shared, and `&enemies.span` borrows `enemies` exclusively.
-- **A value made from a view carries everything the view carries.** That holds for a copy, a range of it, and a struct or list that holds it.
+**Each scoped value has a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies/dependency-rules.md#dependencies)). What a value **carries** is its dependency set.
 
 ```swift
 let text = source.view                    // carries 'source', shared
@@ -97,15 +100,15 @@ let n = enemies.count                     // error: 'enemies' is borrowed by 'ho
 hot[0].hp = 0
 ```
 
-Calls add two more rules, in the next two sections.
+**Until the value's last use, every place in its set counts as borrowed**, with its kind, and the law of exclusivity applies to it ([Borrowing](03-borrowing.md)).
+
+**A view taken from a place borrows that place**, since the view reaches only that place's storage and what the place owns.
+
+**A value made from a view carries everything the view carries**: a copy of the view, a range of it, and a struct or list that holds it.
+
+**A value with a `deinit` of its own keeps its set borrowed until it's destroyed**, since the `deinit` may read what the value borrows. A `List` is an exception: its `deinit` only destroys its elements and frees its buffer, so a `List<StringView>`'s borrows end at its last use ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
 
 ## What a call's result borrows
-
-**A call's result borrows what the call was given** ([02](../spec/02-views-and-dependencies.md#rule-3-call-results)). The caller never looks inside the function. It reads the signature, and assumes the result borrows what it could reach:
-
-- each argument passed borrowed or `mutable`, `self` included, with one exception (next);
-- everything those arguments carry;
-- what each `owned` argument carries, but not the argument itself, which the callee now owns.
 
 ```swift
 func longest(_ lines: Span<StringView>) -> StringView { ... }
@@ -115,26 +118,47 @@ source.append("\n")                       // error: 'source' is borrowed by 'tit
 log(title)
 ```
 
-**A `Span`, `StringView` or number argument lends only what it carries, never itself, to a result made of spans and string views**, whether the argument is a variable or a temporary ([02](../spec/02-views-and-dependencies.md#shallow-values)). Such a result, or a list or struct of them, can point only where the argument points, never into the argument's own bytes. So `grid.row(y + 1)` borrows `grid` alone. A `MutableSpan` is no such argument, since it is move-only.
+**A call's result borrows what the call was given** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#rule-3-call-results)). The caller never looks inside the function. From the signature alone, it assumes the result borrows everything the function could reach:
+
+- each argument passed borrowed or `mutable`, `self` included;
+- everything those arguments carry;
+- what each `owned` argument carries, but not the argument itself, which the function now owns.
+
+**A span, a string view or a number is the exception: it lends only what it carries, never itself, to a result made of spans and string views** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values)). That includes a list or struct of them. Such a result can point only where the argument points, never into the argument's own bytes. This holds whether the argument is a variable or a temporary. So `grid.row(y + 1)` borrows `grid` alone.
+
+**A `MutableSpan` gets no such exception**, since it is move-only.
 
 ## Storing views through a `mutable` argument
 
-**After a call, a `mutable` argument of a scoped type takes on what the other arguments borrow.** The spec calls this **absorption** ([02](../spec/02-views-and-dependencies.md#rule-4-absorption)). It is how `lines` learns, in the opening example, that it borrows `source`:
-
 ```swift
-var lines = List<StringView>()            // holds views, so it is scoped
-splitLines(source.view, into: &lines)     // 'lines' takes on what 'source.view' carries: 'source', shared
+var lines = List<StringView>()
+splitLines(source.view, into: &lines)     // 'lines' takes on what 'source.view' carries: 'source'
+var names = List<StringView>()
+names.append(banner.view)                 // 'self' absorbs too: 'names' takes on 'banner'
+
+struct Scanner(var text: StringView, var pos: Int = 0): Scoped {
+    mutating func scan(into out: mutable List<Token>) { ... }
+}
+
+var scanner = Scanner(text: source.view)
+scanner.scan(into: &tokens)               // 'tokens' takes on what 'scanner' carries: 'source'
+scanner.pos = 0                           // fine: 'tokens' doesn't borrow 'scanner' itself
+use(tokens)
 ```
 
-The signature can't say whether `splitLines` stores views of `text` into `out`, so the caller assumes it does. The same rule covers these cases:
+**After a call, each scoped `mutable` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
 
-- **`self` in a `mutating` method absorbs too**, so `names.append(source.view[0..<5])` makes `names` borrow `source`.
-- **Only a scoped argument absorbs.** A `List<Int>` holds no views, so it takes on nothing.
-- **Another `mutable` argument lends what it carries, not itself.** Take a lexer that views the script's text, and a `mutating` method `lex`. After `lexer.lex(into: &tokens)`, `tokens` holds views of the text the lexer reads. It doesn't borrow `lexer`, so the lexer can move on while `tokens` is used.
+**The caller assumes the function stores whatever it could.** The signature of `splitLines` can't say whether it stores views of `text` into `out`, so the caller assumes it does.
+
+**A `mutating` method's `self` absorbs too.**
+
+**Only a scoped argument absorbs.** A `List<Int>` holds no views, so it takes on nothing.
+
+**A span, a string view or a number lends an absorbing argument only what it carries, as it does a result.** So `lines` borrows `source`, not the view.
+
+**Another `mutable` argument lends what it carries, not itself.** So `tokens` borrows the text the scanner views, and the scanner can move on while `tokens` is in use.
 
 ### What the function may keep
-
-**A function can return or store only what its caller lent it** ([02](../spec/02-views-and-dependencies.md#rule-5-the-callee-side)). This is the other half of the contract: the caller trusts the signature, and the compiler holds the body to it. A function's locals are its own, so no view of one may leave it:
 
 ```swift
 func defaultName() -> StringView {
@@ -149,11 +173,17 @@ func addDefault(into out: mutable List<StringView>) {
 }
 ```
 
-Inside `splitLines`, every line stored into `out` is a range of `text`, which the caller lent, so the body passes. Neither side needs an annotation.
+**A function can return or store only what its caller lent it** ([02](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)). The caller trusts the signature, and the compiler holds the body to it.
+
+**A function's locals are its own, so no view of one may leave it.** They're destroyed when the function returns.
+
+**So neither side needs an annotation.** Inside `splitLines`, every line stored into `out` is a range of `text`, which the caller lent.
 
 ## A result that borrows one argument: `where`
 
-**A `where` clause can narrow what a result borrows** ([02](../spec/02-views-and-dependencies.md#precise-dependencies-opt-in)). By default a result borrows what every argument lends, even one the function only reads. A parser hits this when it looks a token up in a symbol table, then moves its lexer on. Here the lexer owns the script's text, so a token's text borrows the lexer itself:
+**A `where` clause narrows what a result borrows** ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)).
+
+**By default a result borrows what every argument lends, even one the function only reads.** That gets in a parser's way when it looks a token up in a symbol table, then moves its lexer on. Here the lexer owns the script's text, so a token's text borrows the lexer itself:
 
 ```swift
 struct Lexer(var text: String, var pos: Int = 0)
@@ -168,7 +198,7 @@ lexer.advance()                           // error: 'lexer' is borrowed by 'syms
 use(syms)
 ```
 
-The key is only compared, never kept. Say so, and the result borrows the table alone:
+**The key is only compared, never kept.** Say so, and the result borrows the table alone:
 
 ```swift
 extension SymbolTable {
@@ -182,7 +212,7 @@ lexer.advance()                           // fine: 'tok' was last used above
 use(syms)
 ```
 
-Each item of the clause names a subject, `return` or a `mutable` parameter, and what that subject borrows:
+**Each item of the clause names a subject and what it borrows.** The subject is `return` or a `mutable` parameter:
 
 - `return borrows x`: the parameter `x` and what it carries, and no other parameter;
 - `return borrows static`: only global `let`s and `const`s, so no argument stays borrowed;
@@ -199,14 +229,14 @@ func pick(_ a: StringView, _ b: StringView) -> StringView
 
 ## Temporaries
 
-**A view of a temporary can't outlive its statement** ([02](../spec/02-views-and-dependencies.md#temporaries)). A value that no binding holds, such as a call's result, is a temporary. It is destroyed at the end of the statement that made it:
-
 ```swift
 let text = try readText("arena.script").view    // error: the String dies with this statement, and 'text' is used below
 log(text)
 ```
 
-Name the value, and it lives to the end of its scope:
+**A view of a temporary can't outlive its statement** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries)). A **temporary** is a value that no binding holds, such as a call's result. It's destroyed at the end of the statement that made it.
+
+**Name the value, and it lives to the end of its scope:**
 
 ```swift
 let source = try readText("arena.script")       // the binding owns the String
@@ -214,13 +244,13 @@ let text = source.view                           // fine
 log(text)
 ```
 
-The condition of an `if`, `guard` or `while` counts as a statement of its own, so its temporaries are gone before the body runs. A `for` loop is an exception: it keeps the temporaries of its sequence until the loop ends.
+**The condition of an `if`, `guard` or `while` counts as a statement of its own**, so its temporaries are gone before the body runs.
 
-**A temporary span or string view doesn't hold its result to the statement.** In `splitLines(source.view, into: &lines)`, `source.view` is a temporary too, yet `lines` outlives it. By the rule for spans and string views ([above](#what-a-calls-result-borrows)), the view lends only what it carries: `source`. So `source.view[0..<5]` borrows `source` as well, not the temporary view.
+**A `for` loop keeps the temporaries of its sequence until the loop ends.**
+
+**A temporary span or string view doesn't tie its result to the statement.** In `splitLines(source.view, into: &lines)`, `source.view` is a temporary, yet `lines` outlives it. A string view lends only what it carries, `source` ([above](#what-a-calls-result-borrows)). So `source.view[0..<5]` borrows `source` too, not the temporary view.
 
 ## Staying valid after a parameter changes: `outlives`
-
-**`outlives` says that a subject borrows what a parameter carries, but not the parameter itself**, so the subject stays valid after that parameter changes or is gone ([02](../spec/02-views-and-dependencies.md#staying-valid-after-a-parameter-moves-on-outlives)). One case is copying views from one list into another:
 
 ```swift
 func copyAll(from src: List<StringView>, into dst: mutable List<StringView>)
@@ -231,9 +261,13 @@ words.append("eof")                       // fine: without the clause, 'kept' wo
 use(kept)
 ```
 
-In general, the compiler accepts `outlives x` only when nothing `x` carries can be changed through `x` or end with it. A `Span` or a `List<StringView>` qualifies. A `MutableSpan` doesn't, since it could change the elements under the views it handed out. The spec adds one more case, for a result moved out of `x`, as `popLast()` moves an element out of a list.
+**`outlives` says that a subject borrows what a parameter carries, but not the parameter itself** ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So the subject stays valid after that parameter changes or is gone.
 
-**This is also why a `for` loop can collect views of a collection's elements.** A collection's iterator declares its `next()` `where return outlives self`, so each element borrows the collection, not the iterator:
+**The compiler accepts `outlives x` only when nothing `x` carries can be changed through `x` or end with it.** A `Span` or a `List<StringView>` qualifies. A `MutableSpan` doesn't, since it could change the elements under the views it handed out.
+
+**A result moved out of `x` may also be declared `outlives x`, whatever `x` carries.** `popLast()` is one: the element it moves out of a list carries only what the list carried.
+
+**A `for` loop can collect views of a collection's elements.** The loop gets each element from an **iterator**, a value that walks the collection, by calling its `next()`. A collection's iterator declares `next()` `where return outlives self`, so each element borrows the collection, not the iterator:
 
 ```swift
 var names = List<StringView>()
@@ -247,18 +281,18 @@ use(names)                                                     // fine: the loop
 
 - **A handle.** An element of a pool is named by a `Handle<T>`: a small copyable index, checked at each use, which reads `nil` once the element is removed ([Handles and objects](05-handles-and-objects.md)).
 - **A `Slice<T>`.** A range of a buffer held by a `Shared` is named by a `Slice<T>`: a checked view that can be stored anywhere, and reads `nil` once the buffer is gone ([Memory and allocators](06-memory-and-allocators.md)).
-- **An owning copy.** Small data can simply be copied. `String("\(word)")` builds a `String` that owns its text, so it isn't scoped and can go anywhere.
+- **An owning copy.** Small data can be copied. `String("\(word)")` builds a `String` that owns its text, so it isn't scoped and can go anywhere.
 
-A handle or a slice costs a check at each use, and a copy allocates once. Each is written out, so you see the cost where you pay it.
+**Each of these costs something, and the code shows it.** A handle or a slice costs a check at each use, and a copy allocates once.
 
 ## In the spec
 
-- [02 Scoped values](../spec/02-views-and-dependencies.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.
-- [02 Dependencies](../spec/02-views-and-dependencies.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
-- [02 Shallow values](../spec/02-views-and-dependencies.md#shallow-values): which arguments lend only what they carry, and to which results.
-- [02 Temporaries](../spec/02-views-and-dependencies.md#temporaries): full statements, and the temporaries that loops keep.
-- [02 When destroying a value counts as using it](../spec/02-views-and-dependencies.md#when-destroying-a-value-counts-as-using-it): which values keep what they borrow until they are destroyed.
-- [02 Precise dependencies](../spec/02-views-and-dependencies.md#precise-dependencies-opt-in): every form of `where` item, and naming a field of a parameter or a result.
-- [02 `outlives`](../spec/02-views-and-dependencies.md#staying-valid-after-a-parameter-moves-on-outlives): when the compiler accepts it, and values moved out of an owner.
-- [04 Collections and strings](../spec/04-types.md#collections-and-strings): the views beside the owning collections, and how strings are indexed.
-- [06 Long-lived views](../spec/06-memory-and-allocators.md#long-lived-views-into-long-lived-buffers): `Slice<T>` and the buffers it views.
+- [02 Scoped values](../spec/02-views-and-dependencies/scoped-values.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.
+- [02 Dependencies](../spec/02-views-and-dependencies/dependency-rules.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
+- [02 Shallow values](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values): which arguments lend only what they carry, and to which results.
+- [02 Temporaries](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries): full statements, and the temporaries that loops keep.
+- [02 When destroying a value counts as using it](../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it): which values keep what they borrow until they are destroyed.
+- [02 Precise dependencies](../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in): every form of `where` item, and naming a field of a parameter or a result.
+- [02 `outlives`](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives): when the compiler accepts it, and values moved out of an owner.
+- [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): the views beside the owning collections, and how strings are indexed.
+- [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): `Slice<T>` and the buffers it views.
