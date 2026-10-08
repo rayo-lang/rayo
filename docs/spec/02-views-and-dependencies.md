@@ -1,6 +1,6 @@
 # 02 · Views and dependencies
 
-Splitting a string into lines need not copy its characters. Each line can view part of the original string, but then the lines need that string's memory to remain available. Rayo tracks that connection, even when a function stores the views in a collection.
+`splitLines` stores each line as a view into `source`. That saves a copy, but the views still read `source`'s characters. If `source` moves its buffer, they would point at freed memory.
 
 ## Dependencies
 
@@ -8,18 +8,18 @@ Splitting a string into lines need not copy its characters. Each line can view p
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 
 var lines = List<StringView>()
-splitLines(source.view, into: &lines)            // lines now borrows source
+splitLines(source.view, into: &lines)
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print(lines.count)
 ```
 
-`source.view` lends access to the characters owned by `source`; it does not make a copy. The `StringView`s stored in `lines` are views of those characters. Appending to `source` could move its buffer and free the memory the lines still use, so the compiler rejects the append. The later use of `lines` keeps that borrow live.
+After `splitLines` returns, `lines` still holds views of `source`. The append could move the string's buffer, so the compiler rejects it while `lines` is still in use. The later `print` shows why the borrow has not ended yet.
 
 Because the source's memory can be freed, a `StringView` is `Scoped`: it must stay within the scope that lent it, where the compiler can check its borrow. `List<StringView>` is scoped too, because it holds those views. [Scoped values](02-views-and-dependencies/scoped-values.md#scoped-values) sets out which other types have this restriction.
 
-Knowing that `lines` is scoped is only part of the check. The compiler also needs to know *which* memory its views use. A scoped value's **dependency set** records the places and dynamic accesses it borrows, marking each borrow **shared** or **exclusive**. A value **carries** this set as it moves through the function. Until the value's last use, changing, moving or destroying a place it depends on must respect the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
+`Scoped` keeps the list inside the lending scope; it does not identify what the list borrows. For that, the compiler records a **dependency set**: every place or dynamic access the value borrows, marked **shared** or **exclusive**. The value **carries** this set as it moves through the function. Here, `lines` holds a shared borrow of `source`. Until the last use of `lines`, changing, moving or destroying `source` must respect that borrow under the law of exclusivity ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)).
 
-One value can depend on several places at once. Here, `vis` borrows `sprites` exclusively and `grid.cells` shared, so growing `grid.cells` conflicts with the view even though `vis` is used to change sprites:
+A view can keep several places borrowed:
 
 ```swift
 func visible(_ items: mutable List<Sprite>, in cells: Span<Cell>) -> MutableSpan<Sprite> { ... }
@@ -28,6 +28,8 @@ var vis = visible(&sprites, in: grid.cells.span)
 grid.cells.append(c)                               // error: grid.cells is borrowed by 'vis' (used below)
 cull(&vis)
 ```
+
+`vis` is a mutable view of `sprites`, but `visible` also received a span of `grid.cells`. It therefore depends on `sprites` exclusively and `grid.cells` shared. Because `cull` uses `vis` after the attempted append, growing `grid.cells` conflicts with that shared borrow.
 
 The compiler begins with the place a view comes from ([Projection](02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)). If another value is made from that view, it inherits the dependencies ([Transitivity](02-views-and-dependencies/dependency-projection-and-results.md#rule-2-transitivity)). This lets the compiler follow a borrow through the body that created it.
 
