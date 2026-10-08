@@ -58,7 +58,7 @@ var g = registry.lock()
 Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
 
-A **guard type** is a type declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` ([Mutable views](dependency-rules/projection-and-results.md#mutable-views)), as `MutexGuard` is.
+A **guard type** is a type declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` ([Mutable views](dependency-projection-and-results.md#mutable-views)), as `MutexGuard` is.
 
 **`@guard` makes a type scoped, move-only and not `Sendable`: `Scoped`, `~Copyable` and `~Sendable`.**
 
@@ -131,7 +131,7 @@ Without the clause, each element would depend exclusively on the iterator, and t
 
 **Iterators that hand out mutable views stay lending**: each view depends on the iterator, exclusively, so the next `next()` conflicts while the view lives. That holds for one that hands out [`MutableRef`](../04-types/collections.md#iteration)s or `MutableSpan` chunks, since two live exclusive views from one iterator would alias.
 
-**`outlives x` requires that nothing `x` carries can be changed through `x` or end with it.** So `x`'s type can hold no mutable view ([Mutable views](dependency-rules/projection-and-results.md#mutable-views)), and destroying one is no use ([above](#when-destroying-a-value-counts-as-using-it)). In generic code, this must hold for every type argument the constraints allow.
+**`outlives x` requires that nothing `x` carries can be changed through `x` or end with it.** So `x`'s type can hold no mutable view ([Mutable views](dependency-projection-and-results.md#mutable-views)), and destroying one is no use ([above](#when-destroying-a-value-counts-as-using-it)). In generic code, this must hold for every type argument the constraints allow.
 
 - **`Span`, a span iterator and `List<StringView>` qualify.** So the function below leaves `src` free once it returns, where by default `dst` would keep the borrowed `src` itself borrowed.
 - **An iterator over a `MutableSpan` doesn't**, since it could hand out a view and then replace the data under it.
@@ -142,7 +142,7 @@ func copyAll(from src: List<StringView>, into dst: mutable List<StringView>)
     where dst outlives src                       // 'dst' takes on what 'src' carries, not 'src' itself
 ```
 
-**Inside `next()`, verification uses rule 1's shared-view case** ([Rule 1: Projection](dependency-rules/projection-and-results.md#rule-1-projection)), so this body gives `b` the collection's set, not the field's:
+**Inside `next()`, verification uses rule 1's shared-view case** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), so this body gives `b` the collection's set, not the field's:
 
 ```swift
 let b = rest.first
@@ -197,7 +197,7 @@ use(e)
 **The caller keeps a set per stored field of a struct, and per element of a tuple**, down through nested stored fields. A value's own set is their union.
 
 - A primary initializer gives each field its argument's set.
-- Assigning a stored field replaces its set, where the place assigned is known ([Rule 4: Absorption](dependency-rules/absorption-and-accesses.md#rule-4-absorption)).
+- Assigning a stored field replaces its set, where the place assigned is known ([Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)).
 - A call result gets per-field sets only from `return.f` items. Its other fields get what a plain `return` item names, or what the default rules give the whole result.
 - Elements, enum payloads, what a `Box` holds, and a value of a type parameter have a single set.
 
@@ -253,7 +253,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
 
-**Through objects, the cursor holds one mark.** A step through an object's owner or weak pointer takes the new object's access ([Rule 6: Dynamic accesses](dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses)), as a `rebind` to a child's value does when the children are held by `UniquePointer`s. That access **replaces** the previous object's access in `x`'s set, so the cursor holds a mark only on the object it stands on, however deep the walk. The previous access ends once nothing else depends on it.
+**Through objects, the cursor holds one mark.** A step through an object's owner or weak pointer takes the new object's access ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), as a `rebind` to a child's value does when the children are held by `UniquePointer`s. That access **replaces** the previous object's access in `x`'s set, so the cursor holds a mark only on the object it stands on, however deep the walk. The previous access ends once nothing else depends on it.
 
 **This is safe because the new place lies in another object's value, guarded by the new mark.** If an alias removes the child from the previous object, destroying the object the cursor stands on panics ([03](../03-handles-and-objects.md#destroying-an-object)), and any other alias reaching it still conflicts.
 

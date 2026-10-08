@@ -47,7 +47,7 @@ log.lock { msgs in
 **Each form lends the data only while the lock is held:**
 
 - **The closure form calls the closure exactly once**, so it takes the most general closure kind, `consuming`, and the closure may move a captured local out, as the first one moves `m`. The closure's parameter isn't `keep`, so no view of the protected data outlives the lock ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
-- **The guard form returns an exclusive guard from a shared `self`.** A mutable view normally needs an exclusive input, and a guard is one exception, since its `Synchronized` type enforces its exclusivity at run time ([02](../02-views-and-dependencies/dependency-rules/projection-and-results.md#mutable-views)). A guard is scoped, so it can't be:
+- **The guard form returns an exclusive guard from a shared `self`.** A mutable view normally needs an exclusive input, and a guard is one exception, since its `Synchronized` type enforces its exclusivity at run time ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)). A guard is scoped, so it can't be:
     - stored anywhere unscoped, such as a global, a `StablePool` or an object;
     - returned past the mutex it came from;
     - held across an `await`.

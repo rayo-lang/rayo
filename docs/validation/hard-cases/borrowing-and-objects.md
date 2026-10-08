@@ -235,7 +235,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag.view) } }    // a closur
 
 ### A17 · Remembering what a function saw
 
-**A function scans a local list of candidates and wants to keep the ones it picked for later calls.** It can't keep a view of its local list past the call, since the list is destroyed when the function returns ([02](../../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+**A function scans a local list of candidates and wants to keep the ones it picked for later calls.** It can't keep a view of its local list past the call, since the list is destroyed when the function returns ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 - **Must accept** keeping them as owned values, such as a `List<T>` of copies, or as `Handle`s.
 

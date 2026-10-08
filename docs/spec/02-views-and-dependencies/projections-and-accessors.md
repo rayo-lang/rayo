@@ -50,11 +50,11 @@ An accessor whose declared type is written `T?` is an **optional projection**, y
 - a bitfield's bits read out of its bytes ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
 - an under-aligned field copied to an aligned place ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
-An **access-bound** projection's accessor stays suspended at its `yield` until the last use of every value that depends on the access, as for a dynamic access ([Rule 6: Dynamic accesses](dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses)). So its frame, and the temporary in it, stay as they were while a view of the yield lives. Then it runs the code after the `yield`, such as a `modify`'s write-back.
+An **access-bound** projection's accessor stays suspended at its `yield` until the last use of every value that depends on the access, as for a dynamic access ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So its frame, and the temporary in it, stay as they were while a view of the yield lives. Then it runs the code after the `yield`, such as a `modify`'s write-back.
 
 **Meanwhile the accessor keeps `self` and its subscript arguments lent as the access began them**: shared for a `read`, and exclusively for a `modify` or a `get` and `set` change. So what depends on the access depends on those places too, whatever the shallow rule, `outlives` or `copy` drops from its set.
 
-**A view of an access-bound projection works like any view within the function, but can't leave it** ([Rule 5: The callee side](dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)), since the access began in that function, and rule 5 rejects a view of one.
+**A view of an access-bound projection works like any view within the function, but can't leave it** ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)), since the access began in that function, and rule 5 rejects a view of one.
 
 ## Storage projections
 
@@ -74,7 +74,7 @@ func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }       // OK:
 
 **Only `unsafe` code can yield a place reached through a raw pointer**, such as a `List`'s buffer or a lock guard's protected value. That code promises that the place lies in storage the named parameter owns or views, and that the code after the `yield` treats it as still borrowed (below).
 
-**The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). Otherwise both happen at the end of the full statement that begins it ([Temporaries](dependency-rules/projection-and-results.md#temporaries)).
+**The yield stays lent until the accessor returns.** A storage projection's access ends, and the code after its `yield` runs, when the call it is an argument of returns ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). Otherwise both happen at the end of the full statement that begins it ([Temporaries](dependency-projection-and-results.md#temporaries)).
 
 **The code after the `yield` treats the yielded place as still borrowed**, since the access can end while a view of the yield lives on. That code, a `defer` block or a local's destruction included, never changes the place, and after a `modify` never reads it either:
 
@@ -91,7 +91,7 @@ extension Inventory {
 }
 ```
 
-**On an exclusive view type, a view of the yield depends on the view variable itself** ([Rule 1: Projection](dependency-rules/projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views:
+**On an exclusive view type, a view of the yield depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views:
 
 ```swift
 func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.view }
@@ -104,8 +104,8 @@ func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.v
 - Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element projections are `where yield borrows self`.
 - The projections of `Span`, `StringView` and `Borrow` are `where yield outlives self`.
 - `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`.
-- The `.value` of a `UniquePointer` or a `WeakPointer` depends on its access ([Rule 6: Dynamic accesses](dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses)).
-- Properties that build a view, such as `span`, sub-span ranges and an `SoA` column, are `get`s returning a view, not projections ([Rule 3: Call results](dependency-rules/projection-and-results.md#rule-3-call-results)). An `SoA` column's view depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+- The `.value` of a `UniquePointer` or a `WeakPointer` depends on its access ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
+- Properties that build a view, such as `span`, sub-span ranges and an `SoA` column, are `get`s returning a view, not projections ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). An `SoA` column's view depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 
 ## Projections in protocols
 

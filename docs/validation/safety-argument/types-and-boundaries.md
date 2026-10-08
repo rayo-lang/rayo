@@ -54,9 +54,9 @@
 | Promise | What relies on it |
 | --- | --- |
 | A view made from a raw pointer reaches live, aligned, valid places, with the dependencies its signature states ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in), [10](../../spec/10-errors-and-safety/unsafe-code.md#values-views-and-threads)) | [Covered](dependencies.md#covered) |
-| A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](../../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#mutable-views)) | [Mutable views](dependencies.md#mutable-views) |
-| A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](../../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values)) | [Rules 3 and 4](dependencies.md#rule-3) |
-| A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](../../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values)) | The shallow rule ([Rule 3](dependencies.md#rule-3)) |
+| A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)) | [Mutable views](dependencies.md#mutable-views) |
+| A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)) | [Rules 3 and 4](dependencies.md#rule-3) |
+| A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)) | The shallow rule ([Rule 3](dependencies.md#rule-3)) |
 | A storage projection's yield through a raw pointer lies in storage the named parameter owns or views ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#storage-projections)) | [Projections](dependencies.md#projections-and-accessors) |
 | `unsafe Sendable` ([07](../../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)) | [Threads](runtime-and-concurrency.md#threads) |
 | `unsafe Synchronized` ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)) | [Threads](runtime-and-concurrency.md#threads), Exclusive |

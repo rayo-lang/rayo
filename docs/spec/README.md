@@ -2,7 +2,7 @@
 
 Use this reference when you need to know exactly what a Rayo program means. Each numbered page leads to the rules for one topic. Longer chapters have subchapters, so you can open the part that answers your question. The chapters are organized for lookup; you do not need to read them in order. To learn the language through examples, start with the [guide](../guide/README.md).
 
-For a question about a line of code, begin with the construct you wrote. For example, if a call leaves a variable unusable, read [moves](01-values-and-ownership/moves-copies-destruction.md#moves) and [parameters](01-values-and-ownership/parameters.md#parameters). If a returned view cannot be stored, read [dependencies](02-views-and-dependencies/dependency-rules.md#dependencies). The [glossary](../../GLOSSARY.md) helps when an error or a rule uses an unfamiliar term.
+For a question about a line of code, begin with the construct you wrote. For example, if a call leaves a variable unusable, read [moves](01-values-and-ownership/moves-copies-destruction.md#moves) and [parameters](01-values-and-ownership/parameters.md#parameters). If a returned view cannot be stored, read [dependencies](02-views-and-dependencies.md#dependencies). The [glossary](../../GLOSSARY.md) helps when an error or a rule uses an unfamiliar term.
 
 | If you are looking for… | Read |
 | --- | --- |

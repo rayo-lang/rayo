@@ -103,10 +103,10 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 }
 ```
 
-**`await x` evaluates to `x`'s `Output` once it is done.** For the dependency rules ([02](../02-views-and-dependencies/dependency-rules.md#dependencies)), it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement. So the value, and an error that `try await` throws, depend, exclusively, on each of these:
+**`await x` evaluates to `x`'s `Output` once it is done.** For the dependency rules ([02](../02-views-and-dependencies.md#dependencies)), it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement. So the value, and an error that `try await` throws, depend, exclusively, on each of these:
 
 - the resume parameter;
-- `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+- `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **An awaitable whose `Failure` isn't `Never` is awaited with `try await`**, and `.failed(e)` throws `e` there ([10](../10-errors-and-safety.md)). A `task func` is an awaitable of its return and error types.
 

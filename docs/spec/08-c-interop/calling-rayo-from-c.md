@@ -76,7 +76,7 @@ A C or C++ program uses a library written in Rayo:
 
 ## What a C entry hands back to C
 
-**A `Span<T>` or `StringView` handed back to C views what it depends on** ([02](../02-views-and-dependencies/dependency-rules.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores into a `mutable` parameter or through a view a parameter carries.
+**A `Span<T>` or `StringView` handed back to C views what it depends on** ([02](../02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores into a `mutable` parameter or through a view a parameter carries.
 
 **Once a C entry returns, nothing in Rayo holds what it borrowed**: a lock guard is released, and an open no longer counts as a use of its allocator ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 

@@ -86,7 +86,7 @@ struct Label(var text: StringView)                          // error: a struct w
 
 ## What a view carries
 
-**Each scoped value has a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies/dependency-rules.md#dependencies)). What a value **carries** is its dependency set.
+**Each scoped value has a dependency set: the places it borrows, each shared or exclusive** ([02](../spec/02-views-and-dependencies.md#dependencies)). What a value **carries** is its dependency set.
 
 ```swift
 let text = source.view                    // carries 'source', shared
@@ -118,13 +118,13 @@ source.append("\n")                       // error: 'source' is borrowed by 'tit
 log(title)
 ```
 
-**A call's result borrows what the call was given** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#rule-3-call-results)). The caller never looks inside the function. From the signature alone, it assumes the result borrows everything the function could reach:
+**A call's result borrows what the call was given** ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). The caller never looks inside the function. From the signature alone, it assumes the result borrows everything the function could reach:
 
 - each argument passed borrowed or `mutable`, `self` included;
 - everything those arguments carry;
 - what each `owned` argument carries, but not the argument itself, which the function now owns.
 
-**A span, a string view or a number is the exception: it lends only what it carries, never itself, to a result made of spans and string views** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values)). That includes a list or struct of them. Such a result can point only where the argument points, never into the argument's own bytes. This holds whether the argument is a variable or a temporary. So `grid.row(y + 1)` borrows `grid` alone.
+**A span, a string view or a number is the exception: it lends only what it carries, never itself, to a result made of spans and string views** ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)). That includes a list or struct of them. Such a result can point only where the argument points, never into the argument's own bytes. This holds whether the argument is a variable or a temporary. So `grid.row(y + 1)` borrows `grid` alone.
 
 **A `MutableSpan` gets no such exception**, since it is move-only.
 
@@ -146,7 +146,7 @@ scanner.pos = 0                           // fine: 'tokens' doesn't borrow 'scan
 use(tokens)
 ```
 
-**After a call, each scoped `mutable` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
+**After a call, each scoped `mutable` argument takes on what the other arguments borrow.** This is **absorption** ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), and it's how `lines` learns that it borrows `source`.
 
 **The caller assumes the function stores whatever it could.** The signature of `splitLines` can't say whether it stores views of `text` into `out`, so the caller assumes it does.
 
@@ -173,7 +173,7 @@ func addDefault(into out: mutable List<StringView>) {
 }
 ```
 
-**A function can return or store only what its caller lent it** ([02](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)). The caller trusts the signature, and the compiler holds the body to it.
+**A function can return or store only what its caller lent it** ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). The caller trusts the signature, and the compiler holds the body to it.
 
 **A function's locals are its own, so no view of one may leave it.** They're destroyed when the function returns.
 
@@ -234,7 +234,7 @@ let text = try readText("arena.script").view    // error: the String dies with t
 log(text)
 ```
 
-**A view of a temporary can't outlive its statement** ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries)). A **temporary** is a value that no binding holds, such as a call's result. It's destroyed at the end of the statement that made it.
+**A view of a temporary can't outlive its statement** ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). A **temporary** is a value that no binding holds, such as a call's result. It's destroyed at the end of the statement that made it.
 
 **Name the value, and it lives to the end of its scope:**
 
@@ -288,9 +288,9 @@ use(names)                                                     // fine: the loop
 ## In the spec
 
 - [02 Scoped values](../spec/02-views-and-dependencies/scoped-values.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.
-- [02 Dependencies](../spec/02-views-and-dependencies/dependency-rules.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
-- [02 Shallow values](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values): which arguments lend only what they carry, and to which results.
-- [02 Temporaries](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries): full statements, and the temporaries that loops keep.
+- [02 Dependencies](../spec/02-views-and-dependencies.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
+- [02 Shallow values](../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values): which arguments lend only what they carry, and to which results.
+- [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): full statements, and the temporaries that loops keep.
 - [02 When destroying a value counts as using it](../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it): which values keep what they borrow until they are destroyed.
 - [02 Precise dependencies](../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in): every form of `where` item, and naming a field of a parameter or a result.
 - [02 `outlives`](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives): when the compiler accepts it, and values moved out of an owner.

@@ -71,7 +71,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 **When an allocation is live:**
 
 - **One from an allocator** is live until it is freed, by its owner or by a reset or an unregistration ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does)).
-- **A local's or a temporary's** keeps one address, whatever moves into or out of it. It is live from the declaration or the creation to the end of its scope or full statement ([02](../02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries)).
+- **A local's or a temporary's** keeps one address, whatever moves into or out of it. It is live from the declaration or the creation to the end of its scope or full statement ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 - **A `Closure`'s inline captures and a task's locals**, which its state holds across an `await` ([07](../07-concurrency/tasks.md#semantics)), are the exception to keeping one address. They move with the value that holds them, so a pointer into them reaches what it pointed at only until that value next moves.
 
 ### Raw accesses
@@ -92,14 +92,14 @@ The rules say what an allocation is, what each access through a raw pointer must
 
 **Raw accesses respect borrows and views.** `unsafe` code reads a place only where Rayo code could. It writes a place, moves its value out, as `p.move()` does, or destroys the value in it, only where Rayo code with exclusive access could. These rules apply the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)) to raw accesses:
 
-- **Under a mutable access.** While a `mutable` access, an `&` binding or a mutable view is live, nothing touches the places it reaches except through it. So two `MutableSpan`s made from one pointer never overlap while both are live, since one could write what the other still reads ([02](../02-views-and-dependencies/dependency-rules/projection-and-results.md#mutable-views)).
+- **Under a mutable access.** While a `mutable` access, an `&` binding or a mutable view is live, nothing touches the places it reaches except through it. So two `MutableSpan`s made from one pointer never overlap while both are live, since one could write what the other still reads ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 - **Under a borrow.** While a borrow, a borrowing binding or a shared view is live, nothing writes, moves out of or destroys the places it reads. The exception is the places inside a `Synchronized` value, which its own operations may write, move out of or destroy. Any other write could free what the borrow still reads, as appending to a `String` may move its text and free the buffer a view of it reads.
 - **Under narrowing.** While a place is narrowed, nothing makes it `nil` except the code that narrowed it, through one of the events that end the narrowing ([04](../04-types/enums.md#narrowing)). That code uses the payload without checking again.
 - **Immutable memory.** Nothing writes memory that Rayo treats as immutable: read-only data, which holds every `const`'s frozen data, and a `Frozen` value behind a `Shared` or a `LocalShared`. Rayo reads such memory without a mark ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)). Nothing writes memory that its provider made read-only either, such as a C object defined `const`, a string literal's bytes or a page mapped read-only.
 
 **A live parameter counts as a borrow or `mutable` access of its argument's place.** The compiler may assume that neither kind is aliased. It may also pass a borrowed argument as a copy of its bits, so the callee may see a copy rather than the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-**The views `unsafe` code makes keep the promises that 02 states for dependencies** ([02](../02-views-and-dependencies/dependency-rules.md#dependencies)). The compiler sees names, not memory, so a view's dependency set is all it knows of which places the view reaches.
+**The views `unsafe` code makes keep the promises that 02 states for dependencies** ([02](../02-views-and-dependencies.md#dependencies)). The compiler sees names, not memory, so a view's dependency set is all it knows of which places the view reaches.
 
 ### Values, views and threads
 

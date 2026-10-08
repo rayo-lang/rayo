@@ -10,7 +10,7 @@ let body: Span<Vertex> = mesh.vertices.span   // borrows the list's elements, re
 var hot = &heat.span                          // a MutableSpan<Float>: borrows them mutably
 ```
 
-**A view of memory that can be freed must stay within the scope that lent it.** Inside that scope, the compiler sees every borrow, and rejects freeing the memory while the view lives ([Dependencies](dependency-rules.md#dependencies)). A type whose values must stay there conforms to the marker protocol **`Scoped`**, and any value of such a type is a **scoped value**. Among them are these, each of which reaches memory it doesn't own:
+**A view of memory that can be freed must stay within the scope that lent it.** Inside that scope, the compiler sees every borrow, and rejects freeing the memory while the view lives ([Dependencies](../02-views-and-dependencies.md#dependencies)). A type whose values must stay there conforms to the marker protocol **`Scoped`**, and any value of such a type is a **scoped value**. Among them are these, each of which reaches memory it doesn't own:
 
 - **Views of elements and values:** `Span<T>`, `MutableSpan<T>`, `StringView`, `Borrow<T>` and `MutableRef<T>`;
 - **Iterators** of collections, spans and strings, which borrow what they walk;
@@ -52,7 +52,7 @@ struct MutableSpan<Element>(                           // exclusive view: move-o
 
 - **Declared types.** A struct, enum or union with a field or payload whose type is scoped where the type is declared must be declared `Scoped`.
 - **Generic types.** A generic type is scoped when a stored field or payload is, once its type arguments are substituted, its associated types resolved and its `static if` and `static for` members generated. This is checked as `Sendable` is ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
-- **Raw pointers.** A field or payload of raw pointer type `*T` counts as scoped when `T` is, so that the type says what it holds, since rules 3 and 4 read only types ([Shallow values](dependency-rules/projection-and-results.md#shallow-values)).
+- **Raw pointers.** A field or payload of raw pointer type `*T` counts as scoped when `T` is, so that the type says what it holds, since rules 3 and 4 read only types ([Shallow values](dependency-projection-and-results.md#shallow-values)).
 
 So `List<StringView>`, `Map<StringView, Int>`, `Optional<Span<T>>` and `(StringView, Int)` are scoped, though the collections among them still own their heap memory. `Handle<Token>` and `Type<StringView>` aren't, since neither holds what its argument names. A generic type may be scoped in some instances without being declared `Scoped`:
 
@@ -76,7 +76,7 @@ let c: Cursor<List<Int>>                           // scoped, since a list's ite
 - an associated type, such as `C.Iterator`;
 - a type whose members a `static if` or `static for` generates from a generic parameter, type or value.
 
-**A value of such a type follows the dependency rules as if it were scoped**, since generic code is checked once for every type it may stand for. So rule 5 applies when it is returned or stored ([Rule 5: The callee side](dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+**A value of such a type follows the dependency rules as if it were scoped**, since generic code is checked once for every type it may stand for. So rule 5 applies when it is returned or stored ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **Code that must let a `T` outlive its scope requires `T: ~Scoped`**, which every unscoped type satisfies. `Mutex.lock` constrains its result this way:
 
@@ -94,7 +94,7 @@ The closure can compute any unscoped result from the protected data. It can't sm
 - objects' values;
 - a leaked `Box`'s value, which a `RawAllocation` holds with no borrows ([06](../06-memory-and-allocators/owning-values.md#owning-boxes));
 - unscoped closures' captures;
-- the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [Rule 4: Absorption](dependency-rules/absorption-and-accesses.md#rule-4-absorption)) can't track what goes in ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
+- the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)) can't track what goes in ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
 - the concrete type in every conversion to an unscoped existential (`Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`), since erasure would hide what the value borrows;
 - task parameters and a `task func` method's `self`, which a task keeps in its state ([07](../07-concurrency/tasks.md#semantics));
 - the elements of a `StaticSpan`, which outlive every scope ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).

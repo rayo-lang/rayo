@@ -1,6 +1,6 @@
 # Writing the spec
 
-The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. A long chapter keeps its numbered landing page and places related rules in subchapter files beneath a directory of the same name. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
+The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
 
 The safety argument and hard cases in `docs/validation/` check the spec during design and implementation. They do not define language rules. If a check finds a missing rule, add it to the spec chapter that owns it.
 

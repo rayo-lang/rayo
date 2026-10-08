@@ -38,7 +38,7 @@ func scan() {
 
 ### Thread-locals
 
-**Thread-locals need no synchronization**, since each thread has its own copy. But the static checker can't see a callee touching one, so each access is marked as a read or a change. A conflicting access panics, as `grow()` does above under the loop. The marks never synchronize with another thread. A view of a thread-local is a dynamic access, whose mark is held until the last use of every value that depends on it ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses)).
+**Thread-locals need no synchronization**, since each thread has its own copy. But the static checker can't see a callee touching one, so each access is marked as a read or a change. A conflicting access panics, as `grow()` does above under the loop. The marks never synchronize with another thread. A view of a thread-local is a dynamic access, whose mark is held until the last use of every value that depends on it ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Each thread's copy lives until the thread's teardown** ([below](#thread-teardown)). Copies are initialized on their own thread, before it runs any other Rayo code, in the order globals are and under the same checks ([below](#initialization-at-startup)):
 

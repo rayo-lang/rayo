@@ -332,7 +332,7 @@ addAll(target: &hits, source: hits.clone())
 
 A call works in two steps. First, it works out its arguments, left to right. Here, `hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `&hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
 
-A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless an `owned` parameter takes it ([02](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries)). `addAll` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(hits.clone())`, `append` took its clone, and `rounds` owns it.
+A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless an `owned` parameter takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `addAll` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(hits.clone())`, `append` took its clone, and `rounds` owns it.
 
 The compiler checks the law when it compiles, in every build. So for the values in this chapter, the check costs nothing while the program runs.
 
@@ -348,5 +348,5 @@ Some values bend this chapter's rules. A value that several pointers can reach c
 - [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): `borrow` and `&` in a declaration, and how long a borrow lasts.
 - [01 Evaluation order](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin.
 - [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.
-- [02 Temporaries](../spec/02-views-and-dependencies/dependency-rules/projection-and-results.md#temporaries): how long a value that nothing names lives.
+- [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): how long a value that nothing names lives.
 - [04 Iteration](../spec/04-types/collections.md#iteration): how a `for` loop borrows the list it runs over.

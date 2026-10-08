@@ -41,7 +41,7 @@ func spawn(_ kind: Kind, at pos: Vec3 = .zero) { ... }
 spawn(kind)                                             // leaves out 'at:', so 'pos' is .zero
 ```
 
-- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 - **A call that leaves the argument out calls that function** in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)).
 - **A `mutable` parameter has no default**, since it stands for a place of the caller's.
 - **A field's default works the same way** in the primary initializer ([04](../04-types/structs.md#initializers)).
@@ -54,9 +54,9 @@ spawn(kind)                                             // leaves out 'at:', so 
 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address, and it changes through a shared borrow. A `Closure<F>` counts, since its captures may hold one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **The argument of `ptr(to:)`**, whose result is its address ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).
-- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](../02-views-and-dependencies/projections-and-accessors.md#storage-projections)) or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-4-absorption)).
+- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](../02-views-and-dependencies/projections-and-accessors.md#storage-projections)) or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
-[Rules 3 and 4](../02-views-and-dependencies/dependency-rules.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](../02-views-and-dependencies/dependency-rules/projection-and-results.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
+[Rules 3 and 4](../02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
 
 **Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention.
 
@@ -78,7 +78,7 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 3. **As it begins, it runs the accessors those places reach**, in the order the places were worked out, receiver first. These are the `read` and `modify` projections, and the `get` of each `get` and `set` pair that the call lends for change ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
 4. **When it returns, it ends those accesses in reverse order**, running the code after each `yield` and calling each `set`. An access-bound projection's access that the result still depends on is the exception: it ends at that value's last use ([02](../02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)).
 
-**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](../02-views-and-dependencies/dependency-rules/projection-and-results.md#rule-3-call-results)).
+**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)).
 
 ```swift
 items.insert(x, at: items.count)   // count's get has returned before insert borrows items

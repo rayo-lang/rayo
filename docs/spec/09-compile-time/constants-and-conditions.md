@@ -18,7 +18,7 @@ func makeSinTable() -> [1024 of Float] {
 }
 ```
 
-**A `const` initializer is evaluated at compile time.** It is checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](../01-values-and-ownership/parameters.md#default-arguments)). So, as for a default, a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+**A `const` initializer is evaluated at compile time.** It is checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](../01-values-and-ownership/parameters.md#default-arguments)). So, as for a default, a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **Any function can run at compile time if what it executes, on the input it gets:**
 
@@ -88,7 +88,7 @@ func setUp(_ world: mutable World) {
 
 **A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)). Its views and its strings work as follows:
 
-- **Its views are static storage.** Its `.span` is a `Span` of static storage, which rule 5 lets any function return ([02](../02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-5-the-callee-side)).
+- **Its views are static storage.** Its `.span` is a `Span` of static storage, which rule 5 lets any function return ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 - **Unscoped views.** For a `List` or an `[N of T]` reached from a `const` through stored fields and storage projections, as `enemyPresets[i].name` is, the compiler also provides a `staticSpan` property, and for a `String` a `staticString` property. It returns an unscoped `StaticSpan<T>` or `StaticString`, which may be kept anywhere because what it views is never freed ([`StaticSpan`: views of immortal data](attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).
 - **Strings are null-terminated.** The compiler stores a NUL after the text of every `String` it freezes, not counted in its length, so a `staticString` is null-terminated as every `StaticString` is ([04](../04-types/collections.md#strings)).
 

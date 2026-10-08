@@ -159,7 +159,7 @@ save.value?.visible = true                             // still the same widget
 
 - **A read access**, such as a `let` binding or a call to a plain method, holds a shared mark. Any number may be live at once.
 - **A modify access**, such as an assignment, a `var` binding of `&` or a `mutating` call, holds an exclusive mark. No other access may be live with it.
-- **Each mark lasts until the last use of whatever depends on the access**, as a borrow does ([02](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses)).
+- **Each mark lasts until the last use of whatever depends on the access**, as a borrow does ([02](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Comparing a weak pointer's `value` with `nil` takes no mark**, so it never conflicts.
 
@@ -235,7 +235,7 @@ toolbar.value.children.removeAll()       // instead: no child is in use, so each
 ## In the spec
 
 - [01 Values and ownership](../spec/01-values-and-ownership.md#tiers-of-checking): the three tiers, what each checks and what it costs.
-- [02 Views and dependencies](../spec/02-views-and-dependencies/dependency-rules/absorption-and-accesses.md#rule-6-dynamic-accesses): how long an access to an object lasts, and what depends on it.
+- [02 Views and dependencies](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses): how long an access to an object lasts, and what depends on it.
 - [02 Views and dependencies](../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors): `pool[h]` as an optional projection.
 - [03 Handles and objects](../spec/03-handles-and-objects.md): pools and handles, objects and weak pointers, dynamic exclusivity, destruction, objects in arenas, weak pointers as bits for C, and pins.
 - [07 Concurrency](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable): why objects stay on their home thread.
