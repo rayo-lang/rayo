@@ -1,6 +1,6 @@
 # Writing the guide
 
-The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. It is read front to back. The spec states every rule exactly and lets readers find the full account of a construct; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
+The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. Its unnumbered introduction welcomes the reader before chapter 1, and the chapters are read front to back. The spec states every rule exactly and lets readers find the full account of a construct; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
 
 The guide follows `spec-style.md` for inline code, lists and punctuation. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
 
@@ -17,6 +17,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 
 ## Chapters
 
+- **Welcome before teaching.** The introduction says what Rayo is, who this path is for, and how the examples will grow. Chapter 1 begins with the first program rather than repeating that welcome.
 - **Start from a problem.** A chapter opens with something a systems programmer needs to do, in a few sentences and a short code sample, and builds the solution step by step.
 - **Build on earlier chapters only.** A chapter uses what the chapters before it taught, and what it teaches itself. A later topic may be named in passing, with a link to its chapter.
 - **End with the spec.** The last section, `## In the spec`, lists the spec sections behind the chapter, each with a few words on what it adds.
@@ -43,7 +44,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 
   The case for the design against other languages belongs in `why-rayo.md`.
 - **A teacher's voice.** Talk to the reader, and introduce each concept by what it does for them, tied to the example at hand. The examples come from a game, which the reader isn't building.
-- **Write about Rayo.** The subject is always the language, never the guide itself. A pointer to the chapter that teaches a topic, such as "chapter 3 shows why", is the one exception.
+- **Write about Rayo.** In the numbered chapters, the subject is the language rather than the guide itself. A pointer to the chapter that teaches a topic, such as "chapter 3 shows why", is the exception. The introduction may explain how to use the guide.
 
 ## Links
 

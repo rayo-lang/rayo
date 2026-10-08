@@ -58,7 +58,7 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
 
 ## Learn Rayo
 
-The [guide](docs/guide/) teaches Rayo in eight chapters, for programmers who know C++, Rust, Swift or C#. Each chapter starts from a problem that systems code has, solves it in Rayo, and links to the spec sections that hold the full rules.
+Start with the [guide introduction](docs/guide/introduction.md) if you want to learn Rayo. Its eight chapters build from a first program to the problems that systems code runs into, with links to the spec when you need the full rules.
 
 ## Read the spec
 
