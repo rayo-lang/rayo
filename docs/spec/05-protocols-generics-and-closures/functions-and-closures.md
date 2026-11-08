@@ -72,7 +72,7 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **Each body inside a type is an instance body or a static body**, which decides the members it sees unqualified:
 
-- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or an ordinary use, neither a call nor a function value, reaches the static one. The exception is an instance property, which a use that isn't a call reaches first, being the nearer match.
+- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or an ordinary use, neither a call nor a function value, reaches the static one. The exception is an instance property, which an ordinary use reaches first, being the nearer match.
 - **Static bodies.** These are static members and the accessors of static properties. They see no instance members, so only scope 4 holds the type's members for them.
 - **Default values.** A default value, of a field or a parameter, sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
 - **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
@@ -95,11 +95,11 @@ struct Ring<let N: Int> {
 }
 
 extension Int {
-    func check(_ x: Int) { if x < min { … } }   // not a call: skips the method min(_:) and reaches Int.min
+    func check(_ x: Int) { if x < min { … } }   // an ordinary use: skips the method min(_:) and reaches Int.min
 }
 ```
 
-**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For any other use, the nearest match ends the search, whatever it is. A name that isn't called skips instance methods in every use, since an instance method is never a value.
+**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For an ordinary use, neither a call nor a function value, the nearest match ends the search, whatever it is. A name that isn't called, whether a function value or an ordinary use, skips instance methods, since an instance method is never a value.
 
 **A match that can be called, but isn't a function, ends the search for a call or a function value:**
 
