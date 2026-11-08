@@ -176,7 +176,9 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
 - doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below).
 
-**Its processor orders a load before a later load through the address that load read.** With the compiler's bullet above, such an address dependency keeps the second load from seeing memory older than the pointer it went through. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. Then the second load reads a value no older, in its location's modification order, than any write that happens before `S`. That covers, too, any write that happens before a store `S`'s thread read before `S`, and so on back along such reads.
+
+So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was written before it was first stored. With the compiler's bullet above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## What the language leaves open
 
