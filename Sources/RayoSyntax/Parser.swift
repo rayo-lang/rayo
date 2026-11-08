@@ -108,20 +108,7 @@ public struct Parser {
         current.isPunct(.greater) && peek().isPunct(.assign) && !peek().spaceBefore
     }
 
-    // MARK: Lists and sequences
-
-    /// After an opening bracket: items separated by commas, with an optional trailing comma, and the
-    /// `closing` bracket.
-    private mutating func parseList<T>(closing: Punct, _ context: String,
-                                       _ item: (inout Parser) throws(Failure) -> T) throws(Failure) -> [T] {
-        var items: [T] = []
-        while !current.isPunct(closing) {
-            items.append(try item(&self))
-            if !consume(.comma) { break }
-        }
-        try expect(closing, context)
-        return items
-    }
+    // MARK: Sequences
 
     /// Items separated by newlines or `;`, up to the `}` that closes their block or the end of the file,
     /// which it leaves for the caller. An item that fails is skipped, and its error stays reported.
@@ -360,11 +347,15 @@ public struct Parser {
         }
     }
 
-    /// After the `(` that follows a name: the arguments and the `)`.
+    /// After the `(` that follows a name: the arguments, separated by commas with an optional trailing comma,
+    /// and the `)`.
     private mutating func parseCall(to name: String, at nameRange: SourceRange) throws(Failure) -> Expr {
-        let arguments = try parseList(closing: .rparen, "to close the arguments") { parser throws(Failure) in
-            try parser.parseExpression()
+        var arguments: [Expr] = []
+        while !current.isPunct(.rparen) {
+            arguments.append(try parseExpression())
+            if !consume(.comma) { break }
         }
+        try expect(.rparen, "to close the arguments")
         return Expr(kind: .call(name: name, nameRange: nameRange, arguments: arguments), range: range(from: nameRange))
     }
 

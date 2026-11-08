@@ -33,7 +33,7 @@ struct LocalTests {
         ("let x: Bool = 1", "2:15: error: expected Bool, found Int"),
         ("var x = 1\nx = true", "3:5: error: expected Int, found Bool"),
         ("var x = true\nx += 1", "3:1: error: '+=' needs Int operands, found Bool and Int"),
-        ("1 = 2", "2:1: error: only a place can be assigned"),
+        ("1 = 2", "2:1: error: only a local can be assigned"),
         ("let x = 1\nlet x = 2", "3:5: error: 'x' is already declared"),
         ("let x = print(1)", "2:9: error: a local can't have type Void"),
         ("let x: Int", "2:11: error: expected '=' and a value, found a newline"),
@@ -45,8 +45,8 @@ struct LocalTests {
         ("var x = 1\nx.y = 2", "3:2: error: expected a newline or ';' after the statement, found '.'"),
         ("var x = 1\nx[0] = 2", "3:2: error: expected a newline or ';' after the statement, found '['"),
         ("let _ = 5", "2:5: error: '_' can't be declared"),
-        ("_ = 5", "2:1: error: only a place can be assigned"),
-        ("_ += 1", "2:1: error: only a place can be assigned"),
+        ("_ = 5", "2:1: error: only a local can be assigned"),
+        ("_ += 1", "2:1: error: only a local can be assigned"),
         ("print(_)", "2:7: error: '_' names no value"),
     ])
     func rejected(body: String, expected: String) {
@@ -54,10 +54,13 @@ struct LocalTests {
     }
 
     @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [
-        ("var a = 1\nlet b = a", "3:9: error: take the value of 'a' with 'copy a'"),
-        ("var a = 1\nlet b = (a)", "3:9: error: take the value of 'a' with 'copy a'"),
-        ("var a = 1\nvar b = 0\nb = a", "4:5: error: take the value of 'a' with 'copy a'"),
+        ("var a = 1\nlet b = a", "3:9: error: a local's value is taken with 'copy a'"),
+        ("var a = 1\nlet b = (a)", "3:9: error: a local's value is taken with 'copy a'"),
+        ("var a = 1\nvar b = 0\nb = a", "4:5: error: a local's value is taken with 'copy a'"),
         ("let b = copy 1", "2:14: error: expected a name after 'copy', found '1'"),
+        ("let b = copy print", "2:14: error: 'print' is a function, not a value"),
+        ("let b = copy nope", "2:14: error: 'nope' isn't declared"),
+        ("let b = copy _", "2:14: error: '_' names no value"),
     ])
     func moves(body: String, expected: String) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])

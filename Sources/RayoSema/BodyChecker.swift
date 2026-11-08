@@ -86,7 +86,7 @@ struct BodyChecker {
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
         if case .name(let name) = expr.kind, case .local = value.kind {
-            errors.error("take the value of '\(name)' with 'copy \(name)'", at: expr.range)
+            errors.error("a local's value is taken with 'copy \(name)'", at: expr.range)
             return nil
         }
         return value
@@ -153,7 +153,7 @@ struct BodyChecker {
                 errors.error("'\(name)' isn't declared", at: target.range)
             }
         default:
-            errors.error("only a place can be assigned", at: target.range)
+            errors.error("only a local can be assigned", at: target.range)
         }
         return nil
     }

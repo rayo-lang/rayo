@@ -13,7 +13,7 @@ extension BodyChecker {
         return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
     }
 
-    /// The signature of the function `name` names, reporting it when it names no function that can be called.
+    /// The signature of the function called `name`, reporting it when no function of that name can be called.
     private mutating func signature(of name: String, at range: SourceRange) -> Signature? {
         switch lookUp(name) {
         case .local:
