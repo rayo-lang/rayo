@@ -26,14 +26,14 @@ let all = enemies                  // a move: 'enemies' can't be used until it g
 
 - **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one with `borrow` or `&` on a place, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
 - **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. A binding that owns its value can move it on, and a `let` still can't change it.
-- **`borrow` on a value binds the value itself**, which the binding owns, since there is no place to borrow. A property whose accessor is a `get` gives such a value ([below](#what-a-borrowing-let-sees)).
+- **`borrow` on a value binds the value itself**, which the binding owns, since there is no place to borrow. A value property, whose accessor is a `get`, gives such a value ([below](#what-a-borrowing-let-sees)).
 - **`borrow` is written only where a declaration borrows**, and a borrowed argument and a condition borrow with nothing written. A declaration writes it:
     - on its initializer;
     - on an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals));
     - on the place a `rebind` of the binding names ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
 - **Views taken from a borrowing `let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
 - **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So `borrow` of one owns that value instead, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy` or `.clone()`.
-- **A place that a `where yield outlives self` projection yields from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So `borrow` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
+- **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So `borrow` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 - **Neither borrowing form may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 ## What a borrowing `let` sees
@@ -43,8 +43,8 @@ let all = enemies                  // a move: 'enemies' can't be used until it g
 **Making a field computed, or stored, never silently changes what a binding of it gets.** What a binding of `e.f` gets follows from how `f` is declared:
 
 - **A stored field** moves out of `e`, as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows, and `borrow` gives another name for the field.
-- **A property whose accessor is a `get`** gives the value the `get` returns, which the binding owns, with or without `borrow`.
-- **A `read` projection** lends what it yields to `borrow`, and can't be moved from ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
+- **A value property** gives the value its `get` returns, which the binding owns, with or without `borrow` ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
+- **A place property** lends its place to `borrow`, as a stored field does, and can't be moved from ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 Where the stored and the computed forms would differ, the stored form is a compile error:
 
@@ -148,7 +148,7 @@ var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the vi
 - the place that a `var` given `&place` names, through that binding;
 - a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer;
 - an owned capture of a `mutating` or `consuming` closure;
-- a `var` field, an element, a `modify` projection ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)), or a property or subscript with a `set` ([02](../02-views-and-dependencies/projections-and-accessors.md#get-and-set-accessors)), of a changeable place.
+- a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
 
 **Everything else is read-only, and so is whatever is reached through it**: a `let`, owning or borrowing, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`.
 
@@ -181,7 +181,7 @@ r.value?.submit(mesh)              // fine: an object's value is changeable thro
 - a `when` subject that is a place, or a `case` condition's value that is one, with a `var` part;
 - the last expression of an `if` or `when` arm whose position lends a place for change;
 - a place holding a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value, made into a new function value ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
-- a place that a `modify` projection's `yield` lends ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors));
+- the place that a place property's `mutate` hands out ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate));
 - a place made into a `mutable any P`, or holding one that lends a new view of its value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 ```swift

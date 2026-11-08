@@ -64,7 +64,7 @@ func chase(_ enemies: mutable Pool<Enemy>, _ players: Pool<Player>, dt: Float) {
 
 `Pool<T>` owns its elements, while `Handle<T>` names one ([03](../spec/03-handles-and-objects.md#pools-and-handles)). `insert` moves the player into `players` and gives back `p1`, a handle the enemy can keep. The handle is eight bytes and copyable, so other enemies can keep the same target without owning the player. An optional handle takes eight bytes too: all-zero bits mean `nil`.
 
-Looking up `players[p1]` reaches the player where it sits in the pool; it does not copy the player ([02](../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)). The lookup gives `nil` after the player leaves. In `chase`, `guard` skips an enemy with no target or with a target that has left. `guard` keeps `p` bound after the condition, and its `else` must leave the current scope ([04](../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)).
+Looking up `players[p1]` reaches the player where it sits in the pool; it does not copy the player ([02](../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). The lookup gives `nil` after the player leaves. In `chase`, `guard` skips an enemy with no target or with a target that has left. `guard` keeps `p` bound after the condition, and its `else` must leave the current scope ([04](../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
 Removing a player makes every copy of its handle **stale**. A handle stores a slot index and a **generation**, which distinguishes players that occupy the same slot at different times. Once removed, the old handle continues to read `nil`, even if another player takes that slot. Code that removes a player need not find every enemy that targeted it. If you need to take the player out rather than destroy it, `take(h)` removes it and returns it as an optional.
 
@@ -237,7 +237,7 @@ toolbar.value.children.removeAll()       // instead: no child is in use, so each
 
 - [01 Values and ownership](../spec/01-values-and-ownership.md#tiers-of-checking): the three tiers, what each checks and what it costs.
 - [02 Views and dependencies](../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses): how long an access to an object lasts, and what depends on it.
-- [02 Views and dependencies](../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors): `pool[h]` as an optional projection.
+- [02 Views and dependencies](../spec/02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places): `pool[h]` as an optional place property, which hands out the element where it lies.
 - [03 Handles and objects](../spec/03-handles-and-objects.md): pools and handles, objects and weak pointers, dynamic exclusivity, destruction, objects in arenas, weak pointers as bits for C, and pins.
 - [07 Concurrency](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable): why objects stay on their home thread.
 - [10 Errors and safety](../spec/10-errors-and-safety/panics.md#what-panics): every panic the dynamic tier can raise.

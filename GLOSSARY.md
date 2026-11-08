@@ -70,9 +70,6 @@ _Avoid_: safety level, mode
 **Absorption**:
 The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
-**Access-bound projection**:
-A projection whose accessor stays suspended at its `yield` until nothing uses what it yielded, since it may yield a temporary; a projection is access-bound unless declared otherwise ([02](docs/spec/02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)).
-
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
 _Avoid_: lifetime, region, loan set
@@ -92,14 +89,15 @@ _Avoid_: lock token
 A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 _Avoid_: exclusive reference
 
-**Optional projection**:
-A projection whose declared type is written `T?`, which yields either a place of type `T` or `nil` ([02](docs/spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
+**Optional place property**:
+A place property whose declared type is written `T?`, which hands out either a place of type `T` or `nil` ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
+
+**Place property**:
+A computed property or subscript whose `borrow`, and optional `mutate`, hand out a place in storage, which code uses as it would a stored field, with no accessor code after ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)).
+_Avoid_: projection, `read`/`modify` accessor
 
 **PlainDeinit**:
 A type whose `deinit` only destroys what it owns alone and frees its own buffers, so destroying it uses no more than destroying its parts does ([02](docs/spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
-
-**Projection**:
-An accessor that yields a place instead of returning a value: a `read` or a `modify` ([02](docs/spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
 
 **Scoped value**:
 A value of a type that conforms to `Scoped` and must stay within its scope. A view into memory that can be freed is scoped; a scoped value need not be a view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
@@ -111,11 +109,14 @@ A concrete type that holds, at any depth, no function value, closure, `any P`, `
 **Shallow type**:
 A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 
+**Source**:
+A place, or what a place borrows, that a place property's place may lie in: `self` by default, or what its `where return` items name ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)).
+
 **Static storage**:
 Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
-**Storage projection**:
-A projection declared with a `yield` item, such as `where yield borrows self`, which yields part of the storage the item names ([02](docs/spec/02-views-and-dependencies/projections-and-accessors.md#storage-projections)).
+**Value property**:
+A computed property or subscript whose `get` returns a value and whose optional `set` takes one back, so a change works on a copy that `set` writes back ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
 **View**:
 A value that borrows memory something else owns, such as a `Span` or a `StringView` ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
@@ -177,7 +178,7 @@ A struct's header, which lists its stored fields once and is also its initialize
 _Avoid_: memberwise initializer
 
 **Row**:
-A view of one index of an `SoA<T>` across every column, with one projection per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
+A view of one index of an `SoA<T>` across every column, with one place property per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
 
 **Unconditional extension**:
 An extension that gives none of its type's generic arguments and has no `where` clause ([04](docs/spec/04-types/structs.md#initializers)).

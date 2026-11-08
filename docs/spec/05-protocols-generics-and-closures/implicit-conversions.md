@@ -35,7 +35,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
     - the type without `@sendable` or `@noalloc`;
     - its `unsafe` form.
 
-**`x as T` expects a `T`, as an annotation does.** So `x` takes one of the implicit conversions above or a numeric widening ([04](../04-types/numbers-and-math.md#conversions)), or, for a literal, becomes a `T` ([04](../04-types/collections.md#literals)). It never tests a type at run time. Anything else is explicit, such as `box.downcast(to: T.self)` ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+**`x as T` expects a `T`, as an annotation does.** So `x` takes one of the implicit conversions above or a numeric widening ([04](../04-types/numbers-and-math.md#conversions)), or, for a literal, becomes a `T` ([04](../04-types/collections.md#literals)). It never tests a type at run time. Anything else is explicit, such as `box[as: T.self]` ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 **No conversion applies through `mutable`.** An `&` argument has exactly its parameter's type: no widening, no `T → T?`, no stronger closure kind and no added `keep`. Otherwise the callee could store, say, a `mutating` closure into a variable the caller still sees as a non-`mutating` one, which a job system may call on many threads.
 

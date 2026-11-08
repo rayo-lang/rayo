@@ -133,13 +133,9 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 - **Borrows and views** end with the frame, as the values that hold them are destroyed.
 - **Dynamic accesses** release their marks once the unwind has destroyed the last value that depends on them ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Opens of owning values stop counting as uses of their allocators the same way ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
-- **Accessors** run no code after their `yield`, and no `set` is called. An unwind out of an access through a property or a subscript runs only the accessor frame's `defer` blocks and its locals' `deinit`s, as for any frame. It unwinds that frame once it has destroyed the last value that depends on the `yield`. A value that a `get` made for a `set` is destroyed.
+- **Property accesses** run no accessor code as they unwind. Changes made through a place property stay, and a value property's `set` isn't called, so it keeps its old value ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)).
 
-**Every point that can panic is an exit for the rules that check exits.** So an unwind never breaks a rule that a return keeps. Those points are these:
-
-- the operations that [What panics](#what-panics) lists;
-- every call, since the callee may panic;
-- each `yield`, where the caller's panic may end the accessor.
+**Every point that can panic is an exit for the rules that check exits.** So an unwind never breaks a rule that a return keeps. Those points are the operations that [What panics](#what-panics) lists, and every call, since the callee may panic. A property's accessor is a call too: a `borrow`, a `mutate`, a `get` or a `set`. A place property's place is no such point, since its accessor has returned before the caller uses it.
 
 **Two checks treat those points as exits:**
 
@@ -148,7 +144,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 **Each such point is checked as the unwind leaves it:**
 
-- the borrows of the call, or what the `yield` lends, have ended;
+- the borrows of the call have ended;
 - the values the call took have left their places;
 - what the call may have stored in its arguments is absorbed, as rule 4 adds after a call returns ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 

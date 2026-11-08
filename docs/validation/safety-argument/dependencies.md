@@ -25,12 +25,12 @@
 **Rules 1 and 2 cover a view taken from a place, and a value derived from another** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)):
 
 - **Projection.** A view taken from a place reaches only that place's storage and what it owns, so it depends on the place.
-- **Sub-views of a shared view**, declared `where return outlives self` or `where yield outlives self`, depend only on what the view carries. Verification checks the two facts that make this safe ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)):
+- **Sub-views of a shared view**, from a `get` or a place property declared `where return outlives self`, depend only on what the view carries. Verification checks the two facts that make this safe ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)):
     - nothing the view carries can be changed through it, since its type holds no mutable view;
     - nothing it carries ends with it, since destroying it is no use.
 
   Without the first, an iterator over a `MutableSpan` could hand out a view and then replace the data under it. Without the second, dropping a read guard would release the lock under what it lent. A view of data the type holds inline still depends on `self`.
-- **Access-bound projections** may yield a temporary in the accessor's frame. A view of one depends on the access, which keeps the accessor suspended, so its frame and the places it was lent stay as they were until the view's last use ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)). The access began in this function, so rule 5 keeps such a view inside it.
+- **A value property's change** lends a copy that `set` takes back when the access ends. A view of the copy depends on the access, which is held until the view's last use, so the copy and the places the access was lent stay as they were until then ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). The access began in this function, so rule 5 keeps such a view inside it.
 - **Transitivity.** A derived value reaches nothing its source can't. A struct's or tuple's per-field sets only split that reach by stored field ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#naming-a-field)).
 
 ## Rule 3
@@ -82,7 +82,7 @@ use(a)                           // 'a' is still live here
 
 **Rule 5 checks each body against what its signature tells callers, so a caller's sets are covered without seeing the body** ([02](../../spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). What it rejects is what rules 3 and 4 couldn't report:
 
-- a view of what the function owns or began, each released or ended when the call returns: its locals, the storage its `owned` parameters own, a thread-local, and a dynamic or projection access begun inside it. The non-`mutable` parameters of a C entry count as owned, since C passes them by value ([08](../../spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c));
+- a view of what the function owns or began, each released or ended when the call returns: its locals, the storage its `owned` parameters own, a thread-local, and a dynamic access or a value property's change begun inside it. The non-`mutable` parameters of a C entry count as owned, since C passes them by value ([08](../../spec/08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c));
 - a store into a `mutable` parameter `p` that depends on a place overlapping `p`, since the caller's set for `p` would have to name `p` itself;
 - a store through a parameter's exclusive dependencies that depends on the parameter's own storage, which absorption never reports.
 
@@ -127,16 +127,20 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 **`rebind` moves a name, such as a cursor walking down a tree, to another place** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). These rules keep the name's set covered at each step:
 
-- **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
+- **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A step through a place property also takes on the property's other sources. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
 - **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object panics, since the mark is live ([03](../../spec/03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
-- **No step targets an access-bound projection**, since each step would nest another suspended accessor.
+- **No step targets a value property's change**, since each step would nest another change whose `set` waits for the cursor's last use.
 
-## Projections and accessors
+## Place and value properties
 
-**A projection yields a place instead of returning a value** ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)). These rules keep a view of what it yields covered, during the access and after it:
+**A place property hands out a place in storage, and a value property a copy that `set` takes back** ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)). These rules keep a view of either covered, during the access and after it:
 
-- **A storage projection's yield is verified to be storage of what its `where` item names** ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#storage-projections)), so a view of it depends on that, as a view of a stored field does. `unsafe` code that yields through a raw pointer promises the same.
-- **After a `yield`, the accessor treats the yielded place as borrowed**, since a view of it may outlive the access: it never changes it, and after a `modify` never reads it.
-- **An accessor yields exactly once on every normal path**, so the caller always gets one place.
-- **An optional projection or a tuple of places exists only in its parts.** No `T?` or tuple of them lies in memory, so nothing writes, lends or views one whole.
-- **A change through `get` and `set`** lends the `get`'s result and passes it to `set`, which changes `self`. So it is rejected when that result may depend on `self` or on a `mutable` argument of the access, which `set` would change while its `newValue` still views it ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#get-and-set-accessors)). A move-only `owned` argument can't move into both calls.
+- **Every place a place property hands out is verified to lie in its sources**, `self` by default or what its `where return` items name, by rule 5 restricted to them, whatever the place's type ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)). It never lies in a local, a temporary or behind a dynamic access the body begins. `unsafe` code that hands out a place through a raw pointer promises the same.
+- **A view of the place depends on each source place and what it borrows**, as a view of a stored field does, with no shallow or sealed exemption, since the place lies inside its source. Each source is the caller's place, never a bit copy, so the place never lies in a copy that dies with the call.
+- **A `mutate`'s place absorbs only into the sources it depends on exclusively**, and what they hold exclusively. Every change a caller makes there is a change to part of those places, so their sets cover it.
+- **No code of a place property runs after the caller's access**, so nothing of the property's own changes or frees the place while a view of it lives. Code that runs as the body exits treats the place as already lent to the caller.
+- **Every path of a `borrow` or `mutate` body that returns hands out a place, or `nil`**, so the caller always gets one.
+- **An object's `value` keeps its mark until the access ends**, at the last use of every value that depends on it, and the language releases it then (rule 6).
+- **An optional place property or a tuple of places exists only in its parts.** No `T?` or tuple of them lies in memory, so nothing writes, lends or views one whole.
+- **A change through `get` and `set`** lends the `get`'s result and passes it to `set`, which changes `self`. So it is rejected when that result may depend on `self` or on a `mutable` argument of the access, which `set` would change while its `newValue` still views it ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). A move-only `owned` argument can't move into both calls.
+- **A panic leaves each value whole and owned once** ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). Through a place property, changes already made stay in storage, as direct writes would. Through a value property, the copy is destroyed and `set` never runs, so the old value stays. An under-aligned field's temporary is written back instead, since it holds the field's only value.
