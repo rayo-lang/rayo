@@ -25,6 +25,38 @@ func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
 
 **A protocol may inherit others, and declare static requirements and associated types, constrained by `where` clauses** ([12](../12-grammar/declarations.md#files-and-declarations)). An associated type is a type that the protocol leaves to each conformance to choose.
 
+**A requirement whose `where` clause constrains `Self` or an associated type is required only of conformances that satisfy the clause**, as `Comparable`'s `min` and `max` require `Self: Copyable` ([Equality and ordering](operators.md#equality-and-ordering)):
+
+- **Where it is required.** A conformance must meet it under the conformance's own conditions plus the clause, and its witness is checked there. A conditional conformance, `extension X: P where …`, follows the same rule.
+- **Witnesses.** A member of the conformer, or of an extension of it whose `where` clause those conditions imply, may be the witness. Otherwise the default applies, to each instantiation where the clause holds. A conformer that never meets the clause provides none, and a member of that name it declares is an ordinary member, not a witness (below).
+- **Generic calls.** Generic code may call it only where its own constraints imply the clause.
+- **Existentials.** Through `any P` it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it.
+
+```swift
+func lowest<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }   // fine: T: Copyable implies the clause
+func lowest2<T: Comparable>(_ a: T, _ b: T) -> T { a.min(b) }             // error: T may be move-only
+```
+
+A generic conformer can meet such a requirement in a constrained extension. `Pair<T>` is copyable exactly when `T` is, so its conformance's conditions plus `Self: Copyable` imply the extension's `T: Copyable`:
+
+```swift
+struct Pair<T: Comparable>(let a: T, let b: T): Comparable {
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.a < rhs.a || (lhs.a == rhs.a && lhs.b < rhs.b) }
+}
+
+extension Pair where T: Copyable {
+    func min(_ other: Self) -> Self { … }    // the witness of min for every copyable Pair<T>
+}
+```
+
+**A member of a conforming type, or of an extension of one, with a constrained requirement's name and signature that isn't its witness is a compile error**, wherever it is declared. Otherwise a concrete call would reach the member while generic code reaches the witness. The exception is a conformer that never meets the clause, such as a move-only `Comparable` type that declares its own `min`. Generic code can't call the requirement there, so no two calls disagree:
+
+```swift
+extension Pair where T == Int {
+    func min(_ other: Self) -> Self { … }    // error: Pair<Int> already has a witness of min, above
+}
+```
+
 **A conformance binds each associated type in the first of these ways that applies:**
 
 1. by a `typealias`, nested type or generic parameter of that name;
@@ -90,7 +122,9 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 
 - in compile-time code and the body that holds it (below);
 - past the instantiation depth limit ([below](#instantiation));
-- where a builtin type's conditions on its arguments fail, such as `Simd<T, N>`'s ([04](../04-types/numbers-and-math.md#simd-and-math)) or an inline array's count ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
+- where a builtin type's conditions on its arguments fail, such as `Simd<T, N>`'s lane count ([04](../04-types/numbers-and-math.md#simd-and-math)) or an inline array's count ([04](../04-types/collections.md#tuples-ranges-and-arrays));
+- where a shuffle's index is out of range for a generic `N`, or its result's count isn't a lane count ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles));
+- where a swizzle names a lane that a vector of a generic `N` lacks ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
 **Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation.** Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
 
@@ -151,7 +185,7 @@ let verts = bytes.reinterpret(as: Vertex.self)         // U is Vertex
 
 ## Conformances
 
-**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, and the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
+**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
 ```swift
 protocol HasHp { var hp: Float { get set } }
@@ -164,11 +198,13 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 - **Conformances are declared** in the type's module or the protocol's (the orphan rule), so lookup is local. An implied conformance obeys it too. Take a conformance to `Q` declared in neither the type's module nor that of a protocol `B` that `Q` inherits. It implies one to `B` only where the type's conformance to `B` is already declared in the type's module or `B`'s, or given by the language. Otherwise it is a compile error that asks for that declaration. So every module that sees the type and `B` sees the one conformance between them.
 - **A conformance is one fact for the whole program.** An extension declares a conformance only at a file's top level, never inside a function's or a type's body, where one declaration would stand for one conformance per instantiation. A local type declares its own conformances in its header.
 - **A type conforms to a protocol through one conformance.** A conformance to a protocol `Q` implies one, with its conditions, to each protocol `Q` inherits, except where a declared conformance to that protocol already holds for every type it covers. Implied conformances of one type to one protocol with the same conditions are one, so `Comparable, Hashable` implies `Equatable` once. Any other two conformances of one type to one protocol, declared or implied, are a compile error whatever their `where` clauses, since generic code could then see one associated type as two types.
-- **Derived and restricted marker protocols are never implied.** A conformance to `Q` implies none of the marker protocols the language derives or restricts: `Copyable`, `Sendable`, `Frozen`, `Pod`, `TrivialFree`, `Scoped` and `Synchronized`. Each one `Q` inherits must already hold for every type the conformance covers, derived or declared under that protocol's own rules. Otherwise the conformance is a compile error, as listing `Copyable` for a move-only type is ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). So a protocol that inherits `Copyable` admits only copyable types, and a type conforming to `AllocatorImpl`, which inherits `Synchronized`, declares `: unsafe Synchronized` itself, unconditionally (next).
+- **Derived and restricted marker protocols are never implied.** A conformance to `Q` implies none of the marker protocols the language derives or restricts: `Copyable`, `Sendable`, `Frozen`, `Pod`, `TrivialFree`, `Scoped`, `Synchronized` and `SimdLane`. Each one `Q` inherits must already hold for every type the conformance covers, derived or declared under that protocol's own rules. Otherwise the conformance is a compile error, as listing `Copyable` for a move-only type is ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). So a protocol that inherits `Copyable` admits only copyable types, and a type conforming to `AllocatorImpl`, which inherits `Synchronized`, declares `: unsafe Synchronized` itself, unconditionally (next).
 - **`~Copyable`, `~Sendable`, `Scoped` and `Synchronized` are declared unconditionally.** Each is declared in the type's own module, in its declaration or in an unconditional extension ([04](../04-types/structs.md#initializers)). None is declared in an extension that gives some of the type's generic arguments, such as an extension of `Cell<Int>`, or that has a `where` clause. Generic code relies on this, since it derives a generic type's copyability, sendability and scope from its fields, its type arguments and these declarations, for every type argument at once ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types), [07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
 **What a member can witness depends on what its name allows where the conformance is declared:**
 
+- **A member of a constrained extension witnesses only where its clause holds.** It meets a requirement only where the conformance's conditions, plus the requirement's own `where` clause, imply the extension's `where` clause, as `Pair`'s `min` does ([above](#protocols-and-generics)).
+- **A witness is in its requirement's namespace.** An instance requirement is met only by an instance member, and a static requirement, an initializer included, only by a static one, since the two are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)). So `Int`'s static `min` meets no instance `min(_:)` requirement.
 - **A witness is visible where the conformance is declared.** A member, a stored field included, that code there couldn't name witnesses nothing, so a protocol's module can't reach another module's non-public member through a conformance it declares.
 - **A stored field witnesses a requirement only where its name could be used the same way**, since generic code reaches a witness with no `unsafe` in sight. So a `let` field witnesses only `get` and `borrow` requirements.
     - **`unsafe` fields and union members.** An `unsafe` field, or a union member that isn't safe to read ([04](../04-types/enums.md#untagged-unions)), witnesses one only in a conformance declared `: unsafe P`. That promises that every value generic code can read or write through the witness is valid.

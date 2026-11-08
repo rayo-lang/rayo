@@ -122,7 +122,7 @@ func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conformi
 
 ### F5 · Bit-identical results on every target
 
-**A computation must give bit-identical results on every machine**, as a lockstep simulation does when it compares a hash of its state across machines with different platforms and compilers. It uses `Float` and `Simd` math with `a * b + c` patterns, square roots and conversions, and calls whose arguments have side effects, such as this one:
+**A computation must give bit-identical results on every machine**, as a lockstep simulation does when it compares a hash of its state across machines with different platforms and compilers. It uses `Float` and `Simd` math with `a * b + c` patterns, square roots, conversions, and sums and minimums of a vector's lanes, and calls whose arguments have side effects, such as this one:
 
 ```swift
 spawn(at: rng.next(), heading: rng.next())    // each argument draws the next random number

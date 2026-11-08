@@ -60,7 +60,7 @@ unchecked {                        // bounds and the table's other checks off he
 
 | Check | Class | `debug` | `release` |
 | --- | --- | --- | --- |
-| Indexing and slicing bounds, and string ranges on Unicode scalar boundaries | memory safety | on | on |
+| Indexing and slicing bounds, vector loads and stores within their span ([04](../04-types/numbers-and-math.md#simd-and-math)), and string ranges on Unicode scalar boundaries | memory safety | on | on |
 | Stack space, on entry to each function and before each call into C | memory safety | on | on |
 | Thread-bound object: liveness, conflicting accesses, and destruction under an access | memory safety | on | on |
 | Thread-local: initialized, not destroyed, and conflicting accesses | memory safety | on | on |

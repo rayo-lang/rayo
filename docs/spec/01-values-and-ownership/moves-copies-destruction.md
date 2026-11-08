@@ -75,7 +75,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 **Besides `copy`, `clone()` and taking a copyable `const`, these operations copy their copyable operands**, as part of what they are defined to do:
 
 - **Ranges.** A range operator borrows its operands and copies them in, so `0..<count` leaves `count` usable ([05](../05-protocols-generics-and-closures/operators.md#operators)).
-- **Vectors.** A `Simd` initializer copies the lanes it borrows, and a lane read copies the lane, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).
+- **Vectors.** A `Simd` initializer, a load included, copies the lanes it borrows, a store copies its lanes into the span, and a lane read, a swizzle or a shuffle copies the lanes it reads, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).
 - **Inline arrays.** An inline array's `.init(repeating:)` copies the value it repeats ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
 - **The current allocator.** `using allocator = a` reads the id in `a` once, on entry, and holds no borrow of `a`, so the block may contain an `await` ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).

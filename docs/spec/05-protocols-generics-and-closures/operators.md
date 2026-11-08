@@ -92,7 +92,12 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 **Three protocols declare `==`, `<` and hashing:**
 
 - **`Equatable`** requires `==` and `!=`, and gives `!=` a default.
-- **`Comparable: Equatable`** requires `<`, `<=`, `>` and `>=`, and gives each but `<` a default.
+- **`Comparable: Equatable`** requires `<`, `<=`, `>`, `>=`, and, of a copyable type, the methods `min(_:)` and `max(_:)`, and gives each but `<` a default. The methods borrow both values and return a copy of the lesser or the greater, as `..<` copies its operands in (above):
+
+    ```swift
+    func min(_ other: Self) -> Self where Self: Copyable
+    func max(_ other: Self) -> Self where Self: Copyable
+    ```
 - **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`. It must give equal hashes for values that `==` calls equal.
 
     ```swift
@@ -108,9 +113,36 @@ a != b    // default: !(a == b)
 a > b     // default: b < a
 a <= b    // default: a < b || a == b
 a >= b    // default: b < a || a == b
+a.min(b)  // default: b when b < a, else a
+a.max(b)  // default: a when b < a, else b
 ```
 
-**A type may replace any default with its own operator.**
+**Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` ([04](../04-types/numbers-and-math.md#floating-point)). A NaN operand is never a tie: the float witnesses give NaN for it. Values that tie can still differ, so the rule fixes which one a call returns:
+
+```swift
+struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on its rank alone
+    static func == (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank == rhs.rank }
+    static func < (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank < rhs.rank }
+}
+
+let a = Ranked(rank: 1, id: 7)
+let b = Ranked(rank: 1, id: 9)
+let lo = a.min(b)    // a, with id 7: the two tie, so min returns self
+let hi = a.max(b)    // b, with id 9: max returns other
+```
+
+**A type may replace any default with its own operator or method.** `Half`, `Float` and `Double` replace `min` and `max` with IEEE 754-2019's `minimum` and `maximum`, so that a NaN operand gives NaN and `-0` counts as less than `+0` ([04](../04-types/numbers-and-math.md#floating-point)).
+
+**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They borrow their arguments, so a place passed to them stays usable:
+
+```swift
+func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }
+func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
+```
+
+**A move-only `Comparable` type, such as `String`, has no `min` or `max`**, since neither can return a copy of a borrowed value of it ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Code compares such values with `<` and moves the one it keeps.
+
+**The methods share their names with static properties such as `Int.min` and `Int.max`**, which they may, since static and instance members are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)).
 
 **A struct or enum that declares `Equatable`, `Comparable` or `Hashable` gets `==` derived, and for `Hashable`, `hash(into:)`.** Each is derived only when the type doesn't write it, and when all of its fields or payloads conform: to `Equatable` for `==`, and to `Hashable` for `hash(into:)`. A derived member goes field by field in header order, and for an enum, takes the case and then its payload. So `Version` above writes only `<`. `<` is never derived, since no order is right for every type.
 
@@ -120,7 +152,7 @@ a >= b    // default: b < a || a == b
 
 - **Integers.** They are `Comparable` and `Hashable`.
 - **`Bool`, raw pointers and `Handle`s.** They are `Hashable`.
-- **`Half`, `Float` and `Double`.** They are `Comparable`, with IEEE 754's comparisons: a NaN is unequal to every value, itself included, and unordered.
+- **`Half`, `Float` and `Double`.** They are `Comparable`, with IEEE 754's comparisons: a NaN is unequal to every value, itself included, and unordered. Their `min` and `max` methods are IEEE 754-2019's `minimum` and `maximum` ([04](../04-types/numbers-and-math.md#floating-point)).
 - **Enums without payloads.** They are `Hashable` without declaring it, so `e == .missing` works on any of them.
 - **Tuples and inline arrays.** A tuple is `Equatable`, `Hashable` or `Comparable` when each element is, comparing element by element in order, and `[N of T]` is the same when `T` is.
 - **Optionals.** Every optional compares with `nil`: `x == nil` and `x != nil` test for a value, whatever `T` is. `T?` is `Equatable` or `Hashable` when `T` is.
