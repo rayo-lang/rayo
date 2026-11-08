@@ -36,10 +36,12 @@ protocol Table { associatedtype Row }    // the conforming type chooses 'Row'
 struct Archetype<Row>(…): Table          // its generic parameter 'Row' binds Table's 'Row'
 ```
 
-**An associated type `E` in a failure position binds only from witnesses that can fail.** That position is the `E` of a property requirement's type `T!E`, or of a function's or initializer's result type, as in `func load() -> Level!E` and `init() -> Self!E`. A witness whose type or result type is `T` or `Self` can't fail, so it meets the requirement whatever `E` is, and binds nothing ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)). So step 3 skips it:
+**An associated type `E` in a failure position never binds from a witness that can't fail.** That position is the `E` of a `{ get }` requirement's type `T!E`, or of a function's or initializer's result type, as in `func load() -> Level!E` and `init() -> Self!E`. In a `{ get set }` or place requirement, `E` binds from the witness's type, as in any other position.
 
-- `E` binds from the first requirement, in the protocol's order, whose witness can fail;
-- `E` is `Never` when no witness can fail, as the pair rule binds from a type that isn't a `Result`.
+**A witness whose type or result type is `T`, `Self`, `T!Never` or `Self!Never` can't fail.** A `T!Never` counts since it shares `T`'s layout, and function values convert between the two for free, so the `.success` wrapper still applies. Such a witness meets the requirement whatever `E` is, and binds nothing ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)). So step 3 skips it:
+
+- `E` binds from the first requirement, in the protocol's order, that names `E` outside a failure position or whose witness can fail;
+- `E` is `Never` when every requirement naming it is in a failure position and no witness can fail, as the pair rule binds from a type that isn't a `Result`.
 
 So the order of the requirements never decides whether a type conforms:
 
@@ -51,6 +53,13 @@ protocol Gauge {
 }
 struct Fixed(let value: Int): Gauge { func reload() -> Int { value } }              // neither can fail: Failure is Never
 struct Sensor(let value: Int): Gauge { func reload() -> Int!IoError { … } }       // Failure is IoError; 'value' meets Int!IoError too
+
+protocol Probe {
+    associatedtype Failure: Error
+    var value: Int!Failure { get }
+    var lastError: Failure? { get }                                                // names Failure outside a failure position
+}
+struct Thermometer(let value: Int, var lastError: IoError?): Probe                 // lastError binds Failure to IoError
 ```
 
 **`some P` is written only as a parameter's type**, where it is an anonymous type parameter constrained `P`.
