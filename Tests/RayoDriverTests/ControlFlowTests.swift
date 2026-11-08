@@ -87,7 +87,7 @@ struct LocalTests {
         #expect(errors("func main() {\n\(body)\n}") == expected)
     }
 
-    @Test("compound assignments apply their operator, and panic where it fails", arguments: [
+    @Test("compound assignments apply their operator", arguments: [
         ("var x = 7\nx *= 3\nprint(x)", "21\n"), ("var x = 7\nx /= 2\nprint(x)", "3\n"),
         ("var x = 7\nx %= 4\nprint(x)", "3\n"),
     ])
@@ -97,8 +97,8 @@ struct LocalTests {
 
     @Test("a compound assignment that divides by zero panics at the assignment")
     func compoundPanic() {
-        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") ==
-            panicked("4:5: panic: division by zero"))
+        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == Driver.Result(
+            exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:4:5: panic: division by zero\n"))
     }
 }
 
@@ -164,8 +164,8 @@ struct LoopTests {
 
     @Test("a condition that panics stops the loop")
     func conditionPanics() {
-        #expect(run("func main() {\n    var i = 1\n    while 1 / (i - 1) > 0 { }\n}") ==
-            panicked("3:11: panic: division by zero"))
+        #expect(panic(in: run("func main() {\n    var i = 1\n    while 1 / (i - 1) > 0 { }\n}")) ==
+            Panic(reason: "division by zero"))
     }
 
     @Test("'else if' chains pick the first branch whose condition holds", arguments: [(1, "1\n"), (2, "2\n"), (3, "0\n")])

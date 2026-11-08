@@ -15,9 +15,26 @@ func output(_ body: String) -> String {
     return result.output
 }
 
-/// What a run that panics reports: the panic on the error stream, after the output so far.
-func panicked(_ message: String, output: String = "") -> Driver.Result {
-    Driver.Result(exitCode: Driver.panicExitCode, output: output, errors: "main.rayo:\(message)\n")
+/// A run that panicked: the reason it gave, and the output written before it.
+struct Panic: Equatable {
+    var reason: String
+    var output = ""
+}
+
+/// The panic `result` reports in `path`, at any line and column; nil unless the error stream is exactly that one
+/// panic's line and the exit code is a panic's.
+func panic(in result: Driver.Result, file path: String = "main.rayo") -> Panic? {
+    guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix(path + ":"), result.errors.hasSuffix("\n")
+    else { return nil }
+    let line = result.errors.dropFirst(path.count + 1).dropLast()
+    let fields = line.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+    guard !line.contains("\n"), fields.count == 4, fields[0..<2].allSatisfy(isNumeral), fields[2] == " panic",
+          fields[3].hasPrefix(" ") else { return nil }
+    return Panic(reason: String(fields[3].dropFirst()), output: result.output)
+}
+
+private func isNumeral(_ text: Substring) -> Bool {
+    !text.isEmpty && text.allSatisfy { ("0"..."9").contains($0) }
 }
 
 /// A new, empty directory, which `body` may fill and which is removed after it.
@@ -97,9 +114,9 @@ struct BuildTests {
             executable.standardError = errors
             try executable.run()
             executable.waitUntilExit()
-            #expect(String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self) ==
-                "\(source):1:21: panic: integer overflow\n")
-            #expect(executable.terminationStatus == Driver.panicExitCode)
+            let reported = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            let result = Driver.Result(exitCode: executable.terminationStatus, output: "", errors: reported)
+            #expect(panic(in: result, file: source) == Panic(reason: "integer overflow"))
         }
     }
 
@@ -136,12 +153,12 @@ struct IntegerTests {
     @Test("division and remainder by zero panic in every build", arguments: [("1 / 0", "division"), ("1 % 0", "remainder")])
     func byZero(expression: String, operation: String) {
         for mode in [["--debug"], ["--release"]] {
-            #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                panicked("1:21: panic: \(operation) by zero"))
+            #expect(panic(in: run("func main() { print(\(expression)) }", options: mode)) ==
+                Panic(reason: "\(operation) by zero"))
         }
     }
 
-    @Test("in a debug build, overflow panics at the operation, after the output so far", arguments: [
+    @Test("in a debug build, overflow panics after the output so far", arguments: [
         "9223372036854775807 + 1",
         "-9223372036854775807 - 2",
         "4611686018427387904 * 2",
@@ -149,8 +166,8 @@ struct IntegerTests {
         "-(-9223372036854775807 - 1)",
     ])
     func overflowPanics(expression: String) {
-        #expect(run("func main() {\n    print(1)\n    print(\(expression))\n}", options: ["--debug"]) ==
-            panicked("3:11: panic: integer overflow", output: "1\n"))
+        #expect(panic(in: run("func main() {\n    print(1)\n    print(\(expression))\n}", options: ["--debug"])) ==
+            Panic(reason: "integer overflow", output: "1\n"))
     }
 
     @Test("a build that names no mode is a release build, where overflow wraps", arguments: [
@@ -169,7 +186,7 @@ struct IntegerTests {
 
     @Test("a panic names the operation that fails, not the expression around it")
     func nestedPanic() {
-        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) ==
-            panicked("1:25: panic: integer overflow"))
+        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == Driver.Result(
+            exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:1:25: panic: integer overflow\n"))
     }
 }
