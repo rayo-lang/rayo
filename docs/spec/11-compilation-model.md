@@ -175,6 +175,8 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
 
+**A target keeps address dependencies.** A load through a pointer that was itself loaded is ordered after the load of that pointer: an address dependency. Every architecture Rayo supports guarantees this in hardware. The C an implementation emits must keep each such dependency, as the Linux kernel's `READ_ONCE` code does, so the C compiler never replaces the pointer with a value it guessed. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
 ## What the language leaves open
 
 **Two implementations, or two builds of one program with the same build declarations ([09](09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)), can disagree about a safe program only in the points below.** Evaluation order is fixed ([01](01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), and so are every integer result and every float result that IEEE 754 defines exactly ([04](04-types.md)). Safe code has no undefined behavior.

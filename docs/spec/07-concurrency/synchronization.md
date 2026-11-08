@@ -21,9 +21,11 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. The check each use makes synchronizes with the creation.
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. The check each use makes synchronizes with the creation. It loads through the value that names what was made, so the target orders it after the load of that value ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
-**Interning a text happens before every read of that `Name`'s text**, however the `Name` reached the reading thread. Each interned entry holds an atomic word, which interning writes with a release store, and reading the text first loads that word with acquire. An acquire load that reads a release store synchronizes with it, whatever route the `Name` took, a `.relaxed` atomic or a third thread included. So the text's bytes are visible, and reading them races with nothing. A literal's entry is in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). `==` and hashing read no entry, so they promise nothing beyond the value they compare ([04](../04-types/collections.md#collections-and-strings)).
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` reached the reading thread. Each interned entry holds a plain word, written once with a release store after the text and its hash, and every read of either first loads that word with an acquire load. That load goes through the `Name`, so the target orders it after the load that brought the `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)). An acquire load that reads a release store synchronizes with it, whatever route the `Name` took, a `.relaxed` atomic or a third thread included. So the text's bytes and its hash are visible, and reading them races with nothing.
+
+**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
 
 ### Locks: `Mutex` and `RwLock`
 
