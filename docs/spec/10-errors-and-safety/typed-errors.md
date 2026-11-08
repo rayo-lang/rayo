@@ -79,7 +79,7 @@ log("\(squares.count) squares")
 
 **A call whose result type, worked out at the call, is `T!Never` has type `T`, and so does an `await` whose awaitable's `Failure` is `Never` there** ([07](../07-concurrency/tasks.md#awaitables)). The result type is worked out after the call's generic arguments are substituted, so `tryMap(xs, square)` above is a `List<Int>`. The compiler takes the value out, which can't fail, so code that can't fail never writes `try`. A `try` on such a call is a compile error, since the call is no `Result`.
 
-**This rule gives those two expressions their type, and converts nothing.** So a conformance, a member or an operator never sees a `T!Never` as a `T`. Generic code is checked once, so in a body generic over `E` or `X.Failure`, such a call is still an `R!E` or an `Output!Failure`, taken apart with `try`. A `T!Never` value from anywhere else, such as one a generic container stores, stays a `Result` too.
+**This rule gives those two expressions their type, and converts nothing.** So a member or an operator never sees a `T!Never` as a `T`, and a conformance of `T` never covers a `T!Never`, which would give that type a second one. Matching a witness to a requirement is a separate question: a witness of type `T!Never` meets a requirement that can fail, as one of type `T` does ([below](#what-a-failure-type-names)). Generic code is checked once, so in a body generic over `E` or `X.Failure`, such a call is still an `R!E` or an `Output!Failure`, taken apart with `try`. A `T!Never` value from anywhere else, such as one a generic container stores, stays a `Result` too.
 
 **No implicit conversion takes the `T` out of a `T!Never` value.** `try` does, and never fails on it. A `.success` pattern does too, and always matches, and `try?` gives a `T?` that is never `nil`.
 
@@ -92,14 +92,14 @@ public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a 
 - **It succeeds with the new value.** Reaching its end after `self.init`, or in an enum after `self` is assigned, returns `.success` of the new value ([04](../04-types/structs.md#initializers)). So does a `return` there, which takes no value. A `throw` fails it.
 - **`-> Self!` infers `E`**, under the rule for a bare `!`, so only a non-public initializer with a body writes it.
 
-**A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+**A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). A function or initializer whose result is `T!Never` or `Self!Never` can't fail either, and gets the same wrapper. The wrapper takes the `T` out as `try` does, which never fails, and costs nothing, since the two share a layout.
 
 ```swift
 protocol SeedSource { var seed: UInt64!IoError { get } }
 struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it: each read through SeedSource is a .success
 ```
 
-**A property that can't fail meets a `{ get }` requirement that can.** Whatever meets `{ get }` of type `T` also meets `{ get }` of type `T!E` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), as `seed` does above. It does so through the same wrapper, applied to what it hands a `{ get }` read, so a read through the requirement wraps the value in `.success`. Such a witness binds no associated type in `E`'s place. A requirement that names it elsewhere, or a witness that can fail, binds it, and it is `Never` when neither exists ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics)). Only a requirement with `get` alone is met this way:
+**A property that can't fail meets a `{ get }` requirement that can.** Whatever meets `{ get }` of type `T` or `T!Never` also meets `{ get }` of type `T!E` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), as `seed` does above. It does so through the same wrapper, applied to what it hands a `{ get }` read. The wrapper takes the `T` out of a `T!Never` as `try` does, then wraps the value in `.success`. Such a witness binds no associated type in `E`'s place. A requirement that names it elsewhere, or a witness that can fail, binds it, and it is `Never` when neither exists ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics)). Only a requirement with `get` alone is met this way:
 
 - **`{ get set }` of type `T!E`** needs a witness of that type, since its `set` must take a failure too.
 - **A place requirement of type `T!E`** needs a place that holds a `Result`, so a stored `T` doesn't meet it.
