@@ -41,13 +41,14 @@ struct ProgramTests {
     }
 
     @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
-        ("struct S {}", ErrorCode.expected(what: .declaration, found: .token("struct"))),
-        ("func main(_ x: Int) {}", .expected(what: .parenthesisPair, found: .token("_"))),
-        ("func main<T>() {}", .expected(what: .parametersOpen, found: .token("<"))),
-        ("func main() throws {}", .expected(what: .blockOpen, found: .token("throws"))),
-        ("func main() -> (Int) {}", .expected(what: .parenthesisPair, found: .token("Int"))),
-        ("func main() { let x: 3 = 1 }", .expected(what: .type, found: .token("3"))),
-        ("func main() { let f = { 1 } }", .expected(what: .expression, found: .token("{"))),
+        ("struct S {}", ErrorCode.missingFunc(found: .token("struct"))),
+        ("func 1() {}", .missingFunctionName(found: .token("1"))),
+        ("func main(_ x: Int) {}", .unclosedEmptyParentheses(found: .token("_"))),
+        ("func main<T>() {}", .missingParameterList(found: .token("<"))),
+        ("func main() throws {}", .missingBlock(found: .token("throws"))),
+        ("func main() -> (Int) {}", .unclosedEmptyParentheses(found: .token("Int"))),
+        ("func main() { let x: 3 = 1 }", .missingType(found: .token("3"))),
+        ("func main() { let f = { 1 } }", .missingExpression(found: .token("{"))),
     ])
     func syntax(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
@@ -83,23 +84,23 @@ struct ProgramTests {
 
     @Test("a statement is a declaration, an assignment, 'if', 'while', 'break', 'continue' or an expression",
           arguments: [
-        ("{ print(1) }", ErrorCode.expected(what: .expression, found: .token("{"))),
-        ("else { }", .expected(what: .expression, found: .token("else"))),
-        ("let a = 1, b = 2", .expected(what: .statementEnd, found: .token(","))),
-        ("if let x = y {}", .expected(what: .expression, found: .token("let"))),
-        ("if true, false {}", .expected(what: .blockOpen, found: .token(","))),
+        ("{ print(1) }", ErrorCode.missingExpression(found: .token("{"))),
+        ("else { }", .missingExpression(found: .token("else"))),
+        ("let a = 1, b = 2", .unendedStatement(found: .token(","))),
+        ("if let x = y {}", .missingExpression(found: .token("let"))),
+        ("if true, false {}", .missingBlock(found: .token(","))),
     ])
     func statements(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
     @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
-        ("print(value: 1)", ErrorCode.expected(what: .argumentsClose, found: .token(":"))),
-        ("print(copy 1)", .expected(what: .copiedName, found: .token("1"))),
-        ("print(1)(2)", .expected(what: .statementEnd, found: .token("("))),
-        ("let t = (1, 2)", .expected(what: .parenthesizedClose, found: .token(","))),
-        ("let t = ()", .expected(what: .expression, found: .token(")"))),
-        ("let y = if true { 1 } else { 2 }", .expected(what: .expression, found: .token("if"))),
+        ("print(value: 1)", ErrorCode.unclosedArguments(found: .token(":"))),
+        ("print(copy 1)", .missingCopiedName(found: .token("1"))),
+        ("print(1)(2)", .unendedStatement(found: .token("("))),
+        ("let t = (1, 2)", .unclosedParenthesizedExpression(found: .token(","))),
+        ("let t = ()", .missingExpression(found: .token(")"))),
+        ("let y = if true { 1 } else { 2 }", .missingExpression(found: .token("if"))),
     ])
     func expressions(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])

@@ -10,27 +10,27 @@ struct ParserErrorTests {
     @Test("the parser recovers at the next statement, and reports every error")
     func statementRecovery() {
         #expect(errors("func f() {\n    let = 1\n    let y = 2\n    x = )\n}") == [
-            .expected(what: .bindingName, found: .token("=")), .expected(what: .expression, found: .token(")")),
+            .missingBindingName(found: .token("=")), .missingExpression(found: .token(")")),
         ])
     }
 
     @Test("a declaration whose header fails is skipped, and the parser goes on at the next declaration")
     func declarationRecovery() {
         #expect(errors("func f(x) {\n    print(1)\n}\nfunc g() { copy }") == [
-            .expected(what: .parenthesisPair, found: .token("x")), .expected(what: .copiedName, found: .token("}")),
+            .unclosedEmptyParentheses(found: .token("x")), .missingCopiedName(found: .token("}")),
         ])
     }
 
     @Test("declarations are separated by newlines or ';'")
     func separated() {
         #expect(errors("func a() {}\n\nfunc b() -> Int { 1 }; func c() {}") == [])
-        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: .token("func"))])
+        #expect(errors("func a() {} func b() {}") == [.unendedDeclaration(found: .token("func"))])
     }
 
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
         #expect(errors("func f() {\n    let = 1\n    let s = 0x\n}") == [
-            .expected(what: .bindingName, found: .token("=")), .missingDigits,
+            .missingBindingName(found: .token("=")), .missingDigits,
         ])
     }
 
@@ -44,7 +44,7 @@ struct ParserErrorTests {
 
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
-        #expect(errors("func f() {\n    x = 1\n") == [.expected(what: .blockClose, found: .endOfFile)])
+        #expect(errors("func f() {\n    x = 1\n") == [.unclosedBlock(found: .endOfFile)])
     }
 
     @Test("a stray '}' is reported and skipped")
@@ -53,10 +53,10 @@ struct ParserErrorTests {
     }
 
     @Test("malformed declarations and statements", arguments: [
-        ("let x = 1", ErrorCode.expected(what: .declaration, found: .token("let"))),
-        ("func f() -> Int", .expected(what: .blockOpen, found: .endOfFile)),
-        ("func f() { let x }", .expected(what: .bindingValue, found: .token("}"))),
-        ("func f() { copy }", .expected(what: .copiedName, found: .token("}"))),
+        ("let x = 1", ErrorCode.missingFunc(found: .token("let"))),
+        ("func f() -> Int", .missingBlock(found: .endOfFile)),
+        ("func f() { let x }", .missingBindingValue(found: .token("}"))),
+        ("func f() { copy }", .missingCopiedName(found: .token("}"))),
     ])
     func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])

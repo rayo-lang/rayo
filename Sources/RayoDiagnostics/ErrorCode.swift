@@ -24,11 +24,55 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(101, error: "unexpected character '{character}'")
     case unexpectedCharacter(character: String)
 
-    @Code(102, error: "expected {what}, found {found}")
-    case expected(what: Expectation, found: FoundToken)
+    // 102 is unused, and stays so.
 
     @Code(103, error: "unmatched '}'")
     case unmatchedBrace
+
+    @Code(104, error: "expected 'func' to begin a declaration, found {found}")
+    case missingFunc(found: FoundToken)
+
+    @Code(105, error: "expected a newline or ';' after the declaration, found {found}")
+    case unendedDeclaration(found: FoundToken)
+
+    @Code(106, error: "expected the function's name, found {found}")
+    case missingFunctionName(found: FoundToken)
+
+    @Code(107, error: "expected '(' after the function's name, found {found}")
+    case missingParameterList(found: FoundToken)
+
+    @Code(108, error: "expected ')' after '(', found {found}")
+    case unclosedEmptyParentheses(found: FoundToken)
+
+    @Code(109, error: "expected a type, found {found}")
+    case missingType(found: FoundToken)
+
+    @Code(110, error: "expected '{' to begin a block, found {found}")
+    case missingBlock(found: FoundToken)
+
+    @Code(111, error: "expected '}' to close the block, found {found}")
+    case unclosedBlock(found: FoundToken)
+
+    @Code(112, error: "expected a newline or ';' after the statement, found {found}")
+    case unendedStatement(found: FoundToken)
+
+    @Code(113, error: "expected a name to bind, found {found}")
+    case missingBindingName(found: FoundToken)
+
+    @Code(114, error: "expected '=' and a value, found {found}")
+    case missingBindingValue(found: FoundToken)
+
+    @Code(115, error: "expected an expression, found {found}")
+    case missingExpression(found: FoundToken)
+
+    @Code(116, error: "expected a name after 'copy', found {found}")
+    case missingCopiedName(found: FoundToken)
+
+    @Code(117, error: "expected ')' to close the arguments, found {found}")
+    case unclosedArguments(found: FoundToken)
+
+    @Code(118, error: "expected ')' to close the parenthesized expression, found {found}")
+    case unclosedParenthesizedExpression(found: FoundToken)
 
     // MARK: Checking
 
@@ -106,32 +150,11 @@ public enum ErrorCode: Sendable, Hashable {
 }
 
 extension ErrorCode {
-    /// The number as an error message shows it, such as `E0102`.
+    /// The number as an error message shows it, such as `E0113`.
     public var identifier: String {
         let digits = String(number)
         return "E" + String(repeating: "0", count: max(0, 4 - digits.count)) + digits
     }
-}
-
-/// What the parser expected to read next.
-public enum Expectation: String, Sendable, Hashable, CustomStringConvertible {
-    case declaration = "'func' to begin a declaration"
-    case declarationEnd = "a newline or ';' after the declaration"
-    case functionName = "the function's name"
-    case parametersOpen = "'(' after the function's name"
-    case parenthesisPair = "')' after '('"
-    case type = "a type"
-    case blockOpen = "'{' to begin a block"
-    case blockClose = "'}' to close the block"
-    case statementEnd = "a newline or ';' after the statement"
-    case bindingName = "a name to bind"
-    case bindingValue = "'=' and a value"
-    case expression = "an expression"
-    case copiedName = "a name after 'copy'"
-    case argumentsClose = "')' to close the arguments"
-    case parenthesizedClose = "')' to close the parenthesized expression"
-
-    public var description: String { rawValue }
 }
 
 /// What the parser found where it expected something else.
