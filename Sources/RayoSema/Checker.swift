@@ -1,4 +1,5 @@
 import RayoDiagnostics
+import RayoSource
 import RayoSyntax
 
 /// Resolves the names and checks the types of a parsed file.

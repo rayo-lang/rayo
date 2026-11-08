@@ -1,5 +1,4 @@
-import RayoDiagnostics
-import RayoSyntax
+import RayoSource
 
 /// Integer operations, which panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
 extension FunctionWriter {

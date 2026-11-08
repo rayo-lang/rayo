@@ -1,4 +1,4 @@
-import RayoDiagnostics
+import RayoSource
 
 /// Reserved words. Contextual keywords, such as `keep` and `move`, lex as identifiers.
 public enum Keyword: String, Sendable, CaseIterable {

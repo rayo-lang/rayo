@@ -1,5 +1,5 @@
-import RayoDiagnostics
 import RayoSema
+import RayoSource
 import RayoSyntax
 
 /// Rayo IR: a checked program as a control-flow graph of basic blocks over numbered locals, which code

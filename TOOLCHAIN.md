@@ -19,7 +19,8 @@ swift run rayoc run program.rayo
 
 | Path | Holds |
 | --- | --- |
-| `Sources/RayoDiagnostics` | Diagnostics and the source positions they point at, and the `@Diagnostics` and `@Code` macros, which give each diagnostic code a number and a message |
+| `Sources/RayoSource` | Positions and spans in a source file, which diagnostics, Rayo IR and panics point at |
+| `Sources/RayoDiagnostics` | Diagnostics, and the `@Diagnostics` and `@Code` macros, which give each diagnostic code a number and a message |
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
 | `Sources/RayoSyntax` | The lexer, the parser, the syntax tree and its text dump |
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |

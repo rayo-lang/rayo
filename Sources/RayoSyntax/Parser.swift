@@ -1,4 +1,5 @@
 import RayoDiagnostics
+import RayoSource
 
 /// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, so one
 /// run lists every syntax error.

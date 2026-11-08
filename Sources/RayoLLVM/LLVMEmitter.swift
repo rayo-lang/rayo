@@ -1,6 +1,5 @@
-import RayoDiagnostics
 import RayoIR
-import RayoSyntax
+import RayoSource
 
 /// Writes Rayo IR as a module of textual LLVM IR.
 public enum LLVMEmitter {

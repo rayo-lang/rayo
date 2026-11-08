@@ -1,6 +1,6 @@
-import RayoDiagnostics
 import RayoIR
 import RayoSema
+import RayoSource
 import RayoSyntax
 
 /// Writes one function's body, holding each local in a stack slot.
