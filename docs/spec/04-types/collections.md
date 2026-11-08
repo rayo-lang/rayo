@@ -82,7 +82,7 @@ if action == jump { player.jump() }       // compares one pointer-sized value, n
 log("pressed \(jump.text)")               // the text, as a StaticString
 ```
 
-**A `Name` hashes a hash of its text stored with it, never its address.** Each entry stores a fixed function of its text alone, computed when the entry is made. It is never `Hasher`'s output, which may be seeded per process. The build and the interner use the same function. Its algorithm is the library's choice, but it gives one value for a given text at every stage of one build, so an entry's stored hash is the same at compile time as at run time. A `Name`'s `hash(into:)` feeds that stored value to the `Hasher`, so a `Name` hashes as an integer key does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
+**A `Name` hashes a hash of its text stored with it, never its address.** The build computes an entry's hash when it makes a literal's entry, and the interner computes it at run time. So the hash comes from one fixed function of the text alone, which the build and the interner share, and which gives the same value at both stages whatever `Hasher` does. Its algorithm is the library's choice, but it gives one value for a given text at every stage of one build. A `Name`'s `hash(into:)` feeds that stored value to the `Hasher`, so a `Name` hashes as an integer key does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
@@ -100,7 +100,7 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 
 **`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
-**A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each distinct text that a `Name` literal spells anywhere in the program, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
+**A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each text it converts to a `Name` literal in checked code, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
 
 ### Strings
 
@@ -209,24 +209,27 @@ protocol ExpressibleByInternedLiteral {
     associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
     static func internedEntry(for text: StaticString) -> InternedEntry     // run by the compiler, once per distinct text
     @noalloc init(internedLiteral entry: StaticSpan<InternedEntry>)        // the literal's entry, as one element
-    static func internLoaded(_ entries: StaticSpan<InternedEntry>,         // code loaded after startup (below)
-                             binding bound: MutableSpan<StaticSpan<InternedEntry>>) -> Void!AllocError
+    unsafe static func internLoaded(_ entries: StaticSpan<InternedEntry>,  // code loaded after startup (below)
+                                    binding bound: MutableSpan<StaticSpan<InternedEntry>>) -> Void!AllocError
 }
 ```
 
 - **One table per type.** The table holds an entry for each text the build converts to a `T` literal in checked code, anywhere in the program. The build runs `internedEntry(for:)` once per text and freezes the results into one table in read-only data, so equal texts in different modules share one entry.
 - **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree` and `Sendable`, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+- **Entries can't be forged.** A conformer keeps `InternedEntry`'s fields private, so safe code gets an entry only from `internedEntry(for:)`. That is safe to call from anywhere, since it only builds an entry from a text and touches no interner.
 - **The table exists only at run time.** `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
 - **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
 - **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
-**A conformer is a non-generic type that doesn't also conform to `ExpressibleByStringLiteral`.** It keeps its interner in a static stored `let`, which no generic type declares ([07](../07-concurrency/global-state.md#global-state)). A type that conforms to both protocols is a compile error, since a string literal of it would have two meanings.
+**A conformer is a type that can declare a static stored `let`, and doesn't also conform to `ExpressibleByStringLiteral`.** It keeps its interner in a static stored `let`. So it is none of the places 07 lists where one declaration stands for many instances, such as a generic type, a type nested in one or a type local to a generic function ([07](../07-concurrency/global-state.md#global-state)). A type that conforms to both protocols is a compile error, since a string literal of it would have two meanings.
 
 **Code loaded after startup binds its literals to entries before it runs.** The spec defines no way to load code after startup ([11](../11-compilation-model.md#what-the-spec-defines)). It fixes only what a layer that does so, such as a hot reloader, builds on:
 
 - **Each literal reaches its entry through a symbol** keyed by the type and the text, and so does each frozen value that holds one. In the program the build links, the symbol names the text's element of the table, and a loader may bind it to an existing entry instead.
 - **`internLoaded(_:binding:)` takes the new code's entries before that code runs.** The conformer interns each one, and stores in `bound[i]` the entry that `entries[i]`'s text binds to: `entries[i]` itself for a new text, or the entry the text already has. The loader binds each symbol to that entry, so equal texts still give one `Name`.
+- **It is `unsafe`**, since its contract assumes what only the loader knows: that `entries` is the new code's table, and that the loader binds each symbol through `bound` as placed ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)).
 - **It fails with `AllocError` when the interner can't grow**, so the loader can refuse the code. std's `Name` implements it with its interner.
+- **Loaded code shares the program's hash function.** Its entries carry hashes its own build computed, so it must come from a build whose function for an entry's hash is the running program's. A loader that can't confirm this refuses the code.
 
 ### Iteration
 

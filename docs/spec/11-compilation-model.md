@@ -173,9 +173,10 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
 - provides thread-local storage;
 - provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
-- reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+- reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
+- doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below).
 
-**A target keeps address dependencies.** A load through a pointer that was itself loaded is ordered after the load of that pointer: an address dependency. Every architecture Rayo supports guarantees this in hardware. The C an implementation emits must keep each such dependency, as the Linux kernel's `READ_ONCE` code does, so the C compiler never replaces the pointer with a value it guessed. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+**Its processor orders a load before a later load through the address that load read.** With the compiler's bullet above, such an address dependency keeps the second load from seeing memory older than the pointer it went through. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## What the language leaves open
 
