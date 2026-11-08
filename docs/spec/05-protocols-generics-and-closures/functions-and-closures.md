@@ -55,7 +55,8 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 - a function type;
 - `some F`, or a type parameter constrained to a function type ([below](#closures-by-concrete-type-some-f));
-- `Closure<F>` ([below](#unscoped-closures-closuref)).
+- `Closure<F>` ([below](#unscoped-closures-closuref));
+- an optional of any of these, such as `(() -> Void)?`, whose `.some` the closure converts to ([04](../04-types/enums.md#optionals)).
 
 **The scan matches each trailing closure to one parameter:**
 
@@ -63,12 +64,15 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 - each later one carries a label, and goes to the next parameter with that argument label;
 - a parameter the scan passes over takes its default, and passing over one without a default is a compile error.
 
-So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), and `s.spawn { … }` passes its closure for a `some F` parameter:
+So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), and `s.spawn { … }` passes its closure for a `some F` parameter. A second unlabeled closure is a compile error ([12](../12-grammar/notes.md#blocks-and-closure-literals)):
 
 ```swift
 func f(_ a: () -> Void, onCancel: (() -> Void)? = nil, done: () -> Void) { … }
-f { start() } done: { finish() }     // 'onCancel' is passed over, and takes its default
+f { start() } done: { finish() }     // the first closure goes to 'a', and 'onCancel' takes its default
 f { start() } { finish() }           // error: a trailing closure after the first carries a label
+
+func h(_ done: (() -> Void)? = nil) { … }
+h { finish() }                       // the closure converts to the optional's .some
 ```
 
 **Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:

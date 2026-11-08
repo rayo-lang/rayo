@@ -33,6 +33,13 @@ let shown: DoorState = if open {
 } else { .closed }
 ```
 
+**A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
+
+```swift
+makeHandler { cfg } { event in log(event) }       // error: a trailing closure after the first carries a label
+(makeHandler { cfg })({ event in log(event) })    // calls the handler that makeHandler returns
+```
+
 **In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
 ```swift
