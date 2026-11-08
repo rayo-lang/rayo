@@ -65,11 +65,12 @@ When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up:
 
 ### Offer ADRs sparingly
 
-Only offer to create an ADR when all four are true:
+Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
+
+After 1.0, only offer to create an ADR when all four are true:
 
 1. **Hard to reverse**: the cost of changing your mind later is meaningful
 2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
 3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
-4. **A change of course**: it considerably changes something that already exists, or turns the project in a new direction with wide impact. While something is still being shaped, deciding is part of the shaping, and the decision goes into the thing itself, such as the spec chapters. Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
-
+4. **A change of course**: it considerably changes something that already exists, or turns the project in a new direction with wide impact. While something is still being shaped, deciding is part of the shaping, and the decision goes into the thing itself, such as the spec chapters.
 If any of the four is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).

@@ -28,15 +28,16 @@ Scan `docs/adr/` for the highest existing number and increment by one.
 
 ## When to offer an ADR
 
-All four of these must be true:
+Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
+
+After 1.0, all four of these must be true:
 
 1. **Hard to reverse**: the cost of changing your mind later is meaningful
 2. **Surprising without context**: a future reader will look at the code and wonder "why on earth did they do it this way?"
 3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
 4. **A change of course**: it considerably changes something that already exists, or turns the project in a new direction with wide impact
 
-If a decision is easy to reverse, skip it: you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing." If the thing is still being shaped, deciding is part of the shaping: the decision goes into the thing itself, such as the spec chapters. Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
-
+If a decision is easy to reverse, skip it: you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing." If the thing is still being shaped, deciding is part of the shaping: the decision goes into the thing itself, such as the spec chapters.
 ### What qualifies
 
 - **Architectural shape.** "We're using a monorepo." "The write model is event-sourced, the read model is projected into Postgres."
