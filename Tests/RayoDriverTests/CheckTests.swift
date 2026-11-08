@@ -38,7 +38,7 @@ struct ProgramTests {
         ("func main() throws {}", "1:13: error: expected '{' to begin a block, found 'throws'"),
         ("func main() -> (Int) {}", "1:17: error: expected ')' after '(', found 'Int'"),
         ("func main() { let x: [3 of Int] = 1 }", "1:22: error: expected a type, found '['"),
-        ("func main() { let x: Int? = 1 }", "1:25: error: expected a newline or ';' after the statement, found '?'"),
+        ("func main() { let x: Int? = 1 }", "1:25: error: expected '=' and a value, found '?'"),
         ("func main() { let f = { 1 } }", "1:23: error: expected an expression, found '{'"),
     ])
     func syntax(source: String, expected: String) {
@@ -55,29 +55,50 @@ struct ProgramTests {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
-    @Test("calls match the function's labels, arguments and types", arguments: [
+    @Test("calls match the function's arguments and their types", arguments: [
         ("foo(1)", "1:15: error: 'foo' isn't declared"),
         ("print()", "1:15: error: 'print' takes 1 argument, but the call passes 0"),
         ("print(1, 2)", "1:15: error: 'print' takes 1 argument, but the call passes 2"),
-        ("print(value: 1)", "1:28: error: argument 1 of 'print' takes no label, not 'value'"),
-        ("print(print(1))", "1:21: error: printing a value of type Void isn't supported yet"),
-        ("print(true)", "1:21: error: printing a value of type Bool isn't supported yet"),
+        ("print(print(1))", "1:21: error: expected Int, found Void"),
+        ("print(true)", "1:21: error: expected Int, found Bool"),
         ("print(1) + 2", "1:15: error: '+' needs Int operands, found Void and Int"),
-        ("print", "1:15: error: using a function as a value isn't supported yet"),
-        ("print(main)", "1:21: error: using a function as a value isn't supported yet"),
+        ("print", "1:15: error: 'print' is a function, not a value"),
+        ("print(main)", "1:21: error: 'main' is a function, not a value"),
+        ("main()", "1:15: error: 'main' can't be called"),
     ])
     func calls(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
-    @Test("what the checker doesn't have yet is reported as such", arguments: [
-        ("for i in 0..<3 { }", "1:15: error: 'for' isn't supported yet"),
-        ("return", "1:15: error: 'return' isn't supported yet"),
-        ("do { }", "1:15: error: 'do' isn't supported yet"),
-        ("print(copy 1)", "1:21: error: 'copy' of a literal isn't supported yet"),
-        ("var x = &y", "1:23: error: '&' isn't supported yet"),
+    @Test("a statement is a declaration, an assignment, 'if', 'while', 'break', 'continue' or an expression",
+          arguments: [
+        ("for i in 0..<3 { }", "1:15: error: expected an expression, found 'for'"),
+        ("return", "1:15: error: expected an expression, found 'return'"),
+        ("do { }", "1:15: error: expected an expression, found 'do'"),
+        ("self", "1:15: error: expected an expression, found 'self'"),
+        ("{ print(1) }", "1:15: error: expected an expression, found '{'"),
+        ("owned let x = 1", "1:15: error: expected an expression, found 'owned'"),
+        ("let a = 1, b = 2", "1:24: error: expected a newline or ';' after the statement, found ','"),
+        ("if let x = y {}", "1:18: error: expected an expression, found 'let'"),
+        ("if true, false {}", "1:22: error: expected '{' to begin a block, found ','"),
+        ("var x = 1; x <<= 1", "1:28: error: expected a newline or ';' after the statement, found '<<='"),
     ])
-    func unsupportedInMain(body: String, expected: String) {
+    func statements(body: String, expected: String) {
+        #expect(errors("func main() { \(body) }") == [expected])
+    }
+
+    @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
+        ("print(value: 1)", "1:26: error: expected ')' to close the arguments, found ':'"),
+        ("print(copy 1)", "1:26: error: expected a name after 'copy', found '1'"),
+        ("var x = &y", "1:23: error: expected an expression, found '&'"),
+        ("let y = x?", "1:24: error: expected a newline or ';' after the statement, found '?'"),
+        ("let y = a | b", "1:25: error: expected a newline or ';' after the statement, found '|'"),
+        ("let t = (1, 2)", "1:25: error: expected ')' to close the parenthesized expression, found ','"),
+        ("let t = ()", "1:24: error: expected an expression, found ')'"),
+        ("let y = if true { 1 } else { 2 }", "1:23: error: expected an expression, found 'if'"),
+        ("let x = borrow y", "1:23: error: expected an expression, found 'borrow'"),
+    ])
+    func expressions(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
@@ -100,8 +121,7 @@ struct ProgramTests {
     }
 
     @Test("a call's arguments are checked even when the call doesn't match its function", arguments: [
-        ("print(value: a)", ["1:28: error: argument 1 of 'print' takes no label, not 'value'",
-                             "1:28: error: 'a' isn't declared"]),
+        ("main(a)", ["1:15: error: 'main' can't be called", "1:20: error: 'a' isn't declared"]),
         ("print(a, b)", ["1:15: error: 'print' takes 1 argument, but the call passes 2",
                          "1:21: error: 'a' isn't declared", "1:24: error: 'b' isn't declared"]),
     ])

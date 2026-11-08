@@ -6,7 +6,6 @@ import RayoSource
 public struct Parser {
     private var tokens: [Token]
     private var position = 0
-    private var nextID = 0
     public private(set) var diagnostics: [Diagnostic]
 
     /// Thrown once the error is in `diagnostics`; the statement that failed is skipped.
@@ -80,15 +79,7 @@ public struct Parser {
     private mutating func fail(_ message: String) -> Failure {
         // The lexer has reported an invalid token already.
         guard current.kind != .invalid else { return Failure() }
-        return error("\(message), found \(describe(current))", at: current.range)
-    }
-
-    private mutating func unsupported(_ what: String, at range: SourceRange) -> Failure {
-        error("\(what) isn't supported yet", at: range)
-    }
-
-    private mutating func error(_ message: String, at range: SourceRange) -> Failure {
-        diagnostics.append(.error(message, at: range))
+        diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
         return Failure()
     }
 
@@ -112,34 +103,12 @@ public struct Parser {
 
     private func range(from start: SourceRange) -> SourceRange { SourceRange(start.start, previousEnd) }
 
-    private mutating func makeExpr(_ kind: ExprKind, _ range: SourceRange) -> Expr {
-        defer { nextID += 1 }
-        return Expr(id: ExprID(nextID), kind: kind, range: range)
-    }
-
     /// The lexer keeps `>` alone, so a `>` directly followed by `=` is `>=`.
     private var atGreaterEqual: Bool {
         current.isPunct(.greater) && peek().isPunct(.assign) && !peek().spaceBefore
     }
 
-    private var atOwnedBinding: Bool {
-        current.isKeyword(.owned) && (peek().isKeyword(.let) || peek().isKeyword(.var))
-    }
-
-    // MARK: Lists and sequences
-
-    /// After an opening bracket: items separated by commas, with an optional trailing comma, and the
-    /// `closing` bracket.
-    private mutating func parseList<T>(closing: Punct, _ context: String,
-                                       _ item: (inout Parser) throws(Failure) -> T) throws(Failure) -> [T] {
-        var items: [T] = []
-        while !current.isPunct(closing) {
-            items.append(try item(&self))
-            if !consume(.comma) { break }
-        }
-        try expect(closing, context)
-        return items
-    }
+    // MARK: Sequences
 
     /// Items separated by newlines or `;`, up to the `}` that closes their block or the end of the file,
     /// which it leaves for the caller. An item that fails is skipped, and its error stays reported.
@@ -236,70 +205,37 @@ public struct Parser {
     private mutating func parseStatement() throws(Failure) -> Stmt {
         let start = current.range
         let kind: StmtKind
-        if atOwnedBinding {
-            let message = "a declaration takes its value without 'owned'"
-            // Only a 'let' can borrow shared, so only a 'let' gets the hint.
-            throw error(peek().isKeyword(.let) ? "\(message); write 'borrow' after '=' to borrow instead" : message,
-                        at: start)
-        } else if consume(.let) {
+        if consume(.let) {
             kind = .binding(try parseBinding(.let))
         } else if consume(.var) {
             kind = .binding(try parseBinding(.var))
         } else if consume(.if) {
             kind = try parseIf()
         } else if consume(.while) {
-            let condition = try parseCondition()
+            let condition = try parseExpression()
             kind = .whileStmt(condition: condition, body: try parseBlock())
-        } else if consume(.for) {
-            kind = try parseFor()
-        } else if consume(.return) {
-            kind = .returnStmt(atStatementEnd ? nil : try parseExpression())
         } else if consume(.break) {
             kind = .breakStmt
         } else if consume(.continue) {
             kind = .continueStmt
-        } else if consume(.do) {
-            kind = .doBlock(try parseBlock())
-            if current.isKeyword(.catch) { throw unsupported("'catch'", at: current.range) }
         } else {
             kind = try parseExpressionStatement()
         }
         return Stmt(kind: kind, range: range(from: start))
     }
 
-    /// After the `for`: `identifier 'in' lower '..<' upper block`.
-    private mutating func parseFor() throws(Failure) -> StmtKind {
-        let (name, nameRange) = try expectIdentifier("the loop variable")
-        guard consume(.in) else { throw fail("expected 'in' after the loop variable") }
-        let lower = try parseBinary(minimumLevel: 6)
-        guard consume(.halfOpenRange) else {
-            throw fail("expected '..<': the one loop supported so far is 'for i in a..<b'")
-        }
-        let upper = try parseBinary(minimumLevel: 6)
-        return .forRange(name: name, nameRange: nameRange, lower: lower, upper: upper, body: try parseBlock())
-    }
-
     /// An expression, or an assignment to one.
     private mutating func parseExpressionStatement() throws(Failure) -> StmtKind {
         let target = try parseExpression()
-        guard case .punct(let p) = current.kind, p.isAssignment else { return .expression(target) }
-        guard let op = AssignOperator(rawValue: p.rawValue) else { throw unsupported("'\(p.rawValue)'", at: current.range) }
+        guard case .punct(let p) = current.kind, let op = AssignOperator(rawValue: p.rawValue) else {
+            return .expression(target)
+        }
         advance()
         return .assign(target: target, op: op, value: try parseExpression())
     }
 
-    /// The condition of an `if` or `while`, which the statement's block follows.
-    private mutating func parseCondition() throws(Failure) -> Expr {
-        if current.isKeyword(.let) || current.isKeyword(.var) || current.isKeyword(.case) || atOwnedBinding {
-            throw unsupported("a binding condition", at: current.range)
-        }
-        let condition = try parseExpression()
-        if current.isPunct(.comma) { throw unsupported("a condition list", at: current.range) }
-        return condition
-    }
-
     private mutating func parseIf() throws(Failure) -> StmtKind {
-        let condition = try parseCondition()
+        let condition = try parseExpression()
         let then = try parseBlock()
         var otherwise: Block?
         if consume(.else) {
@@ -315,35 +251,13 @@ public struct Parser {
         return .ifStmt(condition: condition, then: then, otherwise: otherwise)
     }
 
-    /// After the `let` or `var`.
+    /// After the `let` or `var`: `identifier (':' type)? '=' expression`.
     private mutating func parseBinding(_ kind: BindingKind) throws(Failure) -> Binding {
         let (name, nameRange) = try expectIdentifier("a name to bind")
         var type: TypeExpr?
         if consume(.colon) { type = try parseType() }
-        var value: Expr?
-        if consume(.assign) {
-            value = current.isKeyword(.borrow) ? try parseBorrowingInitializer(of: kind) : try parseExpression()
-        }
-        if current.isPunct(.comma) { throw unsupported("more than one binding in a declaration", at: current.range) }
-        return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: value)
-    }
-
-    /// `'borrow' unary-expression`, the initializer of a `let` that borrows. The initializer may go on only
-    /// with `??`, which is reported as unsupported, so the borrowed place ends it.
-    private mutating func parseBorrowingInitializer(of kind: BindingKind) throws(Failure) -> Expr {
-        let start = advance().range
-        if kind == .var {
-            // '=' on a 'var' that borrows writes the place it names, which a shared borrow can't.
-            throw error("a 'var' can't borrow shared; write 'let', or '&' to lend the place for change", at: start)
-        }
-        let place = try parseUnary()
-        if current.isPunct(.coalesce) { throw unsupported("'??'", at: current.range) }
-        if !atStatementEnd && !current.isPunct(.comma) {
-            let message = "a borrowing initializer ends after the place it borrows"
-            if atGreaterEqual { throw error("\(message), found '>='", at: current.range) }
-            throw fail(message)
-        }
-        return makeExpr(.borrow(place), range(from: start))
+        guard consume(.assign) else { throw fail("expected '=' and a value") }
+        return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: try parseExpression())
     }
 
     // MARK: Expressions
@@ -381,91 +295,32 @@ public struct Parser {
             // The lexer keeps the newline after a '>' at the end of a line; after a comparison, the line goes on.
             if op == .greater || op == .greaterEqual, current.kind == .newline { advance() }
             let right = try parseBinary(minimumLevel: level + 1)
-            left = makeExpr(.binary(op, left, right), left.range.to(right.range))
-        }
-        if minimumLevel == 1, case .punct(let p) = current.kind, p.isBinaryOperator {
-            throw unsupported("'\(p.rawValue)'", at: current.range)
+            left = Expr(kind: .binary(op, left, right), range: left.range.to(right.range))
         }
         return left
     }
 
+    /// `'-' int-literal`, `'copy' identifier`, `('-' | '!') unary`, or a primary expression.
     private mutating func parseUnary() throws(Failure) -> Expr {
         let start = current.range
         if current.isPunct(.minus), case .intLiteral(let digits) = peek().kind {
             advance()
-            let operand = try parsePostfix()
-            let range = SourceRange(start.start, operand.range.end)
-            if case .intLiteral = operand.kind { return makeExpr(.negativeIntLiteral(digits), range) }
-            return makeExpr(.unary(.negate, operand), range)
+            advance()
+            return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        let make: ((Expr) -> ExprKind)?
+        if consume(.copy) {
+            let (name, nameRange) = try expectIdentifier("a name after 'copy'")
+            return Expr(kind: .copy(name: name, nameRange: nameRange), range: range(from: start))
+        }
+        let op: UnaryOperator
         switch current.kind {
-        case .punct(.minus): make = { .unary(.negate, $0) }
-        case .punct(.bang): make = { .unary(.not, $0) }
-        case .punct(.amp): make = { .lend($0) }
-        case .keyword(.copy): make = { .copy($0) }
-        case .keyword(.consume): make = { .consume($0) }
-        case .keyword(.borrow):
-            throw error("'borrow' is written only to begin the initializer of a local 'let'", at: start)
-        default: make = nil
+        case .punct(.minus): op = .negate
+        case .punct(.bang): op = .not
+        default: return try parsePrimary()
         }
-        guard let make else { return try parsePostfix() }
         advance()
         let operand = try parseUnary()
-        return makeExpr(make(operand), SourceRange(start.start, operand.range.end))
-    }
-
-    private mutating func parsePostfix() throws(Failure) -> Expr {
-        var expr = try parsePrimary()
-        while true {
-            if consume(.dot) {
-                let (name, nameRange) = try parseMemberName()
-                expr = makeExpr(.member(expr, name: name, nameRange: nameRange),
-                                SourceRange(expr.range.start, nameRange.end))
-            } else if consume(.lparen) {
-                let arguments = try parseList(closing: .rparen, "to close the arguments") { parser throws(Failure) in
-                    try parser.parseArgument()
-                }
-                expr = makeExpr(.call(callee: expr, arguments: arguments), range(from: expr.range))
-            } else if consume(.lbracket) {
-                let arguments = try parseList(closing: .rbracket, "to close the index") { parser throws(Failure) in
-                    try parser.parseArgument()
-                }
-                expr = makeExpr(.index(expr, arguments: arguments), range(from: expr.range))
-            } else if current.isPunct(.question) {
-                throw unsupported("optional chaining", at: current.range)
-            } else if current.isPunct(.bang) {
-                throw unsupported("force unwrapping", at: current.range)
-            } else {
-                return expr
-            }
-        }
-    }
-
-    /// After a `.`: an identifier, or a keyword, as in `.init`.
-    private mutating func parseMemberName() throws(Failure) -> (String, SourceRange) {
-        switch current.kind {
-        case .identifier(let name): return (name, advance().range)
-        case .keyword(let keyword): return (keyword.rawValue, advance().range)
-        default: throw fail("expected a member name after '.'")
-        }
-    }
-
-    /// `(arg-label ':')? expression`, where the label may be a keyword.
-    private mutating func parseArgument() throws(Failure) -> Argument {
-        var label: String?
-        if peek().isPunct(.colon) {
-            switch current.kind {
-            case .identifier(let name): label = name
-            case .keyword(let keyword): label = keyword.rawValue
-            default: break
-            }
-            if label != nil {
-                advance()
-                advance()
-            }
-        }
-        return Argument(label: label, value: try parseExpression())
+        return Expr(kind: .unary(op, operand), range: range(from: start))
     }
 
     private mutating func parsePrimary() throws(Failure) -> Expr {
@@ -473,41 +328,41 @@ public struct Parser {
         switch current.kind {
         case .intLiteral(let value):
             advance()
-            return makeExpr(.intLiteral(value), start)
+            return Expr(kind: .intLiteral(value), range: start)
         case .keyword(.true):
             advance()
-            return makeExpr(.boolLiteral(true), start)
+            return Expr(kind: .boolLiteral(true), range: start)
         case .keyword(.false):
             advance()
-            return makeExpr(.boolLiteral(false), start)
-        case .keyword(.self):
-            advance()
-            return makeExpr(.selfRef, start)
+            return Expr(kind: .boolLiteral(false), range: start)
         case .identifier(let name):
             advance()
-            return makeExpr(.name(name), start)
+            guard consume(.lparen) else { return Expr(kind: .name(name), range: start) }
+            return try parseCall(to: name, at: start)
         case .punct(.lparen):
             advance()
             return try parseParenthesized(from: start)
-        case .punct(.lbracket):
-            advance()
-            let elements = try parseList(closing: .rbracket, "to close the array literal") { parser throws(Failure) in
-                try parser.parseExpression()
-            }
-            return makeExpr(.arrayLiteral(elements), range(from: start))
-        case .keyword(.if), .keyword(.when):
-            throw unsupported("'\(current)' as an expression", at: current.range)
         default:
             throw fail("expected an expression")
         }
     }
 
+    /// After the `(` that follows a name: the arguments, separated by commas with an optional trailing comma,
+    /// and the `)`.
+    private mutating func parseCall(to name: String, at nameRange: SourceRange) throws(Failure) -> Expr {
+        var arguments: [Expr] = []
+        while !current.isPunct(.rparen) {
+            arguments.append(try parseExpression())
+            if !consume(.comma) { break }
+        }
+        try expect(.rparen, "to close the arguments")
+        return Expr(kind: .call(name: name, nameRange: nameRange, arguments: arguments), range: range(from: nameRange))
+    }
+
     /// After the `(`: an expression in parentheses and the `)`.
     private mutating func parseParenthesized(from start: SourceRange) throws(Failure) -> Expr {
-        if current.isPunct(.rparen) { throw unsupported("the empty tuple", at: SourceRange(start.start, current.range.end)) }
         let inner = try parseExpression()
-        if current.isPunct(.comma) { throw unsupported("a tuple", at: current.range) }
         try expect(.rparen, "to close the parenthesized expression")
-        return Expr(id: inner.id, kind: inner.kind, range: range(from: start))
+        return Expr(kind: inner.kind, range: range(from: start))
     }
 }
