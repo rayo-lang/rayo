@@ -57,7 +57,14 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an o
 
 ## Operators and punctuation
 
-**A `!` in a type makes a `Result`, and a `!` after an operand forces an optional**, so the parser tells them apart by position alone. In a type, a token that can begin a type after `!` begins the failure type. Any other token, such as a function's `{` or `where`, leaves the `!` bare ([10](../10-errors-and-safety/typed-errors.md#results)).
+**A `!` in a type makes a `Result`, and a `!` after an operand forces an optional**, so the parser tells them apart by position alone. In a type, an identifier or a `(` after `!` begins the failure type. Any other token, such as a function's `{` or `where`, leaves the `!` bare ([10](../10-errors-and-safety/typed-errors.md#results)).
+
+**`try`, `try?` and `try!` take the whole postfix chain after them**, as every prefix operator does. So `try f().x` takes the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)):
+
+```swift
+let size = (try readText(path)).count   // the count of the String that readText succeeds with
+let bad = try readText(path).count      // error: '.count' applies to the Result, which has no 'count'
+```
 
 **A `?` after an operand is always postfix optional chaining**, since Rayo has no ternary operator.
 

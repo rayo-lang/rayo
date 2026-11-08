@@ -42,8 +42,8 @@ func loadLevel(_ path: StringView) -> Level!(IoError | ParseError)   // the same
 
 **These rules say how a `Result` type is written with `!`:**
 
-- **What follows `!` is a name or a parenthesized type**, so an error union there is in parentheses, as in `Level!(IoError | ParseError)`.
-- **`!` applies last.** `Handle<Enemy>?!LoadError` holds an optional, and a `Result` of a function type is written `(() -> Int)!LoadError`. An optional `Result` is written `(Mesh!LoadError)?`, and `Mesh!LoadError?` is a compile error, since it could be read either way.
+- **What follows `!` is a type name or a parenthesized type**, so an error union there is in parentheses, as in `Level!(IoError | ParseError)`.
+- **`!` applies last.** `Handle<Enemy>?!LoadError` holds an optional, and a `Result` of a function type is written `(() -> Int)!LoadError`. An optional `Result` is written `(Mesh!LoadError)?`. `Mesh!LoadError?` is a compile error, since the failure type ends at its name, and an optional, which is no `Error`, could never be one.
 - **A bare `!`** ends the result type of a function whose failure type is inferred ([below](#what-a-failure-type-names)).
 
 **`Result` is an ordinary enum, so its payloads decide its conformances, as any enum's do.** It is:
@@ -54,29 +54,38 @@ func loadLevel(_ path: StringView) -> Level!(IoError | ParseError)   // the same
 - `TrivialFree` when both are ([06](../06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree));
 - scoped when either is ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
-Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no value of it ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)).
+Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no value of it ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). A `T!Never` has no tag, but isn't `Pod` either, so that no `Result` is: code that reads its bytes converts it to a `T` first, at no cost (below).
 
 ### What a failure type names
 
 ```swift
 func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
-let squares = tryMap(xs, square)     // square can't fail, so E is Never, and 'squares' is a List<Int>
+let squares: List<Int> = tryMap(xs, square)    // square can't fail, so E is Never: the List<Int>!Never converts
 ```
 
 **Three rules say what a failure type names:**
 
 - **Error types.** A failure type conforms to `Error`, a marker protocol with no requirements; `Never` conforms too.
-- **Not failing is failing with `Never`.** `T!Never` is the same type as `T`, laid out as `T`. A `Never` failure has no values ([04](../04-types/enums.md#enums)), so every `T!Never` holds a `T`, and every `T` is one. So a function value of type `(Int) -> Int` is an `(Int) -> Int!Never`, and binds `E` to `Never`, as `square` does above.
+- **Not failing is failing with `Never`.** A `Never` failure has no values ([04](../04-types/enums.md#enums)), so every `T!Never` holds a `T`. It is laid out as `T`, with no tag, and converts to `T` and back implicitly at no cost ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a function value of type `(Int) -> Int` converts to `(Int) -> Int!Never`, and binds `E` to `Never`, as `square` does above.
 - **Inferred errors.** A non-public function with a body may end its result type with a bare `!`, as in `-> Int!`. For such a function, the compiler infers the union of the error types its body can fail with, as it does for a closure literal without a written result type. Where functions call each other in a cycle, it infers the smallest such union. A function type, a requirement and any other declaration without a body name their failure type, since there is no body to infer it from.
 
 **The errors a body can fail with are the members of what it propagates:** each `throw`, each `try` that propagates ([below](#propagating-errors-with-try)), and each `Result` it returns whole.
 
-**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`.
+**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`.
 
-**Generic code over `R!E` keeps its two layers whatever `R` and `E` turn out to be.** Where `E` is `Never`, `.success(x)` is `x`, a `.failure` pattern never matches, and `try` gives the value whole, even when `R` is itself a `Result`. So code checked once against `R!E` means the same in every instance ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
+**`T!Never` is a type of its own, not another name for `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
-**An initializer that can fail writes its result type as `-> Self!E`**, or `-> Self!` when it infers `E`, as in `init(mass: Float) -> Self!PhysicsError`. A call to it evaluates to a `Result`, as a call to any function that can fail does.
+**An initializer that can fail writes its result type as `-> Self!E`:**
+
+```swift
+public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a Body!PhysicsError
+```
+
+- **It succeeds with the new value.** Reaching its end after `self.init` returns `.success` of the new value ([04](../04-types/structs.md#initializers)), and so does a `return` there, which takes no value. A `throw` fails it.
+- **`-> Self!` infers `E`**, under the rule for a bare `!`, so only a non-public initializer with a body writes it.
+
+**A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
 ## Error unions
 
@@ -113,17 +122,21 @@ func loadBossLevel(_ path: StringView) -> Level!LoadError {
 - **`return v`** of a `T`, where the result type is `T!E`, returns `.success(v)`, as a value converts to `T?` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A `Result` returned whole is returned as it is. Its failure type may also be one that converts implicitly to the result's, as a member converts to its union ([above](#error-unions)).
 - **`throw e`** returns `.failure(e)`, converting `e`'s members as `try` does (below). Inside a `do` block, it fails the block instead ([below](#handling-errors-with-do-and-catch)).
 
-**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. `try` takes it as a value, so a place moves in, as it does into an `owned` parameter ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). On a type that can't fail, a `T!Never`, `try` gives the value itself.
+**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error. `try` takes `r` as a value, so a place moves in, as it does into an `owned` parameter ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). On a `T!Never`, it gives the `T`, and never fails.
 
-**A `try` that propagates stands in a function or closure whose result is a `Result`, or in a `do` block.** Anywhere else it is a compile error, since the error would have nowhere to go.
+**`try` applies to the whole postfix chain after it**, as every prefix operator does ([12](../12-grammar/constructs.md#expressions)). So `try f().x` names the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x`.
 
-**`try` propagates the error member by member**, and `throw e` throws `e`'s members the same way. When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing failure type, or one of its members, or convert to it:
+**When `try r` is expected to be a `T`, `r` is expected to be a `Result` whose success type is `T`**, with its failure type left open. So in `try deserialize(&r) as Mesh`, the `as` binds `deserialize`'s result type to `Mesh` ([09](../09-compile-time/reflection.md#constructing-values-reflectively)).
+
+**A `try` whose operand's failure type isn't `Never` stands in a function or closure whose result is a `Result`, or in a `do` block.** Anywhere else it is a compile error, since the error would have nowhere to go.
+
+**The error propagates member by member.** When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing failure type, or one of its members, or convert to it:
 
 - **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, declared `owned`. The error moves in, so the new error may carry what the error borrowed, never a view of the error itself ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it can't fail. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.
 - **Into a union.** When the target is a union, a member that is one of its members stays itself, and otherwise exactly one of its members may convert from it. If two could, the `try` or `throw` is an error.
 - **A local lookup.** The lookup looks only at the target type, or for a generic error type at its constraints, so it stays bounded and local. With no matching initializer, the `try` is a compile error.
 
-**`try?` and `try!`.** `try? r` gives an optional, `nil` for a failure, so it drops the error. `try! r` panics on a failure ([Panics](panics.md#what-panics)). Like `try`, each takes `r` as a value.
+**`try?` and `try!`.** `try? r` gives an optional, `nil` for a failure, so it drops the error. On a `T?!E` it gives a `T??`, so a success that holds `nil` stays apart from a failure. `try! r` panics on a failure ([Panics](panics.md#what-panics)). Like `try`, each takes `r` as a value, and is a compile error on an operand that isn't a `Result`.
 
 **Conversions in generic code.** A protocol may require a conversion, and a `try` in generic code then converts through that requirement:
 
@@ -147,13 +160,20 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A call written without `try` evaluates to its `Result`**, so code keeps an error by leaving `try` out. It can store the `Result`, move it to another thread, and take it apart later with `try` or `when`.
 
-**A `Result` that is never used is a compile error**, so no error is dropped without the code saying so. `_ = r` drops one on purpose, and destroys it. A value is never used when it is:
+**A value that may hold an error must be used, or it is a compile error**, so no error is dropped without the code saying so. Its type is one of these:
+
+- a `Result` whose failure type isn't `Never`;
+- an optional or a tuple holding one, at any depth, such as the `(Void!IoError)?` that `player?.save()` gives;
+- a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance. Generic code that drops such a value writes `_ = f()`, a small cost for losing no error in any instance.
+
+**A value is never used when it is:**
 
 - an expression written as a statement;
 - the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
-- the single expression of a body whose result type is `Void`.
+- the single expression of a body whose result type is `Void`;
+- held in a local that no code names after its declaration, since `let r = save()` would otherwise drop the error as silently as a statement does.
 
-A `T!Never` is a `T`, so this rule never applies to it.
+**`_ = r` and `let _ = r` drop such a value on purpose.** Each takes `r` as a value, and destroys it at the end of its statement.
 
 **A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). So `Result` needs no other way to run code and keep its error:
 
@@ -178,7 +198,7 @@ func show(_ outcome: Level!(IoError | ParseError)) {
 }
 ```
 
-`try copy r` takes a copy of a copyable `Result` instead. A panic never becomes a failure by itself: `catchPanic { … }` returns an `R!Panic`, which keeps a caught panic as a value ([Panics](panics.md#panics)).
+`try copy r` takes a copy of a copyable `Result` instead.
 
 ## Handling errors with `do` and `catch`
 
