@@ -172,7 +172,7 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 - **Running out of stack.** Unwinding runs `deinit`s and `defer` blocks, which need the stack that ran out. Each case is caught before anything is written past the stack's end:
     - a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included;
     - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
-- **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or throws ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+- **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
 - **A panic that would unwind into C**: out of an `@export` or `@c` function, or a closure literal converted to a `@c` type. C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
@@ -188,9 +188,9 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 
 ```swift
 func catchPanic<R, EB: Error, ER: Error>(
-    _ body: consuming () throws(EB) -> R,
-    recover: consuming (Panic) throws(ER) -> R
-) throws(EB | ER) -> R
+    _ body: consuming () -> R!EB,
+    recover: consuming (Panic) -> R!ER
+) -> R!(EB | ER)
 
 let frame = catchPanic {
     world.step()                              // may change anything it captures
@@ -206,7 +206,7 @@ let frame = catchPanic {
 
 - **When the body returns**, `catchPanic` returns what it returned, and `recover` never runs.
 - **When a panic unwinds out of the body**, the unwind stops once it has destroyed the body's frames and the body closure itself. Then `recover` runs with the panic as a `Panic` ([below](#the-panic-value)), and `catchPanic` returns what `recover` returns.
-- **Errors pass through.** An error that either closure throws propagates out of `catchPanic` as from any call, so a `try` on the call handles it ([Typed `throws`](typed-errors.md#typed-throws)). An `R` that itself holds an error is returned as any value is. A panic is never an error, and no `catch` sees one.
+- **Errors pass through.** When either closure fails, `catchPanic` returns that failure, so a `try` on the call propagates it ([Results](typed-errors.md#results)). Where neither closure can fail, `EB` and `ER` are `Never`, so the call is an `R`, as `frame` is above ([What a failure type names](typed-errors.md#what-a-failure-type-names)). An `R` that itself holds an error is returned as any value is. A panic is never an error, and no `catch` sees one.
 
 **After a caught panic, what the body was changing may be half-changed.** The unwind stops the body wherever it panicked. So each place the body changed holds a valid value, but not always the one the body meant to leave there. `recover` sees those places as the unwind left them, so it is where the code checks or repairs them, or decides to leave them. That is why `recover` is required: an empty one, as in `recover: { _ in }` for a `Void` body, is a visible choice.
 
