@@ -263,7 +263,7 @@ public indirect enum ExprKind: Sendable {
     case lend(Expr)
     case copy(Expr)
     case consume(Expr)
-    /// `borrow place`: a declaration that borrows the place instead of moving out of it.
+    /// `borrow place`: a shared borrow, which a `let`'s initializer writes instead of moving out of the place.
     case borrow(Expr)
     case arrayLiteral([Expr])
     case closure(ClosureExpr)

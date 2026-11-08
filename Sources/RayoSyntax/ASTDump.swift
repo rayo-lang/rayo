@@ -133,8 +133,8 @@ extension Expr {
             return "(copy \(operand.dump))"
         case .consume(let operand):
             return "(consume \(operand.dump))"
-        case .borrow(let place):
-            return "(borrow \(place.dump))"
+        case .borrow(let operand):
+            return "(borrow \(operand.dump))"
         case .arrayLiteral(let elements):
             return sExpression("array", elements.map(\.dump))
         case .closure(let closure):
