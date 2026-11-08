@@ -1,7 +1,7 @@
 import RayoSource
 
 /// Reserved words. Other words, such as `keep`, lex as identifiers.
-public enum Keyword: String, Sendable, CaseIterable {
+public enum Keyword: String, Sendable {
     case `let`, `var`, `func`, `if`, `else`, `while`, `break`, `continue`, copy, `true`, `false`
 }
 
@@ -33,6 +33,9 @@ public enum TokenKind: Sendable, Hashable {
     /// Text the lexer reported an error for. The parser skips the statement that holds it without reporting
     /// it again.
     case invalid
+    /// A character no token starts with. The lexer leaves it to the parser, which reports the first one in
+    /// a statement and skips the rest of that statement.
+    case unexpected(String)
 }
 
 public struct Token: Sendable, Hashable, CustomStringConvertible {
@@ -53,6 +56,7 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
         case .newline: return "newline"
         case .eof: return "end of file"
         case .invalid: return "invalid token"
+        case .unexpected(let character): return character
         }
     }
 

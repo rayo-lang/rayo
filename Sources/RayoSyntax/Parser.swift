@@ -77,9 +77,15 @@ public struct Parser {
 
     /// Reports `message`, followed by what was found at the current token instead.
     private mutating func fail(_ message: String) -> Failure {
-        // The lexer has reported an invalid token already.
-        guard current.kind != .invalid else { return Failure() }
-        diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
+        switch current.kind {
+        case .invalid:
+            // The lexer has reported it already.
+            break
+        case .unexpected(let character):
+            diagnostics.append(.error("unexpected character '\(character)'", at: current.range))
+        default:
+            diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
+        }
         return Failure()
     }
 

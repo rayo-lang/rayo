@@ -99,9 +99,6 @@ public struct Lexer {
         if isDigit(c) {
             return lexNumber(from: start)
         }
-        if c == UInt8(ascii: "`") {
-            return lexEscapedIdentifier(from: start)
-        }
         for punct in Punct.byLengthDescending where matches(punct.rawValue) {
             for _ in punct.rawValue.utf8 { advance() }
             return Token(.punct(punct), SourceRange(start, location))
@@ -109,22 +106,12 @@ public struct Lexer {
         return lexUnexpectedCharacter(from: start)
     }
 
-    /// `` `name` ``, which is an identifier even when `name` is a keyword.
-    private mutating func lexEscapedIdentifier(from start: SourceLocation) -> Token {
-        advance()
-        let nameStart = index
-        while let c = peek(), isIdentifierContinue(c) { advance() }
-        let name = String(decoding: bytes[nameStart..<index], as: UTF8.self)
-        if peek() == UInt8(ascii: "`") { advance() } else { error("unterminated '`' identifier", from: start) }
-        return Token(.identifier(name), SourceRange(start, location))
-    }
-
-    /// Reports the character at `start`, all of its UTF-8 bytes, as one invalid token.
+    /// The character at `start`, all of its UTF-8 bytes, as one token.
     private mutating func lexUnexpectedCharacter(from start: SourceLocation) -> Token {
         advance()
         while let c = peek(), c & 0xC0 == 0x80 { advance() }
-        error("unexpected character", from: start)
-        return Token(.invalid, SourceRange(start, location))
+        let character = String(decoding: bytes[start.offset..<index], as: UTF8.self)
+        return Token(.unexpected(character), SourceRange(start, location))
     }
 
     private func matches(_ text: String) -> Bool {
@@ -244,18 +231,19 @@ public struct Lexer {
         return result
     }
 
-    static func continuesLine(_ token: Token) -> Bool {
+    private static func continuesLine(_ token: Token) -> Bool {
         guard case .punct(let p) = token.kind else { return false }
         return p.binaryOperator != nil || p.assignOperator != nil || p == .arrow || p == .lparen || p == .lbrace
     }
 
-    /// Whether `token` at the start of a line joins it to the line above. A `-` there starts a statement.
-    static func joinsLine(_ token: Token) -> Bool {
+    /// Whether `token` at the start of a line joins it to the line above. A `-` there starts a statement; a
+    /// `{` can't start one, so it always opens the block of the line above.
+    private static func joinsLine(_ token: Token) -> Bool {
         switch token.kind {
         case .punct(.minus):
             return false
         case .punct(let p):
-            return p.binaryOperator != nil || p == .arrow
+            return p.binaryOperator != nil || p == .arrow || p == .lbrace
         case .keyword(.else):
             return true
         default:

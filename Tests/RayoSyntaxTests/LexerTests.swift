@@ -51,11 +51,12 @@ struct NewlineTests {
         #expect(tokens("let a = b\n>= c") == ["let", "a", "=", "b", ">=", "c"])
     }
 
-    @Test("a line continues after '=', '->' and '{', and before '->'")
+    @Test("a line continues after '=', '->' and '{', and before '->' and '{'")
     func otherContinuations() {
         #expect(tokens("x =\n1") == ["x", "=", "1"])
         #expect(tokens("x +=\n1") == ["x", "+=", "1"])
         #expect(tokens("func f()\n-> Int {\nx\n}") == ["func", "f", "(", ")", "->", "Int", "{", "x", "⏎", "}"])
+        #expect(tokens("if a\n{ b }") == ["if", "a", "{", "b", "}"])
     }
 
     @Test("blank lines and comments collapse into one newline")
@@ -84,10 +85,10 @@ struct TokenTests {
         #expect(tokens("a>b") == ["a", ">", "b"])
     }
 
-    @Test("keywords, identifiers and backticks")
+    @Test("keywords and identifiers")
     func names() {
-        let (lexed, _) = Lexer.tokenize("let `let` keep copy")
-        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("let"), .identifier("keep"), .keyword(.copy), .eof])
+        let (lexed, _) = Lexer.tokenize("let keep copy")
+        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .eof])
     }
 
     @Test("comments nest")
@@ -96,23 +97,26 @@ struct TokenTests {
         #expect(lexErrors("a /* x") == ["1:3: error: unterminated block comment"])
     }
 
-    @Test("lexical errors are reported where they start", arguments: [
+    @Test("malformed integer literals are reported where they start", arguments: [
         ("let x = 12ab", "1:9: error: invalid digit in integer literal"),
         ("let x = 0x", "1:9: error: expected digits after the radix prefix"),
-        ("a # b", "1:3: error: unexpected character"),
-        ("a.b", "1:2: error: unexpected character"),
-        ("let f = 1.5", "1:10: error: unexpected character"),
-        ("x?", "1:2: error: unexpected character"),
-        ("$0", "1:1: error: unexpected character"),
-        ("`abc", "1:1: error: unterminated '`' identifier"),
-        ("é", "1:1: error: unexpected character"),
     ])
     func errors(source: String, expected: String) {
         #expect(lexErrors(source) == [expected])
     }
 
+    @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [
+        "#", ".", "[", "?", "$", "`", "\"", "é",
+    ])
+    func unexpected(character: String) {
+        let (lexed, diagnostics) = Lexer.tokenize("a \(character) b")
+        #expect(diagnostics.isEmpty)
+        #expect(lexed.map(\.kind) == [.identifier("a"), .unexpected(character), .identifier("b"), .eof])
+    }
+
     @Test("a column counts characters, not bytes")
     func columns() {
-        #expect(lexErrors("é é") == ["1:1: error: unexpected character", "1:3: error: unexpected character"])
+        let (lexed, _) = Lexer.tokenize("é é")
+        #expect(lexed.map(\.range.start.column) == [1, 3, 4])
     }
 }
