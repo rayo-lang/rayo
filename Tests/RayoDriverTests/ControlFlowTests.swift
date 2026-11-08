@@ -47,6 +47,7 @@ struct LocalTests {
         ("var x = 1\nx[0] = 2", "3:1: error: assigning to an element isn't supported yet"),
         ("let _ = 5", "2:5: error: discarding a value with '_' isn't supported yet"),
         ("_ = 5", "2:1: error: discarding a value with '_' isn't supported yet"),
+        ("_ += 1", "2:1: error: '_' names no value"),
         ("print(_)", "2:7: error: '_' names no value"),
     ])
     func rejected(body: String, expected: String) {
@@ -84,6 +85,8 @@ struct LocalTests {
         ("let x = 1\nx = undefined", ["3:1: error: 'x' is a 'let', so it can't change", "3:5: error: 'undefined' isn't declared"]),
         ("let x = 1\nx += 1 + true", ["3:1: error: 'x' is a 'let', so it can't change",
                                      "3:6: error: '+' needs Int operands, found Int and Bool"]),
+        ("let k = 1\nk(1 + true)", ["3:1: error: 'k' isn't a function", "3:3: error: '+' needs Int operands, found Int and Bool"]),
+        ("nope(2 + false)", ["2:1: error: 'nope' isn't declared", "2:6: error: '+' needs Int operands, found Int and Bool"]),
         ("let w: Int8 = 1 + true", ["2:8: error: the type 'Int8' isn't supported yet",
                                      "2:15: error: '+' needs Int operands, found Int and Bool"]),
     ])

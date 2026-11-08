@@ -130,7 +130,7 @@ struct BodyChecker {
 
     private mutating func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr,
                                  in range: SourceRange) -> CheckedStmt? {
-        let local = assignedLocal(target)
+        let local = assignedLocal(target, isRead: op.binary != nil)
         let canChange = local.map { isVar($0, at: target.range) } ?? false
         let value = op.binary == nil ? checkTaken(valueExpr) : check(valueExpr)
         guard let local, canChange, let value else { return nil }
@@ -149,9 +149,12 @@ struct BodyChecker {
         return false
     }
 
-    /// The local that `target` names, when it names one.
-    private mutating func assignedLocal(_ target: Expr) -> LocalID? {
+    /// The local that `target` names, when it names one. A compound assignment's target `isRead` as well
+    /// as written.
+    private mutating func assignedLocal(_ target: Expr, isRead: Bool) -> LocalID? {
         switch target.kind {
+        case .name("_", let typeArguments) where typeArguments.isEmpty && isRead:
+            errors.error("'_' names no value", at: target.range)
         case .name("_", let typeArguments) where typeArguments.isEmpty:
             errors.unsupported("discarding a value with '_'", at: target.range)
         case .name(let name, let typeArguments) where typeArguments.isEmpty:

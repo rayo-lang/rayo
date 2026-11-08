@@ -2,6 +2,21 @@ import RayoSyntax
 
 extension BodyChecker {
     mutating func call(_ callee: Expr, _ arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+        guard let signature = signature(of: callee) else {
+            arguments.forEach { _ = check($0.value) }
+            return nil
+        }
+        guard let checked = check(arguments, against: signature, in: range) else { return nil }
+        guard checked[0].type == .int else {
+            errors.unsupported("printing a value of type \(checked[0].type)", at: checked[0].range)
+            return nil
+        }
+        return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
+    }
+
+    /// The signature of the function `callee` names, reporting it when it names no function that can be
+    /// called.
+    private mutating func signature(of callee: Expr) -> Signature? {
         guard case .name(let name, let typeArguments) = callee.kind else {
             errors.unsupported("calling \(callee.kind.construct)", at: callee.range)
             return nil
@@ -27,13 +42,7 @@ extension BodyChecker {
             errors.unsupported("calling 'main'", at: callee.range)
             return nil
         }
-        let signature = Signature.print
-        guard let checked = check(arguments, against: signature, in: range) else { return nil }
-        guard checked[0].type == .int else {
-            errors.unsupported("printing a value of type \(checked[0].type)", at: checked[0].range)
-            return nil
-        }
-        return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
+        return .print
     }
 
     /// Checks `arguments` against `signature`'s parameters, one by one and in order. Every argument's value
