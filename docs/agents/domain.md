@@ -16,7 +16,8 @@ If `GLOSSARY.md` or `docs/adr/` doesn't exist, **proceed silently**. Don't flag 
 - **Terms**: the language's terms are defined in the spec chapters. `GLOSSARY.md` names each, says in one sentence what it is, and links to its definition; the rules stay in the chapters, and the glossary never contradicts them.
 - **The language's design** is the spec chapters themselves: they state the current rules. While the design is still being shaped, a design decision is part of that work: it edits the chapters it touches, and no separate log of decisions is kept.
 - **The guide** in `docs/guide/` teaches the spec's rules and states none of its own. A spec change that alters a rule the guide teaches updates that guide chapter in the same change.
-- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record a change of course: a decision that considerably changes something that already exists, or turns the project in a new direction. The `domain-modeling` skill holds the full test.
+- **ADRs** in `docs/adr/NNNN-<slug>.md`, numbered from `0001`, record a change of course after Rayo 1.0: a decision that considerably changes something that already exists, or turns the project in a new direction. The `domain-modeling` skill holds the full test.
+- **No ADRs before 1.0.** Until Rayo 1.0 the whole language is still being shaped. So a decision that reverses a rule the spec states is part of that shaping too: it edits the chapters that state the rule, and no ADR is written.
 
 ## File structure
 
