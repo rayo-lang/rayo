@@ -31,8 +31,8 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **Each table keeps this contract:**
 
-- **One order.** Every insert, lookup and removal takes effect atomically at one point, in a single total order consistent with happens-before. A resize changes no entry: a lookup during a resize finds every entry inserted before the lookup, as if no resize ran.
-- **Synchronization.** An insert happens before a release that every lookup or check finding its entry synchronizes with. Under a lock that release is the unlock, and after a lock-free migration it is the migration's release of the copy.
+- **One order.** Every insert, lookup and removal takes effect atomically at one point, in a single total order consistent with happens-before. A resize changes no entry: a lookup during a resize returns what it would if no resize ran.
+- **Synchronization.** Each lookup or check that finds an entry synchronizes with some release that the entry's insert happens before. Under a lock that release is the unlock, and after a lock-free migration it is the migration's release of the copy.
 - **One entry per text.** The interner holds at most one entry per text. An insert of a text that is already present fails and returns the existing entry, which the inserting thread then holds as though it had looked it up.
 - **Exclusive keys.** In the weak-link slots and the allocator registry, a creation's key is its slot together with that slot's generation, or its allocator word, and no other creation in the run ever holds it. So a reused slot never matches old bits.
 
