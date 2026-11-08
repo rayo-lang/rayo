@@ -142,6 +142,21 @@ If `make()` panics, the unwind destroys the buffer, or code after a recovery poi
             count += 1                                          // sound: the slot holds a T before it is counted
 ```
 
+**Each `yield` counts as a point that can panic**, since the caller's panic may end the accessor there ([Panics](panics.md#unwinding)). So an accessor leaves every place valid at its `yield`, or restores it in a `defer` block, which runs whether the access ends or unwinds:
+
+```swift
+modify {
+    var t = unsafe (storage + i).move()
+    yield &t                                                 // unsound: if the caller panics, slot i stays empty
+    unsafe { (storage + i).initialize(to: t) }
+}
+modify {
+    var t = unsafe (storage + i).move()
+    defer { unsafe { (storage + i).initialize(to: t) } }     // sound: slot i is filled again either way
+    yield &t
+}
+```
+
 **Work lent to other threads ends before the borrows it was lent.** A library that lends work to other threads, as a parallel loop does, waits for that work to finish before its lending call ends, whether the call returns or unwinds. Otherwise the other threads would go on using borrows that the unwind ended ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
 ## Aliasing and skipped `deinit`s

@@ -376,11 +376,11 @@ A run-time check, such as a bounds check, that keeps safe code sound; it is on i
 _Avoid_: safety check
 
 **Panic**:
-How a bug, such as unwrapping `nil` with `!`, stops the code that hit it: reported through the platform, it unwinds the thread until a recovery point stops it or the thread ends ([10](docs/spec/10-errors-and-safety/panics.md#panics)). Under the abort strategy, a panic ends the program at once instead, as running out of stack always does ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)).
+How a bug, such as unwrapping `nil` with `!`, stops the code that hit it: reported through the platform, it unwinds the thread until a recovery point stops it or the thread ends ([10](docs/spec/10-errors-and-safety/panics.md#panics)).
 _Avoid_: crash, exception
 
 **Panic strategy**:
-The build's choice of how a panic ends: by unwinding, the default, or by aborting, which ends the program at once ([10](docs/spec/10-errors-and-safety/panics.md#panic-strategy)).
+The build's choice of how a panic ends: by unwinding, the default, or by aborting, which reports the panic and ends the program at once, so nothing catches it ([10](docs/spec/10-errors-and-safety/panics.md#panic-strategy)).
 
 **Recoverable error**:
 A typed value, such as a missing file, that a function throws and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).

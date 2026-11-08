@@ -29,6 +29,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 **Failures the code asks for:**
 
 - `fatalError(…)`, `precondition(cond, …)`, `x!` on `nil`, `try!` on an error;
+- `resumePanic(p)`, which carries on a panic already reported ([below](#resuming-a-panic-resumepanic));
 - a failing `assert(cond)`, where assertions are checked ([below](#assert-and-precondition));
 - `unreachable()` reached.
 
@@ -97,14 +98,16 @@ func assert(_ cond: Bool)
 fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted only when it panics
 ```
 
-**A panic's message is any `Formattable` value, such as a string or an interpolated literal** ([04](../04-types/collections.md#strings)). Its segments are evaluated with the call's other arguments, and it is formatted only when the call panics. Where assertions aren't checked, `assert` evaluates neither its condition nor its message ([Checks and build modes](checks-and-build-modes.md#unchecked-blocks)).
+**A panic's message is any `Formattable` value, such as a string or an interpolated literal** ([04](../04-types/collections.md#strings)). Unlike a call's other arguments, its segments are evaluated only when the call panics: always for `fatalError`, and for `precondition` and `assert` only once the condition is false. So a segment never runs where the check passes, and can't panic there.
+
+**A check that doesn't run evaluates nothing.** Where assertions aren't checked, `assert` evaluates neither its condition nor its message ([Checks and build modes](checks-and-build-modes.md#unchecked-blocks)). Neither does a `precondition` that an `unchecked` block strips.
 
 **A panic without a message of its own has a fixed one:**
 
 - `precondition(cond)` panics with `precondition failed`, and `assert(cond)` with `assertion failed`;
 - each check the language makes panics with a text that names the check, such as `integer overflow`, `division by zero`, `index out of range` or `unwrapped nil`.
 
-**Formatting a message allocates nothing.** When the panic happens, the message is formatted once, straight into the platform's report sink and into the `Panic` a recovery point may catch ([below](#the-panic-value)).
+**The sinks a message goes to allocate nothing.** When the panic happens, the message is formatted once, straight into the platform's report sink and into the `Panic` a recovery point may catch ([below](#the-panic-value)). So reporting a panic allocates nothing, unless a segment's own `format` does.
 
 ## What a panic does
 
@@ -122,9 +125,15 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 - **Borrows and views** end with the frame, as the values that hold them are destroyed.
 - **Dynamic accesses** release their marks once the unwind has destroyed the last value that depends on them ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Opens of owning values stop counting as uses of their allocators the same way ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
-- **Accessors** run no code after their `yield`, and no `set` is called. An unwind out of an access through a property or a subscript runs only the accessor frame's `defer` blocks and its locals' `deinit`s, as for any frame. A value that a `get` made for a `set` is destroyed.
+- **Accessors** run no code after their `yield`, and no `set` is called. An unwind out of an access through a property or a subscript runs only the accessor frame's `defer` blocks and its locals' `deinit`s, as for any frame. It unwinds that frame once it has destroyed the last value that depends on the `yield`. A value that a `get` made for a `set` is destroyed.
 
-**Every point that can panic is an exit for the rules that check exits.** Those points are the operations that [What panics](#what-panics) lists, and every call, since the callee may panic. So an unwind never breaks a rule that a return keeps:
+**Every point that can panic is an exit for the rules that check exits.** So an unwind never breaks a rule that a return keeps. Those points are these:
+
+- the operations that [What panics](#what-panics) lists;
+- every call, since the callee may panic;
+- each `yield`, where the caller's panic may end the accessor.
+
+**Two checks treat those points as exits:**
 
 - a `defer` body is checked as if written at each of them too ([Cleanup](typed-errors.md#cleanup));
 - a scoped `mutable` parameter counts as used at each of them, so a callee never leaves its caller a view of what it freed ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
@@ -146,7 +155,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
     - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 - **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or throws ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
-- **A panic while a panic's message is formatted**, since the first panic's report isn't made yet ([above](#messages)).
+- **A panic that would unwind out of formatting a panic's message**, since the first panic's report isn't made yet ([above](#messages)). A `catchPanic` inside a segment's `format` still catches what it may.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
 - **A panic that would unwind into C**: out of an `@export` or `@c` function, or a closure literal converted to a `@c` type. C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **Every panic, under the abort strategy** ([below](#panic-strategy)).
@@ -184,6 +193,8 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 - **`p.message`** is a `StringView` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
 - **`p.isCut`** is `true` when the message was cut, which tells a cut message from a whole one. The report always has the whole message.
 - **`p.location`** is where the panic happened: the call to `fatalError`, `precondition` or `assert`, or the operation whose check failed.
+
+**Only the runtime makes a `Panic`.** The type has no public initializer, so every `Panic` that code holds, and every panic that `resumePanic` carries on, was reported when it happened.
 
 **A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 
