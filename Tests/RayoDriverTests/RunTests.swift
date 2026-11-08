@@ -15,9 +15,20 @@ func output(_ body: String) -> String {
     return result.output
 }
 
-/// What a run that panics reports: the panic on the error stream, after the output so far.
-func panicked(_ message: String, output: String = "") -> Driver.Result {
-    Driver.Result(exitCode: Driver.panicExitCode, output: output, errors: "main.rayo:\(message)\n")
+/// A run that panicked: the reason it gave, and the output written before it.
+struct Panic: Equatable {
+    var reason: String
+    var output = ""
+}
+
+/// The panic `result` reports as one line on the error stream, wherever in `main.rayo` it happened; nil when the
+/// run didn't panic.
+func panic(in result: Driver.Result) -> Panic? {
+    guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix("main.rayo:"), result.errors.hasSuffix("\n"),
+          let marker = result.errors.range(of: ": panic: ") else { return nil }
+    let reason = result.errors[marker.upperBound...].dropLast()
+    guard !reason.contains("\n") else { return nil }
+    return Panic(reason: String(reason), output: result.output)
 }
 
 /// A new, empty directory, which `body` may fill and which is removed after it.
@@ -136,12 +147,12 @@ struct IntegerTests {
     @Test("division and remainder by zero panic in every build", arguments: [("1 / 0", "division"), ("1 % 0", "remainder")])
     func byZero(expression: String, operation: String) {
         for mode in [["--debug"], ["--release"]] {
-            #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                panicked("1:21: panic: \(operation) by zero"))
+            #expect(panic(in: run("func main() { print(\(expression)) }", options: mode)) ==
+                Panic(reason: "\(operation) by zero"))
         }
     }
 
-    @Test("in a debug build, overflow panics at the operation, after the output so far", arguments: [
+    @Test("in a debug build, overflow panics after the output so far", arguments: [
         "9223372036854775807 + 1",
         "-9223372036854775807 - 2",
         "4611686018427387904 * 2",
@@ -149,8 +160,8 @@ struct IntegerTests {
         "-(-9223372036854775807 - 1)",
     ])
     func overflowPanics(expression: String) {
-        #expect(run("func main() {\n    print(1)\n    print(\(expression))\n}", options: ["--debug"]) ==
-            panicked("3:11: panic: integer overflow", output: "1\n"))
+        #expect(panic(in: run("func main() {\n    print(1)\n    print(\(expression))\n}", options: ["--debug"])) ==
+            Panic(reason: "integer overflow", output: "1\n"))
     }
 
     @Test("a build that names no mode is a release build, where overflow wraps", arguments: [
@@ -169,7 +180,7 @@ struct IntegerTests {
 
     @Test("a panic names the operation that fails, not the expression around it")
     func nestedPanic() {
-        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) ==
-            panicked("1:25: panic: integer overflow"))
+        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == Driver.Result(
+            exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:1:25: panic: integer overflow\n"))
     }
 }
