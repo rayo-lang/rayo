@@ -243,9 +243,9 @@ ThreadScope.run { s in
 }
 ```
 
-**Code that only borrows an end compiles, but the end then outlives every panic in the scope**, since no unwind reaches a frame outside the scope until `ThreadScope.run` has joined every thread:
+**Code that only borrows an end compiles, but the end then outlives everything that happens in the scope**, panics included, since nothing destroys a frame outside the scope until `ThreadScope.run` has joined every thread:
 
-- **A borrowed `Sender`**, such as `&tx`. After a producer's panic, a consumer in the scope waits for ever for a disconnection that never comes, and `ThreadScope.run` waits for it.
+- **A borrowed `Sender`**, such as `&tx`. The channel never disconnects inside the scope, so a consumer there waits for ever, after a producer's panic or even after every producer finishes, and `ThreadScope.run` waits for it.
 - **A borrowed `Receiver`**, such as `&rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
 
 ### Snapshots, one-time values and waits
