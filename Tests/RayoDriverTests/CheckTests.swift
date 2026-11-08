@@ -4,10 +4,22 @@ import RayoDriver
 
 /// The errors `rayoc check` reports for `source`, saved as `main.rayo`.
 func errors(_ source: String) -> [ErrorCode] {
+    diagnostics(source).map(\.code)
+}
+
+/// The source text each error `rayoc check` reports for `source` covers.
+func coveredText(_ source: String) -> [String] {
+    let bytes = Array(source.utf8)
+    return diagnostics(source).map {
+        String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self)
+    }
+}
+
+private func diagnostics(_ source: String) -> [Diagnostic] {
     let result = Driver.run(["check", "main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
     #expect(result.exitCode == (result.diagnostics.isEmpty ? 0 : 1))
     #expect(result.output == "")
-    return result.diagnostics.map(\.code)
+    return result.diagnostics
 }
 
 struct ProgramTests {
@@ -22,7 +34,7 @@ struct ProgramTests {
 
     @Test("a program needs a 'main' that returns Void", arguments: [
         ("", ErrorCode.noMain),
-        ("func main() -> Int { 0 }", .mainResult),
+        ("func main() -> Int { 0 }", .mainReturnsNonVoid),
         ("func main() -> Int32 {}", .notAType(name: "Int32")),
     ])
     func main(source: String, expected: ErrorCode) {
@@ -30,24 +42,27 @@ struct ProgramTests {
     }
 
     @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
-        ("struct S {}", ErrorCode.expected(what: .declaration, found: "'struct'")),
-        ("func main(_ x: Int) {}", .expected(what: .parenthesisPair, found: "'_'")),
-        ("func main<T>() {}", .expected(what: .parametersOpen, found: "'<'")),
-        ("func main() throws {}", .expected(what: .blockOpen, found: "'throws'")),
-        ("func main() -> (Int) {}", .expected(what: .parenthesisPair, found: "'Int'")),
-        ("func main() { let x: 3 = 1 }", .expected(what: .type, found: "'3'")),
-        ("func main() { let f = { 1 } }", .expected(what: .expression, found: "'{'")),
+        ("struct S {}", ErrorCode.expected(what: .declaration, found: .token("struct"))),
+        ("func main(_ x: Int) {}", .expected(what: .parenthesisPair, found: .token("_"))),
+        ("func main<T>() {}", .expected(what: .parametersOpen, found: .token("<"))),
+        ("func main() throws {}", .expected(what: .blockOpen, found: .token("throws"))),
+        ("func main() -> (Int) {}", .expected(what: .parenthesisPair, found: .token("Int"))),
+        ("func main() { let x: 3 = 1 }", .expected(what: .type, found: .token("3"))),
+        ("func main() { let f = { 1 } }", .expected(what: .expression, found: .token("{"))),
     ])
     func syntax(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
     }
 
-    @Test("an integer literal must fit in an Int", arguments: [
-        "print(9223372036854775808)", "print(-9223372036854775809)", "print(-(9223372036854775808))",
-        "print(0xFFFFFFFFFFFFFFFF)",
+    @Test("an integer literal must fit in an Int, and the error covers the literal", arguments: [
+        ("print(9223372036854775808)", "9223372036854775808"),
+        ("print(-9223372036854775809)", "-9223372036854775809"),
+        ("print(-(9223372036854775808))", "(9223372036854775808)"),
+        ("print(0xFFFFFFFFFFFFFFFF)", "0xFFFFFFFFFFFFFFFF"),
     ])
-    func literals(body: String) {
-        #expect(errors("func main() { \(body) }") == [.literalTooLarge])
+    func literals(body: String, literal: String) {
+        #expect(errors("func main() { \(body) }") == [.literalExceedsInt])
+        #expect(coveredText("func main() { \(body) }") == [literal])
     }
 
     @Test("calls match the function's arguments and their types", arguments: [
@@ -67,23 +82,23 @@ struct ProgramTests {
 
     @Test("a statement is a declaration, an assignment, 'if', 'while', 'break', 'continue' or an expression",
           arguments: [
-        ("{ print(1) }", ErrorCode.expected(what: .expression, found: "'{'")),
-        ("else { }", .expected(what: .expression, found: "'else'")),
-        ("let a = 1, b = 2", .expected(what: .statementEnd, found: "','")),
-        ("if let x = y {}", .expected(what: .expression, found: "'let'")),
-        ("if true, false {}", .expected(what: .blockOpen, found: "','")),
+        ("{ print(1) }", ErrorCode.expected(what: .expression, found: .token("{"))),
+        ("else { }", .expected(what: .expression, found: .token("else"))),
+        ("let a = 1, b = 2", .expected(what: .statementEnd, found: .token(","))),
+        ("if let x = y {}", .expected(what: .expression, found: .token("let"))),
+        ("if true, false {}", .expected(what: .blockOpen, found: .token(","))),
     ])
     func statements(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
     @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
-        ("print(value: 1)", ErrorCode.expected(what: .argumentsClose, found: "':'")),
-        ("print(copy 1)", .expected(what: .copiedName, found: "'1'")),
-        ("print(1)(2)", .expected(what: .statementEnd, found: "'('")),
-        ("let t = (1, 2)", .expected(what: .parenthesizedClose, found: "','")),
-        ("let t = ()", .expected(what: .expression, found: "')'")),
-        ("let y = if true { 1 } else { 2 }", .expected(what: .expression, found: "'if'")),
+        ("print(value: 1)", ErrorCode.expected(what: .argumentsClose, found: .token(":"))),
+        ("print(copy 1)", .expected(what: .copiedName, found: .token("1"))),
+        ("print(1)(2)", .expected(what: .statementEnd, found: .token("("))),
+        ("let t = (1, 2)", .expected(what: .parenthesizedClose, found: .token(","))),
+        ("let t = ()", .expected(what: .expression, found: .token(")"))),
+        ("let y = if true { 1 } else { 2 }", .expected(what: .expression, found: .token("if"))),
     ])
     func expressions(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])
@@ -117,7 +132,7 @@ struct ProgramTests {
     @Test("a program's only function is 'main', declared once, and a second 'main' is still checked")
     func onlyMain() {
         #expect(errors("func f() {}\nfunc main() {}\nfunc main() -> Bool { print(a) }") == [
-            .functionNotMain, .mainDeclaredTwice, .mainResult, .notDeclared(name: "a"),
+            .functionNotMain, .mainDeclaredTwice, .mainReturnsNonVoid, .notDeclared(name: "a"),
         ])
     }
 }

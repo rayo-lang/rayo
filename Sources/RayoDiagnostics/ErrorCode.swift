@@ -17,7 +17,7 @@ public enum ErrorCode: Sendable, Hashable {
     case missingDigits
 
     @Code(5, error: "integer literal doesn't fit in 64 bits")
-    case integerLiteralTooLarge
+    case literalExceeds64Bits
 
     // MARK: Parsing
 
@@ -25,7 +25,7 @@ public enum ErrorCode: Sendable, Hashable {
     case unexpectedCharacter(character: String)
 
     @Code(102, error: "expected {what}, found {found}")
-    case expected(what: Expectation, found: String)
+    case expected(what: Expectation, found: FoundToken)
 
     @Code(103, error: "unmatched '}'")
     case unmatchedBrace
@@ -42,7 +42,7 @@ public enum ErrorCode: Sendable, Hashable {
     case functionNotMain
 
     @Code(204, error: "'main' returns Void")
-    case mainResult
+    case mainReturnsNonVoid
 
     @Code(205, error: "'{name}' isn't a type")
     case notAType(name: String)
@@ -81,7 +81,7 @@ public enum ErrorCode: Sendable, Hashable {
     case voidComparison(op: String)
 
     @Code(217, error: "the literal doesn't fit in an Int")
-    case literalTooLarge
+    case literalExceedsInt
 
     @Code(218, error: "'_' can't be declared")
     case underscoreDeclared
@@ -132,6 +132,22 @@ public enum Expectation: String, Sendable, Hashable, CustomStringConvertible {
     case parenthesizedClose = "')' to close the parenthesized expression"
 
     public var description: String { rawValue }
+}
+
+/// What the parser found where it expected something else.
+public enum FoundToken: Sendable, Hashable, CustomStringConvertible {
+    /// A token, as the source spells it.
+    case token(String)
+    case newline
+    case endOfFile
+
+    public var description: String {
+        switch self {
+        case .token(let spelling): return "'\(spelling)'"
+        case .newline: return "a newline"
+        case .endOfFile: return "the end of the file"
+        }
+    }
 }
 
 /// How many arguments a function takes, as an error names it: `1 argument`, `2 arguments`.

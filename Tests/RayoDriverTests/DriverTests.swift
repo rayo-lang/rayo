@@ -20,7 +20,7 @@ struct DriverTests {
         #expect(result.exitCode == 1)
         #expect(result.output == "")
         #expect(result.diagnostics.map(\.code) == [
-            .expected(what: .bindingName, found: "'='"), .expected(what: .expression, found: "')'"),
+            .expected(what: .bindingName, found: .token("=")), .expected(what: .expression, found: .token(")")),
         ])
         #expect(result.errors == """
             a.rayo:2:9: error[E0102]: expected a name to bind, found '='

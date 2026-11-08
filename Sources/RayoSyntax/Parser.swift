@@ -64,9 +64,10 @@ public struct Parser {
         return true
     }
 
+    /// Reads the punctuation `expectation` names.
     @discardableResult
-    private mutating func expect(_ punct: Punct, _ expectation: Expectation) throws(Failure) -> Token {
-        guard current.isPunct(punct) else { throw fail(expectation) }
+    private mutating func expect(_ expectation: Expectation) throws(Failure) -> Token {
+        guard current.isPunct(expectation.punct) else { throw fail(expectation) }
         return advance()
     }
 
@@ -93,11 +94,11 @@ public struct Parser {
         diagnostics.append(Diagnostic(code, at: current.range))
     }
 
-    private func describe(_ token: Token) -> String {
+    private func describe(_ token: Token) -> FoundToken {
         switch token.kind {
-        case .newline: return "a newline"
-        case .eof: return "the end of the file"
-        default: return "'\(token)'"
+        case .newline: return .newline
+        case .eof: return .endOfFile
+        default: return .token(token.description)
         }
     }
 
@@ -176,8 +177,8 @@ public struct Parser {
         guard current.isKeyword(.func) else { throw fail(.declaration) }
         let start = advance().range
         let (name, nameRange) = try expectIdentifier(.functionName)
-        try expect(.lparen, .parametersOpen)
-        try expect(.rparen, .parenthesisPair)
+        try expect(.parametersOpen)
+        try expect(.parenthesisPair)
         var result: TypeExpr?
         if consume(.arrow) { result = try parseType() }
         let body = try parseBlock()
@@ -190,7 +191,7 @@ public struct Parser {
     mutating func parseType() throws(Failure) -> TypeExpr {
         let start = current.range
         if consume(.lparen) {
-            try expect(.rparen, .parenthesisPair)
+            try expect(.parenthesisPair)
             return .void(range: range(from: start))
         }
         let (name, _) = try expectIdentifier(.type)
@@ -200,9 +201,9 @@ public struct Parser {
     // MARK: Statements
 
     private mutating func parseBlock() throws(Failure) -> Block {
-        let start = try expect(.lbrace, .blockOpen).range
+        let start = try expect(.blockOpen).range
         let statements = parseStatements()
-        try expect(.rbrace, .blockClose)
+        try expect(.blockClose)
         return Block(statements: statements, range: range(from: start))
     }
 
@@ -339,14 +340,14 @@ public struct Parser {
             arguments.append(try parseExpression())
             if !consume(.comma) { break }
         }
-        try expect(.rparen, .argumentsClose)
+        try expect(.argumentsClose)
         return Expr(kind: .call(name: name, nameRange: nameRange, arguments: arguments), range: range(from: nameRange))
     }
 
     /// After the `(`: an expression in parentheses and the `)`.
     private mutating func parseParenthesized(from start: SourceRange) throws(Failure) -> Expr {
         let inner = try parseExpression()
-        try expect(.rparen, .parenthesizedClose)
+        try expect(.parenthesizedClose)
         return Expr(kind: inner.kind, range: range(from: start))
     }
 }
@@ -360,6 +361,21 @@ private extension BinaryOperator {
         case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual: return 3
         case .add, .subtract: return 4
         case .multiply, .divide, .remainder: return 5
+        }
+    }
+}
+
+private extension Expectation {
+    /// The punctuation an expectation of one names. `expect` takes only those.
+    var punct: Punct {
+        switch self {
+        case .parametersOpen: return .lparen
+        case .parenthesisPair, .argumentsClose, .parenthesizedClose: return .rparen
+        case .blockOpen: return .lbrace
+        case .blockClose: return .rbrace
+        case .declaration, .declarationEnd, .functionName, .type, .statementEnd, .bindingName, .bindingValue,
+             .expression, .copiedName:
+            preconditionFailure("\(self) names no punctuation")
         }
     }
 }

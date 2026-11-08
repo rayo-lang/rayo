@@ -104,7 +104,7 @@ extension BodyChecker {
     /// Checks an integer literal, whose `value` is nil when the literal doesn't fit in an `Int`.
     private mutating func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
         guard let value else {
-            errors.report(.literalTooLarge, at: range)
+            errors.report(.literalExceedsInt, at: range)
             return nil
         }
         return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)

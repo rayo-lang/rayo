@@ -205,7 +205,7 @@ public struct Lexer {
         } else if digits == 0 {
             error = .missingDigits
         } else if overflow {
-            error = .integerLiteralTooLarge
+            error = .literalExceeds64Bits
         } else {
             error = nil
         }

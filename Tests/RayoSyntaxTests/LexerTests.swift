@@ -77,7 +77,7 @@ struct TokenTests {
     func integerMagnitude() {
         #expect(tokens("-9223372036854775808") == ["-", "9223372036854775808"])
         #expect(tokens("18446744073709551615") == ["18446744073709551615"])
-        #expect(lexErrors("18446744073709551616") == [.integerLiteralTooLarge])
+        #expect(lexErrors("18446744073709551616") == [.literalExceeds64Bits])
     }
 
     @Test("the longest operator wins")
@@ -98,12 +98,17 @@ struct TokenTests {
         #expect(lexErrors("a /* x") == [.unterminatedBlockComment])
     }
 
-    @Test("malformed integer literals are reported", arguments: [
-        ("let x = 12ab", ErrorCode.invalidDigit),
-        ("let x = 0x", .missingDigits),
+    @Test("a malformed integer literal is reported, and the error covers the literal", arguments: [
+        ("let x = 12ab", ErrorCode.invalidDigit, "12ab"),
+        ("let x = 0x", .missingDigits, "0x"),
+        ("let x = 18446744073709551616", .literalExceeds64Bits, "18446744073709551616"),
     ])
-    func errors(source: String, expected: ErrorCode) {
-        #expect(lexErrors(source) == [expected])
+    func errors(source: String, expected: ErrorCode, literal: String) {
+        let diagnostics = Lexer.tokenize(source).diagnostics
+        #expect(diagnostics.map(\.code) == [expected])
+        let bytes = Array(source.utf8)
+        #expect(diagnostics.map { String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self) }
+            == [literal])
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [

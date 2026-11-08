@@ -121,7 +121,7 @@ struct DeclarationTests {
     @Test("declarations are separated by newlines")
     func separated() {
         #expect(file("func a() {}\n\nfunc b() -> Int { 1 }") == "(func a() {})\n(func b() -> Int {1})")
-        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: "'func'")])
+        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: .token("func"))])
     }
 }
 
@@ -138,7 +138,7 @@ struct ErrorTests {
             """
         let (parsed, diagnostics) = Parser.parse(source)
         #expect(diagnostics.map(\.code) == [
-            .expected(what: .bindingName, found: "'='"), .expected(what: .expression, found: "')'"),
+            .expected(what: .bindingName, found: .token("=")), .expected(what: .expression, found: .token(")")),
         ])
         #expect(parsed.dump == "(func f() {(let y 2)})\n(func g() {})")
     }
@@ -146,7 +146,7 @@ struct ErrorTests {
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
         #expect(errors("func f() {\n    let = 1\n    let s = 0x\n}") == [
-            .expected(what: .bindingName, found: "'='"), .missingDigits,
+            .expected(what: .bindingName, found: .token("=")), .missingDigits,
         ])
     }
 
@@ -160,7 +160,7 @@ struct ErrorTests {
 
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
-        #expect(errors("func f() {\n    x = 1\n") == [.expected(what: .blockClose, found: "the end of the file")])
+        #expect(errors("func f() {\n    x = 1\n") == [.expected(what: .blockClose, found: .endOfFile)])
     }
 
     @Test("a stray '}' is reported and skipped")
@@ -169,10 +169,10 @@ struct ErrorTests {
     }
 
     @Test("malformed declarations and statements", arguments: [
-        ("let x = 1", ErrorCode.expected(what: .declaration, found: "'let'")),
-        ("func f() -> Int", .expected(what: .blockOpen, found: "the end of the file")),
-        ("func f() { let x }", .expected(what: .bindingValue, found: "'}'")),
-        ("func f() { copy }", .expected(what: .copiedName, found: "'}'")),
+        ("let x = 1", ErrorCode.expected(what: .declaration, found: .token("let"))),
+        ("func f() -> Int", .expected(what: .blockOpen, found: .endOfFile)),
+        ("func f() { let x }", .expected(what: .bindingValue, found: .token("}"))),
+        ("func f() { copy }", .expected(what: .copiedName, found: .token("}"))),
     ])
     func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])

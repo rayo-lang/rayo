@@ -46,7 +46,7 @@ private struct FileChecker {
 
     mutating func checkSignature(ofMain main: FuncDecl) {
         if let result = main.result, let type = declarations.resolve(result, reporting: &errors), type != .void {
-            errors.report(.mainResult, at: result.range)
+            errors.report(.mainReturnsNonVoid, at: result.range)
         }
     }
 }
