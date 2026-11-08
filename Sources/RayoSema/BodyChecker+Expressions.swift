@@ -23,13 +23,12 @@ extension BodyChecker {
             let right = check(right)
             guard let left, let right else { return nil }
             return binary(op, left, right, spelled: op.rawValue, in: expr.range)
-        case .call(let callee, let arguments):
-            return call(callee, arguments, in: expr.range)
-        case .copy(let operand):
-            return copy(operand, in: expr.range)
-        default:
-            errors.unsupported(expr.kind.construct, at: expr.range)
-            return nil
+        case .call(let name, let nameRange, let arguments):
+            return call(name, at: nameRange, arguments, in: expr.range)
+        case .copy(let name, let nameRange):
+            return reference(to: name, at: nameRange).map {
+                CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range)
+            }
         }
     }
 
@@ -45,15 +44,6 @@ extension BodyChecker {
         return false
     }
 
-    /// `copy operand`, whose operand is a local, since every local's type is copyable.
-    private mutating func copy(_ operand: Expr, in range: SourceRange) -> CheckedExpr? {
-        guard case .name = operand.kind else {
-            errors.unsupported("'copy' of \(operand.kind.construct)", at: range)
-            return nil
-        }
-        return check(operand).map { CheckedExpr(kind: $0.kind, type: $0.type, range: range) }
-    }
-
     private mutating func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
         if name == "_" {
             errors.error("'_' names no value", at: range)
@@ -65,7 +55,7 @@ extension BodyChecker {
         case .failed:
             return nil
         case nil where declarations.functionNames.contains(name):
-            errors.unsupported("using a function as a value", at: range)
+            errors.error("'\(name)' is a function, not a value", at: range)
             return nil
         case nil:
             errors.error("'\(name)' isn't declared", at: range)
@@ -94,7 +84,7 @@ extension BodyChecker {
                 return nil
             }
             guard left.type != .void else {
-                errors.unsupported("comparing Void values", at: range)
+                errors.error("'\(spelled)' can't compare Void values", at: range)
                 return nil
             }
             result = .bool
@@ -116,25 +106,5 @@ extension BodyChecker {
             return nil
         }
         return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)
-    }
-}
-
-extension ExprKind {
-    /// What a message calls an expression of this kind.
-    var construct: String {
-        switch self {
-        case .intLiteral, .negativeIntLiteral, .boolLiteral: return "a literal"
-        case .name: return "a name"
-        case .selfRef: return "'self'"
-        case .member: return "a member"
-        case .index: return "indexing"
-        case .call: return "a call"
-        case .unary, .binary: return "an operator"
-        case .lend: return "'&'"
-        case .copy: return "'copy'"
-        case .consume: return "'consume'"
-        case .borrow: return "'borrow'"
-        case .arrayLiteral: return "an array literal"
-        }
     }
 }

@@ -9,10 +9,6 @@ struct Diagnostics {
         list.append(.error(message, at: range))
     }
 
-    mutating func unsupported(_ what: String, at range: SourceRange) {
-        error("\(what) isn't supported yet", at: range)
-    }
-
     /// The errors by where they start in the source, those at one place in the order they were found.
     var inSourceOrder: [Diagnostic] {
         list.enumerated().sorted { a, b in

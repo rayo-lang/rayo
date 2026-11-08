@@ -1,13 +1,5 @@
 import RayoSource
 
-/// Identifies an expression within a file, as the key of per-expression side tables.
-public struct ExprID: Sendable, Hashable, Comparable, CustomStringConvertible {
-    public var raw: Int
-    public init(_ raw: Int) { self.raw = raw }
-    public static func < (a: ExprID, b: ExprID) -> Bool { a.raw < b.raw }
-    public var description: String { "e\(raw)" }
-}
-
 public struct SourceFile: Sendable {
     public var functions: [FuncDecl]
     public init(functions: [FuncDecl]) { self.functions = functions }
@@ -60,7 +52,7 @@ public struct Binding: Sendable {
     public var name: String
     public var nameRange: SourceRange
     public var type: TypeExpr?
-    public var value: Expr?
+    public var value: Expr
 }
 
 public enum AssignOperator: String, Sendable, Hashable {
@@ -95,13 +87,8 @@ public indirect enum StmtKind: Sendable {
     case expression(Expr)
     case ifStmt(condition: Expr, then: Block, otherwise: Block?)
     case whileStmt(condition: Expr, body: Block)
-    /// `for name in lower..<upper { … }`.
-    case forRange(name: String, nameRange: SourceRange, lower: Expr, upper: Expr, body: Block)
-    case returnStmt(Expr?)
     case breakStmt
     case continueStmt
-    /// `do { … }`: a block that groups statements.
-    case doBlock(Block)
 }
 
 public enum BinaryOperator: String, Sendable, Hashable {
@@ -115,13 +102,7 @@ public enum UnaryOperator: String, Sendable, Hashable {
     case not = "!"
 }
 
-public struct Argument: Sendable {
-    public var label: String?
-    public var value: Expr
-}
-
 public struct Expr: Sendable {
-    public var id: ExprID
     public var kind: ExprKind
     public var range: SourceRange
 }
@@ -134,17 +115,10 @@ public indirect enum ExprKind: Sendable {
     case negativeIntLiteral(UInt64)
     case boolLiteral(Bool)
     case name(String)
-    case selfRef
-    case member(Expr, name: String, nameRange: SourceRange)
-    case index(Expr, arguments: [Argument])
-    case call(callee: Expr, arguments: [Argument])
+    /// `name(arguments)`.
+    case call(name: String, nameRange: SourceRange, arguments: [Expr])
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
-    /// `&place`: a place lent for change.
-    case lend(Expr)
-    case copy(Expr)
-    case consume(Expr)
-    /// `borrow place`: a `let`'s initializer that borrows the place instead of moving out of it.
-    case borrow(Expr)
-    case arrayLiteral([Expr])
+    /// `copy name`: the value of a local, which the local keeps.
+    case copy(name: String, nameRange: SourceRange)
 }

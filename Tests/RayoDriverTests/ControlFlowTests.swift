@@ -34,31 +34,30 @@ struct LocalTests {
         ("var x = 1\nx = true", "3:5: error: expected Int, found Bool"),
         ("var x = true\nx += 1", "3:1: error: '+=' needs Int operands, found Bool and Int"),
         ("1 = 2", "2:1: error: only a place can be assigned"),
-        ("let x = 1\nlet x = 2", "3:5: error: declaring 'x' while another 'x' is visible isn't supported yet"),
-        ("let x = print(1)", "2:9: error: a value of type Void isn't supported yet"),
-        ("let x: Int", "2:1: error: a declaration without a value isn't supported yet"),
-        ("let x = borrow y", "2:9: error: 'borrow' isn't supported yet"),
+        ("let x = 1\nlet x = 2", "3:5: error: 'x' is already declared"),
+        ("let x = print(1)", "2:9: error: a local can't have type Void"),
+        ("let x: Int", "2:11: error: expected '=' and a value, found a newline"),
         ("let x = 1\nx(2)", "3:1: error: 'x' isn't a function"),
-        ("let print = 1\nprint(print)", "2:5: error: declaring 'print' while another 'print' is visible isn't supported yet"),
-        ("let main = 1", "2:5: error: declaring 'main' while another 'main' is visible isn't supported yet"),
+        ("let print = 1\nprint(print)", "2:5: error: 'print' is already declared"),
+        ("let main = 1", "2:5: error: 'main' is already declared"),
         ("print = 3", "2:1: error: 'print' is a function, so it can't change"),
         ("main += 2", "2:1: error: 'main' is a function, so it can't change"),
-        ("var x = 1\nx.y = 2", "3:1: error: assigning to a member isn't supported yet"),
-        ("var x = 1\nx[0] = 2", "3:1: error: assigning to an element isn't supported yet"),
-        ("let _ = 5", "2:5: error: discarding a value with '_' isn't supported yet"),
-        ("_ = 5", "2:1: error: discarding a value with '_' isn't supported yet"),
-        ("_ += 1", "2:1: error: '_' names no value"),
+        ("var x = 1\nx.y = 2", "3:2: error: expected a newline or ';' after the statement, found '.'"),
+        ("var x = 1\nx[0] = 2", "3:2: error: expected a newline or ';' after the statement, found '['"),
+        ("let _ = 5", "2:5: error: '_' can't be declared"),
+        ("_ = 5", "2:1: error: only a place can be assigned"),
+        ("_ += 1", "2:1: error: only a place can be assigned"),
         ("print(_)", "2:7: error: '_' names no value"),
     ])
     func rejected(body: String, expected: String) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
-    @Test("a declaration or an assignment from a local would move out of it, which isn't supported yet", arguments: [
-        ("var a = 1\nlet b = a", "3:9: error: moving a value out of 'a' isn't supported yet"),
-        ("var a = 1\nlet b = (a)", "3:9: error: moving a value out of 'a' isn't supported yet"),
-        ("var a = 1\nvar b = 0\nb = a", "4:5: error: moving a value out of 'a' isn't supported yet"),
-        ("let b = copy 1", "2:9: error: 'copy' of a literal isn't supported yet"),
+    @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [
+        ("var a = 1\nlet b = a", "3:9: error: take the value of 'a' with 'copy a'"),
+        ("var a = 1\nlet b = (a)", "3:9: error: take the value of 'a' with 'copy a'"),
+        ("var a = 1\nvar b = 0\nb = a", "4:5: error: take the value of 'a' with 'copy a'"),
+        ("let b = copy 1", "2:14: error: expected a name after 'copy', found '1'"),
     ])
     func moves(body: String, expected: String) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
@@ -74,7 +73,7 @@ struct LocalTests {
         ("let f = undefined\nf(1)", "2:9: error: 'undefined' isn't declared"),
         ("let y: Bool = 1\nif y { }", "2:15: error: expected Bool, found Int"),
         ("let w: Int8 = 3\nw += 1", "2:8: error: 'Int8' isn't a type"),
-        ("let x = 1\nif true {\nlet x = true\nif x { }\n}", "4:5: error: declaring 'x' while another 'x' is visible isn't supported yet"),
+        ("let x = 1\nif true {\nlet x = true\nif x { }\n}", "4:5: error: 'x' is already declared"),
     ])
     func noCascade(body: String, expected: String) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
@@ -132,7 +131,7 @@ struct BoolTests {
         ("let b = 1 && true", "2:9: error: '&&' needs Bool operands, found Int and Bool"),
         ("let b = !1", "2:10: error: expected Bool, found Int"),
         ("let b = -true", "2:10: error: expected Int, found Bool"),
-        ("let b = print(1) == print(2)", "2:9: error: comparing Void values isn't supported yet"),
+        ("let b = print(1) == print(2)", "2:9: error: '==' can't compare Void values"),
     ])
     func rejected(body: String, expected: String) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])

@@ -39,7 +39,7 @@ struct BodyChecker {
         case .expression(let expr):
             return check(expr).map { .expression($0) }
         case .binding(let binding):
-            return check(binding, in: statement.range)
+            return check(binding)
         case .assign(let target, let op, let value):
             return assign(value, op: op, to: target, in: statement.range)
         case .ifStmt(let condition, let then, let otherwise):
@@ -57,25 +57,14 @@ struct BodyChecker {
             return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
         case .continueStmt:
             return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
-        case .forRange:
-            errors.unsupported("'for'", at: statement.range)
-        case .returnStmt:
-            errors.unsupported("'return'", at: statement.range)
-        case .doBlock:
-            errors.unsupported("'do'", at: statement.range)
         }
-        return nil
     }
 
-    private mutating func check(_ binding: Binding, in range: SourceRange) -> CheckedStmt? {
+    private mutating func check(_ binding: Binding) -> CheckedStmt? {
         let declared = binding.type.flatMap { declarations.resolve($0, reporting: &errors) }
-        guard let valueExpr = binding.value else {
-            errors.unsupported("a declaration without a value", at: range)
-            return declareFailed(binding.name, at: binding.nameRange)
-        }
-        let value = checkTaken(valueExpr)
+        let value = checkTaken(binding.value)
         if binding.name == "_" {
-            errors.unsupported("discarding a value with '_'", at: binding.nameRange)
+            errors.error("'_' can't be declared", at: binding.nameRange)
             return nil
         }
         guard let value, binding.type == nil || declared != nil else {
@@ -84,7 +73,7 @@ struct BodyChecker {
         let type = declared ?? value.type
         guard expect(value, type) else { return declareFailed(binding.name, at: binding.nameRange) }
         if type == .void {
-            errors.unsupported("a value of type Void", at: value.range)
+            errors.error("a local can't have type Void", at: value.range)
             return declareFailed(binding.name, at: binding.nameRange)
         }
         guard let local = declare(binding.name, type: type, isVar: binding.kind == .var, at: binding.nameRange)
@@ -92,12 +81,12 @@ struct BodyChecker {
         return .binding(local, value)
     }
 
-    /// Checks `expr` as the value a declaration or an assignment takes, which moves out of a local that
-    /// `expr` names.
+    /// Checks `expr` as the value a declaration or an assignment takes, which takes a local's value only
+    /// with `copy`.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
         if case .name(let name) = expr.kind, case .local = value.kind {
-            errors.unsupported("moving a value out of '\(name)'", at: expr.range)
+            errors.error("take the value of '\(name)' with 'copy \(name)'", at: expr.range)
             return nil
         }
         return value
@@ -121,17 +110,16 @@ struct BodyChecker {
         return nil
     }
 
-    /// Whether `name` already names a local or a function, which a declaration of it would hide, reporting
-    /// it when it does.
+    /// Whether `name` already names a local or a function, reporting it when it does.
     private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
         guard lookUp(name) != nil || declarations.functionNames.contains(name) else { return false }
-        errors.unsupported("declaring '\(name)' while another '\(name)' is visible", at: range)
+        errors.error("'\(name)' is already declared", at: range)
         return true
     }
 
     private mutating func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr,
                                  in range: SourceRange) -> CheckedStmt? {
-        let local = assignedLocal(target, isRead: op.binary != nil)
+        let local = assignedLocal(target)
         let canChange = local.map { isVar($0, at: target.range) } ?? false
         let value = op.binary == nil ? checkTaken(valueExpr) : check(valueExpr)
         guard let local, canChange, let value else { return nil }
@@ -150,15 +138,10 @@ struct BodyChecker {
         return false
     }
 
-    /// The local that `target` names, when it names one. A compound assignment's target `isRead` as well
-    /// as written.
-    private mutating func assignedLocal(_ target: Expr, isRead: Bool) -> LocalID? {
+    /// The local that `target` names, when it names one.
+    private mutating func assignedLocal(_ target: Expr) -> LocalID? {
         switch target.kind {
-        case .name("_") where isRead:
-            errors.error("'_' names no value", at: target.range)
-        case .name("_"):
-            errors.unsupported("discarding a value with '_'", at: target.range)
-        case .name(let name):
+        case .name(let name) where name != "_":
             switch lookUp(name) {
             case .local(let local):
                 return local
@@ -169,10 +152,6 @@ struct BodyChecker {
             case nil:
                 errors.error("'\(name)' isn't declared", at: target.range)
             }
-        case .member:
-            errors.unsupported("assigning to a member", at: target.range)
-        case .index:
-            errors.unsupported("assigning to an element", at: target.range)
         default:
             errors.error("only a place can be assigned", at: target.range)
         }
