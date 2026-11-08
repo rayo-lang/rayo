@@ -99,7 +99,7 @@ for g in label.graphemes { … }            // user-perceived characters, throug
 
 **Every string literal is null-terminated**, so `"abc".cString` passes to C at no cost. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
 
-**Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments are evaluated ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), and borrows each. Its value is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given. Every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
+**Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments are evaluated ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), and borrows each. As the message of `fatalError`, `precondition` or `assert`, it is evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). Its value is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given. Every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
 
 ```swift
 protocol TextSink { mutating func write(_ text: StringView) where self borrows static }

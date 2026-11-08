@@ -18,7 +18,7 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 
 **Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
-1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)).
+1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)).
 3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
@@ -98,6 +98,32 @@ func adopt(_ item: owned Item) {
 **An `owned` parameter that the body doesn't need is dropped with `_ = x`.** A parameter always has a name, since `_` before it is only its argument label.
 
 **In generic code, a value whose type is a type parameter or an associated type must be used too.** That follows from checking generic code once: the check knows only that the type may not be `Void` ([Checking generic code](protocols-and-generics.md#checking-generic-code)).
+
+## Trailing closures
+
+**Trailing closures fill the call's parameters in order, scanning forward from those the parentheses give.** A parameter **takes a closure** when its type is one of these:
+
+- a function type;
+- `some F`, or a type parameter constrained to a function type ([below](#closures-by-concrete-type-some-f));
+- `Closure<F>` ([below](#unscoped-closures-closuref));
+- an optional of any of these, such as `(() -> Void)?`, whose `.some` the closure converts to ([04](../04-types/enums.md#optionals)).
+
+**The scan matches each trailing closure to one parameter:**
+
+- the first, unlabeled one goes to the first parameter that takes a closure;
+- each later one carries a label, and goes to the next parameter with that argument label;
+- a parameter the scan passes over takes its default, and passing over one without a default is a compile error.
+
+So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), and `s.spawn { … }` passes its closure for a `some F` parameter. A second unlabeled closure is a compile error ([12](../12-grammar/notes.md#blocks-and-closure-literals)):
+
+```swift
+func f(_ a: () -> Void, onCancel: (() -> Void)? = nil, done: () -> Void) { … }
+f { start() } done: { finish() }     // the first closure goes to 'a', and 'onCancel' takes its default
+f { start() } { finish() }           // error: a trailing closure after the first carries a label
+
+func h(_ done: (() -> Void)? = nil) { … }
+h { finish() }                       // the closure converts to the optional's .some
+```
 
 ## Capturing places
 
