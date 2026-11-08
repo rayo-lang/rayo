@@ -56,8 +56,8 @@ A C or C++ program uses a library written in Rayo:
 | union | the C union its layout gives ([04](../04-types/enums.md#untagged-unions)), each member in its representation |
 | enum without payloads | its stored integer type, the raw type if it has one ([04](../04-types/enums.md#enums)), with a constant per case holding its stored value |
 | enum with payloads | `struct { tag; union { … } }`, its tag as an enum without payloads stores it |
-| `T!E` whose `T` has size 0, such as `Void!IoError` | `struct { tag; E failure; }`, since C has no type of size 0 for the success |
-| `T!E` whose `E` has size 0, such as `Int32!Timeout` for an empty `struct Timeout: Error` | `struct { tag; T success; }`, for the same reason; with both of size 0, `struct { tag; }` |
+| `T!E` whose `T` has size 0 and whose `E` isn't `Never`, such as `Void!IoError` | `struct { tag; E failure; }`, since C has no type of size 0 for the success |
+| `T!E` whose `E` has size 0 and isn't `Never`, such as `Int32!Timeout` for an empty `struct Timeout: Error` | `struct { tag; T success; }`, for the same reason; with both of size 0, `struct { tag; }` |
 | `T!Never` | `T`'s representation, since it is laid out as `T` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)) |
 | `T?` with a niche | same layout as `T`, with one value meaning `nil` (below) |
 | other `T?` | `struct { T value; bool has; }` |
