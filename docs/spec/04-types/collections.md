@@ -82,7 +82,7 @@ if action == jump { player.jump() }       // compares one pointer-sized value, n
 log("pressed \(jump.text)")               // the text, as a StaticString
 ```
 
-**A `Name` hashes a hash of its text stored with it, never its address.** Each entry stores the hash `Hasher` gives its text, computed when the entry is made, and a `Name`'s `hash(into:)` feeds that stored hash ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). So a `Name` hashes the same at compile time as at run time, and a `const` `Map` or `Set` keyed by `Name` still finds its keys when the program runs ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+**A `Name` hashes a hash of its text stored with it, never its address.** Each entry stores a fixed function of its text alone, computed when the entry is made. It is never `Hasher`'s output, which may be seeded per process. The build and the interner use the same function. Its algorithm is the library's choice, but it gives one value for a given text at every stage of one build, so an entry's stored hash is the same at compile time as at run time. A `Name`'s `hash(into:)` feeds that stored value to the `Hasher`, so a `Name` hashes as an integer key does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
