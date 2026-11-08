@@ -38,6 +38,7 @@ After 1.0, all four of these must be true:
 4. **A change of course**: it considerably changes something that already exists, or turns the project in a new direction with wide impact
 
 If a decision is easy to reverse, skip it: you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing." If the thing is still being shaped, deciding is part of the shaping: the decision goes into the thing itself, such as the spec chapters.
+
 ### What qualifies
 
 - **Architectural shape.** "We're using a monorepo." "The write model is event-sourced, the read model is projected into Postgres."
