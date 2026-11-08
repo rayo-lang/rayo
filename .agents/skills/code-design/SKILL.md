@@ -55,12 +55,12 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 ## 4. Tidy functions
 
-A function is **tidy** when a reader sees what it does at a glance. It is one of two kinds:
+A function is **tidy** when a reader sees what it does at a glance. It does one job, as one of two kinds:
 
-- **An orchestrator.** Its body is a few blocks separated by blank lines, and each block is one or more calls or bindings, each named for its step.
+- **An orchestrator.** Its body is a few blocks separated by blank lines, and every line of a block is a call or binding to a named step, with no mechanics inline.
 - **A leaf.** It performs one step, however long its mechanics run.
 
-Extract a function or value type when a body mixes the two kinds, as shown by:
+Extract a function or value type when a body takes on a second job, however small, or mixes the two kinds, as shown by:
 
 - numbered or section-heading comments;
 - setup followed by dispatch or detailed mechanics; or
@@ -68,19 +68,12 @@ Extract a function or value type when a body mixes the two kinds, as shown by:
 
 A tidy function also has:
 
-- **One job.** A second job, however small, moves into a function of its own.
 - **Inputs from its caller.** A step takes the values its caller already holds as arguments.
 - **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it.
 - **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result.
 - **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
 
-**Done when:** in every changed function:
-
-- it has one job;
-- in an orchestrator, every line of a block is a call or binding to a named step, with no mechanics inline;
-- each step takes as arguments the values its caller already holds, and reports failure in its result;
-- each helper's result is used as returned; and
-- each line holds one concern.
+**Done when:** every changed function is an orchestrator or a leaf as defined above, and has each property listed.
 
 ## 5. Repetition created by the change
 
