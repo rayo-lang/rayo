@@ -253,7 +253,7 @@ protocol SharedIterator: IteratorProtocol {     // elements outlive the iteratio
 protocol Collection: Sequence where Iterator: SharedIterator { var count: Int { get } }   // what generic algorithms take
 
 protocol MutableSequence {                      // what 'for x in &s' iterates
-    associatedtype MutableIterator: IteratorProtocol   // its Element is an exclusive view: MutableRef<T>, MutableSpan<T>, …
+    associatedtype MutableIterator: IteratorProtocol   // a collection's yields exclusive views, such as MutableRef<T>; a Receiver's, owned items
     mutating func makeMutableIterator() -> MutableIterator
 }
 

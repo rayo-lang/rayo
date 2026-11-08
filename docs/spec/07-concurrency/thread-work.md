@@ -113,7 +113,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **The job system's `join` runs both closures even when one panics**, since both are lent already. Once a piece has panicked, a parallel loop may skip the elements no piece has started, since the call unwinds anyway. So the code after a caught panic can't rely on which elements the loop's body saw.
 
-**A panic wakes no parked thread.** So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
+**A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from, or the `Promise` of a future another thread waits on ([Panics in producers and consumers](synchronization.md#panics-in-producers-and-consumers)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
 
 ```swift
 let ready = Event()
@@ -158,16 +158,26 @@ let table = catchPanic {                          // a global's initializer, run
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        while true { draw(rx.waitPop()) }                                    // parks until the simulation sends one
+        for snapshot in &rx { draw(snapshot) }                               // parks between snapshots; ends once every sender is gone
     }
     return (render, tx)                                                      // the simulation keeps the sender
+}
+
+func runSimulation(_ world: mutable World) {                                 // called from main, after startup
+    let (render, var tx) = startRenderer()
+    while !world.quit {
+        step(&world)
+        if case .failure = tx.send(Shared(world.snapshot())) { break }      // the render thread is gone
+    }
+    _ = tx                                                                   // drops the last sender: the render loop ends
+    render.join()                                                            // waits for it, or resumes its panic here
 }
 
 let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // instead of a channel, a global queue: a Synchronized let
 
 func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
-        while true { draw(snapshots.waitPop()) }                             // parks until the simulation pushes one
+        while true { draw(snapshots.waitPop()) }                             // parks until the simulation pushes one; a queue never disconnects
     }
 }
 ```
@@ -184,7 +194,9 @@ static func start(name: StaticString = "", _ body: owned Closure<consuming @send
 
 **`Thread.start` panics when `Runtime.startThread` refuses the start**, since it has no thread to return. That happens when the platform can't start a thread, or after shutdown ([below](#starting-a-thread-runtimestartthread)). The unwind destroys the body and its captures. During startup the runtime queues the thread instead, and `Thread.start` returns its `Thread` at once.
 
-**A thread that serves a stream of items owns the receiving end, and waits on it in a loop**, as the render thread does with `rx`. Between items, `waitPop()` parks it ([Queues and channels](synchronization.md#queues-and-channels)).
+**A thread that serves a stream of items owns the receiving end, and waits on it in a loop**, as the render thread does with `rx`. Between items, `receive()` parks it ([Queues and channels](synchronization.md#queues-and-channels)). The loop ends once every `Sender` is gone and the channel is empty ([Disconnected channels](synchronization.md#disconnected-channels)).
+
+**So the simulation stops the render thread by dropping its sender, and joins it to learn how it ended.** A panic on either side disconnects the channel too, which ends the other side's loop ([Panics in producers and consumers](synchronization.md#panics-in-producers-and-consumers)).
 
 ### What a thread can share
 
