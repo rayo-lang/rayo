@@ -23,35 +23,35 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out, so its writes count for every store of the value it makes, by 11's "Released" condition. The "Carried" condition then takes them along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-**A creation publishes into a shared table after its own writes, by the table's one discipline.** The two disciplines don't compose, since a plain store under a lock gives a lock-free acquire nothing to synchronize with, and a lock gives a plain read nothing either. So each table keeps one:
+**Each creation is entered, after its own writes, in a shared table that behaves as a linearizable map.** Three tables are shared this way:
 
-- **Locked.** Every read of a slot takes the table's lock, and so does every store to one.
-- **Release and acquire.** Every store to a slot, under the lock or not, is a release store or a release compare-and-swap, and every read of a slot, under the lock or not, is an acquire. This covers the common hybrid, whose writers take the lock and store with release while its readers read with acquire and no lock.
-
-A table that keeps the first is a **locked table**, and one that keeps the second a **release-and-acquire table**.
-
-**Either way, a lookup synchronizes with the publication it reads.** So the creation's writes count for every store the lookup's thread makes after it, by 11's "Synchronized" condition ([11](../11-compilation-model.md#what-a-target-must-provide)). Three tables are shared this way:
-
-- the interner's entry table, which a lookup searches ([04](../04-types/collections.md#collections-and-strings));
+- the interner's entry table, keyed by text ([04](../04-types/collections.md#collections-and-strings));
 - the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - the allocator registry, which an `Allocator` id resolves through ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
-**A resize keeps that order.** In a release-and-acquire table it reads each slot with acquire and publishes the slot's copy with a release store, and in a locked table it does both under the lock. So the writes that counted for the original count for the copy too.
+**Each table keeps this contract:**
 
-**A check that resolves bits through a table reads the slot by the table's discipline**, with acquire in a release-and-acquire table or under the lock in a locked table. A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none. It never finds stale contents.
+- **One order.** Every insert, lookup, removal and resize takes effect atomically at one point, in a single total order consistent with happens-before. A resize changes no entry: every entry inserted before or during it is still found after it.
+- **Synchronization.** An insert is a release. A lookup, or a check that resolves bits, that finds an entry synchronizes with the insert that put it there, and with each later change to that slot that it reads.
+- **One entry per text.** The interner holds at most one entry per text. An insert of a text that is already present fails and returns the existing entry, which the inserting thread then holds as though it had looked it up.
+- **Exclusive keys.** In the weak-link slots and the allocator registry, each creation claims a key that no other live creation holds. Generations unique to the run, and allocator words never issued twice, keep a reused slot from ever matching old bits.
 
-**Such a value may find no slot for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
+**How a table keeps the contract is the implementation's choice**: a lock, lock-free compare-and-swap, or any mix of them that keeps it.
+
+**A creation's writes count for every store that a thread makes after finding its entry**, by 11's "Synchronized" condition, since they happen before the insert that the finding synchronizes with ([11](../11-compilation-model.md#what-a-target-must-provide)).
+
+**A check that resolves bits finds the entry or none, never stale contents.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the entry, whose contents it reads safely since it synchronizes with the insert, or it finds none.
+
+**Such a value may find no entry for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
 
 **Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
 
-**Interning publishes the entry into the interner's table by the table's discipline**, then ends with a release fence before it hands the `Name` out. In a release-and-acquire table every insert is a release compare-and-swap, whether or not it holds the lock, since only the compare-and-swap keeps a lock-free insert from adding the same text. In a locked table every insert runs under the lock, checking for the text and inserting it together.
-
-**Publishing fails when another thread published the text first**, so a text never gets two `Name`s. The thread that lost then reads the winner's entry with acquire in a release-and-acquire table, or under the lock in a locked table. It returns that entry, as a lookup that finds an existing entry does, and never hands out its own.
+**Interning inserts the entry into the interner's table after the word's store**, then ends with a release fence before it hands the `Name` out. When the text is already present, the insert fails and returns the existing entry, so a text never gets two `Name`s. The thread then returns that entry, as a lookup that finds it does, and never hands out its own.
 
 **That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
-- **A new entry.** The fence puts the word's store before every store of the `Name` that the interning thread makes, so the word's store counts for each by 11's "Released" condition. The "Carried" condition then takes it along any chain of threads that passes the `Name` on.
-- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, by the table's discipline. That read synchronizes with the release that published the slot after the entry's word, so the word's store happens before that release. The word's store then counts for every store of the `Name` that the lookup's thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
+- **A new entry.** The word's release store comes first, then the insert, then the fence, which puts the word's store before every store of the `Name` that the interning thread makes. So the word's store counts for each by 11's "Released" condition. The "Carried" condition then takes it along any chain of threads that passes the `Name` on.
+- **An existing entry.** A lookup, or a failed insert, that finds the entry synchronizes with the insert that put it there, and the word's store happens before that insert. So the word's store counts for every store of the `Name` that the finding thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
 
 So by 11's rule the acquire load, which goes through the `Name`, reads a value no older than the word's store. The word is written once and entries are never freed, so it reads that store. An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
 
