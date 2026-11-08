@@ -179,12 +179,15 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ISO C guarantees neither of the last two, so the target's compiler must.
 
-**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when either of these holds:
+**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
 - **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
-- **Carried.** `W` counts for a store that `S`'s thread read before `S`, and that thread ordered the read before `S`: the read is an acquire, or `S`'s value or address depends on what it read.
+- **Synchronized.** `W` happens before an acquire read that `S`'s thread made before `S`.
+- **Carried.** `W` counts for a store `R` that `S`'s thread read before `S`, and that thread ordered the read before `S`: `S`'s value or address depends on it, or the read is an acquire.
 
-Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`. ARMv8 and Power give this, as do stronger processors.
+Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`.
+
+**"Synchronized" covers whatever an acquire read synchronizes with**, such as a lock's acquisition of any design, which may read a later read-modify-write in the unlock's release sequence. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores. ARMv8 gives this through other-multi-copy atomicity, and Power through `lwsync` cumulativity under the standard C++ mapping, as do stronger processors.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 

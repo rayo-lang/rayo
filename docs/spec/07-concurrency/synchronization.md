@@ -21,9 +21,9 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out. The target carries what that fence released along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out, so its writes count for every store of the value it makes, by 11's "Released" condition. The "Carried" condition then takes them along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-**A creation publishes into a shared table after its own writes**, with a release store or a release compare-and-swap, or under the table's lock, which lookups take too. Three tables are shared this way:
+**A creation publishes into a shared table after its own writes**, with a release store or a release compare-and-swap, or under the table's lock, which lookups take too. A lookup that reads the slot with acquire, or under the lock, synchronizes with that publication. So the creation's writes count for every store the lookup's thread makes after it, by 11's "Synchronized" condition ([11](../11-compilation-model.md#what-a-target-must-provide)). Three tables are shared this way:
 
 - the interner's entry table, which a lookup searches ([04](../04-types/collections.md#collections-and-strings));
 - the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
@@ -41,8 +41,8 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
-- **A new entry.** The fence orders the word's store before every store of the `Name` that the interning thread makes, and the target carries that order along any chain of threads that passes the `Name` on.
-- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, with acquire or under the table's lock. So it reads after the release that published that slot after the entry's word. The lookup's thread ordered that read before every store of the `Name` it makes, so the chain runs back through the read to the word's store, and on as for a new entry.
+- **A new entry.** The fence puts the word's store before every store of the `Name` that the interning thread makes, so the word's store counts for each by 11's "Released" condition. The "Carried" condition then takes it along any chain of threads that passes the `Name` on.
+- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, with acquire or under the table's lock. That read synchronizes with the release that published the slot after the entry's word, so the word's store happens before it. The word's store then counts for every store of the `Name` that the lookup's thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
 
 An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
 

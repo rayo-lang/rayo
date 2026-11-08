@@ -15,7 +15,6 @@ At a C boundary, Rayo can check only what the imported or exported types express
     - a `String`, `StringView` or `StaticString` holds whole UTF-8 sequences ([04](../04-types/collections.md#strings));
     - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;
     - a `StaticSpan`, a `StaticString` or a `String` with `cap` 0 points at bytes that stay valid and unwritten for the rest of the run, a `StaticString`'s followed by a NUL.
-- **Creations before their uses.** A value C hands back that names a creation, such as a weak link's bits or an `Allocator` id, has that creation happen before its use, through any synchronization. Otherwise C passes the value on only by stores whose value came from loads. When C does neither, Rayo may find no slot for a live creation, with the outcomes 07 gives ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 - **One owner per move-only value.** A move-only value's bytes are never copied to stand for a second value ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads)).
 - **Values that stay on one thread.** A value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`. Its own thread is the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)).
 - **Spans and `mutable` parameters.** Spans, `mutable` parameters and the views C hands Rayo meet these ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)):
@@ -57,6 +56,8 @@ enum NavMode: Int32 { case walk, fly }
 
 - a `UInt64` with `WeakShared<T>(bits:)`, with `WeakPointer<T>(bits:)`, which also checks the thread, since an object is used only on its home thread ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)), or with `Handle<T>(bits:)`;
 - a raw integer with `E(rawValue:)`.
+
+**A value C hands back that names a creation may find no slot for a live creation**, such as a weak link's bits or an `Allocator` id. That happens when no carried chain of stores and no synchronization orders the creation before the use. The outcomes 07 gives then follow, such as `nil` from `WeakShared<T>(bits:)`, so this is defined behavior, not a broken obligation ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## The platform, and embedding Rayo in C
 
