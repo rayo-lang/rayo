@@ -11,10 +11,9 @@ public struct FuncDecl: Sendable {
     public var nameRange: SourceRange
     public var result: TypeExpr?
     public var body: Block
-    public var range: SourceRange
 }
 
-public enum TypeExpr: Sendable, CustomStringConvertible {
+public enum TypeExpr: Sendable {
     /// `Int`.
     case named(String, range: SourceRange)
     /// `()`.
@@ -26,23 +25,13 @@ public enum TypeExpr: Sendable, CustomStringConvertible {
             return range
         }
     }
-
-    public var description: String {
-        switch self {
-        case .named(let name, _):
-            return name
-        case .void:
-            return "()"
-        }
-    }
 }
 
 public struct Block: Sendable {
     public var statements: [Stmt]
-    public var range: SourceRange
 }
 
-public enum BindingKind: String, Sendable, Hashable {
+public enum BindingKind: Sendable, Hashable {
     case `let`
     case `var`
 }

@@ -174,15 +174,14 @@ public struct Parser {
 
     /// `'func' identifier '(' ')' ('->' type)? block`.
     private mutating func parseFunction() throws(Failure) -> FuncDecl {
-        guard current.isKeyword(.func) else { throw fail(.declaration) }
-        let start = advance().range
+        guard consume(.func) else { throw fail(.declaration) }
         let (name, nameRange) = try expectIdentifier(.functionName)
         try expect(.parametersOpen)
         try expect(.parenthesisPair)
         var result: TypeExpr?
         if consume(.arrow) { result = try parseType() }
         let body = try parseBlock()
-        return FuncDecl(name: name, nameRange: nameRange, result: result, body: body, range: range(from: start))
+        return FuncDecl(name: name, nameRange: nameRange, result: result, body: body)
     }
 
     // MARK: Types
@@ -201,10 +200,10 @@ public struct Parser {
     // MARK: Statements
 
     private mutating func parseBlock() throws(Failure) -> Block {
-        let start = try expect(.blockOpen).range
+        try expect(.blockOpen)
         let statements = parseStatements()
         try expect(.blockClose)
-        return Block(statements: statements, range: range(from: start))
+        return Block(statements: statements)
     }
 
     private mutating func parseStatements() -> [Stmt] {
@@ -251,8 +250,7 @@ public struct Parser {
             if current.isKeyword(.if) {
                 let start = advance().range
                 let nested = try parseIf()
-                let nestedRange = range(from: start)
-                otherwise = Block(statements: [Stmt(kind: nested, range: nestedRange)], range: nestedRange)
+                otherwise = Block(statements: [Stmt(kind: nested, range: range(from: start))])
             } else {
                 otherwise = try parseBlock()
             }

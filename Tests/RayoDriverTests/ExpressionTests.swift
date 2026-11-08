@@ -20,8 +20,13 @@ struct PrecedenceTests {
         #expect(output("if \(expression) { print(1) } else { print(0) }") == (value ? "1\n" : "0\n"))
     }
 
+    @Test("every comparison has one level, so '==' doesn't wait for a '<' on its right")
+    func comparisonsShareALevel() {
+        #expect(errors("func main() { if true == 1 < 2 { } }") == [.operandsDiffer(op: "==", left: "Bool", right: "Int")])
+    }
+
     @Test("prefix operators and 'copy' bind tighter than binary operators", arguments: [
-        ("print(- -5)", "5"), ("print(-(5) * 2)", "-10"), ("let a = 3\nprint(copy a + 1)", "4"),
+        ("print(- -5)", "5"), ("print(-(5) + 2)", "-3"), ("let a = 3\nprint(copy a + 1)", "4"),
         ("if !false && false { print(1) } else { print(0) }", "0"),
     ])
     func prefix(body: String, expected: String) {
@@ -58,6 +63,10 @@ struct RangeTests {
         ("let x: Bool = 1 + 2", "1 + 2"),
         ("let x: Bool = (1 + 2)", "(1 + 2)"),
         ("let x: Bool = -1", "-1"),
+        ("var a = 1\nlet x: Bool = -a", "-a"),
+        ("if true == 1 < 2 { }", "true == 1"),
+        ("var x = 1\nx += true", "x += true"),
+        ("break", "break"),
         ("let x: Bool = print(1)", "print(1)"),
         ("var a = 1\nlet b: Bool = copy a", "copy a"),
         ("print(1, 2)", "print(1, 2)"),
