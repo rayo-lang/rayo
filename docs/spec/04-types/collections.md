@@ -48,7 +48,6 @@ let firstTwo = names[0..<2]               // also a Span
 
 - the scoped views `Span`, `MutableSpan` and `StringView`;
 - the immortal `StaticSpan` and `StaticString`;
-- `Name`;
 - the object pointers;
 - `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
@@ -72,16 +71,23 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `String` | yes | UTF-8 bytes, allocator |
 | `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
 | `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
-| `Name` | no | 64-bit interned hash of a text (below) |
+| `Name` | no | Interned text, pointer-sized: compared and hashed without reading the text (below) |
 
-**A `Name` is the 64-bit hash of a text, interned with the text, and compares by its hash alone** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). It is made only from a text:
+**A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` and hashing look only at the `Name`'s own pointer-sized value, never at its text, and no two texts can collide. A compiler's symbols, a config file's keys and a protocol's field names compare this way, as identifiers rather than bytes:
 
-- a string literal of type `Name` hashes at compile time, as `Name(s)` does for a `const` string;
-- `Name(s)` of any other string, and `Name(interning: s)`, intern at run time, copying the text into `.system` memory whatever the current allocator is.
+```swift
+let jump = Name("jump")                   // interns "jump", copying the text only the first time
+if action == jump { player.jump() }       // compares one pointer-sized value, never the text
+log("pressed \(jump.text)")               // the text, as a StaticString
+```
 
-A `Name`'s `text` is a `StaticString`, since interned text is never freed. Every `Name` the build makes at compile time, by a literal, a `const` or a compile-time evaluation, is in the interner with its text from startup.
+**`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
-**No two texts share a `Name`**, since two that did would compare equal. A build in which two constant names would share one fails. At run time, `Name(s)` panics when another text already has `s`'s hash or interning runs out of memory, and `Name(interning: s)` returns `nil` in both cases.
+**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `StaticString` ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). That suits identifiers drawn from a bounded set, such as keywords, config keys or the actions a game binds. It doesn't suit unbounded or untrusted input, where each new text would grow the interner for good.
+
+**Code that must free what it interns keeps its own interner**, an owning value whose storage comes from an allocator or an arena: a `Map` from each text to a small integer id, and a `List` of the texts. Its ids compare as cheaply as a `Name`, and resolve back to text through the interner that made them. Destroying the interner, or resetting its arena, frees every text at once.
+
+**`Name` takes no string literal, and no `Name` is a `const`.** Interning reads and writes the interner, a global, which code running at compile time can't reach ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). So a literal could become a `Name` only by interning each time it is evaluated: a lookup in a table that every thread shares, and maybe an allocation, which nothing at the literal would show. A `Name` that a program uses throughout is made once, in a global `let` that startup initializes ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
 ### Strings
 
@@ -117,7 +123,7 @@ protocol Formattable { func format(into sink: mutable some TextSink) where sink 
 ```swift
 let v: Vec3 = [1, 2, 3]                   // a Vec3: exactly 3 elements
 let mask: LayerMask = [.player, .enemies] // a user type that conforms: any number of layers
-let jump: Name = "jump"                   // hashed at compile time
+let jump: StringView = "jump"             // views the literal's immortal bytes: borrows nothing
 let lo: Int8 = -128                       // fits: the '-' is checked with the literal
 names.append("grunt")                     // a String that uses the literal's bytes: no allocation
 let xs = [3, 4, 5]                        // no context: a [3 of Int], stored inline
@@ -133,7 +139,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 | --- | --- | --- |
 | `ExpressibleByArrayLiteral` | `init<let N: Int>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
 | `ExpressibleByDictionaryLiteral` | `init<let N: Int>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
-| `ExpressibleByStringLiteral` | `init(stringLiteral text: StaticString)` | `StaticString`, `StringView`, `Name`, `String` |
+| `ExpressibleByStringLiteral` | `init(stringLiteral text: StaticString)` | `StaticString`, `StringView`, `String` |
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
@@ -142,7 +148,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 
 - its initializer is `@noalloc`, as those of the number types, `Array`, `Simd`, `InlineList`, `StaticString`, `StringView`, `String` and `std.math`'s `Vec3` and matrices are;
-- its literals convert at compile time (below), as `Name`'s do.
+- its literals convert at compile time (below), so its initializer never runs at run time.
 
 So a `List`, `Set` or `Map` literal is an error there.
 
@@ -174,7 +180,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no `Allocator` id but `.system`;
 - no pointer but a `StaticString` or `StaticSpan`.
 
-`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
+`Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Vec3` literal costs nothing at run time.
 
 **Any other literal runs its initializer on each evaluation**: a `List`'s allocates from the current allocator, and a `String`'s only records it. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 

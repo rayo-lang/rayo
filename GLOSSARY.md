@@ -159,6 +159,10 @@ _Avoid_: weak reference, weak link (a `WeakShared`)
 **Layout order**:
 The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
 
+**Name**:
+std's interned text: a pointer-sized value that equals another exactly when their texts are equal, and whose text lives for the rest of the program ([04](docs/spec/04-types/collections.md#collections-and-strings)).
+_Avoid_: hashed name, string hash, string id
+
 **Narrowing**:
 Treating an optional place as its payload's type after a check that it isn't `nil`, for as long as nothing can make it `nil` ([04](docs/spec/04-types/enums.md#narrowing)).
 _Avoid_: smart cast, flow typing

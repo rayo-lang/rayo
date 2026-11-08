@@ -84,8 +84,6 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 **Poisoned locks.** An unwind out of a lock's exclusive access, through a guard or a closure, poisons the lock: a `Mutex`'s access does, and an `RwLock`'s `write` access does, but its `read` access doesn't. Then `lock`, `read` and `write` on it panic until `clearPoison()` resets it, so another thread, which never sees the `recover` closure that might repair it, doesn't take what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
-**Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
-
 ### Messages
 
 ```swift

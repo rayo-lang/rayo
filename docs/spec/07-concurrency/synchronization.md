@@ -25,9 +25,9 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 - creating a `Shared` value;
 - registering an allocator;
-- interning a `Name`.
+- interning a text as a new `Name`.
 
-The check each use makes synchronizes with the creation.
+The check each use makes synchronizes with the creation, and so does reading a `Name`'s text.
 
 ### Locks: `Mutex` and `RwLock`
 
