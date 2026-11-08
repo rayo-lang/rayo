@@ -284,7 +284,7 @@ enum ThreadStart {
 
 **During startup, `Runtime.startThread` returns `.queued` at once, and the thread waits until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded.
 
-**A queued thread that the platform can't start when startup ends panics on the startup thread**, as part of startup. So, like any uncaught panic during startup, it ends the program: with status 101 before `main`, or at once inside `rayo_init()` ([Initialization at startup](global-state.md#initialization-at-startup)). The failed thread's body and its `ended` are destroyed with the other queued bodies.
+**A queued thread that the platform can't start when startup ends panics on the startup thread**, as part of startup. So, like any uncaught panic during startup, it ends the program: with status 101 before `main`, or at once inside `rayo_init()` ([Initialization at startup](global-state.md#initialization-at-startup)). Before `main`, the failed thread's body and its `ended` are destroyed with the other queued bodies that haven't started. Inside `rayo_init()`, the program ends at once, and no `deinit` runs.
 
 **A refused start makes std's lending calls panic on the calling thread**, as it makes `ThreadScope.spawn` panic ([above](#scoped-threads)). The work, which may borrow the caller's data, is destroyed there and never reaches another thread. The call still waits for the pieces it handed out before the panic leaves it, as the library's promise requires ([above](#the-librarys-promise)).
 
