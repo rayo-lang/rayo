@@ -54,30 +54,30 @@ func loadLevel(_ path: StringView) -> Level!(IoError | ParseError)   // the same
 - `TrivialFree` when both are ([06](../06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree));
 - scoped when either is ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
-Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no value of it ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). A `T!Never` has no tag, but isn't `Pod` either, so that no `Result` is: code that reads its bytes converts it to a `T` first, at no cost (below).
+Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no value of it ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). A `T!Never` has no tag, but isn't `Pod` either, so that no `Result` is: code that reads its bytes takes the `T` out with `try` first (below).
 
 ### What a failure type names
 
 ```swift
 func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
-let squares = tryMap(xs, square)     // square can't fail, so E is Never: a List<Int>!Never
-log("\(squares.count) squares")      // its members are the List's
+let squares = try tryMap(xs, square)    // square can't fail, so E is Never: 'try' takes the List out
+log("\(squares.count) squares")
 ```
 
 **Three rules say what a failure type names:**
 
 - **Error types.** A failure type conforms to `Error`, a marker protocol with no requirements; `Never` conforms too.
-- **Not failing is failing with `Never`.** A `Never` failure has no values ([04](../04-types/enums.md#enums)), so every `T!Never` holds a `T`. It is laid out as `T`, with no tag, and converts to `T` and back implicitly at no cost ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a function value of type `(Int) -> Int` converts to `(Int) -> Int!Never`, and binds `E` to `Never`, as `square` does above.
+- **Not failing is failing with `Never`.** A `Never` failure has no values ([04](../04-types/enums.md#enums)), so every `T!Never` holds a `T`. It is laid out as `T`, with no tag ([04](../04-types/enums.md#enums)). So a function value of type `(Int) -> Int` converts to `(Int) -> Int!Never` and back at no cost ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)), and binds `E` to `Never`, as `square` does above.
 - **Inferred errors.** A non-public function with a body may end its result type with a bare `!`, as in `-> Int!`. For such a function, the compiler infers the union of the error types its body can fail with, as it does for a closure literal without a written result type. Where functions call each other in a cycle, it infers the smallest such union. A function type, a requirement and any other declaration without a body name their failure type, since there is no body to infer it from.
 
 **The errors a body can fail with are the members of what it propagates:** each `throw`, each `try` that propagates ([below](#propagating-errors-with-try)), and each `Result` it returns whole.
 
-**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`.
+**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the function-value conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`.
 
 **`T!Never` is a type of its own, not another name for `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
-**A `T!Never` converts to `T` wherever the context needs a `T`, as the receiver of a member access or a method call included.** It holds nothing but a `T`, so code that can't fail reads its result with no `try` and no annotation, as `squares.count` does above. Member lookup on a `T!Never` looks only in `T`. `Result` declares no members of its own besides its two cases, which are never instance members, so none is hidden. A place of type `T!Never` is a place of `T` there, since the two are laid out the same, so the access borrows it and moves nothing.
+**A `T!Never` value becomes a `T` only through `try`, `try?` or `try!`**, which never fail on it. `squares` above needs `try`, since `tryMap`'s result type says it is a `Result`, and `try` is how any `Result` is taken apart, whatever its failure type. So no other conversion of a `Result` value, and no rule for its members, is needed.
 
 **An initializer that can fail writes its result type as `-> Self!E`:**
 
@@ -165,7 +165,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A value that may hold an error must be used, or it is a compile error**, so no error is dropped without the code saying so. Its type is one of these:
 
-- a `Result` whose failure type isn't `Never`;
+- a `Result` whose failure type isn't `Never`, or a `T!Never` whose `T` is such a value;
 - an optional or a tuple holding one, at any depth, such as the `(Void!IoError)?` that `player?.save()` gives;
 - a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance.
 
@@ -177,7 +177,7 @@ Generic code that drops such a value writes `_ = f()`, a small cost for losing n
 - the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
 - the single expression of a body whose result type is `Void`;
 - held in a local or an `owned` parameter that no code names after its declaration, since `let r = save()` would otherwise drop the error as silently as a statement does;
-- overwritten by an assignment before any code names it, as the first `r` is in `var r = save(a); r = save(b)`.
+- overwritten by an assignment before any code reads it, as the first `r` is in `var r = save(a); r = save(b)`.
 
 **`_ = r` and `let _ = r` drop such a value on purpose.** Each takes `r` as a value, and destroys it at the end of its statement.
 
