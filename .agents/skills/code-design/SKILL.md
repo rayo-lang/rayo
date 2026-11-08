@@ -5,7 +5,7 @@ description: Use before implementing a feature, fix, or refactor to place the ch
 
 # Code Design
 
-Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each function at one zoom level.
+Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each function tidy.
 
 Apply the first three gates before editing. Apply the fourth while coding. Apply the last two after the behavior works. `code-comments` governs documentation and naming.
 
@@ -53,20 +53,27 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 **Done when:** you have named the closest existing concept and decided reuse or separation from its reasons to change.
 
-## 4. One zoom level
+## 4. Tidy functions
 
-A function either orchestrates named steps or performs one step. It does not switch between those altitudes.
+A function is **tidy** when a reader sees what it does at a glance. It does one job, as one of two kinds:
 
-Extract a function or value type when a body reveals a second level through:
+- **An orchestrator.** Its body is a few blocks separated by blank lines, and every line of a block is a call or binding to a named step, with no mechanics inline.
+- **A leaf.** It performs one step, however long its mechanics run.
+
+Extract a function or value type when a body takes on a second job, however small, or mixes the two kinds, as shown by:
 
 - numbered or section-heading comments;
-- setup followed by dispatch or detailed mechanics;
-- parallel locals assigned through the same branches; or
-- a tuple immediately unpacked and recombined by the caller.
+- setup followed by dispatch or detailed mechanics; or
+- parallel locals assigned through the same branches.
 
-Length is not the test. A long mechanical leaf may be coherent; a short function that both coordinates and performs work is not.
+A tidy function also has:
 
-**Done when:** a reader can follow each changed function without changing altitude inside it.
+- **Inputs from its caller.** A step takes the values its caller already holds as arguments.
+- **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it.
+- **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result.
+- **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
+
+**Done when:** every changed function is an orchestrator or a leaf as defined above, and has each property listed.
 
 ## 5. Repetition created by the change
 
@@ -88,4 +95,4 @@ Trace every changed line back to the root problem. Remove surface area the chang
 
 Remove only excess created by this change. Adjacent cleanup is separate work.
 
-**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the clarity of one zoom level.
+**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the tidiness of a function.
