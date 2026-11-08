@@ -11,16 +11,16 @@ public struct DiagnosticsMacro: MemberMacro {
     private struct Member {
         var name: String
         var type: String
-        var placeholder: String
+        var fallbackBody: String
         var body: ([CodeEntry]) -> String
     }
 
     private static var members: [Member] {
         [
-            Member(name: "number", type: "Int", placeholder: "0") { entries in
+            Member(name: "number", type: "Int", fallbackBody: "0") { entries in
                 switchOverSelf(entries.map { "case .\($0.name): \($0.number)" })
             },
-            Member(name: "message", type: "String", placeholder: "\"\"") { entries in
+            Member(name: "message", type: "String", fallbackBody: "\"\"") { entries in
                 switchOverSelf(entries.map { "case \($0.bindingPattern): \($0.messageLiteral)" })
             },
         ]
@@ -33,79 +33,90 @@ public struct DiagnosticsMacro: MemberMacro {
             context.diagnose(Diagnostic(node: node, message: CodeTableError.notAnEnum))
             return []
         }
-        let taken = takenNames(in: enumDecl)
-        var errors = taken.map { Diagnostic(node: $0.declaration, message: CodeTableError.memberTaken($0.name)) }
+        var errors: [Diagnostic] = []
+        let missing = membersToGenerate(in: enumDecl, reporting: &errors)
         let entries = entries(of: enumDecl, reporting: &errors)
         errors.forEach { context.diagnose($0) }
 
-        let access = enumDecl.modifiers.first { ["public", "package"].contains($0.name.text) }
-            .map { "\($0.name.text) " } ?? ""
+        let access = accessModifier(of: enumDecl)
         let readEntries = errors.isEmpty ? entries : nil
-        return members.filter { member in !taken.contains { $0.name == member.name } }.map { member in
+        return missing.map { member in
             """
             \(raw: access)var \(raw: member.name): \(raw: member.type) {
-                \(raw: readEntries.map(member.body) ?? member.placeholder)
+                \(raw: readEntries.map(member.body) ?? member.fallbackBody)
             }
             """
         }
     }
 
-    /// Each case's entry, in order, or nil when any case has none. Reports a number used twice, and a
-    /// case under `#if`.
+    /// Each case's entry, in order, or nil when any case has none. Reports a case under `#if`, and a
+    /// number used twice.
     private static func entries(of enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [CodeEntry]? {
+        errors += conditionalCases(in: enumDecl.memberBlock.members).map {
+            Diagnostic(node: $0.caseKeyword, message: CodeTableError.conditionalCase)
+        }
+        let cases = enumDecl.memberBlock.members.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) }
         var entries: [CodeEntry] = []
-        var allRead = true
+        for caseDecl in cases {
+            if let entry = CodeEntry.read(caseDecl, reporting: &errors) { entries.append(entry) }
+        }
+        errors += duplicateNumbers(in: entries)
+        return entries.count == cases.count ? entries : nil
+    }
+
+    /// An error at each entry whose number an earlier entry has, with a note at that earlier one.
+    private static func duplicateNumbers(in entries: [CodeEntry]) -> [Diagnostic] {
         var firstUses: [Int: ExprSyntax] = [:]
-        for member in enumDecl.memberBlock.members {
-            if let conditional = member.decl.as(IfConfigDeclSyntax.self) {
-                errors += casesUnder(conditional).map { Diagnostic(node: $0.caseKeyword, message: CodeTableError.conditionalCase) }
-                continue
-            }
-            guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
-            guard let entry = CodeEntry.read(caseDecl, reporting: &errors) else {
-                allRead = false
-                continue
-            }
-            if let firstUse = firstUses[entry.number] {
-                let note = Note(node: Syntax(firstUse), message: CodeTableNote.firstUse(entry.number))
-                errors.append(Diagnostic(node: entry.numberNode, message: CodeTableError.duplicateNumber(entry.number),
-                                         notes: [note]))
-            } else {
+        return entries.compactMap { entry in
+            guard let firstUse = firstUses[entry.number] else {
                 firstUses[entry.number] = entry.numberNode
+                return nil
             }
-            entries.append(entry)
-        }
-        return allRead ? entries : nil
-    }
-
-    /// The cases declared under `conditional`, in any of its clauses.
-    private static func casesUnder(_ conditional: IfConfigDeclSyntax) -> [EnumCaseDeclSyntax] {
-        conditional.clauses.flatMap { clause -> [EnumCaseDeclSyntax] in
-            guard case .decls(let members) = clause.elements else { return [] }
-            return members.flatMap { member -> [EnumCaseDeclSyntax] in
-                if let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) { return [caseDecl] }
-                return member.decl.as(IfConfigDeclSyntax.self).map(casesUnder) ?? []
-            }
+            let note = Note(node: Syntax(firstUse), message: CodeTableNote.firstUse(entry.number))
+            return Diagnostic(node: entry.numberNode, message: CodeTableError.duplicateNumber(entry.number), notes: [note])
         }
     }
 
-    /// The instance members of `enumDecl` that declare a name the macro generates.
-    private static func takenNames(in enumDecl: EnumDeclSyntax) -> [(name: String, declaration: DeclSyntax)] {
-        enumDecl.memberBlock.members.compactMap { member in
-            let declared: [String]
+    /// The cases declared under an `#if` among `members`, at any depth.
+    private static func conditionalCases(in members: MemberBlockItemListSyntax) -> [EnumCaseDeclSyntax] {
+        members.flatMap { member -> [EnumCaseDeclSyntax] in
+            guard let conditional = member.decl.as(IfConfigDeclSyntax.self) else { return [] }
+            return conditional.clauses.flatMap { clause -> [EnumCaseDeclSyntax] in
+                guard case .decls(let clauseMembers) = clause.elements else { return [] }
+                return clauseMembers.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) } + conditionalCases(in: clauseMembers)
+            }
+        }
+    }
+
+    /// The members the macro generates that `enumDecl` doesn't declare itself, reporting each it does.
+    private static func membersToGenerate(in enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [Member] {
+        members.filter { member in
+            guard let declaration = instanceDeclaration(named: member.name, in: enumDecl) else { return true }
+            errors.append(Diagnostic(node: declaration, message: CodeTableError.memberTaken(member.name)))
+            return false
+        }
+    }
+
+    /// The instance property or method of `enumDecl` named `name`, if there is one.
+    private static func instanceDeclaration(named name: String, in enumDecl: EnumDeclSyntax) -> DeclSyntax? {
+        enumDecl.memberBlock.members.first { member in
             if let variable = member.decl.as(VariableDeclSyntax.self), !isStatic(variable.modifiers) {
-                declared = variable.bindings.compactMap { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text }
-            } else if let function = member.decl.as(FunctionDeclSyntax.self), !isStatic(function.modifiers) {
-                declared = [function.name.text]
-            } else {
-                declared = []
+                return variable.bindings.contains { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == name }
             }
-            return declared.first { name in members.contains { $0.name == name } }.map { ($0, member.decl) }
-        }
+            if let function = member.decl.as(FunctionDeclSyntax.self), !isStatic(function.modifiers) {
+                return function.name.text == name
+            }
+            return false
+        }?.decl
     }
 
     private static func isStatic(_ modifiers: DeclModifierListSyntax) -> Bool {
         modifiers.contains { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) }
+    }
+
+    /// `public ` or `package ` when the enum is, so that its generated members are too; otherwise nothing.
+    private static func accessModifier(of enumDecl: EnumDeclSyntax) -> String {
+        enumDecl.modifiers.first { ["public", "package"].contains($0.name.text) }.map { "\($0.name.text) " } ?? ""
     }
 
     private static func switchOverSelf(_ cases: [String]) -> String {

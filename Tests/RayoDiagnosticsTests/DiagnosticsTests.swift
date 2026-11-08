@@ -29,6 +29,9 @@ enum SampleCode: Equatable {
 
     @Code(1_002, error: "a backslash, then '\\u{name}', and '{café}'")
     case edges(name: String, café: String)
+
+    @Code(1_003, error: "expected a block '{…}'")
+    case ellipsis
 }
 
 struct DiagnosticsTests {
@@ -40,6 +43,7 @@ struct DiagnosticsTests {
         (.keywordLabel(in: "i"), "'i' is in a loop"),
         (.qualified, "qualified"),
         (.edges(name: "n", café: "c"), "a backslash, then '\\un', and 'c'"),
+        (.ellipsis, "expected a block '{…}'"),
     ])
     func messages(code: SampleCode, message: String) {
         #expect(code.message == message)
@@ -58,7 +62,7 @@ struct DiagnosticsTests {
     @Test("each code has its number", arguments: [
         (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.typeMismatch(expected: "", found: ""), 3),
         (.moveOutOfLocal(name: "a"), 40), (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
-        (.braces(name: ""), 1000), (.qualified, 1001), (.edges(name: "", café: ""), 1002),
+        (.braces(name: ""), 1000), (.qualified, 1001), (.edges(name: "", café: ""), 1002), (.ellipsis, 1003),
     ])
     func numbers(code: SampleCode, number: Int) {
         #expect(code.number == number)
