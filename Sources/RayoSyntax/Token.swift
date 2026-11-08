@@ -1,3 +1,5 @@
+import RayoSource
+
 /// Reserved words. Contextual keywords, such as `keep` and `move`, lex as identifiers.
 public enum Keyword: String, Sendable, CaseIterable {
     case `let`, `var`, `const`, `func`, task, `struct`, `enum`, `protocol`, `extension`, `typealias`, `import`

@@ -1,5 +1,5 @@
 import RayoSema
-import RayoSyntax
+import RayoSource
 
 public enum Lowering {
     public static func lower(_ program: CheckedProgram) -> IRProgram {

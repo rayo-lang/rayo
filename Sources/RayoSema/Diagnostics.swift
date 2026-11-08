@@ -1,4 +1,5 @@
-import RayoSyntax
+import RayoDiagnostics
+import RayoSource
 
 /// Collects the errors of a check.
 struct Diagnostics {
