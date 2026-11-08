@@ -71,7 +71,7 @@ public struct Parser {
     private mutating func fail(_ message: String) -> Failure {
         // The lexer has reported an invalid token already.
         guard current.kind != .invalid else { return Failure() }
-        return error("\(message), found \(atGreaterEqual ? "'>='" : describe(current))", at: current.range)
+        return error("\(message), found \(describe(current))", at: current.range)
     }
 
     private mutating func unsupported(_ what: String, at range: SourceRange) -> Failure {
@@ -465,7 +465,9 @@ public struct Parser {
         let start = current.range
         let kind: StmtKind
         if atOwnedBinding {
-            throw error("a declaration takes its value without 'owned'; write 'borrow' after '=' to borrow instead",
+            let message = "a declaration takes its value without 'owned'"
+            // Only a 'let' can borrow shared, so only a 'let' gets the hint.
+            throw error(peek().isKeyword(.let) ? "\(message); write 'borrow' after '=' to borrow instead" : message,
                         at: start)
         } else if consume(.let) {
             kind = .binding(try parseBinding(.let))
@@ -560,7 +562,7 @@ public struct Parser {
     }
 
     /// `'borrow' unary-expression`, the initializer of a `let` that borrows. The initializer may go on only
-    /// with `??`, which isn't supported yet, so the borrowed place ends it.
+    /// with `??`, which is reported as unsupported, so the borrowed place ends it.
     private mutating func parseBorrowingInitializer(of kind: BindingKind) throws(Failure) -> Expr {
         let start = advance().range
         if kind == .var {
@@ -570,7 +572,9 @@ public struct Parser {
         let place = try parseUnary()
         if current.isPunct(.coalesce) { throw unsupported("'??'", at: current.range) }
         if !atStatementEnd && !current.isPunct(.comma) {
-            throw fail("a borrowing initializer ends after the place it borrows")
+            let message = "a borrowing initializer ends after the place it borrows"
+            if atGreaterEqual { throw error("\(message), found '>='", at: current.range) }
+            throw fail(message)
         }
         return makeExpr(.borrow(place), range(from: start))
     }
