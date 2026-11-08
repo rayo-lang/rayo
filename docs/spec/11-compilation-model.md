@@ -174,11 +174,19 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - provides thread-local storage;
 - provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
-- doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below).
+- doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
+- keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
 
-**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. Then the second load reads a value no older, in its location's modification order, than any write that happens before `S`. That covers, too, any write that happens before a store `S`'s thread read before `S`, and so on back along such reads.
+ISO C guarantees neither of the last two, so the target's compiler must.
 
-So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was written before it was first stored. With the compiler's bullet above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when either of these holds:
+
+- **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
+- **Carried.** `W` counts for a store that `S`'s thread read before `S`, and that thread ordered the read before `S`: the read is an acquire, or `S`'s value or address depends on what it read.
+
+Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`. ARMv8 and Power give this, as do stronger processors.
+
+So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## What the language leaves open
 

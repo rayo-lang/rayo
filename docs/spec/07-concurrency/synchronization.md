@@ -21,11 +21,18 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. The check each use makes synchronizes with the creation. It loads through the value that names what was made, so the target's cumulative ordering of such loads has it read what the creation wrote, however the value travelled ([11](../11-compilation-model.md#what-a-target-must-provide)).
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. Each creation ends with a release fence before it hands the value out. The target carries what that fence released along any chain of threads that passes the value on ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` reached the reading thread. Each interned entry holds a plain word, written once with a release store after the text and its hash, and every read of either first loads that word with an acquire load.
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` reached the reading thread. Interning a new entry writes its text and hash, then a plain word, written once with a release store, and ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
 
-**That acquire load reads the release store, however the `Name` arrived.** It goes through the `Name`. Interning hands a `Name` out only after the release store, so the release store happens before the first store in any chain that carries the `Name` to another thread. The target orders loads through a loaded address cumulatively along such chains, so the acquire load reads the release store, whatever route the `Name` took, a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)). An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
+**That acquire load reads the word's release store, however the `Name` arrived**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
+
+- **A new entry.** The fence orders the word's store before every store of the `Name` that the interning thread makes, and the target carries that order along any chain of threads that passes the `Name` on.
+- **An existing entry.** A lookup that finds one reads the interner's table with acquire. So the chain runs back through that read to the fence that ended the entry's interning.
+
+An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
+
+**The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
 
 **A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
 
