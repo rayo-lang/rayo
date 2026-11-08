@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 /// What a call needs to know about the function it calls.
@@ -14,7 +15,7 @@ struct Declarations {
     /// The functions a program can name.
     let functionNames: Set<String> = ["print", "main"]
 
-    func resolve(_ type: TypeExpr, reporting errors: inout Diagnostics) -> RayoType? {
+    func resolve(_ type: TypeExpr, reporting errors: inout ErrorList) -> RayoType? {
         switch type {
         case .named("Int", _):
             return .int
@@ -23,7 +24,7 @@ struct Declarations {
         case .named("Void", _), .void:
             return .void
         case .named(let name, let range):
-            errors.error("'\(name)' isn't a type", at: range)
+            errors.report(.notAType(name: name), at: range)
             return nil
         }
     }

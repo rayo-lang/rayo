@@ -1,5 +1,9 @@
 import Testing
+import RayoDiagnostics
 import RayoDriver
+
+/// The error for adding a Bool to an Int, as in `1 + true`.
+private let intAndBool = ErrorCode.operandTypes(op: "+", needs: "Int", left: "Int", right: "Bool")
 
 /// The output of running `body` as `main`'s body, which must not fail.
 private func output(_ body: String) -> String {
@@ -23,44 +27,43 @@ struct LocalTests {
 
     @Test("a block's locals are visible only inside it")
     func scopes() {
-        #expect(errors("func main() {\n    if true { let x = 1 }\n    print(x)\n}") ==
-            ["3:11: error: 'x' isn't declared"])
+        #expect(errors("func main() {\n    if true { let x = 1 }\n    print(x)\n}") == [.notDeclared(name: "x")])
     }
 
     @Test("locals are checked", arguments: [
-        ("let x = 1\nx = 2", "3:1: error: 'x' is a 'let', so it can't change"),
-        ("let x = 1\nx += 2", "3:1: error: 'x' is a 'let', so it can't change"),
-        ("let x: Bool = 1", "2:15: error: expected Bool, found Int"),
-        ("var x = 1\nx = true", "3:5: error: expected Int, found Bool"),
-        ("var x = true\nx += 1", "3:1: error: '+=' needs Int operands, found Bool and Int"),
-        ("1 = 2", "2:1: error: only a local can be assigned"),
-        ("let x = 1\nlet x = 2", "3:5: error: 'x' is already declared"),
-        ("let x = print(1)", "2:9: error: a local can't have type Void"),
-        ("let x: Int", "2:11: error: expected '=' and a value, found a newline"),
-        ("let x = 1\nx(2)", "3:1: error: 'x' isn't a function"),
-        ("let print = 1\nprint(print)", "2:5: error: 'print' is already declared"),
-        ("let main = 1", "2:5: error: 'main' is already declared"),
-        ("print = 3", "2:1: error: 'print' is a function, so it can't change"),
-        ("main += 2", "2:1: error: 'main' is a function, so it can't change"),
-        ("let _ = 5", "2:5: error: '_' can't be declared"),
-        ("_ = 5", "2:1: error: only a local can be assigned"),
-        ("_ += 1", "2:1: error: only a local can be assigned"),
-        ("print(_)", "2:7: error: '_' names no value"),
+        ("let x = 1\nx = 2", ErrorCode.assignToLet(name: "x")),
+        ("let x = 1\nx += 2", .assignToLet(name: "x")),
+        ("let x: Bool = 1", .typeMismatch(expected: "Bool", found: "Int")),
+        ("var x = 1\nx = true", .typeMismatch(expected: "Int", found: "Bool")),
+        ("var x = true\nx += 1", .operandTypes(op: "+=", needs: "Int", left: "Bool", right: "Int")),
+        ("1 = 2", .assignToNonLocal),
+        ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
+        ("let x = print(1)", .voidLocal),
+        ("let x: Int", .expected(what: .bindingValue, found: .newline)),
+        ("let x = 1\nx(2)", .notAFunction(name: "x")),
+        ("let print = 1\nprint(print)", .alreadyDeclared(name: "print")),
+        ("let main = 1", .alreadyDeclared(name: "main")),
+        ("print = 3", .assignToFunction(name: "print")),
+        ("main += 2", .assignToFunction(name: "main")),
+        ("let _ = 5", .underscoreDeclared),
+        ("_ = 5", .assignToNonLocal),
+        ("_ += 1", .assignToNonLocal),
+        ("print(_)", .underscoreValue),
     ])
-    func rejected(body: String, expected: String) {
+    func rejected(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
     @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [
-        ("var a = 1\nlet b = a", "3:9: error: a local's value is taken with 'copy a'"),
-        ("var a = 1\nlet b = (a)", "3:9: error: a local's value is taken with 'copy a'"),
-        ("var a = 1\nvar b = 0\nb = a", "4:5: error: a local's value is taken with 'copy a'"),
-        ("let b = copy 1", "2:14: error: expected a name after 'copy', found '1'"),
-        ("let b = copy print", "2:14: error: 'print' is a function, not a value"),
-        ("let b = copy nope", "2:14: error: 'nope' isn't declared"),
-        ("let b = copy _", "2:14: error: '_' names no value"),
+        ("var a = 1\nlet b = a", ErrorCode.takenWithoutCopy(name: "a")),
+        ("var a = 1\nlet b = (a)", .takenWithoutCopy(name: "a")),
+        ("var a = 1\nvar b = 0\nb = a", .takenWithoutCopy(name: "a")),
+        ("let b = copy 1", .expected(what: .copiedName, found: .token("1"))),
+        ("let b = copy print", .functionAsValue(name: "print")),
+        ("let b = copy nope", .notDeclared(name: "nope")),
+        ("let b = copy _", .underscoreValue),
     ])
-    func moves(body: String, expected: String) {
+    func moves(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
@@ -70,27 +73,25 @@ struct LocalTests {
     }
 
     @Test("a declaration that fails still declares its name, so its uses report nothing more", arguments: [
-        ("let x = undefined\nprint(x)", "2:9: error: 'undefined' isn't declared"),
-        ("let f = undefined\nf(1)", "2:9: error: 'undefined' isn't declared"),
-        ("let y: Bool = 1\nif y { }", "2:15: error: expected Bool, found Int"),
-        ("let w: Int8 = 3\nw += 1", "2:8: error: 'Int8' isn't a type"),
-        ("let x = 1\nif true {\nlet x = true\nif x { }\n}", "4:5: error: 'x' is already declared"),
+        ("let x = undefined\nprint(x)", ErrorCode.notDeclared(name: "undefined")),
+        ("let f = undefined\nf(1)", .notDeclared(name: "undefined")),
+        ("let y: Bool = 1\nif y { }", .typeMismatch(expected: "Bool", found: "Int")),
+        ("let w: Int8 = 3\nw += 1", .notAType(name: "Int8")),
+        ("let x = 1\nif true {\nlet x = true\nif x { }\n}", .alreadyDeclared(name: "x")),
     ])
-    func noCascade(body: String, expected: String) {
+    func noCascade(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
     @Test("an assignment's target and value are checked even when the other fails", arguments: [
-        ("nope = 1 + true", ["2:1: error: 'nope' isn't declared", "2:8: error: '+' needs Int operands, found Int and Bool"]),
-        ("let x = 1\nx = undefined", ["3:1: error: 'x' is a 'let', so it can't change", "3:5: error: 'undefined' isn't declared"]),
-        ("let x = 1\nx += 1 + true", ["3:1: error: 'x' is a 'let', so it can't change",
-                                     "3:6: error: '+' needs Int operands, found Int and Bool"]),
-        ("let k = 1\nk(1 + true)", ["3:1: error: 'k' isn't a function", "3:3: error: '+' needs Int operands, found Int and Bool"]),
-        ("nope(2 + false)", ["2:1: error: 'nope' isn't declared", "2:6: error: '+' needs Int operands, found Int and Bool"]),
-        ("let w: Int8 = 1 + true", ["2:8: error: 'Int8' isn't a type",
-                                     "2:15: error: '+' needs Int operands, found Int and Bool"]),
+        ("nope = 1 + true", [ErrorCode.notDeclared(name: "nope"), intAndBool]),
+        ("let x = 1\nx = undefined", [.assignToLet(name: "x"), .notDeclared(name: "undefined")]),
+        ("let x = 1\nx += 1 + true", [.assignToLet(name: "x"), intAndBool]),
+        ("let k = 1\nk(1 + true)", [.notAFunction(name: "k"), intAndBool]),
+        ("nope(2 + false)", [.notDeclared(name: "nope"), intAndBool]),
+        ("let w: Int8 = 1 + true", [.notAType(name: "Int8"), intAndBool]),
     ])
-    func valueChecked(body: String, expected: [String]) {
+    func valueChecked(body: String, expected: [ErrorCode]) {
         #expect(errors("func main() {\n\(body)\n}") == expected)
     }
 
@@ -125,16 +126,16 @@ struct BoolTests {
     }
 
     @Test("operands and conditions are checked", arguments: [
-        ("if 1 { }", "2:4: error: expected Bool, found Int"),
-        ("while 0 { }", "2:7: error: expected Bool, found Int"),
-        ("let b = 1 == true", "2:9: error: '==' needs operands of one type, found Int and Bool"),
-        ("let b = true < false", "2:9: error: '<' needs Int operands, found Bool and Bool"),
-        ("let b = 1 && true", "2:9: error: '&&' needs Bool operands, found Int and Bool"),
-        ("let b = !1", "2:10: error: expected Bool, found Int"),
-        ("let b = -true", "2:10: error: expected Int, found Bool"),
-        ("let b = print(1) == print(2)", "2:9: error: '==' can't compare Void values"),
+        ("if 1 { }", ErrorCode.typeMismatch(expected: "Bool", found: "Int")),
+        ("while 0 { }", .typeMismatch(expected: "Bool", found: "Int")),
+        ("let b = 1 == true", .operandsDiffer(op: "==", left: "Int", right: "Bool")),
+        ("let b = true < false", .operandTypes(op: "<", needs: "Int", left: "Bool", right: "Bool")),
+        ("let b = 1 && true", .operandTypes(op: "&&", needs: "Bool", left: "Int", right: "Bool")),
+        ("let b = !1", .typeMismatch(expected: "Bool", found: "Int")),
+        ("let b = -true", .typeMismatch(expected: "Int", found: "Bool")),
+        ("let b = print(1) == print(2)", .voidComparison(op: "==")),
     ])
-    func rejected(body: String, expected: String) {
+    func rejected(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 }
@@ -202,6 +203,6 @@ struct LoopTests {
 
     @Test("'break' and 'continue' need a loop", arguments: ["break", "continue"])
     func outsideLoop(keyword: String) {
-        #expect(errors("func main() {\n\(keyword)\n}") == ["2:1: error: '\(keyword)' is only allowed inside a loop"])
+        #expect(errors("func main() {\n\(keyword)\n}") == [.outsideLoop(keyword: keyword)])
     }
 }

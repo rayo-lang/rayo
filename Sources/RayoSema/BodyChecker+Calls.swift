@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
@@ -17,7 +18,7 @@ extension BodyChecker {
     private mutating func signature(of name: String, at range: SourceRange) -> Signature? {
         switch lookUp(name) {
         case .local:
-            errors.error("'\(name)' isn't a function", at: range)
+            errors.report(.notAFunction(name: name), at: range)
             return nil
         case .failed:
             return nil
@@ -25,11 +26,11 @@ extension BodyChecker {
             break
         }
         guard declarations.functionNames.contains(name) else {
-            errors.error("'\(name)' isn't declared", at: range)
+            errors.report(.notDeclared(name: name), at: range)
             return nil
         }
         guard name == "print" else {
-            errors.error("'\(name)' can't be called", at: range)
+            errors.report(.notCallable(name: name), at: range)
             return nil
         }
         return .print
@@ -40,9 +41,8 @@ extension BodyChecker {
                                 in range: SourceRange) -> [CheckedExpr]? {
         let parameters = signature.parameters
         guard arguments.count == parameters.count else {
-            let noun = parameters.count == 1 ? "argument" : "arguments"
-            errors.error("'\(signature.name)' takes \(parameters.count) \(noun), but the call passes \(arguments.count)",
-                         at: range)
+            let takes = ArgumentCount(parameters.count)
+            errors.report(.argumentCount(name: signature.name, takes: takes, passes: arguments.count), at: range)
             arguments.forEach { _ = check($0) }
             return nil
         }

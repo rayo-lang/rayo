@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
@@ -11,13 +12,13 @@ struct BodyChecker {
     }
 
     let declarations: Declarations
-    var errors: Diagnostics
+    var errors: ErrorList
     private(set) var locals: [CheckedLocal] = []
     /// The names each enclosing block declares, innermost last.
     private var scopes: [[String: ScopeEntry]] = []
     private var loopDepth = 0
 
-    init(declarations: Declarations, errors: Diagnostics) {
+    init(declarations: Declarations, errors: ErrorList) {
         self.declarations = declarations
         self.errors = errors
     }
@@ -64,7 +65,7 @@ struct BodyChecker {
         let declared = binding.type.flatMap { declarations.resolve($0, reporting: &errors) }
         let value = checkTaken(binding.value)
         if binding.name == "_" {
-            errors.error("'_' can't be declared", at: binding.nameRange)
+            errors.report(.underscoreDeclared, at: binding.nameRange)
             return nil
         }
         guard let value, binding.type == nil || declared != nil else {
@@ -73,7 +74,7 @@ struct BodyChecker {
         let type = declared ?? value.type
         guard expect(value, type) else { return declareFailed(binding.name, at: binding.nameRange) }
         if type == .void {
-            errors.error("a local can't have type Void", at: value.range)
+            errors.report(.voidLocal, at: value.range)
             return declareFailed(binding.name, at: binding.nameRange)
         }
         guard let local = declare(binding.name, type: type, isVar: binding.kind == .var, at: binding.nameRange)
@@ -86,7 +87,7 @@ struct BodyChecker {
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
         if case .name(let name) = expr.kind, case .local = value.kind {
-            errors.error("a local's value is taken with 'copy \(name)'", at: expr.range)
+            errors.report(.takenWithoutCopy(name: name), at: expr.range)
             return nil
         }
         return value
@@ -113,7 +114,7 @@ struct BodyChecker {
     /// Whether `name` already names a local or a function, reporting it when it does.
     private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
         guard lookUp(name) != nil || declarations.functionNames.contains(name) else { return false }
-        errors.error("'\(name)' is already declared", at: range)
+        errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
 
@@ -134,7 +135,7 @@ struct BodyChecker {
     /// Whether `local` is a `var`, reporting it when it isn't.
     private mutating func isVar(_ local: LocalID, at range: SourceRange) -> Bool {
         if locals[local.index].isVar { return true }
-        errors.error("'\(locals[local.index].name)' is a 'let', so it can't change", at: range)
+        errors.report(.assignToLet(name: locals[local.index].name), at: range)
         return false
     }
 
@@ -148,12 +149,12 @@ struct BodyChecker {
             case .failed:
                 break
             case nil where declarations.functionNames.contains(name):
-                errors.error("'\(name)' is a function, so it can't change", at: target.range)
+                errors.report(.assignToFunction(name: name), at: target.range)
             case nil:
-                errors.error("'\(name)' isn't declared", at: target.range)
+                errors.report(.notDeclared(name: name), at: target.range)
             }
         default:
-            errors.error("only a local can be assigned", at: target.range)
+            errors.report(.assignToNonLocal, at: target.range)
         }
         return nil
     }
@@ -161,7 +162,7 @@ struct BodyChecker {
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.
     private mutating func isInsideLoop(_ keyword: String, at range: SourceRange) -> Bool {
         if loopDepth > 0 { return true }
-        errors.error("'\(keyword)' is only allowed inside a loop", at: range)
+        errors.report(.outsideLoop(keyword: keyword), at: range)
         return false
     }
 }

@@ -1,15 +1,24 @@
+import RayoDiagnostics
 import Testing
 @testable import RayoSyntax
 
 /// The tokens of `source`, written as the source spells them, with `⏎` for a newline that ends a statement.
 private func tokens(_ source: String) -> [String] {
     let (tokens, diagnostics) = Lexer.tokenize(source)
-    #expect(diagnostics.map(\.description) == [])
+    #expect(diagnostics.map(\.code) == [])
     return tokens.dropLast().map { $0.kind == .newline ? "⏎" : $0.description }
 }
 
-private func lexErrors(_ source: String) -> [String] {
-    Lexer.tokenize(source).diagnostics.map(\.description)
+private func lexErrors(_ source: String) -> [ErrorCode] {
+    Lexer.tokenize(source).diagnostics.map(\.code)
+}
+
+/// The source text each error the lexer reports for `source` covers.
+private func lexCoveredText(_ source: String) -> [String] {
+    let bytes = Array(source.utf8)
+    return Lexer.tokenize(source).diagnostics.map {
+        String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self)
+    }
 }
 
 struct NewlineTests {
@@ -76,7 +85,7 @@ struct TokenTests {
     func integerMagnitude() {
         #expect(tokens("-9223372036854775808") == ["-", "9223372036854775808"])
         #expect(tokens("18446744073709551615") == ["18446744073709551615"])
-        #expect(lexErrors("18446744073709551616") == ["1:1: error: integer literal doesn't fit in 64 bits"])
+        #expect(lexErrors("18446744073709551616") == [.literalExceeds64Bits])
     }
 
     @Test("the longest operator wins")
@@ -94,15 +103,17 @@ struct TokenTests {
     @Test("comments nest")
     func nestedComments() {
         #expect(tokens("a /* x /* y */ z */ b") == ["a", "b"])
-        #expect(lexErrors("a /* x") == ["1:3: error: unterminated block comment"])
+        #expect(lexErrors("a /* x") == [.unterminatedBlockComment])
     }
 
-    @Test("malformed integer literals are reported where they start", arguments: [
-        ("let x = 12ab", "1:9: error: invalid digit in integer literal"),
-        ("let x = 0x", "1:9: error: expected digits after the radix prefix"),
+    @Test("a malformed integer literal is reported, and the error covers the literal", arguments: [
+        ("let x = 12ab", ErrorCode.invalidDigit, "12ab"),
+        ("let x = 0x", .missingDigits, "0x"),
+        ("let x = 18446744073709551616", .literalExceeds64Bits, "18446744073709551616"),
     ])
-    func errors(source: String, expected: String) {
+    func errors(source: String, expected: ErrorCode, literal: String) {
         #expect(lexErrors(source) == [expected])
+        #expect(lexCoveredText(source) == [literal])
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [

@@ -64,36 +64,41 @@ public struct Parser {
         return true
     }
 
+    /// Reads the punctuation `expectation` names.
     @discardableResult
-    private mutating func expect(_ punct: Punct, _ context: String) throws(Failure) -> Token {
-        guard current.isPunct(punct) else { throw fail("expected '\(punct.rawValue)' \(context)") }
+    private mutating func expect(_ expectation: Expectation) throws(Failure) -> Token {
+        guard current.isPunct(expectation.punct) else { throw fail(expectation) }
         return advance()
     }
 
-    private mutating func expectIdentifier(_ what: String) throws(Failure) -> (String, SourceRange) {
-        guard case .identifier(let name) = current.kind else { throw fail("expected \(what)") }
+    private mutating func expectIdentifier(_ expectation: Expectation) throws(Failure) -> (String, SourceRange) {
+        guard case .identifier(let name) = current.kind else { throw fail(expectation) }
         return (name, advance().range)
     }
 
-    /// Reports `message`, followed by what was found at the current token instead.
-    private mutating func fail(_ message: String) -> Failure {
+    /// Reports that the current token isn't what `expectation` names.
+    private mutating func fail(_ expectation: Expectation) -> Failure {
         switch current.kind {
         case .invalid:
             // The lexer has reported it already.
             break
         case .unexpected(let character):
-            diagnostics.append(.error("unexpected character '\(character)'", at: current.range))
+            report(.unexpectedCharacter(character: character))
         default:
-            diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
+            report(.expected(what: expectation, found: describe(current)))
         }
         return Failure()
     }
 
-    private func describe(_ token: Token) -> String {
+    private mutating func report(_ code: ErrorCode) {
+        diagnostics.append(Diagnostic(code, at: current.range))
+    }
+
+    private func describe(_ token: Token) -> FoundToken {
         switch token.kind {
-        case .newline: return "a newline"
-        case .eof: return "the end of the file"
-        default: return "'\(token)'"
+        case .newline: return .newline
+        case .eof: return .endOfFile
+        default: return .token(token.description)
         }
     }
 
@@ -113,13 +118,14 @@ public struct Parser {
 
     /// Items separated by newlines or `;`, up to the `}` that closes their block or the end of the file,
     /// which it leaves for the caller. An item that fails is skipped, and its error stays reported.
-    private mutating func parseSequence<T>(of what: String, _ item: (inout Parser) throws(Failure) -> T) -> [T] {
+    private mutating func parseSequence<T>(endingEach end: Expectation,
+                                           _ item: (inout Parser) throws(Failure) -> T) -> [T] {
         var items: [T] = []
         skipSeparators()
         while !current.isPunct(.rbrace) && !atEnd {
             do {
                 items.append(try item(&self))
-                if !atStatementEnd { throw fail("expected a newline or ';' after the \(what)") }
+                if !atStatementEnd { throw fail(end) }
             } catch {
                 recover()
             }
@@ -157,20 +163,22 @@ public struct Parser {
     mutating func parseFile() -> SourceFile {
         var functions: [FuncDecl] = []
         while true {
-            functions += parseSequence(of: "declaration") { parser throws(Failure) in try parser.parseFunction() }
+            functions += parseSequence(endingEach: .declarationEnd) { parser throws(Failure) in
+                try parser.parseFunction()
+            }
             if atEnd { return SourceFile(functions: functions) }
-            diagnostics.append(.error("unmatched '}'", at: current.range))
+            report(.unmatchedBrace)
             advance()
         }
     }
 
     /// `'func' identifier '(' ')' ('->' type)? block`.
     private mutating func parseFunction() throws(Failure) -> FuncDecl {
-        guard current.isKeyword(.func) else { throw fail("expected 'func' to begin a declaration") }
+        guard current.isKeyword(.func) else { throw fail(.declaration) }
         let start = advance().range
-        let (name, nameRange) = try expectIdentifier("the function's name")
-        try expect(.lparen, "after the function's name")
-        try expect(.rparen, "after '('")
+        let (name, nameRange) = try expectIdentifier(.functionName)
+        try expect(.parametersOpen)
+        try expect(.parenthesisPair)
         var result: TypeExpr?
         if consume(.arrow) { result = try parseType() }
         let body = try parseBlock()
@@ -183,24 +191,24 @@ public struct Parser {
     mutating func parseType() throws(Failure) -> TypeExpr {
         let start = current.range
         if consume(.lparen) {
-            try expect(.rparen, "after '('")
+            try expect(.parenthesisPair)
             return .void(range: range(from: start))
         }
-        let (name, _) = try expectIdentifier("a type")
+        let (name, _) = try expectIdentifier(.type)
         return .named(name, range: range(from: start))
     }
 
     // MARK: Statements
 
     private mutating func parseBlock() throws(Failure) -> Block {
-        let start = try expect(.lbrace, "to begin a block").range
+        let start = try expect(.blockOpen).range
         let statements = parseStatements()
-        try expect(.rbrace, "to close the block")
+        try expect(.blockClose)
         return Block(statements: statements, range: range(from: start))
     }
 
     private mutating func parseStatements() -> [Stmt] {
-        parseSequence(of: "statement") { parser throws(Failure) in try parser.parseStatement() }
+        parseSequence(endingEach: .statementEnd) { parser throws(Failure) in try parser.parseStatement() }
     }
 
     private mutating func parseStatement() throws(Failure) -> Stmt {
@@ -254,10 +262,10 @@ public struct Parser {
 
     /// After the `let` or `var`: `identifier (':' type)? '=' expression`.
     private mutating func parseBinding(_ kind: BindingKind) throws(Failure) -> Binding {
-        let (name, nameRange) = try expectIdentifier("a name to bind")
+        let (name, nameRange) = try expectIdentifier(.bindingName)
         var type: TypeExpr?
         if consume(.colon) { type = try parseType() }
-        guard consume(.assign) else { throw fail("expected '=' and a value") }
+        guard consume(.assign) else { throw fail(.bindingValue) }
         return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: try parseExpression())
     }
 
@@ -286,7 +294,7 @@ public struct Parser {
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
         if consume(.copy) {
-            let (name, nameRange) = try expectIdentifier("a name after 'copy'")
+            let (name, nameRange) = try expectIdentifier(.copiedName)
             return Expr(kind: .copy(name: name, nameRange: nameRange), range: range(from: start))
         }
         let op: UnaryOperator
@@ -320,7 +328,7 @@ public struct Parser {
             advance()
             return try parseParenthesized(from: start)
         default:
-            throw fail("expected an expression")
+            throw fail(.expression)
         }
     }
 
@@ -332,14 +340,14 @@ public struct Parser {
             arguments.append(try parseExpression())
             if !consume(.comma) { break }
         }
-        try expect(.rparen, "to close the arguments")
+        try expect(.argumentsClose)
         return Expr(kind: .call(name: name, nameRange: nameRange, arguments: arguments), range: range(from: nameRange))
     }
 
     /// After the `(`: an expression in parentheses and the `)`.
     private mutating func parseParenthesized(from start: SourceRange) throws(Failure) -> Expr {
         let inner = try parseExpression()
-        try expect(.rparen, "to close the parenthesized expression")
+        try expect(.parenthesizedClose)
         return Expr(kind: inner.kind, range: range(from: start))
     }
 }
@@ -353,6 +361,21 @@ private extension BinaryOperator {
         case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual: return 3
         case .add, .subtract: return 4
         case .multiply, .divide, .remainder: return 5
+        }
+    }
+}
+
+private extension Expectation {
+    /// The punctuation this expectation names. Only the expectations that `expect` takes name one.
+    var punct: Punct {
+        switch self {
+        case .parametersOpen: return .lparen
+        case .parenthesisPair, .argumentsClose, .parenthesizedClose: return .rparen
+        case .blockOpen: return .lbrace
+        case .blockClose: return .rbrace
+        case .declaration, .declarationEnd, .functionName, .type, .statementEnd, .bindingName, .bindingValue,
+             .expression, .copiedName:
+            preconditionFailure("\(self) names no punctuation")
         }
     }
 }

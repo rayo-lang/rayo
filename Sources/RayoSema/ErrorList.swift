@@ -2,11 +2,11 @@ import RayoDiagnostics
 import RayoSource
 
 /// Collects the errors of a check.
-struct Diagnostics {
+struct ErrorList {
     var list: [Diagnostic] = []
 
-    mutating func error(_ message: String, at range: SourceRange) {
-        list.append(.error(message, at: range))
+    mutating func report(_ code: ErrorCode, at range: SourceRange) {
+        list.append(Diagnostic(code, at: range))
     }
 
     /// The errors by where they start in the source, those at one place in the order they were found.
