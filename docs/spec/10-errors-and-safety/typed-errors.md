@@ -94,6 +94,16 @@ public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a 
 
 **A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
+```swift
+protocol SeedSource { var seed: UInt64!IoError { get } }
+struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it: each read through SeedSource is a .success
+```
+
+**A property that can't fail meets a `{ get }` requirement that can.** Whatever meets `{ get }` of type `T` also meets `{ get }` of type `T!E` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), as `seed` does above. It does so through the same wrapper, applied to its `get`, so a read through the requirement wraps the value in `.success`. Only a requirement with `get` alone is met this way:
+
+- **`{ get set }` of type `T!E`** needs a witness of that type, since its `set` must take a failure too.
+- **A place requirement of type `T!E`** needs a place that holds a `Result`, so a stored `T` doesn't meet it.
+
 ## Error unions
 
 A function that can fail for more than one reason names every error type in its failure type:
@@ -147,7 +157,7 @@ var cache: Mesh!LoadError { borrow { slot } }         // hands out a place that 
 - **A `get` body is a function body**, so `try` and `throw` work in it where the property's type is a `Result`, as in `level`. A subscript's `get` works the same way.
 - **Reading a value property is a call** to its `get` ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), so the rule for a call that can't fail covers it ([above](#what-a-failure-type-names)). With `var value: Int!E { get }` on a `Cell<E>`, `c.value` is an `Int` where `c` is a `Cell<Never>`.
 - **A `set` can't fail.** It takes the new value and returns `Void`, so a change that must report a failure is a method.
-- **A `borrow` or `mutate` body can't fail either**, since it hands out a place, and a failure is no place. So a propagating `try` or a `throw` in one is a compile error. A place property of type `T!E` hands out a place that holds a `Result`, as `cache` does. An optional place property is how one hands out no place ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
+- **A `borrow` or `mutate` body can't fail either**, since it hands out a place, and a failure is no place. So a `try` or `throw` that would leave the body is a compile error. A place property of type `T!E` hands out a place that holds a `Result`, as `cache` does. An optional place property is how one hands out no place ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
 **The error propagates member by member.** When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing failure type, or one of its members, or convert to it:
 
