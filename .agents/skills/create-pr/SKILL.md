@@ -23,7 +23,7 @@ Find the issues the branch works on: the issue the task started from, or else an
 
 ## 3. Write the title and body
 
-**Title:** one line stating what the change does, following the Conventional Commits rule in `AGENTS.md`. Its type says the change's kind.
+**Title:** one line stating what the change does, following the Conventional Commits rule in `AGENTS.md`.
 
 **Body:**
 

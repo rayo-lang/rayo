@@ -4,10 +4,10 @@
 - **Test-driven.** Every behaviour change runs red-green-refactor: write the test first and watch it go red for the right reason, write the least code that turns it green, then refactor while it stays green. Load the `tdd` skill before writing code.
 - **Code design and comments.** Two skills are the authority: `code-design` before you implement, `code-comments` as you write each line.
 - **Branch per change.** Commit on a branch named `impl-<feature-slug>`; when an AI model does the work, append `-via-<model>-<version>`, slugged the same way (`impl-arena-reset`, `impl-arena-reset-via-opus-5-5`). Never commit to `main`.
-- **Conventional Commits.** Every commit you write and every PR title has the subject `type(scope): summary`, the summary starting with a lowercase imperative verb (`feat(sema): check calls to user functions`).
+- **Conventional Commits.** Every commit you write and every PR title has the subject `type(scope): summary`, under 72 characters, the summary starting with a lowercase imperative verb (`feat(sema): check calls to user functions`).
   - **Type:** `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore` or `revert`.
-  - **Scope:** the one module whose behaviour changes, not counting its tests (`syntax`, `sema`, `driver`), or the docs area (`spec`, `guide`, `agents`); left out when the change spans several.
-  - **Breaking change:** one that rejects a program `rayoc` accepted, or changes its command line, puts `!` before the colon (`feat(driver)!: drop 'rayoc parse'`).
+  - **Scope:** the one module whose behaviour changes, not counting tests (`syntax`, `sema`, `driver`), or a docs area such as `spec`, `guide`, `adr` or `agents`; left out when the change spans several.
+  - **Breaking change:** one that rejects a program `rayoc` accepted, changes what such a program does, or breaks a `rayoc` command line that worked, puts `!` before the colon (`feat(driver)!: drop 'rayoc parse'`).
 - **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, skill, or tool template that adds one. The only exception is the branch rule's `-via-` suffix.
 - **Pull requests** follow the `create-pr` skill. A change that builds on an open pull request is **stacked** on it: open it with that pull request's branch as its base, then link the chain, bottom to top, with `gh stack link <pr> <pr> …` (`gh extension install github/gh-stack`). GitHub merges a stack from the bottom up and retargets what stays open.
 
