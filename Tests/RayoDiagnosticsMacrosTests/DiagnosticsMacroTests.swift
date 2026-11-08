@@ -71,13 +71,13 @@ struct DiagnosticsMacroTests {
             """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21), error(.unusedValue("name"), 4, 22)])
     }
 
-    @Test("every case has one code, and every value a label for its message to name it")
+    @Test("every case has one code, and every value a label for its message to name it, before its placeholders are checked")
     func caseShape() {
         expect("""
             @Diagnostics
             enum E {
                 case bare
-                @Code(1, error: "x")
+                @Code(1, error: "{nmae}")
                 case unlabeled(String)
                 @Code(2, error: "x")
                 case wildcard(_ name: String)
