@@ -26,7 +26,7 @@ func area(_ s: Shape) -> Float {
 
 - **Nonexhaustive enums.** A `public` enum marked `@nonexhaustive` makes every `when` over it in another module end in `else`.
 - **Raw values.** A raw type, as `UInt8` is for `Blend`, is an integer type, and only an enum without payloads declares one. A case may give its raw value with `= value`, a `const` expression. One that doesn't takes the previous case's plus one, the first `0`. Every raw value, given or taken, must fit the raw type, or the declaration is a compile error. Two cases with one raw value are a compile error. So `E(rawValue:)` returns the one case whose raw value it is given, or `nil`.
-- **Layout.** An enum without payloads is stored as its raw value when it declares a raw type. One without a raw type is stored as a tag numbering its cases from 0, in the smallest unsigned integer type that fits: `UInt8` for up to 256 cases, none or one included. A payload enum is that tag plus a union, except that an optional may keep its tag in a niche of its payload ([below](#optionals)).
+- **Layout.** An enum without payloads is stored as its raw value when it declares a raw type. One without a raw type is stored as a tag numbering its cases from 0, in the smallest unsigned integer type that fits: `UInt8` for up to 256 cases, none or one included. A payload enum is that tag plus a union, except that an optional may keep its tag in a niche of its payload ([below](#optionals)). A `T!Never` stores no tag at all, since its `.failure` holds a `Never` and so has no values ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)). It is laid out as `T`, and keeps `T`'s niches, so `(Handle<Enemy>!Never)?` costs what `Handle<Enemy>?` does.
 - **No cases.** An enum with no cases, such as the prelude's `Never`, has no values, and size 0. So a function whose result type is `Never`, such as `fatalError`, never returns, and it is what the rules below mean by a call that never returns.
 - **Initializers.** An enum's `init` builds its value by assigning `self` a whole value, such as a case, under the same rule as a struct's `self.init` ([Initializers](structs.md#initializers)). It assigns at most once on every path, and exactly once on every path that returns the new value, as `LoadError`'s `@converts` initializers do ([10](../10-errors-and-safety/typed-errors.md#typed-errors)). Before that assignment, `self` doesn't exist.
 
@@ -109,7 +109,8 @@ let hp = borrow enemies[h]?.hp ?? 0  // looks at the element's hp in place, or a
 - raw pointers, `@c` function pointers, `Box`es, object owners and reference-counted pointers, whose `nil` is null;
 - weak pointers, weak links and `Handle`s, whose `nil` is zero. `Handle` is a std type the language names ([11](../11-compilation-model.md#the-prelude)), and its generation is never 0 ([03](../03-handles-and-objects.md#pools-and-handles));
 - an enum with a spare tag value, whose `nil` is the lowest value of its stored type that no case uses: any Rayo enum that has one, `@nonexhaustive` or not, and an imported C enum the header declares closed ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
-- a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- a struct or tuple, through its first stored field or element that has a niche, whose `nil` is that field's. An imported bitfield never supplies one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
+- a `T!Never` whose `T` has one, whose `nil` is `T`'s, since it stores no tag of its own (above).
 
 **These have no niche:**
 

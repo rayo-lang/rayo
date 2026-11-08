@@ -150,6 +150,8 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
 - the scalar type each part holds, so that `Int8` and `Bool` differ;
 - an enum's cases, tags and raw values.
 
+**A `T!Never` reads as the enum it is, though it stores no tag** ([04](../04-types/enums.md#enums)). `isEnum` is true for it, and its `cases` are `success` and `failure`. `value[case: .success]` always holds the `T`, and `value[case: .failure]` is always `nil`. Its `size` and `alignment` are `T`'s, and its `layoutId` covers its two cases and the absence of a tag, so it differs from `T`'s.
+
 The types it holds are those of its stored fields, elements and payloads. The recursion goes through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
 
 ## Reflection and access control

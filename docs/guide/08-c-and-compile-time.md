@@ -156,7 +156,7 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 **Its parameters and result must have C representations** ([08](../spec/08-c-interop/calling-rayo-from-c.md#c-representations)).
 
-**An error it returns is a value like any other**, so a `Result` reaches C as a struct of a tag and a union, when its success and error types have C representations. A panic in it stops the program, without unwinding into C.
+**An error it returns is a value like any other**, so a `Result` reaches C as a struct of a tag and the value or the error, when their types have C representations or take no space, as `Void` does. A panic in it stops the program, without unwinding into C.
 
 **C never gives up what it passes through an imported callback type**, so a `@c func` with an `owned` parameter doesn't convert to one.
 
