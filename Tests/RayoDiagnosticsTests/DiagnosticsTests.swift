@@ -17,6 +17,15 @@ enum SampleCode: Equatable {
 
     @Code(41, error: "'{name}' takes {count} argument, but the call passes {passed}: '{name}' can't take {passed}")
     case arity(name: String, count: Int, passed: Int)
+
+    @Code(0x50, error: "'{in}' is in a loop")
+    case keywordLabel(in: String)
+
+    @Code(1_000, error: "expected '{' after '{name}', then '}' \u{41} and \"\\\" on\nanother line")
+    case braces(name: String)
+
+    @RayoDiagnostics.Code(1_001, error: "qualified")
+    case qualified
 }
 
 struct DiagnosticsTests {
@@ -25,9 +34,16 @@ struct DiagnosticsTests {
         (.notDeclared(name: "x"), "'x' isn't declared"),
         (.typeMismatch(expected: "Int", found: "Bool"), "expected Int, found Bool"),
         (.arity(name: "f", count: 1, passed: 2), "'f' takes 1 argument, but the call passes 2: 'f' can't take 2"),
+        (.keywordLabel(in: "i"), "'i' is in a loop"),
+        (.qualified, "qualified"),
     ])
     func messages(code: SampleCode, message: String) {
         #expect(code.message == message)
+    }
+
+    @Test("a brace that doesn't enclose a name, and an escape, are written as they are")
+    func literalText() {
+        #expect(SampleCode.braces(name: "if").message == "expected '{' after 'if', then '}' A and \"\\\" on\nanother line")
     }
 
     @Test("a code for what isn't supported yet says so")
@@ -36,7 +52,9 @@ struct DiagnosticsTests {
     }
 
     @Test("each code has its number", arguments: [
-        (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.moveOutOfLocal(name: "a"), 40),
+        (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.typeMismatch(expected: "", found: ""), 3),
+        (.moveOutOfLocal(name: "a"), 40), (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
+        (.braces(name: ""), 1000), (.qualified, 1001),
     ])
     func numbers(code: SampleCode, number: Int) {
         #expect(code.number == number)

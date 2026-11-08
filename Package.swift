@@ -4,7 +4,6 @@ import PackageDescription
 
 let package = Package(
     name: "Rayo",
-    platforms: [.macOS(.v13)],
     products: [
         .executable(name: "rayoc", targets: ["rayoc"]),
     ],
