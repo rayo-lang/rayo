@@ -117,11 +117,23 @@ a.min(b)  // default: b when b < a, else a
 a.max(b)  // default: a when b < a, else b
 ```
 
-**Every witness of `min` returns `self`, and every witness of `max` returns `other`, when the two compare equal**, as the defaults do. Equal values can still differ, as `-0.0` and `0.0` do, or two keys that carry different payloads, so the rule fixes which one a call returns.
+**Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` and give NaN for a NaN operand ([04](../04-types/numbers-and-math.md#floating-point)). Values that tie can still differ, so the rule fixes which one a call returns:
+
+```swift
+struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on its rank alone
+    static func == (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank == rhs.rank }
+    static func < (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank < rhs.rank }
+}
+
+let a = Ranked(rank: 1, id: 7)
+let b = Ranked(rank: 1, id: 9)
+let lo = a.min(b)    // a, with id 7: the two tie, so min returns self
+let hi = a.max(b)    // b, with id 9: max returns other
+```
 
 **A type may replace any default with its own operator or method.** `Half`, `Float` and `Double` replace `min` and `max` with IEEE 754-2019's `minimum` and `maximum`, so that a NaN operand gives NaN and `-0` counts as less than `+0` ([04](../04-types/numbers-and-math.md#floating-point)).
 
-**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They borrow their arguments, so a place passed to them stays usable:
+**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They borrow their arguments, so a place passed to them stays usable:
 
 ```swift
 func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }

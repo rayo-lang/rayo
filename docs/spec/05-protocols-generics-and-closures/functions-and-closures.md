@@ -19,7 +19,7 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 **Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
-2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)).
+2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
 3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
@@ -87,10 +87,10 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 4. each enclosing type, from the innermost outward: its generic parameters, static members and nested types;
 5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
 
-**A local or a parameter that matches ends the search, and so does any match for a name used as something other than a function**, such as a property, a type or a generic parameter. Function names gather candidates across scopes instead:
+**The nearest match, in scope order, decides how a name resolves.** When it is a local, a parameter, a property, a type or a generic parameter, the name means that, and the search ends. So a call `onHit(3)` whose nearest `onHit` is a field of a closure type calls the field. When the nearest match is a function, the name gathers candidates across scopes instead:
 
-- **Calls.** The candidates are every function of that name among the members the body sees and in the module's scope together, and the overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, while `min(b)` reaches the member.
-- **Function values.** A name used as a function value, not called, draws its candidates from the same two places, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
+- **Calls.** The candidates are every function of that name in the nearest match's scope and in scopes 3 to 5 together: the members the body sees, the enclosing types' static members outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
+- **Function values.** A name used as a function value, not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
 - **Ties.** Step 4's tie-breaks apply first. Only a member and a free function that still tie after them go to the member, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`.
 
 **So a member never hides a free function that the call's arguments fit better**, as in a `Comparable` extension:

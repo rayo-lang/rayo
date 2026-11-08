@@ -27,13 +27,26 @@ func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
 
 **A requirement whose `where` clause constrains `Self` or an associated type is required only of conformances that satisfy the clause**, as `Comparable`'s `min` and `max` require `Self: Copyable` ([Equality and ordering](operators.md#equality-and-ordering)):
 
-- **Witnesses.** Its default, and any witness, exist only where the clause holds. A conformer that fails the clause provides none, and a member of that name it declares is an ordinary member, not a witness.
+- **Where it is required.** A conformance must meet it under the conformance's own conditions plus the clause, and its witness is checked there. A conditional conformance, `extension X: P where …`, follows the same rule.
+- **Witnesses.** A member of the conformer, or of an extension of it whose `where` clause those conditions imply, may be the witness. Otherwise the default applies, to each instantiation where the clause holds. A conformer that never meets the clause provides none, and a member of that name it declares is an ordinary member, not a witness.
 - **Generic calls.** Generic code may call it only where its own constraints imply the clause.
 - **Existentials.** Through `any P` it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it.
 
 ```swift
 func lowest<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }   // fine: T: Copyable implies the clause
 func lowest2<T: Comparable>(_ a: T, _ b: T) -> T { a.min(b) }             // error: T may be move-only
+```
+
+A generic conformer can meet such a requirement in a constrained extension. `Pair<T>` is copyable exactly when `T` is, so its conformance's conditions plus `Self: Copyable` imply the extension's `T: Copyable`:
+
+```swift
+struct Pair<T: Comparable>(let a: T, let b: T): Comparable {
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.a < rhs.a || (lhs.a == rhs.a && lhs.b < rhs.b) }
+}
+
+extension Pair where T: Copyable {
+    func min(_ other: Self) -> Self { … }    // the witness of min for every copyable Pair<T>
+}
 ```
 
 **A conformance binds each associated type in the first of these ways that applies:**
@@ -182,6 +195,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 **What a member can witness depends on what its name allows where the conformance is declared:**
 
+- **A member of a constrained extension witnesses only where its clause holds.** It meets a requirement only where the conformance's conditions, plus the requirement's own `where` clause, imply the extension's `where` clause, as `Pair`'s `min` does ([above](#protocols-and-generics)).
 - **A witness is in its requirement's namespace.** An instance requirement is met only by an instance member, and a static requirement, an initializer included, only by a static one, since the two are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)). So `Int`'s static `min` meets no instance `min(_:)` requirement.
 - **A witness is visible where the conformance is declared.** A member, a stored field included, that code there couldn't name witnesses nothing, so a protocol's module can't reach another module's non-public member through a conformance it declares.
 - **A stored field witnesses a requirement only where its name could be used the same way**, since generic code reaches a witness with no `unsafe` in sight. So a `let` field witnesses only `get` and `borrow` requirements.
