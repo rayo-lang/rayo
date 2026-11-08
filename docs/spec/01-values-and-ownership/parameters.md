@@ -71,7 +71,7 @@ builder.finish(builder.count) // fine: count is read before finish takes builder
 f(&x, x)                      // error: two borrows of x overlap for the whole call
 ```
 
-**Evaluation is left to right, and a call's borrows begin with the call.** So a value read for an argument is done before the call lends or takes its place, and every borrow and take of one call is checked against the others. The order is fixed, so two implementations never disagree about it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A call runs in this order:
+**Evaluation is left to right, and a call's borrows begin with the call.** So a value read for an argument is done before the call lends or takes its place, and every borrow and take of one call is checked against the others. The order is fixed, so two implementations never disagree about it ([11](../11-compilation-model.md#what-the-language-leaves-open)). The one exception is the message of `fatalError`, `precondition` or `assert`, evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). A call runs in this order:
 
 1. **It evaluates its callee, then its receiver, then its arguments.** Evaluating a borrowed or `mutable` argument works out which place it names: its base first, then its indices, left to right. An `owned` argument or a `consuming` receiver that names a place is worked out the same way.
 2. **Then the call begins.** Every borrow it passes begins, and lasts until the call returns, and every value it takes leaves its place. A panic before this step leaves those places as they were, and the unwind destroys the argument values made so far, as temporaries ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)).

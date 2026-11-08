@@ -54,7 +54,7 @@ unchecked {                        // bounds and the table's other checks off he
 - synchronization, since a lock and an atomic operation are the operation itself;
 - the memory ordering of a check that also orders memory, as a single-sided queue's side check does ([07](../07-concurrency/synchronization.md#queues-and-channels)). Only its failure test is removed.
 
-**A removed diagnostic check acts as where it is off, and any other removed check's failure is undefined behavior.** So an overflow wraps or truncates, and `assert` evaluates neither its condition nor its message.
+**A removed diagnostic check acts as where it is off, and any other removed check's failure is undefined behavior.** So an overflow wraps or truncates, and `assert` evaluates neither its condition nor its message. A `precondition` that an `unchecked` block strips evaluates neither its condition nor its message either, so a condition with a side effect doesn't run.
 
 ### The checks
 

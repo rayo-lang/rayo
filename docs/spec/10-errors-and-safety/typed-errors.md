@@ -116,6 +116,5 @@ func loadOrDefault(_ path: StringView) throws(IoError) -> Level {
 - **Control leaves a `defer` block early only by a panic.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`, whose panic unwinds out of the block, except where an unwind runs it ([Panics](panics.md#what-ends-the-program)).
 - **A `defer` body is checked as if written at each point where it may run.** Those are these points in its scope, so it uses only what every one of them allows:
     - every exit, a propagating `try` or `throw` included;
-    - every point that can panic ([Panics](panics.md#unwinding));
-    - in an accessor, each `yield`, where the caller's panic may end the accessor;
+    - every point that can panic, each `yield` in an accessor included, as the unwind leaves it ([Panics](panics.md#unwinding));
     - in a `task` function, every `await` it is live across, where destroying the task runs it ([07](../07-concurrency/tasks.md#semantics)).
