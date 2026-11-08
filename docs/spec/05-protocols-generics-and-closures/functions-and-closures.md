@@ -74,21 +74,30 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 - **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members, and a static member only where no instance member has its name. Where both exist, `Self.min` reaches the static one.
 - **Static bodies.** These are static members and the accessors of static properties. They see only static members.
-- **Field defaults.** A field's default value sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
+- **Default values.** A default value, of a field or a parameter, sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
 - **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
-- **Nested declarations.** A nested function, or a member of a local type, sees no instance member of the enclosing type, since it names no `self` ([above](#functions-and-closures)).
+- **Nested functions.** A nested function sees the generic parameters of the function it is in and the enclosing type's static members, but no instance member, since it names no `self` ([above](#functions-and-closures)).
+- **Nested types.** A nested type's members see their own type's members first, then its enclosing types' generic parameters, static members and nested types, outward. A member of a local type sees no instance member of the enclosing type, as a nested function doesn't.
 
-**An unqualified name is looked up in three scopes, in order:**
+**An unqualified name is looked up in these scopes, in order:**
 
 1. the body's locals and parameters;
-2. the members the body sees (above);
-3. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
+2. the generic parameters of the function the body belongs to;
+3. the members the body sees (above);
+4. each enclosing type, from the innermost outward: its generic parameters, static members and nested types;
+5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
 
-**A local or a parameter that matches ends the search, and so does any match for a name that isn't called.** For a call, the candidates are every function of that name among the members the body sees and in the module's scope together, and the overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, while `min(b)` reaches the member. When a member and a free function fit equally well, the member wins:
+**A local or a parameter that matches ends the search, and so does any match for a name used as something other than a function**, such as a property, a type or a generic parameter. Function names gather candidates across scopes instead:
+
+- **Calls.** The candidates are every function of that name among the members the body sees and in the module's scope together, and the overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, while `min(b)` reaches the member.
+- **Function values.** A name used as a function value, not called, draws its candidates from the same two places, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
+- **Ties.** Step 4's tie-breaks apply first. Only a member and a free function that still tie after them go to the member, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`.
+
+**So a member never hides a free function that the call's arguments fit better**, as in a `Comparable` extension:
 
 ```swift
-extension Comparable {
-    consuming func clamped(_ lo: owned Self, _ hi: owned Self) -> Self {
+extension Comparable where Self: Copyable {
+    func clamped(_ lo: Self, _ hi: Self) -> Self {
         max(lo, min(self, hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
     }
 }

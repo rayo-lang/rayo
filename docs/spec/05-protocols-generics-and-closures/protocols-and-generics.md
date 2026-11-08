@@ -25,6 +25,17 @@ func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
 
 **A protocol may inherit others, and declare static requirements and associated types, constrained by `where` clauses** ([12](../12-grammar/declarations.md#files-and-declarations)). An associated type is a type that the protocol leaves to each conformance to choose.
 
+**A requirement whose `where` clause constrains `Self` or an associated type is required only of conformances that satisfy the clause**, as `Comparable`'s `min` and `max` require `Self: Copyable` ([Equality and ordering](operators.md#equality-and-ordering)):
+
+- **Witnesses.** Its default, and any witness, exist only where the clause holds. A conformer that fails the clause provides none, and a member of that name it declares is an ordinary member, not a witness.
+- **Generic calls.** Generic code may call it only where its own constraints imply the clause.
+- **Existentials.** Through `any P` it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it.
+
+```swift
+func lowest<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }   // fine: T: Copyable implies the clause
+func lowest2<T: Comparable>(_ a: T, _ b: T) -> T { a.min(b) }             // error: T may be move-only
+```
+
 **A conformance binds each associated type in the first of these ways that applies:**
 
 1. by a `typealias`, nested type or generic parameter of that name;
@@ -78,8 +89,8 @@ struct Thermometer(let value: Int, var lastError: IoError?): Probe             /
 ```swift
 func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
     var best: Float = 0
-    for x in xs { best = max(best, copy x.hp) }    // fine: Damageable requires 'hp'
-    for x in xs { best += x.armor }                // error here, at the definition: Damageable has no 'armor'
+    for x in xs { best = max(best, x.hp) }    // fine: Damageable requires 'hp'
+    for x in xs { best += x.armor }           // error here, at the definition: Damageable has no 'armor'
     return best
 }
 ```
