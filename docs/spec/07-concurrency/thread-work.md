@@ -83,6 +83,8 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **During startup, `spawn` runs its closure on the startup thread before it returns** ([below](#lent-work-during-startup)). So the scope's promise holds then too, with no thread to wait for.
 
+**When the runtime refuses to start a thread, `spawn` panics on the calling thread**, which happens after shutdown or when the platform can't start one ([below](#lent-work-and-queued-threads)). The closure, which may borrow the caller's data, is destroyed there, and never reaches another thread. `spawn` doesn't run it inline instead, since outside startup parking doesn't panic, so a closure that waits for something the block does later would hang. The panic unwinds out of the block like any other, so `ThreadScope.run` still joins every thread spawned before it.
+
 ### The library's promise
 
 **Lending is the library's `unsafe` promise.** A scoped value, such as a closure that borrows the caller's locals, reaches another thread only through a library's `unsafe` code, which promises:
@@ -121,8 +123,6 @@ ThreadScope.run { s in
     prepare(&input)                                // may panic: without the defer, the spawned thread would wait for ever
 }
 ```
-
-During startup, this example panics at the spawned closure's `wait()` instead, since lent work then runs inline ([below](#lent-work-during-startup)).
 
 **A job system of one's own carries a panic back the same way**, with `catchPanic` around each piece and `resumePanic` on the lending thread ([10](../10-errors-and-safety/panics.md#resuming-a-panic-resumepanic)). Of several panics, it resumes the one with the lowest `sequence`, which is the first reported ([10](../10-errors-and-safety/panics.md#the-panic-value)). It still waits for every piece whether the lending call returns or unwinds, as the library's promise requires ([above](#the-librarys-promise)).
 
@@ -282,7 +282,11 @@ enum ThreadStart {
 
 ### Lent work and queued threads
 
-**During startup, `Runtime.startThread` returns `.queued` at once, and the thread waits until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded. A queued thread that the platform can't start then panics.
+**During startup, `Runtime.startThread` returns `.queued` at once, and the thread waits until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded.
+
+**A queued thread that the platform can't start when startup ends panics on the startup thread**, as part of startup. So, like any uncaught panic during startup, it ends the program: with status 101 before `main`, or at once inside `rayo_init()` ([Initialization at startup](global-state.md#initialization-at-startup)). The failed thread's body and its `ended` are destroyed with the other queued bodies.
+
+**A refused start makes std's lending calls panic on the calling thread**, as it makes `ThreadScope.spawn` panic ([above](#scoped-threads)). The work, which may borrow the caller's data, is destroyed there and never reaches another thread. The call still waits for the pieces it handed out before the panic leaves it, as the library's promise requires ([above](#the-librarys-promise)).
 
 **std guarantees that no lent work is ever queued**, since its lending calls run their work inline during startup ([above](#lent-work-during-startup)). Another library keeps the same guarantee through the result: it starts a worker before it hands the worker any lent work, and when the start comes back `.queued`, it runs the work inline instead.
 

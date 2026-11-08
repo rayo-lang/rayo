@@ -91,7 +91,7 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
 
 **A panic during startup unwinds as any panic does**, so a recovery point inside an initializer can catch it. One that nothing catches ends startup, since no code may run with a global left uninitialized, and with it the program:
 
-- **Before `main`**, the startup thread is the main thread, so the program shuts down as for an uncaught panic there, and exits with status 101 without calling `main` ([10](../10-errors-and-safety/panics.md#uncaught-panics)). Its teardown destroys the thread's objects, and only the thread-local copies startup has initialized. The threads queued during startup never start: their bodies, with their captures, are destroyed on the startup thread, not leaked.
+- **Before `main`**, the startup thread is the main thread, so the program shuts down as for an uncaught panic there, and exits with status 101 without calling `main` ([10](../10-errors-and-safety/panics.md#uncaught-panics)). Its teardown destroys the thread's objects, and only the thread-local copies startup has initialized. The threads queued during startup never start: their bodies, with their captures and their `ended` events, are destroyed on the startup thread, not leaked.
 - **In `rayo_init()`**, the panic would unwind into C, so it ends the program at once ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ### Shutdown

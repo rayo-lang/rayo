@@ -81,8 +81,9 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 - entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](../07-concurrency/global-state.md#initialization-at-startup));
 - calling `rayo_init` a second time, and calling `rayo_thread_detach` or `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what either call destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
-- a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
-- `Thread.start` when `Runtime.startThread` refuses the start, which happens only outside startup ([07](../07-concurrency/thread-work.md#work-that-outlives-the-caller-threads)).
+- a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup));
+- a thread queued during startup that the platform can't start when startup ends, which panics on the startup thread as part of startup, so it ends the program ([07](../07-concurrency/thread-work.md#lent-work-and-queued-threads));
+- `Thread.start`, `ThreadScope.spawn` and std's lending calls when `Runtime.startThread` refuses the start, which happens only outside startup ([07](../07-concurrency/thread-work.md#lent-work-and-queued-threads)).
 
 **Poisoned locks.** `lock`, `read` and `write` on a lock that a panic has poisoned, until `clearPoison()` resets it ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
