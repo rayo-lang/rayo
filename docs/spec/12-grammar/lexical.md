@@ -64,3 +64,5 @@ let i = index(of: h, in: handles.span)                      // and as argument l
 ```
 
 **A keyword label is never ambiguous.** An argument's label is always followed by `:`, and a parameter's external label by its internal name and then `:`, with the convention after the `:`.
+
+**A trailing closure's label is an identifier, never a keyword**, so a keyword after a closure's `}`, such as `else` or `catch`, always reads as that keyword. A parameter whose argument label is a keyword takes its closure inside the parentheses.

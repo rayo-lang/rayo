@@ -56,7 +56,7 @@ extension Bag {
 }
 ```
 
-**After a field is consumed, the whole value can't be used or passed until the field is assigned again.** If the scope ends first, the fields still held are destroyed one by one, last declared first.
+**After a field is consumed, the whole value can't be used or passed until the field is assigned again.** If the scope ends first, by any exit or by a panic's unwind, the fields still held are destroyed one by one, last declared first ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)).
 
 **Only a place that holds the rest of its value has a field assigned.** A place that holds no value, or maybe holds one, is given a whole value, made by an initializer, so no value is ever half-built ([04](../04-types/structs.md#initializers)).
 
@@ -74,7 +74,7 @@ extension Bag {
 - `copy place` and `place.clone()` leave it as it was;
 - through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
-So such a place always holds a value, across a `throw`, an early return and an `await` too. A caller, an alias or a later `deinit` that reaches it finds one there.
+So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 
 ## Constants
 
@@ -103,10 +103,11 @@ hi = 1
 
 **A place that holds a value on only some paths is maybe-initialized where the paths join.** A **maybe-initialized** place can't be used until it is assigned again, which the compiler proves statically.
 
-**At scope end, and when a new value is assigned, the old value is destroyed exactly when there is one.** A partly moved value is tracked per field.
+**At scope end, a panic's unwind included, and when a new value is assigned, the old value is destroyed exactly when there is one.** A partly moved value is tracked per field. An assignment stores its new value before it destroys the old one ([Destruction](moves-copies-destruction.md#destruction)).
 
 **A closure that captures a place exclusively may give it its value**, when the place holds no value, or maybe holds one, and the closure's body assigns it before any other use on every path.
 
 - **The capture carries whether the place holds a value.** An assignment destroys an old value only if there is one. So a `mutating` closure called twice destroys the first value when it assigns the second.
 - **A `let` is given its value this way only by a `consuming` closure**, which runs at most once.
 - **After the closure's last use, the place is maybe-initialized** in the enclosing function, since the closure may never have been called.
+- **`catchPanic`'s two closures share one record** of whether such a place holds a value, since the body may assign it before it panics. So inside the `recover` closure, a place that held no value at the call is maybe-initialized, and a `let` may be given its value by only one of the two ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).

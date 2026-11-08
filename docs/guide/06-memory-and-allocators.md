@@ -250,14 +250,14 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 
 ## When allocation fails
 
-**An allocating operation panics when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). `Box(v)`, `Shared(v)` and `UniquePointer(v)` are among them, so no code goes on with memory it didn't get.
+**An allocating operation ends the program when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). `Box(v)`, `Shared(v)` and `UniquePointer(v)` are among them, so no code goes on with memory it didn't get. This isn't a panic: nothing is cleaned up on the way out, and the program stops at once ([10](../spec/10-errors-and-safety/panics.md#what-ends-the-program)).
 
 **Each also has a fallible form, for code that can make room and try again.** It throws `AllocError`, the prelude's error for an allocation that failed:
 
 ```swift
 func spawnBoss(at pos: Vec3) throws(AllocError) -> Box<Enemy> {
     do {
-        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // throws AllocError instead of panicking
+        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // throws AllocError instead of ending the program
     } catch {
         evictUnusedAssets()                                      // make room, then try once more
         return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // 'pos' is borrowed, so each attempt copies it
