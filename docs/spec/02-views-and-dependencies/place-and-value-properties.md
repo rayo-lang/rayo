@@ -191,7 +191,7 @@ struct Flags(var bits: UInt32) {
 }
 ```
 
-**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it, with or without `borrow` ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)).
+**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it, with or without `borrow` ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)). Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 
 **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
@@ -240,6 +240,7 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 - **A stored field meets a place requirement**, subject to [05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)'s rules on `let`, hidden, static, `unsafe` and union-member fields. An under-aligned field or an imported bitfield is the exception, since it has no place to hand out.
 - **A `get` meets `{ get }`, and a `get` and a `set` meet `{ get set }`.**
 - **When the value's type is copyable, a stored field or a place property also meets `{ get }` and `{ get set }`.** Its place is copied for the `get`, and assigned for the `set`, so `{ get set }` needs a `mutate` or a `var` field. Generic code then changes a copy, as through any value property, so a panic before the `set` loses the change even though the witness is a place ([above](#panics-during-a-change)).
+- **A failing `{ get }` requirement may take a witness that can't fail** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)).
 - **A value property never meets a place requirement**, since what its `get` returns lies in no storage that generic code could keep a view of.
 - **An optional place property meets a place requirement only when the requirement's own declared type is written as an optional, `U?`**, so that generic code treats it as an optional place property too. It never meets one where an associated type or a type parameter turns out to be an optional, or where the requirement is written `Optional<U>`, which asks for a whole place.
 - **A place property that hands out a tuple of places meets no place requirement.**

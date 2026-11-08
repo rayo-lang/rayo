@@ -57,7 +57,7 @@ doc.first = doc.text.view                     // 'doc' now depends on its own fi
 
 ```swift
 var g = registry.lock()
-Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
+_ = Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
 
 A **guard type** is a type declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` ([Mutable views](dependency-projection-and-results.md#mutable-views)), as `MutexGuard` is.
@@ -92,7 +92,7 @@ use(syms)
 
 **An item's subject, what depends, is one of these:**
 
-- `return`, for the result and any thrown error, or for the place a place property hands out ([What a place depends on](place-and-value-properties.md#what-a-place-depends-on));
+- `return`, for the result, an error it fails with included, or for the place a place property hands out ([What a place depends on](place-and-value-properties.md#what-a-place-depends-on));
 - a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
 
 **An item says what its subject depends on:**

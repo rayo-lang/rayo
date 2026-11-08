@@ -10,14 +10,14 @@ source += "\n";                   // may move the buffer: every view in 'lines' 
 parse(lines);                     // reads freed memory
 ```
 
-In Rayo you write the same code, with no annotations, and the compiler catches the bug:
+In Rayo you write the same code, with no annotations, and the compiler catches the bug. Reading a file can fail, so `readText` returns a `String!IoError`: the `String` it read, or the `IoError` that stopped it. The value comes first and the error after the `!`, which here has nothing to do with Swift's implicitly unwrapped optionals. `try` takes the `String` out, or returns the error to the caller ([10](../spec/10-errors-and-safety/typed-errors.md#results)):
 
 ```swift
-func readText(_ path: StringView) throws(IoError) -> String { ... }
+func readText(_ path: StringView) -> String!IoError { ... }
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 func parse(_ lines: Span<StringView>) { ... }
 
-func loadScript(_ path: StringView) throws(IoError) {
+func loadScript(_ path: StringView) -> Void!IoError {
     var source = try readText(path)
     var lines = List<StringView>()
     splitLines(source.view, into: &lines)     // 'lines' now borrows 'source'
@@ -230,7 +230,7 @@ func pick(_ a: StringView, _ b: StringView) -> StringView
 ## Temporaries
 
 ```swift
-let text = try readText("arena.script").view    // error: the String dies with this statement, and 'text' is used below
+let text = (try readText("arena.script")).view    // error: the String dies with this statement, and 'text' is used below
 log(text)
 ```
 

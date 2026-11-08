@@ -107,7 +107,7 @@ upload(m.vertices.read()!)                               // Span<Vertex>: one ch
 - **Reading and locking it.** `s.read()` gives a slice's elements as a `Span<T>?`, and `s.lock()` as a `MutableSpan<T>?`. Each is `nil` once the buffer is gone: its `Shared` value destroyed, or the buffer's storage stale after a reset or an unregistration. Each call checks the storage as an open does, reading `nil` where an open would panic ([Opening an owning value checks it](arena-safety.md#opening-an-owning-value-checks-it)).
 
   Each call upgrades the weak link, and the span holds that owner until the span's last use ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). For a buffer under an `RwLock`, the span also holds the read lock for `read()`, or the write lock for `lock()`, until then. A slice of a bare `Shared<Blob>` is read-only: its `lock()` panics, since nothing writes a `Frozen` value.
-- **What creation checks.** `T` must be `Pod` ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` throws unless all of these hold, which put every element inside the blob, aligned for `T`:
+- **What creation checks.** `T` must be `Pod` ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` fails unless all of these hold, which put every element inside the blob, aligned for `T`:
   - the range is in bounds;
   - `T`'s alignment is at most the blob's;
   - the offset is a multiple of `T`'s alignment.
@@ -115,7 +115,7 @@ upload(m.vertices.read()!)                               // Span<Vertex>: one ch
   Locking as a `MutableSpan<T>` also requires `T.isPaddingFree`, as a mutable span cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), since a store through a padded `T` would leave bytes other slices read uninitialized.
 - **Locked blobs.** A slice of a `Shared<RwLock<Blob>>` is read and locked under the blob's lock. A write lock can replace the whole blob with a shorter or less-aligned one. So each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the lock it takes anyway. A failure reads as `nil`. A bare `Shared<Blob>` can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
 - **Lists.** `slice(at:count:)` on a `Shared<RwLock<List<T>>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. A write lock can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the lock it takes. A failure reads as `nil`.
-- **Limits.** `slice` throws when the offset or the count exceeds `UInt32.max`.
+- **Limits.** `slice` fails when the offset or the count exceeds `UInt32.max`.
 
 A `Font` owns its file's blob through a `Shared`, plus `Slice`s into it:
 

@@ -21,7 +21,7 @@ let all = enemies                  // a move: 'enemies' can't be used until it g
 | `let x = borrow place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
 | `var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `.clone()` | A `memcpy` |
-| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `consume x` ends it early | None |
+| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
 | `var x = borrow place` | | A compile error, since `=` on a `var` that borrows writes the place it names ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)), which a shared borrow can't | |
 
 - **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one with `borrow` or `&` on a place, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
@@ -127,7 +127,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 
 - **A numeric widening reads the place** and makes a new value, which the binding owns.
 - **These conversions take the value**, so from a place, each moves it as a declaration does, unless the code writes a copy of a copyable value:
-    - wrapping it in an optional or an error union;
+    - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
 - **Making an `any P` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. `&place` makes a `mutable any P` instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
@@ -167,7 +167,7 @@ heal(&x)                           // error: the same
 
 ```swift
 let r = renderer.weak()
-r.value?.submit(mesh)              // fine: an object's value is changeable through a let of a weak pointer
+_ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```
 
 ## Lending a place for change
@@ -199,7 +199,10 @@ var v: mutable any Damageable = &boss                    // a mutable any P made
 
 ```swift
 var lives = &particles.life        // the mutable form: a MutableSpan<Float> that 'lives' owns
+lives[0] = 1
 let ages = particles.life          // the shared form: a Span<Float>
+log("first age \(ages[0])")
 var g = registry.lock()            // no '&': 'g' owns the guard, and changes the registry through it
+g.value.flush()
 heal(&makeEnemy())                 // the statement owns the new enemy, and destroys it after the call
 ```

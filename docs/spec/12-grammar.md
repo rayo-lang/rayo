@@ -40,7 +40,7 @@ x = 1; y = 2                    // ';' separates statements on one line
 - **The next line joins the current one** when it starts with one of these:
     - `.`, for method chaining;
     - a binary operator, except `-`, `&`, `..<` and `...`, which can also be prefix operators;
-    - `else`, `catch`, `where`, `throws` or `->`, so a signature can wrap before its result.
+    - `else`, `catch`, `where` or `->`, so a signature can wrap before its result.
 
   So a line that starts with `-x` or `..<n` starts a new statement, unless the line above continues.
 - **A labeled trailing closure continues its call** when its label follows the previous trailing closure's `}` on the same line, as in `} recover: {`. So that `}` doesn't end the statement. A label at the start of the next line begins a new statement instead.

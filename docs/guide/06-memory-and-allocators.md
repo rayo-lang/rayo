@@ -244,7 +244,7 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 
 **`s.read()` checks the buffer, and returns a `Span<T>?`.** It's `nil` once the buffer is gone: its `Shared` value destroyed, or its storage stale after a reset. Reading through the span checks nothing more.
 
-**`slice(of:at:count:)` throws unless the range is in bounds and aligned for `T`.** `T` must be `Pod`: a type for which any bytes are a valid value ([04](../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
+**`slice(of:at:count:)` fails unless the range is in bounds and aligned for `T`.** `T` must be `Pod`: a type for which any bytes are a valid value ([04](../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
 **A buffer that changes sits under an `RwLock`**, a lock that lets in many readers or one writer ([Concurrency](07-concurrency.md#locks-mutex-and-rwlock)). A slice of it can also write, through `s.lock()`.
 
@@ -252,12 +252,12 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 
 **An allocating operation ends the program when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). `Box(v)`, `Shared(v)` and `UniquePointer(v)` are among them, so no code goes on with memory it didn't get. This isn't a panic: nothing is cleaned up on the way out, and the program stops at once ([10](../spec/10-errors-and-safety/panics.md#what-ends-the-program)).
 
-**Each also has a fallible form, for code that can make room and try again.** It throws `AllocError`, the prelude's error for an allocation that failed:
+**Each also has a fallible form, for code that can make room and try again.** `Box.tryNew(v)` returns a `Box<Enemy>!AllocError`: the new box, or an `AllocError`, the prelude's error for an allocation that failed. As with `readText` in [Views](04-views.md), the value comes before the `!` and the error after it:
 
 ```swift
-func spawnBoss(at pos: Vec3) throws(AllocError) -> Box<Enemy> {
+func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
     do {
-        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // throws AllocError instead of ending the program
+        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // fails with AllocError instead of ending the program
     } catch {
         evictUnusedAssets()                                      // make room, then try once more
         return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // 'pos' is borrowed, so each attempt copies it

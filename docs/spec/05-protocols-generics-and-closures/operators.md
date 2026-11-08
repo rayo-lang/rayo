@@ -44,9 +44,28 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 
 1. From its typed arguments. Typed arguments that bind it to different types bind it to the one the others widen to, or are an error.
 2. By matching the expected type against the call's result type, part by part, as `await` does ([07](../07-concurrency/tasks.md#semantics)).
-3. From the literals' default.
+3. From the result type of a closure literal argument, once the parameter's type has given the literal its parameter types. Closure literals that bind it to different types combine as typed arguments do in step 1.
+4. From the literals' default. The literal arguments left to bind it take one default together, as an array literal's elements do ([04](../04-types/collections.md#literals)).
 
-**Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in these three ways, and the last gives its untyped `0` the type `Float`:
+**A closure literal binds through the type its body gives it, which the rule for a bare `!` works out** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)):
+
+- **Its success type** is the type of what its `return`s or its single expression give. A `Result` it returns whole gives its success type, whether alone or beside plain values.
+- **Its failure type** is the union of what its body propagates, a `Result` returned whole included.
+- **A pair `R!E`** in the parameter's type binds from those two types by the pair rule there. So a literal that can't fail binds `E` to `Never`.
+- **An untyped literal it returns**, such as `1`, binds nothing. It counts as a literal argument, which leaves the type parameter to step 4.
+
+```swift
+let half = catchPanic { 1 } recover: { _ in 2.5 }    // both results are literals, so step 4 makes R a Double
+```
+
+**An expected type that isn't a `Result` binds only the success type of a result type `R!E`.** The match binds `R` from it, and leaves `E` to the arguments, as `try` leaves an expected failure type open ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). Where `E` then binds to `Never`, the call is an `R` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), which fits. Otherwise the call is a `Result`, which doesn't, and the error says to write `try`:
+
+```swift
+let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // R is Panic?; neither closure fails, so EB and ER are Never
+let level: Level = catchPanic { try loadLevel(path) } recover: { _ in Level() }    // error: the call is a Level!(IoError | ParseError); write 'try'
+```
+
+**Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and last of those ways, and the last call gives its untyped `0` the type `Float`:
 
 ```swift
 let m = max(f, d)                      // f: Float, d: Double: T is Double, which f widens to

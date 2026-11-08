@@ -29,11 +29,37 @@ func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
 
 1. by a `typealias`, nested type or generic parameter of that name;
 2. by the associated type's default;
-3. from the witness of the first requirement, in the protocol's order, whose declared type names it, with no search.
+3. from the witness of the first requirement, in the protocol's order, whose declared type names it, with no search; in a failure position, it skips witnesses that can't fail (below).
 
 ```swift
 protocol Table { associatedtype Row }    // the conforming type chooses 'Row'
 struct Archetype<Row>(…): Table          // its generic parameter 'Row' binds Table's 'Row'
+```
+
+**An associated type `E` in a failure position never binds from a witness that can't fail.** That position is the `E` of a `{ get }` requirement's type `T!E`, or of a function's or initializer's result type, as in `func load() -> Level!E` and `init() -> Self!E`. In a `{ get set }` or place requirement, `E` binds from the witness's type, as in any other position.
+
+**A witness whose type or result type is `T`, `Self`, `T!Never` or `Self!Never` can't fail.** A `T!Never` counts since the wrapper that meets the requirement takes its `T` out as `try` does, which never fails. Such a witness meets the requirement whatever `E` is, and binds nothing ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)). So step 3 skips it:
+
+- `E` binds from the first requirement, in the protocol's order, that names `E` outside a failure position or whose witness can fail;
+- `E` is `Never` when every requirement naming it is in a failure position and no witness can fail, as the pair rule binds from a type that isn't a `Result`.
+
+So the order of the requirements never decides whether a type conforms:
+
+```swift
+protocol Gauge {
+    associatedtype Failure: Error
+    var value: Int!Failure { get }
+    func reload() -> Int!Failure
+}
+struct Fixed(let value: Int): Gauge { func reload() -> Int { value } }         // neither can fail: Failure is Never
+struct Sensor(let value: Int): Gauge { func reload() -> Int!IoError { … } }    // Failure is IoError; 'value' meets Int!IoError too
+
+protocol Probe {
+    associatedtype Failure: Error
+    var value: Int!Failure { get }
+    var lastError: Failure? { get }                                            // names Failure outside a failure position
+}
+struct Thermometer(let value: Int, var lastError: IoError?): Probe             // lastError binds Failure to IoError
 ```
 
 **`some P` is written only as a parameter's type**, where it is an anonymous type parameter constrained `P`.
@@ -252,7 +278,7 @@ swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack t
 
 **These rules decide whether a call unpacks:**
 
-- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, the error type, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
+- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
 - **Where it doesn't.** When `any P` itself meets `T`'s constraints, as it meets those of an unconstrained `T` or of `T: Copyable`, it binds `T` as the view type instead, and a `Box<any P>` that meets them binds `T` as itself. Any other call that would need `T` to be `any P` is a compile error.
 
 **An unpacking call costs one indirect call, and an instance for each possible dynamic type.** An unpacking call site names one generic function, every type argument but `T` fixed. The program holds an instance of it for every type that can be the dynamic type of an existential of `P`:

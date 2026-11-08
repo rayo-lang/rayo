@@ -46,7 +46,7 @@ using allocator = a { … }                   // a block with an await inside
 - State what the `unsafe` call to `epoll_wait` promises about the event buffer it hands the kernel, and show a buffer that keeps that promise simply.
 - **Must accept** the `frameArena` block above, and a wait inside a loop over a borrowed collection.
 - **Must accept** these in the handshake tasks:
-    - the compound assignment to `total` and the assignment to `results[i]` above, on a task's own locals;
+    - the compound assignment to `total` and the assignment to `results[i]` above, on a task's own locals, with no `try` where `next` and `fetch` can't fail ([10](../../spec/10-errors-and-safety/typed-errors.md#what-a-failure-type-names));
     - the line with `peek` above, where `peek` returns a view of the resume parameter's data;
     - a `defer` live across an `await` that uses only the task's owned locals;
     - an `await` inside a `using allocator` block, as above.

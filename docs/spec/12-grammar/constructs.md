@@ -7,7 +7,9 @@ Within a declaration, the grammar describes the types, statements, expressions a
 ## Types
 
 ```ebnf
-type          = type-primary type-suffix* ;
+type          = result-base ('!' failure-type)? ;                 (* Mesh!LoadError is Result<Mesh, LoadError>; Level!(IoError | ParseError) (10) *)
+result-base   = type-primary type-suffix* ;                        (* '!' applies after '?': Handle<Enemy>?!LoadError; (Mesh!LoadError)? is an optional Result *)
+failure-type  = type-name | '(' type ('|' type)* ')' ;             (* a name, or a parenthesized type or error union *)
 type-primary  = type-name
               | 'Self' ('.' identifier generic-args?)*             (* Self, Self.Element *)
               | '(' tuple-type-elems? ')'                          (* tuple, or Void when empty *)
@@ -16,8 +18,8 @@ type-primary  = type-name
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
               | 'any' composition | 'some' composition | 'mutable' 'any' composition   (* mutable any P: the exclusive existential view *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
-                                                                   (* C function pointer (08): never throws; 'noalloc': its calls allocate nothing (05) *)
-              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' typed-throws? '->' type ;
+                                                                   (* C function pointer (08); 'noalloc': its calls allocate nothing (05) *)
+              | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type ;
                                                                    (* function type; 'unsafe' calls need 'unsafe' (05);
                                                                       'mutating' may write its captures, 'consuming' is call-once;
                                                                       '@sendable' holds only closures with Sendable captures (07);
@@ -43,6 +45,7 @@ statement     = declaration | expression | assignment | guard-stmt
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
               | rebind-stmt | static-if-stmt | static-for-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
+              | '_' '=' expression                                      (* drops a value on purpose, which an unused one would otherwise make an error (05) *)
               | static-error
               | label ':' (for-stmt | while-stmt | repeat-stmt) ;
 
@@ -115,7 +118,7 @@ primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'
               | closure | unsafe-block-expr | if-expr | when-expr ;
 unsafe-block-expr = 'unsafe' '{' statement* expression '}' ;       (* value is the final expression *)
 closure       = '{' closure-sig? statement* '}' ;
-closure-sig   = capture-list? ('static'? closure-params)? ('->' type)? 'in' ;   (* at least one part before 'in' *)
+closure-sig   = capture-list? ('static'? closure-params)? ('->' result-type)? 'in' ;   (* at least one part before 'in' *)
 closure-params= identifier (',' identifier)* | param-clause ;
                 (* { [move input] in … } has captures only; 'static' marks a static closure,
                    whose body is instantiated per compile-time argument, as in T.construct; a closure

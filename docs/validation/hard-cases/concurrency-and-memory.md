@@ -12,7 +12,7 @@ particles.forEachInParallel { p in … }      // runs the body over the elements
 Thread.scope { s in s.spawn { … } }         // starts threads that may borrow the caller's locals
 ```
 
-- **`join`** takes two `@sendable` closures, each of which may write what it captures, and returns when both are done. `@sendable` means every capture must be `Sendable`, whether borrowed or owned, since only `Sendable` values reach another thread. `join` also requires what the closures return or throw to be `Sendable` ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)).
+- **`join`** takes two `@sendable` closures, each of which may write what it captures, and returns when both are done. `@sendable` means every capture must be `Sendable`, whether borrowed or owned, since only `Sendable` values reach another thread. `join` also requires what the closures return, an error included, to be `Sendable` ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)).
 - **`forEachInParallel`** runs a non-`mutating` `@sendable (mutable Element) -> Void` body over a collection's elements.
 - **`Thread.scope`** starts threads that may borrow the caller's locals, and joins them when its block ends.
 
@@ -63,7 +63,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C7 · Panic and errors in lent work
 
-**A closure panics on a worker thread in the middle of a parallel loop.** Separately, both closures of a `join` and several calls of a parallel loop's body throw.
+**A closure panics on a worker thread in the middle of a parallel loop.** Separately, both closures of a `join` fail with an error. A parallel loop's body returns `Void`, so it can't fail.
 
 - Define what happens to the other threads, the process, and the report.
 - **Must hold:** the library can propagate one error after the join, by its own policy, and destroy the others, with no double free and no leak.

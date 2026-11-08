@@ -64,6 +64,15 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an o
 
 ## Operators and punctuation
 
+**A `!` in a type makes a `Result`, and a `!` after an operand forces an optional**, so the parser tells them apart by position alone. In a type, an identifier or a `(` after `!` begins the failure type. Any other token, such as a function's `{` or `where`, leaves the `!` bare ([10](../10-errors-and-safety/typed-errors.md#results)).
+
+**`try`, `try?` and `try!` take the whole postfix chain after them**, as every prefix operator does. So `try f().x` takes the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)):
+
+```swift
+let size = (try readText(path)).count   // the count of the String that readText succeeds with
+let bad = try readText(path).count      // error: '.count' applies to the Result, which has no 'count'
+```
+
 **A `?` after an operand is always postfix optional chaining**, since Rayo has no ternary operator.
 
 **Whitespace tells the prefix and postfix range operators, as in `..<x` and `x...`, from the binary ones.** Between two operands, with whitespace on both sides or on neither, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side: whitespace, a bracket or punctuation.
@@ -111,7 +120,7 @@ let q = SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing two ar
 
 **Every `(` in a type is decided with the same bounded lookahead as generic arguments** ([above](#operators-and-punctuation)):
 
-- **Function type parameters.** When the matching `)` is followed by `throws` or `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter.
+- **Function type parameters.** When the matching `)` is followed by `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter.
 - **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
 - **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple. The exception is `(any P)` after `mutable`, or as the type argument of `Box` or an object pointer, which keeps the shared view apart from the form `any` makes there (below).
 

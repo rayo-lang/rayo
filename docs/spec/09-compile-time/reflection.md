@@ -116,7 +116,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
 - **A declared type** has one part for each declaration from its module inward to itself: a module, type, extension, function, property, subscript, accessor, block, closure literal, `static if` branch or `static for` element. A part holds everything that tells its declaration apart from the others its scope may hold, so two declarations that may coexist never share a part:
     - its kind and its name;
     - an extension's extended type and constraints;
-    - a function's, property's or subscript's whole signature, with `static`, its `self` convention, parameter labels, types and conventions, result, `throws` and `where` clause;
+    - a function's, property's or subscript's whole signature, with `static`, its `self` convention, parameter labels, types and conventions, result and `where` clause;
     - an accessor's kind (`get`, `set`, `borrow`, `mutate`);
     - for a block, closure or branch, which has no name, its position in the scope around it;
     - every compile-time argument the declaration's body is instantiated with (below).
@@ -128,7 +128,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - a tuple's labels;
     - an inline array's count;
     - an existential's `any` or `mutable any`, and its protocols, as a set;
-    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; its thrown type, `Never` when none is written; and each parameter's `keep` and convention;
+    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; and each parameter's `keep` and convention;
     - an error union's members, as a set.
 
   So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
@@ -149,6 +149,8 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
 - the type's layout;
 - the scalar type each part holds, so that `Int8` and `Bool` differ;
 - an enum's cases, tags and raw values.
+
+**A `T!Never` reads as the enum it is, though it stores no tag** ([04](../04-types/enums.md#enums)). `isEnum` is true for it, and its `cases` are `success` and `failure`. `value[case: .success]` always holds the `T`, and `value[case: .failure]` is always `nil`. Its `size` and `alignment` are `T`'s, and its `layoutId` covers its two cases and the absence of a tag, so it differs from `T`'s.
 
 The types it holds are those of its stored fields, elements and payloads. The recursion goes through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
 
@@ -186,7 +188,7 @@ public struct Enemy(
 Loaders (save files, network replication, asset import) need the reverse of `serialize`: building a `T` field by field, including fields with no default. **Static closures** do it: closures whose body is instantiated once per field, like a `static for` body:
 
 ```swift
-func deserialize<T>(_ r: mutable Reader) throws(LoadError) -> T {
+func deserialize<T>(_ r: mutable Reader) -> T!LoadError {
     static if T.conforms(Pod.self) && T.isPaddingFree {      // mirrors serialize: raw bytes
         return try r.read(T.self)
     } else static if T.conforms(Serializable.self) {         // one protocol for both directions
@@ -210,7 +212,7 @@ func deserialize<T>(_ r: mutable Reader) throws(LoadError) -> T {
     }
 }
 
-func deserializeEnum<T>(_ r: mutable Reader) throws(LoadError) -> T {
+func deserializeEnum<T>(_ r: mutable Reader) -> T!LoadError {
     let tag = try r.readName()
     static for c in T.cases {
         if tag == Name(c.name) { return try T.makeCase(c) { static field in try deserialize(&r) as field.type } }

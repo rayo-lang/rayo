@@ -122,7 +122,7 @@ enemies.forEachInParallel { e in
 
 var g = deaths.lock()                    // a MutexGuard<List<Vec3>>
 g.value.append(copy boss.pos)
-consume g                                // unlocks now; otherwise the end of the scope does
+_ = g                                    // unlocks now; otherwise the end of the scope does
 
 deaths.lock { _ in
     deaths.lock { _ in }                 // panics: this thread already holds 'deaths'
@@ -139,7 +139,9 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **Locking doesn't make a closure `mutating`.** `lock` is a non-`mutating` method, so a body that only locks `deaths` still runs on many threads at once.
 
-**The guard form returns a guard, which holds the lock for as long as it lives.** `consume` releases it early.
+**The guard form returns a guard, which holds the lock for as long as it lives.** `_ = g` releases it early, and shows where the lock ends.
+
+**`_ =` drops a value on purpose.** Rayo rejects any value that code never uses, unless its type is `Void`, because an ignored result is usually a bug, such as an error nobody handled. So code that has no use for a value, such as the `Thread` that `Thread.start` returns below, drops it with `_ =` ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
 **A guard is scoped.** It can't be stored in a global or an object, returned past the mutex it came from, or held across an `await` ([below](#stepped-tasks)).
 
@@ -191,10 +193,10 @@ func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int>) {
 ```swift
 var level = loadLevel()
 let bounces = 3
-Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                    // error: unlisted captures; a thread body can't borrow them
+_ = Thread.start(name: "bake") {
+    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
 }
-Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
+_ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
     bakeLighting(level, bounces: bounces)
 }
 ```
@@ -210,7 +212,7 @@ Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread
 ```swift
 let mixer = Shared(Mutex(AudioMixer()))
 let m = mixer.weak()                                         // a WeakShared<Mutex<AudioMixer>>
-Thread.start { [copy m, copy clip] in
+_ = Thread.start { [copy m, copy clip] in
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
 }
 ```
@@ -284,7 +286,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 }
 
 var scripts = TaskSet<Game>(capacity: 512)
-scripts.start(openDoor(frontDoor))                         // calling openDoor runs nothing: it returns the task
+_ = scripts.start(openDoor(frontDoor))                     // calling openDoor runs nothing: it returns the task
 scripts.step(&game)                                        // resumes pending and woken tasks once each
 ```
 

@@ -77,7 +77,7 @@
 - **`AllocatorImpl` is a promise** ([06](../../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)): disjoint allocations, no reuse after handing a block over, and truthful reports. It is `Synchronized`, since any thread allocates ([06](../../spec/06-memory-and-allocators/allocator-basics.md#allocators-and-threads)).
 - **A `Shared<T>` holds a `Frozen` or `Synchronized` value, and a `LocalShared<T>` a `Frozen` one** ([06](../../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So what many owners reach is never written, or written only through its own synchronization, apart from the count, which no reader observes. `Frozen` is derived only for types with no interior mutability, and nothing holding a `Synchronized` value is `Frozen` ([06](../../spec/06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
 - **`release` forgets only a `TrivialFree` value** ([06](../../spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)), whose destruction would only free memory, which the reset then frees.
-- **A failed allocation panics or throws** ([06](../../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so no operation goes on with memory it didn't get.
+- **A failed allocation ends the program or fails with `AllocError`** ([06](../../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so no operation goes on with memory it didn't get.
 
 ## Threads
 

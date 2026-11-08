@@ -15,7 +15,7 @@ For a question about a line of code, begin with the construct you wrote. For exa
 | Work on another thread, locks, atomics or tasks | [07 Concurrency](07-concurrency.md) |
 | A C header, pointer, callback or export | [08 C interop](08-c-interop.md) |
 | A constant, conditional build, attribute or reflection | [09 Compile time](09-compile-time.md) |
-| A thrown error, panic, check or `unsafe` operation | [10 Errors and safety](10-errors-and-safety.md) |
+| A `Result` and its error, a panic, check or `unsafe` operation | [10 Errors and safety](10-errors-and-safety.md) |
 | Modules, visibility, separate compilation or target requirements | [11 Compilation model](11-compilation-model.md) |
 | Whether a sequence of tokens is valid Rayo | [12 Grammar](12-grammar.md) |
 

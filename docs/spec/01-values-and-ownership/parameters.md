@@ -22,7 +22,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 | mutable | `_ x: mutable T` | `f(&x)` | A mutable borrow of a [changeable place](bindings.md#changeable-places) |
 | owned | `_ x: owned T` | `f(x)` | The value: a place moves in, whatever its type, and `f(copy x)` passes a copy |
 
-- **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, by returning, throwing or a panic's unwind, unless the callee has moved it on ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)). A `consuming` method's `self` is held the same way.
+- **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, by returning or a panic's unwind, unless the callee has moved it on ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)). A `consuming` method's `self` is held the same way.
 - **Methods use the same conventions for `self`.** A plain `func` borrows it, a `mutating func` takes it `mutable`, and a `consuming func` takes it `owned`. A struct's primary initializer takes its fields `owned`, since the value owns its fields ([04](../04-types/structs.md#initializers)). So `World(enemies: enemies)` moves `enemies` in.
 - **Conventions line up across an indirection.** A protocol witness, a function converted to a function type, and a function type converted to another declare each parameter, and `self`, with the convention of what they stand for ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a call through any of them passes its arguments as a direct call would ([below](#borrowed-arguments)).
 - **A `mutable` argument's changes reach the caller's place when the call returns**, even when it is lent through a temporary that is written back, as a bitfield or an under-aligned field is ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)). When the call unwinds instead, changes through a value property, such as a bitfield, are lost, since its `set` isn't called ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). An under-aligned field's temporary is still written back ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
@@ -41,7 +41,7 @@ func spawn(_ kind: Kind, at pos: Vec3 = .zero) { ... }
 spawn(kind)                                             // leaves out 'at:', so 'pos' is .zero
 ```
 
-- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+- **The default is checked where it is declared**, as the body of a function with no parameters whose result type is the parameter's type. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 - **A call that leaves the argument out calls that function** in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)).
 - **A `mutable` parameter has no default**, since it stands for a place of the caller's.
 - **A field's default works the same way** in the primary initializer ([04](../04-types/structs.md#initializers)).
@@ -55,11 +55,11 @@ spawn(kind)                                             // leaves out 'at:', so 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address, and it changes through a shared borrow. A `Closure<F>` counts, since its captures may hold one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **The argument of `ptr(to:)`**, whose result is its address ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).
 - **A source of a place property's place.** `self` by default, and each parameter a `where return borrows` item names, whatever the place's type, since the place lies inside it ([02](../02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)).
-- **An argument still viewed after the call.** The result, a thrown error or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+- **An argument still viewed after the call.** The result, an error in it included, or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 [Rules 3 and 4](../02-views-and-dependencies.md#dependencies), and a `where` clause's `return` items, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values). An `Int` or a `List<Int>` result views nothing. A place property's place is no result, so neither of these spares its sources.
 
-**Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where` clause, and each parameter's type and convention.
+**Which arguments are the caller's place follows from the signature alone**: the function called, its result type, its `where` clause, and each parameter's type and convention.
 
 - **Adding `keep` to a parameter changes none of this** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
 - **A call through a function value passes its arguments as a direct call would**, since every function-type conversion keeps the conventions, and which arguments are places ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).
@@ -67,9 +67,9 @@ spawn(kind)                                             // leaves out 'at:', so 
 ## Evaluation order, and when a call's borrows begin
 
 ```swift
-items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-builder.finish(builder.count) // fine: count is read before finish takes builder
-f(&x, x)                      // error: two borrows of x overlap for the whole call
+items.append(items.count)                // fine: items.count is read, and done, before append borrows items
+upload(builder.finish(builder.count))    // fine: count is read before finish takes builder
+f(&x, x)                                 // error: two borrows of x overlap for the whole call
 ```
 
 **Evaluation is left to right, and a call's borrows begin with the call.** So a value read for an argument is done before the call lends or takes its place, and every borrow and take of one call is checked against the others. The order is fixed, so two implementations never disagree about it ([11](../11-compilation-model.md#what-the-language-leaves-open)). The one exception is the message of `fatalError`, `precondition` or `assert`, evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). A call runs in this order:

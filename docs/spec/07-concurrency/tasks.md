@@ -43,7 +43,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 **A place in the task's own state is worked out again on resuming**, from the index values already computed, since only the task's body reaches that state. So an assignment to a local may await on its right side, while one to a place reached through the resume parameter may not:
 
 ```swift
-total += await next()                 // fine: 'total' is a local, worked out again on resuming
+total += await next()                 // fine: 'total' is a local, worked out again on resuming; 'next' can't fail, so no 'try'
 game.score += await pointsFor(n)      // error: 'game.score' is worked out before the 'await', through the resume parameter
 let p = await pointsFor(n)            // fine: the 'await' comes first
 game.score += p                       // and the write after it
@@ -65,10 +65,10 @@ game.score += p                       // and the write after it
 
 **A task never holds itself.** Its state never contains a state of its own type, as it would if its body awaited a call of itself directly or through other `task func`s ([04](../04-types/structs.md#structs)). Recursion goes through an owner, such as a `Box`, so the allocation is visible.
 
-**Results and errors.** A task returns and throws as a function does:
+**Results and errors.** A task returns and fails as a function does:
 
 ```swift
-task func loadLevel(_ id: owned LevelId) with (ctx: mutable Loader) throws(LoadError) -> Level { … }   // a result type and an error type
+task func loadLevel(_ id: owned LevelId) with (ctx: mutable Loader) -> Level!LoadError { … }   // a success type and a failure type
 let level = try await loadLevel(id)          // in another task: yields the result, or propagates the error
 ```
 
@@ -103,12 +103,12 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 }
 ```
 
-**`await x` evaluates to `x`'s `Output` once it is done.** For the dependency rules ([02](../02-views-and-dependencies.md#dependencies)), it is the `x.poll(&ctx, waker)` call that returned `.done`, with `x` a temporary of its statement. So the value, and an error that `try await` throws, depend, exclusively, on each of these:
+**`await x` evaluates to `x`'s `Output!Failure` once it finishes**, or to its `Output` where `Failure` is `Never` (below), `.success` for `.done` and `.failure` for `.failed`. For the dependency rules ([02](../02-views-and-dependencies.md#dependencies)), it is the `x.poll(&ctx, waker)` call that returned, with `x` a temporary of its statement. So the value, an error included, depends, exclusively, on each of these:
 
 - the resume parameter;
 - `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
-**An awaitable whose `Failure` isn't `Never` is awaited with `try await`**, and `.failed(e)` throws `e` there ([10](../10-errors-and-safety.md)). A `task func` is an awaitable of its return and error types.
+**`try await x` propagates the error of `.failed(e)` as `try` does, and `await x` alone keeps it as a value** ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). Where `Failure` is `Never`, as it is worked out at the `await`, `await x` has type `Output`, so `total += await next()` needs no `try` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)). In code generic over `Failure`, it is still an `Output!Failure`. A `task func` is an awaitable of its success and failure types.
 
 **Only its owner's `step` resumes a task, but a step needn't visit every task.**
 

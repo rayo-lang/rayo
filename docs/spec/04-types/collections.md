@@ -280,7 +280,9 @@ for (x, y) in consume z { … }       // 'z' holds a zip with an '&' argument: i
 for (i, e) in items.enumerated() { … }           // shared: (Int, Borrow<Item>) elements
 for (i, e) in &items.enumerated() { … }          // exclusive: (Int, MutableRef<Item>) elements
 let ages = particles.life                        // Span<Float>
+log("first age \(ages[0])")
 var lives = &particles.life                      // MutableSpan<Float>
+lives[0] = 1
 particles.life.sort()                            // only the mutable form has sort(), so it is used
 ```
 

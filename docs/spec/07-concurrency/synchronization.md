@@ -39,7 +39,7 @@ log.lock { msgs in msgs.append(m) }      // closure form: lock takes 'consuming 
 
 var g = log.lock()                       // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
 g.value.append(n)                        // views of g.value depend on g
-consume g                                // unlocks; otherwise its deinit unlocks at scope end
+_ = g                                    // unlocks; otherwise its deinit unlocks at scope end
 
 log.lock { msgs in
     log.lock { _ in }                    // panics: this thread already holds 'log'

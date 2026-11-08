@@ -111,4 +111,4 @@ let (var ts, vs) = &table.rows[fields: (tf, vf)]   // 'ts' is a MutableSpan, and
 
 **Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](../09-compile-time/reflection.md#reflection-and-access-control)), a column is a `MutableSpan`, and a row's field can be written, only for a `var` field that could be assigned there. So a `let` field's column is a `Span` even in an exclusive context. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this.
 
-**A growing operation grows every column or none.** When an allocation fails, `tryAppend` throws, with every column as it was, and `append` ends the program ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+**A growing operation grows every column or none.** When an allocation fails, `tryAppend` fails with `AllocError`, with every column as it was, and `append` ends the program ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).

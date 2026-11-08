@@ -370,7 +370,10 @@ A run-time check that catches a logic bug whose failure is still memory-safe, su
 _Avoid_: debug check
 
 **Error union**:
-A tagged union with one member per error type, written `(IoError | ParseError)`, as in `throws(IoError | ParseError)` ([10](docs/spec/10-errors-and-safety/typed-errors.md#error-unions)).
+A tagged union with one member per error type, written `(IoError | ParseError)`, as in `Level!(IoError | ParseError)` ([10](docs/spec/10-errors-and-safety/typed-errors.md#error-unions)).
+
+**Failure type**:
+The `Failure` of a `Result`, and of a function whose result type is one: the errors it can fail with, `Never` for none ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
 **Memory-safety check**:
 A run-time check, such as a bounds check, that keeps safe code sound; it is on in every build ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
@@ -384,12 +387,15 @@ _Avoid_: crash, exception
 The build's choice of how a panic ends: by unwinding, the default, or by aborting, which reports the panic and ends the program at once, so nothing catches it ([10](docs/spec/10-errors-and-safety/panics.md#panic-strategy)).
 
 **Recoverable error**:
-A typed value, such as a missing file, that a function throws and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).
+A typed value, such as a missing file, that a function returns as the failure of its `Result` and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).
 _Avoid_: exception
 
 **Recovery point**:
 A call of `catchPanic`, where an unwind out of its body stops and its `recover` closure runs with the panic ([10](docs/spec/10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 _Avoid_: catch block, landing pad
+
+**Result**:
+The prelude's enum `Result<Success, Failure>`, written `Success!Failure`, which a function that can fail returns: its result as `.success` or its error as `.failure` ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
 **Unsafe code**:
 Code that uses an operation needing `unsafe`, such as dereferencing a raw pointer or calling C, whose soundness the code promises instead of the compiler ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
