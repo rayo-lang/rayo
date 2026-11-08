@@ -28,7 +28,7 @@ angle.degrees += 45                     // calls get, then set with the sum
 - **A place property** hands out a place in storage, as `hp` does. It declares a `borrow`, which lends the place for reading, and may add a `mutate`, which lends it for change. Code uses the place as it would use a stored field, except to move out of it, and no accessor code runs once the caller has it.
 - **A value property** computes a value and takes one back, as `degrees` does. It declares a `get`, which returns a value, and may add a `set`, which takes a new one. A change works on a copy, which `set` writes back.
 
-A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property. A subscript may declare generic parameters, as a function does, so `box[as: Slider.self]` picks the type it hands out ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property. A subscript may declare generic parameters, as a function does, so `a[as: Tooltip.self]` picks the type it hands out ([09](../09-compile-time/attributes-and-runtime-data.md#runtime-type-info)).
 
 **A declaration's accessors are one of these:**
 
@@ -65,7 +65,7 @@ let pos = borrow world.enemies[h]!.pos       // the borrow accessor; '!' panics 
 
 **A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `&`, as every place lent for change is marked ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). Nothing is copied or moved, so the caller reaches the place itself.
 
-**The access ends at the last use of the place and of every value that depends on it**, as a borrow of a stored field does, and nothing runs then. So `world.enemies[h]?.hp -= 10` changes the element where it lies in the pool. A view of the place can outlive the statement that took it, as a view of a field can ([below](#what-a-place-depends-on)).
+**Each source's access ends at the last use of the place and of every value that depends on it**, as a borrow of a stored field does, and nothing runs then ([below](#the-place-lies-in-its-sources)). An argument that is no source is lent only for the accessor's call. So `world.enemies[h]?.hp -= 10` changes the element where it lies in the pool. A view of the place can outlive the statement that took it, as a view of a field can ([below](#what-a-place-depends-on)).
 
 ### The place lies in its sources
 

@@ -88,7 +88,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 
 **Generics are monomorphized**: each is compiled separately for each set of type arguments, and never implicitly called through a witness table (a type's table of implementations of a protocol's requirements), in any build or across any module boundary. So a call through a witness table happens only through `any P`, where the source shows it ([11](../11-compilation-model.md#runtime-costs)).
 
-**Instantiation always ends.** Since every instantiation is compiled, a generic function or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
+**Instantiation always ends.** Since every instantiation is compiled, a generic function, subscript or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
 
 ```swift
 func nest<T: Copyable>(_ x: T, _ n: Int) {
@@ -210,7 +210,7 @@ func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is receiv
 
 **`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning to `box.value`, or through any `mutable any P`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
 
-**`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. So a test that fails moves nothing:
+**`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
 ```swift
 if var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
