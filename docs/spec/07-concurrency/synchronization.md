@@ -96,7 +96,7 @@ The ends are move-only, unscoped values that point to shared heap state, so `T` 
 
 - **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
 - **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
-- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits park the thread ([below](#parking-and-waking-a-thread)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once.
+- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits park the thread ([below](#parking-and-waking-a-thread)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once. A `signal()` happens before every `wait()` it lets return, so what the signalling thread did before it is visible to the waiter. An `Event` holds only its state word, and declares no `deinit`, so destroying one runs no Rayo code.
 
 **A `Condvar` wait consumes the guard and returns a new one:**
 

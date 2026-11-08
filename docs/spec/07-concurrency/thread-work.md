@@ -95,7 +95,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
   So the type that keeps it is one of these:
     - one that safe code can make and drop, which declares a `deinit` that waits, making destroying it a use ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it));
     - one that only the library makes, such as the `ThreadScope` that `ThreadScope.run` lends its block, where the library waits before the call that lends it returns or unwinds;
-- **never to hand it to a thread that is queued past that time**, as `Runtime.startThread` queues every thread it starts during startup. Such a thread starts only once startup ends, when the borrows the value carries may have ended ([below](#lent-work-during-startup)).
+- **never to hand it to a thread that is queued past that time**, as `Runtime.startThread` queues every thread it starts during startup. Such a thread starts only once startup ends, when the borrows the value carries may have ended. The `.queued` result of the start tells the library so ([below](#lent-work-and-queued-threads)).
 
 **By the first promise, a closure that returns a lock guard taken on a worker, or an object made there, is rejected at the call**, since neither is `Sendable`.
 
@@ -122,7 +122,9 @@ ThreadScope.run { s in
 }
 ```
 
-**A job system of one's own carries a panic back the same way**, with `catchPanic` around each piece and `resumePanic` on the lending thread ([10](../10-errors-and-safety/panics.md#resuming-a-panic-resumepanic)). It still waits for every piece whether the lending call returns or unwinds, as the library's promise requires ([above](#the-librarys-promise)).
+During startup, this example panics at the spawned closure's `wait()` instead, since lent work then runs inline ([below](#lent-work-during-startup)).
+
+**A job system of one's own carries a panic back the same way**, with `catchPanic` around each piece and `resumePanic` on the lending thread ([10](../10-errors-and-safety/panics.md#resuming-a-panic-resumepanic)). Of several panics, it resumes the one with the lowest `sequence`, which is the first reported ([10](../10-errors-and-safety/panics.md#the-panic-value)). It still waits for every piece whether the lending call returns or unwinds, as the library's promise requires ([above](#the-librarys-promise)).
 
 ### Lent work during startup
 
@@ -138,6 +140,14 @@ let table = catchPanic {                          // a global's initializer, run
 } recover: { _ in List<Int>() }
 ```
 
+**Inline work runs as code the block calls, so it follows the rules for startup code:**
+
+- **Order.** Each closure runs at its `spawn` call, in `spawn` order, before the rest of the block.
+- **Parking.** A closure that parks panics, as any wait that would park during startup does ([Initialization at startup](global-state.md#initialization-at-startup)). So the `Event` example above panics during startup, at the spawned closure's `wait()`.
+- **Locks.** A closure that locks a mutex the block holds panics, as relocking a held `Mutex` does ([Locks](synchronization.md#locks-mutex-and-rwlock)).
+- **Spinning.** A closure that spins on an atomic until the block sets it hangs for ever, since the block runs only after the closure returns.
+- **Panics.** An inline closure's panic stops at the closure and waits for the end of `ThreadScope.run`, as outside startup ([above](#scoped-threads)). So the block keeps running after it.
+
 ### Thread-locals in lent work
 
 **Thread-locals belong to the thread that runs the code.** Lent work that reads a `@threadlocal var`, or allocates through the current allocator, gets the running thread's copy. Work that the lending thread runs itself, as the job system's `join` may, touches the lender's copy. A conflict with an access the waiting lender holds then panics on the ordinary access mark ([Thread-locals](global-state.md#thread-locals)).
@@ -147,17 +157,17 @@ let table = catchPanic {                          // a global's initializer, run
 ```swift
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
-    let render = Thread.start(name: "render") { [move rx] in                   // the thread owns the receiver
-        while true { draw(rx.waitPop()) }                                       // parks until the simulation sends one
+    let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
+        while true { draw(rx.waitPop()) }                                    // parks until the simulation sends one
     }
-    return (render, tx)                                                       // the simulation keeps the sender
+    return (render, tx)                                                      // the simulation keeps the sender
 }
 
 let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // instead of a channel, a global queue: a Synchronized let
 
 func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
-        while true { draw(snapshots.waitPop()) }                              // parks until the simulation pushes one
+        while true { draw(snapshots.waitPop()) }                             // parks until the simulation pushes one
     }
 }
 ```
@@ -170,9 +180,9 @@ static func start(name: StaticString = "", _ body: owned Closure<consuming @send
                                                       // Thread<R>'s: the body, handed over; a call infers R from it
 ```
 
-**A `Thread<R>` is move-only and `Sendable`.** It is move-only since it is the one value that can join its thread. It is `Sendable` exactly when `R` is, and `R` always is, so any thread may join it.
+**A `Thread<R>` is move-only and `Sendable`.** It is move-only since it is the one value that can join its thread. It is `Sendable`, since `R` always is, so any thread may join it.
 
-**`Thread.start` panics when the runtime hands its body back unstarted**, since it has no thread to return. That happens when the platform can't start a thread, or after shutdown ([below](#starting-a-thread-runtimestartthread)). The unwind destroys the body and its captures. During startup the runtime queues the thread instead.
+**`Thread.start` panics when `Runtime.startThread` refuses the start**, since it has no thread to return. That happens when the platform can't start a thread, or after shutdown ([below](#starting-a-thread-runtimestartthread)). The unwind destroys the body and its captures. During startup the runtime queues the thread instead, and `Thread.start` returns its `Thread` at once.
 
 **A thread that serves a stream of items owns the receiving end, and waits on it in a loop**, as the render thread does with `rx`. Between items, `waitPop()` parks it ([Queues and channels](synchronization.md#queues-and-channels)).
 
@@ -236,7 +246,12 @@ let sum: UInt32? = catchPanic {
 
 **Dropping a `Thread` detaches the thread.** A **detached thread** runs on to the end of its body and tears down by itself, and nothing can join it any more. Its panic, if it has one, is reported when it happens, and no code sees it. A detached thread that is still running when `main` returns ends where it stands, as every thread other than the main one does ([Shutdown](global-state.md#shutdown)).
 
-**Detaching leaks nothing.** The thread owns what its body captured, and the state it shares with its `Thread` is freed by whichever of the two lets go last. The body's result, kept in that state, is destroyed with it, since no `join()` will take it: when the thread ends, or at the drop if the thread had already ended. `R` is `Sendable`, so either thread may destroy it.
+**Detaching leaks nothing.** The thread owns what its body captured, and the state it shares with its `Thread` is freed by whichever of the two lets go last. No `join()` will take the body's result, so it is destroyed as soon as nothing can take it:
+
+- **when the body returns**, on the thread, before its teardown, if the `Thread` was dropped first;
+- **at the drop**, on the dropping thread, if the body had returned already. `R` is `Sendable`, so that thread may destroy it.
+
+So no Rayo code of the thread runs after its teardown.
 
 **The unused-value rule makes every detach visible.** `Thread.start` returns the `Thread`, so code that never joins it drops it on purpose with `_ =`, as the examples above do ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
@@ -246,16 +261,29 @@ let sum: UInt32? = catchPanic {
 
 ```swift
 static func startThread(_ body: owned Closure<consuming @sendable () -> Void>,   // Runtime's: the body, handed over
-                        ended: Shared<Event>?)                                     // signalled after the thread's teardown
-    -> Closure<consuming @sendable () -> Void>? { … }                              // nil once the thread has started
+                        ended: owned Shared<Event>?) -> ThreadStart { … }          // 'ended': signalled after the thread's teardown
+
+enum ThreadStart {
+    case started                                             // a new thread runs the body
+    case queued                                              // during startup: the thread starts once startup ends
+    case refused(Closure<consuming @sendable () -> Void>)    // the body, unstarted
+}
 ```
 
-The new platform thread runs `body` with no Rayo frame below it. The call returns `nil` once the thread has started. It returns `body`, unstarted, when the platform can't start a thread, or after shutdown ([Shutdown](global-state.md#shutdown)). The call happens before the body begins.
+**The result says what became of the body:**
 
-**The runtime signals `ended`, when it is given one, once the thread's teardown has run** ([Thread teardown](global-state.md#thread-teardown)). Signalling it is the thread's last act in Rayo, so everything the thread did, its teardown's `deinit`s included, happens before a wait on `ended` returns. That is how `join()` and `ThreadScope.run` wait for a thread's teardown ([above](#joining-a-thread)). A body handed back unstarted leaves `ended` unsignalled.
+- **`.started`** once a new platform thread runs it, with no Rayo frame below it. The call happens before the body begins.
+- **`.queued`** during startup, when the thread waits for startup to end ([below](#lent-work-and-queued-threads)).
+- **`.refused`**, holding the body unstarted, when the platform can't start a thread, or after shutdown ([Shutdown](global-state.md#shutdown)). The runtime then drops `ended` unsignalled.
+
+**The runtime signals `ended`, when it is given one, once the thread's teardown has run** ([Thread teardown](global-state.md#thread-teardown)). Signalling it is the thread's last act in Rayo, so everything the thread did, its teardown's `deinit`s included, happens before a wait on `ended` returns. That is how `join()` and `ThreadScope.run` wait for a thread's teardown ([above](#joining-a-thread)). The runtime then releases its owner of `ended`, which runs no Rayo code even when it is the last owner, since destroying an `Event` runs no `deinit` ([Snapshots, one-time values and waits](synchronization.md#snapshots-one-time-values-and-waits)).
 
 **A panic that unwinds out of `body` ends the thread as an uncaught panic does** ([10](../10-errors-and-safety/panics.md#uncaught-panics)). The runtime carries the panic nowhere but the report. So `Thread.start` and job systems run their work under `catchPanic` inside the body, to carry a panic back to a joiner or lender ([above](#panics-in-lent-work)).
 
-**During startup it returns `nil` at once, and queues the thread until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded. A queued thread that the platform can't start then panics. No lent work is ever queued, since std's lending calls run their work inline during startup ([above](#lent-work-during-startup)).
+### Lent work and queued threads
+
+**During startup, `Runtime.startThread` returns `.queued` at once, and the thread waits until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded. A queued thread that the platform can't start then panics.
+
+**std guarantees that no lent work is ever queued**, since its lending calls run their work inline during startup ([above](#lent-work-during-startup)). Another library keeps the same guarantee through the result: it starts a worker before it hands the worker any lent work, and when the start comes back `.queued`, it runs the work inline instead.
 
 **A library may also start threads through the platform's API with `import c`.** The start routine is then a C entry ([08](../08-c-interop/calling-rayo-from-c.md#c-entries-and-threads)). The runtime doesn't know that thread until it enters, so entering before startup ends or after shutdown panics, as for any C thread.

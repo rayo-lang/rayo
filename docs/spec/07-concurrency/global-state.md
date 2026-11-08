@@ -101,7 +101,7 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
 **At shutdown, the thread that shuts down tears down, and then entry closes:**
 
 1. The thread's teardown runs ([above](#thread-teardown)), so a `deinit` that flushes or closes something runs, and sees that thread's copies, the current allocator included.
-2. Entry closes: from then on, an entry from C with no Rayo frame below it on its thread panics ([above](#initialization-at-startup)), and `Runtime.startThread` returns its body unstarted ([Starting a thread: `Runtime.startThread`](thread-work.md#starting-a-thread-runtimestartthread)).
+2. Entry closes: from then on, an entry from C with no Rayo frame below it on its thread panics ([above](#initialization-at-startup)), and `Runtime.startThread` refuses every start, handing its body back unstarted ([Starting a thread: `Runtime.startThread`](thread-work.md#starting-a-thread-runtimestartthread)).
 
 **Other threads don't tear down at shutdown.** When `main` returns, the process exits, ending them where they stand. In a C program that embeds Rayo, a thread that `Runtime.startThread` started still tears down when its body returns. An attached C thread can no longer call `rayo_thread_detach`, since that call enters Rayo as any call from C does, and entry has closed ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 

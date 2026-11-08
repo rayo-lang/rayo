@@ -241,10 +241,10 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 ```swift
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
-    let render = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        while true { draw(rx.waitPop()) }                       // waits for each snapshot in turn
+    let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
+        while true { draw(rx.waitPop()) }                                    // waits for each snapshot in turn
     }
-    return (render, tx)                                         // the simulation keeps the sender
+    return (render, tx)                                                      // the simulation keeps the sender
 }
 ```
 

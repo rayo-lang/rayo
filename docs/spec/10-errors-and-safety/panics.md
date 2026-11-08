@@ -80,9 +80,9 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 **Startup, shutdown and threads from C:**
 
 - entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](../07-concurrency/global-state.md#initialization-at-startup));
-- calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what detaching or shutting down destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
+- calling `rayo_init` a second time, and calling `rayo_thread_detach` or `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what either call destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
 - a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
-- `Thread.start` when the runtime hands its body back unstarted, outside startup ([07](../07-concurrency/thread-work.md#work-that-outlives-the-caller-threads)).
+- `Thread.start` when `Runtime.startThread` refuses the start, which happens only outside startup ([07](../07-concurrency/thread-work.md#work-that-outlives-the-caller-threads)).
 
 **Poisoned locks.** `lock`, `read` and `write` on a lock that a panic has poisoned, until `clearPoison()` resets it ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
@@ -238,7 +238,10 @@ Moves are checked as for any call's arguments: a place that either closure owns 
 ### The `Panic` value
 
 ```swift
-struct Panic { … }             // copyable and Sendable: up to 256 bytes of its message, inline
+struct Panic {                 // copyable and Sendable: up to 256 bytes of its message, inline
+    let sequence: UInt64       // its place in the runtime's report order
+    …
+}
 struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 ```
 
@@ -247,6 +250,8 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 - **`p.message`** is a `StringView` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
 - **`p.isCut`** is `true` when the message was cut, which tells a cut message from a whole one. The report always has the whole message.
 - **`p.location`** is where the panic happened: the call to `fatalError`, `precondition` or `assert`, or the operation whose check failed.
+
+**`p.sequence` is unique to the panic, and increases in the runtime's report order** ([above](#what-a-panic-does)). So of two panics `a` and `b`, `a` was reported first exactly when `a.sequence < b.sequence`. Code that picks one of several panics, as a lending call does, uses it to pick the first reported.
 
 **Only the runtime makes a `Panic`.** The type has no public initializer, so every `Panic` that code holds, and every panic that `resumePanic` carries on, was reported when it happened.
 
@@ -258,7 +263,7 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 func resumePanic(_ p: Panic) -> Never
 ```
 
-**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened.
+**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message, location and sequence, so a later recovery point catches the panic as it first happened.
 
 **A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#panics-in-lent-work)):
 

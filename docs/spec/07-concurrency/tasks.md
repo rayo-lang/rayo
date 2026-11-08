@@ -116,7 +116,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **Only its owner's `step` resumes a task, but a step needn't visit every task.**
 
-- A **pending** task is polled every step.
+- A **pending** task is polled every step, except a step that a panic stops before it reaches the task ([below](#running-tasks)).
 - A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel. The next `step` after a wake resumes it.
 
 **`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread.
@@ -166,7 +166,9 @@ mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>        //
     where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }   // C: the set's resume context type
 ```
 
-**A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay as they were, pending or woken, for the next `step`. They don't run on a resume parameter that the panic may have left half-changed, since an owner's `recover` closure sees that state first, and may repair it ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). An owner that keeps the program running catches the panic around `step`:
+**A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay as they were, pending or woken, for the next `step`, which starts with the task after the one that panicked and wraps around. So a task that panics often can't keep the tasks after it from being stepped.
+
+**Stopping at once keeps the other tasks off a half-changed resume parameter.** The panic may have left the resume parameter half-changed, and the owner's `recover` closure sees it first, so it can repair it before any other task runs ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). An owner that keeps the program running catches the panic around `step`:
 
 ```swift
 catchPanic {
