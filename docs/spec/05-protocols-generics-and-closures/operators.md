@@ -46,8 +46,24 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 2. By matching the expected type against the call's result type, part by part, as `await` does ([07](../07-concurrency/tasks.md#semantics)).
 3. From the result type of a closure literal argument, once the parameter's type has given the literal its parameter types. Closure literals that bind it to different types combine as typed arguments do in step 1.
 4. From the literals' default. The literal arguments left to bind it take one default together, as an array literal's elements do ([04](../04-types/collections.md#literals)).
+5. From its default type argument, for a type's parameter that declares one ([Default type arguments](protocols-and-generics.md#default-type-arguments)), when steps 1 to 4 bind nothing.
 
-**A static call or an initializer on a generic type written without type arguments binds the type's parameters from the call**, in the same four ways, as a generic function's parameters are bound. So `Thread.start { 0 }` binds `Thread`'s `R` from its closure ([07](../07-concurrency/thread-work.md#work-that-outlives-the-caller-threads)), while `Channel<Request>.make(capacity: 64)` writes its argument.
+**A static call or an initializer on a generic type written without type arguments binds the type's parameters from the call**, in the same five ways, as a generic function's parameters are bound. So `Thread.start { 0 }` binds `Thread`'s `R` from its closure ([07](../07-concurrency/thread-work.md#work-that-outlives-the-caller-threads)), while `Channel<Request>.make(capacity: 64)` writes its argument.
+
+**A default binds only the parameter that declares it, and only once the expected type has had its say.** As an argument, a call's expected type is the parameter's type once the callee's own type parameters bind from its other arguments. So an argument whose type a default would complete counts as untyped in step 1, as a literal does. A callee's type parameter that only such a nested default would bind stays unbound, which is an error:
+
+```swift
+func takesFixed(_ m: Map<Name, Int, FixedHashing>) { … }
+func merge<K, H>(_ into: mutable Map<K, Int, H>, _ from: Map<K, Int, H>) { … }
+func fresh<H: Hashing>(_ m: Map<Name, Int, H>) { … }
+var fixed: Map<Name, Int, FixedHashing> = [:]
+
+takesFixed(Map())                  // H is FixedHashing, from the parameter's type
+merge(&fixed, Map())               // K and H bind from 'fixed', and Map() takes them from the parameter's type
+merge(&fixed, Map<Name, Int>())    // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
+fresh(Map())                       // error: nothing binds fresh's H, and Map()'s default never does
+fresh(Map<Name, Int>())            // fine: the written type takes its default, so H is SeededHashing
+```
 
 **A closure literal binds through the type its body gives it, which the rule for a bare `!` works out** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)):
 

@@ -70,8 +70,10 @@ enum NavMode: Int32 { case walk, fly }
 - the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock for timeouts, such as a parked thread's;
-- random bytes that nobody outside the program can predict, from which std draws the process seed that `Map` and `Set` hash with by default ([04](../04-types/collections.md#hash-maps-and-sets));
+- random bytes that nobody outside the program can predict, from which startup draws the process seed that `Map` and `Set` hash with by default ([04](../04-types/collections.md#hash-maps-and-sets));
 - a way to report a panic ([10](../10-errors-and-safety/panics.md#panics)).
+
+**A platform with no source of randomness, such as a small embedded target, takes the seed's bytes from the program that embeds Rayo**, through the same layer that supplies the services above. Protection against chosen colliding keys is then only as strong as the bytes it supplies.
 
 ### Embedding Rayo in a C program
 
@@ -79,7 +81,7 @@ enum NavMode: Int32 { case walk, fly }
 
 | Function | Purpose |
 | --- | --- |
-| `void rayo_init(void)` | Runs startup, once: the calling thread's thread-locals and the other globals' initializers, in startup order ([07](../07-concurrency/global-state.md#initialization-at-startup)) |
+| `void rayo_init(void)` | Runs startup, once: draws the process seed, then runs the calling thread's thread-locals' and the other globals' initializers, in startup order ([07](../07-concurrency/global-state.md#initialization-at-startup)) |
 | `bool rayo_shutdown(void)` | Shuts the runtime down: destroys the calling thread's thread-locals and objects (below), and closes entry ([07](../07-concurrency/global-state.md#shutdown)), and returns whether the runtime has stopped (below) |
 | `void rayo_thread_attach(void)`, `void rayo_thread_detach(void)` | Attach and detach threads Rayo didn't create, such as a middleware library's callback thread. Attaching an attached thread, or detaching one that isn't, does nothing |
 | `void rayo_thread_set_stack(void* low, void* high)` | Declares the bounds of the stack the calling thread has just switched to, such as a fiber's, before it runs Rayo code there |

@@ -54,7 +54,7 @@ So a call the language makes on the code's behalf is allowed only where the call
 **`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)).
 
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types.
-- **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe. Converting an integer to a pointer is `unsafe`.
+- **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Converting an integer to a pointer is `unsafe`.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 

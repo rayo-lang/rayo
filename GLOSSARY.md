@@ -157,7 +157,7 @@ _Avoid_: weak reference, weak link (a `WeakShared`)
 ### Types
 
 **Hashing type**:
-A type conforming to `Hashing`, such as the default `SeededHashing` or `FixedHashing`, which a `Map` or `Set` takes as its `H` to make the `Hasher` that each key is fed to ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
+A type conforming to `Hashing`, such as the default `SeededHashing` or `FixedHashing`, whose value a `Map` or `Set` keeps to make the `Hasher` that each key is fed to ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
 _Avoid_: BuildHasher, hasher builder
 
 **Layout order**:
@@ -189,7 +189,7 @@ A struct's header, which lists its stored fields once and is also its initialize
 _Avoid_: memberwise initializer
 
 **Process seed**:
-The random value std draws from the platform once per run, before startup initializes any global, from which every `Hasher()` starts, so that nobody outside the program can choose keys that collide ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
+The random value that startup draws from the platform once per run, from which each `SeededHashing` map derives a seed of its own, so nobody outside the program can choose colliding keys ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
 _Avoid_: random state, hash key
 
 **Reduction**:

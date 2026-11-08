@@ -230,8 +230,9 @@ let startTime = now()            // fine: a global 'let' is initialized at start
 - accesses no global other than a `const`;
 - starts, parks or wakes no thread;
 - makes no volatile access, and none through a pointer made from an integer;
+- turns no pointer into an integer;
 - reads no clock;
-- hashes nothing with the seed the program draws when it starts (below).
+- makes no seeded `Map` or `Set` (below).
 
 **A `const` whose initializer does anything else is a compile error.** A global `let` runs its initializer at startup instead.
 
@@ -247,9 +248,9 @@ const dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                  // 
 let dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                    // fine: built at startup
 ```
 
-**A `Map` or a `Set` hashes its keys with a seed the program draws when it starts** ([04](../spec/04-types/collections.md#hash-maps-and-sets)). A server that puts keys from its clients in a map would otherwise let a client send keys that all land in one bucket, which makes every lookup slow. The compiler can't know a seed drawn later, so it can't build such a map, and a global `let` of one is built at startup instead.
+**By default, a `Map` or a `Set` hashes its keys with a secret seed, derived from one the program draws when it starts** ([04](../spec/04-types/collections.md#hash-maps-and-sets)). A server that puts keys from its clients in a map would otherwise let a client send keys that all land in one bucket, which makes every lookup slow. The compiler can't know a seed drawn later, so it can't build such a map, and a global `let` of one is built at startup instead.
 
-**A lookup table that should cost nothing at startup names `FixedHashing` as its third type argument.** Its hashes depend only on the keys, so they are the same in the compiler and in every run, and the table can be a `const`. Leave the default for any map whose keys come from outside the program.
+**A lookup table that should cost nothing at startup names `FixedHashing` as its third type argument.** Its hashes depend only on the keys, so they are the same in the compiler and in every run, and the table can be a `const`. Anyone can work out which keys collide under it, so leave the default for any map whose keys come from outside the program.
 
 ## `static if` and `target`
 
