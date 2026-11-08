@@ -96,7 +96,7 @@ struct BodyChecker {
     /// `expr` names.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
-        if case .name(let name, _) = expr.kind, case .local = value.kind {
+        if case .name(let name) = expr.kind, case .local = value.kind {
             errors.unsupported("moving a value out of '\(name)'", at: expr.range)
             return nil
         }
@@ -154,11 +154,11 @@ struct BodyChecker {
     /// as written.
     private mutating func assignedLocal(_ target: Expr, isRead: Bool) -> LocalID? {
         switch target.kind {
-        case .name("_", let typeArguments) where typeArguments.isEmpty && isRead:
+        case .name("_") where isRead:
             errors.error("'_' names no value", at: target.range)
-        case .name("_", let typeArguments) where typeArguments.isEmpty:
+        case .name("_"):
             errors.unsupported("discarding a value with '_'", at: target.range)
-        case .name(let name, let typeArguments) where typeArguments.isEmpty:
+        case .name(let name):
             switch lookUp(name) {
             case .local(let local):
                 return local

@@ -73,7 +73,7 @@ struct LocalTests {
         ("let x = undefined\nprint(x)", "2:9: error: 'undefined' isn't declared"),
         ("let f = undefined\nf(1)", "2:9: error: 'undefined' isn't declared"),
         ("let y: Bool = 1\nif y { }", "2:15: error: expected Bool, found Int"),
-        ("let w: Int8 = 3\nw += 1", "2:8: error: the type 'Int8' isn't supported yet"),
+        ("let w: Int8 = 3\nw += 1", "2:8: error: 'Int8' isn't a type"),
         ("let x = 1\nif true {\nlet x = true\nif x { }\n}", "4:5: error: declaring 'x' while another 'x' is visible isn't supported yet"),
     ])
     func noCascade(body: String, expected: String) {
@@ -87,7 +87,7 @@ struct LocalTests {
                                      "3:6: error: '+' needs Int operands, found Int and Bool"]),
         ("let k = 1\nk(1 + true)", ["3:1: error: 'k' isn't a function", "3:3: error: '+' needs Int operands, found Int and Bool"]),
         ("nope(2 + false)", ["2:1: error: 'nope' isn't declared", "2:6: error: '+' needs Int operands, found Int and Bool"]),
-        ("let w: Int8 = 1 + true", ["2:8: error: the type 'Int8' isn't supported yet",
+        ("let w: Int8 = 1 + true", ["2:8: error: 'Int8' isn't a type",
                                      "2:15: error: '+' needs Int operands, found Int and Bool"]),
     ])
     func valueChecked(body: String, expected: [String]) {

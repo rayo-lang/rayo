@@ -18,7 +18,7 @@ extension BodyChecker {
     /// The signature of the function `callee` names, reporting it when it names no function that can be
     /// called.
     private mutating func signature(of callee: Expr) -> Signature? {
-        guard case .name(let name, let typeArguments) = callee.kind else {
+        guard case .name(let name) = callee.kind else {
             errors.unsupported("calling \(callee.kind.construct)", at: callee.range)
             return nil
         }
@@ -33,10 +33,6 @@ extension BodyChecker {
         }
         guard declarations.functionNames.contains(name) else {
             errors.error("'\(name)' isn't declared", at: callee.range)
-            return nil
-        }
-        guard typeArguments.isEmpty else {
-            errors.error("'\(name)' takes no generic arguments", at: callee.range)
             return nil
         }
         guard name == "print" else {
