@@ -44,7 +44,7 @@ A table that keeps the first is a **locked table**, and one that keeps the secon
 
 **Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
 
-**Interning publishes the entry into the interner's table by the table's discipline**, then ends with a release fence before it hands the `Name` out. In a release-and-acquire table it uses a release compare-and-swap, or a release store under the lock, where checking for the text and inserting it run together. In a locked table it publishes under the lock.
+**Interning publishes the entry into the interner's table by the table's discipline**, then ends with a release fence before it hands the `Name` out. In a release-and-acquire table every insert is a release compare-and-swap, whether or not it holds the lock, since only the compare-and-swap keeps a lock-free insert from adding the same text. In a locked table every insert runs under the lock, checking for the text and inserting it together.
 
 **Publishing fails when another thread published the text first**, so a text never gets two `Name`s. The thread that lost then reads the winner's entry with acquire in a release-and-acquire table, or under the lock in a locked table. It returns that entry, as a lookup that finds an existing entry does, and never hands out its own.
 
