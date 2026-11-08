@@ -46,6 +46,8 @@ func scan() {
 - a thread's started with `Runtime.startThread`: before the body;
 - a C thread's when it attaches ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 
+**A panic in a copy's initializer unwinds as any panic does**, so a recovery point inside the initializer can catch it. One that would unwind out of the initializer is a startup panic on the startup thread ([below](#initialization-at-startup)). On a thread that `Runtime.startThread` started, it ends the program at once ([10](../10-errors-and-safety/panics.md#what-ends-the-program)). That thread has no frame below the initializer to unwind to, and its body, which could carry the panic back to a joiner, hasn't begun.
+
 ### Thread teardown
 
 **A thread's teardown destroys its copies and its objects, on that thread, once it has no other Rayo code to run.** That is when its body returns, at shutdown on the thread that shuts down ([below](#shutdown)), or when a C thread detaches. It runs these steps:
@@ -56,6 +58,8 @@ func scan() {
 4. Those copies, the current allocator among them, are destroyed last, each marked dead first as in step 1.
 
 **A thread that never tears down leaks what its copies and objects own**, as a C thread that exits without detaching does.
+
+**A panic in a teardown's `deinit` unwinds as any panic does**, so a recovery point inside that `deinit` can catch it. One that would unwind out of the teardown ends the program at once, since no frame is left below it to unwind to ([10](../10-errors-and-safety/panics.md#what-ends-the-program)). That holds for the main thread's teardown at shutdown too.
 
 ### Initialization at startup
 
@@ -84,9 +88,14 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
     - During startup only the startup thread has one. An initializer may call C that calls an `@export` or `@c` function back. That entry is let in, while the initialization check still guards every global the callback reads.
     - After shutdown such an entry is let in as before.
 
+**A panic during startup unwinds as any panic does**, so a recovery point inside an initializer can catch it. One that nothing catches ends startup, since no code may run with a global left uninitialized, and with it the program:
+
+- **Before `main`**, the startup thread is the main thread, so the program shuts down as for an uncaught panic there, and exits with status 101 without calling `main` ([10](../10-errors-and-safety/panics.md#uncaught-panics)). Its teardown destroys only the thread-local copies startup has initialized, and the threads queued during startup never start.
+- **In `rayo_init()`**, the panic would unwind into C, so it ends the program at once ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
+
 ### Shutdown
 
-**A program's `main` takes no parameters, and returns `Void`, `Never`, or an `Int32` that becomes the process's exit status.** The runtime shuts down when `main` returns, or when a C program that embeds Rayo calls `rayo_shutdown()` ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
+**A program's `main` takes no parameters, and returns `Void`, `Never`, or an `Int32` that becomes the process's exit status.** The runtime shuts down when `main` returns, or when a C program that embeds Rayo calls `rayo_shutdown()` ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)). An uncaught panic on the main thread shuts it down as a return from `main` does, and the process then exits with status 101 ([10](../10-errors-and-safety/panics.md#uncaught-panics)).
 
 **At shutdown, the thread that shuts down tears down, and then entry closes:**
 

@@ -81,7 +81,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
-_ = Thread.start { [copy m, copy clip] in
+_ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives
 }
 ```

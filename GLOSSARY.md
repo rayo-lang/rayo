@@ -302,6 +302,9 @@ _Avoid_: decorator, proxy allocator
 A value a task polls at each step until it reports that it is done ([07](docs/spec/07-concurrency/tasks.md#awaitables)).
 _Avoid_: future (a `Future` is one awaitable)
 
+**Detached thread**:
+A thread whose `Thread` value was dropped, so it runs on by itself and nothing can join it ([07](docs/spec/07-concurrency/thread-work.md#joining-a-thread)).
+
 **Lent work**:
 Function values that borrow the caller's data, which a library runs on its threads and finishes before those borrows can end ([07](docs/spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
 

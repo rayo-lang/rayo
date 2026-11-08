@@ -171,6 +171,7 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 - **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
+- **A panic that would unwind out of a thread-local's initializer on a thread that `Runtime.startThread` started**, since no frame is below it to unwind to ([07](../07-concurrency/global-state.md#thread-locals)).
 - **A panic that would unwind into C**: out of an `@export` or `@c` function, or a closure literal converted to a `@c` type. C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **Every panic, under the abort strategy** ([below](#panic-strategy)).
 
@@ -255,7 +256,7 @@ func resumePanic(_ p: Panic) -> Never
 
 **`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened.
 
-**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)):
+**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#panics-in-lent-work)):
 
 ```swift
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot

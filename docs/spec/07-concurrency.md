@@ -17,7 +17,7 @@ Thread.scope { s in                                        // threads that may b
 }                                                          // the spawned thread has finished here
 ```
 
-The first `join` can write two separate fields of `world` at once. The second is rejected because one job reads `world.bodies` while the other changes it. `Thread.scope` lets the spawned work borrow a local value because the work finishes before the scope returns.
+The first `join` can write two separate fields of `world` at once. The second is rejected because one job reads `world.bodies` while the other changes it. `Thread.scope` lets the spawned work borrow a local value because the work finishes before the scope returns, or before a panic unwinds out of it. A panic in work on another thread reaches the thread that waits for it, as a panic in a closure it called itself would ([Panics in lent work](07-concurrency/thread-work.md#panics-in-lent-work)).
 
 **Threads, locks and job systems are libraries.** The language gives them checking rules that keep safe code free of data races ([Why safe code can't race](07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)), and the marker protocol `Sendable` for what may cross threads. The runtime starts, parks and wakes threads ([Starting a thread: `Runtime.startThread`](07-concurrency/thread-work.md#starting-a-thread-runtimestartthread), [Parking and waking a thread](07-concurrency/synchronization.md#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([`task` functions: explicitly stepped coroutines](07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines)).
 
