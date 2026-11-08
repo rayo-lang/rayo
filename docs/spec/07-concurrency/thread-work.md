@@ -120,27 +120,32 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 ## Work that outlives the caller: threads
 
 ```swift
-func startRenderer() -> (Thread, Sender<Shared<Snapshot>>) {                 // called from main, after startup
+func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
-    let render = Thread.loop(name: "render", receiving: rx) { snap in          // 'rx' moves in; one iteration per snapshot
-        draw(snap)
+    let render = Thread.start(name: "render") { [move rx] in                   // the thread owns the receiver
+        while true { draw(rx.waitPop()) }                                       // parks until the simulation sends one
     }
     return (render, tx)                                                       // the simulation keeps the sender
 }
 
 let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // instead of a channel, a global queue: a Synchronized let
 
-func startRendererOnGlobal() -> Thread {
+func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
         while true { draw(snapshots.waitPop()) }                              // parks until the simulation pushes one
     }
 }
 ```
 
-**`Thread.loop` and `Thread.start` start a thread that may outlive the function that started it**, as the render thread outlives `startRenderer`:
+**`Thread.start` starts a thread that may outlive the function that started it**, as the render thread outlives `startRenderer`. It runs its body once on the new thread, and returns a `Thread<R>`, where `R` is the body's result type ([Joining a thread](#joining-a-thread)):
 
-- **`Thread.loop`** runs its body once per item, on a thread that owns the `Receiver`, and parks between items.
-- **`Thread.start`** runs its closure once.
+```swift
+struct Thread<R: Sendable & ~Scoped>(…)               // R: the body's result type
+static func start(name: StaticString = "", _ body: owned Closure<consuming @sendable () -> R>) -> Thread<R> { … }
+                                                      // Thread<R>'s: the body, handed over; a call infers R from it
+```
+
+**A thread that serves a stream of items owns the receiving end, and waits on it in a loop**, as the render thread does with `rx`. Between items, `waitPop()` parks it ([Queues and channels](synchronization.md#queues-and-channels)).
 
 ### What a thread can share
 
@@ -160,34 +165,47 @@ _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns '
 ### Joining a thread
 
 ```swift
-let bake = Thread.start(name: "bake") { [move level] in bakeLighting(level, bounces: 3) }
-loadAudio()                       // runs on this thread meanwhile
-bake.join()                       // waits for the bake to end, and resumes its panic here if it had one
+let checksum = Thread.start(name: "checksum") { [move path] in   // a Thread<UInt32!IoError>
+    let bytes = try readFile(path.view)
+    return crc32(bytes)
+}
+indexFolder(dir)                                                // runs on this thread meanwhile
+let sum = try checksum.join()                                   // waits for the thread, then takes its result or propagates its error
 ```
 
-**`join()` waits until the thread has ended, and consumes its `Thread`:**
+**`join()` waits until the thread has ended, consumes its `Thread`, and returns what the body returned:**
 
 ```swift
-consuming func join()             // Thread's: returns once the thread has ended
+consuming func join() -> R        // Thread<R>'s: returns once the thread has ended
 ```
 
 The thread has ended once its body has returned, or a panic has ended it, and its teardown has run ([Thread teardown](global-state.md#thread-teardown)). So everything the thread did, its teardown's `deinit`s included, happens before `join()` returns. A thread is joined at most once, since `join()` consumes the `Thread`.
 
-**`join()` returns nothing, and a thread's body returns `Void`.** `Thread` isn't generic over a result: `Thread.loop` runs its body once per item, so it has no one result to return, and `Thread.start` returns the same `Thread` type. A thread that hands a value back sends it through a channel or a `Future` ([Queues and channels](synchronization.md#queues-and-channels)).
+**The result crosses from the thread to the joiner, so `R` is `Sendable` and unscoped**, as what lent work hands back is ([above](#the-librarys-promise)). The thread keeps the result in the state it shares with its `Thread` until `join()` moves it out. A body that can fail returns a `Result`, so its error reaches the joiner as a value, as `checksum`'s does. A thread whose body returns nothing is a `Thread<Void>`, and `join()` on it returns `Void`.
 
-**A panic in a thread's body ends the thread, and `join()` resumes it in the joiner.** A panic in any of `Thread.loop`'s iterations ends the loop too. The panic was reported when it happened, and unwinds the body's frames, destroying what the body owns, its captures included ([10](../10-errors-and-safety/panics.md#what-a-panic-does)). Then the thread's teardown runs as when the body returns. `Thread.start` and `Thread.loop` run the body under a recovery point of their own, which keeps the panic for `join()`. `join()` resumes it on the joining thread with `resumePanic`, as `Thread.scope` resumes a spawned thread's panic ([above](#scoped-threads)). A joiner that handles the panic itself wraps the call in `catchPanic` ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)):
+**The unused-value rule applies to `join()`'s result as to any call's** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)). So a joiner that waits for a `Thread<R>` but has no use for its result drops the result on purpose:
 
 ```swift
-catchPanic {
-    bake.join()
+checksum.join()                   // error: the UInt32!IoError is never used
+_ = checksum.join()               // fine: waits for the thread, and drops its result
+```
+
+**A panic in a thread's body ends the thread, and `join()` resumes it in the joiner.** The panic was reported when it happened, and unwinds the body's frames, destroying what the body owns, its captures included ([10](../10-errors-and-safety/panics.md#what-a-panic-does)). Then the thread's teardown runs as when the body returns. `Thread.start` runs the body under a recovery point of its own, which keeps the panic for `join()`. `join()` resumes it on the joining thread with `resumePanic`, as `Thread.scope` resumes a spawned thread's panic ([above](#scoped-threads)). A joiner that handles the panic itself wraps the call in `catchPanic` ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)):
+
+```swift
+let sum: UInt32? = catchPanic {
+    try? checksum.join()                                  // nil if the body failed with an error
 } recover: { p in
-    log("baking failed: \(p.message)")                      // the game goes on with the old lighting
+    log("checksum thread panicked: \(p.message)")
+    return nil                                            // and nil if it panicked
 }
 ```
 
-**Dropping a `Thread` detaches the thread.** A **detached thread** runs on to the end of its body and tears down by itself, and nothing can join it any more. Its panic, if it has one, is reported when it happens, and no code sees it. Nothing leaks: the thread owns what its body captured, and the state it shares with its `Thread` is freed by whichever of the two lets go last. A detached thread that is still running when `main` returns ends where it stands, as every thread other than the main one does ([Shutdown](global-state.md#shutdown)).
+**Dropping a `Thread` detaches the thread.** A **detached thread** runs on to the end of its body and tears down by itself, and nothing can join it any more. Its panic, if it has one, is reported when it happens, and no code sees it. A detached thread that is still running when `main` returns ends where it stands, as every thread other than the main one does ([Shutdown](global-state.md#shutdown)).
 
-**The unused-value rule makes every detach visible.** `Thread.start` and `Thread.loop` return the `Thread`, so code that never joins it drops it on purpose, with `_ = Thread.start { … }` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
+**Detaching leaks nothing.** The thread owns what its body captured, and the state it shares with its `Thread` is freed by whichever of the two lets go last. The body's result, kept in that state, is destroyed with it, since no `join()` will take it: when the thread ends, or at the drop if the thread had already ended. `R` is `Sendable`, so either thread may destroy it.
+
+**The unused-value rule makes every detach visible.** `Thread.start` returns the `Thread`, so code that never joins it drops it on purpose, with `_ = Thread.start { … }` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
 ### Starting a thread: `Runtime.startThread`
 
@@ -200,7 +218,7 @@ static func startThread(_ body: owned Closure<consuming @sendable () -> Void>)  
 
 The new platform thread runs `body` with no Rayo frame below it. The call returns `nil` once the thread has started. It returns `body`, unstarted, when the platform can't start a thread, or after shutdown ([Shutdown](global-state.md#shutdown)). The call happens before the body begins.
 
-**A panic that unwinds out of `body` ends the thread as an uncaught panic does** ([10](../10-errors-and-safety/panics.md#uncaught-panics)). Only the report shows it, since no code waits on the thread through the runtime. So `Thread.start`, `Thread.loop` and job systems run their work under `catchPanic` inside the body, to carry a panic back to a joiner or lender ([above](#panics-in-lent-work)).
+**A panic that unwinds out of `body` ends the thread as an uncaught panic does** ([10](../10-errors-and-safety/panics.md#uncaught-panics)). Only the report shows it, since no code waits on the thread through the runtime. So `Thread.start` and job systems run their work under `catchPanic` inside the body, to carry a panic back to a joiner or lender ([above](#panics-in-lent-work)).
 
 **During startup it returns `nil` at once, and queues the thread until startup ends** ([Initialization at startup](global-state.md#initialization-at-startup)), since startup is single-threaded. A queued thread that the platform can't start then panics.
 

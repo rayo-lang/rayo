@@ -213,9 +213,16 @@ bake.join()                                                          // waits un
 
 **An unscoped closure lists its captures, and says how each one gets in.** `[move level]` moves the level into the closure, so the function can't use it afterwards. `[copy bounces]` copies a copyable value, which stays usable outside.
 
-**`Thread.start` returns a `Thread`, and `join()` waits for the thread to end** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). If a panic ended the thread, `join()` carries it on in the joining thread, as `Thread.scope` does for its threads.
+**`Thread.start` returns a `Thread<R>`, where `R` is what the body returns, and `join()` waits for the thread to end and returns that value** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). The bake returns nothing, so `bake` is a `Thread<Void>`. A thread that computes something hands it back through `join()`, as this one does with a checksum of some bytes it owns:
 
-**Dropping a `Thread` detaches the thread: it runs on by itself, and nothing can wait for it any more.** Rayo rejects an unused value, so code that never joins a thread drops its `Thread` with `_ =`, as below. A detached thread still running when `main` returns ends with the program.
+```swift
+let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32>
+let crc = hashing.join()                                      // waits, then returns the body's UInt32
+```
+
+**If a panic ended the thread, `join()` carries it on in the joining thread**, as `Thread.scope` does for its threads.
+
+**Dropping a `Thread` detaches the thread: it runs on by itself, and nothing can wait for it any more.** Its result, if any, is dropped when the thread ends. Rayo rejects an unused value, so code that never joins a thread drops its `Thread` with `_ =`, as below. A detached thread still running when `main` returns ends with the program.
 
 **To hand a thread data that other threads also use, give it a weak link to a `Shared` value** ([03](../spec/03-handles-and-objects.md#sharing-across-threads)). A `WeakShared` is copyable, and `Sendable` when the value is. The thread upgrades it each time it needs the value:
 
@@ -232,18 +239,18 @@ _ = Thread.start { [copy m, copy clip] in                     // '_ =' detaches 
 ### Queues and channels
 
 ```swift
-func startRenderer() -> (Thread, Sender<Shared<Snapshot>>) {
+func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
-    let render = Thread.loop(name: "render", receiving: rx) { snap in   // 'rx' moves in; one call per snapshot
-        draw(snap)
+    let render = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
+        while true { draw(rx.waitPop()) }                       // waits for each snapshot in turn
     }
-    return (render, tx)                                       // the simulation keeps the sender
+    return (render, tx)                                         // the simulation keeps the sender
 }
 ```
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**`Thread.loop` starts a thread that owns a `Receiver`, and runs its body once per item.** Between items, the thread **parks**: it sleeps until the next item comes.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Between items, `waitPop()` **parks** the thread: it sleeps until the next item comes.
 
 **The ends are move-only.** `Sender<T>` and `Receiver<T>` are `Sendable` when `T` is, so each end can move to the thread that uses it.
 
