@@ -71,16 +71,18 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `String` | yes | UTF-8 bytes, allocator |
 | `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
 | `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
-| `Name` | no | Interned text, pointer-sized: compared and hashed without reading the text (below) |
+| `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by a hash stored with it (below) |
 
-**A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` and hashing look only at the `Name`'s own pointer-sized value, never at its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
+**A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
 
 ```swift
 let jump: Name = "jump"                   // a literal: interned by the build, so no code runs
-let same = Name(String("jump"))           // interned at run time: finds the literal's entry, so same == jump
+assert(Name(String("jump")) == jump)      // interned at run time: finds the literal's entry
 if action == jump { player.jump() }       // compares one pointer-sized value, never the text
 log("pressed \(jump.text)")               // the text, as a StaticString
 ```
+
+**A `Name` hashes a hash of its text stored with it, never its address.** Each entry stores the hash `Hasher` gives its text, computed when the entry is made, and a `Name`'s `hash(into:)` feeds that stored hash ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). So a `Name` hashes the same at compile time as at run time, and a `const` `Map` or `Set` keyed by `Name` still finds its keys when the program runs ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
@@ -96,7 +98,7 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 
 **A `Name` is copyable and unscoped, and it is `Sendable` and `Frozen`.** std declares `unsafe Sendable` and `unsafe Frozen` on it, since its value names immortal interned text, which nothing writes and every thread may read ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
 
-**`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates.
+**`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
 **A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each distinct text that a `Name` literal spells anywhere in the program, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
 
@@ -204,17 +206,27 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 
 ```swift
 protocol ExpressibleByInternedLiteral {
-    associatedtype InternedEntry                                          // freezable: one per distinct text
-    static func internedEntry(for text: StaticString) -> InternedEntry   // run by the compiler, once per distinct text
-    init(internedLiteral entry: StaticSpan<InternedEntry>)               // @noalloc: the literal's entry, as one element
+    associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
+    static func internedEntry(for text: StaticString) -> InternedEntry     // run by the compiler, once per distinct text
+    @noalloc init(internedLiteral entry: StaticSpan<InternedEntry>)        // the literal's entry, as one element
+    static func internLoaded(_ entries: StaticSpan<InternedEntry>,         // code loaded after startup (below)
+                             binding bound: MutableSpan<StaticSpan<InternedEntry>>) -> Void!AllocError
 }
 ```
 
-- **One table per type.** The build runs `internedEntry(for:)` for each distinct text that a literal of the type spells anywhere in the program, and freezes the results into one table in read-only data. `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. So equal texts in different modules share one entry.
-- **Each literal is built at compile time.** `init(internedLiteral:)` receives the literal's element of the table. It must be `@noalloc` and able to run at compile time, so every such literal converts at compile time ([above](#literals)).
+- **One table per type.** The table holds an entry for each text the build converts to a `T` literal in checked code, anywhere in the program. The build runs `internedEntry(for:)` once per text and freezes the results into one table in read-only data, so equal texts in different modules share one entry.
+- **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree` and `Sendable`, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+- **The table exists only at run time.** `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
+- **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
 - **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
-**Code loaded after startup adds its literals before it runs.** The spec defines no way to load code after startup. A layer that provides one, such as a hot reloader ([11](../11-compilation-model.md#what-the-spec-defines)), must add the new code's entries to the interner before that code runs. It resolves each of the code's literals to the `Name` its text already has, if any, so equal texts still give one `Name`.
+**A conformer is a non-generic type that doesn't also conform to `ExpressibleByStringLiteral`.** It keeps its interner in a static stored `let`, which no generic type declares ([07](../07-concurrency/global-state.md#global-state)). A type that conforms to both protocols is a compile error, since a string literal of it would have two meanings.
+
+**Code loaded after startup binds its literals to entries before it runs.** The spec defines no way to load code after startup ([11](../11-compilation-model.md#what-the-spec-defines)). It fixes only what a layer that does so, such as a hot reloader, builds on:
+
+- **Each literal reaches its entry through a symbol** keyed by the type and the text, and so does each frozen value that holds one. In the program the build links, the symbol names the text's element of the table, and a loader may bind it to an existing entry instead.
+- **`internLoaded(_:binding:)` takes the new code's entries before that code runs.** The conformer interns each one, and stores in `bound[i]` the entry that `entries[i]`'s text binds to: `entries[i]` itself for a new text, or the entry the text already has. The loader binds each symbol to that entry, so equal texts still give one `Name`.
+- **It fails with `AllocError` when the interner can't grow**, so the loader can refuse the code. std's `Name` implements it with its interner.
 
 ### Iteration
 
