@@ -87,7 +87,7 @@ struct LocalTests {
         #expect(errors("func main() {\n\(body)\n}") == expected)
     }
 
-    @Test("compound assignments apply their operator, and panic where it fails", arguments: [
+    @Test("compound assignments apply their operator", arguments: [
         ("var x = 7\nx *= 3\nprint(x)", "21\n"), ("var x = 7\nx /= 2\nprint(x)", "3\n"),
         ("var x = 7\nx %= 4\nprint(x)", "3\n"),
     ])

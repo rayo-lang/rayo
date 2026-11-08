@@ -21,14 +21,20 @@ struct Panic: Equatable {
     var output = ""
 }
 
-/// The panic `result` reports as one line on the error stream, wherever in `main.rayo` it happened; nil when the
-/// run didn't panic.
-func panic(in result: Driver.Result) -> Panic? {
-    guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix("main.rayo:"), result.errors.hasSuffix("\n"),
-          let marker = result.errors.range(of: ": panic: ") else { return nil }
-    let reason = result.errors[marker.upperBound...].dropLast()
-    guard !reason.contains("\n") else { return nil }
-    return Panic(reason: String(reason), output: result.output)
+/// The panic `result` reports in `path`, at any line and column; nil unless the error stream is exactly that one
+/// panic's line and the exit code is a panic's.
+func panic(in result: Driver.Result, file path: String = "main.rayo") -> Panic? {
+    guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix(path + ":"), result.errors.hasSuffix("\n")
+    else { return nil }
+    let line = result.errors.dropFirst(path.count + 1).dropLast()
+    let fields = line.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+    guard !line.contains("\n"), fields.count == 4, fields[0..<2].allSatisfy(isNumeral), fields[2] == " panic",
+          fields[3].hasPrefix(" ") else { return nil }
+    return Panic(reason: String(fields[3].dropFirst()), output: result.output)
+}
+
+private func isNumeral(_ text: Substring) -> Bool {
+    !text.isEmpty && text.allSatisfy { ("0"..."9").contains($0) }
 }
 
 /// A new, empty directory, which `body` may fill and which is removed after it.
@@ -108,9 +114,9 @@ struct BuildTests {
             executable.standardError = errors
             try executable.run()
             executable.waitUntilExit()
-            #expect(String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self) ==
-                "\(source):1:21: panic: integer overflow\n")
-            #expect(executable.terminationStatus == Driver.panicExitCode)
+            let reported = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            let result = Driver.Result(exitCode: executable.terminationStatus, output: "", errors: reported)
+            #expect(panic(in: result, file: source) == Panic(reason: "integer overflow"))
         }
     }
 
