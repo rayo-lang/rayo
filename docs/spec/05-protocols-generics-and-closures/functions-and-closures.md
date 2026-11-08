@@ -28,6 +28,18 @@ func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no 
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
 
+**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Code always reaches them through different receivers, a type or a value, so no call picks between them:
+
+```swift
+let lowest = Int.min        // the static property
+let m = x.min(y)            // Comparable's instance method, for an Int 'x'
+```
+
+The rules above for members of one kind, by labels, parameter types and `self` convention, apply within each namespace. An unqualified name in a member's body finds members this way:
+
+- **In an instance member's body**, it resolves to an instance member first, and to a static one only when no instance member has that name. So where both exist, the body reaches the static one as `Self.min`.
+- **In a static member's body**, only static members are in scope unqualified.
+
 **These steps resolve each call on its own, without backtracking**, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
 **A call `T(x)` with one unlabeled literal argument makes the literal a `T`**, as `x as T` does, so `Float(0)` is the `Float` zero.
