@@ -61,7 +61,7 @@ Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no val
 ```swift
 func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
-let squares = try tryMap(xs, square)    // square can't fail, so E is Never: 'try' takes the List out
+let squares = tryMap(xs, square)     // square can't fail, so E is Never, and the call is a List<Int>
 log("\(squares.count) squares")
 ```
 
@@ -73,11 +73,15 @@ log("\(squares.count) squares")
 
 **The errors a body can fail with are the members of what it propagates:** each `throw`, each `try` that propagates ([below](#propagating-errors-with-try)), and each `Result` it returns whole.
 
-**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the function-value conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`.
+**A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the function-value conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`. A value argument binds the same way through the `.success` wrap ([below](#propagating-errors-with-try)), so `f(5)`, for `f<R, E>(_ x: R!E)`, binds `R` to `Int` and `E` to `Never`.
 
 **`T!Never` is a type of its own, not another name for `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
-**A `T!Never` value becomes a `T` only through `try`, `try?` or `try!`**, which never fail on it. `squares` above needs `try`, since `tryMap`'s result type says it is a `Result`, and `try` is how any `Result` is taken apart, whatever its failure type. So no other conversion of a `Result` value, and no rule for its members, is needed.
+**A call whose result type, worked out at the call, is `T!Never` has type `T`, and so does an `await` whose awaitable's `Failure` is `Never` there** ([07](../07-concurrency/tasks.md#awaitables)). The result type is worked out after the call's generic arguments are substituted, so `tryMap(xs, square)` above is a `List<Int>`. The compiler takes the value out, which can't fail, so code that can't fail never writes `try`. A `try` on such a call is a compile error, since the call is no `Result`.
+
+**This rule gives those two expressions their type, and converts nothing.** So a conformance, a member or an operator never sees a `T!Never` as a `T`. Generic code is checked once, so in a body generic over `E` or `X.Failure`, such a call is still an `R!E` or an `Output!Failure`, taken apart with `try`. A `T!Never` value from anywhere else, such as one a generic container stores, stays a `Result` too.
+
+**No implicit conversion takes the `T` out of a `T!Never` value.** `try` does, and never fails on it. A `.success` pattern does too, and always matches, and `try?` gives a `T?` that is never `nil`.
 
 **An initializer that can fail writes its result type as `-> Self!E`:**
 
@@ -165,7 +169,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A value that may hold an error must be used, or it is a compile error**, so no error is dropped without the code saying so. Its type is one of these:
 
-- a `Result` whose failure type isn't `Never`, or a `T!Never` whose `T` is such a value;
+- a `Result` whose failure type isn't `Never`, or a `T!Never` whose `T` is any of the types in this list;
 - an optional or a tuple holding one, at any depth, such as the `(Void!IoError)?` that `player?.save()` gives;
 - a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance.
 
