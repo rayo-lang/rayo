@@ -11,5 +11,5 @@ Start with the [Introduction](introduction.md), then read the chapters in order.
 | [4 Views](04-views.md) | Spans and other views, what a function's result may borrow, and why no view outlives what it borrows |
 | [5 Handles and objects](05-handles-and-objects.md) | Links that outlive a function: pools and handles, objects and weak pointers |
 | [6 Memory and allocators](06-memory-and-allocators.md) | Allocators as values, arenas and resets, `Box`, and reference counting with `Shared` |
-| [7 Concurrency](07-concurrency.md) | Lending work to other threads, `Sendable`, locks, threads and stepped tasks |
+| [7 Concurrency](07-concurrency.md) | Lending work to other threads, `Sendable`, locks, threads and tasks |
 | [8 C and compile time](08-c-and-compile-time.md) | Calling C and being called from it, `unsafe`, `const`, `static if` and reflection |
