@@ -173,7 +173,23 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
 - provides thread-local storage;
 - provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
-- reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+- reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
+- doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
+- keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
+
+ISO C guarantees neither of the last two, so the target's compiler must.
+
+**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
+
+- **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
+- **Synchronized.** `W` happens before a release that `S`'s thread synchronized with before `S`. An acquire read by that thread synchronizes with it, or a read followed by an acquire fence, both before `S`.
+- **Carried.** `W` counts for a store `R` that `S`'s thread read before `S`, and that thread ordered the read before `S`: `S`'s value or address depends on it, or the read is an acquire.
+
+Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`.
+
+**"Synchronized" covers the writes that happen before a release, not the release store itself, once a thread synchronizes with it.** A lock's acquisition of any design does, since it reads a release sequence headed by the unlock, perhaps at a later read-modify-write. Program order alone isn't enough: a write followed on its own thread by an acquire read isn't ordered before that thread's later store. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores. ARMv8 gives this through other-multi-copy atomicity, and Power through `lwsync` cumulativity under the standard C++ mapping, as do stronger processors.
+
+So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## What the language leaves open
 
@@ -186,8 +202,8 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.
 - **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a span of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Safe code never sees where a function's code lives.
 - **The bits of weak pointers and weak links**, which `w.bits` shows ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
-- **The values of the ids and hashes that the language defines only by what they identify**: `T.id`, `T.layoutId` and a `Name`'s hash. Each implementation keeps them the same from build to build ([09](09-compile-time/reflection.md#what-reflection-can-read)). The order of an error union's members, which follows its members' `T.id`s, is left open with them ([10](10-errors-and-safety/typed-errors.md#error-unions)).
-- **Whether two such ids or hashes collide.** A collision fails the build, or, for a `Name` interned at run time, panics or makes `Name(interning:)` return `nil` ([04](04-types/collections.md#collections-and-strings)).
+- **The values of the ids and hashes that the language defines only by what they identify**: `T.id` and `T.layoutId`. Each implementation keeps them the same from build to build ([09](09-compile-time/reflection.md#what-reflection-can-read)). The order of an error union's members, which follows its members' `T.id`s, is left open with them ([10](10-errors-and-safety/typed-errors.md#error-unions)).
+- **Whether two types' `T.id`s collide.** A collision fails the build ([09](09-compile-time/reflection.md#what-reflection-can-read)).
 - **The layouts below**, which only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe, and whose values no `Closure` stores inline ([05](05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)):
     - a task's state and an interpolated literal's value, which the compiler builds ([07](07-concurrency/tasks.md#semantics), [04](04-types/collections.md#strings));
     - the builtin `SoA<T>` ([04](04-types/data-layout.md#struct-of-arrays-soat));

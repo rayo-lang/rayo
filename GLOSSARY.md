@@ -162,6 +162,10 @@ The order of a struct's fields in memory: by decreasing alignment, with declarat
 **Mask**:
 Any `Simd<Bool, N>`, such as a comparison of vectors gives, which `select` uses and which has `any`, `all` and its lanes as `UInt64` `bits` ([04](docs/spec/04-types/numbers-and-math.md#masks)).
 
+**Name**:
+std's interned text: a pointer-sized value that equals another exactly when their texts are equal, and whose text lives for the rest of the program ([04](docs/spec/04-types/collections.md#collections-and-strings)).
+_Avoid_: hashed name, string hash, string id
+
 **Narrowing**:
 Treating an optional place as its payload's type after a check that it isn't `nil`, for as long as nothing can make it `nil` ([04](docs/spec/04-types/enums.md#narrowing)).
 _Avoid_: smart cast, flow typing

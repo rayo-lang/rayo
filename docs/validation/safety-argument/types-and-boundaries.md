@@ -70,4 +70,4 @@
 
 **What `unsafe` code allows for is part of the same boundary** ([10](../../spec/10-errors-and-safety/unsafe-code.md#aliasing-and-skipped-deinits)): memory has no declared type, and a `deinit` may never run.
 
-**No `unsafe` call is hidden** ([10](../../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)), so every promise is made at a visible `unsafe` site. A `@safe` module has no such site ([10](../../spec/10-errors-and-safety/unsafe-code.md#safe-modules)), so it makes no promise and is sound given the modules it calls.
+**No `unsafe` call is hidden** ([10](../../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)), so every promise is made at a visible `unsafe` site. The one call without such a site is an interned literal's `init(internedLiteral:)`, whose promise the build keeps, since it supplies the entry itself ([04](../../spec/04-types/collections.md#interned-literals)). A `@safe` module has no such site ([10](../../spec/10-errors-and-safety/unsafe-code.md#safe-modules)), so it makes no promise and is sound given the modules it calls.

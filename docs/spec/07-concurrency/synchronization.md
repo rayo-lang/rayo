@@ -21,13 +21,43 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Each of these happens before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic:
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out, so its writes count for every store of the value it makes, by 11's "Released" condition. The "Carried" condition then takes them along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-- creating a `Shared` value;
-- registering an allocator;
-- interning a `Name`.
+**Each creation is entered, after its own writes, in a shared table that behaves as a linearizable map.** Three tables are shared this way:
 
-The check each use makes synchronizes with the creation.
+- the interner's entry table, keyed by text ([04](../04-types/collections.md#collections-and-strings));
+- the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
+- the allocator registry, which an `Allocator` id resolves through ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
+
+**Each table keeps this contract:**
+
+- **One order.** Every insert, lookup and removal takes effect atomically at one point, in a single total order consistent with happens-before. A resize changes no entry: a lookup during a resize returns what it would if no resize ran.
+- **Synchronization.** Each lookup or check that finds an entry synchronizes with some release that the entry's insert happens before. Under a lock that release is the unlock, and after a lock-free migration it is the migration's release of the copy.
+- **One entry per text.** The interner holds at most one entry per text. An insert of a text that is already present fails and returns the existing entry, which the inserting thread then holds as though it had looked it up.
+- **Exclusive keys.** In the weak-link slots and the allocator registry, a creation's key is its slot together with that slot's generation, or its allocator word, and no other creation in the run ever holds it. So a reused slot never matches old bits.
+
+**How a table keeps the contract is the implementation's choice**: a lock, lock-free compare-and-swap, or any mix of them that keeps it.
+
+**A creation's writes count for every store that a thread makes after finding its entry**, by 11's "Synchronized" condition, since they happen before the insert, which happens before a release that the finding synchronizes with ([11](../11-compilation-model.md#what-a-target-must-provide)).
+
+**A check that resolves bits finds the entry or none, never stale contents.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the entry, whose contents it reads safely since the insert happens before a release it synchronizes with, or it finds none.
+
+**Such a value may find no entry for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
+
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
+
+**Interning inserts the entry into the interner's table after the word's store**, then ends with a release fence before it hands the `Name` out. When the text is already present, the insert fails and returns the existing entry, so a text never gets two `Name`s. The thread then returns that entry, as a lookup that finds it does, and never hands out its own.
+
+**That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
+
+- **A new entry.** The word's release store comes first, then the insert, then the fence, which puts the word's store before every store of the `Name` that the interning thread makes. So the word's store counts for each by 11's "Released" condition. The "Carried" condition then takes it along any chain of threads that passes the `Name` on.
+- **An existing entry.** A lookup, or a failed insert, that finds the entry synchronizes with a release that the insert happens before, and the word's store happens before that insert. So the word's store counts for every store of the `Name` that the finding thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
+
+So by 11's rule the acquire load, which goes through the `Name`, reads a value no older than the word's store. The word is written once and entries are never freed, so it reads that store. An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
+
+**The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
+
+**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
 
 ### Locks: `Mutex` and `RwLock`
 

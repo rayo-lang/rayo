@@ -47,6 +47,8 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 
 So a call the language makes on the code's behalf is allowed only where the call written out would be. Examples are a `@converts` initializer under `try` ([Propagating errors with `try`](typed-errors.md#propagating-errors-with-try)), and the `==` of an expression pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
+**The one exception is an interned literal's `unsafe` `init(internedLiteral:)`**, which the build calls for a literal with no `unsafe` written. Its promise is that the entry is the one the build bound for that literal, and the build itself supplies that entry, so the call carries the promise and the code makes none ([04](../04-types/collections.md#interned-literals)).
+
 ## Raw pointers
 
 **`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)).

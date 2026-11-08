@@ -90,8 +90,6 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 **Channels.** `Channel.make` with a `capacity` below 1: a channel with no room could never take an item, so every `send` would park for ever ([07](../07-concurrency/synchronization.md#queues-and-channels)).
 
-**Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
-
 ### Messages
 
 ```swift

@@ -59,6 +59,8 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 **Opening an owning value checks that no reset or unregistration has invalidated its storage since it was allocated.** A reset can't find the values allocated in the arena, which may be anywhere, so the check is made when each value is opened instead. A failure panics.
 
+**One open fails although no reset or unregistration came first**: that of a valid value whose allocator word reached the opening thread with no carried chain of stores and no synchronization after its allocator's registration. The check may then find no registered allocator for the word, and panics as for an unregistered one ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
+
 **The check covers every owning value, at every open:**
 
 - **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense. Its object is checked at each use instead, and destroyed by a reset ([03](../03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).

@@ -156,6 +156,6 @@ func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
 - **Enums without payloads.** They are `Hashable` without declaring it, so `e == .missing` works on any of them.
 - **Tuples and inline arrays.** A tuple is `Equatable`, `Hashable` or `Comparable` when each element is, comparing element by element in order, and `[N of T]` is the same when `T` is.
 - **Optionals.** Every optional compares with `nil`: `x == nil` and `x != nil` test for a value, whatever `T` is. `T?` is `Equatable` or `Hashable` when `T` is.
-- **Text.** `StaticString`, `StringView` and `String` are `Comparable` and `Hashable`. They compare their bytes, and order them byte by byte, a prefix before any longer text. `Name` is `Hashable` and compares its 64-bit hash.
+- **Text.** `StaticString`, `StringView` and `String` are `Comparable` and `Hashable`. They compare their bytes, and order them byte by byte, a prefix before any longer text. `Name` is `Hashable`: two are equal exactly when their texts are, though `==` never reads the text ([04](../04-types/collections.md#collections-and-strings)).
 
 **`Simd` vectors don't conform**, since their comparisons return masks ([04](../04-types/numbers-and-math.md#simd-and-math)).

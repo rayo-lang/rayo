@@ -45,7 +45,7 @@ func serialize<T>(_ value: T, into w: mutable Writer) {
 func serializeEnum<T>(_ value: T, into w: mutable Writer) {
     static for c in T.cases {
         if let payload = value[case: c] {                     // nil unless value holds case c
-            w.name(c.name)
+            w.tag(c.name)
             static for field in c.payload { serialize(payload[field], into: &w) }
         }
     }
@@ -107,7 +107,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
 - a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
-- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector, `StaticString` or `Name`.
+- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or `StaticString`.
 
 For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
 
@@ -213,11 +213,12 @@ func deserialize<T>(_ r: mutable Reader) -> T!LoadError {
 }
 
 func deserializeEnum<T>(_ r: mutable Reader) -> T!LoadError {
-    let tag = try r.readName()
     static for c in T.cases {
-        if tag == Name(c.name) { return try T.makeCase(c) { static field in try deserialize(&r) as field.type } }
+        if try r.acceptTag(c.name) {                          // compares the file's tag with c's name as bytes, and reads past it only when they match
+            return try T.makeCase(c) { static field in try deserialize(&r) as field.type }
+        }
     }
-    throw .unknownCase(tag)
+    throw .unknownCase(type: T.name, offset: r.offset)       // the tag no case matched is still unread at r.offset
 }
 ```
 

@@ -30,7 +30,6 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // Span<UInt8> to Span<Ver
 
 - `Bool`, which is 0 or 1, and Rayo enums and closed C enums, which hold one of their cases ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
 - pointers, which are never null ([Optionals](enums.md#optionals)), and `Handle`s, weak pointers and weak links, which hold only bits Rayo gave out ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
-- `Name`;
 - owners of memory, since bytes taken as one would be a second owner of what it holds ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads));
 - a `Synchronized` type, or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value ([09](../09-compile-time/reflection.md#what-reflection-can-read)).

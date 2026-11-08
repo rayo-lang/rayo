@@ -57,6 +57,8 @@ enum NavMode: Int32 { case walk, fly }
 - a `UInt64` with `WeakShared<T>(bits:)`, with `WeakPointer<T>(bits:)`, which also checks the thread, since an object is used only on its home thread ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)), or with `Handle<T>(bits:)`;
 - a raw integer with `E(rawValue:)`.
 
+**A value C hands back that names a creation may find no entry for a live creation**, such as a weak link's bits or an `Allocator` id. That happens when no carried chain of stores and no synchronization orders the creation before the use. The outcomes 07 gives then follow, such as `nil` from `WeakShared<T>(bits:)`, so this is defined behavior, not a broken obligation ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
+
 ## The platform, and embedding Rayo in C
 
 ### What the runtime needs from the platform

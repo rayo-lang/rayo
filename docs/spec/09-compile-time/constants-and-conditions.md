@@ -4,12 +4,12 @@
 
 ## Running code at compile time: `const`
 
-A table worked out ahead of time, such as a sine table, a name hashed once or a list of presets, is a `const`, and the function that builds it is ordinary code that the compiler runs:
+A table worked out ahead of time, such as a sine table, a name interned once or a list of presets, is a `const`, and the function that builds it is ordinary code that the compiler runs:
 
 ```swift
 const maxPlayers = 8
 const sinTable: [1024 of Float] = makeSinTable()        // runs in the compiler
-const jumpId: Name = "jump"                             // hashed at compile time
+const jumpId: Name = "jump"                             // interned by the build
 
 func makeSinTable() -> [1024 of Float] {
     var t: [1024 of Float] = .init(repeating: 0)

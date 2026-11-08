@@ -73,7 +73,7 @@ A C or C++ program uses a library written in Rayo:
 
 - function-typed values other than `@c` pointers;
 - weak pointers and weak links to `any P`;
-- `Name`;
+- std's `Name`, whose value means something only to this program's interner ([04](../04-types/collections.md#collections-and-strings));
 - any type whose layout the language or a library leaves open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`;
 - any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 
