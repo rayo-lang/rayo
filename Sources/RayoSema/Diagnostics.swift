@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 /// Collects the errors of a check.

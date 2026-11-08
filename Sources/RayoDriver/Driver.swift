@@ -1,4 +1,5 @@
 import Foundation
+import RayoDiagnostics
 import RayoIR
 import RayoLLVM
 import RayoSema

@@ -1,3 +1,5 @@
+import RayoDiagnostics
+
 /// Turns UTF-8 source into tokens, keeping only the newlines that end statements.
 public struct Lexer {
     private let bytes: [UInt8]

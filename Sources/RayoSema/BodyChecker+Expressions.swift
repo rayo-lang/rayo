@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 extension BodyChecker {

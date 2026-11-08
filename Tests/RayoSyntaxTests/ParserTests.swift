@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import Testing
 @testable import RayoSyntax
 

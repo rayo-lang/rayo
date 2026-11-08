@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoIR
 import RayoSema
 import RayoSyntax

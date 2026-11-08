@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 /// Checks a function body: its statements, its locals and the names they declare, and its expressions.

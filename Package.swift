@@ -18,11 +18,11 @@ let package = Package(
             .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
         ]),
         .target(name: "RayoDiagnostics", dependencies: ["RayoDiagnosticsMacros"]),
-        .target(name: "RayoSyntax"),
-        .target(name: "RayoSema", dependencies: ["RayoSyntax"]),
-        .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSyntax"]),
-        .target(name: "RayoLLVM", dependencies: ["RayoIR", "RayoSema", "RayoSyntax"]),
-        .target(name: "RayoDriver", dependencies: ["RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM"]),
+        .target(name: "RayoSyntax", dependencies: ["RayoDiagnostics"]),
+        .target(name: "RayoSema", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
+        .target(name: "RayoIR", dependencies: ["RayoDiagnostics", "RayoSema", "RayoSyntax"]),
+        .target(name: "RayoLLVM", dependencies: ["RayoDiagnostics", "RayoIR", "RayoSema", "RayoSyntax"]),
+        .target(name: "RayoDriver", dependencies: ["RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM"]),
         .executableTarget(name: "rayoc", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
         .testTarget(name: "RayoDiagnosticsMacrosTests", dependencies: [
@@ -30,7 +30,7 @@ let package = Package(
             .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
         ]),
-        .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoSyntax"]),
+        .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDriver"]),
     ]
 )

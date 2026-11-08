@@ -1,3 +1,5 @@
+import RayoDiagnostics
+
 /// Identifies an expression within a file, as the key of per-expression side tables.
 public struct ExprID: Sendable, Hashable, Comparable, CustomStringConvertible {
     public var raw: Int

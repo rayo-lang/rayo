@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 /// The type of a value in a checked program.

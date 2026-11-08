@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSyntax
 
 /// Integer operations, which panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
