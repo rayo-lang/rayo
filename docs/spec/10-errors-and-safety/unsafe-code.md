@@ -117,7 +117,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 **Wherever `unsafe` code can panic, each of these holds a valid value**, since code may reach it before the `unsafe` code could finish its work:
 
 - every place the unwind may destroy, as a scope's end would ([Panics](panics.md#unwinding));
-- everything that code after a recovery point can reach ([Panics](panics.md#catching-a-panic-catchpanic));
+- everything that a recovery point's `recover` closure, or code after the recovery point, can reach ([Panics](panics.md#catching-a-panic-catchpanic));
 - everything that other threads can reach, such as a queue's links or a lock's word, since they go on running.
 
 **So a value that counts its parts counts a part only once it is there.** This `Buffer` destroys its first `count` slots, so a slot it counts must hold a `T` whenever something can panic. Its fields are `unsafe`, so only `unsafe` code can break that:
@@ -135,7 +135,7 @@ struct Buffer<T>(unsafe let storage: *T, unsafe var count: Int, unsafe let capac
 }
 ```
 
-If `make()` panics, the unwind destroys the buffer, or code after a recovery point reads it, and either finds a counted slot with no `T` in it. Updating `count` last fixes it:
+If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads it, and either finds a counted slot with no `T` in it. Updating `count` last fixes it:
 
 ```swift
             (storage + count).initialize(to: make())

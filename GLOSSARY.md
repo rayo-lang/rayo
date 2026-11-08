@@ -387,7 +387,7 @@ A typed value, such as a missing file, that a function throws and its caller mus
 _Avoid_: exception
 
 **Recovery point**:
-A call of `catchPanic`, where an unwind stops and the panic is thrown as a `Panic` error ([10](docs/spec/10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+A call of `catchPanic`, where an unwind out of its body stops and its `recover` closure runs with the panic ([10](docs/spec/10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 _Avoid_: catch block, landing pad
 
 **Unsafe code**:

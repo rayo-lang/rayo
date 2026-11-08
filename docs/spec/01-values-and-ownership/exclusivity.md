@@ -16,6 +16,8 @@ for (h, e) in &world.enemies.entries {
 
 Without the law, a change could destroy or move what a borrow still uses. In the loop above, `remove` would destroy the enemy that `e` lends, and may move the pool's last enemy into its slot ([03](../03-handles-and-objects.md#pools-and-handles)).
 
+**One call is an exception: `catchPanic`'s two closures may both capture a place exclusively**, since its `recover` closure runs only after its body has ended ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+
 The compiler checks this one function at a time, from its body and the signatures of the functions it calls: a borrow never outlives the function that makes it, except as that function's signature says. So one body holds every borrow the check must see, and the check is **static, in every build, at no run-time cost**. Changing another field during the loop is allowed:
 
 ```swift

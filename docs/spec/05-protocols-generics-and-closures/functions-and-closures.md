@@ -77,8 +77,6 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A body that names a borrowing binding captures the place the binding names**, as worked out when it was bound. The capture brings the binding's dependency set and the dynamic accesses the binding holds, which stay held while the closure lives.
 
-**A capture list names a by-reference capture only to mark it `unwindSafe`** ([10](../10-errors-and-safety/panics.md#marking-a-capture-unwindsafe)). `[unwindSafe &x]` captures the whole place `x` by exclusive reference, and `[unwindSafe x]` by shared reference, rather than the parts the body names. The body then uses `x` only as that capture allows, so it never writes through a shared one.
-
 ## Closure kinds
 
 A closure's type says what it does with its captures, and the compiler infers this kind from the literal's body:

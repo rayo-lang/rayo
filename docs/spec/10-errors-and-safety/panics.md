@@ -13,9 +13,9 @@ let share = total / players                      // panics if players is 0, in e
 **A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), then unwinds the thread that panicked.** The thread leaves its frames as a `throw` leaves scopes, destroying what each one owns, until a recovery point ([below](#catching-a-panic-catchpanic)) stops it or the thread ends. So the code that panicked never goes on, and a program can still recover from a bug in one part of its work:
 
 ```swift
-do {
-    try catchPanic { handle(request) }
-} catch let p as Panic {
+catchPanic {
+    handle(request)
+} recover: { p in
     log("request failed: \(p.message)")      // the server goes on to the next request
 }
 ```
@@ -82,7 +82,7 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 - calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what detaching or shutting down destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
 - a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)).
 
-**Poisoned locks.** An unwind out of a lock's exclusive access, through a guard or a closure, poisons the lock: a `Mutex`'s access does, and an `RwLock`'s `write` access does, but its `read` access doesn't. Then `lock`, `read` and `write` on it panic until `clearPoison()` resets it, so no code takes what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
+**Poisoned locks.** An unwind out of a lock's exclusive access, through a guard or a closure, poisons the lock: a `Mutex`'s access does, and an `RwLock`'s `write` access does, but its `read` access doesn't. Then `lock`, `read` and `write` on it panic until `clearPoison()` resets it, so another thread, which never sees the `recover` closure that might repair it, doesn't take what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
 **Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
 
@@ -123,7 +123,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 1. **It is reported** through the platform as it happens, whether or not a recovery point catches it later.
 2. **It unwinds the thread**, one frame at a time, innermost first ([below](#unwinding)).
-3. **It stops at the innermost recovery point** on the thread, which throws it as a `Panic` error ([below](#catching-a-panic-catchpanic)). With none, the unwind reaches the thread's first frame, and the thread ends ([below](#uncaught-panics)).
+3. **It stops at the innermost recovery point** on the thread, whose `recover` closure then runs with it as a `Panic` ([below](#catching-a-panic-catchpanic)). With none, the unwind reaches the thread's first frame, and the thread ends ([below](#uncaught-panics)).
 
 ### Unwinding
 
@@ -187,14 +187,34 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 ## Catching a panic: `catchPanic`
 
 ```swift
-func catchPanic<R, E: Error>(_ body: consuming () throws(E) -> R) throws(Panic | E) -> R
+func catchPanic<R, EB: Error, ER: Error>(
+    _ body: consuming () throws(EB) -> R,
+    recover: consuming (Panic) throws(ER) -> R
+) throws(EB | ER) -> R
 
-let saved = try? catchPanic { autosave(game) }     // nil if autosave panicked
+let frame = catchPanic {
+    world.step()                              // may change anything it captures
+    return world.snapshot()
+} recover: { p in
+    log("step failed: \(p.message)")
+    world = loadWorld(level)                  // 'world' may be half-changed: this program rebuilds it
+    return lastGoodFrame.clone()
+}
 ```
 
-**`catchPanic(body)` calls `body` as a recovery point.** A **recovery point** is where an unwind stops. When `body` returns or throws, `catchPanic` returns or throws the same. When a panic unwinds out of `body`, `catchPanic` throws it as a `Panic`, once the unwind has destroyed `body`'s frames and the closure itself. So `try`, `try?`, `try!` and `do`/`catch` apply to it unchanged ([Typed `throws`](typed-errors.md#typed-throws)).
+**`catchPanic` runs its body, and runs `recover` only if a panic unwinds out of the body.** The call is a **recovery point**, where an unwind stops, and its value is an `R` either way:
 
+- **When the body returns**, `catchPanic` returns what it returned, and `recover` never runs.
+- **When a panic unwinds out of the body**, the unwind stops once it has destroyed the body's frames and the body closure itself. Then `recover` runs with the panic as a `Panic` ([below](#the-panic-value)), and `catchPanic` returns what `recover` returns.
+- **Errors pass through.** An error that either closure throws propagates out of `catchPanic` as from any call, so a `try` on the call handles it ([Typed `throws`](typed-errors.md#typed-throws)). An `R` that itself holds an error is returned as any value is. A panic is never an error, and no `catch` sees one.
+
+**After a caught panic, what the body was changing may be half-changed.** The unwind stops the body wherever it panicked. So each place the body changed holds a valid value, but not always the one the body meant to leave there. `recover` sees those places as the unwind left them, so it is where the code checks or repairs them, or decides to leave them. That is why `recover` is required: an empty one, as in `recover: { _ in }` for a `Void` body, is a visible choice.
+
+**The two closures may capture the same places, since they never run at once.** `recover` runs only after the unwind has destroyed the body closure. So both may capture one place exclusively, as both capture `world` above, an exception to the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). Moves are checked as for any call's arguments: a place that either closure owns a capture of moved into it when the call began, so the other can't use it.
+
+- **Each closure runs at most once**, the body exactly once. Both parameters are `consuming`, so either closure may move out of what it owns, and a closure of any kind is accepted ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
 - **The innermost one catches.** A panic unwinds to the innermost `catchPanic` on its own thread, and a panic on another thread never reaches it.
+- **A panic in `recover`** unwinds as any panic does, to the next recovery point out. `recover` isn't code an unwind runs, since the first unwind has ended when it starts.
 - **Catching undoes nothing.** The report was made when the panic happened, and the values the unwind destroyed stay destroyed.
 - **Not at compile time.** A panic during compile-time evaluation is a compile error, and `catchPanic` can't run there ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). The error shows the panic's message where compile-time evaluation can evaluate it, and its fixed text otherwise ([above](#messages)).
 - **Not under the abort strategy**, where a panic ends the program before it can reach a recovery point ([below](#panic-strategy)).
@@ -202,7 +222,7 @@ let saved = try? catchPanic { autosave(game) }     // nil if autosave panicked
 ### The `Panic` value
 
 ```swift
-struct Panic: Error { … }      // copyable and Sendable: up to 256 bytes of its message, inline
+struct Panic { … }             // copyable and Sendable: up to 256 bytes of its message, inline
 struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 ```
 
@@ -222,61 +242,22 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 func resumePanic(_ p: Panic) -> Never
 ```
 
-**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened. A library that runs work on other threads uses it to carry that work's panic to the thread that waits for it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
+**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened.
 
-### What the closure may change
-
-**`catchPanic`'s closure may reach nothing that a panic could leave half-changed for the code after the recovery point.** So, unless the capture is marked `unwindSafe` ([below](#marking-a-capture-unwindsafe)), the closure may not:
-
-- depend on a place exclusively, by capturing it exclusively ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)) or by holding an exclusive view of it, such as a `MutableSpan` ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views));
-- capture a value whose type holds, at any depth, an object owner, a weak pointer or a `Slice`, since an object's value and a slice's locked buffer change through a shared path ([03](../03-handles-and-objects.md#dynamic-exclusivity), [06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
-
-**A capture whose type may hold one counts as holding one.** Those are a type parameter, an `any P` and a function value, whose types don't show what they hold.
+**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, whose `recover` keeps the panic. Once all the work has finished, the lending thread resumes it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)):
 
 ```swift
-do {
-    try catchPanic { world.step(dt) }                          // error: the closure captures 'world' exclusively
-} catch let p as Panic { log("step failed: \(p.message)") }
-
-let drawn = try? catchPanic { renderer.value?.submit(mesh) }   // error: 'renderer' is a weak pointer to an object
-```
-
-**The rule guards what code sees, not memory safety.** A value that a panic interrupts in safe code is still a valid value of its type, and `unsafe` code keeps it one ([Unsafe code](unsafe-code.md#panics-in-unsafe-code)). So `unwindSafe` needs no `unsafe`.
-
-**Thread-locals, globals and `Synchronized` values are outside the rule.** A closure reaches a thread-local or a global without capturing it ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), so the rule can't see one, and code after the recovery point checks those itself. A closure may capture a `Synchronized` value, since a lock that a panic may have left half-changed is poisoned ([above](#what-panics)), and each atomic operation is whole.
-
-### Marking a capture `unwindSafe`
-
-**`unwindSafe` in the closure's capture list lifts the rule for one capture.** The caller then takes on what the rule checks: that the code after the recovery point copes with whatever the panic left there. It marks a capture in one of these forms:
-
-- `[unwindSafe &world]` captures `world` by exclusive reference, and `[unwindSafe world]` by shared reference, each the whole place, used only as that capture allows ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
-- `[unwindSafe move rows]` and `[unwindSafe copy body]` capture as `[move rows]` and `[copy body]` do.
-
-`unwindSafe` appears only in a closure literal written as `catchPanic`'s argument.
-
-```swift
-do {
-    try catchPanic { [unwindSafe &world] in world.step(dt) }   // fine: the caller vouches for 'world'
-} catch let p as Panic {
-    world.resetPhysics()                                       // and repairs what the panic may have left
-}
-```
-
-**A function that passes a function value on to `catchPanic` marks it, and the mark vouches for every caller whose function value passes through.** Taking a non-`mutating` function, as `guarded` does, keeps any caller from passing one that changes the caller's places exclusively. What `guarded` vouches for is what those closures change through a shared path:
-
-```swift
-func guarded(_ body: () -> Void) {
-    do {
-        try catchPanic { [unwindSafe copy body] in body() }    // vouches for every caller's 'body'
-    } catch let p as Panic { log("guarded work failed: \(p.message)") }
-}
+var caught: Panic? = nil
+catchPanic { job() } recover: { p in caught = p }     // on the worker: keep the panic
+...                                                    // the rest of the lent work finishes
+if let p = caught { resumePanic(p) }                   // on the lending thread: carry it on
 ```
 
 ## Panic strategy
 
-**The panic strategy says how a panic ends: by unwinding, the default, or by aborting.** A build chooses it with its other settings ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Under the **abort** strategy, every panic is reported, then ends the program at once through the platform's abort, as the failures above do ([above](#what-ends-the-program)). So `catchPanic` never catches: it calls its closure, and returns or throws what the closure does.
+**The panic strategy says how a panic ends: by unwinding, the default, or by aborting.** A build chooses it with its other settings ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Under the **abort** strategy, every panic is reported, then ends the program at once through the platform's abort, as the failures above do ([above](#what-ends-the-program)). So `catchPanic` never catches: it runs its body, and never its `recover` closure.
 
-**The compile-time rules are the same under both strategies.** The rule on `catchPanic`'s closure applies, and every point that can panic still counts as an exit ([above](#unwinding)). So a library compiles the same whichever strategy the program uses.
+**The compile-time rules are the same under both strategies.** `catchPanic` still takes its `recover` closure, which is checked as written, and every point that can panic still counts as an exit ([above](#unwinding)). So a library compiles the same whichever strategy the program uses.
 
 ## `assert` and `precondition`
 

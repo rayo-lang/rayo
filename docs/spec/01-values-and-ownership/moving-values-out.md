@@ -74,7 +74,7 @@ extension Bag {
 - `copy place` and `place.clone()` leave it as it was;
 - through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
-So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or code after a recovery point that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 
 ## Constants
 
