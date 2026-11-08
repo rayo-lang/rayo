@@ -149,8 +149,11 @@ struct StatementTests {
     @Test("bindings", arguments: [
         ("let x = 1", "(let x 1)"),
         ("var x: Int = 1", "(var x: Int 1)"),
-        ("owned let e = list.take()", "(owned let e (call (. list take)))"),
-        ("owned var e: Enemy", "(owned var e: Enemy)"),
+        ("let e = list.take()", "(let e (call (. list take)))"),
+        ("var e: Enemy", "(var e: Enemy)"),
+        ("let all = enemies", "(let all enemies)"),
+        ("let seen = borrow enemies[0]", "(let seen (borrow (index enemies 0)))"),
+        ("let n = borrow -x.count", "(let n (borrow (- (. x count))))"),
         ("var b: Box<Int>= a", "(var b: Box<Int> a)"),
         ("var a: [3 of Int] = [1, 2, 3]", "(var a: [3 of Int] (array 1 2 3))"),
         ("var t = &world.enemies", "(var t (& (. world enemies)))"),
@@ -321,6 +324,8 @@ struct ErrorTests {
         ("func f() { let t = (a, b) }", "1:22: error: a tuple isn't supported yet"),
         ("func f() { let t = () }", "1:20: error: the empty tuple isn't supported yet"),
         ("func f() { let y = x ?? z }", "1:22: error: '??' isn't supported yet"),
+        ("func f() { let x = borrow a ?? b }", "1:29: error: '??' isn't supported yet"),
+        ("func f() { let x = borrow a, y = b }", "1:28: error: more than one binding in a declaration isn't supported yet"),
     ])
     func unsupported(source: String, expected: String) {
         #expect(errors(source) == [expected])
@@ -335,7 +340,28 @@ struct ErrorTests {
         ("func f(_ a: [n of Int]) {}", "1:14: error: expected the inline array's count, found 'n'"),
         ("func f(_ a: [3 Int]) {}", "1:16: error: expected 'of' in an inline array type, found 'Int'"),
         ("func f(_ a: List<>) {}", "1:18: error: expected a type, found '>'"),
-        ("func f() { owned x = 1 }", "1:18: error: expected 'let' or 'var' after 'owned', found 'x'"),
+        ("func f() { owned let x = 1 }",
+         "1:12: error: a declaration takes its value without 'owned'; write 'borrow' after '=' to borrow instead"),
+        ("func f() { owned var x = y }", "1:12: error: a declaration takes its value without 'owned'"),
+        ("func f() { var b: Box<>= a }", "1:23: error: expected a type, found '>'"),
+        ("func f() { if owned let x = y {} }", "1:15: error: a binding condition isn't supported yet"),
+        ("func f() { if owned x {} }", "1:15: error: expected an expression, found 'owned'"),
+        ("func f() { var x = borrow y }", "1:20: error: a 'var' can't borrow shared; write 'let', or '&' to lend the place for change"),
+        ("func f() { var x: Int = borrow y }",
+         "1:25: error: a 'var' can't borrow shared; write 'let', or '&' to lend the place for change"),
+        ("func f() { let x = borrow a + 1 }", "1:29: error: a borrowing initializer ends after the place it borrows, found '+'"),
+        ("func f() { let x = borrow a >= b }",
+         "1:29: error: a borrowing initializer ends after the place it borrows, found '>='"),
+        ("func f() { g(borrow a) }", "1:14: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("func f() { borrow a = 1 }", "1:12: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("func f() { return borrow a }", "1:19: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("func f() { let x = copy borrow a }",
+         "1:25: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("func f() { let x = borrow borrow a }",
+         "1:27: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("func f() { let x = (borrow a) }", "1:21: error: 'borrow' is written only to begin the initializer of a local 'let'"),
+        ("struct S(let x: Int = borrow y) {}",
+         "1:23: error: 'borrow' is written only to begin the initializer of a local 'let'"),
         ("func f() { for i 0..<n {} }", "1:18: error: expected 'in' after the loop variable, found '0'"),
         ("func f() { x.1 }", "1:14: error: expected a member name after '.', found '1'"),
     ])
@@ -347,7 +373,7 @@ struct ErrorTests {
 struct SyntaxTreeTests {
     @Test("a node's range covers its source text")
     func ranges() throws {
-        let source = "func f() {\n    let x = foo(a, b).c + -d\n    run(n) { tick() }\n    (a + b)\n}"
+        let source = "func f() {\n    let x = foo(a, b).c + -d\n    run(n) { tick() }\n    (a + b)\n    let s = borrow v.w[0]\n}"
         let (parsed, _) = Parser.parse(source)
         let function = try #require(parsed.declarations.first.flatMap { declaration -> FuncDecl? in
             if case .function(let function) = declaration { return function } else { return nil }
@@ -362,6 +388,11 @@ struct SyntaxTreeTests {
         }
         #expect(text(statements[1].range, in: source) == "run(n) { tick() }")
         #expect(text(statements[2].range, in: source) == "(a + b)")
+        if case .binding(let binding) = statements[3].kind, let value = binding.value {
+            #expect(text(value.range, in: source) == "borrow v.w[0]")
+        } else {
+            Issue.record("expected a borrowing binding")
+        }
     }
 
     @Test("every expression in a file has its own id")
@@ -372,6 +403,7 @@ struct SyntaxTreeTests {
             }
             func k() {
                 var v = List<Int>(capacity: (2))
+                let first = borrow v[0]
                 if v.isEmpty { while -v.count > 0 { v.append(copy x) } }
                 for i in 0..<n { v[i] = consume w; each(v) { $0 } }
             }
@@ -406,7 +438,8 @@ private func expressionIDs(in file: SourceFile) -> [ExprID] {
         case .index(let base, let arguments), .call(let base, let arguments):
             visit(base)
             arguments.forEach { visit($0.value) }
-        case .unary(_, let operand), .lend(let operand), .copy(let operand), .consume(let operand):
+        case .unary(_, let operand), .lend(let operand), .copy(let operand), .consume(let operand),
+             .borrow(let operand):
             visit(operand)
         case .binary(_, let left, let right):
             visit(left)

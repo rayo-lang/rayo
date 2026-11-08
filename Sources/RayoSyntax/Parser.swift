@@ -67,16 +67,19 @@ public struct Parser {
         return (name, advance().range)
     }
 
+    /// Reports `message`, followed by what was found at the current token instead.
     private mutating func fail(_ message: String) -> Failure {
         // The lexer has reported an invalid token already.
-        if current.kind != .invalid {
-            diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
-        }
-        return Failure()
+        guard current.kind != .invalid else { return Failure() }
+        return error("\(message), found \(describe(current))", at: current.range)
     }
 
     private mutating func unsupported(_ what: String, at range: SourceRange) -> Failure {
-        diagnostics.append(.error("\(what) isn't supported yet", at: range))
+        error("\(what) isn't supported yet", at: range)
+    }
+
+    private mutating func error(_ message: String, at range: SourceRange) -> Failure {
+        diagnostics.append(.error(message, at: range))
         return Failure()
     }
 
@@ -109,6 +112,10 @@ public struct Parser {
     /// arguments, a `>` directly followed by `=` is `>=`.
     private var atGreaterEqual: Bool {
         current.isPunct(.greater) && peek().isPunct(.assign) && !peek().spaceBefore
+    }
+
+    private var atOwnedBinding: Bool {
+        current.isKeyword(.owned) && (peek().isKeyword(.let) || peek().isKeyword(.var))
     }
 
     /// Runs `body` with trailing closures allowed or not, and restores the setting after.
@@ -457,8 +464,15 @@ public struct Parser {
         try rejectAttribute()
         let start = current.range
         let kind: StmtKind
-        if current.isKeyword(.owned) || current.isKeyword(.let) || current.isKeyword(.var) {
-            kind = .binding(try parseBinding())
+        if atOwnedBinding {
+            let message = "a declaration takes its value without 'owned'"
+            // Only a 'let' can borrow shared, so only a 'let' gets the hint.
+            throw error(peek().isKeyword(.let) ? "\(message); write 'borrow' after '=' to borrow instead" : message,
+                        at: start)
+        } else if consume(.let) {
+            kind = .binding(try parseBinding(.let))
+        } else if consume(.var) {
+            kind = .binding(try parseBinding(.var))
         } else if consume(.if) {
             kind = try parseIf()
         } else if consume(.while) {
@@ -509,7 +523,7 @@ public struct Parser {
 
     /// The condition of an `if` or `while`, which the statement's block follows.
     private mutating func parseCondition() throws(Failure) -> Expr {
-        if current.isKeyword(.let) || current.isKeyword(.var) || current.isKeyword(.case) {
+        if current.isKeyword(.let) || current.isKeyword(.var) || current.isKeyword(.case) || atOwnedBinding {
             throw unsupported("a binding condition", at: current.range)
         }
         let condition = try with(trailingClosures: false) { parser throws(Failure) in try parser.parseExpression() }
@@ -534,23 +548,35 @@ public struct Parser {
         return .ifStmt(condition: condition, then: then, otherwise: otherwise)
     }
 
-    private mutating func parseBinding() throws(Failure) -> Binding {
-        let owned = consume(.owned)
-        let kind: BindingKind
-        if consume(.let) {
-            kind = .let
-        } else if consume(.var) {
-            kind = .var
-        } else {
-            throw fail("expected 'let' or 'var' after 'owned'")
-        }
+    /// After the `let` or `var`.
+    private mutating func parseBinding(_ kind: BindingKind) throws(Failure) -> Binding {
         let (name, nameRange) = try expectIdentifier("a name to bind")
         var type: TypeExpr?
         if consume(.colon) { type = try parseType() }
         var value: Expr?
-        if consume(.assign) { value = try parseExpression() }
+        if consume(.assign) {
+            value = current.isKeyword(.borrow) ? try parseBorrowingInitializer(of: kind) : try parseExpression()
+        }
         if current.isPunct(.comma) { throw unsupported("more than one binding in a declaration", at: current.range) }
-        return Binding(owned: owned, kind: kind, name: name, nameRange: nameRange, type: type, value: value)
+        return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: value)
+    }
+
+    /// `'borrow' unary-expression`, the initializer of a `let` that borrows. The initializer may go on only
+    /// with `??`, which is reported as unsupported, so the borrowed place ends it.
+    private mutating func parseBorrowingInitializer(of kind: BindingKind) throws(Failure) -> Expr {
+        let start = advance().range
+        if kind == .var {
+            // '=' on a 'var' that borrows writes the place it names, which a shared borrow can't.
+            throw error("a 'var' can't borrow shared; write 'let', or '&' to lend the place for change", at: start)
+        }
+        let place = try parseUnary()
+        if current.isPunct(.coalesce) { throw unsupported("'??'", at: current.range) }
+        if !atStatementEnd && !current.isPunct(.comma) {
+            let message = "a borrowing initializer ends after the place it borrows"
+            if atGreaterEqual { throw error("\(message), found '>='", at: current.range) }
+            throw fail(message)
+        }
+        return makeExpr(.borrow(place), range(from: start))
     }
 
     // MARK: Expressions
@@ -605,6 +631,8 @@ public struct Parser {
         case .punct(.amp): make = { .lend($0) }
         case .keyword(.copy): make = { .copy($0) }
         case .keyword(.consume): make = { .consume($0) }
+        case .keyword(.borrow):
+            throw error("'borrow' is written only to begin the initializer of a local 'let'", at: start)
         default: make = nil
         }
         guard let make else { return try parsePostfix() }
