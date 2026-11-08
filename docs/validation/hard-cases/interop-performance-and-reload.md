@@ -176,7 +176,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 
 ### G4 · Suspended code
 
-**Tasks in a `TaskSet` are suspended, and a thread that owns a channel's `Receiver` is parked in `receive()`, waiting for its next item.**
+**Tasks in a `TaskSet` are suspended, a thread is parked in that set's `run`, waiting for a wake, and a thread that owns a channel's `Receiver` is parked in `receive()`, waiting for its next item.**
 
 - **Must hold:** a task suspends only at `await`, holding no borrow and no dynamic access there ([07](../../spec/07-concurrency/tasks.md#semantics)). State what a parked thread holds while it waits.
 

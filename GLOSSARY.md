@@ -321,7 +321,7 @@ _Avoid_: decorator, proxy allocator
 ### Concurrency
 
 **Awaitable**:
-A value a task polls at each step until it reports that it is done ([07](docs/spec/07-concurrency/tasks.md#awaitables)).
+A value a task polls at its steps until it reports that it is done, arranging a wake of the task each time it isn't ([07](docs/spec/07-concurrency/tasks.md#awaitables)).
 _Avoid_: future (a `Future` is one awaitable)
 
 **Channel**:
@@ -351,18 +351,25 @@ _Avoid_: promise (in plain text; the library's promise is a different guarantee)
 **Resume parameter**:
 The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
 
+**Runner**:
+What polls a task and makes its `Waker`s, such as std's `TaskSet` and `block(on:)`, giving a pending task its next step only once it is woken ([07](docs/spec/07-concurrency/tasks.md#running-tasks)).
+_Avoid_: executor, scheduler
+
 **Sendable**:
 A type whose values may be used from another thread: moved there, or borrowed there until the lending call returns ([07](docs/spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 
 **Startup**:
 The run of global initializers, one module at a time, before `main`, or in `rayo_init()` when a C program embeds Rayo ([07](docs/spec/07-concurrency/global-state.md#initialization-at-startup)).
 
+**Step**:
+One poll of a task, which runs it from where it suspended to its next `await` that isn't done ([07](docs/spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). `TaskSet`'s `step` gives one to each task woken since the last.
+
 **Synchronized**:
 A type whose non-`mutating` methods change it only through its own synchronization, such as a `Mutex` or a queue, so threads can share it ([07](docs/spec/07-concurrency/synchronization.md#the-synchronized-contract)).
 _Avoid_: concurrent type
 
 **Task**:
-The value a `task func` call returns: a coroutine whose size is known at compile time, which its owner steps until it finishes ([07](docs/spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines)).
+The value a `task func` call returns: a coroutine whose size is known at compile time, which its runner steps until it finishes ([07](docs/spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)).
 _Avoid_: async function, future (a `Future` is one awaitable), state machine value
 
 **Teardown**:

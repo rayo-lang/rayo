@@ -225,7 +225,7 @@ consuming func fulfill(_ value: owned T) -> Void!Disconnected<T>   // Promise<T>
 consuming func wait() -> T?                                        // Future<T>'s: parks until fulfilled; nil once disconnected
 ```
 
-`fulfill` consumes the `Promise`, so a future gets at most one value, and wakes whatever waits on the `Future`: the thread parked in its `wait()`, or the task awaiting it. `wait()` consumes the `Future`, and so does `await` in a task, where a `Future<T>` is an awaitable whose `Output` is `T?` ([Awaitables](tasks.md#awaitables)). A value that is fulfilled but never taken is destroyed with the `Future`, on the thread that destroys it.
+`fulfill` consumes the `Promise`, so a future gets at most one value, and wakes whatever waits on the `Future`: the thread parked in its `wait()`, or the task awaiting it. `wait()` consumes the `Future`, and so does `await` in a task, where a `Future<T>` is an awaitable whose `Output` is `T?` ([Awaitables in std](tasks.md#awaitables-in-std)). A value that is fulfilled but never taken is destroyed with the `Future`, on the thread that destroys it.
 
 **A `Future`'s `isReady` says whether a wait would return at once, and never parks or consumes the `Future`:**
 
