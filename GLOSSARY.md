@@ -341,12 +341,18 @@ The end of a future that waits for its one value: `wait()` or `await` returns th
 **Lent work**:
 Function values that borrow the caller's data, which a library runs on its threads and finishes before those borrows can end ([07](docs/spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
+**Locked table**:
+A shared table whose every read and store of a slot takes the table's lock ([07](docs/spec/07-concurrency/synchronization.md#atomics-and-locks)).
+
 **Nested entry**:
 An entry into Rayo from C on a thread that already has a Rayo frame below it ([07](docs/spec/07-concurrency/global-state.md#initialization-at-startup)).
 
 **Promise**:
 The end of a future that its producer fulfills once with the value, which `fulfill` consumes ([07](docs/spec/07-concurrency/synchronization.md#futures)).
 _Avoid_: promise (in plain text; the library's promise is a different guarantee)
+
+**Release-and-acquire table**:
+A shared table whose every store to a slot is a release store or a release compare-and-swap, and whose every read of one is an acquire, under its lock or not ([07](docs/spec/07-concurrency/synchronization.md#atomics-and-locks)).
 
 **Resume parameter**:
 The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).

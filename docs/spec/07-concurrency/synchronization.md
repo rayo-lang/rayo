@@ -26,7 +26,9 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 **A creation publishes into a shared table after its own writes, by the table's one discipline.** The two disciplines don't compose, since a plain store under a lock gives a lock-free acquire nothing to synchronize with, and a lock gives a plain read nothing either. So each table keeps one:
 
 - **Locked.** Every read of a slot takes the table's lock, and so does every store to one.
-- **Release and acquire.** Every store to a slot, under the lock or not, is a release store or a release compare-and-swap, and every read without the lock is an acquire. This covers the common hybrid, whose writers take the lock and store with release while its readers read with acquire and no lock.
+- **Release and acquire.** Every store to a slot, under the lock or not, is a release store or a release compare-and-swap, and every read of a slot, under the lock or not, is an acquire. This covers the common hybrid, whose writers take the lock and store with release while its readers read with acquire and no lock.
+
+A table that keeps the first is a **locked table**, and one that keeps the second a **release-and-acquire table**.
 
 **Either way, a lookup synchronizes with the publication it reads.** So the creation's writes count for every store the lookup's thread makes after it, by 11's "Synchronized" condition ([11](../11-compilation-model.md#what-a-target-must-provide)). Three tables are shared this way:
 
@@ -34,15 +36,15 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 - the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - the allocator registry, which an `Allocator` id resolves through ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
-**A resize keeps that order.** It reads each slot with acquire and publishes the slot's copy with a release store, or, in a table whose reads all take the lock, does both under the lock. So the writes that counted for the original count for the copy too.
+**A resize keeps that order.** In a release-and-acquire table it reads each slot with acquire and publishes the slot's copy with a release store, and in a locked table it does both under the lock. So the writes that counted for the original count for the copy too.
 
-**A check that resolves bits through a table reads the slot with acquire, or, in a table whose reads all take the lock, under the lock.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none. It never finds stale contents.
+**A check that resolves bits through a table reads the slot by the table's discipline**, with acquire in a release-and-acquire table or under the lock in a locked table. A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none. It never finds stale contents.
 
 **Such a value may find no slot for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. It publishes the entry into the interner's table by the table's discipline: with a release compare-and-swap, or, in a table whose reads all take the lock, under the lock. It ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. It publishes the entry into the interner's table by the table's discipline: with a release compare-and-swap in a release-and-acquire table, or under the lock in a locked table. It ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
 
-**Publishing fails when another thread published the text first**, so a text never gets two `Name`s. The thread that lost then reads the winner's entry with acquire, or, in a table whose reads all take the lock, under the lock. It returns that entry, as a lookup that finds an existing entry does, and never hands out its own.
+**Publishing fails when another thread published the text first**, so a text never gets two `Name`s. The thread that lost then reads the winner's entry with acquire in a release-and-acquire table, or under the lock in a locked table. It returns that entry, as a lookup that finds an existing entry does, and never hands out its own.
 
 **That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
