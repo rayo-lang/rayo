@@ -32,7 +32,7 @@ func writeAll(_ text: String, to descriptor: Int32) {
     }
 }
 
-let result = Driver.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile)
+let result = Driver.run(Array(CommandLine.arguments.dropFirst()), programOutput: .inherited, readFile: readFile)
 writeAll(result.output, to: STDOUT_FILENO)
 writeAll(result.errors, to: STDERR_FILENO)
 exit(result.exitCode)

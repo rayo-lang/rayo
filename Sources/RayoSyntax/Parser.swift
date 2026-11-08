@@ -624,6 +624,13 @@ public struct Parser {
 
     private mutating func parseUnary() throws(Failure) -> Expr {
         let start = current.range
+        if current.isPunct(.minus), case .intLiteral(let digits) = peek().kind {
+            advance()
+            let operand = try parsePostfix()
+            let range = SourceRange(start.start, operand.range.end)
+            if case .intLiteral = operand.kind { return makeExpr(.negativeIntLiteral(digits), range) }
+            return makeExpr(.unary(.negate, operand), range)
+        }
         let make: ((Expr) -> ExprKind)?
         switch current.kind {
         case .punct(.minus): make = { .unary(.negate, $0) }

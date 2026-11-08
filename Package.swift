@@ -8,7 +8,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "RayoSyntax"),
-        .target(name: "RayoDriver", dependencies: ["RayoSyntax"]),
+        .target(name: "RayoSema", dependencies: ["RayoSyntax"]),
+        .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSyntax"]),
+        .target(name: "RayoLLVM", dependencies: ["RayoIR", "RayoSema", "RayoSyntax"]),
+        .target(name: "RayoDriver", dependencies: ["RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM"]),
         .executableTarget(name: "rayoc", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDriver"]),

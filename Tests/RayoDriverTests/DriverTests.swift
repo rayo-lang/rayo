@@ -30,7 +30,7 @@ struct DriverTests {
     }
 
     @Test("wrong arguments print the usage", arguments: [
-        [], ["parse"], ["parse", "a.rayo", "b.rayo"], ["build", "a.rayo"], ["build", "missing.rayo"],
+        [], ["parse"], ["parse", "a.rayo", "b.rayo"], ["link", "a.rayo"], ["build"], ["run", "a.rayo", "b.rayo"],
     ])
     func usage(arguments: [String]) {
         let result = run(arguments, files: ["a.rayo": ""])

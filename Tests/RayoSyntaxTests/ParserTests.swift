@@ -47,7 +47,9 @@ struct ExpressionTests {
         ("copy a.b + 1", "(+ (copy (. a b)) 1)"),
         ("consume a", "(consume a)"),
         ("- -a", "(- (- a))"),
-        ("-9223372036854775808", "(- 9223372036854775808)"),
+        ("-9223372036854775808", "-9223372036854775808"),
+        ("-(5)", "(- 5)"),
+        ("-5.bitWidth", "(- (. 5 bitWidth))"),
     ])
     func prefix(source: String, expected: String) {
         #expect(body(source) == expected)
@@ -431,7 +433,7 @@ private func expressionIDs(in file: SourceFile) -> [ExprID] {
     func visit(_ expr: Expr) {
         ids.append(expr.id)
         switch expr.kind {
-        case .intLiteral, .boolLiteral, .name, .selfRef:
+        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .selfRef:
             break
         case .member(let base, _, _):
             visit(base)
