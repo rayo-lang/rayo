@@ -57,7 +57,7 @@ doc.first = doc.text.view                     // 'doc' now depends on its own fi
 
 ```swift
 var g = registry.lock()
-Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
+_ = Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
 
 A **guard type** is a type declared `@guard`: the type of a value that holds a lock for as long as it lives, which a `Synchronized` type's method returns from a shared `self` ([Mutable views](dependency-projection-and-results.md#mutable-views)), as `MutexGuard` is.

@@ -131,7 +131,7 @@ func main() {
     let gate = world.doors.insert(Door())
 
     var scripts = TaskSet<World>(capacity: 64)                       // a set of tasks stepped with a World
-    scripts.start(openDoor(gate))
+    _ = scripts.start(openDoor(gate))                                // the set runs it; this code needs no handle to it
 
     var last = unsafe plat.time_seconds()   // calling C is unsafe: the compiler can't check C code
     while true {

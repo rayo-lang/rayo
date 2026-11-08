@@ -121,10 +121,10 @@ func startRendererOnGlobal() -> Thread {
 ```swift
 var level = loadLevel()                                      // move-only: owns its lists
 let bounces = 3
-Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                    // error: unlisted captures; a thread body can't borrow them
+_ = Thread.start(name: "bake") {
+    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
 }
-Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the closure owns 'level', and a copy of 'bounces'
+_ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the closure owns 'level', and a copy of 'bounces'
     bakeLighting(level, bounces: bounces)
 }
 ```

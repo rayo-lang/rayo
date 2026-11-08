@@ -46,7 +46,7 @@ struct Sprite(var mesh: MeshId, var renderer: WeakPointer<Renderer>)            
 struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Node>>)     // tree with parent pointers
 
 renderer.value.beginFrame()                    // through the owner: the object itself, no optional
-r.value?.submit(mesh)                          // optional projection: nil once the object is destroyed
+_ = r.value?.submit(mesh)                      // optional projection: nil once the object is destroyed
 if var rd = &r.value { rd.beginFrame(); rd.submit(mesh) }   // one modify access, held while 'rd' is used
 r.value!.stats.drawCalls += 1                  // '!' panics if the object is gone
 ```
@@ -81,7 +81,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
-Thread.start { [copy m, copy clip] in
+_ = Thread.start { [copy m, copy clip] in
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives
 }
 ```

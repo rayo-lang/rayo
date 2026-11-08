@@ -13,7 +13,7 @@ struct Enemy(
     @Transient var path: List<Vec3> = [],                 // a cache: rebuilt after loading, never saved
 )
 
-let window = unsafe plat.window_create(1280, 720, "Rayo".cString)   // a direct call into C, which you vouch for
+game.window = unsafe plat.window_create(1280, 720, "Rayo".cString) // a direct call into C, which you vouch for
 save(boss.value, into: &file)                                      // writes pos, vel and hp, found by reflection
 ```
 

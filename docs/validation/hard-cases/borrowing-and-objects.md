@@ -317,7 +317,7 @@ consuming func close() -> Void!IoError               // on a file whose deinit c
 consuming func intoItems() -> List<T>                // on a wrapper, moving its field out
 
 give(makeLoot().item)                                // a field moved out of a call result
-let mesh = builder.finish(builder.count)             // 'finish' is consuming
+upload(builder.finish(builder.count))                // 'finish' is consuming
 adopt(list, list.count)                              // 'adopt' takes its first parameter owned
 when connect().state { .open(let buf) { … } … }      // matches part of a temporary whose type has a deinit
 when connect() { .open(var b) { b.append(0) } … }    // changes a payload in place

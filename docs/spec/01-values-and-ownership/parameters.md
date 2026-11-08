@@ -67,7 +67,7 @@ spawn(kind)                                             // leaves out 'at:', so 
 
 ```swift
 items.append(items.count)                // fine: items.count is read, and done, before append borrows items
-let mesh = builder.finish(builder.count) // fine: count is read before finish takes builder
+upload(builder.finish(builder.count))    // fine: count is read before finish takes builder
 f(&x, x)                                 // error: two borrows of x overlap for the whole call
 ```
 

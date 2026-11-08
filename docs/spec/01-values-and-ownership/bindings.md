@@ -167,7 +167,7 @@ heal(&x)                           // error: the same
 
 ```swift
 let r = renderer.weak()
-r.value?.submit(mesh)              // fine: an object's value is changeable through a let of a weak pointer
+_ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```
 
 ## Lending a place for change
@@ -199,7 +199,10 @@ var v: mutable any Damageable = &boss                    // a mutable any P made
 
 ```swift
 var lives = &particles.life        // the mutable form: a MutableSpan<Float> that 'lives' owns
+lives[0] = 1
 let ages = particles.life          // the shared form: a Span<Float>
+log("first age \(ages[0])")
 var g = registry.lock()            // no '&': 'g' owns the guard, and changes the registry through it
+g.value.flush()
 heal(&makeEnemy())                 // the statement owns the new enemy, and destroys it after the call
 ```
