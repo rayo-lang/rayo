@@ -14,11 +14,11 @@ struct DriverTests {
         #expect(result.exitCode == 1)
         #expect(result.output == "")
         #expect(result.diagnostics.map(\.code) == [
-            .expected(what: .bindingName, found: .token("=")), .expected(what: .expression, found: .token(")")),
+            .missingBindingName(found: .token("=")), .missingExpression(found: .token(")")),
         ])
         #expect(result.errors == """
-            a.rayo:2:9: error[E0102]: expected a name to bind, found '='
-            a.rayo:3:9: error[E0102]: expected an expression, found ')'
+            a.rayo:2:9: error[E0113]: expected a name to bind, found '='
+            a.rayo:3:9: error[E0115]: expected an expression, found ')'
 
             """)
     }
