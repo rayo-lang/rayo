@@ -78,8 +78,8 @@ struct Thermometer(let value: Int, var lastError: IoError?): Probe             /
 ```swift
 func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
     var best: Float = 0
-    for x in xs { best = max(best, x.hp) }    // fine: Damageable requires 'hp'
-    for x in xs { best += x.armor }           // error here, at the definition: Damageable has no 'armor'
+    for x in xs { best = max(best, copy x.hp) }    // fine: Damageable requires 'hp'
+    for x in xs { best += x.armor }                // error here, at the definition: Damageable has no 'armor'
     return best
 }
 ```

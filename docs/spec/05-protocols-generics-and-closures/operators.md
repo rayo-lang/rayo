@@ -92,11 +92,11 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 **Three protocols declare `==`, `<` and hashing:**
 
 - **`Equatable`** requires `==` and `!=`, and gives `!=` a default.
-- **`Comparable: Equatable`** requires `<`, `<=`, `>`, `>=`, and the methods `min(_:)` and `max(_:)`, and gives each but `<` a default. The methods take the other value and return the lesser or the greater:
+- **`Comparable: Equatable`** requires `<`, `<=`, `>`, `>=`, and the methods `min(_:)` and `max(_:)`, and gives each but `<` a default. The methods consume both values, return the lesser or the greater, and destroy the other, so they work for move-only types too:
 
     ```swift
-    func min(_ other: Self) -> Self
-    func max(_ other: Self) -> Self
+    consuming func min(_ other: owned Self) -> Self
+    consuming func max(_ other: owned Self) -> Self
     ```
 - **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`. It must give equal hashes for values that `==` calls equal.
 
@@ -114,12 +114,19 @@ a > b     // default: b < a
 a <= b    // default: a < b || a == b
 a >= b    // default: b < a || a == b
 a.min(b)  // default: b when b < a, else a
-a.max(b)  // default: b when a < b, else a
+a.max(b)  // default: a when b < a, else b
 ```
+
+**On a tie, `min` returns its first operand and `max` its second**, so `a.min(b)` keeps `a` and `a.max(b)` keeps `b` when neither is less. Which value survives is observable for a move-only type, so the defaults fix it.
 
 **A type may replace any default with its own operator or method.** `Half`, `Float` and `Double` replace `min` and `max` with IEEE 754-2019's `minimum` and `maximum`, so that a NaN operand gives NaN and `-0` counts as less than `+0` ([04](../04-types/numbers-and-math.md#floating-point)).
 
-**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable` gives the same result as concrete code, bit for bit, for every type it is instantiated with.
+**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. Each takes both operands `owned`, so an argument that names a place moves in, and code that still needs the place passes `copy` of it ([01](../01-values-and-ownership/parameters.md#parameters)):
+
+```swift
+func min<T: Comparable>(_ a: owned T, _ b: owned T) -> T { a.min(b) }
+func max<T: Comparable>(_ a: owned T, _ b: owned T) -> T { a.max(b) }
+```
 
 **The methods share their names with static properties such as `Int.min` and `Int.max`**, which they may, since static and instance members are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)).
 

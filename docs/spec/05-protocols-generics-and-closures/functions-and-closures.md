@@ -87,10 +87,8 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 **A local or a parameter that matches ends the search, and so does any match for a name that isn't called.** For a call, the candidates are every function of that name among the members the body sees and in the module's scope together, and the overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, while `min(b)` reaches the member. When a member and a free function fit equally well, the member wins:
 
 ```swift
-struct Meters(let value: Double): Comparable {
-    static func < (lhs: Meters, rhs: Meters) -> Bool { lhs.value < rhs.value }
-
-    func clamped(_ lo: Meters, _ hi: Meters) -> Meters {
+extension Comparable {
+    consuming func clamped(_ lo: owned Self, _ hi: owned Self) -> Self {
         max(lo, min(self, hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
     }
 }
