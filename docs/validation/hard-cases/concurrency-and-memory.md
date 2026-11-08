@@ -111,7 +111,7 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 - **Must accept** the worker's loop ending once every producer is done, with no end-of-stream item and no `unsafe`.
 - **Must hold:** a producer's panic never leaves the worker parked for ever, and the worker's panic never leaves a producer parked, or loses the item it was sending unseen.
 - State where each panic goes, and what the other side sees.
-- **Answered by** [Disconnected channels](../../spec/07-concurrency/synchronization.md#disconnected-channels).
+- **Answered by** [Panics in producers and consumers](../../spec/07-concurrency/synchronization.md#panics-in-producers-and-consumers).
 
 ---
 

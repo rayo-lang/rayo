@@ -324,7 +324,7 @@ An entry into Rayo from C on a thread that already has a Rayo frame below it ([0
 
 **Promise**:
 The end of a future that its producer fulfills once with the value, which `fulfill` consumes ([07](docs/spec/07-concurrency/synchronization.md#futures)).
-_Avoid_: promise in plain text for this end, since the library's promise is the `unsafe` guarantee a lending library makes ([07](docs/spec/07-concurrency/thread-work.md#the-librarys-promise))
+_Avoid_: promise (in plain text; the library's promise is a different guarantee)
 
 **Resume parameter**:
 The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).

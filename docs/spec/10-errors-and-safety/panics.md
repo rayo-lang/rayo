@@ -45,8 +45,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 - opening an owning value whose allocator was reset or unregistered since ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it));
 - reading a global before its initializer has run ([07](../07-concurrency/global-state.md#initialization-at-startup));
 - using a thread-local before its thread's copy is initialized or after it is destroyed ([07](../07-concurrency/global-state.md#thread-locals));
-- polling a task that has already finished ([07](../07-concurrency/tasks.md#semantics));
-- making a channel with a `capacity` below 1, since a channel with no room could never take an item ([07](../07-concurrency/synchronization.md#queues-and-channels)).
+- polling a task that has already finished ([07](../07-concurrency/tasks.md#semantics)).
 
 **Conflicting uses:**
 
@@ -87,6 +86,8 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 - `Thread.start`, `ThreadScope.spawn` and std's lending calls when `Runtime.startThread` refuses the start, which happens only outside startup ([07](../07-concurrency/thread-work.md#lent-work-and-queued-threads)).
 
 **Poisoned locks.** `lock`, `read` and `write` on a lock that a panic has poisoned, until `clearPoison()` resets it ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
+
+**Channels.** `Channel.make` with a `capacity` below 1: a channel with no room could never take an item, so every `send` would park for ever ([07](../07-concurrency/synchronization.md#queues-and-channels)).
 
 **Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
 

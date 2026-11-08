@@ -98,7 +98,7 @@ mutating func receive() -> T?                                    // Receiver<T>'
 mutating func tryReceive() -> T!TryReceiveError                  // Receiver<T>'s: never parks
 ```
 
-**A channel holds at most `capacity` items, and `capacity` is at least 1.** `make` panics on a smaller one, such as `make(capacity: 0)`, since `send` parks while the channel is full, and a channel with no room would always be full ([10](../10-errors-and-safety/panics.md#what-panics)).
+**A channel holds at most `capacity` items, and `capacity` is at least 1.** `make` panics on a smaller one, such as `make(capacity: 0)`: a channel with no room could never take an item, so every `send` would park for ever ([10](../10-errors-and-safety/panics.md#what-panics)).
 
 **`send` parks while the channel is full and connected**, and goes on once the `Receiver` takes an item and makes room. So a producer that runs ahead of its consumer waits for it, rather than filling memory with items nobody has taken.
 
@@ -131,7 +131,7 @@ So each send either put its item in before the disconnection, and the item is de
 
 - each send happens before the receive that returns its item;
 - destroying each `Sender` happens before every `receive()` that returns `nil`, and every `tryReceive()` that gives `.disconnected`;
-- destroying the `Receiver` happens before each `send` or `trySend` that fails.
+- destroying the `Receiver` happens before each `send` that fails, and each `trySend` that fails with `.disconnected`.
 
 **`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
 
@@ -174,27 +174,6 @@ _ = tx.send(r)            // fine: if the Receiver is gone, the request is destr
 try tx.send(r)            // fine in a function that fails with Disconnected<Request>
 ```
 
-#### Panics in producers and consumers
-
-**A panic in a producer disconnects what it produces into, but never reaches the consumer.** The unwind destroys the ends that the panicking code owns, its `Sender`s and its `Promise`s ([below](#futures)), as it destroys every live value ([10](../10-errors-and-safety/panics.md#unwinding)). When one was a channel's last `Sender`, the consumer's `receive()` returns `nil` once it has taken the items sent before. A future's waiter gets `nil`. So a consumer waiting on a producer that panicked wakes, rather than parking for ever as it would on an `Event` that nothing signals.
-
-**The ends carry values, not panics.** The consumer sees the disconnection as it would see producers that finished. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)). The panic of a detached producer, such as the bake thread that fulfills a future ([below](#futures)), reaches only the report, since nothing joins it. So a consumer that must know why its producers stopped joins them.
-
-**A panic in the consumer works the other way round.** The unwind destroys the `Receiver` or the `Future`, and each `send` or `fulfill` after that fails.
-
-**A producer in a `ThreadScope` owns its `Sender`, moved into the closure it spawns** ([Scoped threads](thread-work.md#scoped-threads)):
-
-```swift
-ThreadScope.run { s in
-    let meshes = tx.share()
-    s.spawn { [move meshes] in loadMeshes(into: &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
-    s.spawn { [move tx] in loadSounds(into: &tx) }           // the last producer takes the original
-    for asset in &rx { register(asset) }                     // ends once both producers are done, or have panicked
-}
-```
-
-A `Sender` that a spawned closure only borrows, as `&tx`, belongs to a frame outside the scope. No unwind reaches that frame until `ThreadScope.run` has joined every thread. So after a producer's panic, a consumer in the scope waits for ever for a disconnection that never comes, and `ThreadScope.run` waits for it.
-
 ### Futures
 
 **A future carries one value from a producer to a waiter, through two owned ends that `Future<T>.make()` returns:** a `Promise<T>`, which the producer fulfills once, and a `Future<T>`, which the waiter waits on.
@@ -214,12 +193,17 @@ if let map = lightmap.wait() { apply(map) }                      // parks until 
 ```swift
 consuming func fulfill(_ value: owned T) -> Void!Disconnected<T>   // Promise<T>'s: fails, handing the value back, once the Future is gone
 consuming func wait() -> T?                                        // Future<T>'s: parks until fulfilled; nil once disconnected
-var isReady: Bool { get }                                          // Future<T>'s: never parks, and never consumes
 ```
 
 `fulfill` consumes the `Promise`, so a future gets at most one value, and wakes whatever waits on the `Future`: the thread parked in its `wait()`, or the task awaiting it. `wait()` consumes the `Future`, and so does `await` in a task, where a `Future<T>` is an awaitable whose `Output` is `T?` ([Awaitables](tasks.md#awaitables)). A value that is fulfilled but never taken is destroyed with the `Future`, on the thread that destroys it.
 
-**`isReady` says whether a wait would return at once.** It is `true` once the future is fulfilled or disconnected, and then a `wait()` or an `await` returns at once. A ready future stays ready, so nothing the producer does can make a check that read `true` wrong. Code that must not park, such as a frame loop, checks it each step:
+**A `Future`'s `isReady` says whether a wait would return at once, and never parks or consumes the `Future`:**
+
+```swift
+var isReady: Bool { get }     // Future<T>'s
+```
+
+It is `true` once the future is fulfilled or disconnected, and then a `wait()` or an `await` returns at once. A ready future stays ready, so nothing the producer does can make a check that read `true` wrong. Code that must not park, such as a frame loop, checks it each step:
 
 ```swift
 while !lightmap.isReady { drawLoadingScreen() }   // never parks: checks once a frame
@@ -237,7 +221,32 @@ if let map = lightmap.wait() { apply(map) }       // returns at once: the bake i
 - destroying an unfulfilled `Promise` happens before the `wait()` or `await` that gives `nil`, and before `isReady` reads `true`;
 - destroying the `Future` happens before a `fulfill` that fails.
 
-**A panic in the producer disconnects the future as it disconnects a channel**, and never reaches the waiter ([Panics in producers and consumers](#panics-in-producers-and-consumers)).
+**A panic in the producer disconnects the future as it disconnects a channel**, and never reaches the waiter ([below](#panics-in-producers-and-consumers)).
+
+### Panics in producers and consumers
+
+**A panic in a producer disconnects what it produces into, but never reaches the consumer.** The unwind destroys the ends that the panicking code owns, its `Sender`s and its `Promise`s, as it destroys every live value ([10](../10-errors-and-safety/panics.md#unwinding)). When one was a channel's last `Sender`, the consumer's `receive()` returns `nil` once it has taken the items sent before ([Disconnected channels](#disconnected-channels)). A future's waiter gets `nil` ([Futures](#futures)). So a consumer waiting on a producer that panicked wakes, rather than parking for ever as it would on an `Event` that nothing signals.
+
+**The ends carry values, not panics.** The consumer sees the disconnection as it would see producers that finished. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)). The panic of a detached producer, such as the bake thread that fulfills a future ([above](#futures)), reaches only the report, since nothing joins it. So a consumer that must know why its producers stopped joins them.
+
+**A panic in the consumer works the other way round.** The unwind destroys the `Receiver` or the `Future`, and each `send` or `fulfill` after that fails.
+
+**Every end that code in a `ThreadScope` uses is owned inside the scope**, by the block or by the spawned closure that uses it ([Scoped threads](thread-work.md#scoped-threads)):
+
+```swift
+ThreadScope.run { s in
+    var assets = consume rx                                  // the block owns the Receiver: an unwind out of the block destroys it
+    let meshes = tx.share()
+    s.spawn { [move meshes] in loadMeshes(into: &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
+    s.spawn { [move tx] in loadSounds(into: &tx) }           // the last producer takes the original
+    for asset in &assets { register(asset) }                 // ends once both producers are done, or have panicked
+}
+```
+
+**No unwind reaches a frame outside the scope until `ThreadScope.run` has joined every thread**, so an end that the scope only borrows outlives every panic in it:
+
+- **A borrowed `Sender`**, such as `&tx`. After a producer's panic, a consumer in the scope waits for ever for a disconnection that never comes, and `ThreadScope.run` waits for it.
+- **A borrowed `Receiver`**, such as `&rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
 
 ### Snapshots, one-time values and waits
 
