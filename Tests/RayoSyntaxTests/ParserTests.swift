@@ -17,7 +17,7 @@ struct ParserErrorTests {
     @Test("a declaration whose header fails is skipped, and the parser goes on at the next declaration")
     func declarationRecovery() {
         #expect(errors("func f(x) {\n    print(1)\n}\nfunc g() { copy }") == [
-            .unpairedParenthesis(found: .token("x")), .missingCopiedName(found: .token("}")),
+            .unclosedEmptyParentheses(found: .token("x")), .missingCopiedName(found: .token("}")),
         ])
     }
 

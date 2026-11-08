@@ -24,6 +24,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(101, error: "unexpected character '{character}'")
     case unexpectedCharacter(character: String)
 
+    // 102 is unused, and stays so.
+
     @Code(103, error: "unmatched '}'")
     case unmatchedBrace
 
@@ -40,7 +42,7 @@ public enum ErrorCode: Sendable, Hashable {
     case missingParameterList(found: FoundToken)
 
     @Code(108, error: "expected ')' after '(', found {found}")
-    case unpairedParenthesis(found: FoundToken)
+    case unclosedEmptyParentheses(found: FoundToken)
 
     @Code(109, error: "expected a type, found {found}")
     case missingType(found: FoundToken)
@@ -148,7 +150,7 @@ public enum ErrorCode: Sendable, Hashable {
 }
 
 extension ErrorCode {
-    /// The number as an error message shows it, such as `E0102`.
+    /// The number as an error message shows it, such as `E0113`.
     public var identifier: String {
         let digits = String(number)
         return "E" + String(repeating: "0", count: max(0, 4 - digits.count)) + digits

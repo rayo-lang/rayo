@@ -64,22 +64,23 @@ public struct Parser {
         return true
     }
 
-    /// A syntax error, made from what the parser found where it expected something else.
-    typealias SyntaxError = (FoundToken) -> ErrorCode
+    /// The `ErrorCode` case of a syntax error, which takes what the parser found where it expected something
+    /// else.
+    private typealias SyntaxErrorCase = (FoundToken) -> ErrorCode
 
     @discardableResult
-    private mutating func expect(_ punct: Punct, else error: SyntaxError) throws(Failure) -> Token {
+    private mutating func expect(_ punct: Punct, else error: SyntaxErrorCase) throws(Failure) -> Token {
         guard current.isPunct(punct) else { throw fail(error) }
         return advance()
     }
 
-    private mutating func expectIdentifier(else error: SyntaxError) throws(Failure) -> (String, SourceRange) {
+    private mutating func expectIdentifier(else error: SyntaxErrorCase) throws(Failure) -> (String, SourceRange) {
         guard case .identifier(let name) = current.kind else { throw fail(error) }
         return (name, advance().range)
     }
 
     /// Reports `error` at the current token, or the unexpected character the token is.
-    private mutating func fail(_ error: SyntaxError) -> Failure {
+    private mutating func fail(_ error: SyntaxErrorCase) -> Failure {
         switch current.kind {
         case .invalid:
             // The lexer has reported it already.
@@ -120,7 +121,7 @@ public struct Parser {
 
     /// Items separated by newlines or `;`, up to the `}` that closes their block or the end of the file,
     /// which it leaves for the caller. An item that fails is skipped, and its error stays reported.
-    private mutating func parseSequence<T>(unended: SyntaxError,
+    private mutating func parseSequence<T>(ifUnended unended: SyntaxErrorCase,
                                            _ item: (inout Parser) throws(Failure) -> T) -> [T] {
         var items: [T] = []
         skipSeparators()
@@ -165,7 +166,7 @@ public struct Parser {
     mutating func parseFile() -> SourceFile {
         var functions: [FuncDecl] = []
         while true {
-            functions += parseSequence(unended: ErrorCode.unendedDeclaration) { parser throws(Failure) in
+            functions += parseSequence(ifUnended: ErrorCode.unendedDeclaration) { parser throws(Failure) in
                 try parser.parseFunction()
             }
             if atEnd { return SourceFile(functions: functions) }
@@ -179,7 +180,7 @@ public struct Parser {
         guard consume(.func) else { throw fail(ErrorCode.missingFunc) }
         let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
         try expect(.lparen, else: ErrorCode.missingParameterList)
-        try expect(.rparen, else: ErrorCode.unpairedParenthesis)
+        try expect(.rparen, else: ErrorCode.unclosedEmptyParentheses)
         var result: TypeExpr?
         if consume(.arrow) { result = try parseType() }
         let body = try parseBlock()
@@ -192,7 +193,7 @@ public struct Parser {
     mutating func parseType() throws(Failure) -> TypeExpr {
         let start = current.range
         if consume(.lparen) {
-            try expect(.rparen, else: ErrorCode.unpairedParenthesis)
+            try expect(.rparen, else: ErrorCode.unclosedEmptyParentheses)
             return .void(range: range(from: start))
         }
         let (name, _) = try expectIdentifier(else: ErrorCode.missingType)
@@ -209,7 +210,7 @@ public struct Parser {
     }
 
     private mutating func parseStatements() -> [Stmt] {
-        parseSequence(unended: ErrorCode.unendedStatement) { parser throws(Failure) in try parser.parseStatement() }
+        parseSequence(ifUnended: ErrorCode.unendedStatement) { parser throws(Failure) in try parser.parseStatement() }
     }
 
     private mutating func parseStatement() throws(Failure) -> Stmt {

@@ -42,10 +42,11 @@ struct ProgramTests {
 
     @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
         ("struct S {}", ErrorCode.missingFunc(found: .token("struct"))),
-        ("func main(_ x: Int) {}", .unpairedParenthesis(found: .token("_"))),
+        ("func 1() {}", .missingFunctionName(found: .token("1"))),
+        ("func main(_ x: Int) {}", .unclosedEmptyParentheses(found: .token("_"))),
         ("func main<T>() {}", .missingParameterList(found: .token("<"))),
         ("func main() throws {}", .missingBlock(found: .token("throws"))),
-        ("func main() -> (Int) {}", .unpairedParenthesis(found: .token("Int"))),
+        ("func main() -> (Int) {}", .unclosedEmptyParentheses(found: .token("Int"))),
         ("func main() { let x: 3 = 1 }", .missingType(found: .token("3"))),
         ("func main() { let f = { 1 } }", .missingExpression(found: .token("{"))),
     ])
