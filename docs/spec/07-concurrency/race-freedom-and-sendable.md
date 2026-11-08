@@ -36,7 +36,7 @@ struct Hud(var root: WeakPointer<Widget>)                // not Sendable: holds 
 struct GLTexture(let id: UInt32): ~Sendable              // opts out: must stay on the GL thread
 struct AudioDevice(unsafe let device: *audio.AudioDev): unsafe Sendable   // a promise: the C audio API is thread-safe
 
-_ = Thread.start { [move enemies] in simulate(enemies) } // fine: List<Enemy> is Sendable
+_ = Thread.start { [move enemies] in simulate(enemies) } // fine: List<Enemy> is Sendable; '_ =' detaches the thread
 _ = Thread.start { [move hud] in draw(hud) }             // error: 'Hud' isn't Sendable
 ```
 

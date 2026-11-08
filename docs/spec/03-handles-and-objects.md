@@ -61,7 +61,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 - **No value holding an owner or a weak pointer leaves the thread.** `UniquePointer` and `WeakPointer` aren't `Sendable` ([07](07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)), so no value holding one moves to or is lent to another thread.
 - **The object is destroyed only on its home thread.** A reset or an unregistration on another thread panics instead ([below](#objects-in-arenas-and-other-allocators)).
-- **A home thread's identity is never given to another thread**, not even to one that C starts after the home thread exits without detaching. So the home thread's objects are then reached from no thread, and leak: `WeakPointer(bits:)` and `adopt` read `nil` for them ([07](07-concurrency/global-state.md#thread-teardown)).
+- **A home thread's identity is never given to another thread**, not even to one that C starts after the home thread exits without calling `rayo_thread_detach`. So the home thread's objects are then reached from no thread, and leak: `WeakPointer(bits:)` and `adopt` read `nil` for them ([07](07-concurrency/global-state.md#thread-teardown)).
 
 **Owners and weak pointers are 8 bytes and 8-aligned.** Their `nil` is all zero bits, so `UniquePointer<T>?` and `WeakPointer<T>?` are 8 bytes too, and a weak pointer's bits fit a C `uint64_t` ([below](#weak-pointers-as-bits-and-handing-objects-to-c)).
 
@@ -81,7 +81,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
-_ = Thread.start { [copy m, copy clip] in
+_ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives
 }
 ```
