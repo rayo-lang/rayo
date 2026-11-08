@@ -8,14 +8,11 @@ public struct IRProgram: Sendable {
 }
 
 public struct IRFunction: Sendable {
-    /// The type of each local, indexed by `LocalID`.
+    /// The type of each local, indexed by `LocalID`: the function's own locals first, then the temporaries
+    /// that lowering adds.
     public var locals: [RayoType]
     /// The blocks, indexed by `BlockID`; the first is the entry.
     public var blocks: [BasicBlock]
-}
-
-public struct LocalID: Hashable, Sendable {
-    public var index: Int
 }
 
 public struct BlockID: Hashable, Sendable {
@@ -35,8 +32,20 @@ public struct Statement: Sendable {
     public var range: SourceRange
 }
 
+public enum Constant: Sendable {
+    case int(Int64)
+    case bool(Bool)
+
+    public var type: RayoType {
+        switch self {
+        case .int: return .int
+        case .bool: return .bool
+        }
+    }
+}
+
 public enum Operand: Sendable {
-    case constant(Int64)
+    case constant(Constant)
     /// Reads the local's value.
     case local(LocalID)
 }
@@ -46,10 +55,14 @@ public enum Operand: Sendable {
 public enum Rvalue: Sendable {
     case use(Operand)
     case unary(UnaryOperator, Operand)
+    /// Any binary operator but `&&` and `||`, which lowering turns into branches.
     case binary(BinaryOperator, Operand, Operand)
     case call(Callee, arguments: [Operand])
 }
 
 public enum Terminator: Sendable {
+    case goto(BlockID)
+    /// Continues in `then` when the Bool `condition` is true, and in `otherwise` when it is false.
+    case branch(Operand, then: BlockID, otherwise: BlockID)
     case `return`
 }
