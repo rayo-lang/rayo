@@ -5,6 +5,7 @@
 A move hands a value to a new owner and leaves its old place without that value. It can happen through familiar constructs, even when no `consume` appears. These constructs take a value and therefore move it ([Moves](moves-copies-destruction.md#moves)):
 
 - an assignment, `return`, `throw` and `await`;
+- `try`, `try?` and `try!`, and `_ = x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try));
 - an `owned` argument, and a `consuming` method's receiver ([Parameters](parameters.md#parameters));
 - a declaration that doesn't borrow, and an `owned` part of a condition or pattern ([Bindings](bindings.md#bindings));
 - a `[move x]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));

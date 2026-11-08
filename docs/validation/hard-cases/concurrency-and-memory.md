@@ -63,7 +63,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C7 · Panic and errors in lent work
 
-**A closure panics on a worker thread in the middle of a parallel loop.** Separately, both closures of a `join` and several calls of a parallel loop's body fail with an error.
+**A closure panics on a worker thread in the middle of a parallel loop.** Separately, both closures of a `join` fail with an error. A parallel loop's body returns `Void`, so it can't fail.
 
 - Define what happens to the other threads, the process, and the report.
 - **Must hold:** the library can propagate one error after the join, by its own policy, and destroy the others, with no double free and no leak.

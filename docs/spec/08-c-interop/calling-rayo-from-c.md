@@ -19,7 +19,7 @@ A C or C++ program uses a library written in Rayo:
 
 - **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads. So `@export` on a function is an unverified promise ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
 - **Parameters pass by value.** Each passes in its C representation, whatever its Rayo convention (borrowed or `owned`), except a `mutable` one, which passes as a pointer. The same holds for `@c func`, the form a callback takes ([below](#callbacks)).
-- **Errors are values.** A function that can fail returns a `Result`, which crosses as any enum with payloads does ([below](#c-representations)), so its success and failure types need C representations too. An error union has none, since the order of its members is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
+- **Errors are values.** A function that can fail returns a `Result`, which crosses as the table below gives ([below](#c-representations)), so its failure type needs a C representation too. An error union has none, since the order of its members is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
 - **Panics stay in Rayo.** A panic in the body is reported as any panic is ([10](../10-errors-and-safety/panics.md#panics)), and Rayo never unwinds.
 - **Not generic.** An `@export` function has no type parameters and no `some P` parameter, since C calls one symbol.
 
@@ -56,6 +56,8 @@ A C or C++ program uses a library written in Rayo:
 | union | the C union its layout gives ([04](../04-types/enums.md#untagged-unions)), each member in its representation |
 | enum without payloads | its stored integer type, the raw type if it has one ([04](../04-types/enums.md#enums)), with a constant per case holding its stored value |
 | enum with payloads | `struct { tag; union { … } }`, its tag as an enum without payloads stores it |
+| `T!E` whose `T` has size 0, such as `Void!IoError` | `struct { tag; E failure; }`, since C has no type of size 0 for the success |
+| `T!Never` | `T`'s representation, since it is laid out as `T` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)) |
 | `T?` with a niche | same layout as `T`, with one value meaning `nil` (below) |
 | other `T?` | `struct { T value; bool has; }` |
 | `Handle<T>`, `WeakPointer<T>`, `WeakShared<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |

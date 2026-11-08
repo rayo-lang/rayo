@@ -45,7 +45,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A function declared without `->` returns `Void`.** The exception is a non-public function whose body is a single expression: it returns that expression's type, unless it is `main`, `@c`, `@export`, a `task func` or a protocol witness. A public function is never an exception, since other modules are checked against its declaration, never its body ([11](../11-compilation-model.md#type-checking-is-local)).
 
-**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void` or a `Void!E`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A path that reaches the end of a `Void!E` body returns `.success(())`. A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
+**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded, which is a compile error for a value that may hold an error ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void` or a `Void!E`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A path that reaches the end of a `Void!E` body returns `.success(())`. A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
 
 **A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func`, since a closure is called, not stepped ([07](../07-concurrency/tasks.md#semantics)).
 
@@ -203,7 +203,7 @@ let g: @c (Int32) -> Int32 = { x in x + 1 }     // so does a literal that captur
 unsafe { print(f(4)) }                          // calling one is unsafe
 ```
 
-**`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures. Its parameters and result cross in their C representations, so a `Result` it returns crosses as any enum with payloads does ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
+**`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures. Its parameters and result cross in their C representations, a `Result` it returns included ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
 
 - a literal that captures nothing;
 - a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value, when its parameters and result have the same types and conventions as the pointer type's, and it needs no more stack than the pointer type declares ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).

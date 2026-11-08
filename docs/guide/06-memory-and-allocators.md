@@ -252,7 +252,7 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 
 **An allocating operation panics when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). `Box(v)`, `Shared(v)` and `UniquePointer(v)` are among them, so no code goes on with memory it didn't get.
 
-**Each also has a fallible form, for code that can make room and try again.** It returns a `Result` that fails with `AllocError`, the prelude's error for an allocation that failed:
+**Each also has a fallible form, for code that can make room and try again.** `Box.tryNew(v)` returns a `Box<Enemy>!AllocError`: the new box, or an `AllocError`, the prelude's error for an allocation that failed. As with `readText` in [Views](04-views.md), the value comes before the `!` and the error after it:
 
 ```swift
 func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {

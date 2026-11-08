@@ -108,7 +108,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 - the resume parameter;
 - `x`'s storage, unless `x` is a `task func`'s call. That task's result can view nothing its state owns, as no function's result views what its `owned` parameters or locals own ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
-**An awaitable whose `Failure` isn't `Never` is awaited with `try await`**, which propagates the error of `.failed(e)` as `try` does, or with `await` alone, which keeps it as a value ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). A `Failure` of `Never` makes the result an `Output`, since `T!Never` is `T`. A `task func` is an awaitable of its success and failure types.
+**`try await x` propagates the error of `.failed(e)` as `try` does, and `await x` alone keeps it as a value** ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). Where `Failure` is `Never`, `await x` gives an `Output!Never`, which converts to an `Output` at no cost. A `task func` is an awaitable of its success and failure types.
 
 **Only its owner's `step` resumes a task, but a step needn't visit every task.**
 
