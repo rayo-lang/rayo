@@ -57,7 +57,7 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 A function is **tidy** when a reader sees what it does at a glance. It is one of two kinds:
 
-- **An orchestrator.** Its body is a few blocks separated by blank lines, and each block is a call or a binding whose name states the step.
+- **An orchestrator.** Its body is a few blocks separated by blank lines, and each block is one or more calls or bindings, each named for its step.
 - **A leaf.** It performs one step, however long its mechanics run.
 
 Extract a function or value type when a body mixes the two kinds, as shown by:
@@ -70,13 +70,17 @@ A tidy function also has:
 
 - **One job.** A second job, however small, moves into a function of its own.
 - **Inputs from its caller.** A step takes the values its caller already holds as arguments.
-- **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it, so the caller uses it as returned.
+- **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it.
 - **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result.
 - **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
 
-Length is not the test. A long leaf may be tidy; a short function that both orchestrates and performs a step is not.
+**Done when:** in every changed function:
 
-**Done when:** in each changed orchestrator, every block is one call or binding to a named step, with no mechanics inline; every step takes the values it needs from its caller and reports failure in its result; and every caller uses each helper's result as returned.
+- it has one job;
+- in an orchestrator, every line of a block is a call or binding to a named step, with no mechanics inline;
+- each step takes as arguments the values its caller already holds, and reports failure in its result;
+- each helper's result is used as returned; and
+- each line holds one concern.
 
 ## 5. Repetition created by the change
 
