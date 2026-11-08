@@ -146,9 +146,9 @@ struct ErrorTests {
 
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
-        #expect(errors("func f() {\n    let = 1\n    let s = \"x\"\n}") == [
+        #expect(errors("func f() {\n    let = 1\n    let s = #\n}") == [
             "2:9: error: expected a name to bind, found '='",
-            "3:13: error: string literals aren't supported yet",
+            "3:13: error: unexpected character",
         ])
     }
 

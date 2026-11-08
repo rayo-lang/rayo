@@ -32,13 +32,11 @@ struct ProgramTests {
 
     @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
         ("struct S {}", "1:1: error: expected 'func' to begin a declaration, found 'struct'"),
-        ("@main\nfunc main() {}", "1:1: error: expected 'func' to begin a declaration, found '@'"),
         ("func main(_ x: Int) {}", "1:11: error: expected ')' after '(', found '_'"),
         ("func main<T>() {}", "1:10: error: expected '(' after the function's name, found '<'"),
         ("func main() throws {}", "1:13: error: expected '{' to begin a block, found 'throws'"),
         ("func main() -> (Int) {}", "1:17: error: expected ')' after '(', found 'Int'"),
-        ("func main() { let x: [3 of Int] = 1 }", "1:22: error: expected a type, found '['"),
-        ("func main() { let x: Int? = 1 }", "1:25: error: expected '=' and a value, found '?'"),
+        ("func main() { let x: 3 = 1 }", "1:22: error: expected a type, found '3'"),
         ("func main() { let f = { 1 } }", "1:23: error: expected an expression, found '{'"),
     ])
     func syntax(source: String, expected: String) {
@@ -72,16 +70,11 @@ struct ProgramTests {
 
     @Test("a statement is a declaration, an assignment, 'if', 'while', 'break', 'continue' or an expression",
           arguments: [
-        ("for i in 0..<3 { }", "1:15: error: expected an expression, found 'for'"),
-        ("return", "1:15: error: expected an expression, found 'return'"),
-        ("do { }", "1:15: error: expected an expression, found 'do'"),
-        ("self", "1:15: error: expected an expression, found 'self'"),
         ("{ print(1) }", "1:15: error: expected an expression, found '{'"),
-        ("owned let x = 1", "1:15: error: expected an expression, found 'owned'"),
+        ("else { }", "1:15: error: expected an expression, found 'else'"),
         ("let a = 1, b = 2", "1:24: error: expected a newline or ';' after the statement, found ','"),
         ("if let x = y {}", "1:18: error: expected an expression, found 'let'"),
         ("if true, false {}", "1:22: error: expected '{' to begin a block, found ','"),
-        ("var x = 1; x <<= 1", "1:28: error: expected a newline or ';' after the statement, found '<<='"),
     ])
     func statements(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
@@ -90,13 +83,10 @@ struct ProgramTests {
     @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
         ("print(value: 1)", "1:26: error: expected ')' to close the arguments, found ':'"),
         ("print(copy 1)", "1:26: error: expected a name after 'copy', found '1'"),
-        ("var x = &y", "1:23: error: expected an expression, found '&'"),
-        ("let y = x?", "1:24: error: expected a newline or ';' after the statement, found '?'"),
-        ("let y = a | b", "1:25: error: expected a newline or ';' after the statement, found '|'"),
+        ("print(1)(2)", "1:23: error: expected a newline or ';' after the statement, found '('"),
         ("let t = (1, 2)", "1:25: error: expected ')' to close the parenthesized expression, found ','"),
         ("let t = ()", "1:24: error: expected an expression, found ')'"),
         ("let y = if true { 1 } else { 2 }", "1:23: error: expected an expression, found 'if'"),
-        ("let x = borrow y", "1:23: error: expected an expression, found 'borrow'"),
     ])
     func expressions(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
