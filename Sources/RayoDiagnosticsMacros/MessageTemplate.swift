@@ -14,23 +14,7 @@ struct MessageTemplate {
     /// interpolation. Only `{name}` is a placeholder, so other braces, and `\u{…}`, are text.
     init?(_ expression: ExprSyntax) {
         guard let source = Self.plainSource(of: expression) else { return nil }
-        let scalars = Array(source.unicodeScalars)
-        var parts: [Part] = []
-        var text = String.UnicodeScalarView()
-        var index = 0
-        while index < scalars.count {
-            if let end = Self.placeholderEnd(in: scalars, at: index) {
-                parts.append(.text(String(text)))
-                parts.append(.value(label: String(String.UnicodeScalarView(scalars[(index + 1)..<(end - 1)]))))
-                text = String.UnicodeScalarView()
-                index = end
-            } else {
-                text.append(scalars[index])
-                index += 1
-            }
-        }
-        parts.append(.text(String(text)))
-        self.parts = parts
+        parts = Self.parts(of: Array(source.unicodeScalars))
     }
 
     /// The labels the placeholders name, each once, in the order they first appear.
@@ -42,15 +26,15 @@ struct MessageTemplate {
         return labels
     }
 
-    /// The message as a Swift string literal, in which the value labeled `labels[i]` is `v<i>`.
-    func literal(valuesLabeled labels: [String], isNotSupported: Bool) -> String {
-        let source = parts.map { part in
+    /// The message as the inside of a Swift string literal, in which the value labeled `labels[i]` is `v<i>`.
+    /// Every placeholder names one of `labels`.
+    func literalContent(valuesLabeled labels: [String]) -> String {
+        parts.map { part in
             switch part {
             case .text(let text): text
-            case .value(let label): "\\(v\(labels.firstIndex(of: label) ?? 0))"
+            case .value(let label): "\\(v\(labels.firstIndex(of: label)!))"
             }
         }.joined()
-        return "\"\(source)\(isNotSupported ? " isn't supported yet" : "")\""
     }
 
     /// The source text inside `expression`, when it is a one-line string literal without interpolation.
@@ -65,13 +49,31 @@ struct MessageTemplate {
         return source
     }
 
-    /// The index just past the `{identifier}` that starts at `start`, or nil when no placeholder does.
-    private static func placeholderEnd(in scalars: [Unicode.Scalar], at start: Int) -> Int? {
-        guard scalars[start] == "{", !isUnicodeEscape(scalars, braceAt: start),
-              let end = identifierEnd(in: scalars, from: start + 1), end < scalars.count, scalars[end] == "}" else {
-            return nil
+    /// Splits `scalars` into text and placeholders.
+    private static func parts(of scalars: [Unicode.Scalar]) -> [Part] {
+        var parts: [Part] = []
+        var text = String.UnicodeScalarView()
+        var index = 0
+        while index < scalars.count {
+            if let placeholder = placeholder(in: scalars, at: index) {
+                parts += [.text(String(text)), .value(label: placeholder.label)]
+                text = String.UnicodeScalarView()
+                index = placeholder.end
+            } else {
+                text.append(scalars[index])
+                index += 1
+            }
         }
-        return end + 1
+        return parts + [.text(String(text))]
+    }
+
+    /// The `{identifier}` that starts at `start`: the identifier, and the index just past the `}`.
+    private static func placeholder(in scalars: [Unicode.Scalar], at start: Int) -> (label: String, end: Int)? {
+        guard scalars[start] == "{", !isUnicodeEscape(scalars, braceAt: start),
+              let labelEnd = identifierEnd(in: scalars, from: start + 1), labelEnd < scalars.count,
+              scalars[labelEnd] == "}" else { return nil }
+        let label = String(String.UnicodeScalarView(scalars[(start + 1)..<labelEnd]))
+        return (label, labelEnd + 1)
     }
 
     /// Whether the brace at `brace` opens a `\u{…}` escape: it follows a `u` after an odd run of

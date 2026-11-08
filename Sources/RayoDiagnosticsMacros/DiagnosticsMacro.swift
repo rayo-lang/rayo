@@ -6,13 +6,23 @@ import SwiftSyntaxMacros
 /// A table written wrong gets errors where it is wrong, and members that keep its uses compiling, so that
 /// only those errors are reported.
 public struct DiagnosticsMacro: MemberMacro {
-    /// A member the macro generates: a property with a body for a table that reads, and one that keeps a
-    /// table written wrong compiling.
+    /// A member the macro generates: a property with a body for a table read without errors, and a
+    /// fallback body that keeps a table written wrong compiling.
     private struct Member {
         var name: String
         var type: String
         var fallbackBody: String
         var body: ([CodeEntry]) -> String
+
+        /// The property, with `access` before it, and its body for `entries`, or its fallback body when
+        /// there are none.
+        func declaration(for entries: [CodeEntry]?, access: String) -> DeclSyntax {
+            """
+            \(raw: access)var \(raw: name): \(raw: type) {
+                \(raw: entries.map(body) ?? fallbackBody)
+            }
+            """
+        }
     }
 
     private static var members: [Member] {
@@ -34,27 +44,33 @@ public struct DiagnosticsMacro: MemberMacro {
             return []
         }
         var errors: [Diagnostic] = []
-        let missing = membersToGenerate(in: enumDecl, reporting: &errors)
+        let generated = membersToGenerate(in: enumDecl, reporting: &errors)
+        errors += conditionalCases(in: enumDecl)
         let entries = entries(of: enumDecl, reporting: &errors)
         errors.forEach { context.diagnose($0) }
 
-        let access = accessModifier(of: enumDecl)
         let readEntries = errors.isEmpty ? entries : nil
-        return missing.map { member in
-            """
-            \(raw: access)var \(raw: member.name): \(raw: member.type) {
-                \(raw: readEntries.map(member.body) ?? member.fallbackBody)
-            }
-            """
+        return generated.map { $0.declaration(for: readEntries, access: accessModifier(of: enumDecl)) }
+    }
+
+    /// The members the macro generates that `enumDecl` doesn't declare itself, reporting each it does.
+    private static func membersToGenerate(in enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [Member] {
+        members.filter { member in
+            guard let declaration = instanceDeclaration(named: member.name, in: enumDecl) else { return true }
+            errors.append(Diagnostic(node: declaration, message: CodeTableError.memberTaken(member.name)))
+            return false
         }
     }
 
-    /// Each case's entry, in order, or nil when any case has none. Reports a case under `#if`, and a
-    /// number used twice.
-    private static func entries(of enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [CodeEntry]? {
-        errors += conditionalCases(in: enumDecl.memberBlock.members).map {
+    /// An error at each case declared under an `#if`.
+    private static func conditionalCases(in enumDecl: EnumDeclSyntax) -> [Diagnostic] {
+        casesUnderIf(in: enumDecl.memberBlock.members).map {
             Diagnostic(node: $0.caseKeyword, message: CodeTableError.conditionalCase)
         }
+    }
+
+    /// Each case's entry, in order, or nil when any case has none. Reports a number used twice.
+    private static func entries(of enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [CodeEntry]? {
         let cases = enumDecl.memberBlock.members.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) }
         var entries: [CodeEntry] = []
         for caseDecl in cases {
@@ -78,22 +94,13 @@ public struct DiagnosticsMacro: MemberMacro {
     }
 
     /// The cases declared under an `#if` among `members`, at any depth.
-    private static func conditionalCases(in members: MemberBlockItemListSyntax) -> [EnumCaseDeclSyntax] {
+    private static func casesUnderIf(in members: MemberBlockItemListSyntax) -> [EnumCaseDeclSyntax] {
         members.flatMap { member -> [EnumCaseDeclSyntax] in
             guard let conditional = member.decl.as(IfConfigDeclSyntax.self) else { return [] }
             return conditional.clauses.flatMap { clause -> [EnumCaseDeclSyntax] in
                 guard case .decls(let clauseMembers) = clause.elements else { return [] }
-                return clauseMembers.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) } + conditionalCases(in: clauseMembers)
+                return clauseMembers.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) } + casesUnderIf(in: clauseMembers)
             }
-        }
-    }
-
-    /// The members the macro generates that `enumDecl` doesn't declare itself, reporting each it does.
-    private static func membersToGenerate(in enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [Member] {
-        members.filter { member in
-            guard let declaration = instanceDeclaration(named: member.name, in: enumDecl) else { return true }
-            errors.append(Diagnostic(node: declaration, message: CodeTableError.memberTaken(member.name)))
-            return false
         }
     }
 

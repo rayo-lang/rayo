@@ -14,16 +14,18 @@ struct CodeEntry {
     /// Reads `caseDecl`'s entry, or reports what keeps it from having one and returns nil.
     static func read(_ caseDecl: EnumCaseDeclSyntax, reporting errors: inout [Diagnostic]) -> CodeEntry? {
         guard let element = onlyElement(of: caseDecl, reporting: &errors),
-              let code = onlyCode(on: caseDecl, reporting: &errors),
+              let code = onlyCode(on: caseDecl, named: element.name.text, reporting: &errors),
               let arguments = CodeArguments(code) else { return nil }
 
-        let errorsBefore = errors.count
-        let labels = labels(of: element, reporting: &errors)
+        let values = labeledValues(of: element, reporting: &errors)
         let number = number(in: arguments.number, reporting: &errors)
-        let message = message(in: arguments.message, for: element, reporting: &errors)
-        guard let number, let message, errors.count == errorsBefore else { return nil }
+        let message = message(in: arguments.message, reporting: &errors)
+        guard let values, let number, let message,
+              placeholdersMatch(message, writtenAt: arguments.message, values: values, reporting: &errors) else {
+            return nil
+        }
 
-        return CodeEntry(name: element.name.text, labels: labels, number: number, message: message,
+        return CodeEntry(name: element.name.text, labels: values.map(\.label), number: number, message: message,
                          isNotSupported: arguments.isNotSupported, numberNode: arguments.number)
     }
 
@@ -34,13 +36,8 @@ struct CodeEntry {
 
     /// The message as a Swift string literal that interpolates the values `bindingPattern` binds.
     var messageLiteral: String {
-        message.literal(valuesLabeled: labels, isNotSupported: isNotSupported)
-    }
-
-    /// Whether `attribute` is `@Code`, written alone or after its module's name.
-    static func isCode(_ attribute: AttributeSyntax) -> Bool {
-        if let name = attribute.attributeName.as(IdentifierTypeSyntax.self) { return name.name.text == "Code" }
-        return attribute.attributeName.as(MemberTypeSyntax.self)?.name.text == "Code"
+        let suffix = isNotSupported ? " isn't supported yet" : ""
+        return "\"\(message.literalContent(valuesLabeled: labels))\(suffix)\""
     }
 
     // MARK: Steps of reading an entry
@@ -55,11 +52,11 @@ struct CodeEntry {
         return caseDecl.elements.first
     }
 
-    /// The `@Code` on `caseDecl`, reporting none, and any after the first.
-    private static func onlyCode(on caseDecl: EnumCaseDeclSyntax, reporting errors: inout [Diagnostic]) -> AttributeSyntax? {
+    /// The `@Code` on `caseDecl`, which declares the case `name`, reporting none, and any after the first.
+    private static func onlyCode(on caseDecl: EnumCaseDeclSyntax, named name: String,
+                                 reporting errors: inout [Diagnostic]) -> AttributeSyntax? {
         let codes = caseDecl.attributes.compactMap { $0.as(AttributeSyntax.self) }.filter(isCode)
         guard let code = codes.first else {
-            let name = caseDecl.elements.first?.name.text ?? ""
             errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.caseWithoutCode(name)))
             return nil
         }
@@ -67,13 +64,13 @@ struct CodeEntry {
         return code
     }
 
-    /// The labels of `element`'s values, reporting each value without one.
-    private static func labels(of element: EnumCaseElementSyntax, reporting errors: inout [Diagnostic]) -> [String] {
-        (element.parameterClause?.parameters ?? []).compactMap { parameter in
-            if let label = label(of: parameter) { return label }
-            errors.append(Diagnostic(node: parameter, message: CodeTableError.unlabeledValue(element.name.text)))
-            return nil
-        }
+    /// `element`'s values with their labels, or nil after reporting each value without one.
+    private static func labeledValues(of element: EnumCaseElementSyntax,
+                                      reporting errors: inout [Diagnostic]) -> [LabeledValue]? {
+        let parameters = element.parameterClause?.parameters.map { $0 } ?? []
+        let unlabeled = parameters.filter { LabeledValue($0) == nil }
+        errors += unlabeled.map { Diagnostic(node: $0, message: CodeTableError.unlabeledValue(element.name.text)) }
+        return unlabeled.isEmpty ? parameters.compactMap(LabeledValue.init) : nil
     }
 
     /// The positive integer `expression` writes, reporting anything else.
@@ -83,32 +80,43 @@ struct CodeEntry {
         return nil
     }
 
-    /// The message `expression` writes for `element`, reporting one that isn't a plain literal, a
-    /// placeholder that names no value, and a value no placeholder names. The compiler can place an error
-    /// at a token at best, so a placeholder's error is at the whole message.
-    private static func message(in expression: ExprSyntax, for element: EnumCaseElementSyntax,
-                                reporting errors: inout [Diagnostic]) -> MessageTemplate? {
-        guard let message = MessageTemplate(expression) else {
-            errors.append(Diagnostic(node: expression, message: CodeTableError.messageNotPlain))
-            return nil
-        }
-        let parameters = element.parameterClause?.parameters.map { $0 } ?? []
-        let labels = parameters.compactMap(label(of:))
-        let named = message.placeholderLabels
-        for unknown in named where !labels.contains(unknown) {
-            errors.append(Diagnostic(node: expression, message: CodeTableError.unknownPlaceholder(unknown)))
-        }
-        for parameter in parameters {
-            guard let label = label(of: parameter), let token = parameter.firstName, !named.contains(label) else { continue }
-            errors.append(Diagnostic(node: token, message: CodeTableError.unusedValue(label)))
-        }
-        return message
+    /// The message `expression` writes, reporting one that isn't a plain string literal.
+    private static func message(in expression: ExprSyntax, reporting errors: inout [Diagnostic]) -> MessageTemplate? {
+        if let message = MessageTemplate(expression) { return message }
+        errors.append(Diagnostic(node: expression, message: CodeTableError.messageNotPlain))
+        return nil
     }
 
-    /// The label a message names `parameter` by, or nil when it has none.
-    private static func label(of parameter: EnumCaseParameterSyntax) -> String? {
+    /// Whether `message` names each of `values` and nothing else, reporting a placeholder that names no
+    /// value, and a value no placeholder names. A macro's error is placed at the start of a syntax node,
+    /// so a placeholder's error is at the whole message, `expression`.
+    private static func placeholdersMatch(_ message: MessageTemplate, writtenAt expression: ExprSyntax,
+                                          values: [LabeledValue], reporting errors: inout [Diagnostic]) -> Bool {
+        let named = message.placeholderLabels
+        let unknown = named.filter { label in !values.contains { $0.label == label } }
+        let unused = values.filter { !named.contains($0.label) }
+        errors += unknown.map { Diagnostic(node: expression, message: CodeTableError.unknownPlaceholder($0)) }
+        errors += unused.map { Diagnostic(node: $0.parameter, message: CodeTableError.unusedValue($0.label)) }
+        return unknown.isEmpty && unused.isEmpty
+    }
+
+    /// Whether `attribute` is `@Code`, written alone or after its module's name.
+    private static func isCode(_ attribute: AttributeSyntax) -> Bool {
+        if let name = attribute.attributeName.as(IdentifierTypeSyntax.self) { return name.name.text == "Code" }
+        return attribute.attributeName.as(MemberTypeSyntax.self)?.name.text == "Code"
+    }
+}
+
+/// A value of a case, and the label a message names it by.
+private struct LabeledValue {
+    var label: String
+    var parameter: EnumCaseParameterSyntax
+
+    /// Nil when `parameter` has no label, or `_`.
+    init?(_ parameter: EnumCaseParameterSyntax) {
         guard let label = parameter.firstName, label.tokenKind != .wildcard else { return nil }
-        return label.identifier?.name ?? label.text
+        self.label = label.identifier?.name ?? label.text
+        self.parameter = parameter
     }
 }
 
