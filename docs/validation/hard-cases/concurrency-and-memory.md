@@ -9,12 +9,12 @@
 ```swift
 join({ … }, { … })                          // may run both closures at once, and returns when both are done
 particles.forEachInParallel { p in … }      // runs the body over the elements, on many threads
-Thread.scope { s in s.spawn { … } }         // starts threads that may borrow the caller's locals
+ThreadScope.run { s in s.spawn { … } }      // starts threads that may borrow the caller's locals
 ```
 
 - **`join`** takes two `@sendable` closures, each of which may write what it captures, and returns when both are done. `@sendable` means every capture must be `Sendable`, whether borrowed or owned, since only `Sendable` values reach another thread. `join` also requires what the closures return, an error included, to be `Sendable` ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)).
 - **`forEachInParallel`** runs a non-`mutating` `@sendable (mutable Element) -> Void` body over a collection's elements.
-- **`Thread.scope`** starts threads that may borrow the caller's locals, and joins them when its block ends.
+- **`ThreadScope.run`** starts threads that may borrow the caller's locals, and joins them when its block ends.
 
 Work handed to other threads this way is **lent work** ([07](../../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)). The library's `unsafe` core, its scheduling and its error policy are its own design. The cases check that its safe uses can be written, and that its own `unsafe` promise is small and easy to state.
 
@@ -34,7 +34,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C2 · Disjoint writes to one value from several threads (also C16)
 
-**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `Thread.scope`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope `mutable` and spawns two more threads over places its caller lends it.
+**Two closures work on one `world`: one writes `world.velocities`, and the other reads `world.positions`.** Separately, inside `ThreadScope.run`, the block spawns one thread per part of the work while it works too: one thread writes `world.bodies`, another writes `world.ai` and reads `world.perception`, and the block writes `world.audio`. A helper function takes the scope `mutable` and spawns two more threads over places its caller lends it.
 
 - **Must accept** `join` with the two closures, and all of the scoped threads, with no copies of the world and no `unsafe` outside std. Once the scope returns, every place the spawns borrowed is free again.
 

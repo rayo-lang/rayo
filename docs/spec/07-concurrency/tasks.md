@@ -166,7 +166,7 @@ mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>        //
     where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }   // C: the set's resume context type
 ```
 
-**A task's panic stops at the task, and `step` resumes it once it has stepped the others.** `TaskSet` steps each task under a recovery point of its own ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). So a panic finishes only that task ([Semantics](#semantics)), and the set frees the task's slot, so its handle goes stale. The set's other pending and woken tasks still get their step, as `Thread.scope`'s other threads run on ([Scoped threads](thread-work.md#scoped-threads)). Then `step` resumes the panic with `resumePanic`, so it unwinds out of `step` as a panic in a callee would. An owner that keeps the game running catches it there:
+**A task's panic stops at the task, and `step` resumes it once it has stepped the others.** `TaskSet` steps each task under a recovery point of its own ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). So a panic finishes only that task ([Semantics](#semantics)), and the set frees the task's slot, so its handle goes stale. The set's other pending and woken tasks still get their step, as the other threads of a `ThreadScope.run` block run on ([Scoped threads](thread-work.md#scoped-threads)). Then `step` resumes the panic with `resumePanic`, so it unwinds out of `step` as a panic in a callee would. An owner that keeps the game running catches it there:
 
 ```swift
 catchPanic {

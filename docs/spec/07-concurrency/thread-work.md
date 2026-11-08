@@ -41,10 +41,10 @@ particles.forEachInParallel { p in
 
 ### Scoped threads
 
-**`Thread.scope`, at the top of this chapter, returns only when every thread its block spawned has finished.** So its threads may borrow the caller's locals, as the spawned closure there borrows `world.bodies`. It is declared as:
+**`ThreadScope.run`, at the top of this chapter, returns only when every thread its block spawned has finished.** So its threads may borrow the caller's locals, as the spawned closure there borrows `world.bodies`. It is declared as:
 
 ```swift
-static func scope<R: ~Scoped>(_ body: consuming (mutable ThreadScope) -> R) -> R { … }   // Thread's: runs the block once
+static func run<R: ~Scoped>(_ body: consuming (mutable ThreadScope) -> R) -> R { … }   // ThreadScope's: runs the block once
 ```
 
 The block takes the scope as a `mutable ThreadScope`, so a helper can take the scope as a parameter of that type. The block is called once, so it may write and move its captures, as `Mutex.lock`'s may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
@@ -60,26 +60,26 @@ A parameter of function type would get only a view of the literal, which dies at
 **The scope `s` absorbs what each spawned closure borrows and carries, with the same kinds, until the block returns.** This follows from rule 4, absorption ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)), since the scope's type is unsealed and scoped, as the library's promise requires ([below](#the-librarys-promise)). So nothing a spawned closure captures by reference can change or die before the block returns. A second `spawn` that writes `world.bodies`, or the block touching it after the first `spawn`, conflicts as two arguments of one call do:
 
 ```swift
-Thread.scope { s in
+ThreadScope.run { s in
     s.spawn { integrate(&world.bodies, dt: dt) }
     print(world.bodies.count)                               // error: 's' borrows 'world.bodies' exclusively until the block returns
 }
 ```
 
-**The scope joins every thread its block spawned, whether the block returns or a panic unwinds out of it.** An unwind out of the block stops at `Thread.scope` until every spawned thread has finished, and then goes on out of it. So no spawned thread outlives a borrow it was lent, however the block ends.
+**The scope joins every thread its block spawned, whether the block returns or a panic unwinds out of it.** An unwind out of the block stops at `ThreadScope.run` until every spawned thread has finished, and then goes on out of it. So no spawned thread outlives a borrow it was lent, however the block ends.
 
-**A panic in a spawned thread stops at that thread, and `Thread.scope` resumes it once every thread has finished:**
+**A panic in a spawned thread stops at that thread, and `ThreadScope.run` resumes it once every thread has finished:**
 
 ```swift
-Thread.scope { s in
+ThreadScope.run { s in
     s.spawn { integrate(&world.bodies, dt: dt) }            // if this panics, its panic waits for the join
     mix(&world.audio)                                       // and this still runs
 }                                                           // every thread has finished: a spawned thread's panic resumes here
 ```
 
-The panic unwinds the spawned closure's frames on its own thread, and destroys the closure, while the block and the other spawned threads run on ([Panics in lent work](#panics-in-lent-work)). Once all of them have finished, `Thread.scope` resumes the panic on the calling thread with `resumePanic` ([10](../10-errors-and-safety/panics.md#resuming-a-panic-resumepanic)). So it unwinds the caller as a panic in the block would, and keeps the message and location it was reported with. Joining a `Thread` reports a panic the same way ([below](#joining-a-thread)).
+The panic unwinds the spawned closure's frames on its own thread, and destroys the closure, while the block and the other spawned threads run on ([Panics in lent work](#panics-in-lent-work)). Once all of them have finished, `ThreadScope.run` resumes the panic on the calling thread with `resumePanic` ([10](../10-errors-and-safety/panics.md#resuming-a-panic-resumepanic)). So it unwinds the caller as a panic in the block would, and keeps the message and location it was reported with. Joining a `Thread` reports a panic the same way ([below](#joining-a-thread)).
 
-**One panic goes on out of `Thread.scope` when several happen.** Each was reported when it happened, so the scope drops the others. The one that goes on is:
+**One panic goes on out of `ThreadScope.run` when several happen.** Each was reported when it happened, so the scope drops the others. The one that goes on is:
 
 - the block's own, when a panic unwinds out of the block;
 - otherwise, the panic of the first thread spawned among those that panicked.
@@ -90,12 +90,12 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 - **to move only `Sendable` values between threads.** The closures it takes are `@sendable`, and whatever it passes them is `Sendable`. Whatever it hands back from them to the lending thread is `Sendable` too: their results, the errors they fail with and the panics that end them included. Each value it hands over is made and written before the receiving thread's first use of it, in the memory model's happens-before order ([Atomics and locks](synchronization.md#atomics-and-locks));
 - **to call the value only as its kind allows**, each call of a `mutating` one happening before the next;
-- **to keep it past the call it was given to only in a type that is unsealed and scoped**, as `Thread.scope`'s scope keeps what `spawn` is given ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)). So the value that keeps it absorbs what it borrows for as long as it is kept. While that call runs, a raw pointer to it may pass through any storage that only the library's `unsafe` code reads, such as a global work queue;
+- **to keep it past the call it was given to only in a type that is unsealed and scoped**, as the `ThreadScope` that `ThreadScope.run` lends its block keeps what `spawn` is given ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)). So the value that keeps it absorbs what it borrows for as long as it is kept. While that call runs, a raw pointer to it may pass through any storage that only the library's `unsafe` code reads, such as a global work queue;
 - **to have every other thread done with it by the time the borrows it carries may end**, every access they made through it happening before then. That time is when the call that lent them returns or a panic unwinds out of it, as for `join`, or, for a value kept as above, the last use of the value that keeps it.
 
   So the type that keeps it is one of these:
     - one that safe code can make and drop, which declares a `deinit` that waits, making destroying it a use ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it));
-    - one that only the library makes, like `Thread.scope`'s scope, where the library waits before the call that lends it returns or unwinds.
+    - one that only the library makes, such as the `ThreadScope` that `ThreadScope.run` lends its block, where the library waits before the call that lends it returns or unwinds.
 
 **By the first promise, a closure that returns a lock guard taken on a worker, or an object made there, is rejected at the call**, since neither is `Sendable`.
 
@@ -105,7 +105,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 ### Panics in lent work
 
-**A panic in lent work reaches the lending thread, as a panic in a closure the lender called itself would.** In std's job system, each piece of work runs under a recovery point of its own ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), on whichever thread runs it, the lender included. So a piece's panic unwinds only that piece's frames, and the thread goes on with other work. Once every piece has finished, the lending call resumes the panic on the lending thread with `resumePanic`, as `Thread.scope` does ([above](#scoped-threads)). The panic then unwinds out of the lending call, such as `join` or `forEachInParallel`.
+**A panic in lent work reaches the lending thread, as a panic in a closure the lender called itself would.** In std's job system, each piece of work runs under a recovery point of its own ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), on whichever thread runs it, the lender included. So a piece's panic unwinds only that piece's frames, and the thread goes on with other work. Once every piece has finished, the lending call resumes the panic on the lending thread with `resumePanic`, as `ThreadScope.run` does ([above](#scoped-threads)). The panic then unwinds out of the lending call, such as `join` or `forEachInParallel`.
 
 **One panic goes on out of the lending call when several pieces panic**, the first in the call's own order: `join`'s first closure before its second, and in a parallel loop, the piece holding the earliest element. Each panic was reported when it happened, so the call drops the others.
 
@@ -190,7 +190,7 @@ checksum.join()                   // error: the UInt32!IoError is never used
 _ = checksum.join()               // fine: waits for the thread, and drops its result
 ```
 
-**A panic in a thread's body ends the thread, and `join()` resumes it in the joiner.** The panic was reported when it happened, and unwinds the body's frames, destroying what the body owns, its captures included ([10](../10-errors-and-safety/panics.md#what-a-panic-does)). Then the thread's teardown runs as when the body returns. `Thread.start` runs the body under a recovery point of its own, which keeps the panic for `join()`. `join()` resumes it on the joining thread with `resumePanic`, as `Thread.scope` resumes a spawned thread's panic ([above](#scoped-threads)). A joiner that handles the panic itself wraps the call in `catchPanic` ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)):
+**A panic in a thread's body ends the thread, and `join()` resumes it in the joiner.** The panic was reported when it happened, and unwinds the body's frames, destroying what the body owns, its captures included ([10](../10-errors-and-safety/panics.md#what-a-panic-does)). Then the thread's teardown runs as when the body returns. `Thread.start` runs the body under a recovery point of its own, which keeps the panic for `join()`. `join()` resumes it on the joining thread with `resumePanic`, as `ThreadScope.run` resumes a spawned thread's panic ([above](#scoped-threads)). A joiner that handles the panic itself wraps the call in `catchPanic` ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)):
 
 ```swift
 let sum: UInt32? = catchPanic {

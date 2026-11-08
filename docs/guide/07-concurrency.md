@@ -64,18 +64,18 @@ The job system's own `unsafe` code promises to call each closure only as its kin
 ### Scoped threads
 
 ```swift
-Thread.scope { s in
+ThreadScope.run { s in
     s.spawn { integrate(&world.enemies, dt: dt) }       // runs on another thread
     mix(&world.audio)                                   // runs on this thread meanwhile
     print(world.enemies.count)                          // error: 's' borrows 'world.enemies' exclusively until the block returns
 }                                                       // every spawned thread has finished here
 ```
 
-**`Thread.scope` starts threads that may borrow the caller's locals** ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). It returns only when every thread its block spawned has finished, so no thread outlives what it borrows.
+**`ThreadScope.run` starts threads that may borrow the caller's locals** ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). It returns only when every thread its block spawned has finished, so no thread outlives what it borrows.
 
 **`spawn` hands its closure to the scope `s`, and `s` holds what the closure borrows until the block returns.** So code in the block, or a second `spawn`, that touches `world.enemies` conflicts, as a second argument of one call would.
 
-**A panic in a spawned thread waits for the others, then carries on in the caller.** Chapter 1 showed a panic abandoning the work in progress. Here it abandons only the spawned closure's work, destroying what the closure owns, while the block and the other threads run on. Once every thread has finished, `Thread.scope` carries the panic on as if the block itself had panicked ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). So the scope still never returns before its threads are done, even when one fails. `join` and the parallel loops treat a panic in their closures the same way.
+**A panic in a spawned thread waits for the others, then carries on in the caller.** Chapter 1 showed a panic abandoning the work in progress. Here it abandons only the spawned closure's work, destroying what the closure owns, while the block and the other threads run on. Once every thread has finished, `ThreadScope.run` carries the panic on as if the block itself had panicked ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). So the scope still never returns before its threads are done, even when one fails. `join` and the parallel loops treat a panic in their closures the same way.
 
 ## What may cross threads: `Sendable`
 
@@ -220,7 +220,7 @@ let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32
 let crc = hashing.join()                                      // waits, then returns the body's UInt32
 ```
 
-**If a panic ended the thread, `join()` carries it on in the joining thread**, as `Thread.scope` does for its threads.
+**If a panic ended the thread, `join()` carries it on in the joining thread**, as `ThreadScope.run` does for its threads.
 
 **Dropping a `Thread` detaches the thread: it runs on by itself, and nothing can wait for it any more.** Its result, if any, is dropped when the thread ends. Rayo rejects an unused value, so code that never joins a thread drops its `Thread` with `_ =`, as below. A detached thread still running when `main` returns ends with the program.
 
