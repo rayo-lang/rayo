@@ -126,13 +126,14 @@ mutating func send(_ item: owned T) -> Void!Disconnected<T>      // Sender<T>'s:
 mutating func trySend(_ item: owned T) -> Void!TrySendError<T>   // Sender<T>'s: never parks
 mutating func receive() -> T?                                    // Receiver<T>'s: parks while empty; nil once every Sender is gone
 mutating func tryReceive() -> T!TryReceiveError                  // Receiver<T>'s: never parks
+mutating func receive(timeout: Duration) -> T!ReceiveTimeoutError   // Receiver<T>'s: parks while empty, for at most 'timeout'
 ```
 
 **A channel holds at most `capacity` items, and `capacity` is at least 1.** `make` panics on a smaller one, such as `make(capacity: 0)`: a channel with no room could never take an item, so every `send` would park for ever ([10](../10-errors-and-safety/panics.md#what-panics)).
 
 **`send` parks while the channel is full and connected**, and goes on once the `Receiver` takes an item and makes room. So a producer that runs ahead of its consumer waits for it, rather than filling memory with items nobody has taken.
 
-**The ends aren't `Synchronized`.** `receive()` and `tryReceive()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `send(_:)` and `trySend(_:)` are `mutating` too, so each `Sender` is one producer at a time.
+**The ends aren't `Synchronized`.** `receive()`, `receive(timeout:)` and `tryReceive()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `send(_:)` and `trySend(_:)` are `mutating` too, so each `Sender` is one producer at a time.
 
 **The shared state counts the ends that own it**, which also tells each side when the other is gone ([below](#disconnected-channels)). A sender queued inside its own channel is a cycle that dropping the `Receiver` breaks, since that destroys the queued items. Other cycles, such as a `Receiver` queued inside its own channel, leak.
 
@@ -147,7 +148,7 @@ mutating func tryReceive() -> T!TryReceiveError                  // Receiver<T>'
 
 **The end whose destruction disconnects the channel wakes every thread parked on it** ([below](#parking-and-waking-a-thread)), so none waits for an end that is gone:
 
-- **The last `Sender`** wakes the thread parked in `receive()` on the empty channel, and that `receive()` returns `nil`.
+- **The last `Sender`** wakes the thread parked in `receive()` or `receive(timeout:)` on the empty channel. That `receive()` returns `nil`, and that `receive(timeout:)` fails with `.disconnected`.
 - **The `Receiver`** wakes every thread parked in `send` on the full channel. Each of those sends fails, and hands its item back in `Disconnected<T>`.
 
 **Destroying the `Receiver` runs in this order:**
@@ -160,7 +161,7 @@ So each send either put its item in before the disconnection, and the item is de
 **A channel orders the threads that use its ends, so what one thread did before is visible to the other:**
 
 - each send happens before the receive that returns its item;
-- destroying each `Sender` happens before every `receive()` that returns `nil`, and every `tryReceive()` that gives `.disconnected`;
+- destroying each `Sender` happens before every `receive()` that returns `nil`, and every `tryReceive()` or `receive(timeout:)` that fails with `.disconnected`;
 - destroying the `Receiver` happens before each `send` that fails, and each `trySend` that fails with `.disconnected`.
 
 **`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
@@ -180,6 +181,17 @@ enum TryReceiveError: Error {
     case disconnected       // every Sender is gone, and no item is left
 }
 ```
+
+**`receive(timeout:)` parks as `receive()` does, but for at most `timeout` on `MonotonicClock`, and tells a timeout from a disconnection** ([Time](#time-duration-and-instant)):
+
+```swift
+enum ReceiveTimeoutError: Error {
+    case timedOut           // connected, and no item came before the timeout passed
+    case disconnected       // every Sender is gone, and no item is left
+}
+```
+
+An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
 
 **`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
@@ -344,16 +356,51 @@ struct SpinQueue<T>(…): unsafe Synchronized { … }   // in the type's declara
 extension SpinQueue: unsafe Synchronized {}          // or, instead, in an extension
 ```
 
+### Time: `Duration` and `Instant`
+
+**std counts time in whole nanoseconds, held in an `Int64`, so times add and compare exactly on every target.** A `Duration` is a length of time, and an `Instant` is a point in time on one clock:
+
+```swift
+struct Duration(let nanoseconds: Int64): Hashable, Comparable   // may be negative; Duration.zero is no time
+struct Instant(let nanoseconds: Int64): Hashable, Comparable    // nanoseconds since its clock's own start
+
+static func seconds(_ s: Double) -> Duration { … }              // Duration's: .seconds(0.5)
+static func milliseconds(_ ms: Int64) -> Duration { … }         // Duration's, as are microseconds(_:) and nanoseconds(_:)
+```
+
+**The arithmetic is `Int64` arithmetic on the nanoseconds**, so an overflow does what an `Int64` overflow does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)):
+
+- two `Duration`s add and subtract, and a `Duration` multiplies by an `Int64`;
+- an `Instant` plus or minus a `Duration` is an `Instant`;
+- an `Instant` minus an `Instant` is the `Duration` between them.
+
+**`seconds(_:)` converts as `Int64(s * 1e9)` does**, so it rounds toward zero, and panics on NaN or on a value out of range ([04](../04-types/numbers-and-math.md#conversions)).
+
+**A clock is a `TimeSource`, and an `Instant` means something only beside the instants of the same clock:**
+
+```swift
+protocol TimeSource { var now: Instant { get } }
+struct MonotonicClock(): TimeSource { … }       // the system's clock for waits: MonotonicClock().now
+```
+
+**`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game's simulation time, which stops while the game is paused.
+
+**`Thread.sleep(for:)` parks the calling thread for at least `d`**, and returns at once when `d` is zero or less:
+
+```swift
+static func sleep(for d: Duration) { … }        // Thread's
+```
+
 ### Parking and waking a thread
 
 **A blocking primitive parks its waiting thread through the runtime**, which any `unsafe` code may call:
 
 ```swift
-unsafe static func park(on word: *UInt32, expected: UInt32, timeout: Int?) -> Bool { … }   // Runtime's: parks the calling thread on 'word'
-unsafe static func wake(on word: *UInt32, count: Int) { … }                                 // Runtime's: wakes threads parked on 'word'
+unsafe static func park(on word: *UInt32, expected: UInt32, timeout: Duration?) -> Bool { … }   // Runtime's: parks the calling thread on 'word'
+unsafe static func wake(on word: *UInt32, count: Int) { … }                                      // Runtime's: wakes threads parked on 'word'
 ```
 
-**`park` parks the calling thread on `word` if it still holds `expected`**, until another thread wakes it or `timeout` nanoseconds pass. It returns `false` only when the timeout passed. It may also return early, so its caller checks its condition again. Its caller promises that `word` stays live and is accessed only atomically meanwhile.
+**`park` parks the calling thread on `word` if it still holds `expected`**, until another thread wakes it or `timeout` passes on `MonotonicClock` ([above](#time-duration-and-instant)). It returns `false` only when the timeout passed. It may also return early, so its caller checks its condition again. Its caller promises that `word` stays live and is accessed only atomically meanwhile.
 
 **`wake` wakes up to `count` threads parked on `word`.**
 
