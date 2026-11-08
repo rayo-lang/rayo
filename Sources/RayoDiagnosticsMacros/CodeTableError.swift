@@ -43,7 +43,7 @@ enum CodeTableError: DiagnosticMessage, Equatable {
     var severity: DiagnosticSeverity { .error }
 }
 
-/// Where a `CodeTableError` comes from, when that is somewhere else.
+/// A note that points at a code's number where the number is first used.
 enum CodeTableNote: NoteMessage, Equatable {
     case firstUse(Int)
 

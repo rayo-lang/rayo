@@ -6,7 +6,25 @@ import SwiftSyntaxMacros
 /// A table written wrong gets errors where it is wrong, and members that keep its uses compiling, so that
 /// only those errors are reported.
 public struct DiagnosticsMacro: MemberMacro {
-    private static let generatedNames = ["number", "message"]
+    /// A member the macro generates: a property with a body for a table that reads, and one that keeps a
+    /// table written wrong compiling.
+    private struct Member {
+        var name: String
+        var type: String
+        var placeholder: String
+        var body: ([CodeEntry]) -> String
+    }
+
+    private static var members: [Member] {
+        [
+            Member(name: "number", type: "Int", placeholder: "0") { entries in
+                switchOverSelf(entries.map { "case .\($0.name): \($0.number)" })
+            },
+            Member(name: "message", type: "String", placeholder: "\"\"") { entries in
+                switchOverSelf(entries.map { "case \($0.bindingPattern): \($0.messageLiteral)" })
+            },
+        ]
+    }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
                                  conformingTo protocols: [TypeSyntax],
@@ -22,20 +40,11 @@ public struct DiagnosticsMacro: MemberMacro {
 
         let access = enumDecl.modifiers.first { ["public", "package"].contains($0.name.text) }
             .map { "\($0.name.text) " } ?? ""
-        let bodies: [String: String]
-        if let entries, errors.isEmpty {
-            bodies = [
-                "number": switchOverSelf(entries.map { "case .\($0.name): \($0.number)" }),
-                "message": switchOverSelf(entries.map { "case \($0.bindingPattern): \($0.messageLiteral)" }),
-            ]
-        } else {
-            bodies = ["number": "0", "message": "\"\""]
-        }
-        let types = ["number": "Int", "message": "String"]
-        return generatedNames.filter { name in !taken.contains { $0.name == name } }.map { name in
+        let readEntries = errors.isEmpty ? entries : nil
+        return members.filter { member in !taken.contains { $0.name == member.name } }.map { member in
             """
-            \(raw: access)var \(raw: name): \(raw: types[name]!) {
-                \(raw: bodies[name]!)
+            \(raw: access)var \(raw: member.name): \(raw: member.type) {
+                \(raw: readEntries.map(member.body) ?? member.placeholder)
             }
             """
         }
@@ -53,20 +62,18 @@ public struct DiagnosticsMacro: MemberMacro {
                 continue
             }
             guard let caseDecl = member.decl.as(EnumCaseDeclSyntax.self) else { continue }
-            switch CodeEntry.read(caseDecl) {
-            case .failure(let caseErrors):
-                errors += caseErrors.list
+            guard let entry = CodeEntry.read(caseDecl, reporting: &errors) else {
                 allRead = false
-            case .success(let entry):
-                if let firstUse = firstUses[entry.number] {
-                    let note = Note(node: Syntax(firstUse), message: CodeTableNote.firstUse(entry.number))
-                    errors.append(Diagnostic(node: entry.numberNode, message: CodeTableError.duplicateNumber(entry.number),
-                                             notes: [note]))
-                } else {
-                    firstUses[entry.number] = entry.numberNode
-                }
-                entries.append(entry)
+                continue
             }
+            if let firstUse = firstUses[entry.number] {
+                let note = Note(node: Syntax(firstUse), message: CodeTableNote.firstUse(entry.number))
+                errors.append(Diagnostic(node: entry.numberNode, message: CodeTableError.duplicateNumber(entry.number),
+                                         notes: [note]))
+            } else {
+                firstUses[entry.number] = entry.numberNode
+            }
+            entries.append(entry)
         }
         return allRead ? entries : nil
     }
@@ -82,19 +89,23 @@ public struct DiagnosticsMacro: MemberMacro {
         }
     }
 
-    /// The members of `enumDecl` that declare a name the macro generates.
+    /// The instance members of `enumDecl` that declare a name the macro generates.
     private static func takenNames(in enumDecl: EnumDeclSyntax) -> [(name: String, declaration: DeclSyntax)] {
         enumDecl.memberBlock.members.compactMap { member in
             let declared: [String]
-            if let variable = member.decl.as(VariableDeclSyntax.self) {
+            if let variable = member.decl.as(VariableDeclSyntax.self), !isStatic(variable.modifiers) {
                 declared = variable.bindings.compactMap { $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text }
-            } else if let function = member.decl.as(FunctionDeclSyntax.self) {
+            } else if let function = member.decl.as(FunctionDeclSyntax.self), !isStatic(function.modifiers) {
                 declared = [function.name.text]
             } else {
                 declared = []
             }
-            return declared.first(where: generatedNames.contains).map { ($0, member.decl) }
+            return declared.first { name in members.contains { $0.name == name } }.map { ($0, member.decl) }
         }
+    }
+
+    private static func isStatic(_ modifiers: DeclModifierListSyntax) -> Bool {
+        modifiers.contains { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) }
     }
 
     private static func switchOverSelf(_ cases: [String]) -> String {

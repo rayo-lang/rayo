@@ -59,7 +59,7 @@ struct DiagnosticsMacroTests {
         expect("""
             @Diagnostics
             enum E {
-                @Code(1, error: "'{nmae}' isn't declared")
+                @Code(1, error: "'{nmae}' isn't declared, nor is '{nmae}'")
                 case notDeclared(name: String)
             }
             """, expandsTo: """
@@ -68,7 +68,7 @@ struct DiagnosticsMacroTests {
 
             \(placeholderMembers)
             }
-            """, reporting: [error(.unknownPlaceholder("nmae"), 3, 23), error(.unusedValue("name"), 4, 22)])
+            """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21), error(.unusedValue("name"), 4, 22)])
     }
 
     @Test("every case has one code, and every value a label for its message to name it")
@@ -121,6 +121,10 @@ struct DiagnosticsMacroTests {
                 case d
                 @Code(5, error: #"e"#)
                 case e
+                @Code(6, error: """
+                    f
+                    """)
+                case f
             }
             """#, expandsTo: #"""
             enum E {
@@ -129,12 +133,13 @@ struct DiagnosticsMacroTests {
                 case c
                 case d
                 case e
+                case f
 
             \#(placeholderMembers)
             }
             """#, reporting: [
                 error(.numberNotLiteral, 3, 11), error(.numberNotLiteral, 5, 11), error(.numberNotLiteral, 7, 11),
-                error(.messageNotPlain, 9, 21), error(.messageNotPlain, 11, 21),
+                error(.messageNotPlain, 9, 21), error(.messageNotPlain, 11, 21), error(.messageNotPlain, 13, 21),
             ])
     }
 
@@ -166,18 +171,20 @@ struct DiagnosticsMacroTests {
             enum E {
                 @Code(1, error: "a")
                 case a
+                static var message: String { "" }
                 var number: Int { 1 }
             }
             """, expandsTo: """
             enum E {
                 case a
+                static var message: String { "" }
                 var number: Int { 1 }
 
                 var message: String {
                     ""
                 }
             }
-            """, reporting: [error(.memberTaken("number"), 5, 5)])
+            """, reporting: [error(.memberTaken("number"), 6, 5)])
     }
 
     @Test("'@Code' gives a code only to a case of a '@Diagnostics' enum")

@@ -3,11 +3,10 @@ import SwiftSyntax
 
 /// One case of a `@Diagnostics` enum, as its `@Code` describes it.
 struct CodeEntry {
-    /// A piece of a message: text as written in the source, or a placeholder.
+    /// A piece of a message: text as written in the source, or the label a placeholder names.
     enum Part {
         case text(String)
-        /// `{label}`, which starts `offset` UTF-8 bytes into the message's text.
-        case value(label: String, offset: Int)
+        case value(label: String)
     }
 
     var name: String
@@ -18,37 +17,38 @@ struct CodeEntry {
     var isNotSupported: Bool
     var numberNode: ExprSyntax
 
-    /// Reads `caseDecl`'s entry, or returns the errors that keep it from having one.
-    static func read(_ caseDecl: EnumCaseDeclSyntax) -> Result<CodeEntry, Errors> {
+    /// Reads `caseDecl`'s entry, or reports what keeps it from having one and returns nil.
+    static func read(_ caseDecl: EnumCaseDeclSyntax, reporting errors: inout [Diagnostic]) -> CodeEntry? {
         guard caseDecl.elements.count == 1, let element = caseDecl.elements.first else {
-            return .failure(Errors([Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.oneCasePerCode)]))
+            errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.oneCasePerCode))
+            return nil
         }
         let codes = caseDecl.attributes.compactMap { $0.as(AttributeSyntax.self) }.filter(isCode)
         guard let code = codes.first else {
-            let error = CodeTableError.caseWithoutCode(element.name.text)
-            return .failure(Errors([Diagnostic(node: caseDecl.caseKeyword, message: error)]))
+            errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.caseWithoutCode(element.name.text)))
+            return nil
         }
-        // An argument list that fits neither '@Code' is reported by the compiler, which matches it to one.
+        // The compiler reports an argument list that fits neither '@Code'.
         guard case .argumentList(let arguments) = code.arguments, arguments.count == 2,
-              let numberArgument = arguments.first, let messageArgument = arguments.last else {
-            return .failure(Errors([]))
-        }
-        var errors = codes.dropFirst().map { Diagnostic(node: $0, message: CodeTableError.oneCodePerCase) }
-        let labels = readLabels(of: element, caseName: element.name.text, into: &errors)
+              let numberArgument = arguments.first, let messageArgument = arguments.last else { return nil }
+
+        let errorCount = errors.count
+        errors += codes.dropFirst().map { Diagnostic(node: $0, message: CodeTableError.oneCodePerCase) }
+        let labels = readLabels(of: element, reporting: &errors)
         let number = positiveInteger(numberArgument.expression)
         if number == nil {
             errors.append(Diagnostic(node: numberArgument.expression, message: CodeTableError.numberNotLiteral))
         }
         let message = parts(of: messageArgument.expression)
         if let message {
-            errors += placeholderErrors(message, labels: labels, in: element, literal: messageArgument.expression)
+            errors += placeholderErrors(message, in: element, literal: messageArgument.expression)
         } else {
             errors.append(Diagnostic(node: messageArgument.expression, message: CodeTableError.messageNotPlain))
         }
-        guard let number, let message, errors.isEmpty else { return .failure(Errors(errors)) }
-        return .success(CodeEntry(name: element.name.text, labels: labels, number: number, message: message,
-                                  isNotSupported: messageArgument.label?.text == "notSupported",
-                                  numberNode: numberArgument.expression))
+        guard let number, let message, errors.count == errorCount else { return nil }
+        return CodeEntry(name: element.name.text, labels: labels, number: number, message: message,
+                         isNotSupported: messageArgument.label?.text == "notSupported",
+                         numberNode: numberArgument.expression)
     }
 
     /// Whether `attribute` is `@Code`, written alone or after its module's name.
@@ -57,16 +57,18 @@ struct CodeEntry {
         return attribute.attributeName.as(MemberTypeSyntax.self)?.name.text == "Code"
     }
 
+    /// The label of `parameter`, which a message names it by, or nil when it has none.
+    private static func label(of parameter: EnumCaseParameterSyntax) -> String? {
+        guard let label = parameter.firstName, label.tokenKind != .wildcard else { return nil }
+        return label.identifier?.name ?? label.text
+    }
+
     /// The labels of `element`'s values, reporting each value without one.
-    private static func readLabels(of element: EnumCaseElementSyntax, caseName: String,
-                                   into errors: inout [Diagnostic]) -> [String] {
-        let parameters = element.parameterClause?.parameters.map { $0 } ?? []
-        return parameters.compactMap { parameter in
-            guard let label = parameter.firstName, label.tokenKind != .wildcard else {
-                errors.append(Diagnostic(node: parameter, message: CodeTableError.unlabeledValue(caseName)))
-                return nil
-            }
-            return label.identifier?.name ?? label.text
+    private static func readLabels(of element: EnumCaseElementSyntax, reporting errors: inout [Diagnostic]) -> [String] {
+        (element.parameterClause?.parameters ?? []).compactMap { parameter in
+            if let label = label(of: parameter) { return label }
+            errors.append(Diagnostic(node: parameter, message: CodeTableError.unlabeledValue(element.name.text)))
+            return nil
         }
     }
 
@@ -92,11 +94,10 @@ struct CodeEntry {
         var text: [UInt8] = []
         var index = 0
         while index < bytes.count {
-            let isUnicodeEscape = index >= 2 && bytes[index - 2] == UInt8(ascii: "\\") && bytes[index - 1] == UInt8(ascii: "u")
-            if bytes[index] == UInt8(ascii: "{"), !isUnicodeEscape, let end = identifierEnd(in: bytes, from: index + 1),
-               end < bytes.count, bytes[end] == UInt8(ascii: "}") {
+            if bytes[index] == UInt8(ascii: "{"), !isUnicodeEscape(bytes, braceAt: index),
+               let end = identifierEnd(in: bytes, from: index + 1), end < bytes.count, bytes[end] == UInt8(ascii: "}") {
                 parts.append(.text(String(decoding: text, as: UTF8.self)))
-                parts.append(.value(label: String(decoding: bytes[(index + 1)..<end], as: UTF8.self), offset: index))
+                parts.append(.value(label: String(decoding: bytes[(index + 1)..<end], as: UTF8.self)))
                 text = []
                 index = end + 1
             } else {
@@ -108,11 +109,21 @@ struct CodeEntry {
         return parts
     }
 
-    /// The index just past the identifier that starts at `start`, or nil when none starts there.
+    /// Whether the brace at `brace` opens a `\u{…}` escape: it follows a `u` after an odd run of
+    /// backslashes, since an even run is that many escaped backslashes.
+    private static func isUnicodeEscape(_ bytes: [UInt8], braceAt brace: Int) -> Bool {
+        guard brace >= 2, bytes[brace - 1] == UInt8(ascii: "u") else { return false }
+        var backslashes = 0
+        while brace - 2 - backslashes >= 0, bytes[brace - 2 - backslashes] == UInt8(ascii: "\\") { backslashes += 1 }
+        return backslashes % 2 == 1
+    }
+
+    /// The index just past the identifier that starts at `start`, or nil when none starts there. Any
+    /// non-ASCII byte counts as a letter, as it may in a Swift identifier.
     private static func identifierEnd(in bytes: [UInt8], from start: Int) -> Int? {
         func isLetter(_ byte: UInt8) -> Bool {
             (byte >= UInt8(ascii: "a") && byte <= UInt8(ascii: "z")) || (byte >= UInt8(ascii: "A") && byte <= UInt8(ascii: "Z"))
-                || byte == UInt8(ascii: "_")
+                || byte == UInt8(ascii: "_") || byte >= 0x80
         }
         guard start < bytes.count, isLetter(bytes[start]) else { return nil }
         var end = start + 1
@@ -122,25 +133,26 @@ struct CodeEntry {
         return end
     }
 
-    /// The errors for placeholders that name no value, at each placeholder, and for values that no
-    /// placeholder names, at each value's label.
-    private static func placeholderErrors(_ message: [Part], labels: [String], in element: EnumCaseElementSyntax,
+    /// The errors for placeholders that name no value, at the message, and for values that no
+    /// placeholder names, at each value's label. The compiler places an error at a token at best, so it
+    /// can't point inside the message.
+    private static func placeholderErrors(_ message: [Part], in element: EnumCaseElementSyntax,
                                           literal: ExprSyntax) -> [Diagnostic] {
-        let textStart = literal.as(StringLiteralExprSyntax.self)?.openingQuote.endPositionBeforeTrailingTrivia
+        let parameters = element.parameterClause?.parameters.map { $0 } ?? []
+        let labels = parameters.compactMap(label(of:))
         var errors: [Diagnostic] = []
-        var named: Set<String> = []
-        for case .value(let label, let offset) in message {
-            if !labels.contains(label) && !named.contains(label) {
-                let position = textStart.map { $0.advanced(by: offset) }
-                errors.append(Diagnostic(node: literal, position: position, message: CodeTableError.unknownPlaceholder(label)))
+        var named: [String] = []
+        for case .value(let label) in message where !named.contains(label) {
+            if !labels.contains(label) {
+                errors.append(Diagnostic(node: literal, message: CodeTableError.unknownPlaceholder(label)))
             }
-            named.insert(label)
+            named.append(label)
         }
-        for parameter in element.parameterClause?.parameters ?? [] {
-            guard let label = parameter.firstName, let name = label.identifier?.name, !named.contains(name) else {
+        for parameter in parameters {
+            guard let label = label(of: parameter), let token = parameter.firstName, !named.contains(label) else {
                 continue
             }
-            errors.append(Diagnostic(node: label, message: CodeTableError.unusedValue(name)))
+            errors.append(Diagnostic(node: token, message: CodeTableError.unusedValue(label)))
         }
         return errors
     }
@@ -150,7 +162,7 @@ struct CodeEntry {
         let source = message.map { part in
             switch part {
             case .text(let text): text
-            case .value(let label, _): "\\(v\(labels.firstIndex(of: label) ?? 0))"
+            case .value(let label): "\\(v\(labels.firstIndex(of: label) ?? 0))"
             }
         }.joined()
         return "\"\(source)\(isNotSupported ? " isn't supported yet" : "")\""
@@ -159,14 +171,5 @@ struct CodeEntry {
     /// The pattern that matches the case and binds its values in order, as `v0`, `v1` and so on.
     var bindingPattern: String {
         labels.isEmpty ? ".\(name)" : ".\(name)(\(labels.indices.map { "let v\($0)" }.joined(separator: ", ")))"
-    }
-}
-
-/// Errors found while reading a `@Diagnostics` enum.
-struct Errors: Error {
-    var list: [Diagnostic]
-
-    init(_ list: [Diagnostic]) {
-        self.list = list
     }
 }
