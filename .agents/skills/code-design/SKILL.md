@@ -55,26 +55,28 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 ## 4. Tidy functions
 
-A function is **tidy** when a reader sees what it does at a glance. Its body is a few blocks, separated by blank lines, and each block is one named step. It either orchestrates named steps or performs one step; it stays at one altitude.
+A function is **tidy** when a reader sees what it does at a glance. It is one of two kinds:
 
-Extract a function or value type when a body reveals a second level through:
+- **An orchestrator.** Its body is a few blocks separated by blank lines, and each block is a call or a binding whose name states the step.
+- **A leaf.** It performs one step, however long its mechanics run.
+
+Extract a function or value type when a body mixes the two kinds, as shown by:
 
 - numbered or section-heading comments;
-- setup followed by dispatch or detailed mechanics;
-- parallel locals assigned through the same branches;
-- a tuple immediately unpacked and recombined by the caller; or
-- bookkeeping that tells the caller whether a step failed, such as a count taken before the step and compared after it. Have the step return nil instead.
+- setup followed by dispatch or detailed mechanics; or
+- parallel locals assigned through the same branches.
 
-Keep each function's reading direct:
+A tidy function also has:
 
-- **Name covers the body.** A function does what its name says and nothing more; a second job moves to a function named for it.
-- **Steps take what the caller holds.** Pass a value the caller already has, rather than having the step work it out again.
-- **Results are ready to use.** A helper returns what its caller needs, so the caller does no index or offset arithmetic on it.
-- **One check per line.** A condition reads at a glance; a guard of several unrelated checks puts each on its own line or splits into steps.
+- **One job.** A second job, however small, moves into a function of its own.
+- **Inputs from its caller.** A step takes the values its caller already holds as arguments.
+- **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it, so the caller uses it as returned.
+- **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result.
+- **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
 
-Length is not the test. A long mechanical leaf may be tidy; a short function that both coordinates and performs work is not.
+Length is not the test. A long leaf may be tidy; a short function that both orchestrates and performs a step is not.
 
-**Done when:** a reader who sees only a changed function's body can name what each block does in one pass, without opening a helper or working out an index.
+**Done when:** in each changed orchestrator, every block is one call or binding to a named step, with no mechanics inline; every step takes the values it needs from its caller and reports failure in its result; and every caller uses each helper's result as returned.
 
 ## 5. Repetition created by the change
 
