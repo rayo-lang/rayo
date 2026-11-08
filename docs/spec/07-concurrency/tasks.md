@@ -31,7 +31,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
     guard let d = game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
     game.doors[door]?.state = .opening
-    await seconds(0.5)
+    await elapsed(.seconds(0.5))           // half a second of the game's own time
     game.doors[door]?.state = .open
     await until { [copy door] game in game.playerDistance(to: door) > 5 }   // game is lent to the condition on each poll
     await closeDoor(door)                   // awaiting a sub-task runs it inline, with its state nested
@@ -69,7 +69,7 @@ let p = await pointsFor(n)            // fine: the 'await' comes first
 game.score += p                       // and the write after it
 ```
 
-**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`.** The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await seconds(0.5)`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
+**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`.** The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await elapsed(.seconds(0.5))`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
 
 **`await` takes its operand as an `owned` argument is taken** ([01](../01-values-and-ownership/moving-values-out.md#moving-values-out)): it moves into the task's state and is polled there. So awaiting a local `Future` consumes it.
 
@@ -118,11 +118,13 @@ struct Waker(                     // made by the task's runner
     let target: WeakShared<any WakeTarget>,
     let id: UInt64,
 ): Copyable {                     // Sendable, derived: it holds only a weak link and an id
-    func wake() { … }             // any thread, including C callbacks; nothing once the target is gone
+    func wake() { … }                           // any thread, including C callbacks; nothing once the target is gone
+    func wake(at deadline: Instant) { … }       // the same, once MonotonicClock reaches 'deadline'
 }
 
 protocol WakeTarget: Synchronized {   // reached only by shared access, so it changes only through its own synchronization
-    func wake(id: UInt64)             // called from any thread, C callbacks and real-time threads included
+    func wake(id: UInt64)                       // called from any thread, C callbacks included
+    func wake(id: UInt64, at deadline: Instant)
 }
 ```
 
@@ -135,9 +137,11 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 ### Waking a task
 
-**`.pending` means the awaitable has arranged for its `Waker` to be called.** Before a poll returns `.pending`, it hands the `Waker` it was given to whatever will let the awaitable make progress. That may be a `Future`'s `Promise`, an I/O completion or a timer. An awaitable that can only find out by looking again, as `until` does, calls `wake()` itself before it returns ([below](#awaitables-in-std)).
+**`.pending` means the awaitable has arranged for its `Waker` to be called.** Before a poll returns `.pending`, it hands the `Waker` it was given to whatever will let the awaitable make progress. That may be a `Future`'s `Promise` or an I/O completion. An awaitable that waits for a time calls `wake(at:)`, and one that can only find out by looking again, as `until` does, calls `wake()` itself before it returns ([below](#awaitables-in-std)).
 
-**The task's runner polls it again only after that wake** ([Running tasks](#running-tasks)). So a task costs its runner nothing while it waits, however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
+**So a task that waits costs nothing until the wake** ([Running tasks](#running-tasks)), however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
+
+**`wake(at:)` asks the task's runner to wake it once `MonotonicClock` reaches `deadline`** ([Time](synchronization.md#time-duration-and-instant)), or at once when the deadline has passed. A runner keeps one deadline for each task, the one it was last given, and drops it when it steps the task. That loses nothing, since an awaitable that is still pending arranges its wake again at each poll.
 
 **A task is pending only when the awaitable it is suspended on is.** `await x` polls `x` with the `Waker` that the task's own poll was given. So the wake that `x` arranged wakes the task, and a sub-task passes the same `Waker` on to what it awaits.
 
@@ -145,7 +149,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **An awaitable that returns `.pending` with no wake arranged leaves its task suspended until something else wakes it, which may be never.** The compiler can't check this, and no memory is at risk. The task waits as a thread parked on an `Event` that nothing signals does, and destroying it still cleans it up ([Semantics](#semantics)).
 
-**`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread.
+**`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So reaching the target takes no lock, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys and frees the target on the waking thread. `wake(at:)` reaches its target the same way.
 
 **`poll` returns a correct result whenever it is called, since a wake is only a hint.** A wake that an earlier awaitable of the task arranged may still arrive after the task has gone past it. A `Waker` may also outlive its task, so a target may get a wake for an id it no longer runs. So a task may be polled with nothing changed, and then it arranges its wake again and returns `.pending`.
 
@@ -155,13 +159,14 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 - **`until`**, which is done once its condition holds (below);
 - **`nextStep()`**, which waits for the task's next step (below);
-- **`Future<T>`**, whose `Output` is `T?`, `nil` once its `Promise` is gone unfulfilled ([Futures](synchronization.md#futures));
-- **timed waits**, which `seconds` makes (below).
+- **`sleep(for:)`**, which waits on `MonotonicClock` (below);
+- **`elapsed(_:)`**, which waits on a clock that the program supplies (below);
+- **`Future<T>`**, whose `Output` is `T?`, `nil` once its `Promise` is gone unfulfilled ([Futures](synchronization.md#futures)).
 
-**`until`, `nextStep()` and timed waits wake their task themselves at each poll that returns `.pending`**, since nothing outside the task tells them when to look again. So their runner polls them at every pass:
+**`until`, `nextStep()` and `elapsed(_:)` wake their task themselves at each poll that returns `.pending`**, since nothing outside the task tells them when to look again. So their runner polls them at every pass:
 
 - **Under `step`**, once each time the program steps, which suits a frame loop that checks a condition once a frame ([Running tasks](#running-tasks)).
-- **Under `run` or `block(on:)`**, again and again, since a woken task keeps the runner from parking ([below](#waiting-for-wakes-run-and-blockon)). The thread then busy-waits until the awaitable is done. Code that waits on another thread or on I/O under such a runner awaits what wakes it instead, such as a `Future`.
+- **Under `run` or `block(on:)`**, again and again, since a woken task keeps the runner from parking ([below](#waiting-for-wakes-run-and-blockon)). The thread then busy-waits until the awaitable is done. Code under such a runner awaits what wakes it instead, such as a `Future` or `sleep(for:)`.
 
 **`nextStep()` returns `.pending` once, and `.done` at its next poll:**
 
@@ -171,14 +176,19 @@ func nextStep() -> NextStep { … }     // NextStep: an Awaitable whose Context 
 
 So under `step`, a task that awaits it goes on at the next step, as a script that acts once a frame does. Under `run`, it goes on once the tasks woken before it have had their step, so a long computation can let them run between its parts.
 
-**A timed wait's `Context` `C` gives the program's own time, through the `now` property that `TimeSource` requires:**
+**A timed wait counts from its first poll, and is done at the first poll that finds its time has passed:**
 
 ```swift
-func seconds<C: TimeSource>(_ s: Double) -> Seconds<C> { … }            // a timed wait; TimeSource requires 'var now: Double { get }'
-extension Game: TimeSource { var now: Double { copy simulationTime } }   // so openDoor's seconds(0.5) counts simulation time
+func sleep(for d: Duration) -> Sleep { … }                         // Sleep: an Awaitable whose Context is Void
+func elapsed<C: TimeSource>(_ d: Duration) -> Elapsed<C> { … }     // Elapsed<C>: an Awaitable whose Context is C
+extension Game: TimeSource { var now: Instant { copy simulationTime } }   // so openDoor's wait counts simulation time
 ```
 
-Each poll compares `now` with the time the wait is due. Only the `Context` knows how its time advances, which is why a timed wait wakes itself at each poll that isn't due.
+**`sleep(for:)` waits on `MonotonicClock`, and never busy-waits** ([Time](synchronization.md#time-duration-and-instant)). Its first poll sets its deadline, `d` after `now`, and each poll that isn't due arranges its wake with `wake(at:)`. So under `run` or `block(on:)` the thread parks until the deadline, and under `step` the first step after the deadline resumes the task. Its `Context` is `Void`, so any task may await it.
+
+**`elapsed(_:)` waits on the task's resume parameter, which is a `TimeSource`**, such as a game's simulation time. Each poll compares the parameter's `now` with the time the wait is due, and a poll that isn't due wakes the task itself.
+
+**It wakes itself since nothing tells it when the program's own time advances.** Such a clock usually advances once per pass of the loop that steps the tasks, so a poll at each step comes as often as its time can change. A `TimeSource` that let waits register wakes would have to keep `Waker`s and call them as it advances, a cost on every clock that only a runner that parks would use. So under `run`, a task awaits `sleep(for:)` instead.
 
 **A suspended task's awaitable is stored in its state, so it can't hold a borrow either.** So `until`'s condition receives the resume parameter as its argument on every poll. `until` takes the condition by concrete type and moves it in ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)):
 
@@ -196,26 +206,39 @@ await until { game in game.isOver }     // fine: the condition takes it as its a
 ### Running tasks
 
 ```swift
-var scripts = TaskSet<Game>(capacity: 512)           // resume context type: mutable Game
-let t = scripts.start(openDoor(frontDoor))           // returns Handle<TaskSlot>
-scripts.cancel(t)                                    // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
+var scripts = TaskSet<Game>(capacity: 512)                       // resume context type: mutable Game
+guard let door = try? scripts.start(openDoor(frontDoor)) else { return }   // nil when all 512 slots are taken
+scripts.cancel(door)                                             // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
 
-scripts.step(&game)                                  // wherever the program steps: one step for each task woken since the last
+scripts.step(&game)                                              // wherever the program steps: one step for each task woken since the last
 ```
 
-**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. Each runner gives a pending task its next step only after the task is woken.
+**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. Each runner gives a pending task its next step only after the task is woken: by a `wake()`, or by its deadline passing ([Waking a task](#waking-a-task)).
 
 **std's `TaskSet` takes ownership of each task it starts:**
 
 ```swift
-mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>        // TaskSet<C>'s: the task, moved in
-    where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }   // C: the set's resume context type
+init(capacity: Int)                                        // TaskSet<C>'s; C: the set's resume context type
+init(capacity: Int, notifying loop: Waker)                 // also calls 'loop.wake()' after each wake it records (below)
+mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>!TaskSetFull<A>   // the task, moved in
+    where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }
+mutating func step(_ ctx: mutable C) { … }
+var hasWoken: Bool { get }                                 // whether a step now would find a task woken
+var deadline: Instant? { get }                             // the earliest deadline among its tasks
+var runWaker: Waker { get }                                // a Waker of the set itself, for 'run' (below)
+
+struct TaskSetFull<A>(let work: A): Error                  // start's failure: the task, handed back unstarted
 ```
 
-**A task is woken from the time `start` returns until its runner gives it a step.** Each `wake()` of one of its `Waker`s wakes it again ([Waking a task](#waking-a-task)), however many times it comes, so a task that is woken twice before a step gets one step. Each wake happens before the step it leads to, so what the waking thread did before its `wake()` is visible to the task.
+**`start` fails once every slot is taken, and hands the task back**, as a failed `send` hands back its item ([Disconnected channels](synchronization.md#disconnected-channels)). So a full set never drops a task that its caller still wants.
+
+**A set's wake target comes from `.system`, made when the set is.** The wake target is the `Synchronized` value that the set's `Waker`s reach, and holds each slot's wake and deadline. A thread that wakes a task may hold an owner of it for a moment ([Waking a task](#waking-a-task)), so it never comes from the current allocator, which may be an arena that the program resets.
+
+**A task is woken from the time `start` returns until its runner gives it a step.** Each `wake()` of one of its `Waker`s wakes it again, however many times it comes, so a task that is woken twice before a step gets one step. Each wake happens before the step it leads to, so what the waking thread did before its `wake()` is visible to the task.
 
 **`step` takes the set's woken tasks as it begins, and gives each of them one step:**
 
+- **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins.
 - **Order.** It steps them in the order of their slots, and `start` fills the lowest free slot. A step that follows a panic starts after the task that panicked instead (below).
 - **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until a wake.
 - **Wakes during the step.** A wake that comes while the step runs, from the task itself, another task or another thread, counts for the next step. So each task gets one step at most, and `nextStep()` waits for the next `step` ([above](#awaitables-in-std)).
@@ -234,6 +257,8 @@ catchPanic {
 
 **A `TaskSet` isn't `Sendable`, since its type doesn't show its tasks' types.** So it and its tasks stay on one thread, and the tasks needn't be `Sendable`. A task is `Sendable` when everything in its state is. Its `Waker`s are `Sendable`, so a wake may come from any thread.
 
+**A wake of a `TaskSet` records the wake and never runs a task's code.** `wake(id:)` marks the task woken, and `wake(id:at:)` sets its deadline. Each makes at most one runtime wake call of its own, for a parked `run` ([below](#waiting-for-wakes-run-and-blockon)), and then calls the notifying `Waker`, if the set has one. The runtime's wake may block briefly where the platform's wake does. The `Waker` that reached the target may also destroy and free it on the waking thread, when it held the last owner ([Waking a task](#waking-a-task)). So real-time code, such as an audio callback, doesn't wake a task itself: it hands the wake to another thread.
+
 ### Waiting for wakes: `run` and `block(on:)`
 
 **A thread whose tasks spend most of their time waiting parks until one is woken.** A server's thread waits for its sockets, as this one does:
@@ -241,8 +266,8 @@ catchPanic {
 ```swift
 var conns = TaskSet<Server>(capacity: 1024)            // the connections' tasks, run with the server's state
 _ = conns.start(acceptLoop(listener))                  // puts each new socket in 'server.accepted', and never finishes
-while !server.stopping {
-    conns.run(&server, until: { s in !s.accepted.isEmpty || s.stopping })   // parks the thread between wakes
+while !stopping.load(.acquire) {                      // stopping: a global Atomic<Bool>, which another thread may set
+    conns.run(&server, until: { s in !s.accepted.isEmpty || stopping.load(.acquire) })   // parks the thread between wakes
     while let sock = server.accepted.popLast() { _ = conns.start(serve(sock)) }
 }
 ```
@@ -252,22 +277,33 @@ A task can't start a task in the set that runs it, since `run` holds the set exc
 **std's two runners that park are `TaskSet`'s `run` and the free function `block(on:)`:**
 
 ```swift
-mutating func run(_ ctx: mutable C, until done: (C) -> Bool) { … }   // TaskSet<C>'s: steps and parks, until 'done' holds or no task is left
+mutating func run(_ ctx: mutable C, until done: (mutable C) -> Bool) { … }   // TaskSet<C>'s: steps and parks, until 'done' holds or no task is left
 func block<A: Awaitable>(on work: owned A, with ctx: mutable A.Context) -> A.Output!A.Failure { … }   // runs one awaitable to its end
 func block<A: Awaitable>(on work: owned A) -> A.Output!A.Failure where A.Context == Void { … }
 ```
+
+**`done` has the function type of `until`'s condition**, so the same check can serve as either. `until` keeps its condition in the task's state, so it takes one that owns its captures, by its concrete type ([above](#awaitables-in-std)). `run` only calls `done` while it runs, so `done` may borrow what it captures.
 
 **`run` repeats three things until it returns:**
 
 1. It steps the set, as `step` does ([Running tasks](#running-tasks)).
 2. It returns if the set holds no task, since no wake could come for one, or if `done(ctx)` is true. So `done` is checked only after a step, and a condition that changes with no wake is seen after the next wake.
-3. It parks the thread until a task is woken, unless one already is.
+3. It parks the thread until a task is woken, a task's deadline passes, or `runWaker` is called, unless a task is woken already.
 
-**`run` parks on a word in the set's wake target, through `Runtime.park`** ([Parking and waking a thread](synchronization.md#parking-and-waking-a-thread)). The wake target is the `Synchronized` value that the set's `Waker`s reach. An `Event` would not do, since it is set once, and a runner parks again and again:
+**`run` parks on a word in the set's wake target, through `Runtime.park`** ([Parking and waking a thread](synchronization.md#parking-and-waking-a-thread)). An `Event` would not do, since it is set once, and a runner parks again and again:
 
-- **A wake.** `wake(id:)` records the task as woken, changes the word, and wakes the thread parked on it. It takes no lock and never waits, so a C callback or a real-time thread may wake a task.
+- **A wake.** A wake records the task as woken, or its deadline, then changes the word, and wakes `run` if it is parked ([Running tasks](#running-tasks)).
 - **A park.** `run` reads the word, finds no task woken, and parks only if the word still holds what it read. So a wake that comes between the check and the park changes the word first, and the park returns at once. No wake is lost.
+- **A deadline.** The park's timeout ends at the earliest of the set's deadlines, so a task that awaits `sleep(for:)` wakes on time, and the thread sleeps until then.
 - **An early return.** A park that returns with no wake leads to a step that polls nothing, and `run` parks again.
+
+**`runWaker` lets another thread stop `run`, or hand it work.** It is a `Waker` of the set itself, which wakes no task. Its `wake()` wakes a parked `run`, which steps the set and checks `done` again. So the other thread first changes what `done` reads, through a `Synchronized` value such as an `Atomic`, and then wakes the set:
+
+```swift
+let stop = conns.runWaker                // a copy, sent to the thread that stops the server
+stopping.store(true, .release)           // on that thread: the Atomic<Bool> that 'done' loads
+stop.wake()                              // run steps, finds 'done' true, and returns
+```
 
 **A task's panic leaves `run` as it leaves `step`, at once.** The task is finished and its slot freed, and the tasks the step hadn't reached stay woken, for a `step` or `run` that starts after the task that panicked ([Running tasks](#running-tasks)). So the owner's `recover` sees the resume parameter before any other task runs, and the owner then calls `run` again to go on. A panic in `done` unwinds out of `run` too, and finishes no task.
 
@@ -278,11 +314,21 @@ let level = try block(on: loadLevel(id), with: &loader)   // parks while the loa
 ```
 
 - **What it takes.** It keeps the work in its own frame for the call, so it takes an awaitable of any result, scoped or not, where a `TaskSet` takes only unscoped tasks that return nothing.
-- **How it parks.** It polls the work, and parks as `run` does whenever the work is pending and no wake has come since the poll began. It parks on a wake target of its own, a `Shared` that it makes from the current allocator and drops when it returns.
+- **How it parks.** It polls the work, and parks as `run` does whenever the work is pending and no wake has come since the poll began, until a wake or the work's deadline.
+- **Its wake target.** Each thread has one for `block(on:)`, which its first call makes from `.system`, and which the thread's teardown destroys, as it destroys the thread's copy of a thread-local ([Thread teardown](global-state.md#thread-teardown)). So `block(on:)` allocates nothing after a thread's first call, and never from the current allocator.
+- **Nested calls.** A `block(on:)` inside another on the same thread shares the thread's wake target. It leaves the target woken as it returns, so the outer call polls its work again, and loses no wake that the inner call took.
 - **Panics.** A panic in the work's poll finishes it, if it is a task ([Semantics](#semantics)), and unwinds out of `block(on:)` at once, which destroys the work with the call's frame.
 
-**Called from a task's step, `block(on:)` parks the thread of that task's runner**, so the runner's other tasks wait too.
+**Called from a task's step, `block(on:)` parks the thread of that task's runner**, so the runner's other tasks wait too. When only one of those tasks would wake the work, `block(on:)` waits for ever.
 
-**During startup, a `run` or `block(on:)` that would park panics**, as any wait that would park until another thread acts does ([Initialization at startup](global-state.md#initialization-at-startup)).
+**During startup, a `run` or `block(on:)` that would park with no deadline panics**, as any wait that would park until another thread acts does ([Initialization at startup](global-state.md#initialization-at-startup)).
 
-**A program that already waits in an event loop of its own**, such as one in `epoll_wait`, can call `step` from that loop. A wake from another thread then reaches the set's word, not the loop's wait, so a program that needs such wakes runs its tasks with a runner of its own, whose `WakeTarget` wakes the loop.
+**A program that waits in an event loop of its own**, such as one in `epoll_wait`, steps the set from that loop. It makes the set with a notifying `Waker`, whose target ends the loop's wait, such as by writing an eventfd. The set calls that `Waker` after recording each wake or deadline, on the waking thread, so a wake from another thread ends the wait too. The set uses only its `wake()`. Each pass waits no longer than the set's `deadline`, and not at all while `hasWoken` is true:
+
+```swift
+var conns = TaskSet<Reactor>(capacity: 1024, notifying: loopWaker)   // loopWaker's target writes the loop's eventfd
+while reactor.running {
+    reactor.wait(polling: conns.hasWoken, until: conns.deadline)      // epoll_wait, at most until the deadline
+    conns.step(&reactor)
+}
+```

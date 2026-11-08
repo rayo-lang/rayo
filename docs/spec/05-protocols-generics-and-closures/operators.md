@@ -72,7 +72,7 @@ let level: Level = catchPanic { try loadLevel(path) } recover: { _ in Level() } 
 ```swift
 let m = max(f, d)                      // f: Float, d: Double: T is Double, which f widens to
 let b: Float = max(0, 1)               // from the expected type: a Float call
-let s: Seconds<Game> = seconds(0.5)    // from the expected type: C is Game
+let s: Elapsed<Game> = elapsed(d)      // from the expected type: C is Game
 let n = max(0, 1)                      // from the literals' default: an Int call
 hp = max(0, hp - amount)               // T is Float, from 'hp - amount', so 0 is a Float
 ```

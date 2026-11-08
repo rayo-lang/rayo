@@ -352,7 +352,7 @@ _Avoid_: promise (in plain text; the library's promise is a different guarantee)
 The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
 
 **Runner**:
-What polls a task and makes its `Waker`s, such as std's `TaskSet` and `block(on:)`, giving a pending task its next step only once it is woken ([07](docs/spec/07-concurrency/tasks.md#running-tasks)).
+What polls a task and makes its `Waker`s, such as std's `TaskSet` and `block(on:)` ([07](docs/spec/07-concurrency/tasks.md#running-tasks)).
 _Avoid_: executor, scheduler
 
 **Sendable**:
