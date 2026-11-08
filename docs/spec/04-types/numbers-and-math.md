@@ -105,7 +105,7 @@ let lowest = minNumber(x, Float.nan)    // x: minNumber skips a NaN
 let z = min(-0.0, 0.0)                  // -0.0, which counts as less than +0.0
 ```
 
-**`Half`, `Float` and `Double` witness `Comparable`'s `minimum` and `maximum` with IEEE 754-2019's `minimum` and `maximum`** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). The free functions `min(a, b)` and `max(a, b)`, generic code over `Comparable` and a vector's lane-wise forms all call those witnesses ([SIMD and math](#simd-and-math)):
+**`Half`, `Float` and `Double` witness `Comparable`'s `min` and `max` methods with IEEE 754-2019's `minimum` and `maximum`** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). The free functions `min(a, b)` and `max(a, b)`, generic code over `Comparable` and a vector's lane-wise forms all call those witnesses ([SIMD and math](#simd-and-math)):
 
 - if either operand is NaN, the result is NaN, and which NaN is left open, as for every NaN result;
 - `-0` counts as less than `+0`.
@@ -144,10 +144,21 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 - **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 - **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
 - **Converting lanes.** `Simd<U, N>(converting: v)` converts each lane of `v` as the unlabeled scalar conversion `U(x)` does ([Conversions](#conversions)). A widening conversion is exact, and any other rounds or checks each lane, and panics where `U(x)` would.
+- **Truncating and clamping.** `Simd<U, N>(truncating: v)` and `Simd<U, N>(clamping: v)` apply `U(truncating: x)` and `U(clamping: x)` to each lane, with the scalar rules. So they exist where those forms do: truncating between integer types, and clamping to an integer type from an integer or floating-point one.
+- **Masks don't convert.** A mask has no numeric lanes to convert, so code that wants numbers writes `select(mask, ones, zeros)`.
 - **Loads and stores.** `Simd<T, N>(loading: span, at: i)` reads `N` lanes from a `Span<T>`, starting at element `i`, and `v.store(into: &out, at: i)` writes them into a `MutableSpan<T>` there. Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
 - **Bounds.** A load or a store panics when `i` is negative or `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
-**`SimdLane` is the prelude's marker protocol for the types a lane may hold.** It refines `Copyable` and `Sendable`, and only the language gives conformances to it: the number types and `Bool` conform, and declaring a conformance to it is a compile error ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So generic code may treat every `T: SimdLane` as copyable, `Sendable` and unscoped, and copy lanes freely.
+**Packing lanes into a narrower type says what happens to a lane that doesn't fit**, as a scalar conversion does:
+
+```swift
+let wide: Simd<UInt16, 8> = [0, 200, 255, 256, 1000, 7, 65535, 128]
+let packed = Simd<UInt8, 8>(clamping: wide)      // [0, 200, 255, 255, 255, 7, 255, 128]
+let low = Simd<UInt8, 8>(truncating: wide)       // [0, 200, 255, 0, 232, 7, 255, 128]
+let checked = Simd<UInt8, 8>(converting: wide)   // panics where overflow checks are on: 256 doesn't fit
+```
+
+**`SimdLane` is the prelude's marker protocol for the types a lane may hold.** It refines `Copyable` and `Sendable`, and every `T: SimdLane` also meets `T: ~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). Only the language gives conformances to it: the number types and `Bool` conform, and declaring a conformance to it is a compile error ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So generic code may treat every `T: SimdLane` as copyable, `Sendable` and unscoped, and copy lanes freely.
 
 **`Simd` operations never become calls at run time, in any build**, since they are builtin. A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
