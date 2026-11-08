@@ -202,7 +202,7 @@ let frame = catchPanic {
 }
 ```
 
-**`catchPanic` runs its body, and runs `recover` only if a panic unwinds out of the body.** The call is a **recovery point**, where an unwind stops, and its value is an `R` either way:
+**`catchPanic` runs its body, and runs `recover` only if a panic unwinds out of the body.** The call is a **recovery point**, where an unwind stops, and its value is an `R!(EB | ER)` either way, which is an `R` where neither closure can fail:
 
 - **When the body returns**, `catchPanic` returns what it returned, and `recover` never runs.
 - **When a panic unwinds out of the body**, the unwind stops once it has destroyed the body's frames and the body closure itself. Then `recover` runs with the panic as a `Panic` ([below](#the-panic-value)), and `catchPanic` returns what `recover` returns.
