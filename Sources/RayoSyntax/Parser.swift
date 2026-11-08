@@ -13,14 +13,23 @@ public struct Parser {
     struct Failure: Error {}
 
     public init(_ source: String) {
-        let (tokens, diagnostics) = Lexer.tokenize(source)
+        self.init(Array(source.utf8))
+    }
+
+    /// A parser for source held as UTF-8, which reports where it isn't.
+    public init(_ bytes: [UInt8]) {
+        let (tokens, diagnostics) = Lexer.tokenize(bytes)
         self.tokens = tokens
         self.diagnostics = diagnostics
     }
 
-    /// Parses `source`, with the lexer's and the parser's diagnostics in source order.
     public static func parse(_ source: String) -> (file: SourceFile, diagnostics: [Diagnostic]) {
-        var parser = Parser(source)
+        parse(Array(source.utf8))
+    }
+
+    /// Parses `bytes`, with the lexer's and the parser's diagnostics in source order.
+    public static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
+        var parser = Parser(bytes)
         let file = parser.parseFile()
         let ordered = parser.diagnostics.enumerated().sorted { a, b in
             (a.element.range.start.offset, a.offset) < (b.element.range.start.offset, b.offset)

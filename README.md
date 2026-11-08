@@ -5,7 +5,7 @@ Rayo is a general-purpose systems programming language. It gives the same contro
 Game development is one of Rayo's priorities: engines and gameplay code, of the kind written in C++ today and shipped on consoles.
 
 > [!NOTE]
-> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The reference compiler, `rayoc`, parses a first subset of the language, but it can't check or run programs yet. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
+> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The reference compiler, `rayoc`, parses a first subset of the language, and checks and runs a `main` that prints integer arithmetic. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
 
 Source files use the `.rayo` extension.
 

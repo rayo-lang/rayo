@@ -1,7 +1,6 @@
 import RayoSema
 import RayoSyntax
 
-/// Lowers a checked program to Rayo IR.
 public enum Lowering {
     public static func lower(_ program: CheckedProgram) -> IRProgram {
         IRProgram(main: lower(program.main))

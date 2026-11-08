@@ -7,7 +7,7 @@ import Darwin
 #endif
 import RayoDriver
 
-func readFile(_ path: String) -> String? {
+func readFile(_ path: String) -> [UInt8]? {
     guard let handle = fopen(path, "rb") else { return nil }
     defer { fclose(handle) }
     var bytes: [UInt8] = []
@@ -17,8 +17,7 @@ func readFile(_ path: String) -> String? {
         bytes.append(contentsOf: buffer[0..<count])
         if count < buffer.count { break }
     }
-    if ferror(handle) != 0 { return nil }
-    return String(decoding: bytes, as: UTF8.self)
+    return ferror(handle) != 0 ? nil : bytes
 }
 
 /// Writes all of `text` to `descriptor`, retrying after a partial or interrupted write.

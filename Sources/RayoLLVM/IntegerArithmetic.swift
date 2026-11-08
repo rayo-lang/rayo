@@ -1,31 +1,43 @@
 import RayoSyntax
 
-/// Integer operations that panic where Rayo defines a panic, and so never reach LLVM's undefined cases.
+/// Integer operations, which panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
 extension FunctionWriter {
-    /// An `llvm.<intrinsic>.with.overflow` operation that panics when it overflows.
-    mutating func checkedArithmetic(_ intrinsic: String, _ left: String, _ right: String,
-                                    at range: SourceRange) -> String {
+    /// `left op right`, for `op` one of LLVM's `add`, `sub` and `mul`: it panics on overflow where overflow is
+    /// checked, and wraps where it isn't.
+    mutating func arithmetic(_ op: String, _ left: String, _ right: String, at range: SourceRange) -> String {
+        let result = newValue()
+        guard checksOverflow else {
+            emit("\(result) = \(op) i64 \(left), \(right)")
+            return result
+        }
         let pair = newValue()
-        emit("\(pair) = call { i64, i1 } @llvm.\(intrinsic).with.overflow.i64(i64 \(left), i64 \(right))")
+        emit("\(pair) = call { i64, i1 } @llvm.s\(op).with.overflow.i64(i64 \(left), i64 \(right))")
         let overflowed = newValue()
         emit("\(overflowed) = extractvalue { i64, i1 } \(pair), 1")
         panic(if: overflowed, "integer overflow", at: range)
-        let result = newValue()
         emit("\(result) = extractvalue { i64, i1 } \(pair), 0")
         return result
     }
 
     mutating func divide(_ left: String, _ right: String, at range: SourceRange) -> String {
         panic(ifZero: right, "division by zero", at: range)
-        let isMin = newValue()
-        emit("\(isMin) = icmp eq i64 \(left), \(Int64.min)")
         let isMinusOne = newValue()
         emit("\(isMinusOne) = icmp eq i64 \(right), -1")
-        let overflows = newValue()
-        emit("\(overflows) = and i1 \(isMin), \(isMinusOne)")
-        panic(if: overflows, "integer overflow", at: range)
+        if checksOverflow {
+            let isMin = newValue()
+            emit("\(isMin) = icmp eq i64 \(left), \(Int64.min)")
+            let overflows = newValue()
+            emit("\(overflows) = and i1 \(isMin), \(isMinusOne)")
+            panic(if: overflows, "integer overflow", at: range)
+        }
+        // A division by -1 negates, which wraps Int.min to itself, but LLVM leaves Int.min / -1 undefined, so
+        // it divides by 1 and negates instead.
+        let quotient = newValue()
+        emit("\(quotient) = sdiv i64 \(left), \(divisor(right, replacingMinusOne: isMinusOne))")
+        let negated = newValue()
+        emit("\(negated) = sub i64 0, \(quotient)")
         let result = newValue()
-        emit("\(result) = sdiv i64 \(left), \(right)")
+        emit("\(result) = select i1 \(isMinusOne), i64 \(negated), i64 \(quotient)")
         return result
     }
 
@@ -34,11 +46,16 @@ extension FunctionWriter {
         // Every remainder by -1 is 0, but LLVM leaves Int.min % -1 undefined, so it divides by 1 instead.
         let isMinusOne = newValue()
         emit("\(isMinusOne) = icmp eq i64 \(right), -1")
+        let result = newValue()
+        emit("\(result) = srem i64 \(left), \(divisor(right, replacingMinusOne: isMinusOne))")
+        return result
+    }
+
+    /// `right`, or 1 where `isMinusOne` holds.
+    private mutating func divisor(_ right: String, replacingMinusOne isMinusOne: String) -> String {
         let divisor = newValue()
         emit("\(divisor) = select i1 \(isMinusOne), i64 1, i64 \(right)")
-        let result = newValue()
-        emit("\(result) = srem i64 \(left), \(divisor)")
-        return result
+        return divisor
     }
 
     private mutating func panic(ifZero value: String, _ reason: String, at range: SourceRange) {

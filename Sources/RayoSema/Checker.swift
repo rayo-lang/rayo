@@ -43,6 +43,7 @@ private struct FileChecker {
                 unsupported("a function other than 'main'", at: function.nameRange)
             case .function(let function) where main != nil:
                 error("'main' is declared more than once", at: function.nameRange)
+                _ = check(main: function)
             case .function(let function):
                 main = function
             }
@@ -52,8 +53,12 @@ private struct FileChecker {
             error("the program has no 'main' function", at: SourceRange(start, start))
             return nil
         }
+        return CheckedProgram(main: check(main: main))
+    }
+
+    mutating func check(main: FuncDecl) -> CheckedFunction {
         checkSignature(ofMain: main)
-        return CheckedProgram(main: CheckedFunction(body: main.body.statements.compactMap { check($0) }))
+        return CheckedFunction(body: main.body.statements.compactMap { check($0) })
     }
 
     mutating func checkSignature(ofMain main: FuncDecl) {
@@ -106,10 +111,10 @@ private struct FileChecker {
     mutating func check(_ expr: Expr) -> CheckedExpr? {
         switch expr.kind {
         case .intLiteral(let digits):
-            return literal(Int64(exactly: digits), written: "\(digits)", in: expr.range)
+            return literal(Int64(exactly: digits), in: expr.range)
         case .negativeIntLiteral(let digits):
             let value = digits == Int64.min.magnitude ? Int64.min : Int64(exactly: digits).map { -$0 }
-            return literal(value, written: "-\(digits)", in: expr.range)
+            return literal(value, in: expr.range)
         case .unary(.negate, let operand):
             guard let operand = check(operand), expect(operand, .int) else { return nil }
             return CheckedExpr(kind: .unary(.negate, operand), type: .int, range: expr.range)
@@ -164,35 +169,43 @@ private struct FileChecker {
         return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
     }
 
-    /// Checks `arguments` against `signature`'s parameters, one by one and in order.
+    /// Checks `arguments` against `signature`'s parameters, one by one and in order. Every argument's value
+    /// is checked, whether or not the call matches the signature.
     mutating func check(_ arguments: [Argument], against signature: Signature, in range: SourceRange) -> [CheckedExpr]? {
         let parameters = signature.parameters
         guard arguments.count == parameters.count else {
             let noun = parameters.count == 1 ? "argument" : "arguments"
             error("'\(signature.name)' takes \(parameters.count) \(noun), but the call passes \(arguments.count)",
                   at: range)
+            arguments.forEach { _ = check($0.value) }
             return nil
         }
         var checked: [CheckedExpr] = []
         for (index, (argument, parameter)) in zip(arguments, parameters).enumerated() {
-            if argument.label != parameter.label {
-                let position = "argument \(index + 1) of '\(signature.name)'"
-                switch (parameter.label, argument.label) {
-                case (nil, let written?):
-                    error("\(position) takes no label, not '\(written)'", at: argument.value.range)
-                case (let label?, nil):
-                    error("\(position) needs the label '\(label)'", at: argument.value.range)
-                case (let label?, let written?):
-                    error("\(position) takes the label '\(label)', not '\(written)'", at: argument.value.range)
-                case (nil, nil):
-                    break
-                }
-                return nil
+            let labelMatches = labelMatches(argument, parameter, position: index + 1, of: signature)
+            if let value = check(argument.value), labelMatches, expect(value, parameter.type) {
+                checked.append(value)
             }
-            guard let value = check(argument.value), expect(value, parameter.type) else { return nil }
-            checked.append(value)
         }
-        return checked
+        return checked.count == arguments.count ? checked : nil
+    }
+
+    mutating func labelMatches(_ argument: Argument, _ parameter: Signature.Parameter, position: Int,
+                               of signature: Signature) -> Bool {
+        let argumentName = "argument \(position) of '\(signature.name)'"
+        switch (parameter.label, argument.label) {
+        case (nil, nil):
+            return true
+        case (let label?, let written?) where label == written:
+            return true
+        case (nil, let written?):
+            error("\(argumentName) takes no label, not '\(written)'", at: argument.value.range)
+        case (let label?, nil):
+            error("\(argumentName) needs the label '\(label)'", at: argument.value.range)
+        case (let label?, let written?):
+            error("\(argumentName) takes the label '\(label)', not '\(written)'", at: argument.value.range)
+        }
+        return false
     }
 
     /// Whether `expr` has `type`, reporting it when it doesn't.
@@ -202,11 +215,10 @@ private struct FileChecker {
         return false
     }
 
-    /// Checks an integer literal, whose `value` is nil when the literal, `written` as it is, doesn't fit in
-    /// an `Int`.
-    mutating func literal(_ value: Int64?, written: String, in range: SourceRange) -> CheckedExpr? {
+    /// Checks an integer literal, whose `value` is nil when the literal doesn't fit in an `Int`.
+    mutating func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
         guard let value else {
-            error("'\(written)' doesn't fit in an Int", at: range)
+            error("the literal doesn't fit in an Int", at: range)
             return nil
         }
         return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)

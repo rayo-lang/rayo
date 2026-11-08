@@ -1,14 +1,15 @@
 import RayoIR
 import RayoSyntax
 
-/// Writes Rayo IR as an LLVM IR module that a C toolchain's linker turns into an executable.
+/// Writes Rayo IR as a module of textual LLVM IR.
 public enum LLVMEmitter {
-    /// The exit status of a program that panics.
-    public static let panicExitStatus: Int32 = 101
+    /// The exit code of a program that panics.
+    public static let panicExitCode: Int32 = 101
 
-    /// The module for `program`, whose panics name `sourcePath` as the file they happen in.
-    public static func emit(_ program: IRProgram, sourcePath: String) -> String {
-        var module = ModuleWriter(sourcePath: sourcePath)
+    /// The module for `program`, whose panics name `sourcePath` as the file they happen in. Integer overflow
+    /// panics where `checksOverflow` is true, and wraps where it's false.
+    public static func emit(_ program: IRProgram, sourcePath: String, checksOverflow: Bool) -> String {
+        var module = ModuleWriter(sourcePath: sourcePath, checksOverflow: checksOverflow)
         module.define(program.main, named: "rayo.main")
         return module.text
     }
@@ -17,11 +18,13 @@ public enum LLVMEmitter {
 /// Collects a module's function definitions and the constants they use.
 struct ModuleWriter {
     let sourcePath: String
+    let checksOverflow: Bool
     var constants: [String] = []
     var definitions: [String] = []
 
-    init(sourcePath: String) {
+    init(sourcePath: String, checksOverflow: Bool) {
         self.sourcePath = sourcePath
+        self.checksOverflow = checksOverflow
     }
 
     var text: String {
@@ -40,7 +43,7 @@ struct ModuleWriter {
             define private void @rayo.panic(ptr %message, i64 %length) noreturn {
               call i32 @fflush(ptr null)
               call i64 @write(i32 2, ptr %message, i64 %length)
-              call void @exit(i32 \(LLVMEmitter.panicExitStatus))
+              call void @exit(i32 \(LLVMEmitter.panicExitCode))
               unreachable
             }
 

@@ -15,6 +15,8 @@ struct FunctionWriter {
         self.module = module
     }
 
+    var checksOverflow: Bool { module.checksOverflow }
+
     mutating func write() -> String {
         lines.append("entry:")
         for (index, type) in function.locals.enumerated() {
@@ -29,10 +31,11 @@ struct FunctionWriter {
         return lines.map { $0 + "\n" }.joined()
     }
 
+    /// The type of a local's stack slot.
     private func llvmType(_ type: RayoType) -> String {
         switch type {
         case .int: return "i64"
-        case .void: return "void"
+        case .void: preconditionFailure("lowering makes no local of type Void")
         }
     }
 
@@ -52,9 +55,9 @@ struct FunctionWriter {
 
     private mutating func write(_ statement: Statement) {
         let value = compute(statement.value, at: statement.range)
-        if let destination = statement.destination, let value {
-            emit("store \(llvmType(function.locals[destination.index])) \(value), ptr %l\(destination.index)")
-        }
+        guard let destination = statement.destination else { return }
+        guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
+        emit("store \(llvmType(function.locals[destination.index])) \(value), ptr %l\(destination.index)")
     }
 
     private mutating func write(_ terminator: Terminator) {
@@ -98,16 +101,16 @@ struct FunctionWriter {
 
     private mutating func unary(_ op: UnaryOperator, _ operand: String, at range: SourceRange) -> String {
         switch op {
-        case .negate: return checkedArithmetic("ssub", "0", operand, at: range)
+        case .negate: return arithmetic("sub", "0", operand, at: range)
         case .not: preconditionFailure("the checker gives '!' no integer operand")
         }
     }
 
     private mutating func binary(_ op: BinaryOperator, _ left: String, _ right: String, at range: SourceRange) -> String {
         switch op {
-        case .add: return checkedArithmetic("sadd", left, right, at: range)
-        case .subtract: return checkedArithmetic("ssub", left, right, at: range)
-        case .multiply: return checkedArithmetic("smul", left, right, at: range)
+        case .add: return arithmetic("add", left, right, at: range)
+        case .subtract: return arithmetic("sub", left, right, at: range)
+        case .multiply: return arithmetic("mul", left, right, at: range)
         case .divide: return divide(left, right, at: range)
         case .remainder: return remainder(left, right, at: range)
         default: preconditionFailure("the checker accepts no '\(op.rawValue)'")

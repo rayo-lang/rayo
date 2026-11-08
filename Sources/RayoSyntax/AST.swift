@@ -250,8 +250,8 @@ public struct Expr: Sendable {
 public indirect enum ExprKind: Sendable {
     /// The literal's digits.
     case intLiteral(UInt64)
-    /// `-digits`: a `-` written directly before a literal, which is one literal with the negated value, so
-    /// that `-9223372036854775808` is `Int.min` though `9223372036854775808` doesn't fit in an `Int`.
+    /// `-digits`: a `-` with no operator between it and a literal, which is one literal with the negated
+    /// value, so that `-9223372036854775808` is `Int.min` though `9223372036854775808` doesn't fit in an `Int`.
     case negativeIntLiteral(UInt64)
     case boolLiteral(Bool)
     /// A name, with generic arguments where written: `x`, `List<Int>`.

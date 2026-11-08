@@ -8,18 +8,34 @@ public struct Lexer {
     public private(set) var diagnostics: [Diagnostic] = []
 
     public init(_ source: String) {
-        bytes = Array(source.utf8)
+        self.init(Array(source.utf8))
+    }
+
+    public init(_ bytes: [UInt8]) {
+        self.bytes = bytes
     }
 
     public static func tokenize(_ source: String) -> (tokens: [Token], diagnostics: [Diagnostic]) {
-        var lexer = Lexer(source)
+        tokenize(Array(source.utf8))
+    }
+
+    public static func tokenize(_ bytes: [UInt8]) -> (tokens: [Token], diagnostics: [Diagnostic]) {
+        var lexer = Lexer(bytes)
         let raw = lexer.lexAll()
         return (significantNewlines(raw), lexer.diagnostics)
     }
 
     // MARK: Raw tokens
 
+    /// The file's tokens. A file that isn't UTF-8 has none, and one error at its first invalid byte.
     mutating func lexAll() -> [Token] {
+        if let invalid = Self.firstInvalidByte(in: bytes) {
+            while index < invalid { advance() }
+            let start = location
+            advance()
+            error("the file isn't valid UTF-8", from: start)
+            return [Token(.eof, SourceRange(location, location), spaceBefore: false)]
+        }
         var tokens: [Token] = []
         while true {
             let token = next()
@@ -28,6 +44,19 @@ public struct Lexer {
             }
             tokens.append(token)
             if token.kind == .eof { return tokens }
+        }
+    }
+
+    private static func firstInvalidByte(in bytes: [UInt8]) -> Int? {
+        var iterator = bytes.makeIterator()
+        var parser = Unicode.UTF8.ForwardParser()
+        var offset = 0
+        while true {
+            switch parser.parseScalar(from: &iterator) {
+            case .valid(let scalar): offset += scalar.count
+            case .emptyInput: return nil
+            case .error: return offset
+            }
         }
     }
 

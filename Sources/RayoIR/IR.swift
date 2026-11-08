@@ -41,8 +41,8 @@ public enum Operand: Sendable {
     case local(LocalID)
 }
 
-/// An operation that makes a value. Integer arithmetic panics on overflow, and on division or remainder
-/// by zero.
+/// An operation that makes a value. Integer arithmetic panics on division or remainder by zero, and on
+/// overflow where overflow is checked; where it isn't, overflow wraps.
 public enum Rvalue: Sendable {
     case use(Operand)
     case unary(UnaryOperator, Operand)
