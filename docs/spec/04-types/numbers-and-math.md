@@ -105,7 +105,7 @@ let lowest = minNumber(x, Float.nan)    // x: minNumber skips a NaN
 let z = min(-0.0, 0.0)                  // -0.0, which counts as less than +0.0
 ```
 
-**`Half`, `Float` and `Double` witness `Comparable`'s `min` and `max` with IEEE 754-2019's `minimum` and `maximum`** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). The free functions `min(a, b)` and `max(a, b)`, generic code over `Comparable` and a vector's lane-wise forms all call that witness ([SIMD and math](#simd-and-math)):
+**`Half`, `Float` and `Double` witness `Comparable`'s `minimum` and `maximum` with IEEE 754-2019's `minimum` and `maximum`** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). The free functions `min(a, b)` and `max(a, b)`, generic code over `Comparable` and a vector's lane-wise forms all call those witnesses ([SIMD and math](#simd-and-math)):
 
 - if either operand is NaN, the result is NaN, and which NaN is left open, as for every NaN result;
 - `-0` counts as less than `+0`.
