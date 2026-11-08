@@ -171,6 +171,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 **What a member can witness depends on what its name allows where the conformance is declared:**
 
+- **A witness is in its requirement's namespace.** An instance requirement is met only by an instance member, and a static requirement, an initializer included, only by a static one, since the two are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)). So `Int`'s static `min` meets no instance `min(_:)` requirement.
 - **A witness is visible where the conformance is declared.** A member, a stored field included, that code there couldn't name witnesses nothing, so a protocol's module can't reach another module's non-public member through a conformance it declares.
 - **A stored field witnesses a requirement only where its name could be used the same way**, since generic code reaches a witness with no `unsafe` in sight. So a `let` field witnesses only `get` and `borrow` requirements.
     - **`unsafe` fields and union members.** An `unsafe` field, or a union member that isn't safe to read ([04](../04-types/enums.md#untagged-unions)), witnesses one only in a conformance declared `: unsafe P`. That promises that every value generic code can read or write through the witness is valid.

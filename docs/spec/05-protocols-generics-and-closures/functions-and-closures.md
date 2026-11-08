@@ -28,18 +28,6 @@ func f(_ x: Int) { … }      // wins for an Int argument: it alone declares no 
 func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 ```
 
-**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Code always reaches them through different receivers, a type or a value, so no call picks between them:
-
-```swift
-let lowest = Int.min        // the static property
-let m = x.min(y)            // Comparable's instance method, for an Int 'x'
-```
-
-The rules above for members of one kind, by labels, parameter types and `self` convention, apply within each namespace. An unqualified name in a member's body finds members this way:
-
-- **In an instance member's body**, it resolves to an instance member first, and to a static one only when no instance member has that name. So where both exist, the body reaches the static one as `Self.min`.
-- **In a static member's body**, only static members are in scope unqualified.
-
 **These steps resolve each call on its own, without backtracking**, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
 **A call `T(x)` with one unlabeled literal argument makes the literal a `T`**, as `x as T` does, so `Float(0)` is the `Float` zero.
@@ -70,6 +58,43 @@ The rules above for members of one kind, by labels, parameter types and `self` c
 - a nested function;
 - a member, accessor, initializer, `deinit` or field default of a local type;
 - a member of a local extension.
+
+## Static and instance members
+
+**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Qualified code reaches them through different receivers, a type or a value, so no call picks between them:
+
+```swift
+let lowest = Int.min        // the static property
+let m = x.min(y)            // Comparable's instance method, for an Int 'x'
+```
+
+The overload rules above, by labels, parameter types and `self` convention, apply within each namespace.
+
+**Each body inside a type is an instance body or a static body**, which decides the members it sees unqualified:
+
+- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members, and a static member only where no instance member has its name. Where both exist, `Self.min` reaches the static one.
+- **Static bodies.** These are static members and the accessors of static properties. They see only static members.
+- **Field defaults.** A field's default value sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
+- **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
+- **Nested declarations.** A nested function, or a member of a local type, sees no instance member of the enclosing type, since it names no `self` ([above](#functions-and-closures)).
+
+**An unqualified name is looked up in three scopes, in order:**
+
+1. the body's locals and parameters;
+2. the members the body sees (above);
+3. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
+
+**A local or a parameter that matches ends the search, and so does any match for a name that isn't called.** For a call, the candidates are every function of that name among the members the body sees and in the module's scope together, and the overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, while `min(b)` reaches the member. When a member and a free function fit equally well, the member wins:
+
+```swift
+struct Meters(let value: Double): Comparable {
+    static func < (lhs: Meters, rhs: Meters) -> Bool { lhs.value < rhs.value }
+
+    func clamped(_ lo: Meters, _ hi: Meters) -> Meters {
+        max(lo, min(self, hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
+    }
+}
+```
 
 ## Unused values
 

@@ -121,7 +121,7 @@ a.max(b)  // default: b when a < b, else a
 
 **The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable` gives the same result as concrete code, bit for bit, for every type it is instantiated with.
 
-**The methods share their names with static properties such as `Int.min` and `Int.max`**, which they may, since static and instance members are separate namespaces ([Functions and closures](functions-and-closures.md#functions-and-closures)).
+**The methods share their names with static properties such as `Int.min` and `Int.max`**, which they may, since static and instance members are separate namespaces ([Static and instance members](functions-and-closures.md#static-and-instance-members)).
 
 **A struct or enum that declares `Equatable`, `Comparable` or `Hashable` gets `==` derived, and for `Hashable`, `hash(into:)`.** Each is derived only when the type doesn't write it, and when all of its fields or payloads conform: to `Equatable` for `==`, and to `Hashable` for `hash(into:)`. A derived member goes field by field in header order, and for an enum, takes the case and then its payload. So `Version` above writes only `<`. `<` is never derived, since no order is right for every type.
 
