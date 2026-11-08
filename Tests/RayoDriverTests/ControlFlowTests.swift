@@ -5,14 +5,6 @@ import RayoDriver
 /// The error for adding a Bool to an Int, as in `1 + true`.
 private let intAndBool = ErrorCode.operandTypes(op: "+", needs: "Int", left: "Int", right: "Bool")
 
-/// The output of running `body` as `main`'s body, which must not fail.
-private func output(_ body: String) -> String {
-    let result = run("func main() {\n\(body)\n}")
-    #expect(result.exitCode == 0)
-    #expect(result.errors == "")
-    return result.output
-}
-
 struct LocalTests {
     @Test("locals hold values, and a 'var' changes by assignment and compound assignment")
     func locals() {

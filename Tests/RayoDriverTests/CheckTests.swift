@@ -8,13 +8,13 @@ func errors(_ source: String) -> [ErrorCode] {
 }
 
 /// The source text each of `diagnostics` covers in `source`.
-private func coveredText(_ diagnostics: [Diagnostic], in source: String) -> [String] {
+func coveredText(_ diagnostics: [Diagnostic], in source: String) -> [String] {
     let bytes = Array(source.utf8)
     return diagnostics.map { String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self) }
 }
 
 /// The diagnostics `rayoc check` reports for `source`, saved as `main.rayo`.
-private func diagnostics(_ source: String) -> [Diagnostic] {
+func diagnostics(_ source: String) -> [Diagnostic] {
     let result = Driver.run(["check", "main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
     #expect(result.exitCode == (result.diagnostics.isEmpty ? 0 : 1))
     #expect(result.output == "")

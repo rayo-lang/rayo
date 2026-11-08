@@ -8,15 +8,9 @@ private func run(_ arguments: [String], files: [String: String] = [:]) -> Driver
 }
 
 struct DriverTests {
-    @Test("parse prints the syntax tree")
-    func parse() {
-        let result = run(["parse", "a.rayo"], files: ["a.rayo": "func f() { x = 1 }"])
-        #expect(result == Driver.Result(exitCode: 0, output: "(func f() {(= x 1)})\n", errors: ""))
-    }
-
     @Test("errors fail the run, and go to the error stream as the file's path, the position, the code and the message")
     func errorFormat() {
-        let result = run(["parse", "a.rayo"], files: ["a.rayo": "func f() {\n    let = 1\n    x = )\n}"])
+        let result = run(["check", "a.rayo"], files: ["a.rayo": "func f() {\n    let = 1\n    x = )\n}"])
         #expect(result.exitCode == 1)
         #expect(result.output == "")
         #expect(result.diagnostics.map(\.code) == [
@@ -31,7 +25,7 @@ struct DriverTests {
 
     @Test("a file that can't be read fails the run")
     func unreadable() {
-        #expect(run(["parse", "missing.rayo"]) ==
+        #expect(run(["check", "missing.rayo"]) ==
             Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't read 'missing.rayo'\n"))
     }
 
@@ -43,7 +37,8 @@ struct DriverTests {
     }
 
     @Test("wrong arguments print the usage", arguments: [
-        [], ["parse"], ["parse", "a.rayo", "b.rayo"], ["link", "a.rayo"], ["build"], ["run", "a.rayo", "b.rayo"],
+        [], ["check"], ["check", "a.rayo", "b.rayo"], ["parse", "a.rayo"], ["link", "a.rayo"], ["build"],
+        ["run", "a.rayo", "b.rayo"],
         ["check", "--debug", "a.rayo"], ["run", "--fast", "a.rayo"], ["run", "a.rayo", "--debug"],
         ["build", "--debug", "--release", "a.rayo"],
     ])

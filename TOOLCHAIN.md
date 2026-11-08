@@ -22,7 +22,7 @@ swift run rayoc run program.rayo
 | `Sources/RayoSource` | Positions and spans in a source file, which diagnostics, Rayo IR and panics point at |
 | `Sources/RayoDiagnostics` | Diagnostics, and the `@Diagnostics` and `@Code` macros, which give each diagnostic code a number and a message |
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
-| `Sources/RayoSyntax` | The lexer, the parser, the syntax tree and its text dump |
+| `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
 | `Sources/RayoLLVM` | The writer of Rayo IR as textual LLVM IR, with the runtime that reports panics |

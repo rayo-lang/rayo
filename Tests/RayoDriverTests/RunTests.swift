@@ -7,6 +7,14 @@ func run(_ source: String, options: [String] = []) -> Driver.Result {
     Driver.run(["run"] + options + ["main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
 }
 
+/// The output of running `body` as `main`'s body, which must not fail.
+func output(_ body: String) -> String {
+    let result = run("func main() {\n\(body)\n}")
+    #expect(result.exitCode == 0)
+    #expect(result.errors == "")
+    return result.output
+}
+
 /// What a run that panics reports: the panic on the error stream, after the output so far.
 func panicked(_ message: String, output: String = "") -> Driver.Result {
     Driver.Result(exitCode: Driver.panicExitCode, output: output, errors: "main.rayo:\(message)\n")
