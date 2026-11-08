@@ -21,14 +21,22 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. Each creation ends with a release fence before it hands the value out. The target carries what that fence released along any chain of threads that passes the value on ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out. The target carries what that fence released along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` reached the reading thread. Interning a new entry writes its text and hash, then a plain word, written once with a release store, and ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
+**A creation publishes into a shared table with a release store, made after its own writes.** Three tables are shared this way:
 
-**That acquire load reads the word's release store, however the `Name` arrived**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
+- the interner's entry table, which a lookup searches ([04](../04-types/collections.md#collections-and-strings));
+- the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
+- the allocator registry, which an `Allocator` id resolves through ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
+
+**A check that resolves bits through a table reads the slot with acquire.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none, and `WeakShared(bits:)` reads `nil`. It never finds stale contents.
+
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. It publishes the entry into the interner's table with a release store, and ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
+
+**That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
 - **A new entry.** The fence orders the word's store before every store of the `Name` that the interning thread makes, and the target carries that order along any chain of threads that passes the `Name` on.
-- **An existing entry.** A lookup that finds one reads the interner's table with acquire. So the chain runs back through that read to the fence that ended the entry's interning.
+- **An existing entry.** A lookup that finds one reads the table's slot with acquire, and so reads the release store that published the entry after its word. The lookup's thread ordered that read before every store of the `Name` it makes, so the chain runs back through the read to the word's store, and on as for a new entry.
 
 An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
 
