@@ -78,6 +78,25 @@ let saved = save(level)           // error if no code reads 'saved': its error w
 
 **`_ = x` and `let _ = x` drop a value on purpose.** Each takes `x` as a value, and destroys it at the end of its statement.
 
+```swift
+_ = r.value?.submit(mesh)         // a Void?: nil if the object was gone and 'submit' never ran
+_ = try? save(level)              // a Void?: nil if the save failed
+
+let zone = profiler.zone("physics")   // kept only so its deinit records the time
+step(&world, dt: dt)
+_ = zone                          // the zone ends here, and this line reads it
+
+func adopt(_ item: owned Item) {
+    _ = item                      // this 'adopt' keeps nothing, so it drops what it was handed
+}
+```
+
+**An optional chain or a `try?` on a call that returns `Void` gives a `Void?`, which must be used too.** It says whether the call ran, and code that ignores it says so with `_ =`.
+
+**A local kept only for what its `deinit` does is ended with `_ = x` where its effect should stop.** That statement reads the local, so it isn't unused, and the code shows where a lock is released or a zone ends. Any later borrow, call or move also reads it. Its destruction doesn't: that it uses what the value borrows is a matter of dependencies ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), not of this rule.
+
+**An `owned` parameter that the body doesn't need is dropped with `_ = x`.** A parameter always has a name, since `_` before it is only its argument label.
+
 **In generic code, a value whose type is a type parameter or an associated type must be used too.** That follows from checking generic code once: the check knows only that the type may not be `Void` ([Checking generic code](protocols-and-generics.md#checking-generic-code)).
 
 ## Capturing places
