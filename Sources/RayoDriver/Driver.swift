@@ -29,7 +29,6 @@ public enum Driver {
                rayoc build|run [--debug | --release] <file>
 
         commands:
-          parse    parse the file and print its syntax tree
           check    check the file and report its errors
           build    compile the file to an executable beside it, named without '.rayo'
           run      compile the file and run it
@@ -41,7 +40,7 @@ public enum Driver {
         """
 
     private enum Command: String {
-        case parse, check, build, run
+        case check, build, run
     }
 
     /// A build's mode, which turns the diagnostic checks on in a debug build and off in a release one.
@@ -93,7 +92,6 @@ public enum Driver {
 
             let (file, diagnostics) = Parser.parse(source)
             if !diagnostics.isEmpty { return failure(diagnostics, in: path) }
-            if command == .parse { return Result(exitCode: 0, output: file.dump + "\n", errors: "") }
 
             let checked = Checker.check(file)
             guard let program = checked.program else { return failure(checked.diagnostics, in: path) }

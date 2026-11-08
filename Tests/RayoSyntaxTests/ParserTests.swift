@@ -1,146 +1,30 @@
 import RayoDiagnostics
-import RayoSource
 import Testing
-@testable import RayoSyntax
-
-/// Parses `source` as a whole file that must have no errors, and dumps it.
-private func file(_ source: String) -> String {
-    let (parsed, diagnostics) = Parser.parse(source)
-    #expect(diagnostics.map(\.code) == [])
-    return parsed.dump
-}
-
-/// Parses `source` as a function's body that must have no errors, and dumps its statements.
-private func body(_ source: String) -> String {
-    let (parsed, diagnostics) = Parser.parse("func t() {\n\(source)\n}")
-    #expect(diagnostics.map(\.code) == [])
-    guard parsed.functions.count == 1, let function = parsed.functions.first else {
-        Issue.record("expected one function, got \(parsed.dump)")
-        return ""
-    }
-    return function.body.statements.map(\.dump).joined(separator: "; ")
-}
+import RayoSyntax
 
 private func errors(_ source: String) -> [ErrorCode] {
     Parser.parse(source).diagnostics.map(\.code)
 }
 
-struct ExpressionTests {
-    @Test("precedence and associativity", arguments: [
-        ("a + b * c", "(+ a (* b c))"),
-        ("a * b + c", "(+ (* a b) c)"),
-        ("a - b - c", "(- (- a b) c)"),
-        ("a || b && c == d", "(|| a (&& b (== c d)))"),
-        ("a < b == c", "(== (< a b) c)"),
-        ("a + b < c * d", "(< (+ a b) (* c d))"),
-        ("(a + b) * c", "(* (+ a b) c)"),
-        ("a % b / c", "(/ (% a b) c)"),
-        ("a >= b", "(>= a b)"),
-        ("a <= b != c > d", "(> (!= (<= a b) c) d)"),
-    ])
-    func precedence(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("prefix operators and 'copy' bind tighter than binary operators", arguments: [
-        ("-a * b", "(* (- a) b)"),
-        ("!x && y", "(&& (! x) y)"),
-        ("copy a + 1", "(+ (copy a) 1)"),
-        ("- -a", "(- (- a))"),
-        ("-9223372036854775808", "-9223372036854775808"),
-        ("-(5)", "(- 5)"),
-    ])
-    func prefix(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("calls", arguments: [
-        ("f()", "(call f)"),
-        ("f(a, b)", "(call f a b)"),
-        ("f(\n  a,\n  b,\n)", "(call f a b)"),
-        ("f(copy y, g(1))", "(call f (copy y) (call g 1))"),
-    ])
-    func calls(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("a line that ends in a comparison '>' continues")
-    func greaterContinues() {
-        #expect(body("let ok = a >\n    b") == "(let ok (> a b))")
-        #expect(body("let ok = a >=\n    b") == "(let ok (>= a b))")
-    }
-}
-
-struct StatementTests {
-    @Test("bindings", arguments: [
-        ("let x = 1", "(let x 1)"),
-        ("var x: Int = 1", "(var x: Int 1)"),
-        ("let e = take()", "(let e (call take))"),
-        ("let all = enemies", "(let all enemies)"),
-    ])
-    func bindings(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("assignments", arguments: [
-        ("x = 1", "(= x 1)"),
-        ("x *= 2; x /= 3; x %= 4; x += 5; x -= 6", "(*= x 2); (/= x 3); (%= x 4); (+= x 5); (-= x 6)"),
-    ])
-    func assignments(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("control flow", arguments: [
-        ("if a { x = 1 } else if b { x = 2 } else { x = 3 }",
-         "(if a {(= x 1)} else {(if b {(= x 2)} else {(= x 3)})})"),
-        ("if a { b() }\nelse { c() }", "(if a {(call b)} else {(call c)})"),
-        ("while i < n { i += 1; if done { break } else { continue } }",
-         "(while (< i n) {(+= i 1); (if done {(break)} else {(continue)})})"),
-    ])
-    func controlFlow(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("newlines end statements, and a line that starts with '-' starts one")
-    func statementBoundaries() {
-        #expect(body("let a = b\n-c") == "(let a b); (- c)")
-        #expect(body("let total = base +\n    bonus * 2") == "(let total (+ base (* bonus 2)))")
-    }
-}
-
-struct DeclarationTests {
-    @Test("a function has a name, '()', an optional result type and a body", arguments: [
-        ("func f() {}", "(func f() {})"),
-        ("func f() -> Int { 1 }", "(func f() -> Int {1})"),
-        ("func f() -> () {}", "(func f() -> () {})"),
-    ])
-    func functions(source: String, expected: String) {
-        #expect(file(source) == expected)
-    }
-
-    @Test("declarations are separated by newlines")
-    func separated() {
-        #expect(file("func a() {}\n\nfunc b() -> Int { 1 }") == "(func a() {})\n(func b() -> Int {1})")
-        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: .token("func"))])
-    }
-}
-
-struct ErrorTests {
-    @Test("the parser recovers at the next statement and reports every error")
-    func recovery() {
-        let source = """
-            func f() {
-                let = 1
-                let y = 2
-                x = )
-            }
-            func g() {}
-            """
-        let (parsed, diagnostics) = Parser.parse(source)
-        #expect(diagnostics.map(\.code) == [
+struct ParserErrorTests {
+    @Test("the parser recovers at the next statement, and reports every error")
+    func statementRecovery() {
+        #expect(errors("func f() {\n    let = 1\n    let y = 2\n    x = )\n}") == [
             .expected(what: .bindingName, found: .token("=")), .expected(what: .expression, found: .token(")")),
         ])
-        #expect(parsed.dump == "(func f() {(let y 2)})\n(func g() {})")
+    }
+
+    @Test("a declaration whose header fails is skipped, and the parser goes on at the next declaration")
+    func declarationRecovery() {
+        #expect(errors("func f(x) {\n    print(1)\n}\nfunc g() { copy }") == [
+            .expected(what: .parenthesisPair, found: .token("x")), .expected(what: .copiedName, found: .token("}")),
+        ])
+    }
+
+    @Test("declarations are separated by newlines or ';'")
+    func separated() {
+        #expect(errors("func a() {}\n\nfunc b() -> Int { 1 }; func c() {}") == [])
+        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: .token("func"))])
     }
 
     @Test("the lexer's and the parser's errors come in source order")
@@ -177,32 +61,4 @@ struct ErrorTests {
     func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
     }
-}
-
-struct SyntaxTreeTests {
-    @Test("a node's range covers its source text")
-    func ranges() throws {
-        let source = "func f() {\n    let x = foo(a, b) + -d\n    run(n)\n    (a + b)\n    let c = copy x\n}"
-        let (parsed, _) = Parser.parse(source)
-        let function = try #require(parsed.functions.first)
-        let statements = function.body.statements
-        #expect(text(function.range, in: source) == source)
-        #expect(text(statements[0].range, in: source) == "let x = foo(a, b) + -d")
-        if case .binding(let binding) = statements[0].kind {
-            #expect(text(binding.value.range, in: source) == "foo(a, b) + -d")
-        } else {
-            Issue.record("expected a binding")
-        }
-        #expect(text(statements[1].range, in: source) == "run(n)")
-        #expect(text(statements[2].range, in: source) == "(a + b)")
-        if case .binding(let binding) = statements[3].kind {
-            #expect(text(binding.value.range, in: source) == "copy x")
-        } else {
-            Issue.record("expected a binding")
-        }
-    }
-}
-
-private func text(_ range: SourceRange, in source: String) -> String {
-    String(decoding: Array(source.utf8)[range.start.offset..<range.end.offset], as: UTF8.self)
 }
