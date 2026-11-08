@@ -109,6 +109,8 @@ extension Argument {
 extension Expr {
     public var dump: String {
         switch kind {
+        case .negativeIntLiteral(let digits):
+            return "-\(digits)"
         case .intLiteral(let value):
             return String(value)
         case .boolLiteral(let value):
