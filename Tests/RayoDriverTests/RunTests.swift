@@ -59,16 +59,39 @@ struct BuildTests {
         #expect(result == Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't find clang on the search path\n"))
     }
 
-    @Test("a clang that fails has its errors reported")
+    @Test("a clang that fails has its errors reported, and a directory named clang isn't one")
     func clangFails() throws {
         try withTemporaryDirectory { directory in
+            let decoy = directory.appendingPathComponent("decoy")
+            try FileManager.default.createDirectory(at: decoy.appendingPathComponent("clang"),
+                                                    withIntermediateDirectories: true)
             let clang = directory.appendingPathComponent("clang")
             try Data("#!/bin/sh\necho 'clang: something broke' >&2\nexit 1\n".utf8).write(to: clang)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: clang.path)
-            let result = Driver.run(["run", "main.rayo"], environment: ["PATH": directory.path]) { _ in
+            let result = Driver.run(["run", "main.rayo"], environment: ["PATH": "\(decoy.path):\(directory.path)"]) { _ in
                 Array("func main() {}".utf8)
             }
             #expect(result == Driver.Result(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
+        }
+    }
+
+    @Test("build builds in the mode it names")
+    func buildMode() throws {
+        try withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("overflow.rayo").path
+            let program = "func main() { print(9223372036854775807 + 1) }"
+            #expect(Driver.run(["build", "--debug", source]) { _ in Array(program.utf8) } ==
+                Driver.Result(exitCode: 0, output: "", errors: ""))
+
+            let executable = Process()
+            executable.executableURL = directory.appendingPathComponent("overflow")
+            let errors = Pipe()
+            executable.standardError = errors
+            try executable.run()
+            executable.waitUntilExit()
+            #expect(String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self) ==
+                "\(source):1:21: panic: integer overflow\n")
+            #expect(executable.terminationStatus == Driver.panicExitCode)
         }
     }
 

@@ -42,7 +42,11 @@ struct Toolchain {
         let directories = environment["PATH", default: ""].split(separator: ":")
         for directory in directories {
             let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent("clang")
-            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory), !isDirectory.boolValue,
+               FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
         }
         throw Failure("can't find clang on the search path")
     }

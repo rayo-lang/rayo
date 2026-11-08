@@ -190,6 +190,7 @@ private struct FileChecker {
         return checked.count == arguments.count ? checked : nil
     }
 
+    /// Whether `argument` has `parameter`'s label, reporting it when it doesn't.
     mutating func labelMatches(_ argument: Argument, _ parameter: Signature.Parameter, position: Int,
                                of signature: Signature) -> Bool {
         let argumentName = "argument \(position) of '\(signature.name)'"
