@@ -7,7 +7,6 @@ public struct Lexer {
     private var index = 0
     private var line = 1
     private var column = 1
-    private var sawSpace = false
     public private(set) var diagnostics: [Diagnostic] = []
 
     public init(_ source: String) {
@@ -37,7 +36,7 @@ public struct Lexer {
             let start = location
             advance()
             error("the file isn't valid UTF-8", from: start)
-            return [Token(.eof, SourceRange(location, location), spaceBefore: false)]
+            return [Token(.eof, SourceRange(location, location))]
         }
         var tokens: [Token] = []
         while true {
@@ -85,15 +84,14 @@ public struct Lexer {
     }
 
     private mutating func next() -> Token {
-        sawSpace = false
         skipTrivia()
         let start = location
         guard let c = peek() else {
-            return Token(.eof, SourceRange(start, start), spaceBefore: sawSpace)
+            return Token(.eof, SourceRange(start, start))
         }
         if c == UInt8(ascii: "\n") {
             advance()
-            return Token(.newline, SourceRange(start, location), spaceBefore: sawSpace)
+            return Token(.newline, SourceRange(start, location))
         }
         if isIdentifierStart(c) {
             return lexIdentifier(from: start)
@@ -101,38 +99,25 @@ public struct Lexer {
         if isDigit(c) {
             return lexNumber(from: start)
         }
-        if c == UInt8(ascii: "`") {
-            advance()
-            let nameStart = index
-            while let d = peek(), isIdentifierContinue(d) { advance() }
-            let name = String(decoding: bytes[nameStart..<index], as: UTF8.self)
-            if peek() == UInt8(ascii: "`") { advance() } else { error("unterminated '`' identifier", from: start) }
-            return Token(.identifier(name), SourceRange(start, location), spaceBefore: sawSpace)
-        }
-        if c == UInt8(ascii: "$"), let d = peek(1), isDigit(d) {
-            advance()
-            while let d = peek(), isDigit(d) { advance() }
-            let name = String(decoding: bytes[start.offset..<index], as: UTF8.self)
-            return Token(.identifier(name), SourceRange(start, location), spaceBefore: sawSpace)
-        }
         for punct in Punct.byLengthDescending where matches(punct.rawValue) {
             for _ in punct.rawValue.utf8 { advance() }
-            return Token(.punct(punct), SourceRange(start, location), spaceBefore: sawSpace)
+            return Token(.punct(punct), SourceRange(start, location))
         }
-        if c == UInt8(ascii: "\"") {
-            skipStringLiteral()
-            error("string literals aren't supported yet", from: start)
-        } else {
-            advance()
-            while let d = peek(), d & 0xC0 == 0x80 { advance() }
-            error("unexpected character", from: start)
-        }
-        return Token(.invalid, SourceRange(start, location), spaceBefore: sawSpace)
+        return lexUnexpectedCharacter(from: start)
     }
 
-    /// Skips a string literal to its closing quote, or to the end of its line if it has none.
-    private mutating func skipStringLiteral() {
+    /// The character at `start`, all of its UTF-8 bytes, as one token. A `"` takes its quoted text with it,
+    /// so that a bracket inside the quotes can't end the block the parser skips to when it reports the `"`.
+    private mutating func lexUnexpectedCharacter(from start: SourceLocation) -> Token {
         advance()
+        while let c = peek(), c & 0xC0 == 0x80 { advance() }
+        let character = String(decoding: bytes[start.offset..<index], as: UTF8.self)
+        if character == "\"" { skipQuotedText() }
+        return Token(.unexpected(character), SourceRange(start, location))
+    }
+
+    /// Skips to just past the closing `"` on this line, a `\"` aside, or to the end of the line if there is none.
+    private mutating func skipQuotedText() {
         while let c = peek(), c != UInt8(ascii: "\""), c != UInt8(ascii: "\n") {
             advance()
             if c == UInt8(ascii: "\\"), let d = peek(), d != UInt8(ascii: "\n") { advance() }
@@ -153,13 +138,10 @@ public struct Lexer {
         while let c = peek() {
             if c == UInt8(ascii: " ") || c == UInt8(ascii: "\t") || c == UInt8(ascii: "\r") {
                 advance()
-                sawSpace = true
             } else if c == UInt8(ascii: "/"), peek(1) == UInt8(ascii: "/") {
                 while let d = peek(), d != UInt8(ascii: "\n") { advance() }
-                sawSpace = true
             } else if c == UInt8(ascii: "/"), peek(1) == UInt8(ascii: "*") {
                 skipBlockComment()
-                sawSpace = true
             } else {
                 return
             }
@@ -189,7 +171,7 @@ public struct Lexer {
         while let c = peek(), isIdentifierContinue(c) { advance() }
         let text = String(decoding: bytes[start.offset..<index], as: UTF8.self)
         let kind: TokenKind = Keyword(rawValue: text).map { .keyword($0) } ?? .identifier(text)
-        return Token(kind, SourceRange(start, location), spaceBefore: sawSpace)
+        return Token(kind, SourceRange(start, location))
     }
 
     private mutating func lexNumber(from start: SourceLocation) -> Token {
@@ -217,11 +199,7 @@ public struct Lexer {
             advance()
         }
         let message: String?
-        if radix == 10, peek() == UInt8(ascii: "."), let d = peek(1), isDigit(d) {
-            advance()
-            while let c = peek(), isIdentifierContinue(c) { advance() }
-            message = "floating-point literals aren't supported yet"
-        } else if let c = peek(), isIdentifierContinue(c) {
+        if let c = peek(), isIdentifierContinue(c) {
             while let c = peek(), isIdentifierContinue(c) { advance() }
             message = "invalid digit in integer literal"
         } else if digits == 0 {
@@ -233,29 +211,27 @@ public struct Lexer {
         }
         if let message {
             error(message, from: start)
-            return Token(.invalid, SourceRange(start, location), spaceBefore: sawSpace)
+            return Token(.invalid, SourceRange(start, location))
         }
-        return Token(.intLiteral(value), SourceRange(start, location), spaceBefore: sawSpace)
+        return Token(.intLiteral(value), SourceRange(start, location))
     }
 
     // MARK: Newlines
 
-    /// Drops the newlines that don't end a statement: inside `(` or `[`, after a token that continues the
-    /// line, and before a token that joins the line above. Only the parser knows whether a `>` at the end
-    /// of a line compares or closes generic arguments, so it drops the newline after a comparison `>`.
+    /// Drops the newlines that don't end a statement: inside `(`, after a token that continues the line, and
+    /// before a token that joins the line above.
     static func significantNewlines(_ raw: [Token]) -> [Token] {
         var result: [Token] = []
         var brackets: [Punct] = []
         for (i, token) in raw.enumerated() {
             switch token.kind {
-            case .punct(.lparen), .punct(.lbracket), .punct(.lbrace):
+            case .punct(.lparen), .punct(.lbrace):
                 if case .punct(let p) = token.kind { brackets.append(p) }
-            case .punct(.rparen), .punct(.rbracket), .punct(.rbrace):
+            case .punct(.rparen), .punct(.rbrace):
                 if !brackets.isEmpty { brackets.removeLast() }
             case .newline:
-                if let open = brackets.last, open == .lparen || open == .lbracket { continue }
+                if brackets.last == .lparen { continue }
                 if let previous = result.last, continuesLine(previous) { continue }
-                if endsInAttribute(result) { continue }
                 if i + 1 < raw.count, joinsLine(raw[i + 1]) { continue }
                 if result.isEmpty || result.last?.kind == .newline { continue }
             default:
@@ -266,48 +242,20 @@ public struct Lexer {
         return result
     }
 
-    static func continuesLine(_ token: Token) -> Bool {
+    private static func continuesLine(_ token: Token) -> Bool {
         guard case .punct(let p) = token.kind else { return false }
-        return p.isBinaryOperator || p.isAssignment || p == .arrow || p == .comma
-            || p == .lparen || p == .lbracket || p == .lbrace
+        return p.binaryOperator != nil || p.assignOperator != nil || p == .arrow || p == .lparen || p == .lbrace
     }
 
-    /// Whether `tokens` ends in an attribute: `@`, a name that may have `.` parts, and optional
-    /// arguments in parentheses, as in `@reflect`, `@ui.Bounds` and `@packed(4)`.
-    static func endsInAttribute(_ tokens: [Token]) -> Bool {
-        var i = tokens.count - 1
-        if i >= 0, tokens[i].isPunct(.rparen) {
-            var depth = 0
-            while i >= 0 {
-                if tokens[i].isPunct(.rparen) { depth += 1 }
-                if tokens[i].isPunct(.lparen) { depth -= 1 }
-                if depth == 0 { break }
-                i -= 1
-            }
-            i -= 1
-        }
-        while i >= 1, isName(tokens[i]) {
-            if tokens[i - 1].isPunct(.at) { return true }
-            guard tokens[i - 1].isPunct(.dot) else { return false }
-            i -= 2
-        }
-        return false
-    }
-
-    private static func isName(_ token: Token) -> Bool {
+    /// Whether `token` at the start of a line joins it to the line above. A `-` there starts a statement; a
+    /// `{` can't start one, so it always opens the block of the line above.
+    private static func joinsLine(_ token: Token) -> Bool {
         switch token.kind {
-        case .identifier, .keyword: return true
-        default: return false
-        }
-    }
-
-    static func joinsLine(_ token: Token) -> Bool {
-        switch token.kind {
-        case .punct(.dot), .punct(.arrow), .punct(.greater):
-            return true
+        case .punct(.minus):
+            return false
         case .punct(let p):
-            return p.isBinaryOperator && p != .minus && p != .amp && p != .halfOpenRange && p != .closedRange
-        case .keyword(.else), .keyword(.catch), .keyword(.where), .keyword(.throws):
+            return p.binaryOperator != nil || p == .arrow || p == .lbrace
+        case .keyword(.else):
             return true
         default:
             return false

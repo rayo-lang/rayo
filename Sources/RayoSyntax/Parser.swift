@@ -77,9 +77,15 @@ public struct Parser {
 
     /// Reports `message`, followed by what was found at the current token instead.
     private mutating func fail(_ message: String) -> Failure {
-        // The lexer has reported an invalid token already.
-        guard current.kind != .invalid else { return Failure() }
-        diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
+        switch current.kind {
+        case .invalid:
+            // The lexer has reported it already.
+            break
+        case .unexpected(let character):
+            diagnostics.append(.error("unexpected character '\(character)'", at: current.range))
+        default:
+            diagnostics.append(.error("\(message), found \(describe(current))", at: current.range))
+        }
         return Failure()
     }
 
@@ -102,11 +108,6 @@ public struct Parser {
     private var previousEnd: SourceLocation { tokens[max(position - 1, 0)].range.end }
 
     private func range(from start: SourceRange) -> SourceRange { SourceRange(start.start, previousEnd) }
-
-    /// The lexer keeps `>` alone, so a `>` directly followed by `=` is `>=`.
-    private var atGreaterEqual: Bool {
-        current.isPunct(.greater) && peek().isPunct(.assign) && !peek().spaceBefore
-    }
 
     // MARK: Sequences
 
@@ -134,12 +135,12 @@ public struct Parser {
         var depth = 0
         loop: while !atEnd {
             switch current.kind {
-            case .punct(.lbrace), .punct(.lparen), .punct(.lbracket):
+            case .punct(.lbrace), .punct(.lparen):
                 depth += 1
             case .punct(.rbrace):
                 if depth == 0 { break loop }
                 depth -= 1
-            case .punct(.rparen), .punct(.rbracket):
+            case .punct(.rparen):
                 if depth > 0 { depth -= 1 }
             case .newline, .punct(.semicolon):
                 if depth == 0 { break loop }
@@ -227,7 +228,7 @@ public struct Parser {
     /// An expression, or an assignment to one.
     private mutating func parseExpressionStatement() throws(Failure) -> StmtKind {
         let target = try parseExpression()
-        guard case .punct(let p) = current.kind, let op = AssignOperator(rawValue: p.rawValue) else {
+        guard case .punct(let p) = current.kind, let op = p.assignOperator else {
             return .expression(target)
         }
         advance()
@@ -266,35 +267,11 @@ public struct Parser {
         try parseBinary(minimumLevel: 1)
     }
 
-    /// The binary operator at the current token, its precedence level, from 1 for the loosest, and how many
-    /// tokens it spans.
-    private func binaryOperator() -> (op: BinaryOperator, level: Int, width: Int)? {
-        if atGreaterEqual { return (.greaterEqual, 4, 2) }
-        guard case .punct(let p) = current.kind else { return nil }
-        switch p {
-        case .orOr: return (.or, 2, 1)
-        case .andAnd: return (.and, 3, 1)
-        case .equal: return (.equal, 4, 1)
-        case .notEqual: return (.notEqual, 4, 1)
-        case .less: return (.less, 4, 1)
-        case .lessEqual: return (.lessEqual, 4, 1)
-        case .greater: return (.greater, 4, 1)
-        case .plus: return (.add, 6, 1)
-        case .minus: return (.subtract, 6, 1)
-        case .star: return (.multiply, 7, 1)
-        case .slash: return (.divide, 7, 1)
-        case .percent: return (.remainder, 7, 1)
-        default: return nil
-        }
-    }
-
     private mutating func parseBinary(minimumLevel: Int) throws(Failure) -> Expr {
         var left = try parseUnary()
-        while let (op, level, width) = binaryOperator(), level >= minimumLevel {
-            for _ in 0..<width { advance() }
-            // The lexer keeps the newline after a '>' at the end of a line; after a comparison, the line goes on.
-            if op == .greater || op == .greaterEqual, current.kind == .newline { advance() }
-            let right = try parseBinary(minimumLevel: level + 1)
+        while case .punct(let p) = current.kind, let op = p.binaryOperator, op.level >= minimumLevel {
+            advance()
+            let right = try parseBinary(minimumLevel: op.level + 1)
             left = Expr(kind: .binary(op, left, right), range: left.range.to(right.range))
         }
         return left
@@ -364,5 +341,18 @@ public struct Parser {
         let inner = try parseExpression()
         try expect(.rparen, "to close the parenthesized expression")
         return Expr(kind: inner.kind, range: range(from: start))
+    }
+}
+
+private extension BinaryOperator {
+    /// How tightly the operator binds, from 1 for the loosest. Operators of one level group from the left.
+    var level: Int {
+        switch self {
+        case .or: return 1
+        case .and: return 2
+        case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual: return 3
+        case .add, .subtract: return 4
+        case .multiply, .divide, .remainder: return 5
+        }
     }
 }

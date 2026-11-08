@@ -146,10 +146,19 @@ struct ErrorTests {
 
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
-        #expect(errors("func f() {\n    let = 1\n    let s = \"x\"\n}") == [
+        #expect(errors("func f() {\n    let = 1\n    let s = #\n}") == [
             "2:9: error: expected a name to bind, found '='",
-            "3:13: error: string literals aren't supported yet",
+            "3:13: error: unexpected character '#'",
         ])
+    }
+
+    @Test("a statement that holds unexpected characters is reported once, at the first")
+    func unexpectedOncePerStatement() {
+        #expect(errors("func f() {\n    print(\"it's a.b\")\n    x[0] = 2\n}") == [
+            "2:11: error: unexpected character '\"'",
+            "3:6: error: unexpected character '['",
+        ])
+        #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == ["2:11: error: unexpected character '\"'"])
     }
 
     @Test("an unclosed block is reported at the end of the file")

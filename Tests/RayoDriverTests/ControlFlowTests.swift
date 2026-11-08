@@ -42,8 +42,6 @@ struct LocalTests {
         ("let main = 1", "2:5: error: 'main' is already declared"),
         ("print = 3", "2:1: error: 'print' is a function, so it can't change"),
         ("main += 2", "2:1: error: 'main' is a function, so it can't change"),
-        ("var x = 1\nx.y = 2", "3:2: error: expected a newline or ';' after the statement, found '.'"),
-        ("var x = 1\nx[0] = 2", "3:2: error: expected a newline or ';' after the statement, found '['"),
         ("let _ = 5", "2:5: error: '_' can't be declared"),
         ("_ = 5", "2:1: error: only a local can be assigned"),
         ("_ += 1", "2:1: error: only a local can be assigned"),
