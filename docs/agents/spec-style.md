@@ -1,12 +1,14 @@
 # Writing the spec
 
-The numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and read by looking things up rather than front to back. Teaching belongs in the guide, which may simplify and links to the spec for the full rules.
+The unnumbered introduction and numbered chapters in `docs/spec/` are Rayo's specification: complete and exact, organized by construct, and useful both for reading through and for looking up a rule. A long chapter keeps its numbered landing page and places related rules in subchapter files directly beneath a directory of the same name. Subchapters do not have further nested directories. The guide introduces the language in learning order and may simplify; the spec explains the full rules.
+
+The safety argument and hard cases in `docs/validation/` check the spec during design and implementation. They do not define language rules. If a check finds a missing rule, add it to the spec chapter that owns it.
 
 The spec is **precise, plain and explained**: every rule stated exactly, with the reason it holds, in words a reader takes in once. Precision comes from defined terms and complete lists, never from packing more clauses into a sentence. Being a reference is a reason to be exact, not a reason to be terse: a reader who looks a rule up should understand it, not only find it.
 
 ## Sentences
 
-- **One rule per sentence.** Aim for under 25 words. A sentence past 40 is a list, or two rules.
+- **Let each thought run its course.** Explain what happens, why it happens and what follows in connected prose. Split a sentence when it asks the reader to hold two separate ideas at once, not just because it contains a reason or consequence. A sentence past 40 words usually needs another sentence or a list.
 - **Active voice, short words.** "The compiler rejects `f(&x, x)`", not "`f(&x, x)` is rejected". *Use*, not *utilize*; *so*, not *consequently*.
 - **The thing as the subject of a verb.** "`list[i]` hands out the list's element", not "the place an accessor yields from one".
 - **Common words for common ideas.** Where programmers already have a word, use it: *reference counting*, not *counted owner*. Coin a term only for an idea with no common name, and define it.
@@ -15,11 +17,13 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 
 ## Paragraphs and sections
 
-- **Lead with the rule**, in bold, in one sentence. Its cases, exceptions and consequences follow. A short example may come first.
+- **Move from whole to parts.** The introduction says what Rayo is and how the main ideas fit together before any numbered chapter begins. Chapter 01 opens with ownership, not another introduction to the language. Each numbered chapter opens with the situation its construct addresses and how its main ideas fit together, then moves to examples and exact rules. Introduce names from an example only after the example shows them.
+- **Give the rule a setting.** In a section whose context is already clear, a concrete case can make a rule easier to understand. Explain what the example shows, then state the exact rule and its consequences. A section meant for lookup may begin with the rule.
+- **Make each paragraph follow one line of reasoning.** Connect a definition to the example or need that gives it meaning. Do not stack definitions or rules and leave the reader to work out how they relate.
 - **Three or more items make a list**, one item per bullet.
-- **Paragraphs stay under about 120 words.** A section that needs more splits into subsections, each with its own rule.
+- **Paragraphs stay under about 120 words.** A section that needs more splits where the subject changes.
 - **An exception sits next to its rule**, so a reader who finds the rule also finds what it doesn't cover.
-- **Each rule is stated once**, in the section that owns it. Other sections link to it.
+- **Each rule is stated once**, in the section that owns it. Other sections link to it. A numbered landing page introduces and links its subchapters; the subchapter owns the detailed rules.
 - **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Examples use the spec's running game code, such as `Enemy`, `world` and `Mesh`.
 
 ## Terms and links
@@ -28,7 +32,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **A chapter follows its construct, not a teaching order.** A rule may use a term defined later; on the term's first use in a section, it links to its definition.
 - **One link per idea.** A sentence carrying more than two links is a list: give each item its own bullet and link.
 - **Links** read `([06](06-memory-and-allocators.md#anchor))` across chapters, and `([above](#anchor))` or `([below](#anchor))` within one.
-- **Anchors are part of the interface.** A pull request that renames a heading updates every link to it.
+- **Anchors are part of the interface.** A pull request that moves or renames a heading updates every link to it. In a subchapter, links to a sibling subchapter use its file name; links to another numbered chapter go up one directory.
 
 ## Explaining
 
