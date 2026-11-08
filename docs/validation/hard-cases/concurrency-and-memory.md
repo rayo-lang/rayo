@@ -104,6 +104,15 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
     - the shared object, with every access marked as a lock at the call, and its sharing and its lock written in its type;
     - the resource id, as a type that stays on its thread although its only field is an integer.
 
+### C18 · A consumer whose producers stop
+
+**A worker thread takes jobs from several producer threads until no producer is left, then ends.** One producer may panic part way through, and the worker itself may panic while producers still send. In C++, a consumer parked on a condition variable waits for ever when its producer throws before it notifies.
+
+- **Must accept** the worker's loop ending once every producer is done, with no end-of-stream item and no `unsafe`.
+- **Must hold:** a producer's panic never leaves the worker parked for ever, and the worker's panic never leaves a producer parked, or loses the item it was sending unseen.
+- State where each panic goes, and what the other side sees.
+- **Answered by** [Disconnected channels](../../spec/07-concurrency/synchronization.md#disconnected-channels).
+
 ---
 
 ## M. Memory

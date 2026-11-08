@@ -72,23 +72,79 @@ The panic left the data as it found it, perhaps half-changed. Only the panicking
 
 ### Queues and channels
 
-**Queues and channels pass owned items from producers to consumers.**
+**Queues and channels pass owned items from producers to consumers.** A queue is one `Synchronized` value that its producers and consumers all borrow. A channel is a queue that owned ends share, so it can tell its consumer when every producer is gone ([below](#disconnected-channels)).
 
 **Queues have `pop()`, which returns a `T?` and doesn't block, and `waitPop()`, which returns a `T` and does.**
 
 **Single-producer and single-consumer queues check their single sides at run time.** Overlapping calls on one side panic. Each call's check synchronizes with the previous call on that side, whichever thread made it. So the algorithm never sees two producers or two consumers at once, and sees successive ones in order.
 
-**`Channel<T>` makes a queue that two owned ends share, a `Sender<T>` and a `Receiver<T>`:**
+**A queue has no close, since no code owns a side of it.** Its producers and consumers borrow it, often as a global `let` that lives until shutdown, so nothing marks the last producer gone. `waitPop()` parks until another item comes, for ever if none does. A consumer that must learn when its producers are done takes its items from a channel instead.
+
+**`Channel<T>` makes a channel, a queue that two kinds of owned ends share, `Sender<T>` and `Receiver<T>`:**
 
 ```swift
 let (tx, rx) = Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
 ```
 
-The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
+The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). A channel has one `Receiver`, and as many `Sender`s as `share()` makes. Like `Shared`'s `share()`, it adds an owner of the shared state visibly ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 
-**The ends aren't `Synchronized`.** `rx.pop()` and `rx.waitPop()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `tx.push(_:)` is `mutating` too, so each `Sender` is one producer at a time.
+**Each end has its own methods:**
 
-**The shared state counts the ends that own it.** A sender queued inside its own channel is a cycle that dropping the `Receiver` breaks, since that destroys the queued items. Other cycles, such as a `Receiver` queued inside its own channel, leak.
+```swift
+func share() -> Sender<T>                                     // Sender<T>'s: another Sender of the same channel
+mutating func send(_ item: owned T) -> Void!Disconnected<T>   // Sender<T>'s: fails, handing the item back, once the Receiver is gone
+mutating func receive() -> T?                                 // Receiver<T>'s: parks while empty; nil once every Sender is gone
+mutating func tryReceive() -> T!TryReceiveError               // Receiver<T>'s: never parks
+```
+
+**The ends aren't `Synchronized`.** `receive()` and `tryReceive()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `send(_:)` is `mutating` too, so each `Sender` is one producer at a time.
+
+**The shared state counts the ends that own it**, which also tells each side when the other is gone ([below](#disconnected-channels)). A sender queued inside its own channel is a cycle that dropping the `Receiver` breaks, since that destroys the queued items. Other cycles, such as a `Receiver` queued inside its own channel, leak.
+
+### Disconnected channels
+
+**A channel is disconnected once the ends on one side are all gone, so the other side never waits for an end that can't act.** Each direction has its own condition:
+
+- **For receiving.** A channel is disconnected for receiving once every `Sender` is gone and no item is left in it. The items sent before the last `Sender` went are still received, in the order they were sent.
+- **For sending.** A channel is disconnected for sending once the `Receiver` is gone. The items left in it are destroyed with the `Receiver`.
+
+**An end is gone once it is destroyed, however that happens**: dropped with `_ =`, at the end of its scope, or by an unwind ([10](../10-errors-and-safety/panics.md#unwinding)). The end whose destruction disconnects the channel wakes every thread parked on it ([below](#parking-and-waking-a-thread)). Destroying the last `Sender` happens before each `receive()` that returns `nil`, so what the producers did before is visible to the consumer.
+
+**`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
+
+```swift
+while let r = rx.receive() { handle(r) }      // ends once every Sender is gone and the channel is empty
+for r in &rx { handle(r) }                    // the same loop
+```
+
+**A `Receiver` is a `MutableSequence` whose iterator calls `receive()`**, so `for r in &rx` hands each item over, and ends at disconnection ([04](../04-types/collections.md#iteration)). The loop holds `rx` exclusively, as each `receive()` does, and the `&` says so.
+
+**`tryReceive()` never parks, and tells an empty channel from a disconnected one:**
+
+```swift
+enum TryReceiveError: Error {
+    case empty              // connected, with no item yet
+    case disconnected       // every Sender is gone, and no item is left
+}
+```
+
+**`send` fails once the channel is disconnected for sending, and its error hands the item back**, so no item is lost unseen:
+
+```swift
+struct Disconnected<T>(let item: T): Error      // send's error: the item that no Receiver will take
+```
+
+**A send's result is a `Result`, so the unused-value rule makes the sender check it or drop it on purpose** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)):
+
+```swift
+tx.send(r)                // error: the Void!Disconnected<Request> is never used
+_ = tx.send(r)            // fine: if the Receiver is gone, the request is destroyed here
+try tx.send(r)            // fine in a function that fails with Disconnected<Request>
+```
+
+**A panic in a producer disconnects the channel, but never reaches the consumer.** The unwind destroys the `Sender`s that the panicking code owns, as it destroys every live value ([10](../10-errors-and-safety/panics.md#unwinding)). When one of them was the last, the consumer's `receive()` returns `nil` once it has taken the items sent before. So a consumer waiting on a producer that panicked wakes, rather than parking for ever, as it would on an `Event` that nothing signals ([Panics in lent work](thread-work.md#panics-in-lent-work)).
+
+**The channel carries items, not panics.** The consumer sees the disconnection as it would see producers that finished. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)). So a consumer that must know why its producers stopped joins them. A panic in the consumer works the other way round: the unwind destroys the `Receiver`, and each `send` after it fails.
 
 ### Snapshots, one-time values and waits
 
