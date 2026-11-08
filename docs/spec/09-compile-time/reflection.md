@@ -92,11 +92,11 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 | Expression | Meaning |
 | --- | --- |
-| `value[field]` | Projection of that field (read, `modify` on a changeable place, or `consume` on one the code may move from) |
+| `value[field]` | Projection of that field (borrowed, lent for change on a changeable place, or `consume` on one the code may move from) |
 | `value[fields: (f1, f2)]` | Several distinct fields projected at once as a tuple of disjoint places ([below](#tuples-field-lists-and-queries)) |
-| `value[case: c]` | A projection of case `c`'s payload, as a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](../04-types/collections.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case (read, `modify` on a changeable place, or `consume`, which moves the payload out only when `value` holds `c`, as an `owned` pattern does) |
+| `value[case: c]` | A projection of case `c`'s payload, as a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](../04-types/collections.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case (borrowed, lent for change on a changeable place, or `consume`, which moves the payload out only when `value` holds `c`, as an `owned` pattern does) |
 
-**`value[field]` lends the field in place**, as an accessor that yields does ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)). It is a storage projection, which a view can outlive, except on an imported bitfield or an under-aligned field. Those go through a temporary, so it is access-bound there. Every `value[field]` is checked per instantiation, for one field ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). So generic code sees a storage projection or an access-bound one exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
+**`value[field]` lends the field in place**, as a place property does ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)), so a view of it can outlive the access. An imported bitfield or an under-aligned field is the exception: it goes through a temporary there, as a value property does. Every `value[field]` is checked per instantiation, for one field ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). So generic code sees a place or a temporary exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
 
 **Two kinds of imported C member reflect in their own way:**
 
@@ -117,7 +117,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - its kind and its name;
     - an extension's extended type and constraints;
     - a function's, property's or subscript's whole signature, with `static`, its `self` convention, parameter labels, types and conventions, result, `throws` and `where` clause;
-    - an accessor's kind (`get`, `set`, `read`, `modify`);
+    - an accessor's kind (`get`, `set`, `borrow`, `mutate`);
     - for a block, closure or branch, which has no name, its position in the scope around it;
     - every compile-time argument the declaration's body is instantiated with (below).
 
@@ -177,7 +177,7 @@ public struct Enemy(
 
 - **Which fields are listed.** `T.fields` lists every field inside `T`'s own module, and elsewhere only the `public` ones, or all of them when `T` is `@reflect(private)`.
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them. Where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), it also lets that code write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
-- **Writing.** `value[field]` projects for `modify` only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
+- **Writing.** `value[field]` lends for change only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
 - **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path. `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
 - **`unsafe` fields and unions.** A field declared `unsafe`, such as `Span`'s `baseAddress`, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
 

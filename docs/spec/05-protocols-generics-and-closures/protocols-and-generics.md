@@ -82,13 +82,13 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 - a static closure;
 - a reflective projection: `value[f]`, `value[fields:]` or `value[case:]`.
 
-**The checks that run on the expanded body are those of moves, initialization, borrows, dependencies, yields and `self.init` calls.** So a move in a `static for` body moves once per element ([09](../09-compile-time/reflection.md#static-reflection)).
+**The checks that run on the expanded body are those of moves, initialization, borrows, dependencies, the places that place properties hand out, and `self.init` calls.** So a move in a `static for` body moves once per element ([09](../09-compile-time/reflection.md#static-reflection)).
 
 ## Instantiation
 
 **Generics are monomorphized**: each is compiled separately for each set of type arguments, and never implicitly called through a witness table (a type's table of implementations of a protocol's requirements), in any build or across any module boundary. So a call through a witness table happens only through `any P`, where the source shows it ([11](../11-compilation-model.md#runtime-costs)).
 
-**Instantiation always ends.** Since every instantiation is compiled, a generic function or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
+**Instantiation always ends.** Since every instantiation is compiled, a generic function, subscript or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
 
 ```swift
 func nest<T: Copyable>(_ x: T, _ n: Int) {
@@ -144,10 +144,10 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 **What a member can witness depends on what its name allows where the conformance is declared:**
 
 - **A witness is visible where the conformance is declared.** A member, a stored field included, that code there couldn't name witnesses nothing, so a protocol's module can't reach another module's non-public member through a conformance it declares.
-- **A stored field witnesses a requirement only where its name could be used the same way**, since generic code reaches a witness with no `unsafe` in sight. So a `let` field witnesses only `get` and `read` requirements.
+- **A stored field witnesses a requirement only where its name could be used the same way**, since generic code reaches a witness with no `unsafe` in sight. So a `let` field witnesses only `get` and `borrow` requirements.
     - **`unsafe` fields and union members.** An `unsafe` field, or a union member that isn't safe to read ([04](../04-types/enums.md#untagged-unions)), witnesses one only in a conformance declared `: unsafe P`. That promises that every value generic code can read or write through the witness is valid.
     - **Bare global `var`s.** A static stored `var` that isn't `@threadlocal` is a bare global `var` ([07](../07-concurrency/global-state.md#global-state)). It witnesses only a `{ get }` or `{ get set }` requirement of a copyable type, whose every access copies, and only under `: unsafe P`. There, `: unsafe P` promises that no access through it races with another.
-    - **Thread-locals.** A `@threadlocal` static `var` witnesses an access-bound requirement, never one `where yield borrows static`, since every access to it is a dynamic access that what it yields can't outlast, by rule 6 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). When its type is copyable, it also witnesses a `{ get }` or `{ get set }` requirement, each access copying under its own dynamic access.
+    - **Thread-locals.** A `@threadlocal` static `var` witnesses no place requirement ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), since every access to it is a dynamic access that a view of it can't outlast, by rule 6 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). When its type is copyable, it witnesses a `{ get }` or `{ get set }` requirement, each access copying under its own dynamic access.
 - **An `unsafe` witness, a function, initializer, operator, subscript or accessor, meets only an `unsafe` requirement**, whose callers write `unsafe`, or any requirement in a conformance declared `: unsafe P`, promising that every call generic code can make through it is safe.
 
 **`unsafe protocol P` declares a contract the compiler can't check**, such as "memory is never handed out twice" for `AllocatorImpl` ([06](../06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
@@ -173,8 +173,8 @@ for w in &widgets { w.value.update(dt) }           // mutable any Widget: mutati
 
 | Form | What it is | Made from |
 | --- | --- | --- |
-| `any P` | Shared view: scoped, copyable | A shared borrow of a `T: P`, or a shared projection of an unscoped existential |
-| `mutable any P` | Exclusive view: scoped, move-only | An exclusive borrow `&place` of a `T: P`, or a `mutable` projection of an unscoped existential |
+| `any P` | Shared view: scoped, copyable | A shared borrow of a `T: P`, or of an unscoped existential's `value` |
+| `mutable any P` | Exclusive view: scoped, move-only | An exclusive borrow `&place` of a `T: P`, or of an unscoped existential's `value` |
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
@@ -208,12 +208,12 @@ func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is receiv
 - **`MutableRef<any P>`**, what a loop over `&` a `List<any P>` yields, is an exclusive view of a slot holding a shared `any P`. Through it `d` can reassign the shared view but never reach its value. So `d.takeDamage(1)` is a compile error, since the slot holds a shared view, whose value other views may be reading.
 - **`d: mutable (any P)`**, with parentheses, lets a callee reassign which value the caller's shared view refers to ([12](../12-grammar/notes.md#parentheses-and-conventions-in-types)).
 
-**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` projects `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)). Assigning to `box.value`, or through any `mutable any P`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
+**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning to `box.value`, or through any `mutable any P`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
 
-**`box.downcast(to: T.self)` is an optional projection of the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. So a test that fails moves nothing:
+**`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
 ```swift
-if var s = &box.downcast(to: Slider.self) { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+if var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
 ```
 
 **The unscoped existentials are types of their own, which binding a type parameter never makes.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
@@ -242,9 +242,9 @@ func refillAll(_ targets: mutable List<Box<any Damageable>>) {
 }
 ```
 
-**Passing an existential to a generic parameter `T: P` unpacks it: `T` is the value's dynamic type for that call.** A shared `any P` unpacks only as a borrowed `T`. A `mutable any P`, or a `mutable` projection of an unscoped existential, also unpacks as `mutable T`, whose whole value the generic code may replace, since the type can't change. An owned `Box<any P>` also unpacks as an `owned T`: its value moves out into the call, and its allocation is freed.
+**Passing an existential to a generic parameter `T: P` unpacks it: `T` is the value's dynamic type for that call.** A shared `any P` unpacks only as a borrowed `T`. A `mutable any P`, or an unscoped existential's `value` lent for change, also unpacks as `mutable T`, whose whole value the generic code may replace, since the type can't change. An owned `Box<any P>` also unpacks as an `owned T`: its value moves out into the call, and its allocation is freed.
 
-**`any P` never conforms to `P`, so it can't bind `T` without unpacking.** Two existentials unpack to two types, and a box's projection isn't a place of type `any P` that `T` could bind as the view type (below). So passing two boxes' values for one `T` is a compile error:
+**`any P` never conforms to `P`, so it can't bind `T` without unpacking.** Two existentials unpack to two types, and a box's `value` isn't a place of type `any P` that `T` could bind as the view type (below). So passing two boxes' values for one `T` is a compile error:
 
 ```swift
 swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
@@ -252,7 +252,7 @@ swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack t
 
 **These rules decide whether a call unpacks:**
 
-- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, the error type, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's projection or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
+- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, the error type, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
 - **Where it doesn't.** When `any P` itself meets `T`'s constraints, as it meets those of an unconstrained `T` or of `T: Copyable`, it binds `T` as the view type instead, and a `Box<any P>` that meets them binds `T` as itself. Any other call that would need `T` to be `any P` is a compile error.
 
 **An unpacking call costs one indirect call, and an instance for each possible dynamic type.** An unpacking call site names one generic function, every type argument but `T` fixed. The program holds an instance of it for every type that can be the dynamic type of an existential of `P`:

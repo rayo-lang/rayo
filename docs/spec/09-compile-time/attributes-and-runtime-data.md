@@ -63,7 +63,7 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 
 **Only `typeInfo` builds a `TypeInfo`, `FieldInfo`, `CaseInfo` or `AttributeInfo`**, whose initializers are private to the module that declares them, so each record describes its type truthfully.
 
-**An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding, and padding bytes are uninitialized ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `a[as: Tooltip.self]` is an optional projection of the `Tooltip` it holds, `nil` for another attribute type.
+**An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding, and padding bytes are uninitialized ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `a[as: Tooltip.self]` is an optional place property that hands out the `Tooltip` it holds, or `nil` for another attribute type ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
 ### `StaticSpan`: views of immortal data
 

@@ -16,7 +16,7 @@ enemies.remove(h)                                    // every copy of h goes sta
 if enemies[h] == nil { … }                           // true: a stale handle reads nil
 ```
 
-**`pool[h]` is an optional projection** ([02](02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)): it yields the element in place, or `nil`. The standard library declares `Handle` this way:
+**`pool[h]` is an optional place property** ([02](02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)): it hands out the element in place, or `nil`. The standard library declares `Handle` this way:
 
 ```swift
 @align(8) public struct Handle<T> private init(public let index: UInt32, public let generation: UInt32): Copyable, Hashable {
@@ -46,14 +46,14 @@ struct Sprite(var mesh: MeshId, var renderer: WeakPointer<Renderer>)            
 struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Node>>)     // tree with parent pointers
 
 renderer.value.beginFrame()                    // through the owner: the object itself, no optional
-r.value?.submit(mesh)                          // optional projection: nil once the object is destroyed
+r.value?.submit(mesh)                          // optional place property: nil once the object is destroyed
 if var rd = &r.value { rd.beginFrame(); rd.submit(mesh) }   // one modify access, held while 'rd' is used
 r.value!.stats.drawCalls += 1                  // '!' panics if the object is gone
 ```
 
-**A weak pointer's `value` is a `T?` projection, which reads `nil` once the object is destroyed**, so a weak pointer never dangles. Comparing it with `nil` checks only that the object lives, and takes no mark ([below](#dynamic-exclusivity)), so it never conflicts.
+**A weak pointer's `value` is an optional place property of type `T?`, which reads `nil` once the object is destroyed**, so a weak pointer never dangles. Comparing it with `nil` checks only that the object lives, and takes no mark ([below](#dynamic-exclusivity)), so it never conflicts.
 
-**The owner's `value` projects a `T`, since the owner keeps the object alive.** It fails only when something else, such as an arena reset, has destroyed the object, and the access then panics ([below](#destroying-an-object)).
+**The owner's `value` hands out a `T`, since the owner keeps the object alive.** It fails only when something else, such as an arena reset, has destroyed the object, and the access then panics ([below](#destroying-an-object)).
 
 **A weak pointer never aliases a mutation.** Two weak pointers to one object are aliases the static checker can't see, so each use is checked at run time ([below](#dynamic-exclusivity)).
 
@@ -69,7 +69,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **The law of exclusivity holds for an object's value too, checked at run time** ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)), since the static checker can't see which weak pointers name one object. Every access to the value, through the owner or any weak pointer, is checked:
 
-- **Marks.** A **read access** is any shared use of the value, such as a `read` projection, a borrowing `let` or a borrowing method call, and holds a shared mark. A **modify access** is any change, such as a `modify` projection, a `var` binding of `&place` or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life.
+- **Marks.** A **read access** is any shared use of the value, such as a borrowing `let` or a borrowing method call, and holds a shared mark. A **modify access** is any change, such as an assignment, a `var` binding of `&place` or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life. The language then releases the mark itself, since `value` is a place property that runs no code after an access ([02](02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)).
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destroying the object while any access to it is live panics too ([below](#destroying-an-object)).
 - **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([10](10-errors-and-safety/panics.md#what-panics)). So does creating an object when no generation is left, since each object needs a generation that no other object of the run gets ([below](#destroying-an-object)).
 

@@ -70,7 +70,7 @@ A **guard type** is a type declared `@guard`: the type of a value that holds a l
 
 ## Precise dependencies (opt-in)
 
-**A `where` clause can say what a function's result, an accessor's yield or an absorbing parameter depends on.** By default a result depends on every argument rule 3 names, even one it only read. The clause helps where that gets in the way, as with a lookup keyed by a view into a buffer you want to advance:
+**A `where` clause can say what a function's result, a place property's place or an absorbing parameter depends on.** By default a result depends on every argument rule 3 names, even one it only read. The clause helps where that gets in the way, as with a lookup keyed by a view into a buffer you want to advance:
 
 ```swift
 extension SymbolTable {
@@ -92,13 +92,12 @@ use(syms)
 
 **An item's subject, what depends, is one of these:**
 
-- `return`, for the result and any thrown error;
-- `yield`, for what an accessor yields ([Storage projections](projections-and-accessors.md#storage-projections));
+- `return`, for the result and any thrown error, or for the place a place property hands out ([What a place depends on](place-and-value-properties.md#what-a-place-depends-on));
 - a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
 
 **An item says what its subject depends on:**
 
-- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject.
+- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject. For a place property's place, `x` is a source instead: the shallow and sealed exemptions don't apply, and static storage counts only when an item names it ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 - **`borrows static`**: static storage only.
 - **`outlives x`**: only what `x` borrows, so the subject stays valid after `x` changes or is gone ([below](#staying-valid-after-a-parameter-moves-on-outlives)).
 
@@ -137,7 +136,7 @@ Without the clause, each element would depend exclusively on the iterator, and t
 
 - **`Span`, a span iterator and `List<StringView>` qualify.** So the function below leaves `src` free once it returns, where by default `dst` would keep the borrowed `src` itself borrowed.
 - **An iterator over a `MutableSpan` doesn't**, since it could hand out a view and then replace the data under it.
-- **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` is declared `where yield borrows self`.
+- **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` depends on the guard itself, a place property's default ([02](place-and-value-properties.md#the-place-lies-in-its-sources)).
 
 ```swift
 func copyAll(from src: List<StringView>, into dst: mutable List<StringView>)
@@ -251,7 +250,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **Then `x = &p` writes that view into the place `x` names**, as `d = &crate` does in a loop over `&targets`, and `x` still names the same place.
 
-**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use.
+**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use. A step through a place property whose sources go beyond `self` may reach a place in another argument, as `&cur[graft: &spare]` does. So `x`'s set also takes on every other dependency of the new place ([02](place-and-value-properties.md#the-place-lies-in-its-sources)).
 
 **Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
 
@@ -259,7 +258,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **This is safe because the new place lies in another object's value, guarded by the new mark.** If an alias removes the child from the previous object, destroying the object the cursor stands on panics ([03](../03-handles-and-objects.md#destroying-an-object)), and any other alias reaching it still conflicts.
 
-**A target reached through an access-bound projection is an error**, since each step would nest another suspended access ([Access-bound projections](projections-and-accessors.md#access-bound-projections)).
+**A target reached through a value property's change is an error**, since each step would nest another change whose `set` waits for the cursor's last use ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)). A target reached through a place property is fine, since it lies in storage.
 
 **A binding that owns its value can be rebound**, such as either of these:
 
