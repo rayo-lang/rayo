@@ -159,6 +159,9 @@ _Avoid_: weak reference, weak link (a `WeakShared`)
 **Layout order**:
 The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
 
+**Mask**:
+Any `Simd<Bool, N>`, such as a comparison of vectors gives, which `select` uses and which has `any`, `all` and its lanes as `UInt64` `bits` ([04](docs/spec/04-types/numbers-and-math.md#masks)).
+
 **Name**:
 std's interned text: a pointer-sized value that equals another exactly when their texts are equal, and whose text lives for the rest of the program ([04](docs/spec/04-types/collections.md#collections-and-strings)).
 _Avoid_: hashed name, string hash, string id
@@ -181,8 +184,23 @@ _Avoid_: trivial type
 A struct's header, which lists its stored fields once and is also its initializer ([04](docs/spec/04-types/structs.md#structs)).
 _Avoid_: memberwise initializer
 
+**Reduction**:
+An operation that combines a vector's lanes into one value, such as `sum()` or a mask's `any`, in an order fixed on every target ([04](docs/spec/04-types/numbers-and-math.md#reductions)).
+_Avoid_: horizontal operation
+
 **Row**:
 A view of one index of an `SoA<T>` across every column, with one place property per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
+
+**Shuffle**:
+An operation that builds a vector from lanes of one or two vectors, picked by a list of lane indices known at compile time, as `shuffle(v, [3, 2, 1, 0])` does ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
+_Avoid_: permute
+
+**SimdLane**:
+The prelude's marker protocol for the types a vector's lanes may hold, the number types and `Bool`, which no other type can declare ([04](docs/spec/04-types/numbers-and-math.md#simd-and-math)).
+_Avoid_: SimdElement
+
+**Swizzle**:
+A vector property whose name lists up to four of the lanes `x`, `y`, `z` and `w`, as `v.zyx` does: a swizzle of 2 to 4 lanes is shorthand for a shuffle, and one lane is `v[i]` ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
 **Unconditional extension**:
 An extension that gives none of its type's generic arguments and has no `where` clause ([04](docs/spec/04-types/structs.md#initializers)).
@@ -373,7 +391,7 @@ Said of a value that can be frozen: copied into read-only data, where it stays u
 Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).
 
 **Reaches run time**:
-Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, or an attribute argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, an attribute argument or a `const` argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 **Static closure**:
 A closure whose body is instantiated once per field, as the argument of `T.construct` or `T.makeCase` ([09](docs/spec/09-compile-time/reflection.md#constructing-values-reflectively)).

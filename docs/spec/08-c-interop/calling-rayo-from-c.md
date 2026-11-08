@@ -52,7 +52,7 @@ A C or C++ program uses a library written in Rayo:
 | struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), each in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | a C struct whose member `_i` is element `i`, declared in layout order ([04](../04-types/collections.md#tuples-ranges-and-arrays)), each in its representation |
-| `Simd<T, N>` over a number type, other than the vector types the table above imports | `struct { _Alignas(A) T lanes[N]; }`, where `A` is the vector's alignment, so a 3-lane vector's fourth slot is padding ([04](../04-types/numbers-and-math.md#simd-and-math)) |
+| `Simd<T, N>` over a number type, other than the vector types the table above imports | `struct { _Alignas(A) T lanes[N]; }`, where `A` is the vector's alignment, the smaller of its size and 64, so a 3-lane vector's fourth slot is padding ([04](../04-types/numbers-and-math.md#vector-layout)) |
 | union | the C union its layout gives ([04](../04-types/enums.md#untagged-unions)), each member in its representation |
 | enum without payloads | its stored integer type, the raw type if it has one ([04](../04-types/enums.md#enums)), with a constant per case holding its stored value |
 | enum with payloads | `struct { tag; union { … } }`, its tag as an enum without payloads stores it |

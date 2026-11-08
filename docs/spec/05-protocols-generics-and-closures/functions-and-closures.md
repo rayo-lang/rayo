@@ -19,8 +19,8 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 **Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
-2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)).
-3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
+2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
+3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, or a bare name whose match is a generic or overloaded function, which the expected type resolves as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
 ```swift
@@ -58,6 +58,92 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 - a nested function;
 - a member, accessor, initializer, `deinit` or field default of a local type;
 - a member of a local extension.
+
+## Static and instance members
+
+**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Qualified code reaches them through different receivers, a type or a value, so no call picks between them:
+
+```swift
+let lowest = Int.min        // the static property
+let m = x.min(y)            // Comparable's instance method, for an Int 'x'
+```
+
+The overload rules above, by labels, parameter types and `self` convention, apply within each namespace.
+
+**Each body inside a type is an instance body or a static body**, which decides the members it sees unqualified:
+
+- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or an ordinary use, neither a call nor a function value, reaches the static one. The exception is an instance property, which an ordinary use reaches first, being the nearer match.
+- **Static bodies.** These are static members and the accessors of static properties. They see no instance members, so only scope 4 holds the type's members for them.
+- **Default values.** A default value, of a field or a parameter, sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
+- **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
+- **Nested functions.** A nested function sees the generic parameters of the function it is in and the enclosing type's static members, but no instance member, since it names no `self` ([above](#functions-and-closures)).
+- **Nested types.** A nested type's members see its instance members in scope 3, and in scope 4 its generic parameters, static members and nested types, then each enclosing type's, outward. A member of a local type sees no instance member of the enclosing type, as a nested function doesn't.
+
+**An unqualified name is looked up in these scopes, in order:**
+
+1. the body's locals and parameters;
+2. the generic parameters of the function the body belongs to;
+3. the instance members the body sees (above);
+4. the body's own type, then each enclosing type outward: its generic parameters, static members and nested types;
+5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
+
+Each member is in one scope, instance members in 3 and static ones in 4, so no member is found twice:
+
+```swift
+struct Ring<let N: Int> {
+    func cap() -> Int { N }                  // scope 4: Ring's own value parameter
+}
+
+extension Int {
+    func check(_ x: Int) { if x < min { … } }   // an ordinary use: skips the method min(_:) and reaches Int.min
+}
+```
+
+**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For an ordinary use, neither a call nor a function value, the nearest match ends the search, whatever it is. A name that isn't called, whether a function value or an ordinary use, skips instance methods, since an instance method is never a value.
+
+**A match that can be called, but isn't a function, ends the search for a call or a function value:**
+
+- a local, a parameter or a property whose type is a function type, a closure's concrete type or a `Closure<F>` ([Closures by concrete type](#closures-by-concrete-type-some-f)). A call `onHit(3)` whose nearest `onHit` is such a field calls the field, even when its type doesn't fit the call;
+- a type, or a type parameter, which a call calls for an initializer. A value parameter can't be called, so the search skips it.
+
+**When the first match that can be called is a function, the name gathers candidates across scopes:**
+
+- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together. Those hold the instance members the body sees, the static members of its own type and the enclosing types outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
+- **Function values.** A name used as a function value (below), not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
+- **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
+
+**A bare name is used as a function value wherever a function type is expected before the name is resolved**, as in these places:
+
+- a `let` or `var` with a type annotation;
+- an assignment to a function-typed place, such as `handler = max`;
+- a `return`, or a single-expression body, whose result is a function type, a closure's included, as in `pick` ([Function-typed values](#function-typed-values));
+- an element of an array literal whose element type is a declared function type;
+- an argument to a callee left with a single candidate, counted after step 1's label and arity filter, so `use(x:)` and `use(f:)` leave one;
+- a default value of a function-typed parameter or field.
+
+Anywhere else, such as an argument to a callee left with several candidates, the name is an ordinary use and takes the nearest match. A nearest match that isn't a function is typed in step 2 ([above](#functions-and-closures)).
+
+**So neither a member nor a name that can't be called hides a free function that the call's arguments fit better:**
+
+```swift
+extension Comparable where Self: Copyable {
+    func clamped(_ lo: Self, _ hi: Self) -> Self {
+        max(lo, min(self, hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
+    }
+}
+
+extension Int {
+    static func cap(_ x: Int) -> Int { max(0, min(x, 100)) }   // fine: the properties Int.min and Int.max can't be called
+}
+
+struct Bounds(let min: Float, let max: Float) {
+    func clamp(_ x: Float) -> Float { max(min, min(x, max)) }  // the calls skip the fields; the arguments name them
+    func show() { use(max) }                                   // the field: 'use' is overloaded, so this is no function value
+}
+
+func use(_ x: Float) { … }                                     // so use(max) above calls this one
+func use(_ f: (Float, Float) -> Float) { … }
+```
 
 ## Unused values
 

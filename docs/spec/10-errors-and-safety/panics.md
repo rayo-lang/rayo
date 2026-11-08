@@ -41,6 +41,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 **Uses out of bounds, or outside a value's life:**
 
 - out-of-bounds indexing, and a string range off a Unicode scalar boundary ([04](../04-types/collections.md#strings));
+- a vector load or store outside its span ([04](../04-types/numbers-and-math.md#simd-and-math));
 - an access through, or a pin taken through, a stale object owner ([03](../03-handles-and-objects.md#destroying-an-object));
 - opening an owning value whose allocator was reset or unregistered since ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it));
 - reading a global before its initializer has run ([07](../07-concurrency/global-state.md#initialization-at-startup));
