@@ -167,23 +167,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A call written without `try` evaluates to its `Result`**, so code keeps an error by leaving `try` out. It can store the `Result`, move it to another thread, and take it apart later with `try` or `when`.
 
-**A value that may hold an error must be used, or it is a compile error**, so no error is dropped without the code saying so. Its type is one of these:
-
-- a `Result` whose failure type isn't `Never`, or a `T!Never` whose `T` is any of the types in this list;
-- an optional or a tuple holding one, at any depth, such as the `(Void!IoError)?` that `player?.save()` gives;
-- a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance.
-
-Generic code that drops such a value writes `_ = f()`, a small cost for losing no error in any instance.
-
-**A value is never used when it is:**
-
-- an expression written as a statement;
-- the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
-- the single expression of a body whose result type is `Void`;
-- held in a local or an `owned` parameter that no code names after its declaration, since `let r = save()` would otherwise drop the error as silently as a statement does;
-- overwritten by an assignment before any code reads it, as the first `r` is in `var r = save(a); r = save(b)`.
-
-**`_ = r` and `let _ = r` drop such a value on purpose.** Each takes `r` as a value, and destroys it at the end of its statement.
+**A `Result` that is never used is a compile error, as every unused value whose type isn't `Void` or `Never` is** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)). So no error is dropped without the code saying so, however deeply a value holds it, as in the `(Void!IoError)?` that `player?.save()` gives. `_ = r` drops one on purpose.
 
 **A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). So `Result` needs no other way to run code and keep its error:
 
