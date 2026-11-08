@@ -20,7 +20,7 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
-3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
+3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, or a bare name whose match is a generic or overloaded function, which the expected type resolves as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
 ```swift
@@ -87,7 +87,7 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 4. each enclosing type, from the innermost outward: its generic parameters, static members and nested types;
 5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
 
-**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For any other use, the nearest match ends the search, whatever it is.
+**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For any other use, the nearest match ends the search, whatever it is. A name that isn't called skips instance methods in every use, since an instance method is never a value.
 
 **A match that can be called, but isn't a function, ends the search for a call or a function value:**
 
@@ -100,14 +100,16 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 - **Function values.** A name used as a function value (below), not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
 - **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
 
-**A bare name is used as a function value only where its expected type is known to be a function type before the name is resolved:**
+**A bare name is used as a function value wherever a function type is expected before the name is resolved**, as in these places:
 
 - a `let` or `var` with a type annotation;
-- a `return`, or a single-expression body, of a function whose result type is a function type, as in `pick` ([Function-typed values](#function-typed-values));
-- an argument to a callee that has a single candidate;
+- an assignment to a function-typed place, such as `handler = max`;
+- a `return`, or a single-expression body, whose result is a function type, a closure's included, as in `pick` ([Function-typed values](#function-typed-values));
+- an element of an array literal whose element type is a declared function type;
+- an argument to a callee left with a single candidate, counted after step 1's label and arity filter, so `use(x:)` and `use(f:)` leave one;
 - a default value of a function-typed parameter or field.
 
-Anywhere else, such as an argument to an overloaded callee, which step 2 types without context, the name is an ordinary use and takes the nearest match.
+Anywhere else, such as an argument to a callee left with several candidates, the name is an ordinary use and takes the nearest match. A nearest match that isn't a function is typed in step 2 ([above](#functions-and-closures)).
 
 **So neither a member nor a name that can't be called hides a free function that the call's arguments fit better:**
 
