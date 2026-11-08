@@ -40,7 +40,7 @@ x = 1; y = 2                    // ';' separates statements on one line
 - **The next line joins the current one** when it starts with one of these:
     - `.`, for method chaining;
     - a binary operator, except `-`, `&`, `..<` and `...`, which can also be prefix operators;
-    - `else`, `catch`, `where`, `throws` or `->`, so a signature can wrap before its result.
+    - `else`, `catch`, `where` or `->`, so a signature can wrap before its result.
 
   So a line that starts with `-x` or `..<n` starts a new statement, unless the line above continues.
 - **A `when` arm ends with the `}` of its block.** Whatever follows begins the next arm, on the same line or the next, so a line that starts with `.` or `else` there begins an arm rather than joining the one above. An arm's patterns and guard may span lines by the rules above, as `.chase(let t)` does below.

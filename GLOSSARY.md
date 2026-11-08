@@ -369,7 +369,10 @@ A run-time check that catches a logic bug whose failure is still memory-safe, su
 _Avoid_: debug check
 
 **Error union**:
-A tagged union with one member per error type, written `(IoError | ParseError)`, as in `throws(IoError | ParseError)` ([10](docs/spec/10-errors-and-safety/typed-errors.md#error-unions)).
+A tagged union with one member per error type, written `(IoError | ParseError)`, as in `Level!(IoError | ParseError)` ([10](docs/spec/10-errors-and-safety/typed-errors.md#error-unions)).
+
+**Failure type**:
+The `Failure` of a `Result`, and of a function whose result type is one: the errors it can fail with, `Never` for none ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
 **Memory-safety check**:
 A run-time check, such as a bounds check, that keeps safe code sound; it is on in every build ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
@@ -380,8 +383,11 @@ How a bug, such as unwrapping `nil` with `!`, stops the program: reported throug
 _Avoid_: crash, abort, exception
 
 **Recoverable error**:
-A typed value, such as a missing file, that a function throws and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).
+A typed value, such as a missing file, that a function returns as the failure of its `Result` and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).
 _Avoid_: exception
+
+**Result**:
+The prelude's enum `Result<Success, Failure>`, written `Success!Failure`, which a function that can fail returns: its result as `.success` or its error as `.failure` ([10](docs/spec/10-errors-and-safety/typed-errors.md#results)).
 
 **Unsafe code**:
 Code that uses an operation needing `unsafe`, such as dereferencing a raw pointer or calling C, whose soundness the code promises instead of the compiler ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).

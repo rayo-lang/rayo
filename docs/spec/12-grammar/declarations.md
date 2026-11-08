@@ -40,7 +40,7 @@ let-decl      = 'let' binding (',' binding)* ;                      (* let lo = 
 var-decl      = 'var' binding (',' binding)* | 'var' identifier ':' type where-clause? accessor-block ;
 binding       = pattern (':' type)? ('=' expression)? ;
 
-func-decl     = 'func' func-name generic-params? param-clause throws-clause? ('->' type)?
+func-decl     = 'func' func-name generic-params? param-clause ('->' result-type)?
                 where-clause? block ;
 func-name     = identifier | operator ;
 operator      = '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '&' | '|' | '^'
@@ -48,14 +48,14 @@ operator      = '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '
                                                                    One parameter declares a prefix operator ('-', '!', '~'), two a binary one (05) *)
 label         = identifier ;
 task-decl     = 'task' 'func' identifier generic-params? param-clause
-                ('with' '(' identifier ':' 'mutable' type ')')? throws-clause? ('->' type)? where-clause? block ;
+                ('with' '(' identifier ':' 'mutable' type ')')? ('->' result-type)? where-clause? block ;
                                                                    (* one resume parameter (07) *)
 param-clause  = '(' (param (',' param)* ','?)? ')' ;
 param         = (arg-label | '_')? identifier ':' param-convention? type ('=' expression)? ;
 arg-label     = identifier | keyword ;                            (* func index(of x: T, in s: Span<T>) *)
 param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or owned for a mutating or consuming function type, some F of one, or mutable any P (05) *)
-throws-clause = 'throws' | typed-throws ;                          (* bare 'throws' only on a non-public function with a body (10) *)
-typed-throws  = 'throws' '(' type ('|' type)* ')' ;                (* throws(IoError | ParseError): an error union (10) *)
+result-type   = type | result-base '!' ;                           (* a bare '!' infers the failure type: only on a non-public function with a body (10) *)
+init-result   = '->' 'Self' '!' type-primary? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError (10) *)
 
 struct-decl   = 'struct' identifier generic-params? primary-init? inheritance? where-clause? ('{' member* '}')? ;
                 (* a struct's body declares no stored field: its 'var's are computed or static, and its 'let's static (04) *)
@@ -72,10 +72,10 @@ enum-case     = attribute* 'case' case-item (',' case-item)* ;
 case-item     = identifier ('(' tuple-type-elems ')' | '=' expression)? ;   (* a raw value only in an enum without payloads (04) *)
 protocol-decl = 'protocol' identifier inheritance? where-clause? '{' protocol-member* '}' ;   (* 'unsafe protocol P': every conformance is ': unsafe P' (05) *)
 protocol-member = 'associatedtype' identifier inheritance? ('=' type)?
-              | attribute* modifier* 'func' func-name generic-params? param-clause typed-throws? ('->' type)? where-clause?
+              | attribute* modifier* 'func' func-name generic-params? param-clause ('->' type)? where-clause?
               | attribute* modifier* 'var' identifier ':' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
               | attribute* modifier* 'subscript' param-clause '->' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
-              | attribute* modifier* 'init' '?'? generic-params? param-clause typed-throws? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError) *)
+              | attribute* modifier* 'init' '?'? generic-params? param-clause ('->' 'Self' '!' type-primary)? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError) *)
 extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                    (* no stored member or enum case, directly or generated, and a deinit
                                                                       only in an unconditional extension, in the type's module (04);
@@ -85,7 +85,7 @@ extern-c-decl = 'extern' 'c' ( plain-string-lit | 'noalloc'? c-stack? 'func' ide
 c-stack       = 'stack' '(' expression ')' ;                        (* the stack, in bytes, the C function needs at most: a const Int expression (08) *)
 
 member        = declaration | init-decl | deinit-decl | subscript-decl | static-if-decl | static-for-decl | static-error ;
-init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause throws-clause? where-clause? block ;
+init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause init-result? where-clause? block ;   (* not both '?' and an init-result *)
 deinit-decl   = attribute* 'deinit' block ;                         (* '@noalloc' is the attribute with a meaning here (06) *)
 subscript-decl= attribute* modifier* 'subscript' param-clause '->' type where-clause? accessor-block ;
 accessor-block= '{' ( statement* | accessor+ ) '}' ;              (* 'get', 'set', 'read' or 'modify' first, after attributes and modifiers, then '{', begins an accessor, never a call *)

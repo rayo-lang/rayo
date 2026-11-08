@@ -40,7 +40,7 @@ let banner = """
 
 **The keywords are these:** `let var const func task struct enum protocol extension typealias import public private
 init deinit self Self if else guard when case for in while repeat break continue return
-throw throws try catch do defer static mutable owned consuming copy consume borrow mutating any some
+throw try catch do defer static mutable owned consuming copy consume borrow mutating any some
 where with await yield unsafe unchecked using extern as is nil true false
 associatedtype subscript`.
 
