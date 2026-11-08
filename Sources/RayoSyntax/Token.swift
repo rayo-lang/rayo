@@ -3,7 +3,7 @@ public enum Keyword: String, Sendable, CaseIterable {
     case `let`, `var`, `const`, `func`, task, `struct`, `enum`, `protocol`, `extension`, `typealias`, `import`
     case `public`, `private`, `init`, `deinit`, `self`, `Self`, `if`, `else`, `guard`, when, `case`, `for`, `in`
     case `while`, `repeat`, `break`, `continue`, `return`, `throw`, `throws`, `try`, `catch`, `do`, `defer`
-    case `static`, mutable, owned, consuming, copy, consume, mutating, any, some, `where`, with, await, yield
+    case `static`, mutable, owned, consuming, copy, consume, borrow, mutating, any, some, `where`, with, await, yield
     case unsafe, unchecked, using, extern, `as`, `is`, `nil`, `true`, `false`, `associatedtype`, `subscript`
 }
 

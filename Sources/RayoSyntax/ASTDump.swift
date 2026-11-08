@@ -75,7 +75,7 @@ extension Stmt {
     public var dump: String {
         switch kind {
         case .binding(let binding):
-            var text = "(\(binding.owned ? "owned " : "")\(binding.kind.rawValue) \(binding.name)"
+            var text = "(\(binding.kind.rawValue) \(binding.name)"
             if let type = binding.type { text += ": \(type)" }
             if let value = binding.value { text += " \(value.dump)" }
             return text + ")"
@@ -133,6 +133,8 @@ extension Expr {
             return "(copy \(operand.dump))"
         case .consume(let operand):
             return "(consume \(operand.dump))"
+        case .borrow(let place):
+            return "(borrow \(place.dump))"
         case .arrayLiteral(let elements):
             return sExpression("array", elements.map(\.dump))
         case .closure(let closure):

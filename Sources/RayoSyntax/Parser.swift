@@ -457,7 +457,7 @@ public struct Parser {
         try rejectAttribute()
         let start = current.range
         let kind: StmtKind
-        if current.isKeyword(.owned) || current.isKeyword(.let) || current.isKeyword(.var) {
+        if current.isKeyword(.let) || current.isKeyword(.var) {
             kind = .binding(try parseBinding())
         } else if consume(.if) {
             kind = try parseIf()
@@ -535,22 +535,14 @@ public struct Parser {
     }
 
     private mutating func parseBinding() throws(Failure) -> Binding {
-        let owned = consume(.owned)
-        let kind: BindingKind
-        if consume(.let) {
-            kind = .let
-        } else if consume(.var) {
-            kind = .var
-        } else {
-            throw fail("expected 'let' or 'var' after 'owned'")
-        }
+        let kind: BindingKind = advance().isKeyword(.let) ? .let : .var
         let (name, nameRange) = try expectIdentifier("a name to bind")
         var type: TypeExpr?
         if consume(.colon) { type = try parseType() }
         var value: Expr?
         if consume(.assign) { value = try parseExpression() }
         if current.isPunct(.comma) { throw unsupported("more than one binding in a declaration", at: current.range) }
-        return Binding(owned: owned, kind: kind, name: name, nameRange: nameRange, type: type, value: value)
+        return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: value)
     }
 
     // MARK: Expressions
@@ -605,6 +597,7 @@ public struct Parser {
         case .punct(.amp): make = { .lend($0) }
         case .keyword(.copy): make = { .copy($0) }
         case .keyword(.consume): make = { .consume($0) }
+        case .keyword(.borrow): make = { .borrow($0) }
         default: make = nil
         }
         guard let make else { return try parsePostfix() }

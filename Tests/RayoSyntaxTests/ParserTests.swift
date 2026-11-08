@@ -46,6 +46,7 @@ struct ExpressionTests {
         ("&x.items[1]", "(& (index (. x items) 1))"),
         ("copy a.b + 1", "(+ (copy (. a b)) 1)"),
         ("consume a", "(consume a)"),
+        ("borrow a.b", "(borrow (. a b))"),
         ("- -a", "(- (- a))"),
         ("-9223372036854775808", "(- 9223372036854775808)"),
     ])
@@ -149,8 +150,9 @@ struct StatementTests {
     @Test("bindings", arguments: [
         ("let x = 1", "(let x 1)"),
         ("var x: Int = 1", "(var x: Int 1)"),
-        ("owned let e = list.take()", "(owned let e (call (. list take)))"),
-        ("owned var e: Enemy", "(owned var e: Enemy)"),
+        ("let e = list.take()", "(let e (call (. list take)))"),
+        ("var e: Enemy", "(var e: Enemy)"),
+        ("let seen = borrow enemies[0]", "(let seen (borrow (index enemies 0)))"),
         ("var b: Box<Int>= a", "(var b: Box<Int> a)"),
         ("var a: [3 of Int] = [1, 2, 3]", "(var a: [3 of Int] (array 1 2 3))"),
         ("var t = &world.enemies", "(var t (& (. world enemies)))"),
@@ -335,7 +337,7 @@ struct ErrorTests {
         ("func f(_ a: [n of Int]) {}", "1:14: error: expected the inline array's count, found 'n'"),
         ("func f(_ a: [3 Int]) {}", "1:16: error: expected 'of' in an inline array type, found 'Int'"),
         ("func f(_ a: List<>) {}", "1:18: error: expected a type, found '>'"),
-        ("func f() { owned x = 1 }", "1:18: error: expected 'let' or 'var' after 'owned', found 'x'"),
+        ("func f() { owned let x = 1 }", "1:12: error: expected an expression, found 'owned'"),
         ("func f() { for i 0..<n {} }", "1:18: error: expected 'in' after the loop variable, found '0'"),
         ("func f() { x.1 }", "1:14: error: expected a member name after '.', found '1'"),
     ])
@@ -406,7 +408,8 @@ private func expressionIDs(in file: SourceFile) -> [ExprID] {
         case .index(let base, let arguments), .call(let base, let arguments):
             visit(base)
             arguments.forEach { visit($0.value) }
-        case .unary(_, let operand), .lend(let operand), .copy(let operand), .consume(let operand):
+        case .unary(_, let operand), .lend(let operand), .copy(let operand), .consume(let operand),
+             .borrow(let operand):
             visit(operand)
         case .binary(_, let left, let right):
             visit(left)

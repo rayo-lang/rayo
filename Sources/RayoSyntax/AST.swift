@@ -147,7 +147,6 @@ public enum BindingKind: String, Sendable, Hashable {
 }
 
 public struct Binding: Sendable {
-    public var owned: Bool
     public var kind: BindingKind
     public var name: String
     public var nameRange: SourceRange
@@ -264,6 +263,8 @@ public indirect enum ExprKind: Sendable {
     case lend(Expr)
     case copy(Expr)
     case consume(Expr)
+    /// `borrow place`: a declaration that borrows the place instead of moving out of it.
+    case borrow(Expr)
     case arrayLiteral([Expr])
     case closure(ClosureExpr)
 }
