@@ -230,7 +230,8 @@ let startTime = now()            // fine: a global 'let' is initialized at start
 - accesses no global other than a `const`;
 - starts, parks or wakes no thread;
 - makes no volatile access, and none through a pointer made from an integer;
-- reads no clock.
+- reads no clock;
+- hashes nothing with the seed the program draws when it starts (below).
 
 **A `const` whose initializer does anything else is a compile error.** A global `let` runs its initializer at startup instead.
 
@@ -239,6 +240,16 @@ let startTime = now()            // fine: a global 'let' is initialized at start
 **Allocation works.** The compiler has a heap of its own, so a `const` can build a `List` with `append`.
 
 **A `const` that run-time code names is frozen into the program's read-only data** ([09](../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)), since the running program has no compile-time heap.
+
+```swift
+const lootWeights: Map<Int, Float, FixedHashing> = [1: 0.6, 2: 0.3, 3: 0.1]   // frozen into read-only data
+const dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                  // error: a seeded Map can't be made at compile time
+let dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                    // fine: built at startup
+```
+
+**A `Map` or a `Set` hashes its keys with a seed the program draws when it starts** ([04](../spec/04-types/collections.md#hash-maps-and-sets)). A server that puts keys from its clients in a map would otherwise let a client send keys that all land in one bucket, which makes every lookup slow. The compiler can't know a seed drawn later, so it can't build such a map, and a global `let` of one is built at startup instead.
+
+**A lookup table that should cost nothing at startup names `FixedHashing` as its third type argument.** Its hashes depend only on the keys, so they are the same in the compiler and in every run, and the table can be a `const`. Leave the default for any map whose keys come from outside the program.
 
 ## `static if` and `target`
 
@@ -369,4 +380,5 @@ struct Boss(@Bounds(0, maxHp) var hp: Float = 100)      // fine
 - [10 Unsafe code](../spec/10-errors-and-safety/unsafe-code.md#unsafe-code): what needs `unsafe`, raw pointers, the full rules `unsafe` code keeps, and `@safe` modules.
 - [05 C function pointers](../spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers): which functions convert to a `@c` type, and when.
 - [03 Pinning for C](../spec/03-handles-and-objects.md#pinning-for-c): what a pin guarantees while C holds its address.
+- [04 Hash maps and sets](../spec/04-types/collections.md#hash-maps-and-sets): the hashing types, the seed drawn for each run, and which maps can be frozen.
 - [09 Compile time](../spec/09-compile-time.md): `const` evaluation and freezing, `static if`, everything reflection reads, attributes, generated declarations, building values with `T.construct`, and `typeInfo` at run time.

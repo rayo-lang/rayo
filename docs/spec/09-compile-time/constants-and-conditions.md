@@ -26,7 +26,8 @@ func makeSinTable() -> [1024 of Float] {
 - accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
 - starts, parks and wakes no thread: it reaches no blocking wait, `Runtime.park` or `Runtime.wake`;
 - makes no volatile access, and no access through a pointer made from an integer;
-- reads no clock.
+- reads no clock;
+- makes no `Hasher` from the process seed, as a `Map` or `Set` with the default `SeededHashing` does when it is made, since that seed is drawn only when the program runs ([04](../04-types/collections.md#hash-maps-and-sets)).
 
 **A `const` whose initializer does anything else is a compile error**, while a global `let`'s runs at startup instead ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
@@ -105,11 +106,15 @@ func setUp(_ world: mutable World) {
 - **Unscoped.** It is unscoped ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). Freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a `StaticSpan` or a `StaticString` (above).
 - **Readable from any thread.** It has a `Sendable` type, as every global that safe code reaches does ([07](../07-concurrency/global-state.md#global-state)).
 
-**The same test decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So these two are initialized at startup:
+**Nothing frozen depends on the process seed.** Code that makes a `Hasher` from it can't run at compile time (above), so no value built at compile time places keys by a seeded hash. A `Map` or `Set` with `SeededHashing`, or any value whose layout comes from such a hash, never reaches read-only data, where the run's lookups would hash by another seed and miss its keys ([04](../04-types/collections.md#hash-maps-and-sets)).
+
+**The same test, with the rules above for what can run at compile time, decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So the first three below are initialized at startup, and only the last is frozen:
 
 ```swift
-let frameArena = Allocator.register(Arena(size: 64.mb))   // holds an allocator id other than .system
-let godMode = Atomic(false)                               // Synchronized: kept in memory its methods can write
+let frameArena = Allocator.register(Arena(size: 64.mb))                // holds an allocator id other than .system
+let godMode = Atomic(false)                                            // Synchronized: kept in memory its methods can write
+let presetIds: Map<Name, Int> = ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
+let fixedIds: Map<Name, Int, FixedHashing> = ["grunt": 0, "brute": 1]  // fixed hashing: frozen into read-only data
 ```
 
 **A `const` that doesn't reach run time, such as a list iterated by `static for`, may hold anything.** An attribute made from one must still be freezable ([Attributes](attributes-and-runtime-data.md#attributes)).

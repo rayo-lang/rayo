@@ -72,6 +72,8 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
 
 **A global `let` goes into read-only data, in every build, exactly when it can be computed and frozen at compile time:** its initializer can run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), and its value passes the **freezable** test ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`. One that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value.
 
+**So a global `Map` or `Set` that hashes with the default `SeededHashing` is built at startup**, since making one reads the process seed, which only a run has ([04](../04-types/collections.md#hash-maps-and-sets)). One with `FixedHashing` goes into read-only data when the rest of it is freezable.
+
 **Every other global is initialized at startup**, one module at a time, each module's declarations in source order. **Startup** runs before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](../08-c-interop.md)). The next module is always the first in the build's list ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) whose imports are all initialized. A module outside the prelude's modules and every module they import counts all of those as imports ([11](../11-compilation-model.md#the-prelude)).
 
 **No global is destroyed** ([below](#shutdown)) **or consumed** ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)), other than a thread-local's copy, which ends in its thread's teardown.

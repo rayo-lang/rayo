@@ -41,6 +41,7 @@ using allocator = a { … }                   // a block with an await inside
 ```
 
 - **Must accept** per-request scratch memory, stepped tasks, and a time-based wait driven by the server's own clock.
+- **Must hold:** a client can't choose header names that collide in a `Map` the server keys by them, without the server asking for that protection.
 - Memory must stay bounded as long as each worker returns to its event loop between requests, whether that loop is a C library's that calls Rayo back, or Rayo code that idles in `epoll_wait` or on a futex.
 - **Must hold:** what a worker holds while it waits for its next request never makes its arena's next reset panic.
 - State what the `unsafe` call to `epoll_wait` promises about the event buffer it hands the kernel, and show a buffer that keeps that promise simply.

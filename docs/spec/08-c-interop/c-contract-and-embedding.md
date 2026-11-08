@@ -70,6 +70,7 @@ enum NavMode: Int32 { case walk, fly }
 - the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock for timeouts, such as a parked thread's;
+- random bytes that nobody outside the program can predict, from which std draws the process seed that `Map` and `Set` hash with by default ([04](../04-types/collections.md#hash-maps-and-sets));
 - a way to report a panic ([10](../10-errors-and-safety/panics.md#panics)).
 
 ### Embedding Rayo in a C program

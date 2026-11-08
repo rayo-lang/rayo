@@ -156,6 +156,10 @@ _Avoid_: weak reference, weak link (a `WeakShared`)
 
 ### Types
 
+**Hashing type**:
+A type conforming to `Hashing`, such as the default `SeededHashing` or `FixedHashing`, which a `Map` or `Set` takes as its `H` to make the `Hasher` that each key is fed to ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
+_Avoid_: BuildHasher, hasher builder
+
 **Layout order**:
 The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
 
@@ -183,6 +187,10 @@ _Avoid_: trivial type
 **Primary initializer**:
 A struct's header, which lists its stored fields once and is also its initializer ([04](docs/spec/04-types/structs.md#structs)).
 _Avoid_: memberwise initializer
+
+**Process seed**:
+The random value std draws from the platform once per run, before startup initializes any global, from which every `Hasher()` starts, so that nobody outside the program can choose keys that collide ([04](docs/spec/04-types/collections.md#hash-maps-and-sets)).
+_Avoid_: random state, hash key
 
 **Reduction**:
 An operation that combines a vector's lanes into one value, such as `sum()` or a mask's `any`, in an order fixed on every target ([04](docs/spec/04-types/numbers-and-math.md#reductions)).
@@ -219,6 +227,10 @@ The parts of generic code the compiler checks at each instantiation instead of o
 
 **Default**:
 A member of a protocol extension that matches a requirement, and is the witness of every conformance that declares none ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#protocol-extensions)).
+
+**Default type argument**:
+The type a struct's, enum's or union's type parameter names after `=`, which a written type that leaves that argument out takes, as `Map<Name, Int>` takes `SeededHashing` for its `H` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#default-type-arguments)).
+_Avoid_: default generic parameter
 
 **Existential**:
 A value of type `any P` or `mutable any P`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).

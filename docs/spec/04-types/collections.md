@@ -60,7 +60,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
 | `StaticSpan<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)) |
-| `Map<K, V>`, `Set<T>` | yes | Hash map and set |
+| `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
 | `StablePool<T>` | yes | Stable and pinnable element addresses |
@@ -84,6 +84,8 @@ log("pressed \(jump.text)")               // the text, as a StaticString
 
 **A `Name` hashes a hash of its text stored with it, never its address.** The build computes an entry's hash when it makes a literal's entry, and the interner computes it at run time. So the hash comes from one fixed function of the text alone, which the build and the interner share, and which gives the same value at both stages whatever `Hasher` does. Its algorithm is the library's choice, but it gives one value for a given text at every stage of one build. A `Name`'s `hash(into:)` feeds that stored value to the `Hasher`, so a `Name` hashes as an integer key does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
+**So a `Name` key hashes correctly under either hashing type.** The map's `Hasher` mixes the stored value with its own seed, as it would an integer's, so a `Map` with `FixedHashing` and `Name` keys can be frozen ([Hash maps and sets](#hash-maps-and-sets)). The stored value itself is never seeded, though. Two texts whose stored hashes collide collide in every map, which is one more reason not to intern text from outside the program (below).
+
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
 **Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `StaticString` ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
@@ -101,6 +103,51 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 **`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
 **A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each text it converts to a `Name` literal in checked code, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
+
+### Hash maps and sets
+
+```swift
+enum Action { case jump, fire, crouch }
+
+const bindings: Map<Name, Action, FixedHashing> = ["jump": .jump]   // frozen into read-only data
+const aliases: Map<Name, Action> = ["leap": .jump]                  // error: a seeded Map can't be made at compile time
+let shortcuts: Map<Name, Action> = ["leap": .jump]                  // fine: a global 'let', built at startup
+```
+
+**`Map` and `Set` hash their keys with a seed that nobody outside the program can learn, so nobody can choose keys that collide.** A program that hashes keys from outside, such as a server reading a request's headers, would otherwise let whoever sends them pick keys that all land in one bucket. Each lookup would then walk every one of those keys, and a few thousand of them could stall the server.
+
+**Each takes a type parameter, `H`, which decides how the `Hasher`s it feeds its keys to are seeded.** `H` defaults to `SeededHashing` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#default-type-arguments)), so `Map<Name, Action>` is `Map<Name, Action, SeededHashing>`:
+
+```swift
+struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
+struct Set<T: Hashable, H: Hashing = SeededHashing>(…)
+
+protocol Hashing {
+    static func makeHasher() -> Hasher    // a new hash state, for one key
+}
+```
+
+A type that conforms to `Hashing` is a **hashing type**. A map or set calls `H.makeHasher()` for each key it hashes, and feeds the key to the result through `hash(into:)` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Every initializer of `Map` and `Set` calls it once too, even one that makes an empty map. So whether a map can be made at compile time depends only on its type, never on whether it happens to be empty (below).
+
+**std's `Hasher` has one algorithm, which is the library's choice, and starts from a seed:**
+
+- **`Hasher()`** starts from the **process seed**: a random value std draws from the platform once per run, before startup initializes any global ([07](../07-concurrency/global-state.md#initialization-at-startup)). Every such `Hasher` in one run starts from the same seed.
+- **`Hasher(seed:)`** starts from the `UInt64` it is given, so its output depends only on that seed and on what it is fed.
+
+**std provides two hashing types:**
+
+- **`SeededHashing`**, the default, returns `Hasher()`. So a key's hash, and the order in which a map visits its entries, can differ between two runs of one build ([11](../11-compilation-model.md#what-the-language-leaves-open)).
+- **`FixedHashing`** returns a `Hasher(seed:)` with a seed that std fixes. So a key's hash depends only on the key, and is the same at compile time and in every run of one build.
+
+A program may declare its own, such as one that returns a `Hasher(seed:)` with a secret it reads at startup.
+
+**The process seed exists only at run time, so code that makes a `Hasher()` can't run at compile time** ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). The compiler has no run's seed to start from, and keys placed by any other seed would lie where the run's lookups never look. So a map's or set's hashing type decides whether it can be frozen into read-only data:
+
+- **A `const` of one with `SeededHashing` is a compile error**, since a `const`'s initializer must run at compile time.
+- **A global `let` of one with `SeededHashing` is built at startup**, since only a value computed at compile time goes into read-only data ([07](../07-concurrency/global-state.md#initialization-at-startup)).
+- **One with `FixedHashing` can be frozen**, when what it holds is freezable ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). So a lookup table such as `bindings` above lies in read-only data, and costs nothing at startup.
+
+**A seeded map's order doesn't repeat from run to run.** So a replay, a lockstep simulation or a test that compares printed output sorts the keys it visits, or uses `FixedHashing`, whose order is the same in every run of one build.
 
 ### Strings
 

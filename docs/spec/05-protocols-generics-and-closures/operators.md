@@ -98,7 +98,7 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
     func min(_ other: Self) -> Self where Self: Copyable
     func max(_ other: Self) -> Self where Self: Copyable
     ```
-- **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`. It must give equal hashes for values that `==` calls equal.
+- **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`, whose seed the map or set doing the hashing chooses ([04](../04-types/collections.md#hash-maps-and-sets)). It must give equal hashes for values that `==` calls equal.
 
     ```swift
     protocol Hashable: Equatable {

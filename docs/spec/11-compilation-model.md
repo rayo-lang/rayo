@@ -198,6 +198,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 **What is left is timing and order, some representations, what libraries and builds choose, and limits:**
 
 - **Thread timing.**
+- **The process seed**, which std draws anew for each run ([04](04-types/collections.md#hash-maps-and-sets)). So what a `Hasher` that starts from it outputs can differ even between two runs of one build, and so can any order that depends on that output, such as that of a `Map` with the default `SeededHashing`.
 - **Destruction order**: the order in which a reset or an unregistration runs the `deinit`s of the objects it destroys ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)), and in which a thread's teardown destroys its objects ([07](07-concurrency/global-state.md#thread-teardown)).
 - **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.
 - **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a span of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Safe code never sees where a function's code lives.
@@ -213,7 +214,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
     - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 - **What a library leaves open**, such as:
     - the last bits of a math function like `sin`;
-    - `Hasher`'s output, and so any order that depends on it;
+    - `Hasher`'s algorithm, and so what a `Hasher` outputs from a given seed, such as `FixedHashing`'s, and any order that depends on it, though one build gives the same output at compile time and in every run ([04](04-types/collections.md#hash-maps-and-sets));
     - the layout of its types, such as std's `Pin<T>`, `LocalPin<T>` or `FieldInfo`;
     - the bits of handles ([03](03-handles-and-objects.md#pools-and-handles)).
 - **What a build reports**: the call sites it passes to allocators, or 0 ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)), and what a panic report contains ([10](10-errors-and-safety/panics.md#what-a-panic-does)).

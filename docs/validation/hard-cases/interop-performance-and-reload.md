@@ -129,7 +129,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 ```
 
 - **Must accept** bit-identical state on every target, under every toolchain and in every build mode, from the language's rules alone. Name the rule that fixes each result.
-- State what the program must avoid or supply itself to stay deterministic, such as its own `sin`.
+- State what the program must avoid or supply itself to stay deterministic, such as its own `sin`, or an order for the entries of a `Map` it steps through.
 
 ### F6 · Integer and float edge cases
 
