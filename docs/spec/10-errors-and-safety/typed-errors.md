@@ -61,7 +61,8 @@ Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no val
 ```swift
 func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
-let squares: List<Int> = tryMap(xs, square)    // square can't fail, so E is Never: the List<Int>!Never converts
+let squares = tryMap(xs, square)     // square can't fail, so E is Never: a List<Int>!Never
+log("\(squares.count) squares")      // its members are the List's
 ```
 
 **Three rules say what a failure type names:**
@@ -76,13 +77,15 @@ let squares: List<Int> = tryMap(xs, square)    // square can't fail, so E is Nev
 
 **`T!Never` is a type of its own, not another name for `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
+**A `T!Never` converts to `T` wherever the context needs a `T`, as the receiver of a member access or a method call included.** It holds nothing but a `T`, so code that can't fail reads its result with no `try` and no annotation, as `squares.count` does above. Member lookup on a `T!Never` looks only in `T`. `Result` declares no members of its own besides its two cases, which are never instance members, so none is hidden. A place of type `T!Never` is a place of `T` there, since the two are laid out the same, so the access borrows it and moves nothing.
+
 **An initializer that can fail writes its result type as `-> Self!E`:**
 
 ```swift
 public init(mass: Float) -> Self!PhysicsError    // a call to it evaluates to a Body!PhysicsError
 ```
 
-- **It succeeds with the new value.** Reaching its end after `self.init` returns `.success` of the new value ([04](../04-types/structs.md#initializers)), and so does a `return` there, which takes no value. A `throw` fails it.
+- **It succeeds with the new value.** Reaching its end after `self.init`, or in an enum after `self` is assigned, returns `.success` of the new value ([04](../04-types/structs.md#initializers)). So does a `return` there, which takes no value. A `throw` fails it.
 - **`-> Self!` infers `E`**, under the rule for a bare `!`, so only a non-public initializer with a body writes it.
 
 **A witness that can't fail meets a requirement that can**, as `init()` meets `init() -> Self!E`. It does so through the conversion that a named function makes to such a type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
@@ -122,7 +125,7 @@ func loadBossLevel(_ path: StringView) -> Level!LoadError {
 - **`return v`** of a `T`, where the result type is `T!E`, returns `.success(v)`, as a value converts to `T?` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A `Result` returned whole is returned as it is. Its failure type may also be one that converts implicitly to the result's, as a member converts to its union ([above](#error-unions)).
 - **`throw e`** returns `.failure(e)`, converting `e`'s members as `try` does (below). Inside a `do` block, it fails the block instead ([below](#handling-errors-with-do-and-catch)).
 
-**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error. `try` takes `r` as a value, so a place moves in, as it does into an `owned` parameter ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). On a `T!Never`, it gives the `T`, and never fails.
+**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error, and the operand takes no implicit conversion into a `Result`, so `let n: Int = try 5` is an error too. `try` takes `r` as a value, so a place moves in, as it does into an `owned` parameter ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). On a `T!Never`, it gives the `T`, and never fails.
 
 **`try` applies to the whole postfix chain after it**, as every prefix operator does ([12](../12-grammar/constructs.md#expressions)). So `try f().x` names the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x`.
 
@@ -164,14 +167,17 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 - a `Result` whose failure type isn't `Never`;
 - an optional or a tuple holding one, at any depth, such as the `(Void!IoError)?` that `player?.save()` gives;
-- a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance. Generic code that drops such a value writes `_ = f()`, a small cost for losing no error in any instance.
+- a type parameter or an associated type, since generic code is checked once, and the type may turn out to be a `Result` in some instance.
+
+Generic code that drops such a value writes `_ = f()`, a small cost for losing no error in any instance.
 
 **A value is never used when it is:**
 
 - an expression written as a statement;
 - the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
 - the single expression of a body whose result type is `Void`;
-- held in a local that no code names after its declaration, since `let r = save()` would otherwise drop the error as silently as a statement does.
+- held in a local or an `owned` parameter that no code names after its declaration, since `let r = save()` would otherwise drop the error as silently as a statement does;
+- overwritten by an assignment before any code names it, as the first `r` is in `var r = save(a); r = save(b)`.
 
 **`_ = r` and `let _ = r` drop such a value on purpose.** Each takes `r` as a value, and destroys it at the end of its statement.
 
