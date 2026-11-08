@@ -72,20 +72,32 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **Each body inside a type is an instance body or a static body**, which decides the members it sees unqualified:
 
-- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members, and a static member only where no instance member has its name. Where both exist, `Self.min` reaches the static one.
-- **Static bodies.** These are static members and the accessors of static properties. They see only static members.
+- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or a use that isn't a call, reaches the static one. The exception is an instance property, which a use that isn't a call reaches first, being the nearer match.
+- **Static bodies.** These are static members and the accessors of static properties. They see no instance members, so only scope 4 holds the type's members for them.
 - **Default values.** A default value, of a field or a parameter, sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
 - **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
 - **Nested functions.** A nested function sees the generic parameters of the function it is in and the enclosing type's static members, but no instance member, since it names no `self` ([above](#functions-and-closures)).
-- **Nested types.** A nested type's members see their own type's members first, then its enclosing types' generic parameters, static members and nested types, outward. A member of a local type sees no instance member of the enclosing type, as a nested function doesn't.
+- **Nested types.** A nested type's members see its instance members in scope 3, and in scope 4 its generic parameters, static members and nested types, then each enclosing type's, outward. A member of a local type sees no instance member of the enclosing type, as a nested function doesn't.
 
 **An unqualified name is looked up in these scopes, in order:**
 
 1. the body's locals and parameters;
 2. the generic parameters of the function the body belongs to;
-3. the members the body sees (above);
-4. each enclosing type, from the innermost outward: its generic parameters, static members and nested types;
+3. the instance members the body sees (above);
+4. the body's own type, then each enclosing type outward: its generic parameters, static members and nested types;
 5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
+
+Each member is in one scope, instance members in 3 and static ones in 4, so no member is found twice:
+
+```swift
+struct Ring<let N: Int> {
+    func cap() -> Int { N }                  // scope 4: Ring's own value parameter
+}
+
+extension Int {
+    func check(_ x: Int) { if x < min { … } }   // not a call: skips the method min(_:) and reaches Int.min
+}
+```
 
 **The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For any other use, the nearest match ends the search, whatever it is. A name that isn't called skips instance methods in every use, since an instance method is never a value.
 
@@ -96,7 +108,7 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **When the first match that can be called is a function, the name gathers candidates across scopes:**
 
-- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together: the members the body sees, the enclosing types' static members outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
+- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together. Those hold the instance members the body sees, the static members of its own type and the enclosing types outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
 - **Function values.** A name used as a function value (below), not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
 - **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
 
