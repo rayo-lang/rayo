@@ -12,9 +12,13 @@ func errors(_ source: String) -> [String] {
 }
 
 struct ProgramTests {
-    @Test("a program that checks reports nothing")
-    func clean() {
-        #expect(errors("func main() { print(-9223372036854775808) }") == [])
+    @Test("a program that checks reports nothing", arguments: [
+        "func main() { print(-9223372036854775808) }",
+        "func main() -> Void {}",
+        "func main() -> () {}",
+    ])
+    func clean(source: String) {
+        #expect(errors(source) == [])
     }
 
     @Test("a program needs a 'main' that returns Void", arguments: [
@@ -32,7 +36,7 @@ struct ProgramTests {
         ("func main(_ x: Int) {}", "1:11: error: expected ')' after '(', found '_'"),
         ("func main<T>() {}", "1:10: error: expected '(' after the function's name, found '<'"),
         ("func main() throws {}", "1:13: error: expected '{' to begin a block, found 'throws'"),
-        ("func main() -> (Int) {}", "1:17: error: expected ')' to close '()', found 'Int'"),
+        ("func main() -> (Int) {}", "1:17: error: expected ')' after '(', found 'Int'"),
         ("func main() { let x: [3 of Int] = 1 }", "1:22: error: expected a type, found '['"),
         ("func main() { let x: Int? = 1 }", "1:25: error: expected a newline or ';' after the statement, found '?'"),
         ("func main() { let f = { 1 } }", "1:23: error: expected an expression, found '{'"),
@@ -78,11 +82,12 @@ struct ProgramTests {
     }
 
     @Test("a type is Int, Bool, Void or '()'", arguments: [
-        ("let x: Int8 = 1", "1:22: error: 'Int8' isn't a type"),
-        ("let x: List = 1", "1:22: error: 'List' isn't a type"),
+        ("let x: Int = 1; let y: Bool = true; print(x)", []),
+        ("let x: Int8 = 1", ["1:22: error: 'Int8' isn't a type"]),
+        ("let x: List = 1", ["1:22: error: 'List' isn't a type"]),
     ])
-    func types(body: String, expected: String) {
-        #expect(errors("func main() { \(body) }") == [expected])
+    func types(body: String, expected: [String]) {
+        #expect(errors("func main() { \(body) }") == expected)
     }
 
     @Test("both operands of an operator are checked, and errors are listed in source order")

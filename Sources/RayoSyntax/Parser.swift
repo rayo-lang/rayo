@@ -213,7 +213,7 @@ public struct Parser {
     mutating func parseType() throws(Failure) -> TypeExpr {
         let start = current.range
         if consume(.lparen) {
-            try expect(.rparen, "to close '()'")
+            try expect(.rparen, "after '('")
             return .void(range: range(from: start))
         }
         let (name, _) = try expectIdentifier("a type")
