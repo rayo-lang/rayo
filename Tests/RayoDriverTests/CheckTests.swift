@@ -43,7 +43,8 @@ struct ProgramTests {
         ("print()", "1:15: error: 'print' takes 1 argument, but the call passes 0"),
         ("print(1, 2)", "1:15: error: 'print' takes 1 argument, but the call passes 2"),
         ("print(value: 1)", "1:28: error: argument 1 of 'print' takes no label, not 'value'"),
-        ("print(print(1))", "1:21: error: expected Int, found Void"),
+        ("print(print(1))", "1:21: error: printing a value of type Void isn't supported yet"),
+        ("print(true)", "1:21: error: printing a value of type Bool isn't supported yet"),
         ("print(1) + 2", "1:15: error: '+' needs Int operands, found Void and Int"),
         ("print<Int>(1)", "1:15: error: 'print' takes no generic arguments"),
         ("print", "1:15: error: using a function as a value isn't supported yet"),
@@ -57,7 +58,7 @@ struct ProgramTests {
         ("for i in 0..<3 { }", "1:15: error: 'for' isn't supported yet"),
         ("return", "1:15: error: 'return' isn't supported yet"),
         ("do { }", "1:15: error: 'do' isn't supported yet"),
-        ("print(copy 1)", "1:21: error: 'copy' isn't supported yet"),
+        ("print(copy 1)", "1:21: error: 'copy' of a literal isn't supported yet"),
         ("var x = &y", "1:23: error: '&' isn't supported yet"),
         ("let x: Int8 = 1", "1:22: error: the type 'Int8' isn't supported yet"),
     ])

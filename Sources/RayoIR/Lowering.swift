@@ -120,24 +120,10 @@ private struct FunctionBuilder {
         case .unary(let op, let operand):
             return .unary(op, self.operand(of: operand))
         case .binary(let op, let left, let right):
-            let operands = self.operands(of: [left, right])
-            return .binary(op, operands[0], operands[1])
+            let left = operand(of: left)
+            return .binary(op, left, operand(of: right))
         case .call(let callee, let arguments):
-            return .call(callee, arguments: operands(of: arguments))
-        }
-    }
-
-    /// The operands of `exprs`, evaluated left to right. A local is read where it stands, so a local read
-    /// before an operand that may run code is copied into a temporary, which that code can't change.
-    private mutating func operands(of exprs: [CheckedExpr]) -> [Operand] {
-        exprs.indices.map { index in
-            let expr = exprs[index]
-            guard case .local(let local) = expr.kind, exprs[(index + 1)...].contains(where: \.mayRunCode) else {
-                return operand(of: expr)
-            }
-            let temporary = newTemporary(expr.type)
-            emit(.use(.local(local)), into: temporary, range: expr.range)
-            return .local(temporary)
+            return .call(callee, arguments: arguments.map { operand(of: $0) })
         }
     }
 
@@ -181,16 +167,5 @@ private struct FunctionBuilder {
     private mutating func newTemporary(_ type: RayoType) -> LocalID {
         locals.append(type)
         return LocalID(index: locals.count - 1)
-    }
-}
-
-private extension CheckedExpr {
-    /// Whether evaluating the expression may run code, which could change a local, rather than only read
-    /// a constant or a local.
-    var mayRunCode: Bool {
-        switch kind {
-        case .intLiteral, .boolLiteral, .local: return false
-        default: return true
-        }
     }
 }

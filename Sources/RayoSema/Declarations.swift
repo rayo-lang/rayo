@@ -4,14 +4,15 @@ import RayoSyntax
 struct Signature {
     struct Parameter {
         var label: String?
-        var type: RayoType
+        /// Nil for a parameter that takes a value of any type.
+        var type: RayoType?
     }
 
     var name: String
     var parameters: [Parameter]
     var result: RayoType
 
-    static let print = Signature(name: "print", parameters: [Parameter(label: nil, type: .int)], result: .void)
+    static let print = Signature(name: "print", parameters: [Parameter(label: nil, type: nil)], result: .void)
 }
 
 /// The names a function body sees beyond its own locals: the prelude's, and the file's own declarations.

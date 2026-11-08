@@ -24,6 +24,8 @@ extension BodyChecker {
             return binary(op, left, right, spelled: op.rawValue, in: expr.range)
         case .call(let callee, let arguments):
             return call(callee, arguments, in: expr.range)
+        case .copy(let operand):
+            return copy(operand, in: expr.range)
         default:
             errors.unsupported(expr.kind.construct, at: expr.range)
             return nil
@@ -42,7 +44,20 @@ extension BodyChecker {
         return false
     }
 
+    /// `copy operand`, whose operand is a local, since every local's type is copyable.
+    private mutating func copy(_ operand: Expr, in range: SourceRange) -> CheckedExpr? {
+        guard case .name = operand.kind else {
+            errors.unsupported("'copy' of \(operand.kind.construct)", at: range)
+            return nil
+        }
+        return check(operand).map { CheckedExpr(kind: $0.kind, type: $0.type, range: range) }
+    }
+
     private mutating func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
+        if name == "_" {
+            errors.error("'_' names no value", at: range)
+            return nil
+        }
         switch lookUp(name) {
         case .local(let local):
             return CheckedExpr(kind: .local(local), type: locals[local.index].type, range: range)
@@ -78,7 +93,7 @@ extension BodyChecker {
                 return nil
             }
             guard left.type != .void else {
-                errors.error("'\(spelled)' can't compare Void values", at: range)
+                errors.unsupported("comparing Void values", at: range)
                 return nil
             }
             result = .bool

@@ -6,10 +6,14 @@ extension BodyChecker {
             errors.unsupported("calling \(callee.kind.construct)", at: callee.range)
             return nil
         }
-        // A local shadows the function of its name, as any declaration shadows the prelude's.
-        if lookUp(name) != nil {
+        switch lookUp(name) {
+        case .local:
             errors.error("'\(name)' isn't a function", at: callee.range)
             return nil
+        case .failed:
+            return nil
+        case nil:
+            break
         }
         guard declarations.functionNames.contains(name) else {
             errors.error("'\(name)' isn't declared", at: callee.range)
@@ -25,6 +29,10 @@ extension BodyChecker {
         }
         let signature = Signature.print
         guard let checked = check(arguments, against: signature, in: range) else { return nil }
+        guard checked[0].type == .int else {
+            errors.unsupported("printing a value of type \(checked[0].type)", at: checked[0].range)
+            return nil
+        }
         return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
     }
 
@@ -43,7 +51,7 @@ extension BodyChecker {
         var checked: [CheckedExpr] = []
         for (index, (argument, parameter)) in zip(arguments, parameters).enumerated() {
             let labelMatches = labelMatches(argument, parameter, position: index + 1, of: signature)
-            if let value = check(argument.value), labelMatches, expect(value, parameter.type) {
+            if let value = check(argument.value), labelMatches, parameter.type.map({ expect(value, $0) }) ?? true {
                 checked.append(value)
             }
         }

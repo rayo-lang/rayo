@@ -53,7 +53,6 @@ public enum CheckedStmt: Sendable {
     /// A declaration, which gives the new local its first value.
     case binding(LocalID, CheckedExpr)
     case assign(CheckedPlace, CheckedExpr)
-    /// `place ⊕= value`, which evaluates `value` before it reads the place.
     case compoundAssign(CheckedPlace, BinaryOperator, CheckedExpr)
     case ifStmt(condition: CheckedExpr, then: [CheckedStmt], otherwise: [CheckedStmt])
     case whileStmt(condition: CheckedExpr, body: [CheckedStmt])

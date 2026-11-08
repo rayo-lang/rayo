@@ -52,8 +52,10 @@ struct BodyChecker {
             let body = check(body)
             loopDepth -= 1
             return condition.map { .whileStmt(condition: $0, body: body) }
-        case .breakStmt, .continueStmt:
-            return loopExit(statement)
+        case .breakStmt:
+            return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
+        case .continueStmt:
+            return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
         case .forRange:
             errors.unsupported("'for'", at: statement.range)
         case .returnStmt:
@@ -70,7 +72,11 @@ struct BodyChecker {
             errors.unsupported("a declaration without a value", at: range)
             return declareFailed(binding.name, at: binding.nameRange)
         }
-        let value = check(valueExpr)
+        let value = checkTaken(valueExpr)
+        if binding.name == "_" {
+            errors.unsupported("discarding a value with '_'", at: binding.nameRange)
+            return nil
+        }
         guard let value, binding.type == nil || declared != nil else {
             return declareFailed(binding.name, at: binding.nameRange)
         }
@@ -85,9 +91,19 @@ struct BodyChecker {
         return .binding(local, value)
     }
 
+    /// Checks `expr` as the value a declaration or an assignment takes, which moves out of a local that
+    /// `expr` names.
+    private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
+        guard let value = check(expr) else { return nil }
+        if case .name(let name, _) = expr.kind, case .local = value.kind {
+            errors.unsupported("moving a value out of '\(name)'", at: expr.range)
+            return nil
+        }
+        return value
+    }
+
     private mutating func declare(_ name: String, type: RayoType, isVar: Bool, at range: SourceRange) -> LocalID? {
-        guard lookUp(name) == nil else {
-            errors.unsupported("declaring '\(name)' while another '\(name)' is visible", at: range)
+        guard !isVisible(name, reportingRedeclarationAt: range) else {
             scopes[scopes.count - 1][name] = .failed
             return nil
         }
@@ -99,55 +115,70 @@ struct BodyChecker {
 
     /// Declares `name` for a declaration that failed, so that its uses report nothing more.
     private mutating func declareFailed(_ name: String, at range: SourceRange) -> CheckedStmt? {
-        if lookUp(name) != nil {
-            errors.unsupported("declaring '\(name)' while another '\(name)' is visible", at: range)
-        }
+        _ = isVisible(name, reportingRedeclarationAt: range)
         scopes[scopes.count - 1][name] = .failed
         return nil
+    }
+
+    /// Whether `name` already names a local or a function, which a declaration of it would hide, reporting
+    /// it when it does.
+    private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
+        guard lookUp(name) != nil || declarations.functionNames.contains(name) else { return false }
+        errors.unsupported("declaring '\(name)' while another '\(name)' is visible", at: range)
+        return true
     }
 
     private mutating func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr,
                                  in range: SourceRange) -> CheckedStmt? {
         let local = assignedLocal(target)
-        let value = check(valueExpr)
-        guard let local, let value else { return nil }
+        let canChange = local.map { isVar($0, at: target.range) } ?? false
+        let value = op.binary == nil ? checkTaken(valueExpr) : check(valueExpr)
+        guard let local, canChange, let value else { return nil }
         let place = CheckedPlace(local: local, range: target.range)
-        let current = CheckedExpr(kind: .local(local), type: locals[local.index].type, range: target.range)
-        guard locals[local.index].isVar else {
-            errors.error("'\(locals[local.index].name)' is a 'let', so it can't change", at: target.range)
-            return nil
-        }
-        if let binaryOp = op.binary {
-            guard binary(binaryOp, current, value, spelled: op.rawValue, in: range) != nil else { return nil }
-            return .compoundAssign(place, binaryOp, value)
-        }
-        return expect(value, current.type) ? .assign(place, value) : nil
+        let type = locals[local.index].type
+        guard let binaryOp = op.binary else { return expect(value, type) ? .assign(place, value) : nil }
+        let current = CheckedExpr(kind: .local(local), type: type, range: target.range)
+        guard binary(binaryOp, current, value, spelled: op.rawValue, in: range) != nil else { return nil }
+        return .compoundAssign(place, binaryOp, value)
     }
 
-    /// The local that `target` names, when it names one that can be assigned.
+    /// Whether `local` is a `var`, reporting it when it isn't.
+    private mutating func isVar(_ local: LocalID, at range: SourceRange) -> Bool {
+        if locals[local.index].isVar { return true }
+        errors.error("'\(locals[local.index].name)' is a 'let', so it can't change", at: range)
+        return false
+    }
+
+    /// The local that `target` names, when it names one.
     private mutating func assignedLocal(_ target: Expr) -> LocalID? {
-        guard case .name(let name, let typeArguments) = target.kind, typeArguments.isEmpty else {
+        switch target.kind {
+        case .name("_", let typeArguments) where typeArguments.isEmpty:
+            errors.unsupported("discarding a value with '_'", at: target.range)
+        case .name(let name, let typeArguments) where typeArguments.isEmpty:
+            switch lookUp(name) {
+            case .local(let local):
+                return local
+            case .failed:
+                break
+            case nil where declarations.functionNames.contains(name):
+                errors.error("'\(name)' is a function, so it can't change", at: target.range)
+            case nil:
+                errors.error("'\(name)' isn't declared", at: target.range)
+            }
+        case .member:
+            errors.unsupported("assigning to a member", at: target.range)
+        case .index:
+            errors.unsupported("assigning to an element", at: target.range)
+        default:
             errors.error("only a place can be assigned", at: target.range)
-            return nil
         }
-        switch lookUp(name) {
-        case .local(let local):
-            return local
-        case .failed:
-            return nil
-        case nil:
-            errors.error("'\(name)' isn't declared", at: target.range)
-            return nil
-        }
+        return nil
     }
 
-    private mutating func loopExit(_ statement: Stmt) -> CheckedStmt? {
-        let isBreak: Bool
-        if case .breakStmt = statement.kind { isBreak = true } else { isBreak = false }
-        guard loopDepth > 0 else {
-            errors.error("'\(isBreak ? "break" : "continue")' is only allowed inside a loop", at: statement.range)
-            return nil
-        }
-        return isBreak ? .breakStmt : .continueStmt
+    /// Whether a loop encloses the `keyword` statement, reporting it when none does.
+    private mutating func isInsideLoop(_ keyword: String, at range: SourceRange) -> Bool {
+        if loopDepth > 0 { return true }
+        errors.error("'\(keyword)' is only allowed inside a loop", at: range)
+        return false
     }
 }
