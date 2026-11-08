@@ -51,7 +51,25 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A closure's parameter types come from a written parameter clause or the expected type**, never from the body, since inference is local ([11](../11-compilation-model.md#type-checking-is-local)). The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](../12-grammar/constructs.md#expressions)).
 
-**Trailing closures fill the call's closure parameters in order.** The first, unlabeled one is the argument for the first parameter of function type after those the parentheses give. Each later one carries a label, and is the argument for the next such parameter, whose argument label it must equal. So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+**Trailing closures fill the call's parameters in order, scanning forward from those the parentheses give.** A parameter **takes a closure** when its type is one of these:
+
+- a function type;
+- `some F`, or a type parameter constrained to a function type ([below](#closures-by-concrete-type-some-f));
+- `Closure<F>` ([below](#unscoped-closures-closuref)).
+
+**The scan matches each trailing closure to one parameter:**
+
+- the first, unlabeled one goes to the first parameter that takes a closure;
+- each later one carries a label, and goes to the next parameter with that argument label;
+- a parameter the scan passes over takes its default, and passing over one without a default is a compile error.
+
+So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)), and `s.spawn { … }` passes its closure for a `some F` parameter:
+
+```swift
+func f(_ a: () -> Void, onCancel: (() -> Void)? = nil, done: () -> Void) { … }
+f { start() } done: { finish() }     // 'onCancel' is passed over, and takes its default
+f { start() } { finish() }           // error: a trailing closure after the first carries a label
+```
 
 **Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
 
