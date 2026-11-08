@@ -25,7 +25,7 @@ extension LoadError {                                   // enables 'try' across 
 }
 ```
 
-**A public function's `throws` names its error type, and throwing costs the same as returning:** a throwing function returns its result or its error as a tagged union, with no unwinding and no allocation.
+**A public function's `throws` names its error type, and throwing costs the same as returning:** a throwing function returns its result or its error as a tagged union, with no unwinding and no allocation. Unwinding is the path of a panic, which signals a bug rather than a failure the caller expects ([Panics](panics.md#what-a-panic-does)).
 
 **Three rules say what a `throws` clause names:**
 
@@ -112,6 +112,9 @@ func loadOrDefault(_ path: StringView) throws(IoError) -> Level {
 
 **These rules say when a `defer` block runs, and what its body may do:**
 
-- **`defer { }` runs on every scope exit.** An error return is one, and it runs where the destruction order places it ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
-- **Control never leaves a `defer` block early.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`.
-- **A `defer` body is checked as if written at each point where it may run.** Those are every exit of its scope, a propagating `try` or `throw` included, and, in a `task` function, every `await` it is live across, where destroying the task runs it ([07](../07-concurrency/tasks.md#semantics)). So it uses only what every one of those points allows.
+- **`defer { }` runs on every scope exit.** An error return is one, and so is a panic's unwind ([Panics](panics.md#unwinding)). It runs where the destruction order places it ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
+- **Control leaves a `defer` block early only by a panic.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`, whose panic unwinds out of the block, except where an unwind runs it ([Panics](panics.md#what-ends-the-program)).
+- **A `defer` body is checked as if written at each point where it may run.** Those are these points in its scope, so it uses only what every one of them allows:
+    - every exit, a propagating `try` or `throw` included;
+    - every point that can panic, each `yield` in an accessor included, as the unwind leaves it ([Panics](panics.md#unwinding));
+    - in a `task` function, every `await` it is live across, where destroying the task runs it ([07](../07-concurrency/tasks.md#semantics)).

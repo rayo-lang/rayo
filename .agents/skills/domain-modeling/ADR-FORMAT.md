@@ -28,7 +28,9 @@ Scan `docs/adr/` for the highest existing number and increment by one.
 
 ## When to offer an ADR
 
-All four of these must be true:
+Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
+
+After 1.0, all four of these must be true:
 
 1. **Hard to reverse**: the cost of changing your mind later is meaningful
 2. **Surprising without context**: a future reader will look at the code and wonder "why on earth did they do it this way?"

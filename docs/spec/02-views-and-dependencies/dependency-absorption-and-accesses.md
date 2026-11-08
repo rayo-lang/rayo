@@ -120,7 +120,7 @@ struct Lines(var out: MutableSpan<StringView>, var s: String, var view: StringVi
 
 **In the caller's own body, that assignment is an error only when destroying `doc` uses the dependency** ([When destroying a value counts as using it](dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
 
-**Scoped `mutable` parameters count as used at every exit**: each `return`, `throw` and propagating `try`, and the end of the body. So a callee can't store a view into `out` and then free what it points at, even on its way out with an error.
+**Scoped `mutable` parameters count as used at every exit**: each `return`, `throw` and propagating `try`, each point that can panic ([10](../10-errors-and-safety/panics.md#unwinding)), and the end of the body. So a callee can't store a view into `out` and then free what it points at, even on its way out with an error or a panic. At a call that can panic, they count as used with what that call may have stored in them, as rule 4 adds after it returns ([above](#rule-4-absorption)), since the panic may leave from inside it.
 
 **A closure body is checked as a method whose `self` is the closure.** Its by-reference captures are places `self` depends on, shared or exclusive, and a result or a store into a `mutable` parameter may depend on them.
 
@@ -164,7 +164,7 @@ let items = r.value!.items.span   // derived from the access to the object 'r' p
 let e = first(r.value!)           // passed through a call
 ```
 
-**The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. When the access ends, the language releases its mark itself. A value property's change is held the same way, with `set` called once it ends ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)).
+**The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. When the access ends, the language releases its mark itself. When a panic unwinds instead, the mark is released once the unwind has destroyed the last value that depends on the access ([10](../10-errors-and-safety/panics.md#unwinding)). A value property's change is held the same way, with `set` called once it ends, and never on an unwind ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)).
 
 **A site in a loop's body or `while` condition holds one access at a time**, since a set names an access by the site that began it. Each time the site begins a dynamic access, or a value property's change, no value that depends on the access it began the last time may be used from then on:
 

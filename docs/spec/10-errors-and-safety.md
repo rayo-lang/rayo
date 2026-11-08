@@ -1,6 +1,6 @@
 # 10 · Errors and safety
 
-Rayo gives expected failures and broken assumptions different paths. An expected failure, such as a missing file, is a **recoverable error**: a typed value that the caller must handle. A broken assumption, such as dereferencing a stale handle, **panics** ([Panics](10-errors-and-safety/panics.md#panics)). The language also defines which checks run in each build and where code must take responsibility with `unsafe`.
+Rayo gives expected failures and broken assumptions different paths. An expected failure, such as a missing file, is a **recoverable error**: a typed value that the caller must handle. A broken assumption, such as dereferencing a stale handle, **panics**: it is reported, and unwinds the thread until a recovery point stops it or the thread ends ([Panics](10-errors-and-safety/panics.md#panics)). The language also defines which checks run in each build and where code must take responsibility with `unsafe`.
 
 ```swift
 enum ConfigError: Error {

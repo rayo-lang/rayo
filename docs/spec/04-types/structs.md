@@ -109,7 +109,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 **Before `self.init`, `self` doesn't exist.** Nothing reads or assigns a field until then, and after it `self` is a whole value, as in a `mutating` method.
 
-**No value is ever half-built.** The primary initializer sets every field at once, from arguments already evaluated. An `init` that throws or returns `nil` before `self.init` has only its locals to destroy. One that throws or returns `nil` after it destroys a whole value, running its `deinit` if the type has one.
+**No value is ever half-built.** The primary initializer sets every field at once, from arguments already evaluated. An `init` that throws, returns `nil` or panics before `self.init` has only its locals and the arguments made so far to destroy ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)). One that does so after it destroys a whole value, running its `deinit` if the type has one.
 
 **The header sets the primary initializer's access.** It is as visible as the struct unless the header says `private init(…)`, which keeps it inside the module ([11](../11-compilation-model.md#modules-and-names)). Other modules then build a value only through a secondary initializer, which can check an invariant such as `Fraction`'s nonzero denominator. Two more things in the header limit who can call it:
 

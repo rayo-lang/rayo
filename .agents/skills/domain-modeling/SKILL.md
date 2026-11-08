@@ -65,7 +65,9 @@ When a term is resolved, update `GLOSSARY.md` right there. Don't batch these up:
 
 ### Offer ADRs sparingly
 
-Only offer to create an ADR when all four are true:
+Before Rayo 1.0 the whole project is still being shaped, so offer no ADR then: the decision goes into the spec chapters or the code it shapes (`docs/agents/domain.md`).
+
+After 1.0, only offer to create an ADR when all four are true:
 
 1. **Hard to reverse**: the cost of changing your mind later is meaningful
 2. **Surprising without context**: a future reader will wonder "why did they do it this way?"

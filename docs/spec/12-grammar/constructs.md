@@ -100,7 +100,8 @@ prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' 
 postfix-expr  = primary postfix* ;
 postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords allowed after '.': T.self, .init(…); gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
-call-suffix   = '(' argument-list? ')' trailing-closure* | trailing-closure+ ;
+call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
+trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)
 argument-list = argument (',' argument)* ','? ;
 argument      = (arg-label ':')? ('&'? expression | operator) ;      (* combine: + passes the operator as a function value *)
 primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'

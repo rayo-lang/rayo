@@ -377,12 +377,19 @@ A run-time check, such as a bounds check, that keeps safe code sound; it is on i
 _Avoid_: safety check
 
 **Panic**:
-How a bug, such as unwrapping `nil` with `!`, stops the program: reported through the platform, it never returns ([10](docs/spec/10-errors-and-safety/panics.md#panics)).
-_Avoid_: crash, abort, exception
+How a bug, such as unwrapping `nil` with `!`, stops the code that hit it: reported through the platform, it unwinds the thread until a recovery point stops it or the thread ends ([10](docs/spec/10-errors-and-safety/panics.md#panics)).
+_Avoid_: crash, exception
+
+**Panic strategy**:
+The build's choice of how a panic ends: by unwinding, the default, or by aborting, which reports the panic and ends the program at once, so nothing catches it ([10](docs/spec/10-errors-and-safety/panics.md#panic-strategy)).
 
 **Recoverable error**:
 A typed value, such as a missing file, that a function throws and its caller must handle ([10](docs/spec/10-errors-and-safety.md)).
 _Avoid_: exception
+
+**Recovery point**:
+A call of `catchPanic`, where an unwind out of its body stops and its `recover` closure runs with the panic ([10](docs/spec/10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+_Avoid_: catch block, landing pad
 
 **Unsafe code**:
 Code that uses an operation needing `unsafe`, such as dereferencing a raw pointer or calling C, whose soundness the code promises instead of the compiler ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
@@ -392,6 +399,9 @@ A protocol, such as `Sendable` or `Frozen`, whose declared conformance is a cont
 
 **Unverified promise**:
 A declaration the compiler takes on trust, such as an `unsafe` conformance, an `@export` function or an `import c` config block ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
+
+**Unwinding**:
+What a panic does to its thread's frames, innermost first: it ends each as a `throw` would, destroying its live values and running its live `defer` blocks ([10](docs/spec/10-errors-and-safety/panics.md#unwinding)).
 
 ### Compilation
 
