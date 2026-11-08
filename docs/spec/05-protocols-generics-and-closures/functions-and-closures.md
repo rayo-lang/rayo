@@ -87,19 +87,34 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 4. each enclosing type, from the innermost outward: its generic parameters, static members and nested types;
 5. the module's scope, where a prelude name counts unless a declaration of the module or one it imports shadows it ([11](../11-compilation-model.md#the-prelude)).
 
-**The nearest match, in scope order, decides how a name resolves.** When it is a local, a parameter, a property, a type or a generic parameter, the name means that, and the search ends. So a call `onHit(3)` whose nearest `onHit` is a field of a closure type calls the field. When the nearest match is a function, the name gathers candidates across scopes instead:
+**The nearest match, in scope order, decides how a name resolves.** For a call or a function value, a match that can't be called is skipped, and the search goes on. For any other use, the nearest match ends the search, whatever it is.
 
-- **Calls.** The candidates are every function of that name in the nearest match's scope and in scopes 3 to 5 together: the members the body sees, the enclosing types' static members outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
+**A match that can be called, but isn't a function, ends the search for a call or a function value:**
+
+- a local, a parameter or a property whose type is a function type, a closure's concrete type or a `Closure<F>` ([Closures by concrete type](#closures-by-concrete-type-some-f)), so a call `onHit(3)` whose nearest `onHit` is such a field calls the field;
+- a type, or a generic parameter, which a call calls for an initializer.
+
+**When the first match that can be called is a function, the name gathers candidates across scopes:**
+
+- **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together: the members the body sees, the enclosing types' static members outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
 - **Function values.** A name used as a function value, not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
-- **Ties.** Step 4's tie-breaks apply first. Only a member and a free function that still tie after them go to the member, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`.
+- **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
 
-**So a member never hides a free function that the call's arguments fit better**, as in a `Comparable` extension:
+**So neither a member nor a name that can't be called hides a free function that the call's arguments fit better:**
 
 ```swift
 extension Comparable where Self: Copyable {
     func clamped(_ lo: Self, _ hi: Self) -> Self {
         max(lo, min(self, hi))    // fine: two arguments fit only the free min and max, not self.min(_:)
     }
+}
+
+extension Int {
+    static func cap(_ x: Int) -> Int { max(0, min(x, 100)) }   // fine: the properties Int.min and Int.max can't be called
+}
+
+struct Bounds(let min: Float, let max: Float) {
+    func clamp(_ x: Float) -> Float { max(min, min(x, max)) }  // the calls skip the fields; the arguments name them
 }
 ```
 

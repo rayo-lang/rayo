@@ -28,7 +28,7 @@ func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
 **A requirement whose `where` clause constrains `Self` or an associated type is required only of conformances that satisfy the clause**, as `Comparable`'s `min` and `max` require `Self: Copyable` ([Equality and ordering](operators.md#equality-and-ordering)):
 
 - **Where it is required.** A conformance must meet it under the conformance's own conditions plus the clause, and its witness is checked there. A conditional conformance, `extension X: P where …`, follows the same rule.
-- **Witnesses.** A member of the conformer, or of an extension of it whose `where` clause those conditions imply, may be the witness. Otherwise the default applies, to each instantiation where the clause holds. A conformer that never meets the clause provides none, and a member of that name it declares is an ordinary member, not a witness.
+- **Witnesses.** A member of the conformer, or of an extension of it whose `where` clause those conditions imply, may be the witness. Otherwise the default applies, to each instantiation where the clause holds. A conformer that never meets the clause provides none, and a member of that name it declares is an ordinary member, not a witness (below).
 - **Generic calls.** Generic code may call it only where its own constraints imply the clause.
 - **Existentials.** Through `any P` it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it.
 
@@ -46,6 +46,14 @@ struct Pair<T: Comparable>(let a: T, let b: T): Comparable {
 
 extension Pair where T: Copyable {
     func min(_ other: Self) -> Self { … }    // the witness of min for every copyable Pair<T>
+}
+```
+
+**A member with a constrained requirement's name and signature that isn't its witness is a compile error**, wherever it is declared, since a concrete call would reach it while generic code reaches the witness. The exception is a conformer that never meets the clause, such as a move-only `Comparable` type that declares its own `min`. Generic code can't call the requirement there, so no two calls disagree:
+
+```swift
+extension Pair where T == Int {
+    func min(_ other: Self) -> Self { … }    // error: Pair<Int> already has a witness of min, above
 }
 ```
 

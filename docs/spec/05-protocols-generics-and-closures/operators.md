@@ -117,7 +117,7 @@ a.min(b)  // default: b when b < a, else a
 a.max(b)  // default: a when b < a, else b
 ```
 
-**Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` and give NaN for a NaN operand ([04](../04-types/numbers-and-math.md#floating-point)). Values that tie can still differ, so the rule fixes which one a call returns:
+**Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` ([04](../04-types/numbers-and-math.md#floating-point)). A NaN operand is never a tie: the float witnesses give NaN for it. Values that tie can still differ, so the rule fixes which one a call returns:
 
 ```swift
 struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on its rank alone
