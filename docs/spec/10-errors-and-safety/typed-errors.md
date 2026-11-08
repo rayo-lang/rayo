@@ -137,6 +137,18 @@ func loadBossLevel(_ path: StringView) -> Level!LoadError {
 
 **A `try` whose operand's failure type isn't `Never` stands in a function or closure whose result is a `Result`, or in a `do` block.** Anywhere else it is a compile error, since the error would have nowhere to go.
 
+**A property can fail only through the value its `get` returns:**
+
+```swift
+var level: Level!IoError { get { try load(path) } }   // a get body: it propagates an IoError, or returns .success
+var cache: Mesh!LoadError { borrow { slot } }         // hands out a place that holds a Result; the borrow can't fail
+```
+
+- **A `get` body is a function body**, so `try` and `throw` work in it where the property's type is a `Result`, as in `level`. A subscript's `get` works the same way.
+- **Reading a value property is a call** to its `get` ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), so the rule for a call that can't fail covers it ([above](#what-a-failure-type-names)). With `var value: Int!E { get }` on a `Cell<E>`, `c.value` is an `Int` where `c` is a `Cell<Never>`.
+- **A `set` can't fail.** It takes the new value and returns `Void`, so a change that must report a failure is a method.
+- **A `borrow` or `mutate` body can't fail either**, since it hands out a place, and a failure is no place. So a propagating `try` or a `throw` in one is a compile error. A place property of type `T!E` hands out a place that holds a `Result`, as `cache` does. An optional place property is how one hands out no place ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
+
 **The error propagates member by member.** When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing failure type, or one of its members, or convert to it:
 
 - **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, declared `owned`. The error moves in, so the new error may carry what the error borrowed, never a view of the error itself ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it can't fail. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.

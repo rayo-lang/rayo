@@ -191,7 +191,7 @@ struct Flags(var bits: UInt32) {
 }
 ```
 
-**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it, with or without `borrow` ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)).
+**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it, with or without `borrow` ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)). Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 
 **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
