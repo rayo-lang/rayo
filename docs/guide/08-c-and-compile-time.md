@@ -156,7 +156,7 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 **Its parameters and result must have C representations** ([08](../spec/08-c-interop/calling-rayo-from-c.md#c-representations)).
 
-**It can't throw, since C has no way to catch an error.** A panic in it stops the program, without unwinding into C.
+**An error it returns is a value like any other**, so a `Result` reaches C as a tag and a union, when its success and error types have C representations. A panic in it stops the program, without unwinding into C.
 
 **C never gives up what it passes through an imported callback type**, so a `@c func` with an `owned` parameter doesn't convert to one.
 
@@ -183,7 +183,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **`@c` keeps a struct's fields in the order you declare them, and checks that each has a C representation** ([04](../spec/04-types/structs.md#structs)). Use it when something outside your program fixes the layout, such as a C library's header, a file format or a network packet. Every struct that `import c` makes is a `@c struct`.
 
-**An exported function is a plain C function.** It has no type parameters, and it can't throw.
+**An exported function is a plain C function.** It has no type parameters, and any `Result` it returns crosses as a `@c func`'s does.
 
 **An exported function's parameters pass by value, whatever their conventions, except a `mutable` one, which passes as a pointer.**
 

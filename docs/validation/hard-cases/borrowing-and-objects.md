@@ -313,7 +313,7 @@ await until { [copy target] game in game.enemies[target] == nil }   // the condi
 The criteria below use these declarations and statements:
 
 ```swift
-consuming func close() throws(IoError)               // on a file whose deinit closes it
+consuming func close() -> Void!IoError               // on a file whose deinit closes it
 consuming func intoItems() -> List<T>                // on a wrapper, moving its field out
 
 give(makeLoot().item)                                // a field moved out of a call result

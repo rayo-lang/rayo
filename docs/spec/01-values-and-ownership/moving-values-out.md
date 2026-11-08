@@ -49,7 +49,7 @@ These moves leave the rest of the value to be destroyed:
 
 ```swift
 extension File {
-    consuming func close() throws(IoError) { … }   // File's deinit closes it: this closes it, then 'discard self', so it closes once
+    consuming func close() -> Void!IoError { … }   // File's deinit closes it: this closes it, then 'discard self', so it closes once
 }
 extension Bag {
     consuming func intoItems() -> List<T> { … }    // Bag has a deinit: this moves 'items' out, then 'discard self'

@@ -8,7 +8,7 @@ enum ConfigError: Error {
     case badValue(field: StaticString)
 }
 
-func loadConfig(_ path: StringView) throws(ConfigError) -> Config { ... }   // the signature names the error type
+func loadConfig(_ path: StringView) -> Config!ConfigError { ... }   // the result type names the error type
 
 do {
     settings = try loadConfig(path)       // a missing file is expected: it comes back as a value
@@ -21,7 +21,7 @@ do {
 let pos = borrow enemies[target]!.pos     // a stale handle here is a bug: '!' panics
 ```
 
-The type in `loadConfig`'s signature tells the caller which failures it may catch. The `catch` arms handle them as values; the `!` on the last line takes the panic path if the handle has gone stale.
+`loadConfig`'s result type, a `Result`, tells the caller which failures it may catch. The `catch` arms handle them as values; the `!` on the last line takes the panic path if the handle has gone stale.
 
 ## Subchapters
 

@@ -96,7 +96,7 @@ public struct Fraction private init(let num: Int, let den: Int) {   // other mod
 }
 
 public struct Body private init(let mass: Float, let invMass: Float, var velocity: Vec3 = .zero) {
-    public init(mass: Float) throws(PhysicsError) {
+    public init(mass: Float) -> Self!PhysicsError {
         guard mass > 0 else { throw .badMass }          // 'self' doesn't exist yet: only the arguments are checked
         self.init(mass: copy mass, invMass: 1 / mass)   // every field is set at once
     }
@@ -109,7 +109,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 **Before `self.init`, `self` doesn't exist.** Nothing reads or assigns a field until then, and after it `self` is a whole value, as in a `mutating` method.
 
-**No value is ever half-built.** The primary initializer sets every field at once, from arguments already evaluated. An `init` that throws or returns `nil` before `self.init` has only its locals to destroy. One that throws or returns `nil` after it destroys a whole value, running its `deinit` if the type has one.
+**No value is ever half-built.** The primary initializer sets every field at once, from arguments already evaluated. An `init` that fails or returns `nil` before `self.init` has only its locals to destroy. One that fails or returns `nil` after it destroys a whole value, running its `deinit` if the type has one.
 
 **The header sets the primary initializer's access.** It is as visible as the struct unless the header says `private init(…)`, which keeps it inside the module ([11](../11-compilation-model.md#modules-and-names)). Other modules then build a value only through a secondary initializer, which can check an invariant such as `Fraction`'s nonzero denominator. Two more things in the header limit who can call it:
 
@@ -145,7 +145,7 @@ func sum(_ r: NetRec) -> UInt32 {
 **A place guaranteed less than its type's alignment, at any depth, is under-aligned, and is used only by value.** So `recs[1].id` in a `List` of the 5-byte `Rec` above is under-aligned: `id` is at offset 0, but `recs[1]` itself is guaranteed only 1. Using it by value means that nothing borrows it where it lies:
 
 - **No views.** Any borrow of it but an argument is a compile error: a binding or pattern part bound in place, a `when` subject, a span, an `any P`, a `yield` in an accessor, or a `for` loop binding its elements in place. A closure captures the aligned place that holds it instead ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
-- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A projection reached through such a receiver, or whose `where yield` clause names such an argument, is access-bound, as a bitfield's is ([02](../02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)): the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result or thrown error ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A projection reached through such a receiver, or whose `where yield` clause names such an argument, is access-bound, as a bitfield's is ([02](../02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)): the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result, an error included ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **Generic code takes the safe bound**, since it is checked once, at its definition ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A path that crosses no `@packed` struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a `@packed` or `@packed(N)` struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have:
 

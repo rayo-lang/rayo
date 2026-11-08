@@ -92,7 +92,7 @@ use(syms)
 
 **An item's subject, what depends, is one of these:**
 
-- `return`, for the result and any thrown error;
+- `return`, for the result, an error it fails with included;
 - `yield`, for what an accessor yields ([Storage projections](projections-and-accessors.md#storage-projections));
 - a parameter that absorbs under rule 4, for what it takes on: a `mutable` one, `self` in a `mutating` method included, or an `owned` one that is a mutable view, such as an `owned` `MutableSpan`.
 

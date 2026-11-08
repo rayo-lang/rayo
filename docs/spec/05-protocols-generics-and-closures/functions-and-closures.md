@@ -45,7 +45,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A function declared without `->` returns `Void`.** The exception is a non-public function whose body is a single expression: it returns that expression's type, unless it is `main`, `@c`, `@export`, a `task func` or a protocol witness. A public function is never an exception, since other modules are checked against its declaration, never its body ([11](../11-compilation-model.md#type-checking-is-local)).
 
-**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
+**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void` or a `Void!E`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A path that reaches the end of a `Void!E` body returns `.success(())`. A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
 
 **A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func`, since a closure is called, not stepped ([07](../07-concurrency/tasks.md#semantics)).
 
@@ -199,13 +199,13 @@ var onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function t
 ```swift
 @c func half(_ x: Int32) -> Int32 { x / 2 }
 let f: @c (Int32) -> Int32 = half               // a named @c func converts
-let g: @c (Int32) -> Int32 = { x in x + 1 }     // so does a literal that captures nothing and doesn't throw
+let g: @c (Int32) -> Int32 = { x in x + 1 }     // so does a literal that captures nothing
 unsafe { print(f(4)) }                          // calling one is unsafe
 ```
 
-**`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures, and it never throws, since C can't receive an error. Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
+**`@c (Int32) -> Int32` is a C function pointer.** It has no room for captures. Its parameters and result cross in their C representations, so a `Result` it returns crosses as any enum with payloads does ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). Calling one is `unsafe`, since the type can't tell a Rayo function from a C one. These convert to it:
 
-- a literal that captures nothing and doesn't throw;
+- a literal that captures nothing;
 - a named `@c func`, `@export`, imported or `extern c` function, or a `@c` value, when its parameters and result have the same types and conventions as the pointer type's, and it needs no more stack than the pointer type declares ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 
 **Inside `unsafe`, a function also converts to a `@c` type whose types differ but have the same C representations** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). So a `WeakPointer<Body>` parameter meets a `UInt64` one. A `mutable T` parameter also meets a `*T` or `*T?` one there, since both cross as `T*`:
@@ -260,7 +260,7 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in copy x } }        // er
 - **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to each of these, with parameter conventions lining up as a witness's do ([01](../01-values-and-ownership/parameters.md#parameters)):
     - `Closure<F>`, for a function type `F` its signature matches;
     - any function type its signature matches, of any kind;
-    - if it doesn't throw, such a type throwing an error type that leaves the same arguments places ([Implicit conversions](implicit-conversions.md#implicit-conversions)).
+    - if it can't fail, such a type whose result adds a failure type, as `(Int) -> Int!IoError` does for `abs`, when that type leaves the same arguments the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)). The compiler makes a function that returns each of its results as `.success`.
 
   A named function views no storage and depends on nothing, which is why `pick` compiles. An overloaded name is resolved by the expected type. A closure literal that captures nothing converts the same way, since its storage holds nothing. So `inc` and the default of `sorted(by:)` above compile.
 - **`@sendable` function types**, such as `@sendable (mutable Particle) -> Void`, hold only closures whose captures, by reference or owned, all have `Sendable` types, and their values are `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). A named function always converts to one. A `@sendable` value converts to the same type without the mark, never the reverse, and `Closure<F>` and `some F` carry the mark the same way.

@@ -21,7 +21,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
     - a `mutating` one by one thread at a time, each call happening before the next, since calling it changes the closure itself;
     - a `consuming` one once, since the call consumes it.
 - **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(&x, x)` is.
-- **What a call begins ends with it**, since rule 5 lets no function return, throw or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
+- **What a call begins ends with it**, since rule 5 lets no function return or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
 
 **Writing a shared place from a parallel loop's body is a type error:**
 
@@ -70,7 +70,7 @@ Thread.scope { s in
 
 **Lending is the library's `unsafe` promise.** A scoped value, such as a closure that borrows the caller's locals, reaches another thread only through a library's `unsafe` code, which promises:
 
-- **to move only `Sendable` values between threads.** The closures it takes are `@sendable`, and whatever it passes them is `Sendable`. Whatever it hands back from them to the lending thread is `Sendable` too: their results and the errors they throw. Each value it hands over is made and written before the receiving thread's first use of it, in the memory model's happens-before order ([Atomics and locks](synchronization.md#atomics-and-locks));
+- **to move only `Sendable` values between threads.** The closures it takes are `@sendable`, and whatever it passes them is `Sendable`. Whatever it hands back from them to the lending thread is `Sendable` too: their results, the errors they fail with included. Each value it hands over is made and written before the receiving thread's first use of it, in the memory model's happens-before order ([Atomics and locks](synchronization.md#atomics-and-locks));
 - **to call the value only as its kind allows**, each call of a `mutating` one happening before the next;
 - **to keep it past the call it was given to only in a type that is unsealed and scoped**, as `Thread.scope`'s scope keeps what `spawn` is given ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)). So the value that keeps it absorbs what it borrows for as long as it is kept. While that call runs, a raw pointer to it may pass through any storage that only the library's `unsafe` code reads, such as a global work queue;
 - **to have every other thread done with it by the time the borrows it carries may end**, every access they made through it happening before then. That time is when the call that lent them returns, as for `join`, or, for a value kept as above, the last use of the value that keeps it.
@@ -79,7 +79,7 @@ Thread.scope { s in
     - one that safe code can make and drop, which declares a `deinit` that waits, making destroying it a use ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it));
     - one that only the library makes, like `Thread.scope`'s scope, where the library waits before the call that lends it returns.
 
-**By the first promise, a closure that returns or throws a lock guard taken on a worker, or an object made there, is rejected at the call**, since neither is `Sendable`.
+**By the first promise, a closure that returns a lock guard taken on a worker, or an object made there, is rejected at the call**, since neither is `Sendable`.
 
 **The borrowed memory stays valid while it is lent.** The lender can't free it while the borrow lasts. A reset or an unregistration of its allocator panics while an open, the lender's or a worker's, still lends from it ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 

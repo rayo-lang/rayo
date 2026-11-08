@@ -37,7 +37,7 @@
 
 **Rule 3 gives a scoped result everything the call was given** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), and drops a place only where the result can't reach it.
 
-**A callee returns or throws only what rule 5 lets it, and rule 3 gives the result all of that**, so the result is covered. Rule 5 lets a callee return these:
+**A callee returns only what rule 5 lets it, an error included, and rule 3 gives the result all of that**, so the result is covered. Rule 5 lets a callee return these:
 
 - its borrowed and `mutable` parameters;
 - what they carry;

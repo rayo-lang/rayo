@@ -252,7 +252,7 @@ swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack t
 
 **These rules decide whether a call unpacks:**
 
-- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, the error type, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's projection or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
+- **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's projection or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
 - **Where it doesn't.** When `any P` itself meets `T`'s constraints, as it meets those of an unconstrained `T` or of `T: Copyable`, it binds `T` as the view type instead, and a `Box<any P>` that meets them binds `T` as itself. Any other call that would need `T` to be `any P` is a compile error.
 
 **An unpacking call costs one indirect call, and an instance for each possible dynamic type.** An unpacking call site names one generic function, every type argument but `T` fixed. The program holds an instance of it for every type that can be the dynamic type of an existential of `P`:

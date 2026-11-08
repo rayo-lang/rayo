@@ -7,9 +7,9 @@ An owning value cannot proceed as though an allocation succeeded when it did not
 ## Allocation failure
 
 ```swift
-func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
+func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
     do {
-        try spawns.tryAppend(copy p)    // the fallible form: throws AllocError instead of panicking
+        try spawns.tryAppend(copy p)    // the fallible form: fails with AllocError instead of panicking
     } catch {
         evictUnusedAssets()             // make room, then try once more
         try spawns.tryAppend(copy p)    // 'p' is borrowed, so each attempt appends a copy
@@ -17,7 +17,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) throws(AllocError) {
 }
 ```
 
-**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](../11-compilation-model.md#the-prelude)). So no operation goes on with memory it didn't get. Those operations that build or grow a value at run time also have a fallible form, for code that can make room and try again, as `addSpawn` does. The fallible form returns `nil` or throws `AllocError`, the prelude's error for an allocation its allocator couldn't make:
+**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, panics when its allocator can't make the allocation** ([11](../11-compilation-model.md#the-prelude)). So no operation goes on with memory it didn't get. Those operations that build or grow a value at run time also have a fallible form, for code that can make room and try again, as `addSpawn` does. The fallible form returns `nil` or fails with `AllocError`, the prelude's error for an allocation its allocator couldn't make:
 
 - `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
 - `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));

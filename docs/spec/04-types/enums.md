@@ -57,8 +57,8 @@ if case .chase(let t) = state { track(t) }     // one pattern as a condition
 
 **A pattern says which values its arm matches, and what it binds:**
 
-- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed, returns `Bool` and doesn't throw. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier compares with an existing value unless it is under `let` or `var`, where it binds a new name ([12](../12-grammar/constructs.md#patterns)).
-- **Type patterns.** `is E` matches, and `let e as E` matches and binds, a subject of type `E`, such as the error of a `do` block that throws only `E`, or a member `E` of an error-union subject ([10](../10-errors-and-safety/typed-errors.md#error-unions)). No other subject has type patterns.
+- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed and returns `Bool`, which can't fail. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier compares with an existing value unless it is under `let` or `var`, where it binds a new name ([12](../12-grammar/constructs.md#patterns)).
+- **Type patterns.** `is E` matches, and `let e as E` matches and binds, a subject of type `E`, such as the error of a `do` block that fails only with `E`, or a member `E` of an error-union subject ([10](../10-errors-and-safety/typed-errors.md#error-unions)). No other subject has type patterns.
 
   When `E` is itself an error union, as a type parameter may turn out to be, `let e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](../01-values-and-ownership/bindings.md#conversions)):
     - from a value subject, such as `when consume e` or a `catch`, it takes what the subject held;

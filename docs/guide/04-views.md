@@ -13,11 +13,11 @@ parse(lines);                     // reads freed memory
 In Rayo you write the same code, with no annotations, and the compiler catches the bug:
 
 ```swift
-func readText(_ path: StringView) throws(IoError) -> String { ... }
+func readText(_ path: StringView) -> String!IoError { ... }   // a String, or an IoError that 'try' passes on
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 func parse(_ lines: Span<StringView>) { ... }
 
-func loadScript(_ path: StringView) throws(IoError) {
+func loadScript(_ path: StringView) -> Void!IoError {
     var source = try readText(path)
     var lines = List<StringView>()
     splitLines(source.view, into: &lines)     // 'lines' now borrows 'source'

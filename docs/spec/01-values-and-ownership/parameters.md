@@ -41,7 +41,7 @@ func spawn(_ kind: Kind, at pos: Vec3 = .zero) { ... }
 spawn(kind)                                             // leaves out 'at:', so 'pos' is .zero
 ```
 
-- **The default is checked where it is declared**, as the body of a function with no parameters that returns the parameter's type and doesn't throw. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+- **The default is checked where it is declared**, as the body of a function with no parameters whose result type is the parameter's type. So it names no other parameter and no `self`, and a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 - **A call that leaves the argument out calls that function** in the argument's position, as part of the call's own statement ([below](#evaluation-order-and-when-a-calls-borrows-begin)).
 - **A `mutable` parameter has no default**, since it stands for a place of the caller's.
 - **A field's default works the same way** in the primary initializer ([04](../04-types/structs.md#initializers)).
@@ -54,11 +54,11 @@ spawn(kind)                                             // leaves out 'at:', so 
 
 - **A `Synchronized` value.** An argument that is or holds one at any depth, since such a value's identity is its address, and it changes through a shared borrow. A `Closure<F>` counts, since its captures may hold one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **The argument of `ptr(to:)`**, whose result is its address ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).
-- **An argument still viewed after the call.** The result, a thrown error, a storage projection's yield ([02](../02-views-and-dependencies/projections-and-accessors.md#storage-projections)) or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+- **An argument still viewed after the call.** The result, an error in it included, a storage projection's yield ([02](../02-views-and-dependencies/projections-and-accessors.md#storage-projections)) or an absorbing argument may view the argument's own storage, which in a copy would be the callee's. An absorbing argument is a `mutable` one, or an `owned` mutable view, such as a `MutableSpan` or a `mutating` closure (rule 4 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 [Rules 3 and 4](../02-views-and-dependencies.md#dependencies), and an accessor's `where yield` clause, tell which arguments may still be viewed: they go by the signature's types, and by which arguments are [shallow](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values). An `Int` or a `List<Int>` result views nothing.
 
-**Which arguments are the caller's place follows from the signature alone**: the function called, its result and error types, its `where yield` clause, and each parameter's type and convention.
+**Which arguments are the caller's place follows from the signature alone**: the function called, its result type, its `where yield` clause, and each parameter's type and convention.
 
 - **Adding `keep` to a parameter changes none of this** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)).
 - **A call through a function value passes its arguments as a direct call would**, since every function-type conversion keeps the conventions, and which arguments are places ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). `ptr(to:)` is never a function value ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)).

@@ -77,7 +77,7 @@ put(&out)                               // 'out' now depends on 'src'
 
 ## Rule 5: The callee side
 
-**A function can return, throw or store only what its caller lent it.** Rules 3 and 4 tell the caller what a call borrows from the signature, and rule 5 checks each body against that. So the caller's sets hold without the caller seeing the body. A returned or thrown scoped value, and anything stored into a scoped `mutable` parameter, may depend only on:
+**A function can return or store only what its caller lent it.** Rules 3 and 4 tell the caller what a call borrows from the signature, and rule 5 checks each body against that. So the caller's sets hold without the caller seeing the body. A returned scoped value, an error it fails with included, and anything stored into a scoped `mutable` parameter, may depend only on:
 
 - the borrowed or `mutable` parameters and their dependency sets, except that what is stored into a `mutable` parameter depends on another `mutable` parameter itself only when a `where` item names it ([above](#rule-4-absorption));
 - the sets carried in by scoped `owned` parameters, which belong to the caller and flow back through rules 3 and 4;

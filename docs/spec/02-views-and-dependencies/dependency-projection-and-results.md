@@ -39,7 +39,7 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **A `mutable` argument's place is held exclusively, and a borrowed one's shared.** Each set keeps its own kinds, so a view taken through a borrowed `MutableSpan` still holds what the span holds exclusively.
 
-**A thrown error is a result too**: what a `catch` binds depends on the arguments the same way.
+**An error is part of the result**, since a function that can fail returns a `Result` ([10](../10-errors-and-safety/typed-errors.md#results)). So what a `try` propagates, and what a `catch` binds, depends on the arguments the same way.
 
 ### Closure calls
 
