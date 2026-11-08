@@ -34,7 +34,7 @@ world.apply(world.commands.take())                       // take() moves the con
 - **Objects.** Code changes an object through its owner or any of its weak pointers, which are aliases the static checker can't see. So each access takes a mark, and a conflicting one panics ([03](../03-handles-and-objects.md#dynamic-exclusivity)).
 - **Thread-locals.** A thread-local is declared `@threadlocal`, and the static checker can't see a callee touching one, so its accesses are marked the same way ([07](../07-concurrency/global-state.md#thread-locals)).
 - **`Synchronized` values.** A value such as a `Mutex` changes only through its own synchronization ([07](../07-concurrency/synchronization.md#atomics-and-locks)). A `Slice` into a locked buffer takes the buffer's lock ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
-- **Channel ends.** A channel's two ends share one queue, which each end changes ([07](../07-concurrency/synchronization.md#queues-and-channels)).
+- **Channel and future ends.** A channel's `Receiver` and its `Sender`s, however many, share one queue, which each end changes ([07](../07-concurrency/synchronization.md#queues-and-channels)). A future's `Promise` and `Future` share the one value, which the `Promise` sets ([07](../07-concurrency/synchronization.md#futures)).
 - **Pool elements.** A pool's element, named by a `Handle`, reads `nil` once the element is removed ([03](../03-handles-and-objects.md#pools-and-handles)).
 - **Pinned elements.** C may hold a pinned element's address ([03](../03-handles-and-objects.md#pinning-for-c)).
 - **Unsafe code.** In `unsafe` code, raw pointers, bare global `var`s and imported C variables let other code change a value, and nothing checks them.
