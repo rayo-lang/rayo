@@ -35,7 +35,15 @@ struct FunctionWriter {
     private func llvmType(_ type: RayoType) -> String {
         switch type {
         case .int: return "i64"
+        case .bool: return "i1"
         case .void: preconditionFailure("lowering makes no local of type Void")
+        }
+    }
+
+    private func type(of operand: Operand) -> RayoType {
+        switch operand {
+        case .constant(let constant): return constant.type
+        case .local(let local): return function.locals[local.index]
         }
     }
 
@@ -62,6 +70,10 @@ struct FunctionWriter {
 
     private mutating func write(_ terminator: Terminator) {
         switch terminator {
+        case .goto(let target):
+            emit("br label %bb\(target.index)")
+        case .branch(let condition, let then, let otherwise):
+            emit("br i1 \(read(condition)), label %bb\(then.index), label %bb\(otherwise.index)")
         case .return:
             emit("ret void")
         }
@@ -69,8 +81,10 @@ struct FunctionWriter {
 
     private mutating func read(_ operand: Operand) -> String {
         switch operand {
-        case .constant(let value):
+        case .constant(.int(let value)):
             return String(value)
+        case .constant(.bool(let value)):
+            return value ? "true" : "false"
         case .local(let local):
             let value = newValue()
             emit("\(value) = load \(llvmType(function.locals[local.index])), ptr %l\(local.index)")
@@ -86,9 +100,9 @@ struct FunctionWriter {
             return read(operand)
         case .unary(let op, let operand):
             return unary(op, read(operand), at: range)
-        case .binary(let op, let left, let right):
-            let left = read(left)
-            return binary(op, left, read(right), at: range)
+        case .binary(let op, let leftOperand, let right):
+            let left = read(leftOperand)
+            return binary(op, left, read(right), of: type(of: leftOperand), at: range)
         case .call(let callee, let arguments):
             let values = arguments.map { read($0) }
             switch callee {
@@ -101,19 +115,37 @@ struct FunctionWriter {
 
     private mutating func unary(_ op: UnaryOperator, _ operand: String, at range: SourceRange) -> String {
         switch op {
-        case .negate: return arithmetic("sub", "0", operand, at: range)
-        case .not: preconditionFailure("the checker gives '!' no integer operand")
+        case .negate:
+            return arithmetic("sub", "0", operand, at: range)
+        case .not:
+            let result = newValue()
+            emit("\(result) = xor i1 \(operand), true")
+            return result
         }
     }
 
-    private mutating func binary(_ op: BinaryOperator, _ left: String, _ right: String, at range: SourceRange) -> String {
+    /// `left op right`, whose operands both have `type`.
+    private mutating func binary(_ op: BinaryOperator, _ left: String, _ right: String, of type: RayoType,
+                                 at range: SourceRange) -> String {
         switch op {
         case .add: return arithmetic("add", left, right, at: range)
         case .subtract: return arithmetic("sub", left, right, at: range)
         case .multiply: return arithmetic("mul", left, right, at: range)
         case .divide: return divide(left, right, at: range)
         case .remainder: return remainder(left, right, at: range)
-        default: preconditionFailure("the checker accepts no '\(op.rawValue)'")
+        case .equal: return compare("eq", left, right, of: type)
+        case .notEqual: return compare("ne", left, right, of: type)
+        case .less: return compare("slt", left, right, of: type)
+        case .lessEqual: return compare("sle", left, right, of: type)
+        case .greater: return compare("sgt", left, right, of: type)
+        case .greaterEqual: return compare("sge", left, right, of: type)
+        case .and, .or: preconditionFailure("lowering turns '\(op.rawValue)' into branches")
         }
+    }
+
+    private mutating func compare(_ predicate: String, _ left: String, _ right: String, of type: RayoType) -> String {
+        let result = newValue()
+        emit("\(result) = icmp \(predicate) \(llvmType(type)) \(left), \(right)")
+        return result
     }
 }

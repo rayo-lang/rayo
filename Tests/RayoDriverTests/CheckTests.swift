@@ -54,11 +54,12 @@ struct ProgramTests {
     }
 
     @Test("what the checker doesn't have yet is reported as such", arguments: [
-        ("let x = 1", "1:15: error: a 'let' declaration isn't supported yet"),
-        ("while 1 { }", "1:15: error: 'while' isn't supported yet"),
-        ("print(1 < 2)", "1:21: error: '<' isn't supported yet"),
+        ("for i in 0..<3 { }", "1:15: error: 'for' isn't supported yet"),
+        ("return", "1:15: error: 'return' isn't supported yet"),
+        ("do { }", "1:15: error: 'do' isn't supported yet"),
         ("print(copy 1)", "1:21: error: 'copy' isn't supported yet"),
-        ("print(true)", "1:21: error: Bool isn't supported yet"),
+        ("var x = &y", "1:23: error: '&' isn't supported yet"),
+        ("let x: Int8 = 1", "1:22: error: the type 'Int8' isn't supported yet"),
     ])
     func unsupportedInMain(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
@@ -89,7 +90,7 @@ struct ProgramTests {
             "1:8: error: a struct isn't supported yet",
             "2:6: error: a function other than 'main' isn't supported yet",
             "4:6: error: 'main' is declared more than once",
-            "4:16: error: the type 'Bool' isn't supported yet",
+            "4:16: error: 'main' returns Void, Never or Int32",
             "4:29: error: 'a' isn't declared",
         ])
     }

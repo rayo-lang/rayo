@@ -3,11 +3,13 @@ import RayoSyntax
 /// The type of a value in a checked program.
 public enum RayoType: Hashable, Sendable, CustomStringConvertible {
     case int
+    case bool
     case void
 
     public var description: String {
         switch self {
         case .int: return "Int"
+        case .bool: return "Bool"
         case .void: return "Void"
         }
     }
@@ -19,11 +21,44 @@ public struct CheckedProgram: Sendable {
 }
 
 public struct CheckedFunction: Sendable {
+    /// The function's locals, indexed by `LocalID`.
+    public var locals: [CheckedLocal]
     public var body: [CheckedStmt]
+}
+
+/// Identifies a local of a function.
+public struct LocalID: Hashable, Sendable {
+    public var index: Int
+
+    public init(index: Int) {
+        self.index = index
+    }
+}
+
+public struct CheckedLocal: Sendable {
+    public var name: String
+    public var type: RayoType
+    /// True for a `var`, which may be assigned after its declaration.
+    public var isVar: Bool
+}
+
+/// A place that a statement writes, and where the source names it.
+public struct CheckedPlace: Sendable {
+    public var local: LocalID
+    public var range: SourceRange
 }
 
 public enum CheckedStmt: Sendable {
     case expression(CheckedExpr)
+    /// A declaration, which gives the new local its first value.
+    case binding(LocalID, CheckedExpr)
+    case assign(CheckedPlace, CheckedExpr)
+    /// `place ⊕= value`, which evaluates `value` before it reads the place.
+    case compoundAssign(CheckedPlace, BinaryOperator, CheckedExpr)
+    case ifStmt(condition: CheckedExpr, then: [CheckedStmt], otherwise: [CheckedStmt])
+    case whileStmt(condition: CheckedExpr, body: [CheckedStmt])
+    case breakStmt
+    case continueStmt
 }
 
 public struct CheckedExpr: Sendable {
@@ -34,6 +69,8 @@ public struct CheckedExpr: Sendable {
 
 public indirect enum CheckedExprKind: Sendable {
     case intLiteral(Int64)
+    case boolLiteral(Bool)
+    case local(LocalID)
     case unary(UnaryOperator, CheckedExpr)
     case binary(BinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])
