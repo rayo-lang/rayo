@@ -76,7 +76,8 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` and hashing look only at the `Name`'s own pointer-sized value, never at its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
 
 ```swift
-let jump = Name("jump")                   // interns "jump", copying the text only the first time
+let jump: Name = "jump"                   // a literal: interned by the build, so no code runs
+let same = Name(String("jump"))           // interned at run time: finds the literal's entry, so same == jump
 if action == jump { player.jump() }       // compares one pointer-sized value, never the text
 log("pressed \(jump.text)")               // the text, as a StaticString
 ```
@@ -97,7 +98,7 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 
 **`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates.
 
-**`Name` takes no string literal, and no `Name` is a `const`.** Interning reads and writes the interner, a global, which code running at compile time can't reach ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). So a literal could become a `Name` only by interning each time it is evaluated: a lookup in a table that every thread shares, and maybe an allocation, which nothing at the literal would show. A `Name` that a program uses throughout is made once, in a global `let` that startup initializes ([07](../07-concurrency/global-state.md#initialization-at-startup)).
+**A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each distinct text that a `Name` literal spells anywhere in the program, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
 
 ### Strings
 
@@ -133,7 +134,7 @@ protocol Formattable { func format(into sink: mutable some TextSink) where sink 
 ```swift
 let v: Vec3 = [1, 2, 3]                   // a Vec3: exactly 3 elements
 let mask: LayerMask = [.player, .enemies] // a user type that conforms: any number of layers
-let jump: StringView = "jump"             // views the literal's immortal bytes: borrows nothing
+let jump: Name = "jump"                   // interned by the build: no cost at run time
 let lo: Int8 = -128                       // fits: the '-' is checked with the literal
 names.append("grunt")                     // a String that uses the literal's bytes: no allocation
 let xs = [3, 4, 5]                        // no context: a [3 of Int], stored inline
@@ -150,6 +151,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 | `ExpressibleByArrayLiteral` | `init<let N: Int>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
 | `ExpressibleByDictionaryLiteral` | `init<let N: Int>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
 | `ExpressibleByStringLiteral` | `init(stringLiteral text: StaticString)` | `StaticString`, `StringView`, `String` |
+| `ExpressibleByInternedLiteral` | `init(internedLiteral entry: StaticSpan<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
@@ -158,7 +160,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 
 - its initializer is `@noalloc`, as those of the number types, `Array`, `Simd`, `InlineList`, `StaticString`, `StringView`, `String` and `std.math`'s `Vec3` and matrices are;
-- its literals convert at compile time (below), so its initializer never runs at run time.
+- its literals convert at compile time (below), as `Name`'s do.
 
 So a `List`, `Set` or `Map` literal is an error there.
 
@@ -188,13 +190,31 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no object;
 - no `Synchronized` value;
 - no `Allocator` id but `.system`;
-- no pointer but a `StaticString` or `StaticSpan`.
+- no pointer but one into immortal data, as a `StaticString`, a `StaticSpan` or a `Name` holds.
 
-`Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Vec3` literal costs nothing at run time.
+`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
 
 **Any other literal runs its initializer on each evaluation**: a `List`'s allocates from the current allocator, and a `String`'s only records it. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 
 **`true` and `false` are only `Bool`, and `nil` only an optional.**
+
+#### Interned literals
+
+**A type interns its string literals with the build's help by conforming to `ExpressibleByInternedLiteral`**, as std's `Name` does. The build makes each text's entry once, and the type's interner starts out holding them all. So a literal costs nothing at run time, and still names the entry that interning its text at run time finds:
+
+```swift
+protocol ExpressibleByInternedLiteral {
+    associatedtype InternedEntry                                          // freezable: one per distinct text
+    static func internedEntry(for text: StaticString) -> InternedEntry   // run by the compiler, once per distinct text
+    init(internedLiteral entry: StaticSpan<InternedEntry>)               // @noalloc: the literal's entry, as one element
+}
+```
+
+- **One table per type.** The build runs `internedEntry(for:)` for each distinct text that a literal of the type spells anywhere in the program, and freezes the results into one table in read-only data. `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. So equal texts in different modules share one entry.
+- **Each literal is built at compile time.** `init(internedLiteral:)` receives the literal's element of the table. It must be `@noalloc` and able to run at compile time, so every such literal converts at compile time ([above](#literals)).
+- **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).
+
+**Code loaded after startup adds its literals before it runs.** The spec defines no way to load code after startup. A layer that provides one, such as a hot reloader ([11](../11-compilation-model.md#what-the-spec-defines)), must add the new code's entries to the interner before that code runs. It resolves each of the code's literals to the `Name` its text already has, if any, so equal texts still give one `Name`.
 
 ### Iteration
 
