@@ -88,6 +88,8 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
     - A left shift drops bits past the top whatever the sign, so it never overflows.
     - The masking shifts `&<<` and `&>>` use only the count's low bits, `count & (bitWidth - 1)`, as an unsigned amount.
 
+**`x.trailingZeroCount` is the number of zero bits below `x`'s lowest set bit, as an `Int`**, for every integer type. When `x` is 0 it is the bit width, so `UInt64(0).trailingZeroCount` is 64.
+
 ### Floating point
 
 ```swift
@@ -103,7 +105,7 @@ let lowest = minNumber(x, Float.nan)    // x: minNumber skips a NaN
 let z = min(-0.0, 0.0)                  // -0.0, which counts as less than +0.0
 ```
 
-**`min` and `max` of floating-point values are IEEE 754-2019's `minimum` and `maximum`**, for `Half`, `Float` and `Double`, as scalars and lane by lane in a vector ([SIMD and math](#simd-and-math)):
+**`Half`, `Float` and `Double` witness `Comparable`'s `min` and `max` with IEEE 754-2019's `minimum` and `maximum`** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). The free functions `min(a, b)` and `max(a, b)`, generic code over `Comparable` and a vector's lane-wise forms all call that witness ([SIMD and math](#simd-and-math)):
 
 - if either operand is NaN, the result is NaN, and which NaN is left open, as for every NaN result;
 - `-0` counts as less than `+0`.
@@ -133,18 +135,23 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 
 **A `Simd<T, N>` is `N` lanes of one type, which its operators work on lane by lane:**
 
-- **Lane types and counts.** `Simd<T, N>` is builtin, over a number type `T`, or `Bool` for masks. It has any power of two from 1 to 64 lanes, or 3. The limit is 64 lanes since a mask of 64 lanes fits in one `UInt64` ([Masks](#masks)). `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
-- **In generic code.** Generic code may name `Simd<T, N>` for its own `T` and `N`. Its `T` and lane count are then checked where they are known, at each instantiation, as a `static error` is ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). Operations that compute with lanes, such as arithmetic, comparisons and reductions, need a concrete `T`. A load, a store, a shuffle or a swizzle only moves lanes, so it works for any lane type, a mask's `Bool` and a generic `T` included ([below](#shuffles-and-swizzles)).
+- **Lane types.** `Simd` is the builtin `Simd<T: SimdLane, let N: Int>`. Its lanes are of a number type, or of `Bool` for [masks](#masks), the types that conform to `SimdLane` (below).
+- **Lane counts.** `N` is any power of two from 1 to 64, or 3. Masks set the limit of 64 ([below](#masks)). `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
+- **In generic code.** Generic code that names `Simd<T, N>` for its own `T` states `T: SimdLane`, as `reversed` does ([below](#shuffles-and-swizzles)). A lane count it doesn't fix is checked at each instantiation ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
+- **Moving lanes.** Any operation that only moves lanes works for every `T: SimdLane`, generic or not: indexing and lane assignment, array literals, the initializers from lanes and `repeating:`, loads and stores, `select`, shuffles and swizzles. Operations that compute with lanes, such as arithmetic, comparisons, conversions and [reductions](#reductions), need a concrete `T`.
 - **Operators.** A scalar operand broadcasts to every lane, on either side: `v * 2`, `2 * v`. A comparison gives a mask ([below](#masks)). Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
-- **`min` and `max`.** `min(a, b)` and `max(a, b)` of two vectors work lane by lane, and so do `minNumber` and `maxNumber` of two floating-point vectors. Integer lanes compare by value, and floating-point lanes follow the floating-point rules ([above](#floating-point)).
+- **`min` and `max`.** `min(a, b)` and `max(a, b)` of two vectors work lane by lane, each lane through its type's `Comparable` witness, so integer lanes compare by value and floating-point lanes as [above](#floating-point). `minNumber` and `maxNumber` of two floating-point vectors work lane by lane too.
 - **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 - **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
+- **Converting lanes.** `Simd<U, N>(converting: v)` converts each lane of `v` as the unlabeled scalar conversion `U(x)` does ([Conversions](#conversions)). A widening conversion is exact, and any other rounds or checks each lane, and panics where `U(x)` would.
 - **Loads and stores.** `Simd<T, N>(loading: span, at: i)` reads `N` lanes from a `Span<T>`, starting at element `i`, and `v.store(into: &out, at: i)` writes them into a `MutableSpan<T>` there. Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
 - **Bounds.** A load or a store panics when `i` is negative or `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
+**`SimdLane` is the prelude's marker protocol for the types a lane may hold.** It refines `Copyable` and `Sendable`, and only the language gives conformances to it: the number types and `Bool` conform, and declaring a conformance to it is a compile error ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So generic code may treat every `T: SimdLane` as copyable, `Sendable` and unscoped, and copy lanes freely.
+
 **`Simd` operations never become calls at run time, in any build**, since they are builtin. A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
-**A target splits a vector wider than its vector registers into parts that fit**, and runs each operation on each part. Every lane gets the same result either way, since a lane operation reads only its own lanes, and a reduction combines lanes in its own fixed order ([Reductions](#reductions)). So every lane count works on every target, with more instructions where the registers are narrower.
+**A target splits a vector wider than its vector registers into parts that fit**, and runs each operation on each part. Every lane gets the same result either way, since a lane operation reads only its own lanes, and a reduction combines lanes in its own fixed order ([Reductions](#reductions)). A shuffle's permutation is fixed at compile time, so the target lowers it to its own lane moves across the parts. So every lane count works on every target, with more instructions where the registers are narrower.
 
 ### Vector layout
 
@@ -158,7 +165,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 | `Simd<Bool, 16>` | 16 bytes | 16 |
 | `Simd<Float, 3>` | 16 bytes, the last 4 padding | 16 |
 
-So a vector's layout is the same on every target, and no vector asks for more than 64 bytes of alignment, since none needs more. A vector's C representation takes the same alignment ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
+So a vector's layout is the same on every target, and no vector asks for more than 64 bytes of alignment. A vector's C representation takes the same alignment ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
 
 **Only the 3-lane form has padding**: it takes the room of four lanes, and its last lane is padding ([below](#vec3-and-three-lane-vectors)).
 
@@ -183,9 +190,8 @@ let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-
 - **Picking lanes.** Lane `i` of the result is lane `indices[i]` of `a` followed by `b`. An index `j` below `N` picks lane `j` of `a`, and an index from `N` to `2N - 1` picks lane `j - N` of `b`, as `8` and up do in `z` above.
 - **The result.** It is a `Simd<T, K>`, so `K` must be a lane count. It may differ from `N`, so a shuffle also takes some of a vector's lanes, or repeats them into a wider vector.
 - **Compile-time indices.** The index list is a `const` argument, which the compiler evaluates as it does a `const` initializer ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). So an index outside the vectors is a compile error, and a shuffle never checks at run time.
-- **Any lane type.** A shuffle only moves lanes and never computes with them, so it works for every lane type, as loads and stores do ([above](#simd-and-math)).
 
-**Any function that can run at compile time can compute an index list.** In generic code the list is evaluated at each instantiation, since it may depend on that instantiation's `N` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)):
+**Any function that can run at compile time can compute an index list.** In generic code the list is evaluated at each instantiation, since it may depend on that instantiation's `N`. So an index out of range, or a count `K` that isn't a lane count, fails there ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A shuffle only moves lanes, so `reversed` works for every `T: SimdLane` ([above](#simd-and-math)):
 
 ```swift
 func reversedLanes<let N: Int>() -> [N of Int] {      // ordinary code, run by the compiler
@@ -194,20 +200,20 @@ func reversedLanes<let N: Int>() -> [N of Int] {      // ordinary code, run by t
     return lanes
 }
 
-func reversed<T, let N: Int>(_ v: Simd<T, N>) -> Simd<T, N> {
-    shuffle(v, reversedLanes<N>())                    // computed for each N, and fine for any T
+func reversed<T: SimdLane, let N: Int>(_ v: Simd<T, N>) -> Simd<T, N> {
+    shuffle(v, reversedLanes<N>())                    // the list is computed for each N
 }
 ```
 
-**A swizzle is shorthand for a shuffle of one vector.** It is a property whose name lists up to four lanes among `x`, `y`, `z` and `w`, which stand for lanes 0 to 3 of a vector of any lane count:
+**A swizzle is a property whose name lists up to four lanes among `x`, `y`, `z` and `w`**, which stand for lanes 0 to 3 of a vector of any lane count. A swizzle of 2 to 4 lanes is shorthand for a shuffle, and one of a single lane is `v[i]`:
 
-- **Reads.** A swizzle of 2 to 4 lanes is the shuffle with those indices: `v.zyx` is `shuffle(v, [2, 1, 0])`, and `v.xxxx` is `shuffle(v, [0, 0, 0, 0])`. A swizzle of one lane is a lane read, a `T`: `v.y` is `v[1]`.
+- **Reads.** `v.zyx` is `shuffle(v, [2, 1, 0])`, and `v.xxxx` is `shuffle(v, [0, 0, 0, 0])`. `v.y` is `v[1]`, a `T`.
 - **Writes.** A swizzle is assignable when no lane repeats. `v.xz = p` stores `p`'s two lanes into lanes 0 and 2 of `v`, as `v[0] = p[0]` and `v[2] = p[1]` would.
-- **Missing lanes.** Naming a lane the vector doesn't have, such as `w` of a 3-lane vector, is a compile error.
+- **Missing lanes.** Naming a lane the vector doesn't have, such as `w` of a 3-lane vector, is a compile error. Where `N` is generic, it fails at the instantiation that lacks the lane ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
 
 ### Masks
 
-A comparison of vectors gives a **mask**, a `Simd<Bool, N>` whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
+A **mask** is a `Simd<Bool, N>`, one `Bool` per lane. A comparison of vectors gives one, whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
 
 ```swift
 func firstNewline(in bytes: Span<UInt8>) -> Int? {
@@ -225,18 +231,22 @@ func firstNewline(in bytes: Span<UInt8>) -> Int? {
 }
 ```
 
-**A mask chooses lanes, tests them or becomes bits:**
+**Every mask, whatever made it, combines with other masks, chooses lanes, tests them and becomes bits:**
 
+- **Combining.** `a & b`, `a | b` and `a ^ b` combine two masks lane by lane, as and, or and exclusive or, and `!m` negates every lane.
 - **Choosing.** `select(mask, a, b)` takes lane `i` from `a` where the mask's lane `i` is true, and from `b` where it is false.
 - **Testing.** `any` and `all` reduce a mask to one `Bool`: whether some lane is true, and whether every lane is.
-- **Bits.** `mask.bits` holds lane `i` at bit `i` of an unsigned integer: a `UInt8` for up to 8 lanes, and a `UInt16`, `UInt32` or `UInt64` for 16, 32 or 64. The bits above the last lane are 0. Every mask fits in a `UInt64`, which is why a vector has at most 64 lanes.
+- **Bits.** `mask.bits` is a `UInt64` that holds lane `i` at bit `i`, at every lane count, with the bits above the last lane 0. One type for every `N` lets generic code use it unchanged.
+
+**A vector has at most 64 lanes, so that every mask's `bits` fit in one `UInt64`.**
 
 ### Reductions
 
 A **reduction** combines a vector's lanes into one value. A mask has `any`, `all` and `bits` ([above](#masks)), and a vector of numbers has these:
 
 - `sum()`, the lanes added together;
-- `min()` and `max()`, the least and greatest lane, as `min` and `max` compare them ([Floating point](#floating-point));
+- on integer lanes, `wrappingSum()`, the lanes added with `&+`, which wraps on overflow ([Integer overflow](#integer-overflow-division-and-shifts));
+- `min()` and `max()`, the least and greatest lane, through the lane type's `Comparable` witness ([Floating point](#floating-point));
 - on floating-point lanes, `minNumber()` and `maxNumber()`, which skip NaN lanes as `minNumber` and `maxNumber` do.
 
 **Every reduction combines lanes in one fixed order, the same on every target**, since a floating-point sum's rounding depends on its order and Rayo never reassociates ([Floating point](#floating-point)):
@@ -256,7 +266,16 @@ let d: Simd<Int8, 4> = [100, 100, -100, -100]
 let t = d.sum()        // 0: (100 + -100) + (100 + -100) never overflows, though 100 + 100 would
 ```
 
-**The order matters only to `sum()`.** `min`, `max`, `minNumber` and `maxNumber` are commutative and associative, so their reductions give the same result in any order ([Floating point](#floating-point)).
+**A sum that may overflow its lane type widens the lanes first, or wraps on purpose:**
+
+```swift
+let bytes = Simd<UInt8, 16>(loading: data, at: i)
+let wide = Simd<UInt16, 16>(converting: bytes)    // exact: every UInt8 fits in a UInt16
+let total = wide.sum()                            // at most 16 × 255, which fits in a UInt16
+let check = bytes.wrappingSum()                   // a UInt8 checksum: wraps, never panics
+```
+
+**The order matters only to `sum()`**: to its rounding on floating-point lanes, and to whether it panics on integer lanes. Wrapping addition, `min`, `max`, `minNumber` and `maxNumber` are commutative and associative, so their reductions give the same result in any order ([Floating point](#floating-point)).
 
 ### `Vec3` and three-lane vectors
 

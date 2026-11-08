@@ -48,7 +48,8 @@ A `const` **reaches run time** when code names it anywhere but in these places, 
 
 - a `const` initializer;
 - the condition or list of a `static if` or `static for`;
-- an attribute argument.
+- an attribute argument;
+- a `const` argument, such as a shuffle's index list ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
 Here `enemyPresets` reaches run time, since `presets()` names it, even if nothing calls `presets()`:
 
