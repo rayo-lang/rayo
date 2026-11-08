@@ -231,7 +231,7 @@ if let map = lightmap.wait() { apply(map) }       // returns at once: the bake i
 
 **A panic in the consumer works the other way round.** The unwind destroys the `Receiver` or the `Future`, and each `send` or `fulfill` after that fails.
 
-**Every end that code in a `ThreadScope` uses is owned inside the scope**, by the block or by the spawned closure that uses it ([Scoped threads](thread-work.md#scoped-threads)):
+**So that no panic leaves a thread waiting, code in a `ThreadScope` owns each channel or future end it uses inside the scope**, in the block or in the spawned closure that uses it ([Scoped threads](thread-work.md#scoped-threads)). The compiler doesn't check this. Owning the ends there is what lets each unwind in the scope destroy the ends its code used:
 
 ```swift
 ThreadScope.run { s in
@@ -243,7 +243,7 @@ ThreadScope.run { s in
 }
 ```
 
-**No unwind reaches a frame outside the scope until `ThreadScope.run` has joined every thread**, so an end that the scope only borrows outlives every panic in it:
+**Code that only borrows an end compiles, but the end then outlives every panic in the scope**, since no unwind reaches a frame outside the scope until `ThreadScope.run` has joined every thread:
 
 - **A borrowed `Sender`**, such as `&tx`. After a producer's panic, a consumer in the scope waits for ever for a disconnection that never comes, and `ThreadScope.run` waits for it.
 - **A borrowed `Receiver`**, such as `&rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.

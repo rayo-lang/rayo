@@ -344,7 +344,8 @@ scripts.step(&game)                                        // resumes pending an
 - [07 Joining a thread](../spec/07-concurrency/thread-work.md#joining-a-thread): `join()`, detaching, and what a thread's panic does.
 - [07 Sendable](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable): every rule that derives `Sendable`, and where it is required.
 - [07 Atomics and locks](../spec/07-concurrency/synchronization.md#atomics-and-locks): memory orderings, `Mutex` and `RwLock`, queues, channels, `Published`, `Once` and blocking waits.
-- [07 Disconnected channels](../spec/07-concurrency/synchronization.md#disconnected-channels): when a channel is disconnected, what `receive`, `tryReceive` and `send` do then, and how a panic disconnects one.
+- [07 Disconnected channels](../spec/07-concurrency/synchronization.md#disconnected-channels): when a channel is disconnected, and what `receive`, `tryReceive` and `send` do then.
+- [07 Panics in producers and consumers](../spec/07-concurrency/synchronization.md#panics-in-producers-and-consumers): what a panic on either side disconnects, and why each end is owned inside a `ThreadScope`.
 - [07 The `Synchronized` contract](../spec/07-concurrency/synchronization.md#the-synchronized-contract): what a type of your own must uphold to declare it.
 - [07 Global state](../spec/07-concurrency/global-state.md#global-state): thread-locals, startup, thread teardown and shutdown.
 - [07 Task functions](../spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines): awaitables, wakers, and `TaskSet`.
