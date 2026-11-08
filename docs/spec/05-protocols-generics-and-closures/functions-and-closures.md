@@ -72,7 +72,7 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **Each body inside a type is an instance body or a static body**, which decides the members it sees unqualified:
 
-- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or a use that isn't a call, reaches the static one. The exception is an instance property, which a use that isn't a call reaches first, being the nearer match.
+- **Instance bodies.** These are instance methods, initializers, `deinit`, and the accessors of instance properties and subscripts. They see the type's instance members in scope 3 and its static members in scope 4 (below). Where both exist, a call reaches the instance member, and `Self.min`, or an ordinary use, neither a call nor a function value, reaches the static one. The exception is an instance property, which a use that isn't a call reaches first, being the nearer match.
 - **Static bodies.** These are static members and the accessors of static properties. They see no instance members, so only scope 4 holds the type's members for them.
 - **Default values.** A default value, of a field or a parameter, sees only static members ([01](../01-values-and-ownership/parameters.md#default-arguments)).
 - **Closure literals.** A closure literal looks names up as its enclosing body does. One that names `self` or an instance member captures `self` by the capture rules ([Capturing places](#capturing-places)).
