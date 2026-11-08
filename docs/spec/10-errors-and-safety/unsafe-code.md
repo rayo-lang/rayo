@@ -145,11 +145,11 @@ If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads
 **A property's accessors are calls, each a point that can panic like any other** ([Panics](panics.md#unwinding)). A place property's accessor runs nothing once it has handed out its place, so a panic while the caller uses the place can't stop it halfway. A value property's change is different: a panic between its `get` and its `set` destroys the copy and never calls `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). So a `get` never takes a value out of storage for its `set` to put back:
 
 ```swift
-var slot: T {
+subscript(i: Int) -> T {
     get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
     set { unsafe (storage + i).initialize(to: newValue) }
 }
-var slot: T {
+subscript(i: Int) -> T {
     borrow { unsafe storage[i] }                             // sound: hands out slot i itself, which stays full
     mutate { unsafe &storage[i] }
 }
