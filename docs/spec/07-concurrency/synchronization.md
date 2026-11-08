@@ -23,20 +23,26 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made. That holds however the value was passed on, by stores whose value came from loads, `.relaxed` atomics included. Each creation ends with a release fence before it hands the value out. The target carries what that fence released along any chain of such stores ([11](../11-compilation-model.md#what-a-target-must-provide)). So the check each use makes, which loads through the value, reads what the creation wrote, and the use is ordered after the creation.
 
-**A creation publishes into a shared table with a release store, made after its own writes.** Three tables are shared this way:
+**A creation publishes into a shared table after its own writes**, with a release store or a release compare-and-swap, or under the table's lock, which lookups take too. Three tables are shared this way:
 
 - the interner's entry table, which a lookup searches ([04](../04-types/collections.md#collections-and-strings));
 - the weak-link slots that `WeakShared(bits:)` and upgrades resolve through ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - the allocator registry, which an `Allocator` id resolves through ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
-**A check that resolves bits through a table reads the slot with acquire.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none, and `WeakShared(bits:)` reads `nil`. It never finds stale contents.
+**A resize keeps that order.** It reads each slot with acquire and publishes the slot's copy with a release store, so the writes that counted for the original count for the copy too.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. It publishes the entry into the interner's table with a release store, and ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
+**A check that resolves bits through a table reads the slot with acquire.** A value rebuilt with no carried chain, such as a `WeakShared(bits:)` made from integers that control flow rebuilt or that passed through C, then finds one of two things. Either it finds the published slot, whose contents it reads safely, or it finds none. It never finds stale contents.
+
+**Such a value may find no slot for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
+
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. It publishes the entry into the interner's table with a release compare-and-swap, or under the table's lock, and ends with a release fence before it hands the `Name` out. Every read of the text or the hash first loads that word with an acquire load.
+
+**Publishing fails when another thread published the text first**, so a text never gets two `Name`s. The thread that lost then reads the winner's entry with acquire and returns it, as a lookup that finds an existing entry does, and never hands out its own entry.
 
 **That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
 - **A new entry.** The fence orders the word's store before every store of the `Name` that the interning thread makes, and the target carries that order along any chain of threads that passes the `Name` on.
-- **An existing entry.** A lookup that finds one reads the table's slot with acquire, and so reads the release store that published the entry after its word. The lookup's thread ordered that read before every store of the `Name` it makes, so the chain runs back through the read to the word's store, and on as for a new entry.
+- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, with acquire or under the table's lock. So it reads after the release that published that slot after the entry's word. The lookup's thread ordered that read before every store of the `Name` it makes, so the chain runs back through the read to the word's store, and on as for a new entry.
 
 An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
 
