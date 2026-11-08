@@ -49,7 +49,7 @@ extension Pair where T: Copyable {
 }
 ```
 
-**A member with a constrained requirement's name and signature that isn't its witness is a compile error**, wherever it is declared, since a concrete call would reach it while generic code reaches the witness. The exception is a conformer that never meets the clause, such as a move-only `Comparable` type that declares its own `min`. Generic code can't call the requirement there, so no two calls disagree:
+**A member of a conforming type, or of an extension of one, with a constrained requirement's name and signature that isn't its witness is a compile error**, wherever it is declared. Otherwise a concrete call would reach the member while generic code reaches the witness. The exception is a conformer that never meets the clause, such as a move-only `Comparable` type that declares its own `min`. Generic code can't call the requirement there, so no two calls disagree:
 
 ```swift
 extension Pair where T == Int {

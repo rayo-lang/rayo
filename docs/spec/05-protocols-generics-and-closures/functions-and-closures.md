@@ -91,14 +91,23 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **A match that can be called, but isn't a function, ends the search for a call or a function value:**
 
-- a local, a parameter or a property whose type is a function type, a closure's concrete type or a `Closure<F>` ([Closures by concrete type](#closures-by-concrete-type-some-f)), so a call `onHit(3)` whose nearest `onHit` is such a field calls the field;
-- a type, or a generic parameter, which a call calls for an initializer.
+- a local, a parameter or a property whose type is a function type, a closure's concrete type or a `Closure<F>` ([Closures by concrete type](#closures-by-concrete-type-some-f)). A call `onHit(3)` whose nearest `onHit` is such a field calls the field, even when its type doesn't fit the call;
+- a type, or a type parameter, which a call calls for an initializer. A value parameter can't be called, so the search skips it.
 
 **When the first match that can be called is a function, the name gathers candidates across scopes:**
 
 - **Calls.** The candidates are every function of that name in that match's scope and in scopes 3 to 5 together: the members the body sees, the enclosing types' static members outward, and the module's scope. The overload rules choose among them ([above](#functions-and-closures)). So `min(a, b)` reaches the free two-argument function, `min(b)` reaches the member, and `helper()` in a member of `Outer.Inner` reaches a static `Outer.helper`.
-- **Function values.** A name used as a function value, not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
+- **Function values.** A name used as a function value (below), not called, draws its candidates from the same scopes, and the expected type chooses, as for any overloaded name ([Function-typed values](#function-typed-values)). Instance methods aren't function values, so they are never candidates there.
 - **Ties.** Step 4's tie-breaks apply first, so a free `f(_ x: Int)` beats a generic member `f<T>(_ x: T)`. A tie left after them goes to the candidate from the nearest scope. So a nested `func f(_ x: Int)` shadows a free one, an enclosing type's static function beats a free one, and a member beats a free one.
+
+**A bare name is used as a function value only where its expected type is known to be a function type before the name is resolved:**
+
+- a `let` or `var` with a type annotation;
+- a `return`, or a single-expression body, of a function whose result type is a function type, as in `pick` ([Function-typed values](#function-typed-values));
+- an argument to a callee that has a single candidate;
+- a default value of a function-typed parameter or field.
+
+Anywhere else, such as an argument to an overloaded callee, which step 2 types without context, the name is an ordinary use and takes the nearest match.
 
 **So neither a member nor a name that can't be called hides a free function that the call's arguments fit better:**
 
@@ -115,7 +124,11 @@ extension Int {
 
 struct Bounds(let min: Float, let max: Float) {
     func clamp(_ x: Float) -> Float { max(min, min(x, max)) }  // the calls skip the fields; the arguments name them
+    func show() { use(max) }                                   // the field: 'use' is overloaded, so this is no function value
 }
+
+func use(_ x: Float) { … }                                     // so use(max) above calls this one
+func use(_ f: (Float, Float) -> Float) { … }
 ```
 
 ## Unused values
