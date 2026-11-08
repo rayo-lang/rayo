@@ -8,7 +8,7 @@ A function that can fail in an expected way returns the failure to its caller as
 enum LoadError: Error {
     case notFound(path: StaticString)
     case corrupt(offset: Int)
-    case unknownCase(type: StaticString)    // reflective loaders (09)
+    case unknownCase(type: StaticString, offset: Int)   // reflective loaders (09)
     case badValue(field: StaticString)
     case outOfMemory
 }

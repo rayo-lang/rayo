@@ -45,7 +45,7 @@ func serialize<T>(_ value: T, into w: mutable Writer) {
 func serializeEnum<T>(_ value: T, into w: mutable Writer) {
     static for c in T.cases {
         if let payload = value[case: c] {                     // nil unless value holds case c
-            w.name(c.name)
+            w.tag(c.name)
             static for field in c.payload { serialize(payload[field], into: &w) }
         }
     }
@@ -214,11 +214,11 @@ func deserialize<T>(_ r: mutable Reader) -> T!LoadError {
 
 func deserializeEnum<T>(_ r: mutable Reader) -> T!LoadError {
     static for c in T.cases {
-        if try r.acceptTag(c.name) {                          // reads the file's tag only when it is c's name: never interns it
+        if try r.acceptTag(c.name) {                          // compares the file's tag with c's name as bytes, and reads past it only when they match
             return try T.makeCase(c) { static field in try deserialize(&r) as field.type }
         }
     }
-    throw .unknownCase(type: T.name)
+    throw .unknownCase(type: T.name, offset: r.offset)       // the tag no case matched is still unread at r.offset
 }
 ```
 
