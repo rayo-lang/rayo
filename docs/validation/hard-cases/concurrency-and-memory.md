@@ -67,6 +67,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 - Define what happens to the other threads, the process, and the report.
 - **Must hold:** the library can propagate one error after the join, by its own policy, and destroy the others, with no double free and no leak.
+- **Answered by** [Panics in lent work](../../spec/07-concurrency/thread-work.md#panics-in-lent-work) and [What a panic does](../../spec/10-errors-and-safety/panics.md#what-a-panic-does). The panic is reported when it happens and stops at its piece. The other pieces run on, or a parallel loop skips those not started, and the process goes on. The loop waits for every piece, then resumes the first panic reported on the lending thread.
 
 ### C10 · Resetting a shared arena while other threads allocate from it
 

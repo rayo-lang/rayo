@@ -60,7 +60,15 @@ log.lock { msgs in
 
 **`RwLock<T>` works like `Mutex`, with `read` (shared) and `write` (exclusive) in both forms.** Taking the write lock on a thread that holds either lock, or either lock on a thread that holds the write lock, panics, as relocking a `Mutex` does. A read lock taken again on a thread that holds one is granted at once, even while a writer waits, since that writer can't proceed before the outer read ends.
 
-**A panic that unwinds out of a lock's exclusive access poisons the lock, and taking a poisoned lock panics until `clearPoison()` resets it** ([10](../10-errors-and-safety/panics.md#what-panics)). The unwind still releases the lock, as it destroys the guard or ends the closure form's call, so a panic never leaves a lock held.
+**A panic that unwinds out of a lock's exclusive access poisons the lock.** That is a `Mutex`'s access, or an `RwLock`'s `write` access, through a guard or the closure form. An `RwLock`'s `read` access never poisons, since it changes nothing. The unwind still releases the lock, as it destroys the guard or ends the closure form's call, so a panic never leaves a lock held.
+
+**While a lock is poisoned, `lock`, `read` and `write` on it panic, until `clearPoison()` resets it:**
+
+```swift
+func clearPoison()            // Mutex's and RwLock's: a shared borrow, so any thread may call it
+```
+
+The panic left the data as it found it, perhaps half-changed. Only the panicking thread's `recover` closure sees that panic and can repair the data ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). So another thread, which never sees it, can't take the half-changed data for a whole value.
 
 ### Queues and channels
 
@@ -88,7 +96,7 @@ The ends are move-only, unscoped values that point to shared heap state, so `T` 
 
 - **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
 - **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
-- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits park the thread ([below](#parking-and-waking-a-thread)).
+- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future`, whose waits park the thread ([below](#parking-and-waking-a-thread)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once.
 
 **A `Condvar` wait consumes the guard and returns a new one:**
 
@@ -98,7 +106,9 @@ g = cv.wait(consume g)       // unlocks, parks, relocks after it wakes, and retu
 
 `g` can be consumed only after the last use of every view derived from it, so no view of the protected data survives the unlock. The mutex is in the consumed guard's dependency set, so the wait borrows both the condvar and the mutex.
 
-**The relock is the mutex's `lock`**, so it panics when another thread's panic poisoned the mutex during the wait ([Locks](#locks-mutex-and-rwlock)). The wait then returns no guard, and leaves the mutex unlocked.
+**The relock is the mutex's `lock`**, so it panics when another thread's panic poisoned the mutex during the wait ([above](#locks-mutex-and-rwlock)). The wait then doesn't return, and leaves the mutex unlocked.
+
+**Poisoning wakes no thread.** A thread parked in a `Condvar` wait stays parked until another thread notifies the condvar, even when the panic it waited on has poisoned the mutex. So code that would notify does it in a `defer`, which runs on the unwind too ([Panics in lent work](thread-work.md#panics-in-lent-work)).
 
 ### The `Synchronized` contract
 

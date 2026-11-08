@@ -75,7 +75,7 @@ ThreadScope.run { s in
 
 **`spawn` hands its closure to the scope `s`, and `s` holds what the closure borrows until the block returns.** So code in the block, or a second `spawn`, that touches `world.enemies` conflicts, as a second argument of one call would.
 
-**A panic in a spawned thread waits for the others, then carries on in the caller.** Chapter 1 showed a panic abandoning the work in progress. Here it abandons only the spawned closure's work, destroying what the closure owns, while the block and the other threads run on. Once every thread has finished, `ThreadScope.run` carries the panic on as if the block itself had panicked ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). So the scope still never returns before its threads are done, even when one fails. `join` and the parallel loops treat a panic in their closures the same way.
+**A panic in a spawned thread waits for the others, then carries on in the caller.** Chapter 1 showed a panic abandoning the work in progress. Here it abandons only the spawned closure's work, destroying what the closure owns, while the block and the other threads run on. Once every thread has finished, `ThreadScope.run` carries the panic on as if the block itself had panicked ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). So the scope still never returns before its threads are done, even when one fails. The job system's `join` and parallel loops treat a panic in their closures the same way.
 
 ## What may cross threads: `Sendable`
 
@@ -155,7 +155,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **Taking the write lock on a thread that holds either lock panics**, and so does taking either lock on a thread that holds the write lock.
 
-**A panic that abandons a `Mutex`'s closure or guard poisons the lock.** The panic still releases the lock, but the list it was changing may be half-changed. So from then on, locking `deaths` panics, until `clearPoison()` resets it, and no other thread mistakes the half-changed list for a whole one ([10](../spec/10-errors-and-safety/panics.md#what-panics)).
+**A panic that abandons a `Mutex`'s closure or guard poisons the lock.** The panic still releases the lock, but the list it was changing may be half-changed. So from then on, locking `deaths` panics unless the program resets the lock, and no other thread mistakes the half-changed list for a whole one ([07](../spec/07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
 ### Atomics
 
@@ -198,13 +198,13 @@ func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int>) {
 var level = loadLevel()
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(level, bounces: bounces)                               // error: unlisted captures; a thread body can't borrow them
 }
 let bake = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
     bakeLighting(level, bounces: bounces)
 }
-loadAudio()                                                          // runs on this thread meanwhile
-bake.join()                                                          // waits until the bake has finished
+loadAudio()                                                             // runs on this thread meanwhile
+bake.join()                                                             // waits until the bake has finished
 ```
 
 **A thread started with `Thread.start` may run after the function that started it returns** ([07](../spec/07-concurrency/thread-work.md#what-a-thread-can-share)). So its body can't borrow anything: it must own what it captures.
@@ -228,8 +228,8 @@ let crc = hashing.join()                                      // waits, then ret
 
 ```swift
 let mixer = Shared(Mutex(AudioMixer()))
-let m = mixer.weak()                                         // a WeakShared<Mutex<AudioMixer>>
-_ = Thread.start { [copy m, copy clip] in                     // '_ =' detaches the thread: nothing joins it
+let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
+_ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
 }
 ```

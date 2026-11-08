@@ -61,7 +61,7 @@ game.score += p                       // and the write after it
 
 **Destroying a suspended task cleans it up.** Cancelling it, or dropping it or the task set that holds it, destroys its state as leaving every open scope would. The `deinit`s of its live locals and its live `defer` blocks run, in the usual order ([10](../10-errors-and-safety/typed-errors.md#cleanup)), and no other code does. That happens outside any step, with no resume parameter. So a `defer` that is live across an `await` may use only what exists without a step: the state's parameters and owned locals, and the globals any code reaches, not the resume parameter.
 
-**A finished task stays finished.** Once its `poll` has returned `.done` or `.failed`, or a panic has unwound out of it (below), its result has moved out or never came, and its locals are destroyed. So destroying it runs nothing, and polling it again panics ([10](../10-errors-and-safety/panics.md#what-panics)).
+**A finished task stays finished.** Once its `poll` has returned `.done` or `.failed`, or a panic has unwound out of it, its result has moved out or never came, and its locals are destroyed. So destroying it runs nothing, and polling it again panics ([10](../10-errors-and-safety/panics.md#what-panics)).
 
 **A panic that unwinds out of a step finishes the task.** The unwind leaves the task's body as a `throw` would: it destroys the task's live locals and runs its live `defer` blocks ([10](../10-errors-and-safety/panics.md#unwinding)). Then it goes on out of the `poll` that ran the step, so the task never yields a result.
 
@@ -166,16 +166,14 @@ mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>        //
     where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }   // C: the set's resume context type
 ```
 
-**A task's panic stops at the task, and `step` resumes it once it has stepped the others.** `TaskSet` steps each task under a recovery point of its own ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). So a panic finishes only that task ([Semantics](#semantics)), and the set frees the task's slot, so its handle goes stale. The set's other pending and woken tasks still get their step, as the other threads of a `ThreadScope.run` block run on ([Scoped threads](thread-work.md#scoped-threads)). Then `step` resumes the panic with `resumePanic`, so it unwinds out of `step` as a panic in a callee would. An owner that keeps the game running catches it there:
+**A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay as they were, pending or woken, for the next `step`. They don't run on a resume parameter that the panic may have left half-changed, since an owner's `recover` closure sees that state first, and may repair it ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). An owner that keeps the program running catches the panic around `step`:
 
 ```swift
 catchPanic {
     scripts.step(&game)
 } recover: { p in
-    log("a script failed: \(p.message)")             // that script is gone, and the others took their step
+    log("a script failed: \(p.message)")             // that script is gone; the rest wait for the next step
 }
 ```
-
-**One panic goes on out of `step` when several tasks panic in it**, the first in the order the step ran the tasks. Each was reported when it happened, so `step` drops the others.
 
 **A `TaskSet` isn't `Sendable`, since its type doesn't show its tasks' types.** So it and its tasks stay on one thread, and the tasks needn't be `Sendable`. A task is `Sendable` when everything in its state is.
