@@ -45,7 +45,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A function declared without `->` returns `Void`.** The exception is a non-public function whose body is a single expression: it returns that expression's type, unless it is `main`, `@c`, `@export`, a `task func` or a protocol witness. A public function is never an exception, since other modules are checked against its declaration, never its body ([11](../11-compilation-model.md#type-checking-is-local)).
 
-**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value is discarded. Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
+**Every path returns.** A body that is a single expression returns its value, unless the result type is `Void`, where the value must itself be a `Void` or a `Never`, since any other would go unused ([below](#unused-values)). Otherwise, in a function, closure, `get` or `task` body whose result type isn't `Void`, every path ends in a `return` with a value, a `throw` or a call that never returns ([04](../04-types/enums.md#enums)). A function whose result type is `Never` has no `return`, and no path reaches its end. A `while true` loop that no `break` leaves never completes, so no path continues past it.
 
 **A closure literal's body is a function body of its own.** `return` and `throw` leave the closure, `break` and `continue` target only loops inside it, and `await` can't appear in it, even in a `task func`, since a closure is called, not stepped ([07](../07-concurrency/tasks.md#semantics)).
 
@@ -56,6 +56,29 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 - a nested function;
 - a member, accessor, initializer, `deinit` or field default of a local type;
 - a member of a local extension.
+
+## Unused values
+
+```swift
+enemies.popLast()                 // error: the popped enemy is never used
+_ = enemies.popLast()             // fine: dropped on purpose
+scores.sorted()                   // error: a sorted copy, never used; 'scores.sort()' sorts in place
+let saved = save(level)           // error if no code reads 'saved': its error would be lost
+```
+
+**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
+
+**A value is unused when it is:**
+
+- an expression written as a statement;
+- the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
+- the single expression of a body whose result type is `Void`;
+- held in a local or an `owned` parameter that no code reads after its declaration;
+- overwritten by an assignment before any code reads it, as the first `r` is in `var r = save(a); r = save(b)`.
+
+**`_ = x` and `let _ = x` drop a value on purpose.** Each takes `x` as a value, and destroys it at the end of its statement.
+
+**In generic code, a value whose type is a type parameter or an associated type must be used too.** That follows from checking generic code once: the check knows only that the type may not be `Void` ([Checking generic code](protocols-and-generics.md#checking-generic-code)).
 
 ## Capturing places
 
