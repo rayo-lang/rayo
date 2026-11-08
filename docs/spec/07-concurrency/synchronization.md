@@ -42,7 +42,7 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 **That acquire load reads the word's release store, however the `Name` was passed on**, through a `.relaxed` atomic or a third thread included ([11](../11-compilation-model.md#what-a-target-must-provide)):
 
 - **A new entry.** The fence puts the word's store before every store of the `Name` that the interning thread makes, so the word's store counts for each by 11's "Released" condition. The "Carried" condition then takes it along any chain of threads that passes the `Name` on.
-- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, with acquire or under the table's lock. That read synchronizes with the release that published the slot after the entry's word, so the word's store happens before it. The word's store then counts for every store of the `Name` that the lookup's thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
+- **An existing entry.** A lookup that finds one reads the slot it finds, the original or a resize's copy, with acquire or under the table's lock. That read synchronizes with the release that published the slot after the entry's word, so the word's store happens before that release. The word's store then counts for every store of the `Name` that the lookup's thread makes, by "Synchronized", and "Carried" takes it on as for a new entry.
 
 An acquire load that reads a release store synchronizes with it. So the text's bytes and its hash are visible, and reading them races with nothing.
 
