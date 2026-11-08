@@ -219,7 +219,7 @@ protocol ConsumingSequence {                    // what a loop over a whole valu
 
 A pattern binds through the view's `value`, so move-only elements iterate like any others.
 
-**A sequence that is a place is iterated where it is.** Such a place is a variable, a stored field, or a `read` or `modify` projection such as `.value`. Anything else, such as `a.enumerated()`, is a whole value. It is moved into a hidden `var` that lives until the loop ends. So is every temporary in the sequence expression, each into its own, in evaluation order. An adaptor in a hidden local keeps its collection borrowed for the whole loop:
+**A sequence that is a place is iterated where it is.** Such a place is a variable, a stored field, or a place property's place, such as `.value`. Anything else, such as `a.enumerated()`, is a whole value. It is moved into a hidden `var` that lives until the loop ends. So is every temporary in the sequence expression, each into its own, in evaluation order. An adaptor in a hidden local keeps its collection borrowed for the whole loop:
 
 ```swift
 for (i, e) in &makeEnemies().enumerated() { … }       // the new list is a hidden mutable local, and so is its adaptor
@@ -316,6 +316,6 @@ var (c, d) = (consume s).split(at: m)   // a whole value: the consuming form han
 ```
 
 - **A receiver that is a whole value picks the `consuming` form**: a call result, a `get` accessor's or subscript's included, or `consume x`.
-- **A receiver that is a place picks the `mutating` form**, or, where a shared form exists too, the one its access context picks (above). A place here is a variable, a stored field even of a temporary, or a `read` or `modify` projection.
+- **A receiver that is a place picks the `mutating` form**, or, where a shared form exists too, the one its access context picks (above). A place here is a variable, a stored field even of a temporary, or a place property's place.
 
 So `s.split(at: m)` on a `MutableSpan` lends two halves that depend on `s` exclusively. `(consume s).split(at: m)` hands them over, carrying only what `s` carried, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A shared `Span`'s `split(at:)` is declared `where return outlives self`, so it needs no pair.

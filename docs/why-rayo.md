@@ -14,8 +14,9 @@ Six principles decide Rayo's trade-offs.
    Where the compiler stages a place through a temporary, a declaration announces it:
     - a `@packed` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
     - an imported C bitfield ([08](spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
-    - a property or subscript with a `set` ([02](spec/02-views-and-dependencies/projections-and-accessors.md#get-and-set-accessors));
-    - an access-bound `read` or `modify` that yields a temporary ([02](spec/02-views-and-dependencies/projections-and-accessors.md#access-bound-projections)).
+    - a value property, one declared with `get` and `set` ([02](spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
+
+   A place property, declared with `borrow` and `mutate`, never stages: it hands out its storage itself ([02](spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 2. **Nothing reasonable is forbidden; the language only chooses how to check it.** Each systems pattern lands in the cheapest [tier](spec/01-values-and-ownership.md#tiers-of-checking) that can check it, and none is forced into `unsafe` just because the checker can't prove it.
 3. **Values by default, objects when you need them.** Borrows of values are checked within one function body. Longer links are handles and weak pointers, checked at each use.
 4. **No build setting turns memory safety off; diagnostics are settings.** Bounds checks, object checks and arena checks stay on in every build, except the ones an `unchecked` block's own code performs ([10](spec/10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)). Diagnostic checks, such as overflow and `assert`, are on or off where code is written, by the build mode's default, a module's settings or a scope's `@checks` ([10](spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).

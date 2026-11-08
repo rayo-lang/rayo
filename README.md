@@ -68,7 +68,7 @@ The spec starts with an [Introduction](docs/spec/introduction.md), then has one 
 | --- | --- |
 | [Introduction](docs/spec/introduction.md) | The language, its safety model and the scope of this specification |
 | [01 Values and ownership](docs/spec/01-values-and-ownership.md) | Copy and move, parameters and bindings, borrows and `mutable`, the law of exclusivity |
-| [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and `read`, `modify`, `get` and `set` accessors |
+| [02 Views and dependencies](docs/spec/02-views-and-dependencies.md) | Views and scoped values, how the compiler tracks what they borrow, `rebind`, and place and value properties |
 | [03 Handles and objects](docs/spec/03-handles-and-objects.md) | Pools and handles, `UniquePointer` and `WeakPointer`, pinning for C |
 | [04 Types](docs/spec/04-types.md) | Numbers, [SIMD](docs/spec/04-types/numbers-and-math.md#simd-and-math), structs, enums and [`when`](docs/spec/04-types/enums.md#matching-with-when-and-choosing-with-if), optionals, unions, strings, collections and iteration, `Pod`, `SoA` |
 | [05 Protocols, generics and closures](docs/spec/05-protocols-generics-and-closures.md) | Protocols, generics, `any P`, operators, [equality and ordering](docs/spec/05-protocols-generics-and-closures/operators.md#equality-and-ordering), closures and function types, implicit conversions |

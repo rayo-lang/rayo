@@ -2,15 +2,15 @@
 
 [02 · Views and dependencies](../02-views-and-dependencies.md#dependencies)
 
-Dependencies begin where code makes a view of a place. They follow values derived from that view, including values returned by a function, so the caller can still tell what storage the result needs. The first three rules describe that path from source to result.
+Dependencies begin where code makes a view of a place. They follow values derived from that view, including values returned by a function, so the caller can still tell what storage the result needs. The first three rules describe that path from the place to the result.
 
 ## Rule 1: Projection
 
-**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. It depends shared for a read projection, such as `pool[h]` or `list[i]`, and exclusively for a `modify` projection ([Projections: `read` and `modify` accessors](projections-and-accessors.md#projections-read-and-modify-accessors)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3, since a `get` returns a value instead of yielding a place ([below](#rule-3-call-results)).
+**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. A place property's place, such as `pool[h]` or `list[i]`, is part of the places it lies in, so a view of it depends on those, whatever its type ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3, since a `get` returns a value instead of handing out a place ([below](#rule-3-call-results)).
 
-**What a view taken from a place depends on follows from what it is taken through:** a shared view, a place that owns its value or an exclusive view, or an access-bound projection.
+**What a view taken from a place depends on follows from what it is taken through:** a shared view, a place that owns its value or an exclusive view, or a value property's change.
 
-**Through a shared view, the place drops out where declared.** A `get` declared `where return outlives self`, or a projection declared `where yield outlives self`, gives a sub-view that is a narrower copy of the shared view ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So the sub-view depends only on what the view carries, not on the variable holding it. The compiler verifies the two facts that make this safe: nothing the view carries can be changed through it, or end with it ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
+**Through a shared view, the place drops out where declared.** A `get` or a place property declared `where return outlives self` gives a sub-view that is a narrower copy of the shared view ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So the sub-view depends only on what the view carries, not on the variable holding it. The compiler verifies the two facts that make this safe: nothing the view carries can be changed through it, or end with it ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
 
 ```swift
 let b = rest.first                       // in a span iterator: 'b' depends on what 'rest' views
@@ -20,13 +20,13 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **Verification rejects an `outlives` clause for a view of data the type holds inline**, such as a `[4 of Int]` field, which depends on `self` itself.
 
-**Through a place that owns its value, or an exclusive view, projections depend on the place itself.** An exclusive view can change what it carries, so it never meets the condition that lets the place drop out ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
+**Through a place that owns its value, or an exclusive view, a place property whose source is `self` hands out a place that depends on that place itself** ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)). An exclusive view can change what it carries, so it never meets the condition that lets the place drop out ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
 
-**Through an access-bound projection, a view depends on the access.** An access-bound projection, one with no `yield` item in its `where` clause, may yield a temporary ([Access-bound projections](projections-and-accessors.md#access-bound-projections)). So a view of it depends on the **access**, which is held as rule 6 holds a dynamic access. The held access keeps the accessor suspended, so its frame stays as it was until the view's last use. The access is in the yielded value's own set, so it follows every value derived from it, even where the place drops out. It also keeps the places the accessor was given lent.
+**Through a value property's change, a view depends on the access.** Such a change lends a copy that `get` returned, which `set` takes back when the access ends ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)). So a view of the copy depends on the **access**, which is held as rule 6 holds a dynamic access, and the copy stays as it was until the view's last use. The access is in the copy's own set, so it follows every value derived from it, even where the place drops out. It also keeps `self` and the subscript's arguments lent.
 
 ## Rule 2: Transitivity
 
-**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing its source can't, so the source's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)).
+**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing the value it came from can't, so that value's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)).
 
 ## Rule 3: Call results
 
@@ -155,7 +155,7 @@ forEachLine(src.view) { line in lines.append(copy line) }
 - **Code that views a shallow value's bytes with `ptr(to:)`** promises never to return or store that view where a sealed type holds it.
 - **Code that keeps a value through a raw pointer**, reading it after the call that gave it the value returns, promises that the holding type says what it holds, since rules 3 and 4 read only types. The type must be scoped if the value is, as a field `*T` makes it for a `T`. It must be unsealed if the value is, or may be, a closure, a function value or an `any P`, as a type parameter, an associated type or a `some P` may be.
 
-**Code that keeps a value through a raw pointer also promises what it hands out of that storage.** What it later hands out borrows nothing that the handing-out call's dependencies don't give it, by the dependency rules and its `where` items. That covers a result, a yield, and a store through a `mutable` parameter. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only unscoped values ([07](../07-concurrency/synchronization.md#queues-and-channels)).
+**Code that keeps a value through a raw pointer also promises what it hands out of that storage.** What it later hands out borrows nothing that the handing-out call's dependencies don't give it, by the dependency rules and its `where` items. That covers a result, the place a place property hands out, and a store through a `mutable` parameter. So storage that one value absorbs into and another hands out of, such as a channel's two ends, holds only unscoped values ([07](../07-concurrency/synchronization.md#queues-and-channels)).
 
 ### Mutable views
 
@@ -214,7 +214,7 @@ if let x = first(makeArray()) { use(x) }   // error: the array dies before the b
 **A scoped temporary gets no exemption**, since it may hold data inline that a borrowed callee lends out. Only its set flows in two cases:
 
 - when it is shallow, and the result or absorbing argument is sealed ([above](#shallow-values));
-- when the callee's `where` clause says the result, or what it yields, `outlives` the parameter it is passed for ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)), as a `where return outlives self` `get` or a `where yield outlives self` projection does.
+- when the callee's `where` clause says the result, or the place it hands out, `outlives` the parameter it is passed for ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)), as a `get` or a place property declared `where return outlives self` does.
 
 So these leave only `arr` and `src` borrowed:
 

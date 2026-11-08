@@ -48,4 +48,4 @@ The callee's body is checked against the same promise: it can return or store a 
 - [Projection, transitivity and call results](02-views-and-dependencies/dependency-projection-and-results.md)
 - [Absorption, callee checks and dynamic accesses](02-views-and-dependencies/dependency-absorption-and-accesses.md)
 - [Destruction, precise dependencies and `rebind`](02-views-and-dependencies/dependency-lifetimes.md)
-- [Projections and accessors](02-views-and-dependencies/projections-and-accessors.md)
+- [Place and value properties](02-views-and-dependencies/place-and-value-properties.md)

@@ -96,10 +96,10 @@ A cursor that binds a place can't be re-targeted with `=`, which writes the plac
 
 ### A7 · Accessors, user subscripts and columns (also part of A24)
 
-**Code needs two *computed* projections of one value mutably at once**: `modify` accessors, not stored fields ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#projections-read-and-modify-accessors)).
+**Code needs two *computed* places of one value mutably at once**: place properties with a `mutate`, not stored fields ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 ```swift
-var p = &world.physics     // a modify accessor
+var p = &world.physics     // a place property's mutate
 var r = &world.render      // another one, on the same world
 step(&p, &r)
 ```
@@ -109,7 +109,7 @@ The criteria below also use these patterns:
 ```swift
 var lives = &particles.life                          // an SoA column, taken as a MutableSpan<Float>
 
-node.next = nil                                      // through a property that yields a stored optional field
+node.next = nil                                      // through a place property that hands out a stored optional field
 _ = node.next.take()                                 // takes the value out through the same property, and drops it
 pool[a]?.hp = copy pool[b]!.hp                       // one element's field, assigned from another's
 world.enemies[h]?.hp -= reinforce(&world.enemies)    // the right side lends the whole pool for change
@@ -118,9 +118,9 @@ if let c = h?.cell { use(c.tag.span) }               // a view through an option
 ```
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
-- **Must accept** a user container, such as a ring buffer over raw memory, whose `modify` subscript yields an element, and a function that takes the container `mutable` and returns a view of that element.
+- **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container `mutable` and returns a view of that element.
 - **Must accept** an `SoA<T>` column, a view of the buffer that holds one field of `T`, taken as a `MutableSpan` as `lives` is above, and moved into a struct of views, into a closure, or into an `owned` parameter.
-- **Must accept** the optional chains through projections above, the first two through a property that yields a stored optional field.
+- **Must accept** the optional chains through place properties above, the first two through one that hands out a stored optional field.
 
 ### A8 · A graph with cross-links, freed all at once
 
