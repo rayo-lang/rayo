@@ -153,7 +153,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 | `ExpressibleByArrayLiteral` | `init<let N: Int>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
 | `ExpressibleByDictionaryLiteral` | `init<let N: Int>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
 | `ExpressibleByStringLiteral` | `init(stringLiteral text: StaticString)` | `StaticString`, `StringView`, `String` |
-| `ExpressibleByInternedLiteral` | `init(internedLiteral entry: StaticSpan<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
+| `ExpressibleByInternedLiteral` | `unsafe init(internedLiteral entry: StaticSpan<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
@@ -208,7 +208,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 protocol ExpressibleByInternedLiteral {
     associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
     static func internedEntry(for text: StaticString) -> InternedEntry     // run by the compiler, once per distinct text
-    @noalloc init(internedLiteral entry: StaticSpan<InternedEntry>)        // the literal's entry, as one element
+    @noalloc unsafe init(internedLiteral entry: StaticSpan<InternedEntry>) // the entry the build bound for the literal
     unsafe static func internLoaded(_ entries: StaticSpan<InternedEntry>,  // code loaded after startup (below)
                                     binding bound: MutableSpan<StaticSpan<InternedEntry>>) -> Void!AllocError
 }
@@ -216,9 +216,10 @@ protocol ExpressibleByInternedLiteral {
 
 - **One table per type.** The table holds an entry for each text the build converts to a `T` literal in checked code, anywhere in the program. The build runs `internedEntry(for:)` once per text and freezes the results into one table in read-only data, so equal texts in different modules share one entry.
 - **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree` and `Sendable`, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
-- **Entries can't be forged.** A conformer keeps `InternedEntry`'s fields private, so safe code gets an entry only from `internedEntry(for:)`. That is safe to call from anywhere, since it only builds an entry from a text and touches no interner.
+- **Entries can't be forged.** A conformer keeps `InternedEntry`'s fields private, so safe code gets an entry only from `internedEntry(for:)`. That is safe to call from anywhere, since it only builds an entry from a text and touches no interner. An entry built that way never becomes a value of the type, since only `unsafe` code calls `init(internedLiteral:)` (below).
 - **The table exists only at run time.** `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
 - **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
+- **Its caller promises the entry.** `init(internedLiteral:)` is `unsafe`: its caller promises that the span is the entry the build bound for that literal, since an entry from anywhere else would give its text a second value. The call the build makes for a literal carries that promise itself, so a literal needs no `unsafe` in source, in a `@safe` module too ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe)).
 - **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
 **A conformer is a type that can declare a static stored `let`, and doesn't also conform to `ExpressibleByStringLiteral`.** It keeps its interner in a static stored `let`. So it is none of the places 07 lists where one declaration stands for many instances, such as a generic type, a type nested in one or a type local to a generic function ([07](../07-concurrency/global-state.md#global-state)). A type that conforms to both protocols is a compile error, since a string literal of it would have two meanings.
