@@ -53,7 +53,8 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 - destroying a thread-bound object while an access to it is live ([03](../03-handles-and-objects.md#destroying-an-object));
 - taking a `Mutex`'s or an `RwLock`'s exclusive access on a thread that holds any access to it, or any access on a thread that holds its exclusive one, since that conflicts with a view the thread holds ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
 - `lock()` on a `Slice` of a bare `Shared<Blob>`, since nothing writes a `Frozen` value ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers));
-- overlapping calls on one side of a single-producer or single-consumer queue, so that its algorithm never sees two producers or two consumers at once ([07](../07-concurrency/synchronization.md#queues-and-channels)).
+- overlapping calls on one side of a single-producer or single-consumer queue, so that its algorithm never sees two producers or two consumers at once ([07](../07-concurrency/synchronization.md#queues-and-channels));
+- a thread joining its own `Thread`, since it would wait for itself for ever ([07](../07-concurrency/thread-work.md#joining-a-thread)).
 
 **Running out:**
 
@@ -79,10 +80,12 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 **Startup, shutdown and threads from C:**
 
 - entering Rayo from C before startup has finished or after shutdown, except a nested entry ([07](../07-concurrency/global-state.md#initialization-at-startup));
-- calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what detaching or shutting down destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
-- a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)).
+- calling `rayo_init` a second time, and calling `rayo_thread_detach` or `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what either call destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
+- a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup));
+- a thread queued during startup that the platform can't start when startup ends, which panics on the startup thread as part of startup, so it ends the program ([07](../07-concurrency/thread-work.md#lent-work-and-queued-threads));
+- `Thread.start`, `ThreadScope.spawn` and std's lending calls when `Runtime.startThread` refuses the start, which happens only outside startup ([07](../07-concurrency/thread-work.md#lent-work-and-queued-threads)).
 
-**Poisoned locks.** An unwind out of a lock's exclusive access, through a guard or a closure, poisons the lock: a `Mutex`'s access does, and an `RwLock`'s `write` access does, but its `read` access doesn't. Then `lock`, `read` and `write` on it panic until `clearPoison()` resets it, so another thread, which never sees the `recover` closure that might repair it, doesn't take what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
+**Poisoned locks.** `lock`, `read` and `write` on a lock that a panic has poisoned, until `clearPoison()` resets it ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
 **Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
 
@@ -125,6 +128,8 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 2. **It unwinds the thread**, one frame at a time, innermost first ([below](#unwinding)).
 3. **It stops at the innermost recovery point** on the thread, whose `recover` closure then runs with it as a `Panic` ([below](#catching-a-panic-catchpanic)). With none, the unwind reaches the thread's first frame, and the thread ends ([below](#uncaught-panics)).
 
+**The runtime reports panics one at a time, in one total order that respects happens-before.** A panic that happens before another is reported first. So a root cause comes before the panics that follow from it: a panic that poisons a lock is reported before the unwind poisons it, so before any panic of a thread that then finds the lock poisoned. Code that must pick one of several panics, such as a lending call, picks the first reported ([07](../07-concurrency/thread-work.md#panics-in-lent-work)).
+
 ### Unwinding
 
 **Unwinding** is how a panic leaves the frames of its thread. It ends each frame as a `throw` that nothing catches would: it destroys each live value the frame owns and runs each live `defer` block, in the order a scope's end destroys them ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)). That covers the temporaries of the statement the panic interrupted, and a value that holds only some of its fields, which loses exactly those.
@@ -157,7 +162,7 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 
 ### Uncaught panics
 
-**A panic that no recovery point catches ends its thread.** The unwind destroys the thread's first frame too, and the thread's teardown then runs as when its body returns ([07](../07-concurrency/global-state.md#thread-teardown)). How the end of a thread reaches the code that started it or lent it work is in 07 ([07](../07-concurrency/thread-work.md#lending-work-and-starting-threads)).
+**A panic that no recovery point catches ends its thread.** The unwind destroys the thread's first frame too, and the thread's teardown then runs as when its body returns ([07](../07-concurrency/global-state.md#thread-teardown)). A library that started the thread or lent it work carries the panic on in the thread that waits for it: `join()` resumes it in the joiner ([07](../07-concurrency/thread-work.md#joining-a-thread)), and a lending call on the lending thread ([07](../07-concurrency/thread-work.md#panics-in-lent-work)).
 
 **On the main thread, the program then shuts down as when `main` returns, and exits with status 101.** Shutdown runs the main thread's teardown and closes entry from C ([07](../07-concurrency/global-state.md#shutdown)).
 
@@ -171,7 +176,8 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 - **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
-- **A panic that would unwind into C**: out of an `@export` or `@c` function, or a closure literal converted to a `@c` type. C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
+- **A panic that would unwind out of a thread-local's initializer on any thread outside startup**, since no joiner can learn of it ([07](../07-concurrency/global-state.md#thread-locals)). On a C thread that is attaching, it would unwind into C anyway, as the next item says.
+- **A panic that would unwind into C**, out of any entry from C. That is a C entry, which is an `@export` or `@c` function or a closure literal converted to a `@c` type, or one of the runtime's C exports, such as `rayo_init`, `rayo_thread_attach`, `rayo_thread_detach` or `rayo_shutdown` ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)). C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **Every panic, under the abort strategy** ([below](#panic-strategy)).
 
 **Ending the program runs these steps:**
@@ -233,7 +239,10 @@ Moves are checked as for any call's arguments: a place that either closure owns 
 ### The `Panic` value
 
 ```swift
-struct Panic { … }             // copyable and Sendable: up to 256 bytes of its message, inline
+struct Panic {                 // copyable and Sendable: up to 256 bytes of its message, inline
+    let sequence: UInt64       // its place in the runtime's report order
+    …
+}
 struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 ```
 
@@ -242,6 +251,8 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 - **`p.message`** is a `StringView` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
 - **`p.isCut`** is `true` when the message was cut, which tells a cut message from a whole one. The report always has the whole message.
 - **`p.location`** is where the panic happened: the call to `fatalError`, `precondition` or `assert`, or the operation whose check failed.
+
+**`p.sequence` is unique to the panic, and increases in the runtime's report order** ([above](#what-a-panic-does)). So of two panics `a` and `b`, `a` was reported first exactly when `a.sequence < b.sequence`. Code that picks one of several panics, as a lending call does, uses it to pick the first reported.
 
 **Only the runtime makes a `Panic`.** The type has no public initializer, so every `Panic` that code holds, and every panic that `resumePanic` carries on, was reported when it happened.
 
@@ -253,9 +264,9 @@ struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 func resumePanic(_ p: Panic) -> Never
 ```
 
-**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened.
+**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message, location and sequence, so a later recovery point catches the panic as it first happened.
 
-**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)):
+**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#panics-in-lent-work)):
 
 ```swift
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot

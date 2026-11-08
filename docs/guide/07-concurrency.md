@@ -64,16 +64,18 @@ The job system's own `unsafe` code promises to call each closure only as its kin
 ### Scoped threads
 
 ```swift
-Thread.scope { s in
+ThreadScope.run { s in
     s.spawn { integrate(&world.enemies, dt: dt) }       // runs on another thread
     mix(&world.audio)                                   // runs on this thread meanwhile
     print(world.enemies.count)                          // error: 's' borrows 'world.enemies' exclusively until the block returns
 }                                                       // every spawned thread has finished here
 ```
 
-**`Thread.scope` starts threads that may borrow the caller's locals** ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). It returns only when every thread its block spawned has finished, so no thread outlives what it borrows.
+**`ThreadScope.run` starts threads that may borrow the caller's locals** ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). It returns only when every thread its block spawned has finished, so no thread outlives what it borrows.
 
 **`spawn` hands its closure to the scope `s`, and `s` holds what the closure borrows until the block returns.** So code in the block, or a second `spawn`, that touches `world.enemies` conflicts, as a second argument of one call would.
+
+**A panic in a spawned thread waits for the others, then carries on in the caller.** Chapter 1 showed a panic abandoning the work in progress. Here it abandons only the spawned closure's work, destroying what the closure owns, while the block and the other threads run on. Once every thread has finished, `ThreadScope.run` carries the panic on as if the block itself had panicked ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). So the scope still never returns before its threads are done, even when one fails. The job system's `join` and parallel loops treat a panic in their closures the same way.
 
 ## What may cross threads: `Sendable`
 
@@ -153,6 +155,8 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **Taking the write lock on a thread that holds either lock panics**, and so does taking either lock on a thread that holds the write lock.
 
+**A panic that abandons a `Mutex`'s closure or guard poisons the lock.** The panic still releases the lock, but the list it was changing may be half-changed. So from then on, locking `deaths` panics unless the program resets the lock, and no other thread mistakes the half-changed list for a whole one ([07](../spec/07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
+
 ### Atomics
 
 ```swift
@@ -194,11 +198,13 @@ func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int>) {
 var level = loadLevel()
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(level, bounces: bounces)                               // error: unlisted captures; a thread body can't borrow them
 }
-_ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
+let bake = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
     bakeLighting(level, bounces: bounces)
 }
+loadAudio()                                                             // runs on this thread meanwhile
+bake.join()                                                             // waits until the bake has finished
 ```
 
 **A thread started with `Thread.start` may run after the function that started it returns** ([07](../spec/07-concurrency/thread-work.md#what-a-thread-can-share)). So its body can't borrow anything: it must own what it captures.
@@ -207,12 +213,23 @@ _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the th
 
 **An unscoped closure lists its captures, and says how each one gets in.** `[move level]` moves the level into the closure, so the function can't use it afterwards. `[copy bounces]` copies a copyable value, which stays usable outside.
 
+**`Thread.start` returns a `Thread<R>`, where `R` is what the body returns, and `join()` waits for the thread to end and returns that value** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). The bake returns nothing, so `bake` is a `Thread<Void>`. A thread that computes something hands it back through `join()`, as this one does with a checksum of some bytes it owns:
+
+```swift
+let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32>
+let crc = hashing.join()                                      // waits, then returns the body's UInt32
+```
+
+**If a panic ended the thread, `join()` carries it on in the joining thread**, as `ThreadScope.run` does for its threads.
+
+**Dropping a `Thread` detaches the thread: it runs on by itself, and nothing can wait for it any more.** Its result, if any, is dropped when the thread ends. Rayo rejects an unused value, so code that never joins a thread drops its `Thread` with `_ =`, as below. A detached thread still running when `main` returns ends with the program.
+
 **To hand a thread data that other threads also use, give it a weak link to a `Shared` value** ([03](../spec/03-handles-and-objects.md#sharing-across-threads)). A `WeakShared` is copyable, and `Sendable` when the value is. The thread upgrades it each time it needs the value:
 
 ```swift
 let mixer = Shared(Mutex(AudioMixer()))
-let m = mixer.weak()                                         // a WeakShared<Mutex<AudioMixer>>
-_ = Thread.start { [copy m, copy clip] in
+let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
+_ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
 }
 ```
@@ -222,18 +239,18 @@ _ = Thread.start { [copy m, copy clip] in
 ### Queues and channels
 
 ```swift
-func startRenderer() -> (Thread, Sender<Shared<Snapshot>>) {
+func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
-    let render = Thread.loop(name: "render", receiving: rx) { snap in   // 'rx' moves in; one call per snapshot
-        draw(snap)
+    let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
+        while true { draw(rx.waitPop()) }                                    // waits for each snapshot in turn
     }
-    return (render, tx)                                       // the simulation keeps the sender
+    return (render, tx)                                                      // the simulation keeps the sender
 }
 ```
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**`Thread.loop` starts a thread that owns a `Receiver`, and runs its body once per item.** Between items, the thread **parks**: it sleeps until the next item comes.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Between items, `waitPop()` **parks** the thread: it sleeps until the next item comes.
 
 **The ends are move-only.** `Sender<T>` and `Receiver<T>` are `Sendable` when `T` is, so each end can move to the thread that uses it.
 
@@ -305,7 +322,8 @@ scripts.step(&game)                                        // resumes pending an
 ## In the spec
 
 - [07 Concurrency](../spec/07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race): the four ways two threads can reach the same memory, and why safe code can't race.
-- [07 The library's promise](../spec/07-concurrency/thread-work.md#the-librarys-promise): what a job system's `unsafe` code promises, and thread-locals in lent work.
+- [07 The library's promise](../spec/07-concurrency/thread-work.md#the-librarys-promise): what a job system's `unsafe` code promises, how a panic in lent work reaches the lender, and thread-locals in lent work.
+- [07 Joining a thread](../spec/07-concurrency/thread-work.md#joining-a-thread): `join()`, detaching, and what a thread's panic does.
 - [07 Sendable](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable): every rule that derives `Sendable`, and where it is required.
 - [07 Atomics and locks](../spec/07-concurrency/synchronization.md#atomics-and-locks): memory orderings, `Mutex` and `RwLock`, queues, channels, `Published`, `Once` and blocking waits.
 - [07 The `Synchronized` contract](../spec/07-concurrency/synchronization.md#the-synchronized-contract): what a type of your own must uphold to declare it.

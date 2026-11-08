@@ -61,7 +61,11 @@ game.score += p                       // and the write after it
 
 **Destroying a suspended task cleans it up.** Cancelling it, or dropping it or the task set that holds it, destroys its state as leaving every open scope would. The `deinit`s of its live locals and its live `defer` blocks run, in the usual order ([10](../10-errors-and-safety/typed-errors.md#cleanup)), and no other code does. That happens outside any step, with no resume parameter. So a `defer` that is live across an `await` may use only what exists without a step: the state's parameters and owned locals, and the globals any code reaches, not the resume parameter.
 
-**A finished task stays finished.** Once its `poll` has returned `.done` or `.failed`, its result has moved out and its locals are destroyed, so destroying it runs nothing, and polling it again panics ([10](../10-errors-and-safety/panics.md#what-panics)).
+**A finished task stays finished.** Once its `poll` has returned `.done` or `.failed`, or a panic has unwound out of it, its result has moved out or never came, and its locals are destroyed. So destroying it runs nothing, and polling it again panics ([10](../10-errors-and-safety/panics.md#what-panics)).
+
+**A panic that unwinds out of a step finishes the task.** The unwind leaves the task's body as a `throw` would: it destroys the task's live locals and runs its live `defer` blocks ([10](../10-errors-and-safety/panics.md#unwinding)). Then it goes on out of the `poll` that ran the step, so the task never yields a result.
+
+**Awaiting a task that panics yields nothing: the panic unwinds through the `await`.** A sub-task runs inline in the step of the task that awaits it, so its panic goes on through the awaiting task, and finishes both, as a panic in a callee unwinds its caller.
 
 **A task never holds itself.** Its state never contains a state of its own type, as it would if its body awaited a call of itself directly or through other `task func`s ([04](../04-types/structs.md#structs)). Recursion goes through an owner, such as a `Box`, so the allocation is visible.
 
@@ -112,8 +116,8 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **Only its owner's `step` resumes a task, but a step needn't visit every task.**
 
-- A **pending** task is polled every step.
-- A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel. The next `step` after a wake resumes it.
+- A **pending** task is polled every step, except a step that a panic stops before it reaches the task ([below](#running-tasks)).
+- A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel. The next `step` after a wake resumes it, unless a panic stops that step before it reaches the task, which then stays woken for the following step ([below](#running-tasks)).
 
 **`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread.
 
@@ -160,6 +164,18 @@ scripts.step(&game)                                  // wherever the program ste
 ```swift
 mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>        // TaskSet<C>'s: the task, moved in
     where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }   // C: the set's resume context type
+```
+
+**A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay as they were, pending or woken, for the next `step`, which starts with the task after the one that panicked and wraps around. So a task that panics often can't keep the tasks after it from being stepped.
+
+**Stopping at once keeps the other tasks off a half-changed resume parameter.** The panic may have left the resume parameter half-changed, and the owner's `recover` closure sees it first, so it can repair it before any other task runs ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)). An owner that keeps the program running catches the panic around `step`:
+
+```swift
+catchPanic {
+    scripts.step(&game)
+} recover: { p in
+    log("a script failed: \(p.message)")             // that script is gone; the rest wait for the next step
+}
 ```
 
 **A `TaskSet` isn't `Sendable`, since its type doesn't show its tasks' types.** So it and its tasks stay on one thread, and the tasks needn't be `Sendable`. A task is `Sendable` when everything in its state is.
