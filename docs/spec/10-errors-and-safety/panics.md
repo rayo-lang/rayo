@@ -45,7 +45,8 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 - opening an owning value whose allocator was reset or unregistered since ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it));
 - reading a global before its initializer has run ([07](../07-concurrency/global-state.md#initialization-at-startup));
 - using a thread-local before its thread's copy is initialized or after it is destroyed ([07](../07-concurrency/global-state.md#thread-locals));
-- polling a task that has already finished ([07](../07-concurrency/tasks.md#semantics)).
+- polling a task that has already finished ([07](../07-concurrency/tasks.md#semantics));
+- making a channel with a `capacity` below 1, since a channel with no room could never take an item ([07](../07-concurrency/synchronization.md#queues-and-channels)).
 
 **Conflicting uses:**
 

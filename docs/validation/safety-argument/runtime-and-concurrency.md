@@ -105,7 +105,7 @@
     - views of its interior only under a lock, or of data never written again except through its own synchronization and never freed before the value is destroyed;
     - bitwise-movable whenever unborrowed, since the language moves only unborrowed values.
 
-  A channel's ends are `mutating` on each side, so exclusivity makes one consumer and one producer at a time, statically ([07](../../spec/07-concurrency/synchronization.md#queues-and-channels)).
+  A channel's ends are `mutating` on each side, so exclusivity makes its one `Receiver` the one consumer, and each `Sender` one producer at a time, statically. Many producers each own a `Sender` that `share()` made ([07](../../spec/07-concurrency/synchronization.md#queues-and-channels)). A future's `Promise` and `Future` are consumed by `fulfill` and `wait()`, so it has one producer and one waiter ([07](../../spec/07-concurrency/synchronization.md#futures)).
 - **`Shared` values**, whose value is `Frozen`, so never written, or `Synchronized`, so written only through its own synchronization ([above](#memory-and-allocators)).
 - **`const`s, global `let`s and immortal data**, read through shared borrows and changed only through their own synchronization ([07](../../spec/07-concurrency/global-state.md#global-state)).
 

@@ -113,7 +113,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **The job system's `join` runs both closures even when one panics**, since both are lent already. Once a piece has panicked, a parallel loop may skip the elements no piece has started, since the call unwinds anyway. So the code after a caught panic can't rely on which elements the loop's body saw.
 
-**A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from, or the `Promise` of a future another thread waits on ([Disconnected channels](synchronization.md#disconnected-channels)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
+**A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from, or the `Promise` of a future another thread waits on ([Panics in producers and consumers](synchronization.md#panics-in-producers-and-consumers)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
 
 ```swift
 let ready = Event()
@@ -163,13 +163,15 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // 
     return (render, tx)                                                      // the simulation keeps the sender
 }
 
-let (render, var tx) = startRenderer()
-while running {
-    step(&world)
-    if case .failure = tx.send(Shared(world.snapshot())) { break }          // the render thread is gone
+func runSimulation(_ world: mutable World) {                                 // called from main, after startup
+    let (render, var tx) = startRenderer()
+    while !world.quit {
+        step(&world)
+        if case .failure = tx.send(Shared(world.snapshot())) { break }      // the render thread is gone
+    }
+    _ = tx                                                                   // drops the last sender: the render loop ends
+    render.join()                                                            // waits for it, or resumes its panic here
 }
-_ = tx                                                                       // drops the last sender: the render loop ends
-render.join()                                                                // waits for it, or resumes its panic here
 
 let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // instead of a channel, a global queue: a Synchronized let
 
@@ -194,10 +196,7 @@ static func start(name: StaticString = "", _ body: owned Closure<consuming @send
 
 **A thread that serves a stream of items owns the receiving end, and waits on it in a loop**, as the render thread does with `rx`. Between items, `receive()` parks it ([Queues and channels](synchronization.md#queues-and-channels)). The loop ends once every `Sender` is gone and the channel is empty ([Disconnected channels](synchronization.md#disconnected-channels)).
 
-**So the simulation stops the render thread by dropping its sender, and joins it to learn how it ended.** A panic on either side ends the other cleanly too:
-
-- **In the simulation.** The unwind destroys `tx`, so the render loop ends, and the render thread's body returns.
-- **In the render thread.** The unwind destroys `rx`, so the next `send` fails, the simulation's loop breaks, and `render.join()` resumes the render thread's panic.
+**So the simulation stops the render thread by dropping its sender, and joins it to learn how it ended.** A panic on either side disconnects the channel too, which ends the other side's loop ([Panics in producers and consumers](synchronization.md#panics-in-producers-and-consumers)).
 
 ### What a thread can share
 

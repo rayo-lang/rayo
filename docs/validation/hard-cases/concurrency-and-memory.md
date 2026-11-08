@@ -50,7 +50,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 - **Must hold:** the inner call is checked by the same rules as the outer one, and the language adds no rule for nesting.
 - **Must accept** a library that runs inner work on the threads already waiting in its joins. State what the language requires of work a library runs on a thread that is waiting in its own join.
-- **Must hold:** `Future.wait()` runs no other code inline, and returns once the promise's thread panics, rather than waiting for ever ([07](../../spec/07-concurrency/synchronization.md#futures)).
+- **Must hold:** `Future.wait()` runs no other code inline, and returns once the thread that owns its `Promise` panics, rather than waiting for ever ([07](../../spec/07-concurrency/synchronization.md#futures)).
 - State what happens when lent work run on a waiting thread takes a lock that thread holds, so a library knows what running unrelated work inline costs.
 
 ### C6 · Allocation inside lent work

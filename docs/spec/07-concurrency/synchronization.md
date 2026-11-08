@@ -91,15 +91,18 @@ The ends are move-only, unscoped values that point to shared heap state, so `T` 
 **Each end has its own methods:**
 
 ```swift
-func share() -> Sender<T>                                     // Sender<T>'s: another Sender of the same channel
-mutating func send(_ item: owned T) -> Void!Disconnected<T>   // Sender<T>'s: parks while full; fails, handing the item back, once the Receiver is gone
-mutating func receive() -> T?                                 // Receiver<T>'s: parks while empty; nil once every Sender is gone
-mutating func tryReceive() -> T!TryReceiveError               // Receiver<T>'s: never parks
+func share() -> Sender<T>                                        // Sender<T>'s: another Sender of the same channel
+mutating func send(_ item: owned T) -> Void!Disconnected<T>      // Sender<T>'s: parks while full; fails once the Receiver is gone
+mutating func trySend(_ item: owned T) -> Void!TrySendError<T>   // Sender<T>'s: never parks
+mutating func receive() -> T?                                    // Receiver<T>'s: parks while empty; nil once every Sender is gone
+mutating func tryReceive() -> T!TryReceiveError                  // Receiver<T>'s: never parks
 ```
 
-**A channel holds at most `capacity` items, and `send` parks while the channel is full and connected.** The send goes on once the `Receiver` takes an item and makes room. So a producer that runs ahead of its consumer waits for it, rather than filling memory with items nobody has taken.
+**A channel holds at most `capacity` items, and `capacity` is at least 1.** `make` panics on a smaller one, such as `make(capacity: 0)`, since `send` parks while the channel is full, and a channel with no room would always be full ([10](../10-errors-and-safety/panics.md#what-panics)).
 
-**The ends aren't `Synchronized`.** `receive()` and `tryReceive()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `send(_:)` is `mutating` too, so each `Sender` is one producer at a time.
+**`send` parks while the channel is full and connected**, and goes on once the `Receiver` takes an item and makes room. So a producer that runs ahead of its consumer waits for it, rather than filling memory with items nobody has taken.
+
+**The ends aren't `Synchronized`.** `receive()` and `tryReceive()` are `mutating`, so exclusivity makes the one `Receiver` the single consumer statically. `send(_:)` and `trySend(_:)` are `mutating` too, so each `Sender` is one producer at a time.
 
 **The shared state counts the ends that own it**, which also tells each side when the other is gone ([below](#disconnected-channels)). A sender queued inside its own channel is a cycle that dropping the `Receiver` breaks, since that destroys the queued items. Other cycles, such as a `Receiver` queued inside its own channel, leak.
 
@@ -107,15 +110,28 @@ mutating func tryReceive() -> T!TryReceiveError               // Receiver<T>'s: 
 
 **A channel is disconnected once the ends on one side are all gone, so the other side never waits for an end that can't act.** Each direction has its own condition:
 
-- **For receiving.** A channel is disconnected for receiving once every `Sender` is gone and no item is left in it. The items sent before the last `Sender` went are still received, in the order they were sent.
-- **For sending.** A channel is disconnected for sending once the `Receiver` is gone. The items left in it are destroyed with the `Receiver`.
+- **For receiving.** A channel is disconnected for receiving once every `Sender` is gone and no item is left in it. The items sent before then are still received, each `Sender`'s items in the order it sent them.
+- **For sending.** A channel is disconnected for sending once the `Receiver` is gone.
 
-**An end is gone once it is destroyed, however that happens**: dropped with `_ =`, at the end of its scope, or by an unwind ([10](../10-errors-and-safety/panics.md#unwinding)). Destroying the last `Sender` happens before each `receive()` that returns `nil`, so what the producers did before is visible to the consumer.
+**An end is gone once it is destroyed, however that happens**: dropped with `_ =`, at the end of its scope, or by an unwind ([10](../10-errors-and-safety/panics.md#unwinding)).
 
 **The end whose destruction disconnects the channel wakes every thread parked on it** ([below](#parking-and-waking-a-thread)), so none waits for an end that is gone:
 
 - **The last `Sender`** wakes the thread parked in `receive()` on the empty channel, and that `receive()` returns `nil`.
 - **The `Receiver`** wakes every thread parked in `send` on the full channel. Each of those sends fails, and hands its item back in `Disconnected<T>`.
+
+**Destroying the `Receiver` runs in this order:**
+
+1. It disconnects the channel for sending, and wakes every thread parked in `send`.
+2. It destroys the items left in the channel, on the destroying thread, oldest first. When one item's `deinit` panics, the rest are still destroyed, as an unwind destroys the rest of any value whose destruction panicked ([10](../10-errors-and-safety/panics.md#unwinding)).
+
+So each send either put its item in before the disconnection, and the item is destroyed with the `Receiver`, or fails, and hands the item back.
+
+**A channel orders the threads that use its ends, so what one thread did before is visible to the other:**
+
+- each send happens before the receive that returns its item;
+- destroying each `Sender` happens before every `receive()` that returns `nil`, and every `tryReceive()` that gives `.disconnected`;
+- destroying the `Receiver` happens before each `send` or `trySend` that fails.
 
 **`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
 
@@ -135,10 +151,19 @@ enum TryReceiveError: Error {
 }
 ```
 
-**`send` fails once the channel is disconnected for sending, and its error hands the item back**, so no item is lost unseen:
+**`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
 ```swift
 struct Disconnected<T>(let item: T): Error      // the error of send, and of a future's fulfill: the value nobody will take
+```
+
+**`trySend` never parks, and hands the item back whether the channel is full or disconnected:**
+
+```swift
+enum TrySendError<T>: Error {
+    case full(T)            // connected, with no room
+    case disconnected(T)    // the Receiver is gone
+}
 ```
 
 **A send's result is a `Result`, so the unused-value rule makes the sender check it or drop it on purpose** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)):
@@ -149,9 +174,26 @@ _ = tx.send(r)            // fine: if the Receiver is gone, the request is destr
 try tx.send(r)            // fine in a function that fails with Disconnected<Request>
 ```
 
-**A panic in a producer disconnects the channel, but never reaches the consumer.** The unwind destroys the `Sender`s that the panicking code owns, as it destroys every live value ([10](../10-errors-and-safety/panics.md#unwinding)). When one of them was the last, the consumer's `receive()` returns `nil` once it has taken the items sent before. So a consumer waiting on a producer that panicked wakes, rather than parking for ever, as it would on an `Event` that nothing signals ([Panics in lent work](thread-work.md#panics-in-lent-work)).
+#### Panics in producers and consumers
 
-**The channel carries items, not panics.** The consumer sees the disconnection as it would see producers that finished. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)). So a consumer that must know why its producers stopped joins them. A panic in the consumer works the other way round: the unwind destroys the `Receiver`, and each `send` after it fails.
+**A panic in a producer disconnects what it produces into, but never reaches the consumer.** The unwind destroys the ends that the panicking code owns, its `Sender`s and its `Promise`s ([below](#futures)), as it destroys every live value ([10](../10-errors-and-safety/panics.md#unwinding)). When one was a channel's last `Sender`, the consumer's `receive()` returns `nil` once it has taken the items sent before. A future's waiter gets `nil`. So a consumer waiting on a producer that panicked wakes, rather than parking for ever as it would on an `Event` that nothing signals.
+
+**The ends carry values, not panics.** The consumer sees the disconnection as it would see producers that finished. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)). The panic of a detached producer, such as the bake thread that fulfills a future ([below](#futures)), reaches only the report, since nothing joins it. So a consumer that must know why its producers stopped joins them.
+
+**A panic in the consumer works the other way round.** The unwind destroys the `Receiver` or the `Future`, and each `send` or `fulfill` after that fails.
+
+**A producer in a `ThreadScope` owns its `Sender`, moved into the closure it spawns** ([Scoped threads](thread-work.md#scoped-threads)):
+
+```swift
+ThreadScope.run { s in
+    let meshes = tx.share()
+    s.spawn { [move meshes] in loadMeshes(into: &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
+    s.spawn { [move tx] in loadSounds(into: &tx) }           // the last producer takes the original
+    for asset in &rx { register(asset) }                     // ends once both producers are done, or have panicked
+}
+```
+
+A `Sender` that a spawned closure only borrows, as `&tx`, belongs to a frame outside the scope. No unwind reaches that frame until `ThreadScope.run` has joined every thread. So after a producer's panic, a consumer in the scope waits for ever for a disconnection that never comes, and `ThreadScope.run` waits for it.
 
 ### Futures
 
@@ -162,24 +204,40 @@ let (promise, lightmap) = Future<Lightmap>.make()                // promise: a P
 _ = Thread.start(name: "bake") { [move promise, move level] in   // '_ =' detaches the thread
     _ = promise.fulfill(bakeLightmap(level))                     // '_ =': if nobody waits any more, the lightmap is destroyed
 }
-if let map = lightmap.wait() { apply(map) }                      // parks until the bake is done; nil if its promise went unfulfilled
+if let map = lightmap.wait() { apply(map) }                      // parks until the bake is done; nil if its Promise went unfulfilled
 ```
+
+**The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped`.** Each is `Sendable` when `T` is, so the producer's thread can own the `Promise`. Neither is `Synchronized`: each has one owner, and fulfilling or waiting consumes the end, so a future has one producer and one waiter.
 
 **Each end is used once:**
 
 ```swift
 consuming func fulfill(_ value: owned T) -> Void!Disconnected<T>   // Promise<T>'s: fails, handing the value back, once the Future is gone
 consuming func wait() -> T?                                        // Future<T>'s: parks until fulfilled; nil once disconnected
+var isReady: Bool { get }                                          // Future<T>'s: never parks, and never consumes
 ```
 
-`fulfill` consumes the promise, so a future gets at most one value. `wait()` consumes the future, and so does `await` in a task, where a `Future<T>` is an awaitable whose `Output` is `T?` ([Awaitables](tasks.md#awaitables)). A `Promise<T>` is move-only, and `Sendable` when `T` is, so the producer's thread can own it. Fulfilling a promise happens before the `wait()` or `await` that returns its value.
+`fulfill` consumes the `Promise`, so a future gets at most one value, and wakes whatever waits on the `Future`: the thread parked in its `wait()`, or the task awaiting it. `wait()` consumes the `Future`, and so does `await` in a task, where a `Future<T>` is an awaitable whose `Output` is `T?` ([Awaitables](tasks.md#awaitables)). A value that is fulfilled but never taken is destroyed with the `Future`, on the thread that destroys it.
+
+**`isReady` says whether a wait would return at once.** It is `true` once the future is fulfilled or disconnected, and then a `wait()` or an `await` returns at once. A ready future stays ready, so nothing the producer does can make a check that read `true` wrong. Code that must not park, such as a frame loop, checks it each step:
+
+```swift
+while !lightmap.isReady { drawLoadingScreen() }   // never parks: checks once a frame
+if let map = lightmap.wait() { apply(map) }       // returns at once: the bake is done, or its Promise is gone
+```
 
 **A future is disconnected as a channel is, once the end on one side is gone** ([above](#disconnected-channels)):
 
-- **For waiting.** A future is disconnected for waiting once its `Promise` is destroyed unfulfilled: dropped, at the end of its scope, or by an unwind. That destruction wakes whatever waits on the future, the thread parked in its `wait()` or the task awaiting it, which then gets `nil`.
+- **For waiting.** A future is disconnected for waiting once its `Promise` is destroyed unfulfilled: dropped, at the end of its scope, or by an unwind. That destruction wakes whatever waits on the future, which then gets `nil`.
 - **For fulfilling.** A future is disconnected for fulfilling once its `Future` is destroyed. `fulfill` then fails, and hands the value back in `Disconnected<T>`, as a `send` does.
 
-**A panic in the producer disconnects the future, but never reaches the waiter**, as with a channel. The unwind destroys the `Promise` that the panicking code owns, so the waiter gets `nil` rather than parking for ever. The panic itself goes to whoever joins the producer's thread ([Joining a thread](thread-work.md#joining-a-thread)), or to the call that lent the producer its work ([Panics in lent work](thread-work.md#panics-in-lent-work)).
+**A future orders the threads that use its ends, so what one thread did before is visible to the other:**
+
+- fulfilling the `Promise` happens before the `wait()` or `await` that returns its value, and before `isReady` reads `true`;
+- destroying an unfulfilled `Promise` happens before the `wait()` or `await` that gives `nil`, and before `isReady` reads `true`;
+- destroying the `Future` happens before a `fulfill` that fails.
+
+**A panic in the producer disconnects the future as it disconnects a channel**, and never reaches the waiter ([Panics in producers and consumers](#panics-in-producers-and-consumers)).
 
 ### Snapshots, one-time values and waits
 
@@ -187,7 +245,7 @@ consuming func wait() -> T?                                        // Future<T>'
 
 - **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
 - **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
-- **Blocking primitives** are `Event`, `Condvar`, `Semaphore` and `Future` ([above](#futures)), whose waits park the thread ([below](#parking-and-waking-a-thread)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once. A `signal()` happens before every `wait()` it lets return, so what the signalling thread did before it is visible to the waiter. An `Event` holds only its state word, and declares no `deinit`, so destroying one runs no Rayo code.
+- **Blocking primitives** are `Event`, `Condvar` and `Semaphore`, whose waits park the thread ([below](#parking-and-waking-a-thread)), as a `Future`'s `wait()` does too, though a `Future` is an owned end and not `Synchronized` ([above](#futures)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once. A `signal()` happens before every `wait()` it lets return, so what the signalling thread did before it is visible to the waiter. An `Event` holds only its state word, and declares no `deinit`, so destroying one runs no Rayo code.
 
 **A `Condvar` wait consumes the guard and returns a new one:**
 

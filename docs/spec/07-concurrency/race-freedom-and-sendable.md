@@ -47,8 +47,8 @@ _ = Thread.start { [move hud] in draw(hud) }             // error: 'Hud' isn't S
 - **Existentials.** An `any P` or a `mutable any P` hides its value's type. So it is `Sendable` only when `P` refines `Sendable`, or when it is written with `& Sendable`, which accepts only `Sendable` types ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 - **Raw pointers.** A raw pointer, and anything that holds one, isn't `Sendable`, unless its type declares `unsafe Sendable` or `unsafe Synchronized` ([The `Synchronized` contract](synchronization.md#the-synchronized-contract)).
 - **Object pointers and lock guards.** `UniquePointer` and `WeakPointer` ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)), lock guards ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)), and anything that holds one of them never are: their marks and locks belong to one thread. An object's access marks never synchronize with another thread, and many platform mutexes must be unlocked on the thread that locked them. So declaring `unsafe Sendable` or `unsafe Synchronized` on such a type breaks its promise ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)).
-- **Shared values, channel ends, promises and pins.** `Shared<T>`, `WeakShared<T>`, `Sender<T>`, `Receiver<T>`, `Promise<T>` and `Pin<T>` are `Sendable` when `T` is. A `LocalShared<T>` or a `LocalPin<T>` never is, so a `LocalShared`'s count needs no atomic operation, and a `LocalPin` drops on its object's home thread ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners), [03](../03-handles-and-objects.md#pinning-for-c)).
-- **`Synchronized` types.** Every one, `Future<T>` among them, is `Sendable`, since the contract allows its contents to be only `Sendable` values or raw pointers ([The `Synchronized` contract](synchronization.md#the-synchronized-contract)).
+- **Shared values, the ends of channels and futures, and pins.** `Shared<T>`, `WeakShared<T>`, `Sender<T>`, `Receiver<T>`, `Promise<T>`, `Future<T>` and `Pin<T>` are `Sendable` when `T` is. A `LocalShared<T>` or a `LocalPin<T>` never is, so a `LocalShared`'s count needs no atomic operation, and a `LocalPin` drops on its object's home thread ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners), [03](../03-handles-and-objects.md#pinning-for-c)).
+- **`Synchronized` types.** Every one is `Sendable`, since the contract allows its contents to be only `Sendable` values or raw pointers ([The `Synchronized` contract](synchronization.md#the-synchronized-contract)).
 
 **A type may also opt out, or promise what the compiler can't derive:**
 
@@ -60,8 +60,8 @@ _ = Thread.start { [move hud] in draw(hud) }             // error: 'Hud' isn't S
 
 - a thread body's captures ([What a thread can share](thread-work.md#what-a-thread-can-share));
 - what a job system lends to its threads and hands back ([The library's promise](thread-work.md#the-librarys-promise));
-- the contents of a `Synchronized` value, such as a queue's items or a `Future`'s result, except the raw pointers its `unsafe` code answers for ([The `Synchronized` contract](synchronization.md#the-synchronized-contract));
+- the contents of a `Synchronized` value, such as a queue's items or a `Published` value, except the raw pointers its `unsafe` code answers for ([The `Synchronized` contract](synchronization.md#the-synchronized-contract));
 - the value of a `Shared` whose owners or weak links cross threads ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - every global that safe code reaches ([Global state](global-state.md#global-state)).
 
-**A `Channel`'s items needn't be `Sendable`.** The ends of one whose items aren't `Sendable` aren't either, so both stay on one thread.
+**A `Channel`'s items needn't be `Sendable`.** The ends of one whose items aren't `Sendable` aren't either, so both stay on one thread. **Nor need a future's value**, for the same reason: a `Promise<T>` and a `Future<T>` whose `T` isn't `Sendable` stay on one thread.

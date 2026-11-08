@@ -310,14 +310,21 @@ _Avoid_: pipe
 A thread whose `Thread` value was dropped, so it runs on by itself and nothing can join it ([07](docs/spec/07-concurrency/thread-work.md#joining-a-thread)). Not to be confused with a C thread's `rayo_thread_detach`, which tears down the thread's Rayo state ([08](docs/spec/08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 
 **Disconnected**:
-Said of a channel or a future whose ends on one side are all gone, so the other side stops waiting for them ([07](docs/spec/07-concurrency/synchronization.md#disconnected-channels)).
+Said of a channel or a future once one side's ends are all gone, so the other side stops waiting ([07](docs/spec/07-concurrency/synchronization.md#disconnected-channels)). A channel is disconnected for receiving once every `Sender` is gone and it is empty, and for sending once its `Receiver` is gone.
 _Avoid_: closed (no code closes a channel)
+
+**Future**:
+The end of a future that waits for its one value: `wait()` or `await` returns the value, or `nil` once the `Promise` is gone unfulfilled ([07](docs/spec/07-concurrency/synchronization.md#futures)).
 
 **Lent work**:
 Function values that borrow the caller's data, which a library runs on its threads and finishes before those borrows can end ([07](docs/spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
 **Nested entry**:
 An entry into Rayo from C on a thread that already has a Rayo frame below it ([07](docs/spec/07-concurrency/global-state.md#initialization-at-startup)).
+
+**Promise**:
+The end of a future that its producer fulfills once with the value, which `fulfill` consumes ([07](docs/spec/07-concurrency/synchronization.md#futures)).
+_Avoid_: promise in plain text for this end, since the library's promise is the `unsafe` guarantee a lending library makes ([07](docs/spec/07-concurrency/thread-work.md#the-librarys-promise))
 
 **Resume parameter**:
 The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
