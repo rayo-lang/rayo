@@ -21,13 +21,9 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`AtomicArray<T>` is a fixed-size array of atomics.**
 
-**Creation happens before use.** Each of these happens before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic:
+**Creation happens before use.** Creating a `Shared` value, and registering an allocator, each happen before every use through a value that names what it made, however that value reached the using thread, even through a `.relaxed` atomic. The check each use makes synchronizes with the creation.
 
-- creating a `Shared` value;
-- registering an allocator;
-- interning a text as a new `Name`.
-
-The check each use makes synchronizes with the creation, and so does reading a `Name`'s text.
+**Interning a text happens before every read of that `Name`'s text**, however the `Name` reached the reading thread. Each interned entry holds an atomic word, which interning writes with a release store, and reading the text first loads that word with acquire. An acquire load that reads a release store synchronizes with it, whatever route the `Name` took, a `.relaxed` atomic or a third thread included. So the text's bytes are visible, and reading them races with nothing. `==` and hashing read no entry, so they promise nothing beyond the value they compare ([04](../04-types/collections.md#collections-and-strings)).
 
 ### Locks: `Mutex` and `RwLock`
 
