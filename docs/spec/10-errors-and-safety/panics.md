@@ -110,12 +110,12 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 **Each of these panics has a fixed text**, which stands in for the message where the message can't be shown:
 
-- `fatalError` has `fatal error`, `precondition` has `precondition failed`, and `assert` has `assertion failed`, which are also the whole message of the forms that take none;
+- `fatalError` has `fatal error`, `precondition` has `precondition failed`, and `assert` has `assertion failed`, and `precondition(cond)` and `assert(cond)` panic with theirs as the whole message;
 - each check the language makes panics with a text that names the check, such as `integer overflow`, `division by zero`, `index out of range` or `unwrapped nil`.
 
 **The sinks a message goes to allocate nothing.** When the panic happens, the message is evaluated, then formatted once, straight into the platform's report sink and into the `Panic` a recovery point may catch ([below](#the-panic-value)). So reporting a panic allocates nothing, unless a segment's own `format` does.
 
-**A panic while the message is evaluated or formatted is an ordinary panic.** The first panic is reported with its fixed text in place of the message, and the second, reported in turn, unwinds as any panic does. So when `i` is out of range, `precondition(i < items.count, "bad index \(items[i].name)")` reports `precondition failed`, then unwinds with `index out of range`, which a recovery point catches.
+**A panic while the message is evaluated or formatted is an ordinary panic.** The first panic is reported with its fixed text in place of the message, and the second, reported in turn, unwinds as any panic does. Since the message goes straight into the report sink, the first report may hold the part of the message written before the second panic, followed by the fixed text. So when `i` is out of range, `precondition(i < items.count, "bad index \(items[i].name)")` reports `precondition failed`, then unwinds with `index out of range`, which a recovery point catches.
 
 ## What a panic does
 
