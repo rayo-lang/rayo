@@ -28,7 +28,7 @@ angle.degrees += 45                     // calls get, then set with the sum
 - **A place property** hands out a place in storage, as `hp` does. It declares a `borrow`, which lends the place for reading, and may add a `mutate`, which lends it for change. Code uses the place as it would use a stored field, except to move out of it, and no accessor code runs once the caller has it.
 - **A value property** computes a value and takes one back, as `degrees` does. It declares a `get`, which returns a value, and may add a `set`, which takes a new one. A change works on a copy, which `set` writes back.
 
-A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property.
+A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property. A subscript may declare generic parameters, as a function does, so `box[as: Slider.self]` picks the type it hands out ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 **A declaration's accessors are one of these:**
 
@@ -129,9 +129,19 @@ struct Inventory(var items: List<Item>) {
 func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: the view depends on 'inv', not on '0'
 ```
 
-**The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on a `mutable` argument, and on `self` through a `mutate`. It depends shared on every other source. Each source's set keeps its own kinds.
+**The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on each `mutable` source, and on `self` through a `mutate` when `self` is a source. It depends shared on every other source, and on no argument that isn't one. Each source's set keeps its own kinds. So `cur[graft: &spare]` depends exclusively on `spare` and what it holds, not on `cur`, and a `mutable` parameter that no item names, such as a log the accessor writes to, stays free.
 
-**The place depends on a source place whatever the place's type.** The shallow and sealed exemptions spare a value a call returns, which can't reach a shallow argument's own bytes ([Shallow values](dependency-projection-and-results.md#shallow-values)). A place lies inside its source, so they never apply to it. So an `any Equatable` made from `p.first`, a place of type `Int` inside a local `p`, depends on `p`, and can't be returned from `p`'s function.
+**The place depends on a source place whatever the place's type.** The shallow and sealed exemptions spare a value a call returns, which can't reach a shallow argument's own bytes ([Shallow values](dependency-projection-and-results.md#shallow-values)). A place lies inside its source, so they never apply to it:
+
+```swift
+struct Pair(var a: Int, var b: Int) {
+    var first: Int { borrow { a } mutate { &a } }
+}
+func leak() -> any Equatable {
+    let p = Pair(a: 1, b: 2)
+    return p.first                       // error: the view depends on local 'p', which is destroyed on return
+}
+```
 
 **Each source place is the caller's place, never a bit copy**, since the place lies inside it ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
@@ -239,7 +249,7 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 
 **The standard library's place properties have these sources:**
 
-- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element places hand out part of `self`, the default.
+- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element places lie in `self` or what it borrows, the default.
 - The place properties of `Span`, `StringView` and `Borrow` are `where return outlives self`.
 - The `.value` of a `UniquePointer` or a `WeakPointer` is the language's own, and depends on its access ([above](#places-behind-a-run-time-check)).
 

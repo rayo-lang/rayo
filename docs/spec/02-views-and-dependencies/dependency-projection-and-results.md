@@ -2,7 +2,7 @@
 
 [02 · Views and dependencies](../02-views-and-dependencies.md#dependencies)
 
-Dependencies begin where code makes a view of a place. They follow values derived from that view, including values returned by a function, so the caller can still tell what storage the result needs. The first three rules describe that path from source to result.
+Dependencies begin where code makes a view of a place. They follow values derived from that view, including values returned by a function, so the caller can still tell what storage the result needs. The first three rules describe that path from the place to the result.
 
 ## Rule 1: Projection
 
@@ -20,13 +20,13 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **Verification rejects an `outlives` clause for a view of data the type holds inline**, such as a `[4 of Int]` field, which depends on `self` itself.
 
-**Through a place that owns its value, or an exclusive view, a place property's place depends on the place itself.** An exclusive view can change what it carries, so it never meets the condition that lets the place drop out ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
+**Through a place that owns its value, or an exclusive view, a place property whose source is `self` hands out a place that depends on that place itself** ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)). An exclusive view can change what it carries, so it never meets the condition that lets the place drop out ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
 
 **Through a value property's change, a view depends on the access.** Such a change lends a copy that `get` returned, which `set` takes back when the access ends ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)). So a view of the copy depends on the **access**, which is held as rule 6 holds a dynamic access, and the copy stays as it was until the view's last use. The access is in the copy's own set, so it follows every value derived from it, even where the place drops out. It also keeps `self` and the subscript's arguments lent.
 
 ## Rule 2: Transitivity
 
-**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing its source can't, so the source's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)).
+**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing the value it came from can't, so that value's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)).
 
 ## Rule 3: Call results
 

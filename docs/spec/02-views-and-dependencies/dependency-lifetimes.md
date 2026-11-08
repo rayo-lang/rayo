@@ -97,7 +97,7 @@ use(syms)
 
 **An item says what its subject depends on:**
 
-- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject.
+- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject. For a place property's place, `x` is a source instead: the shallow and sealed exemptions don't apply, and static storage counts only when an item names it ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 - **`borrows static`**: static storage only.
 - **`outlives x`**: only what `x` borrows, so the subject stays valid after `x` changes or is gone ([below](#staying-valid-after-a-parameter-moves-on-outlives)).
 
@@ -250,7 +250,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **Then `x = &p` writes that view into the place `x` names**, as `d = &crate` does in a loop over `&targets`, and `x` still names the same place.
 
-**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use. A step through a place property whose sources go beyond `self` may reach a place in another argument, as `&cur[graft: &spare]` does. So `x`'s set also takes on every other dependency of the new place ([02](place-and-value-properties.md#what-a-place-depends-on)).
+**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use. A step through a place property whose sources go beyond `self` may reach a place in another argument, as `&cur[graft: &spare]` does. So `x`'s set also takes on every other dependency of the new place ([02](place-and-value-properties.md#the-place-lies-in-its-sources)).
 
 **Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
 
