@@ -73,7 +73,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
 | `Name` | no | Interned text, pointer-sized: compared and hashed without reading the text (below) |
 
-**A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` and hashing look only at the `Name`'s own pointer-sized value, never at its text, and no two texts can collide. A compiler's symbols, a config file's keys and a protocol's field names compare this way, as identifiers rather than bytes:
+**A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` and hashing look only at the `Name`'s own pointer-sized value, never at its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
 
 ```swift
 let jump = Name("jump")                   // interns "jump", copying the text only the first time
@@ -83,9 +83,19 @@ log("pressed \(jump.text)")               // the text, as a StaticString
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
-**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `StaticString` ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). That suits identifiers drawn from a bounded set, such as keywords, config keys or the actions a game binds. It doesn't suit unbounded or untrusted input, where each new text would grow the interner for good.
+**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `StaticString` ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
 
-**Code that must free what it interns keeps its own interner**, an owning value whose storage comes from an allocator or an arena: a `Map` from each text to a small integer id, and a `List` of the texts. Its ids compare as cheaply as a `Name`, and resolve back to text through the interner that made them. Destroying the interner, or resetting its arena, frees every text at once.
+**`Name(existing: s)` looks `s` up and never interns it.** It returns the `Name` that `s`'s text already has, or `nil` for text never interned. So a program matches outside text against the names it defines without growing the interner:
+
+```swift
+if let key = Name(existing: line.key), key == jump { … }   // a key read from a file: looked up, never interned
+```
+
+**Code that must free what it interns keeps its own interner**, an owning value whose storage comes from an allocator or an arena. It holds a `List` of the texts, and a `Map` from each text to an id of the interner's own type, typed as a `Handle<T>` is by its element, so ids from two kinds of interner don't mix. Its ids compare as cheaply as a `Name`, and resolve back to text through the interner that made them. Destroying the interner, or resetting its arena, frees every text at once.
+
+**A `Name` is copyable and unscoped, and it is `Sendable` and `Frozen`.** std declares `unsafe Sendable` and `unsafe Frozen` on it, since its value names immortal interned text, which nothing writes and every thread may read ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
+
+**`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates.
 
 **`Name` takes no string literal, and no `Name` is a `const`.** Interning reads and writes the interner, a global, which code running at compile time can't reach ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). So a literal could become a `Name` only by interning each time it is evaluated: a lookup in a table that every thread shares, and maybe an allocation, which nothing at the literal would show. A `Name` that a program uses throughout is made once, in a global `let` that startup initializes ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
