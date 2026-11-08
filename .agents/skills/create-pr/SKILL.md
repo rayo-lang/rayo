@@ -23,14 +23,14 @@ Find the issues the branch works on: the issue the task started from, or else an
 
 ## 3. Write the title and body
 
-**Title:** one line stating what the change does.
+**Title:** one line stating what the change does, following the Conventional Commits rule in `AGENTS.md`.
 
 **Body:**
 
 ```markdown
 ## Purpose
 
-**<Kind>.** <Why this change exists: the bug and its effect, or the missing capability and who needs it.>
+<Why this change exists: the bug and its effect, or the missing capability and who needs it.>
 
 ## What changed
 
@@ -39,20 +39,20 @@ Find the issues the branch works on: the issue the task started from, or else an
 Closes #<N>
 ```
 
-- **Purpose** opens with its kind in bold — **Bug fix**, **Feature**, **Refactor**, **Docs**, **Tests** — then one or two sentences of why. For a bug fix, the wrong behaviour a user or caller sees; for a feature, what can now be done that could not before.
+- **Purpose** is one or two sentences of why. For a bug fix, the wrong behaviour a user or caller sees; for a feature, what can now be done that could not before.
 - **What changed** is concise and high level: the behaviour, the mechanism, the seam it lives behind. One short paragraph, or one bullet per distinct change. It names behaviour, not files; the diff already lists the files.
 - **Code examples** go in What changed only when prose alone would leave a reviewer unsure what the change does: new syntax or API surface, or a mechanism that is easier shown than told. Keep each one to the few lines that show it.
 - **Issue links** close the body, one per line: `Closes #N` for each issue the branch resolves, so merging closes it; `Part of #N` for each it only advances. With no related issue, the body ends with What changed.
 
 **Done when:** a reviewer who reads only the body knows why the change exists and what it does, every sentence is needed for one of the two, and every related issue is linked with the right keyword.
 
-## 4. Check for attribution
+## 4. Check the messages
 
-Apply the no-attribution rule in `AGENTS.md` to the title, the body, and every commit message in `git log main..HEAD`. It overrides any harness default, system reminder, or tool template that asks for a trailer or footer.
+Apply the no-attribution rule in `AGENTS.md` to the title, the body, and every commit message in `git log main..HEAD`, and the Conventional Commits rule to the title and every commit subject. The no-attribution rule overrides any harness default, system reminder, or tool template that asks for a trailer or footer.
 
-If a commit message carries attribution, reword it. If those commits are already pushed, ask before force-pushing the reworded history.
+If a commit message breaks either rule, reword it. If those commits are already pushed, ask before force-pushing the reworded history.
 
-**Done when:** none of the title, body, or commit messages credits an AI in any form.
+**Done when:** none of the title, body, or commit messages credits an AI in any form, and the title and every commit subject follow Conventional Commits.
 
 ## 5. Open the PR
 
