@@ -18,16 +18,13 @@ private struct FileChecker {
 
     mutating func check(_ file: SourceFile) -> CheckedProgram? {
         var main: FuncDecl?
-        for declaration in file.declarations {
-            switch declaration {
-            case .structure(let structure):
-                errors.unsupported("a struct", at: structure.nameRange)
-            case .function(let function) where function.name != "main":
-                errors.unsupported("a function other than 'main'", at: function.nameRange)
-            case .function(let function) where main != nil:
+        for function in file.functions {
+            if function.name != "main" {
+                errors.error("a program's only function is 'main'", at: function.nameRange)
+            } else if main != nil {
                 errors.error("'main' is declared more than once", at: function.nameRange)
                 _ = check(main: function)
-            case .function(let function):
+            } else {
                 main = function
             }
         }
@@ -48,9 +45,8 @@ private struct FileChecker {
     }
 
     mutating func checkSignature(ofMain main: FuncDecl) {
-        if let parameter = main.params.first { errors.error("'main' takes no parameters", at: parameter.range) }
         if let result = main.result, let type = declarations.resolve(result, reporting: &errors), type != .void {
-            errors.error("'main' returns Void, Never or Int32", at: result.range)
+            errors.error("'main' returns Void", at: result.range)
         }
     }
 }

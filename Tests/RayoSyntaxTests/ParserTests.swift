@@ -13,7 +13,7 @@ private func file(_ source: String) -> String {
 private func body(_ source: String) -> String {
     let (parsed, diagnostics) = Parser.parse("func t() {\n\(source)\n}")
     #expect(diagnostics.map(\.description) == [])
-    guard parsed.declarations.count == 1, case .function(let function) = parsed.declarations[0] else {
+    guard parsed.functions.count == 1, let function = parsed.functions.first else {
         Issue.record("expected one function, got \(parsed.dump)")
         return ""
     }
@@ -74,77 +74,10 @@ struct ExpressionTests {
         #expect(body(source) == expected)
     }
 
-    @Test("'<' opens generic arguments only when the token after '>' can follow them", arguments: [
-        ("List<Int>()", "(call List<Int>)"),
-        ("List<List<Int>>(capacity: 3)", "(call List<List<Int>> capacity:3)"),
-        ("f(a < b, c > (d))", "(call f (call a<b, c> d))"),
-        ("f(a < b, (c > d))", "(call f (< a b) (> c d))"),
-        ("a < b", "(< a b)"),
-        ("a < b > c", "(> (< a b) c)"),
-        ("T == List<Int> || x", "(|| (== T List<Int>) x)"),
-        ("Box<[4 of Int]>.make()", "(call (. Box<[4 of Int]> make))"),
-        ("List<Int,>()", "(call List<Int>)"),
-    ])
-    func genericArguments(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
     @Test("a line that ends in a comparison '>' continues")
     func greaterContinues() {
         #expect(body("let ok = a >\n    b") == "(let ok (> a b))")
         #expect(body("let ok = a >=\n    b") == "(let ok (>= a b))")
-    }
-
-    @Test("a '>' that closes generic arguments ends the line")
-    func greaterClosesLine() {
-        #expect(body("let xs: List<Int>\nf()") == "(let xs: List<Int>); (call f)")
-    }
-}
-
-struct ClosureTests {
-    @Test("signatures", arguments: [
-        ("let f = { [move level] in start(level) }", "(let f (closure [move level] {(call start level)}))"),
-        ("let f = { [copy id, move self] in log(id) }", "(let f (closure [copy id, move self] {(call log id)}))"),
-        ("let f = { a, b in a + b }", "(let f (closure (a, b) {(+ a b)}))"),
-        ("let f = { (a: Int, b: mutable Int) -> Int in a }", "(let f (closure (a: Int, b: mutable Int) -> Int {a}))"),
-        ("let f = { -> Int in 1 }", "(let f (closure -> Int {1}))"),
-        ("let f = { $0.hp > 0 }", "(let f (closure {(> (. $0 hp) 0)}))"),
-        ("let f = { x }", "(let f (closure {x}))"),
-        ("let f = { [copy x] }", "(let f (closure {(array (copy x))}))"),
-        ("let f = { (a + b) }", "(let f (closure {(+ a b)}))"),
-        ("let f = {\n  hits += 1\n  log(hits)\n}", "(let f (closure {(+= hits 1); (call log hits)}))"),
-    ])
-    func signatures(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("trailing closures", arguments: [
-        ("each(xs) { e in log(e) }", "(call each xs (closure (e) {(call log e)}))"),
-        ("run { tick() }", "(call run (closure {(call tick)}))"),
-        ("xs.forEach { log($0) }", "(call (. xs forEach) (closure {(call log $0)}))"),
-        ("pair(a) { x } { y }", "(call pair a (closure {x}) (closure {y}))"),
-    ])
-    func trailing(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("no trailing closures where a statement's block follows", arguments: [
-        ("if xs.isEmpty { reset() }", "(if (. xs isEmpty) {(call reset)})"),
-        ("while ok(x) { step() }", "(while (call ok x) {(call step)})"),
-        ("for i in 0..<n { use(i) }", "(for i 0 n {(call use i)})"),
-        ("while xs.any({ $0.alive }) { step() }",
-         "(while (call (. xs any) (closure {(. $0 alive)})) {(call step)})"),
-        ("if f(g { 1 }) { step() }", "(if (call f (call g (closure {1}))) {(call step)})"),
-    ])
-    func condition(source: String, expected: String) {
-        #expect(body(source) == expected)
-    }
-
-    @Test("a closure literal used as a statement is an error")
-    func closureStatement() {
-        #expect(errors("func t() {\n    { reset() }\n}") ==
-            ["2:5: error: this closure would never run; 'do { … }' groups statements"])
-        #expect(body("do { reset() }") == "(do {(call reset)})")
     }
 }
 
@@ -157,8 +90,6 @@ struct StatementTests {
         ("let all = enemies", "(let all enemies)"),
         ("let seen = borrow enemies[0]", "(let seen (borrow (index enemies 0)))"),
         ("let n = borrow -x.count", "(let n (borrow (- (. x count))))"),
-        ("var b: Box<Int>= a", "(var b: Box<Int> a)"),
-        ("var a: [3 of Int] = [1, 2, 3]", "(var a: [3 of Int] (array 1 2 3))"),
         ("var t = &world.enemies", "(var t (& (. world enemies)))"),
     ])
     func bindings(source: String, expected: String) {
@@ -199,50 +130,13 @@ struct StatementTests {
 }
 
 struct DeclarationTests {
-    @Test("a struct with fields, conformances, methods and a deinit")
-    func structure() {
-        let source = """
-            struct Enemy(var hp: Int, let id: Int = 0): ~Copyable, Scoped {
-                func alive() -> Bool { hp > 0 }
-                mutating func hit(by damage: Int) { hp -= damage }
-                consuming func finish() -> Int { id }
-                deinit { log(id) }
-            }
-            """
-        #expect(file(source) == """
-            (struct Enemy(var hp: Int, let id: Int = 0): ~Copyable, Scoped
-              (func alive() -> Bool {(> hp 0)})
-              (mutating func hit(by damage: Int) {(-= hp damage)})
-              (consuming func finish() -> Int {id})
-              (deinit {(call log id)}))
-            """)
-    }
-
-    @Test("a struct with no body, and one with no fields")
-    func plainStructs() {
-        #expect(file("struct Point(var x: Int, var y: Int)\nstruct Marker {}") ==
-            "(struct Point(var x: Int, var y: Int))\n(struct Marker)")
-    }
-
-    @Test("parameter labels and conventions")
-    func parameters() {
-        #expect(file("func move(_ e: owned Enemy, into list: mutable List<Enemy>, in s: Span<Int>, n: Int) {}") ==
-            "(func move(_ e: owned Enemy, into list: mutable List<Enemy>, in s: Span<Int>, n: Int) {})")
-    }
-
-    @Test("types", arguments: [
-        ("mutating (keep Span<Int>, mutable Int) -> Void", "mutating (keep Span<Int>, mutable Int) -> Void"),
-        ("some consuming () -> Int", "some consuming () -> Int"),
-        ("(Int) -> (Int) -> Bool", "(Int) -> (Int) -> Bool"),
-        ("Closure<() -> Void>", "Closure<() -> Void>"),
-        ("[4 of [2 of Int]]", "[4 of [2 of Int]]"),
-        ("()", "()"),
-        ("(Int)", "Int"),
-        ("(keep owned MutableSpan<Int>) -> Void", "(keep owned MutableSpan<Int>) -> Void"),
-        ("(keep) -> Void", "(keep) -> Void"),
+    @Test("a function has a name, '()', an optional result type and a body", arguments: [
+        ("func f() {}", "(func f() {})"),
+        ("func f() -> Int { 1 }", "(func f() -> Int {1})"),
+        ("func f() -> () {}", "(func f() -> () {})"),
     ])
-    func types(source: String, expected: String) {
-        #expect(file("func f(_ x: \(source)) {}") == "(func f(_ x: \(expected)) {})")
+    func functions(source: String, expected: String) {
+        #expect(file(source) == expected)
     }
 
     @Test("declarations are separated by newlines")
@@ -280,14 +174,6 @@ struct ErrorTests {
         ])
     }
 
-    @Test("a second deinit is reported at its keyword, in source order")
-    func secondDeinit() {
-        #expect(errors("struct S {\n    deinit {}\n    deinit {}\n    func f() { let = 1 }\n}") == [
-            "3:5: error: a type declares at most one 'deinit'",
-            "4:20: error: expected a name to bind, found '='",
-        ])
-    }
-
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
         #expect(errors("func f() {\n    x = 1\n") == ["3:1: error: expected '}' to close the block, found the end of the file"])
@@ -299,11 +185,6 @@ struct ErrorTests {
     }
 
     @Test("what the subset doesn't have yet is reported as such", arguments: [
-        ("func f<T>(_ x: T) {}", "1:7: error: a generic function isn't supported yet"),
-        ("func f() throws {}", "1:10: error: 'throws' isn't supported yet"),
-        ("func f(_ x: Int = 1) {}", "1:17: error: a default argument isn't supported yet"),
-        ("func f(_ x: Int?) {}", "1:16: error: an optional type isn't supported yet"),
-        ("func f(_ x: (Int, Int)) {}", "1:13: error: a tuple type isn't supported yet"),
         ("func f() { let a = 1, b = 2 }", "1:21: error: more than one binding in a declaration isn't supported yet"),
         ("func f() { for x in xs {} }", "1:24: error: expected '..<': the one loop supported so far is 'for i in a..<b', found '{'"),
         ("func f() { x <<= 1 }", "1:14: error: '<<=' isn't supported yet"),
@@ -314,16 +195,8 @@ struct ErrorTests {
         ("func f() { let r = 0..<n }", "1:21: error: '..<' isn't supported yet"),
         ("func f() { let y = if a { 1 } else { 2 } }", "1:20: error: 'if' as an expression isn't supported yet"),
         ("func f() { let y = when x {} }", "1:20: error: 'when' as an expression isn't supported yet"),
-        ("struct S<T>(var x: T)", "1:9: error: a generic struct isn't supported yet"),
-        ("@reflect\nstruct S {}", "1:1: error: an attribute isn't supported yet"),
-        ("struct S {\n    @inline func f() {}\n}", "2:5: error: an attribute isn't supported yet"),
-        ("func f() {\n    @checks(.all)\n    do { g() }\n}", "2:5: error: an attribute isn't supported yet"),
-        ("func f() where T: P {}", "1:10: error: a 'where' clause isn't supported yet"),
         ("func f() { do {} catch {} }", "1:18: error: 'catch' isn't supported yet"),
         ("func f() { if a, b {} }", "1:16: error: a condition list isn't supported yet"),
-        ("func f(_ p: *Int) {}", "1:13: error: a raw pointer type isn't supported yet"),
-        ("func f(_ p: any P) {}", "1:13: error: 'any' isn't supported yet"),
-        ("func f(_ a: (Int,)) {}", "1:13: error: a tuple type isn't supported yet"),
         ("func f() { let t = (a, b) }", "1:22: error: a tuple isn't supported yet"),
         ("func f() { let t = () }", "1:20: error: the empty tuple isn't supported yet"),
         ("func f() { let y = x ?? z }", "1:22: error: '??' isn't supported yet"),
@@ -335,18 +208,11 @@ struct ErrorTests {
     }
 
     @Test("malformed declarations, types and statements", arguments: [
-        ("let x = 1", "1:1: error: expected 'struct' or 'func' to begin a declaration, found 'let'"),
-        ("struct S(var x) {}", "1:15: error: expected ':' and a type, or '=' and a default, found ')'"),
-        ("struct S(x: Int)", "1:10: error: expected 'var' or 'let' to begin a field, found 'x'"),
-        ("struct S { let x = 1 }", "1:12: error: expected a method or 'deinit', found 'let'"),
+        ("let x = 1", "1:1: error: expected 'func' to begin a declaration, found 'let'"),
         ("func f() -> Int", "1:16: error: expected '{' to begin a block, found the end of the file"),
-        ("func f(_ a: [n of Int]) {}", "1:14: error: expected the inline array's count, found 'n'"),
-        ("func f(_ a: [3 Int]) {}", "1:16: error: expected 'of' in an inline array type, found 'Int'"),
-        ("func f(_ a: List<>) {}", "1:18: error: expected a type, found '>'"),
         ("func f() { owned let x = 1 }",
          "1:12: error: a declaration takes its value without 'owned'; write 'borrow' after '=' to borrow instead"),
         ("func f() { owned var x = y }", "1:12: error: a declaration takes its value without 'owned'"),
-        ("func f() { var b: Box<>= a }", "1:23: error: expected a type, found '>'"),
         ("func f() { if owned let x = y {} }", "1:15: error: a binding condition isn't supported yet"),
         ("func f() { if owned x {} }", "1:15: error: expected an expression, found 'owned'"),
         ("func f() { var x = borrow y }", "1:20: error: a 'var' can't borrow shared; write 'let', or '&' to lend the place for change"),
@@ -363,8 +229,6 @@ struct ErrorTests {
         ("func f() { let x = borrow borrow a }",
          "1:27: error: 'borrow' is written only to begin the initializer of a local 'let'"),
         ("func f() { let x = (borrow a) }", "1:21: error: 'borrow' is written only to begin the initializer of a local 'let'"),
-        ("struct S(let x: Int = borrow y) {}",
-         "1:23: error: 'borrow' is written only to begin the initializer of a local 'let'"),
         ("func f() { for i 0..<n {} }", "1:18: error: expected 'in' after the loop variable, found '0'"),
         ("func f() { x.1 }", "1:14: error: expected a member name after '.', found '1'"),
     ])
@@ -376,11 +240,9 @@ struct ErrorTests {
 struct SyntaxTreeTests {
     @Test("a node's range covers its source text")
     func ranges() throws {
-        let source = "func f() {\n    let x = foo(a, b).c + -d\n    run(n) { tick() }\n    (a + b)\n    let s = borrow v.w[0]\n}"
+        let source = "func f() {\n    let x = foo(a, b).c + -d\n    run(n)\n    (a + b)\n    let s = borrow v.w[0]\n}"
         let (parsed, _) = Parser.parse(source)
-        let function = try #require(parsed.declarations.first.flatMap { declaration -> FuncDecl? in
-            if case .function(let function) = declaration { return function } else { return nil }
-        })
+        let function = try #require(parsed.functions.first)
         let statements = function.body.statements
         #expect(text(function.range, in: source) == source)
         #expect(text(statements[0].range, in: source) == "let x = foo(a, b).c + -d")
@@ -389,7 +251,7 @@ struct SyntaxTreeTests {
         } else {
             Issue.record("expected a binding with a value")
         }
-        #expect(text(statements[1].range, in: source) == "run(n) { tick() }")
+        #expect(text(statements[1].range, in: source) == "run(n)")
         #expect(text(statements[2].range, in: source) == "(a + b)")
         if case .binding(let binding) = statements[3].kind, let value = binding.value {
             #expect(text(value.range, in: source) == "borrow v.w[0]")
@@ -401,14 +263,12 @@ struct SyntaxTreeTests {
     @Test("every expression in a file has its own id")
     func uniqueIDs() {
         let source = """
-            struct S(var x: Int = f(1)) {
-                func g() -> Int { h { [copy y] (a: Int) in a + y }[0] }
-            }
+            func g() -> Int { h(copy y, by: a + y)[0] }
             func k() {
-                var v = List<Int>(capacity: (2))
+                var v = make(capacity: (2))
                 let first = borrow v[0]
                 if v.isEmpty { while -v.count > 0 { v.append(copy x) } }
-                for i in 0..<n { v[i] = consume w; each(v) { $0 } }
+                for i in 0..<n { v[i] = consume w; each(v, [1, 2]) }
             }
             """
         let (parsed, diagnostics) = Parser.parse(source)
@@ -418,10 +278,9 @@ struct SyntaxTreeTests {
         #expect(Set(ids).count == ids.count)
     }
 
-    @Test("a member name may be a keyword, and a field's type may come from its default")
-    func keywordsAndDefaults() {
+    @Test("a member name may be a keyword")
+    func keywordMember() {
         #expect(body("x.init") == "(. x init)")
-        #expect(file("struct S(var x = 0)") == "(struct S(var x = 0))")
     }
 }
 
@@ -449,8 +308,6 @@ private func expressionIDs(in file: SourceFile) -> [ExprID] {
             visit(right)
         case .arrayLiteral(let elements):
             elements.forEach(visit)
-        case .closure(let closure):
-            visit(closure.body)
         }
     }
     func visit(_ block: Block) {
@@ -483,16 +340,6 @@ private func expressionIDs(in file: SourceFile) -> [ExprID] {
             }
         }
     }
-    func visit(_ function: FuncDecl) { visit(function.body) }
-    for declaration in file.declarations {
-        switch declaration {
-        case .function(let function):
-            visit(function)
-        case .structure(let structure):
-            structure.fields.compactMap(\.defaultValue).forEach(visit)
-            structure.methods.forEach(visit)
-            structure.deinitBody.map(visit)
-        }
-    }
+    for function in file.functions { visit(function.body) }
     return ids
 }

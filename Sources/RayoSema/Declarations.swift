@@ -22,16 +22,14 @@ struct Declarations {
 
     func resolve(_ type: TypeExpr, reporting errors: inout Diagnostics) -> RayoType? {
         switch type {
-        case .named("Int", let arguments, _) where arguments.isEmpty:
+        case .named("Int", _):
             return .int
-        case .named("Bool", let arguments, _) where arguments.isEmpty:
+        case .named("Bool", _):
             return .bool
-        case .named("Void", let arguments, _) where arguments.isEmpty:
+        case .named("Void", _), .void:
             return .void
-        case .void:
-            return .void
-        default:
-            errors.unsupported("the type '\(type)'", at: type.range)
+        case .named(let name, let range):
+            errors.error("'\(name)' isn't a type", at: range)
             return nil
         }
     }

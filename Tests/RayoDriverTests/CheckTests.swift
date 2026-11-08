@@ -17,14 +17,27 @@ struct ProgramTests {
         #expect(errors("func main() { print(-9223372036854775808) }") == [])
     }
 
-    @Test("a program needs a 'main' that takes no parameters, and returns Void, Never or Int32", arguments: [
+    @Test("a program needs a 'main' that returns Void", arguments: [
         ("", "1:1: error: the program has no 'main' function"),
-        ("func main(_ x: Int) {}", "1:11: error: 'main' takes no parameters"),
-        ("func main() -> Int { 0 }", "1:16: error: 'main' returns Void, Never or Int32"),
-        ("func main() -> Int32 {}", "1:16: error: the type 'Int32' isn't supported yet"),
-        ("func main() -> Never {}", "1:16: error: the type 'Never' isn't supported yet"),
+        ("func main() -> Int { 0 }", "1:16: error: 'main' returns Void"),
+        ("func main() -> Int32 {}", "1:16: error: 'Int32' isn't a type"),
     ])
     func main(source: String, expected: String) {
+        #expect(errors(source) == [expected])
+    }
+
+    @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
+        ("struct S {}", "1:1: error: expected 'func' to begin a declaration, found 'struct'"),
+        ("@main\nfunc main() {}", "1:1: error: expected 'func' to begin a declaration, found '@'"),
+        ("func main(_ x: Int) {}", "1:11: error: expected ')' after '(', found '_'"),
+        ("func main<T>() {}", "1:10: error: expected '(' after the function's name, found '<'"),
+        ("func main() throws {}", "1:13: error: expected '{' to begin a block, found 'throws'"),
+        ("func main() -> (Int) {}", "1:17: error: expected ')' to close '()', found 'Int'"),
+        ("func main() { let x: [3 of Int] = 1 }", "1:22: error: expected a type, found '['"),
+        ("func main() { let x: Int? = 1 }", "1:25: error: expected a newline or ';' after the statement, found '?'"),
+        ("func main() { let f = { 1 } }", "1:23: error: expected an expression, found '{'"),
+    ])
+    func syntax(source: String, expected: String) {
         #expect(errors(source) == [expected])
     }
 
@@ -46,7 +59,6 @@ struct ProgramTests {
         ("print(print(1))", "1:21: error: printing a value of type Void isn't supported yet"),
         ("print(true)", "1:21: error: printing a value of type Bool isn't supported yet"),
         ("print(1) + 2", "1:15: error: '+' needs Int operands, found Void and Int"),
-        ("print<Int>(1)", "1:15: error: 'print' takes no generic arguments"),
         ("print", "1:15: error: using a function as a value isn't supported yet"),
         ("print(main)", "1:21: error: using a function as a value isn't supported yet"),
     ])
@@ -60,18 +72,25 @@ struct ProgramTests {
         ("do { }", "1:15: error: 'do' isn't supported yet"),
         ("print(copy 1)", "1:21: error: 'copy' of a literal isn't supported yet"),
         ("var x = &y", "1:23: error: '&' isn't supported yet"),
-        ("let x: Int8 = 1", "1:22: error: the type 'Int8' isn't supported yet"),
     ])
     func unsupportedInMain(body: String, expected: String) {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
+    @Test("a type is Int, Bool, Void or '()'", arguments: [
+        ("let x: Int8 = 1", "1:22: error: 'Int8' isn't a type"),
+        ("let x: List = 1", "1:22: error: 'List' isn't a type"),
+    ])
+    func types(body: String, expected: String) {
+        #expect(errors("func main() { \(body) }") == [expected])
+    }
+
     @Test("both operands of an operator are checked, and errors are listed in source order")
     func everyError() {
-        #expect(errors("func main() { print(a + b) }\nstruct S(var x: Int)") == [
+        #expect(errors("func main() { print(a + b) }\nfunc main() {}") == [
             "1:21: error: 'a' isn't declared",
             "1:25: error: 'b' isn't declared",
-            "2:8: error: a struct isn't supported yet",
+            "2:6: error: 'main' is declared more than once",
         ])
     }
 
@@ -85,14 +104,13 @@ struct ProgramTests {
         #expect(errors("func main() { \(body) }") == expected)
     }
 
-    @Test("declarations other than one 'main' aren't supported yet, and a second 'main' is still checked")
-    func unsupportedDeclarations() {
-        #expect(errors("struct S(var x: Int)\nfunc f() {}\nfunc main() {}\nfunc main() -> Bool { print(a) }") == [
-            "1:8: error: a struct isn't supported yet",
-            "2:6: error: a function other than 'main' isn't supported yet",
-            "4:6: error: 'main' is declared more than once",
-            "4:16: error: 'main' returns Void, Never or Int32",
-            "4:29: error: 'a' isn't declared",
+    @Test("a program's only function is 'main', declared once, and a second 'main' is still checked")
+    func onlyMain() {
+        #expect(errors("func f() {}\nfunc main() {}\nfunc main() -> Bool { print(a) }") == [
+            "1:6: error: a program's only function is 'main'",
+            "3:6: error: 'main' is declared more than once",
+            "3:16: error: 'main' returns Void",
+            "3:29: error: 'a' isn't declared",
         ])
     }
 }

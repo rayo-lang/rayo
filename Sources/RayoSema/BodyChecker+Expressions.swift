@@ -11,7 +11,7 @@ extension BodyChecker {
             return literal(value, in: expr.range)
         case .boolLiteral(let value):
             return CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range)
-        case .name(let name, let typeArguments) where typeArguments.isEmpty:
+        case .name(let name):
             return reference(to: name, at: expr.range)
         case .unary(let op, let operand):
             let type: RayoType = op == .negate ? .int : .bool
@@ -124,7 +124,7 @@ extension ExprKind {
     var construct: String {
         switch self {
         case .intLiteral, .negativeIntLiteral, .boolLiteral: return "a literal"
-        case .name: return "a generic name"
+        case .name: return "a name"
         case .selfRef: return "'self'"
         case .member: return "a member"
         case .index: return "indexing"
@@ -135,7 +135,6 @@ extension ExprKind {
         case .consume: return "'consume'"
         case .borrow: return "'borrow'"
         case .arrayLiteral: return "an array literal"
-        case .closure: return "a closure"
         }
     }
 }
