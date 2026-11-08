@@ -99,7 +99,7 @@ protocol SeedSource { var seed: UInt64!IoError { get } }
 struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it: each read through SeedSource is a .success
 ```
 
-**A property that can't fail meets a `{ get }` requirement that can.** Whatever meets `{ get }` of type `T` also meets `{ get }` of type `T!E` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), as `seed` does above. It does so through the same wrapper, applied to what it hands a `{ get }` read, so a read through the requirement wraps the value in `.success`. Where `E` is an associated type that nothing else binds, the witness binds it to `Never` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics)). Only a requirement with `get` alone is met this way:
+**A property that can't fail meets a `{ get }` requirement that can.** Whatever meets `{ get }` of type `T` also meets `{ get }` of type `T!E` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), as `seed` does above. It does so through the same wrapper, applied to what it hands a `{ get }` read, so a read through the requirement wraps the value in `.success`. Such a witness binds no associated type in `E`'s place: a witness that can fail binds it, or it is `Never` when none can ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#protocols-and-generics)). Only a requirement with `get` alone is met this way:
 
 - **`{ get set }` of type `T!E`** needs a witness of that type, since its `set` must take a failure too.
 - **A place requirement of type `T!E`** needs a place that holds a `Result`, so a stored `T` doesn't meet it.
