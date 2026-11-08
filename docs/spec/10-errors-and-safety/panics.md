@@ -62,7 +62,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
     - the reader counts of an object, a thread-local and an `RwLock` ([03](../03-handles-and-objects.md#dynamic-exclusivity), [07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
     - pin counts ([03](../03-handles-and-objects.md#pinning-for-c));
     - a thread's counts of its uses of an allocator ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it));
-    - the counts behind `Shared`, `LocalShared`, `Published` snapshots, and `Sender`, `Receiver` and `Future` values ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners), [07](../07-concurrency/synchronization.md#queues-and-channels));
+    - the counts behind `Shared`, `LocalShared`, `Published` snapshots, and `Sender`, `Receiver`, `Promise` and `Future` values ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners), [07](../07-concurrency/synchronization.md#queues-and-channels));
 - creating an object or a `Shared` value when no generation is left, so that no weak pointer or weak link names a later one ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 
 Running out of stack, and an allocation that fails in a plain form, end the program instead ([below](#what-ends-the-program)).

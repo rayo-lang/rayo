@@ -113,7 +113,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **The job system's `join` runs both closures even when one panics**, since both are lent already. Once a piece has panicked, a parallel loop may skip the elements no piece has started, since the call unwinds anyway. So the code after a caught panic can't rely on which elements the loop's body saw.
 
-**A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from ([Disconnected channels](synchronization.md#disconnected-channels)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
+**A panic wakes no parked thread, except through what its unwind destroys**, such as the last `Sender` of a channel another thread receives from, or the `Promise` of a future another thread waits on ([Disconnected channels](synchronization.md#disconnected-channels)). So when a piece waits for something that only the code that panicked would have done, the piece waits for ever, and so does the lending call, or a `join()`. Code that other threads wait on signals them in a `defer`, which runs on every way out, the unwind included:
 
 ```swift
 let ready = Event()

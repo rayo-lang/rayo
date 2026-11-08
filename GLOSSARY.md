@@ -310,7 +310,7 @@ _Avoid_: pipe
 A thread whose `Thread` value was dropped, so it runs on by itself and nothing can join it ([07](docs/spec/07-concurrency/thread-work.md#joining-a-thread)). Not to be confused with a C thread's `rayo_thread_detach`, which tears down the thread's Rayo state ([08](docs/spec/08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 
 **Disconnected**:
-Said of a channel whose ends on one side are all gone: for receiving once every `Sender` is gone and no item is left, for sending once the `Receiver` is gone ([07](docs/spec/07-concurrency/synchronization.md#disconnected-channels)).
+Said of a channel or a future whose ends on one side are all gone, so the other side stops waiting for them ([07](docs/spec/07-concurrency/synchronization.md#disconnected-channels)).
 _Avoid_: closed (no code closes a channel)
 
 **Lent work**:

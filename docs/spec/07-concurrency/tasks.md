@@ -117,7 +117,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 **Only its owner's `step` resumes a task, but a step needn't visit every task.**
 
 - A **pending** task is polled every step, except a step that a panic stops before it reaches the task ([below](#running-tasks)).
-- A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`, an I/O completion or a timer wheel. The next `step` after a wake resumes it, unless a panic stops that step before it reaches the task, which then stays woken for the following step ([below](#running-tasks)).
+- A **waiting** task isn't. Its awaitable has handed the `Waker` to whatever will complete it, such as a `Future`'s promise, an I/O completion or a timer wheel. The next `step` after a wake resumes it, unless a panic stops that step before it reaches the task, which then stays woken for the following step ([below](#running-tasks)).
 
 **`wake()` upgrades its weak link and calls the target's `wake(id:)` through the new owner** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So reaching the target takes no lock and never waits, though `wake(id:)` itself may. Waking a destroyed target does nothing. When every other owner of the target drops while `wake()` holds the one it upgraded, `wake()` drops the last owner, and destroys the target on the waking thread.
 
@@ -126,7 +126,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 **std's awaitables include these:**
 
 - **`until`**, which takes a condition (below);
-- **`Future<T>`**, whose `Output` is `T`;
+- **`Future<T>`**, whose `Output` is `T?`, `nil` once its promise is gone unfulfilled ([Futures](synchronization.md#futures));
 - **timed waits**, which `seconds` makes (below).
 
 **A timed wait's `Context` `C` gives the program's own time, through the `now` property that `TimeSource` requires:**

@@ -54,7 +54,7 @@ log.value.lock { $0.append(m) }
 - **Handing an owner to C.** `Shared.leak(s)` gives up the owner, keeping its count, and returns a weak link for C to hold as a `uint64_t`. `Shared.adopt(w)` returns that owner, and reads `nil` unless `w` names a live value with a leaked owner, so a forged, mistyped or repeated `adopt` is harmless. While C holds a leaked owner, the value stays at its address.
 - **Threads.** `Shared<T>` and `WeakShared<T>` are `Sendable` when `T` is, and `LocalShared<T>` never is ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Weak pointers and weak links don't own, so a `Frozen` value may hold them without creating cycles. A `Frozen` value that crosses threads holds only weak links, since an object's weak pointers stay on its home thread.
 
-**`Sender`, `Receiver` and `Future` values also count their owners internally.** Dropping a `Receiver` breaks the cycles that [07](../07-concurrency/synchronization.md#queues-and-channels) names, and the others leak.
+**The ends of a channel or a future, `Sender`, `Receiver`, `Promise` and `Future` values, also count their owners internally**, so each side learns when the other is gone ([07](../07-concurrency/synchronization.md#disconnected-channels)). Dropping a `Receiver` breaks the cycles that [07](../07-concurrency/synchronization.md#queues-and-channels) names, and the others leak.
 
 ### `Frozen`: types with no interior mutability
 

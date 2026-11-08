@@ -264,6 +264,8 @@ _ = tx                                        // drops the sender: the render lo
 render.join()                                 // waits for the last frame
 ```
 
+**The channel holds at most three snapshots, its capacity.** When the simulation runs ahead and three are already waiting, `send` parks it until the render thread takes one.
+
 **`send` returns a `Result`, since the other side may be gone.** Once the `Receiver` is dropped, sending fails, and the error hands the snapshot back rather than losing it. Rayo rejects an unused value, so the simulation, which has no use for a snapshot nobody will draw, drops the result with `_ =`.
 
 **A panic on either side disconnects the channel too.** Unwinding destroys the ends the panicking thread owns, as it destroys everything else. So a render thread that panics makes each later `send` fail, and `render.join()` then carries the panic on in the simulation. If the simulation panics, its sender is destroyed, and the render loop ends instead of waiting for ever.
