@@ -110,7 +110,7 @@ The criteria below also use these patterns:
 var lives = &particles.life                          // an SoA column, taken as a MutableSpan<Float>
 
 node.next = nil                                      // through a property that yields a stored optional field
-node.next.take()                                     // takes the value out through the same property
+_ = node.next.take()                                 // takes the value out through the same property, and drops it
 pool[a]?.hp = copy pool[b]!.hp                       // one element's field, assigned from another's
 world.enemies[h]?.hp -= reinforce(&world.enemies)    // the right side lends the whole pool for change
 let hp = copy target?.hp                             // a copy through an optional chain
@@ -317,7 +317,7 @@ consuming func close() -> Void!IoError               // on a file whose deinit c
 consuming func intoItems() -> List<T>                // on a wrapper, moving its field out
 
 give(makeLoot().item)                                // a field moved out of a call result
-builder.finish(builder.count)                        // 'finish' is consuming
+let mesh = builder.finish(builder.count)             // 'finish' is consuming
 adopt(list, list.count)                              // 'adopt' takes its first parameter owned
 when connect().state { .open(let buf) { … } … }      // matches part of a temporary whose type has a deinit
 when connect() { .open(var b) { b.append(0) } … }    // changes a payload in place

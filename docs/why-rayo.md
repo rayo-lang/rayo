@@ -127,7 +127,7 @@ task func openDoor(_ door: owned Handle<Door>) with (world: mutable World) {   /
 func main() {
     var world = World()
     let hero = world.players.insert(Player(pos: .zero))              // insert returns a Handle<Player>
-    world.enemies.insert(Enemy(pos: Vec3(10, 0, 0), target: hero))   // an enemy that chases the hero
+    _ = world.enemies.insert(Enemy(pos: Vec3(10, 0, 0), target: hero))   // an enemy that chases the hero; its handle isn't needed
     let gate = world.doors.insert(Door())
 
     var scripts = TaskSet<World>(capacity: 64)                       // a set of tasks stepped with a World

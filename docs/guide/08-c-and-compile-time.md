@@ -13,8 +13,8 @@ struct Enemy(
     @Transient var path: List<Vec3> = [],                 // a cache: rebuilt after loading, never saved
 )
 
-unsafe plat.window_create(1280, 720, "Rayo".cString)      // a direct call into C, which you vouch for
-save(boss.value, into: &file)                             // writes pos, vel and hp, found by reflection
+let window = unsafe plat.window_create(1280, 720, "Rayo".cString)   // a direct call into C, which you vouch for
+save(boss.value, into: &file)                                      // writes pos, vel and hp, found by reflection
 ```
 
 Rayo calls C directly, with no glue code. Where C can't promise something, you promise it yourself, and Rayo marks that code `unsafe`. You write `save` once for every type, with code the compiler runs while it builds your program: `const`, `static if`, and reflection over a type's fields.

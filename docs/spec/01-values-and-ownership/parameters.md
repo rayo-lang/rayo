@@ -66,9 +66,9 @@ spawn(kind)                                             // leaves out 'at:', so 
 ## Evaluation order, and when a call's borrows begin
 
 ```swift
-items.append(items.count)     // fine: items.count is read, and done, before append borrows items
-builder.finish(builder.count) // fine: count is read before finish takes builder
-f(&x, x)                      // error: two borrows of x overlap for the whole call
+items.append(items.count)                // fine: items.count is read, and done, before append borrows items
+let mesh = builder.finish(builder.count) // fine: count is read before finish takes builder
+f(&x, x)                                 // error: two borrows of x overlap for the whole call
 ```
 
 **Evaluation is left to right, and a call's borrows begin with the call.** So a value read for an argument is done before the call lends or takes its place, and every borrow and take of one call is checked against the others. The order is fixed, so two implementations never disagree about it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A call runs in this order:

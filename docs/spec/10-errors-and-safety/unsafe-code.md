@@ -8,7 +8,7 @@ Safe Rayo code relies on the compiler to check its memory guarantees. Some opera
 unsafe {
     let p: *Particle = ptr(to: &particles[0])
     p[3].pos = .zero
-    memcpy(dst, src, n)
+    _ = memcpy(dst, src, n)                                         // C's memcpy returns 'dst', dropped here
 }
 let now = unsafe plat.time_seconds()                                // one expression
 
