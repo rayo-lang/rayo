@@ -102,3 +102,13 @@ Some values that the code doesn't declare still count as locals, and take their 
 - **`defer`.** A `defer` block runs as a value declared where it stands would be destroyed ([10](../10-errors-and-safety/typed-errors.md#cleanup)).
 
 **What a destruction uses is checked in this order.** Where destroying a value uses what it borrows ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), that use is checked in this order, against what is still alive at that point. So a lock guard declared after its mutex is released before the mutex is destroyed.
+
+### Destruction by unwinding
+
+**A panic that unwinds through a scope ends it as a `throw` would, and destroys what it holds in the same order** ([10](../10-errors-and-safety/panics.md#unwinding)). The scopes end innermost first, and each destroys these, in the order above:
+
+- its live locals, hidden locals and `owned` parameters, with each `defer` block running where it stands;
+- the temporaries that the statement the panic interrupted has made so far;
+- the fields still held by a value that a field was moved out of.
+
+**So a value is destroyed once, and only while it holds one, whichever way its scope ends.** A place that holds a value on only some paths is destroyed exactly when it holds one, as at any scope's end ([Places that hold no value](moving-values-out.md#places-that-hold-no-value)). A value still being built, such as the arguments of a primary initializer or the elements of an array literal, is only the temporaries made so far. The unwind destroys those, and no half-built value ([04](../04-types/structs.md#initializers)).

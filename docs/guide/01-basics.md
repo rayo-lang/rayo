@@ -82,7 +82,7 @@ let a = hp8 + 10                // the 10 becomes an Int8 too, and 130 doesn't f
 
 Going past the limit is called **overflow**, and Rayo treats it as a bug. What happens next depends on how the program was built. Rayo builds a program in one of two modes: `debug`, for while you're developing, and `release`, for when you ship ([10](../spec/10-errors-and-safety/checks-and-build-modes.md#build-modes)).
 
-A `debug` build checks every addition, subtraction and multiplication. When one overflows, the program stops right there and reports where it happened. Stopping like this is called a **panic**. A `release` build leaves the checks out so the program runs faster, and an overflowing result wraps around, past the largest value to the smallest, so the wrong number carries on unnoticed.
+A `debug` build checks every addition, subtraction and multiplication. When one overflows, the program reports where it happened and abandons the work in progress, so the wrong number never reaches the rest of the game. This is called a **panic**. In a program with one thread, like the ones in this chapter, a panic that nothing catches ends the program ([10](../spec/10-errors-and-safety/panics.md#uncaught-panics)). A `release` build leaves the checks out so the program runs faster, and an overflowing result wraps around, past the largest value to the smallest, so the wrong number carries on unnoticed.
 
 Sometimes going past the limit isn't a bug. A hash function relies on numbers wrapping around, and a meter that fills up should simply stop when it's full. For those cases, Rayo has operators, such as `&+` and `+|`, that say what to do at the limit, so they never panic:
 
@@ -209,3 +209,4 @@ for i in 0..<100 {
 - [04 Types](../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts): what every integer operation does at its limits.
 - [05 Protocols, generics and closures](../spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures): functions, their parameters and what they return.
 - [10 Errors and safety](../spec/10-errors-and-safety/checks-and-build-modes.md#build-modes): the build modes, and the checks each one keeps.
+- [10 Panics](../spec/10-errors-and-safety/panics.md#panics): what panics, how a panic unwinds its thread, and how code catches one.

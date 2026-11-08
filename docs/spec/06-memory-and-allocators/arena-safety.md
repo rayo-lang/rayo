@@ -100,6 +100,7 @@ levelArena.reset()                            // destroys the doors; each deinit
 
 - **What it owns stays usable to it.** While such a `deinit` runs, the thread running it can open a value that this reset or unregistration made stale. That holds for a reset or unregistration of the object's allocator, or of one it is built over ([Allocators over other allocators](allocator-implementations.md#allocators-over-other-allocators)). Freeing such a value from that `deinit` releases it into the allocator it came from. A value an earlier reset made stale still fails, since its memory may already be reused.
 - **The memory is still there.** A reset frees its old blocks only after every such `deinit` has returned ([step 5](#what-a-reset-does)), and an unregistration destroys the implementation only then ([below](#unregistering-an-allocator)). So what an open lent inside one has ended first.
+- **A panic in one still lets the reset or unregistration finish.** It runs the other `deinit`s and its remaining steps before the panic unwinds out of it, as an unwind destroys the rest of a value whose `deinit` panicked ([10](../10-errors-and-safety/panics.md#unwinding)). Those `deinit`s then run because of an unwind, so a second panic in one ends the program.
 
 ## Unregistering an allocator
 

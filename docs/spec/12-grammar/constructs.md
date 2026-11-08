@@ -122,7 +122,8 @@ closure-params= identifier (',' identifier)* | param-clause ;
                    whose body is instantiated per compile-time argument, as in T.construct; a closure
                    passed to a compile-time list's filter or map is instantiated per element unmarked *)
 capture-list  = '[' capture (',' capture)* ','? ']' ;
-capture       = ('move' | 'copy') (identifier | 'self') ;          (* 'move self' only in a consuming method (05) *)
+capture       = ('move' | 'copy') (identifier | 'self')            (* 'move self' only in a consuming method (05) *)
+              | 'unwindSafe' ('&' | 'move') (identifier | 'self') ;   (* only in catchPanic's closure (10) *)
 trailing-closure = closure ;
 ```
 

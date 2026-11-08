@@ -44,7 +44,7 @@ throw throws try catch do defer static mutable owned consuming copy consume borr
 where with await yield unsafe unchecked using extern as is nil true false
 associatedtype subscript`.
 
-**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard`. Some of those positions are narrow:
+**Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `read`, `modify`, `get`, `set`, `c`, `allocator`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to`, `discard` and `unwindSafe`. Some of those positions are narrow:
 
 - **`union`** is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call;
 - **`keep`** only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses;
@@ -54,7 +54,8 @@ associatedtype subscript`.
 - **`stack`** only at the start of such a rule, after `extern c` or its `noalloc`, or after `@c` in a type;
 - **`borrows`** and **`outlives`** only in a `where` clause, right after an item's subject. A requirement starts with a type, and a dotted path such as `out.items` parses as a type too, so the token after it tells a `borrows-item` from a constraint;
 - **`rebind`** only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and **`to`** only after `rebind` and that identifier;
-- **`discard`** only at the start of a statement when `self` follows it.
+- **`discard`** only at the start of a statement when `self` follows it;
+- **`unwindSafe`** only at the start of a capture, when `&` or `move` follows it.
 
 **Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword:
 
