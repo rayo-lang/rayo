@@ -55,7 +55,7 @@ param         = (arg-label | '_')? identifier ':' param-convention? type ('=' ex
 arg-label     = identifier | keyword ;                            (* func index(of x: T, in s: Span<T>) *)
 param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or owned for a mutating or consuming function type, some F of one, or mutable any P (05) *)
 result-type   = type | result-base '!' ;                           (* a bare '!' infers the failure type: only on a non-public function with a body (10) *)
-init-result   = '->' 'Self' '!' type-primary? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError (10) *)
+init-result   = '->' 'Self' '!' failure-type? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError; bare only on a non-public one (10) *)
 
 struct-decl   = 'struct' identifier generic-params? primary-init? inheritance? where-clause? ('{' member* '}')? ;
                 (* a struct's body declares no stored field: its 'var's are computed or static, and its 'let's static (04) *)
@@ -75,7 +75,7 @@ protocol-member = 'associatedtype' identifier inheritance? ('=' type)?
               | attribute* modifier* 'func' func-name generic-params? param-clause ('->' type)? where-clause?
               | attribute* modifier* 'var' identifier ':' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
               | attribute* modifier* 'subscript' param-clause '->' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
-              | attribute* modifier* 'init' '?'? generic-params? param-clause ('->' 'Self' '!' type-primary)? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError) *)
+              | attribute* modifier* 'init' '?'? generic-params? param-clause ('->' 'Self' '!' failure-type)? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError); not both '?' and '!' *)
 extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                    (* no stored member or enum case, directly or generated, and a deinit
                                                                       only in an unconditional extension, in the type's module (04);

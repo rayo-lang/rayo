@@ -7,8 +7,9 @@ Within a declaration, the grammar describes the types, statements, expressions a
 ## Types
 
 ```ebnf
-type          = result-base ('!' type-primary)? ;                 (* Mesh!LoadError is Result<Mesh, LoadError>; Level!(IoError | ParseError) (10) *)
+type          = result-base ('!' failure-type)? ;                 (* Mesh!LoadError is Result<Mesh, LoadError>; Level!(IoError | ParseError) (10) *)
 result-base   = type-primary type-suffix* ;                        (* '!' applies after '?': Handle<Enemy>?!LoadError; (Mesh!LoadError)? is an optional Result *)
+failure-type  = type-name | '(' type ('|' type)* ')' ;             (* a name, or a parenthesized type or error union *)
 type-primary  = type-name
               | 'Self' ('.' identifier generic-args?)*             (* Self, Self.Element *)
               | '(' tuple-type-elems? ')'                          (* tuple, or Void when empty *)
@@ -17,7 +18,7 @@ type-primary  = type-name
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
               | 'any' composition | 'some' composition | 'mutable' 'any' composition   (* mutable any P: the exclusive existential view *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
-                                                                   (* C function pointer (08): never fails; 'noalloc': its calls allocate nothing (05) *)
+                                                                   (* C function pointer (08); 'noalloc': its calls allocate nothing (05) *)
               | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type ;
                                                                    (* function type; 'unsafe' calls need 'unsafe' (05);
                                                                       'mutating' may write its captures, 'consuming' is call-once;
