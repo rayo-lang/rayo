@@ -73,8 +73,8 @@ case-item     = identifier ('(' tuple-type-elems ')' | '=' expression)? ;   (* a
 protocol-decl = 'protocol' identifier inheritance? where-clause? '{' protocol-member* '}' ;   (* 'unsafe protocol P': every conformance is ': unsafe P' (05) *)
 protocol-member = 'associatedtype' identifier inheritance? ('=' type)?
               | attribute* modifier* 'func' func-name generic-params? param-clause typed-throws? ('->' type)? where-clause?
-              | attribute* modifier* 'var' identifier ':' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
-              | attribute* modifier* 'subscript' param-clause '->' type where-clause? '{' ('get' 'set'? | 'read' 'modify'?) '}'
+              | attribute* modifier* 'var' identifier ':' type where-clause? '{' ('get' 'set'? | 'borrow' 'mutate'?) '}'
+              | attribute* modifier* 'subscript' param-clause '->' type where-clause? '{' ('get' 'set'? | 'borrow' 'mutate'?) '}'
               | attribute* modifier* 'init' '?'? generic-params? param-clause typed-throws? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError) *)
 extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                    (* no stored member or enum case, directly or generated, and a deinit
@@ -88,8 +88,9 @@ member        = declaration | init-decl | deinit-decl | subscript-decl | static-
 init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause throws-clause? where-clause? block ;
 deinit-decl   = attribute* 'deinit' block ;                         (* '@noalloc' is the attribute with a meaning here (06) *)
 subscript-decl= attribute* modifier* 'subscript' param-clause '->' type where-clause? accessor-block ;
-accessor-block= '{' ( statement* | accessor+ ) '}' ;              (* 'get', 'set', 'read' or 'modify' first, after attributes and modifiers, then '{', begins an accessor, never a call *)
-accessor      = attribute* modifier* ('get' | 'set' | 'read' | 'modify') block ;   (* the accessors are 'get', 'get set', 'read' or 'read modify' (02); unsafe get { … } *)
+accessor-block= '{' ( statement* | accessor+ ) '}' ;              (* 'get', 'set', 'borrow' or 'mutate' first, after attributes and modifiers, then '{', begins an accessor,
+                                                                      never a call or a borrow of a closure literal *)
+accessor      = attribute* modifier* ('get' | 'set' | 'borrow' | 'mutate') block ;   (* the accessors are 'get', 'get set', 'borrow' or 'borrow mutate' (02); unsafe get { … } *)
 
 inheritance   = ':' conformance (',' conformance)* ;
 conformance   = 'unsafe'? type                                    (* struct Queue<T>(…): unsafe Synchronized: an unverified promise *)
@@ -100,7 +101,8 @@ where-clause  = 'where' requirement (',' requirement)* ;
 requirement   = type ':' constraint ('&' constraint)* | type ('==' | '!=') type   (* where A != B: two distinct types *)
               | borrows-item ;
 borrows-item  = subject ('borrows' | 'outlives') source ;          (* where return borrows self, out borrows text (02) *)
-subject       = 'return' ('.' field-step)* | 'yield' | ('self' | identifier) ('.' field-step)* ;   (* return.name: a stored field of the result; 'self' only where it absorbs under rule 4 (02) *)
+subject       = 'return' ('.' field-step)* | ('self' | identifier) ('.' field-step)* ;   (* return: the result, or a place property's place; return.name: a stored field of the result;
+                                                                      'self' only where it absorbs under rule 4 (02) *)
 source        = 'static' | ('self' | identifier) ('.' field-step)* ;   (* 'static' only after 'borrows'; a path of stored fields *)
 field-step    = identifier | int-literal ;                         (* a stored field, or a tuple element: return.0 *)
 constraint    = type | '~' type ;                                 (* only ~Scoped: T isn't scoped (02) *)

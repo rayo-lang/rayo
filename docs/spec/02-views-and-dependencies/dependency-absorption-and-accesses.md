@@ -8,7 +8,7 @@ Across a call, the caller and callee have different parts of the dependency chec
 
 **After a call, every scoped `mutable` argument, a `mutating` method's `self` included, takes on what the other arguments borrow.** This is the caller's side of rule 5 for stores. A callee can store a view into a `mutable` argument, as `append` does, and rule 5 lets it store only what its caller lent it. Absorption adds all of that to the argument's set, so the caller learns what the argument now borrows without seeing the body.
 
-**An `owned` argument that is a mutable view, and a `modify`'s yield, absorb too** (below). Each absorbing argument takes on the places and sets of the borrowed arguments, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3:
+**An `owned` argument that is a mutable view absorbs too** (below). Each absorbing argument takes on the places and sets of the borrowed arguments, and the sets of the `mutable` and scoped `owned` ones, with the kinds of rule 3:
 
 ```swift
 tokens.append(Token(text: src.view))   // 'tokens' now depends on 'src'
@@ -73,7 +73,7 @@ put(&out)                               // 'out' now depends on 'src'
 
 **The closure itself absorbs only what its `keep` arguments carry**, never the argument places ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). A `mutating` closure absorbs what its `keep` arguments carry into itself, and so into the places it depends on exclusively. Its other parameters are call-scoped, lent only for the call, so nothing it was lent reaches its captures. So a closure lent data for one call, such as a lock's, can't keep a view of it.
 
-**A projection access is a call to its accessor**, with the subscript's arguments and `self`. A `modify`'s yield is one more `mutable` argument, since the code after the `yield` may store what the caller wrote there: a subscript's `mutable` parameter absorbs it ([Projections: `read` and `modify` accessors](projections-and-accessors.md#projections-read-and-modify-accessors)).
+**An access through a place property is a call to its accessor**, with `self` and the subscript's arguments, and its place depends on them as a result would ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). No accessor code runs after the caller's access. So what the caller stores into a `mutate`'s place is a change to part of each place that place depends on exclusively, and each of those takes it on (above).
 
 ## Rule 5: The callee side
 
@@ -96,7 +96,7 @@ func name() -> StringView {
 
 **Rule 5 rejects what rules 3 and 4 couldn't report to the caller:**
 
-- **A view of what the function itself owns or began**, since each is released or ended when the call returns. That is a local, storage an `owned` parameter owns but not the borrows it carries, a thread-local, or a dynamic access or access-bound projection begun inside the function. The non-`mutable` parameters of an `@export` or `@c` function, or of a closure literal converted to a `@c` type, count as `owned` here, since C passes them by value ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
+- **A view of what the function itself owns or began**, since each is released or ended when the call returns. That is a local, storage an `owned` parameter owns but not the borrows it carries, a thread-local, or a dynamic access or a value property's change begun inside the function. The non-`mutable` parameters of an `@export` or `@c` function, or of a closure literal converted to a `@c` type, count as `owned` here, since C passes them by value ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **Anything stored into a `mutable` parameter `p` that depends on a place overlapping `p`**, since rule 4 tells the caller nothing new about its own argument. The caller's set for `p` would have to name `p` itself.
 - **Anything stored through a parameter's exclusive dependencies that depends on the parameter's own storage**, which rule 4 never reports.
 
@@ -164,9 +164,9 @@ let items = r.value!.items.span   // derived from the access to the object 'r' p
 let e = first(r.value!)           // passed through a call
 ```
 
-**The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. An access-bound projection's access is held the same way, with its accessor suspended at the `yield`.
+**The access is held until the last use of every value that depends on it**, so the run-time mark covers the view for its whole life. When the access ends, the language releases its mark itself. A value property's change is held the same way, with `set` called once it ends ([Value properties: `get` and `set`](place-and-value-properties.md#value-properties-get-and-set)).
 
-**A site in a loop's body or `while` condition holds one access at a time**, since a set names an access by the site that began it. Each time the site begins a dynamic access, or an access-bound projection's access, no value that depends on the access it began the last time may be used from then on:
+**A site in a loop's body or `while` condition holds one access at a time**, since a set names an access by the site that began it. Each time the site begins a dynamic access, or a value property's change, no value that depends on the access it began the last time may be used from then on:
 
 ```swift
 for w in nodes { names.append(w.value!.name.view) }   // error

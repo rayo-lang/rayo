@@ -35,7 +35,7 @@
     - views only read-only data, since freezing follows only raw pointers, and any other view would still point at compile-time memory.
 
   It is `Sendable`, since every thread may read it.
-- **Reflection grants nothing a name doesn't** ([09](../../spec/09-compile-time/reflection.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. So a `private init` keeps guarding its type's invariants. A reflective projection is a storage or access-bound projection exactly as the field is ([09](../../spec/09-compile-time/reflection.md#what-reflection-can-read)).
+- **Reflection grants nothing a name doesn't** ([09](../../spec/09-compile-time/reflection.md#reflection-and-access-control)): the same visibility, `unsafe` fields, union reads and moves out, and `T.construct` calls the primary initializer. So a `private init` keeps guarding its type's invariants. A reflective projection lends a place, or goes through a temporary, exactly as the field does ([09](../../spec/09-compile-time/reflection.md#what-reflection-can-read)).
 - **Generated declarations are checked as written ones** ([09](../../spec/09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)), and generic code takes them at the safe bound ([Generic code and existentials](runtime-and-concurrency.md#generic-code-and-existentials)).
 
 ## Checks and panics
@@ -57,7 +57,7 @@
 | A mutable view built from a raw pointer changes only what its exclusive inputs own or carry ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)) | [Mutable views](dependencies.md#mutable-views) |
 | A value kept through a raw pointer is held in a type that says what it holds, and what is handed out of that storage borrows only what the call gives ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)) | [Rules 3 and 4](dependencies.md#rule-3) |
 | A shallow value's bytes viewed with `ptr(to:)` never reach a sealed type ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)) | The shallow rule ([Rule 3](dependencies.md#rule-3)) |
-| A storage projection's yield through a raw pointer lies in storage the named parameter owns or views ([02](../../spec/02-views-and-dependencies/projections-and-accessors.md#storage-projections)) | [Projections](dependencies.md#projections-and-accessors) |
+| A place that a place property hands out through a raw pointer lies in storage that what it depends on owns or views ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-storage)) | [Place and value properties](dependencies.md#place-and-value-properties) |
 | `unsafe Sendable` ([07](../../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)) | [Threads](runtime-and-concurrency.md#threads) |
 | `unsafe Synchronized` ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)) | [Threads](runtime-and-concurrency.md#threads), Exclusive |
 | `unsafe Frozen` ([06](../../spec/06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)) | `Shared`, `LocalShared`, freezing |

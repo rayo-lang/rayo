@@ -41,12 +41,10 @@ statement     = declaration | expression | assignment | guard-stmt
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
               | 'defer' block | 'unsafe' block | 'unchecked' block | using-stmt
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
-              | rebind-stmt | static-if-stmt | static-for-stmt | yield-stmt
+              | rebind-stmt | static-if-stmt | static-for-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
               | static-error
               | label ':' (for-stmt | while-stmt | repeat-stmt) ;
-yield-stmt    = 'yield' ( yield-operand | '(' yield-operand (',' yield-operand)+ ','? ')' ) ;   (* yield (&a, &b): a tuple of places *)
-yield-operand = '&'? expression ;
 
 assignment    = expression assign-op expression ;
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;

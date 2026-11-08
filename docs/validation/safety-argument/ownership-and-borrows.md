@@ -59,7 +59,7 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 
 - a `Synchronized` value, whose identity is its address, and which changes through a shared borrow;
 - the argument of `ptr(to:)`, whose result is its address;
-- one that a result, an error, a yield or an absorbing argument may still view after the call, which would otherwise view the callee's copy.
+- one that a result, an error, a place property's place or an absorbing argument may still view after the call, which would otherwise view the callee's copy.
 
 **Which arguments these are follows from the signature alone, and conversions keep conventions.** So a call through a function value passes its arguments as a direct call does.
 

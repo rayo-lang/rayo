@@ -80,7 +80,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 - **The current allocator.** `using allocator = a` reads the id in `a` once, on entry, and holds no borrow of `a`, so the block may contain an `await` ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).
 - **`as` patterns.** An `as` pattern on a place copies it, since the conversion makes a new value ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
-- **`get` and `set`.** A change through a `get` and `set` pair copies a copyable `owned` subscript argument for the `get`, since one value can't move into both calls ([02](../02-views-and-dependencies/projections-and-accessors.md#get-and-set-accessors)).
+- **`get` and `set`.** A change through a value property with a `get` and a `set` copies a copyable `owned` subscript argument for the `get`, since one value can't move into both calls ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
 **One copy is deferred.** A `String` made from a literal uses the literal's bytes until its first write or growth, and copies them then, so making it allocates nothing ([04](../04-types/collections.md#literals)).
 
