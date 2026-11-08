@@ -110,3 +110,4 @@ hi = 1
 - **The capture carries whether the place holds a value.** An assignment destroys an old value only if there is one. So a `mutating` closure called twice destroys the first value when it assigns the second.
 - **A `let` is given its value this way only by a `consuming` closure**, which runs at most once.
 - **After the closure's last use, the place is maybe-initialized** in the enclosing function, since the closure may never have been called.
+- **`catchPanic`'s two closures share one record** of whether such a place holds a value, since the body may assign it before it panics. So inside the `recover` closure, a place that held no value at the call is maybe-initialized, and a `let` may be given its value by only one of the two ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).

@@ -102,7 +102,8 @@ prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' 
 postfix-expr  = primary postfix* ;
 postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords allowed after '.': T.self, .init(…); gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
-call-suffix   = '(' argument-list? ')' trailing-closure* | trailing-closure+ ;
+call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
+trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)
 argument-list = argument (',' argument)* ','? ;
 argument      = (arg-label ':')? ('&'? expression | operator) ;      (* combine: + passes the operator as a function value *)
 primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'
@@ -123,7 +124,7 @@ closure-params= identifier (',' identifier)* | param-clause ;
                    passed to a compile-time list's filter or map is instantiated per element unmarked *)
 capture-list  = '[' capture (',' capture)* ','? ']' ;
 capture       = ('move' | 'copy') (identifier | 'self') ;          (* 'move self' only in a consuming method (05) *)
-trailing-closure = (identifier ':')? closure ;                     (* a label only after the first: catchPanic { … } recover: { … } *)
+trailing-closure = closure ;
 ```
 
 ## Patterns

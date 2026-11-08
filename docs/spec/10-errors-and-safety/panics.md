@@ -210,7 +210,22 @@ let frame = catchPanic {
 
 **After a caught panic, what the body was changing may be half-changed.** The unwind stops the body wherever it panicked. So each place the body changed holds a valid value, but not always the one the body meant to leave there. `recover` sees those places as the unwind left them, so it is where the code checks or repairs them, or decides to leave them. That is why `recover` is required: an empty one, as in `recover: { _ in }` for a `Void` body, is a visible choice.
 
-**The two closures may capture the same places, since they never run at once.** `recover` runs only after the unwind has destroyed the body closure. So both may capture one place exclusively, as both capture `world` above, an exception to the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). Moves are checked as for any call's arguments: a place that either closure owns a capture of moved into it when the call began, so the other can't use it.
+**The two closures' captures don't conflict with each other, since the closures never run at once.** `recover` runs only after the unwind has destroyed the body closure. So both may capture one place, exclusively too, as both capture `world` above. That exception to the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)) is narrow:
+
+- it covers only two closure literals written as `catchPanic`'s arguments, never function values made before the call;
+- it covers only the conflict between those two closures' captures;
+- everything else is checked as usual. A value that the body closure's creation made depend on a place still conflicts with `recover`'s use of that place ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+
+```swift
+catchPanic {
+    views.append(name.view)          // creating this closure makes 'views' depend on 'name'
+} recover: { _ in
+    name = String("b")               // error: 'views' depends on 'name', and is used below
+}
+print(views[0])
+```
+
+Moves are checked as for any call's arguments: a place that either closure owns a capture of moved into it when the call began, so the other can't use it. Whether a captured place holds a value is tracked across both closures ([01](../01-values-and-ownership/moving-values-out.md#places-that-hold-no-value)).
 
 - **Each closure runs at most once**, the body exactly once. Both parameters are `consuming`, so either closure may move out of what it owns, and a closure of any kind is accepted ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
 - **The innermost one catches.** A panic unwinds to the innermost `catchPanic` on its own thread, and a panic on another thread never reaches it.
@@ -244,13 +259,12 @@ func resumePanic(_ p: Panic) -> Never
 
 **`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened.
 
-**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, whose `recover` keeps the panic. Once all the work has finished, the lending thread resumes it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)):
+**A library that lends work to other threads carries a piece's panic back with it.** Each piece runs under `catchPanic`, and keeps its panic, if any, in a slot of its own. Once all the work has finished, the library hands the slots back to the lending thread, which resumes a panic it finds ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)):
 
 ```swift
-var caught: Panic? = nil
-catchPanic { job() } recover: { p in caught = p }     // on the worker: keep the panic
-...                                                    // the rest of the lent work finishes
-if let p = caught { resumePanic(p) }                   // on the lending thread: carry it on
+let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot
+...                                                                                // the library waits for every piece
+if let p = caught { resumePanic(p) }                                               // on the lending thread: carry it on
 ```
 
 ## Panic strategy

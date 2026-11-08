@@ -51,6 +51,8 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A closure's parameter types come from a written parameter clause or the expected type**, never from the body, since inference is local ([11](../11-compilation-model.md#type-checking-is-local)). The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](../12-grammar/constructs.md#expressions)).
 
+**Trailing closures fill the call's closure parameters in order.** The first, unlabeled one is the argument for the first parameter of function type after those the parentheses give. Each later one carries a label, and is the argument for the next such parameter, whose argument label it must equal. So `catchPanic { … } recover: { p in … }` passes its body, then its `recover` closure ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+
 **Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
 
 - a nested function;
