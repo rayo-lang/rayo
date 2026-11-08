@@ -1,27 +1,14 @@
 import RayoSource
 
-public enum Severity: Sendable, Hashable {
-    case error
-    case note
-}
-
+/// An error in a program, and where it is.
 public struct Diagnostic: Sendable, Hashable, CustomStringConvertible {
-    public var severity: Severity
-    public var message: String
+    public var code: ErrorCode
     public var range: SourceRange
 
-    public init(_ severity: Severity, _ message: String, at range: SourceRange) {
-        self.severity = severity
-        self.message = message
+    public init(_ code: ErrorCode, at range: SourceRange) {
+        self.code = code
         self.range = range
     }
 
-    public static func error(_ message: String, at range: SourceRange) -> Diagnostic {
-        Diagnostic(.error, message, at: range)
-    }
-
-    public var description: String {
-        let label = severity == .error ? "error" : "note"
-        return "\(range.start): \(label): \(message)"
-    }
+    public var description: String { "\(range.start): error[\(code.identifier)]: \(code.message)" }
 }

@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSource
 import Testing
 @testable import RayoSyntax
@@ -5,14 +6,14 @@ import Testing
 /// Parses `source` as a whole file that must have no errors, and dumps it.
 private func file(_ source: String) -> String {
     let (parsed, diagnostics) = Parser.parse(source)
-    #expect(diagnostics.map(\.description) == [])
+    #expect(diagnostics.map(\.code) == [])
     return parsed.dump
 }
 
 /// Parses `source` as a function's body that must have no errors, and dumps its statements.
 private func body(_ source: String) -> String {
     let (parsed, diagnostics) = Parser.parse("func t() {\n\(source)\n}")
-    #expect(diagnostics.map(\.description) == [])
+    #expect(diagnostics.map(\.code) == [])
     guard parsed.functions.count == 1, let function = parsed.functions.first else {
         Issue.record("expected one function, got \(parsed.dump)")
         return ""
@@ -20,8 +21,8 @@ private func body(_ source: String) -> String {
     return function.body.statements.map(\.dump).joined(separator: "; ")
 }
 
-private func errors(_ source: String) -> [String] {
-    Parser.parse(source).diagnostics.map(\.description)
+private func errors(_ source: String) -> [ErrorCode] {
+    Parser.parse(source).diagnostics.map(\.code)
 }
 
 struct ExpressionTests {
@@ -120,8 +121,7 @@ struct DeclarationTests {
     @Test("declarations are separated by newlines")
     func separated() {
         #expect(file("func a() {}\n\nfunc b() -> Int { 1 }") == "(func a() {})\n(func b() -> Int {1})")
-        #expect(errors("func a() {} func b() {}") ==
-            ["1:13: error: expected a newline or ';' after the declaration, found 'func'"])
+        #expect(errors("func a() {} func b() {}") == [.expected(what: .declarationEnd, found: "'func'")])
     }
 }
 
@@ -137,47 +137,44 @@ struct ErrorTests {
             func g() {}
             """
         let (parsed, diagnostics) = Parser.parse(source)
-        #expect(diagnostics.map(\.description) == [
-            "2:9: error: expected a name to bind, found '='",
-            "4:9: error: expected an expression, found ')'",
+        #expect(diagnostics.map(\.code) == [
+            .expected(what: .bindingName, found: "'='"), .expected(what: .expression, found: "')'"),
         ])
         #expect(parsed.dump == "(func f() {(let y 2)})\n(func g() {})")
     }
 
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
-        #expect(errors("func f() {\n    let = 1\n    let s = #\n}") == [
-            "2:9: error: expected a name to bind, found '='",
-            "3:13: error: unexpected character '#'",
+        #expect(errors("func f() {\n    let = 1\n    let s = 0x\n}") == [
+            .expected(what: .bindingName, found: "'='"), .missingDigits,
         ])
     }
 
     @Test("a statement that holds unexpected characters is reported once, at the first")
     func unexpectedOncePerStatement() {
         #expect(errors("func f() {\n    print(\"it's a.b\")\n    x[0] = 2\n}") == [
-            "2:11: error: unexpected character '\"'",
-            "3:6: error: unexpected character '['",
+            .unexpectedCharacter(character: "\""), .unexpectedCharacter(character: "["),
         ])
-        #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == ["2:11: error: unexpected character '\"'"])
+        #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
 
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
-        #expect(errors("func f() {\n    x = 1\n") == ["3:1: error: expected '}' to close the block, found the end of the file"])
+        #expect(errors("func f() {\n    x = 1\n") == [.expected(what: .blockClose, found: "the end of the file")])
     }
 
     @Test("a stray '}' is reported and skipped")
     func strayBrace() {
-        #expect(errors("}\nfunc f() {}") == ["1:1: error: unmatched '}'"])
+        #expect(errors("}\nfunc f() {}") == [.unmatchedBrace])
     }
 
     @Test("malformed declarations and statements", arguments: [
-        ("let x = 1", "1:1: error: expected 'func' to begin a declaration, found 'let'"),
-        ("func f() -> Int", "1:16: error: expected '{' to begin a block, found the end of the file"),
-        ("func f() { let x }", "1:18: error: expected '=' and a value, found '}'"),
-        ("func f() { copy }", "1:17: error: expected a name after 'copy', found '}'"),
+        ("let x = 1", ErrorCode.expected(what: .declaration, found: "'let'")),
+        ("func f() -> Int", .expected(what: .blockOpen, found: "the end of the file")),
+        ("func f() { let x }", .expected(what: .bindingValue, found: "'}'")),
+        ("func f() { copy }", .expected(what: .copiedName, found: "'}'")),
     ])
-    func malformed(source: String, expected: String) {
+    func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
     }
 }

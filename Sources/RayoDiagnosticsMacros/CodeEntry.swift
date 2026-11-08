@@ -8,7 +8,6 @@ struct CodeEntry {
     var labels: [String]
     var number: Int
     var message: MessageTemplate
-    var isNotSupported: Bool
     var numberNode: ExprSyntax
 
     /// Reads `caseDecl`'s entry, or reports what keeps it from having one and returns nil.
@@ -26,7 +25,7 @@ struct CodeEntry {
         }
 
         return CodeEntry(name: element.name.text, labels: values.map(\.label), number: number, message: message,
-                         isNotSupported: arguments.isNotSupported, numberNode: arguments.number)
+                         numberNode: arguments.number)
     }
 
     /// The pattern that matches the case and binds its values in order, as `v0`, `v1` and so on.
@@ -36,8 +35,7 @@ struct CodeEntry {
 
     /// The message as a Swift string literal that interpolates the values `bindingPattern` binds.
     var messageLiteral: String {
-        let suffix = isNotSupported ? " isn't supported yet" : ""
-        return "\"\(message.literalContent(valuesLabeled: labels))\(suffix)\""
+        "\"\(message.literalContent(valuesLabeled: labels))\""
     }
 
     // MARK: Steps of reading an entry
@@ -124,15 +122,12 @@ private struct LabeledValue {
 private struct CodeArguments {
     var number: ExprSyntax
     var message: ExprSyntax
-    /// True for `notSupported:`, false for `error:`.
-    var isNotSupported: Bool
 
-    /// Nil when the arguments fit neither `@Code`, which the compiler reports.
+    /// Nil when the arguments don't fit `@Code`, which the compiler reports.
     init?(_ code: AttributeSyntax) {
         guard case .argumentList(let arguments) = code.arguments, arguments.count == 2,
               let number = arguments.first, let message = arguments.last else { return nil }
         self.number = number.expression
         self.message = message.expression
-        isNotSupported = message.label?.text == "notSupported"
     }
 }

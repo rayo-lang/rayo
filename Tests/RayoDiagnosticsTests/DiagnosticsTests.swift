@@ -12,9 +12,6 @@ enum SampleCode: Equatable {
     @Code(3, error: "expected {expected}, found {found}")
     case typeMismatch(expected: String, found: String)
 
-    @Code(40, notSupported: "moving a value out of '{name}'")
-    case moveOutOfLocal(name: String)
-
     @Code(41, error: "'{name}' takes {count} argument, but the call passes {passed}: '{name}' can't take {passed}")
     case arity(name: String, count: Int, passed: Int)
 
@@ -54,17 +51,28 @@ struct DiagnosticsTests {
         #expect(SampleCode.braces(name: "if").message == "expected '{' after 'if', then '}' A and \"\\\" on\nanother line")
     }
 
-    @Test("a code for what isn't supported yet says so")
-    func notSupported() {
-        #expect(SampleCode.moveOutOfLocal(name: "a").message == "moving a value out of 'a' isn't supported yet")
-    }
-
     @Test("each code has its number", arguments: [
         (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.typeMismatch(expected: "", found: ""), 3),
-        (.moveOutOfLocal(name: "a"), 40), (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
+        (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
         (.braces(name: ""), 1000), (.qualified, 1001), (.edges(name: "", café: ""), 1002), (.ellipsis, 1003),
     ])
     func numbers(code: SampleCode, number: Int) {
         #expect(code.number == number)
+    }
+}
+
+struct ErrorCodeTests {
+    @Test("an error code is shown as 'E' and four digits", arguments: [
+        (ErrorCode.notUTF8, "E0001"), (.unmatchedBrace, "E0103"), (.outsideLoop(keyword: "break"), "E0224"),
+    ])
+    func identifiers(code: ErrorCode, identifier: String) {
+        #expect(code.identifier == identifier)
+    }
+
+    @Test("an argument count names one argument, or several", arguments: [
+        (ArgumentCount(0), "0 arguments"), (1, "1 argument"), (2, "2 arguments"),
+    ])
+    func argumentCounts(count: ArgumentCount, text: String) {
+        #expect(count.description == text)
     }
 }

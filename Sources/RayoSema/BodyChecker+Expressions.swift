@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
@@ -40,13 +41,13 @@ extension BodyChecker {
     /// Whether `expr` has `type`, reporting it when it doesn't.
     mutating func expect(_ expr: CheckedExpr, _ type: RayoType) -> Bool {
         if expr.type == type { return true }
-        errors.error("expected \(type), found \(expr.type)", at: expr.range)
+        errors.report(.typeMismatch(expected: "\(type)", found: "\(expr.type)"), at: expr.range)
         return false
     }
 
     private mutating func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
         if name == "_" {
-            errors.error("'_' names no value", at: range)
+            errors.report(.underscoreValue, at: range)
             return nil
         }
         switch lookUp(name) {
@@ -55,10 +56,10 @@ extension BodyChecker {
         case .failed:
             return nil
         case nil where declarations.functionNames.contains(name):
-            errors.error("'\(name)' is a function, not a value", at: range)
+            errors.report(.functionAsValue(name: name), at: range)
             return nil
         case nil:
-            errors.error("'\(name)' isn't declared", at: range)
+            errors.report(.notDeclared(name: name), at: range)
             return nil
         }
     }
@@ -80,11 +81,11 @@ extension BodyChecker {
             result = .bool
         case .equal, .notEqual:
             guard left.type == right.type else {
-                errors.error("'\(spelled)' needs operands of one type, found \(left.type) and \(right.type)", at: range)
+                errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil
             }
             guard left.type != .void else {
-                errors.error("'\(spelled)' can't compare Void values", at: range)
+                errors.report(.voidComparison(op: spelled), at: range)
                 return nil
             }
             result = .bool
@@ -95,14 +96,15 @@ extension BodyChecker {
     private mutating func operands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
                                    are type: RayoType, in range: SourceRange) -> Bool {
         if left.type == type && right.type == type { return true }
-        errors.error("'\(spelled)' needs \(type) operands, found \(left.type) and \(right.type)", at: range)
+        let code = ErrorCode.operandTypes(op: spelled, needs: "\(type)", left: "\(left.type)", right: "\(right.type)")
+        errors.report(code, at: range)
         return false
     }
 
     /// Checks an integer literal, whose `value` is nil when the literal doesn't fit in an `Int`.
     private mutating func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
         guard let value else {
-            errors.error("the literal doesn't fit in an Int", at: range)
+            errors.report(.literalTooLarge, at: range)
             return nil
         }
         return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)

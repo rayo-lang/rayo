@@ -31,7 +31,7 @@ let package = Package(
             .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
             .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
         ]),
-        .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoSource", "RayoSyntax"]),
-        .testTarget(name: "RayoDriverTests", dependencies: ["RayoDriver"]),
+        .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSource", "RayoSyntax"]),
+        .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
     ]
 )

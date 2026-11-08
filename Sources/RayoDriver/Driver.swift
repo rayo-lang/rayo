@@ -10,11 +10,14 @@ public enum Driver {
         public var exitCode: Int32
         public var output: String
         public var errors: String
+        /// The errors found in the program, which `errors` also shows.
+        public var diagnostics: [Diagnostic]
 
-        public init(exitCode: Int32, output: String, errors: String) {
+        public init(exitCode: Int32, output: String, errors: String, diagnostics: [Diagnostic] = []) {
             self.exitCode = exitCode
             self.output = output
             self.errors = errors
+            self.diagnostics = diagnostics
         }
     }
 
@@ -127,7 +130,7 @@ public enum Driver {
     }
 
     private static func failure(_ diagnostics: [Diagnostic], in path: String) -> Result {
-        Result(exitCode: 1, output: "", errors: diagnostics.map { "\(path):\($0)\n" }.joined())
+        Result(exitCode: 1, output: "", errors: diagnostics.map { "\(path):\($0)\n" }.joined(), diagnostics: diagnostics)
     }
 }
 

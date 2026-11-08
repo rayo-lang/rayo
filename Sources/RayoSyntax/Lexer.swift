@@ -35,7 +35,7 @@ public struct Lexer {
             while index < invalid { advance() }
             let start = location
             advance()
-            error("the file isn't valid UTF-8", from: start)
+            report(.notUTF8, from: start)
             return [Token(.eof, SourceRange(location, location))]
         }
         var tokens: [Token] = []
@@ -79,8 +79,8 @@ public struct Lexer {
         index += 1
     }
 
-    private mutating func error(_ message: String, from start: SourceLocation) {
-        diagnostics.append(.error(message, at: SourceRange(start, location)))
+    private mutating func report(_ code: ErrorCode, from start: SourceLocation) {
+        diagnostics.append(Diagnostic(code, at: SourceRange(start, location)))
     }
 
     private mutating func next() -> Token {
@@ -159,7 +159,7 @@ public struct Lexer {
                 advance(); advance()
                 depth -= 1
             } else if peek() == nil {
-                error("unterminated block comment", from: start)
+                report(.unterminatedBlockComment, from: start)
                 return
             } else {
                 advance()
@@ -198,19 +198,19 @@ public struct Lexer {
             digits += 1
             advance()
         }
-        let message: String?
+        let error: ErrorCode?
         if let c = peek(), isIdentifierContinue(c) {
             while let c = peek(), isIdentifierContinue(c) { advance() }
-            message = "invalid digit in integer literal"
+            error = .invalidDigit
         } else if digits == 0 {
-            message = "expected digits after the radix prefix"
+            error = .missingDigits
         } else if overflow {
-            message = "integer literal doesn't fit in 64 bits"
+            error = .integerLiteralTooLarge
         } else {
-            message = nil
+            error = nil
         }
-        if let message {
-            error(message, from: start)
+        if let error {
+            report(error, from: start)
             return Token(.invalid, SourceRange(start, location))
         }
         return Token(.intLiteral(value), SourceRange(start, location))

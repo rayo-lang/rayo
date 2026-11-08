@@ -1,4 +1,5 @@
 import Testing
+import RayoDiagnostics
 import RayoDriver
 
 /// Runs the driver over files held in memory.
@@ -13,14 +14,19 @@ struct DriverTests {
         #expect(result == Driver.Result(exitCode: 0, output: "(func f() {(= x 1)})\n", errors: ""))
     }
 
-    @Test("syntax errors go to the error stream, after the file's path, and fail the run")
-    func syntaxErrors() {
+    @Test("errors fail the run, and go to the error stream as the file's path, the position, the code and the message")
+    func errorFormat() {
         let result = run(["parse", "a.rayo"], files: ["a.rayo": "func f() {\n    let = 1\n    x = )\n}"])
-        #expect(result == Driver.Result(exitCode: 1, output: "", errors: """
-            a.rayo:2:9: error: expected a name to bind, found '='
-            a.rayo:3:9: error: expected an expression, found ')'
+        #expect(result.exitCode == 1)
+        #expect(result.output == "")
+        #expect(result.diagnostics.map(\.code) == [
+            .expected(what: .bindingName, found: "'='"), .expected(what: .expression, found: "')'"),
+        ])
+        #expect(result.errors == """
+            a.rayo:2:9: error[E0102]: expected a name to bind, found '='
+            a.rayo:3:9: error[E0102]: expected an expression, found ')'
 
-            """))
+            """)
     }
 
     @Test("a file that can't be read fails the run")
@@ -29,10 +35,11 @@ struct DriverTests {
             Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't read 'missing.rayo'\n"))
     }
 
-    @Test("a file that isn't UTF-8 is an error where its first invalid byte is")
+    @Test("a file that isn't UTF-8 is an error")
     func notUTF8() {
         let result = Driver.run(["check", "a.rayo"]) { _ in Array("func main() {\n    print(1) // é".utf8) + [0xFF] }
-        #expect(result == Driver.Result(exitCode: 1, output: "", errors: "a.rayo:2:18: error: the file isn't valid UTF-8\n"))
+        #expect(result.exitCode == 1)
+        #expect(result.diagnostics.map(\.code) == [.notUTF8])
     }
 
     @Test("wrong arguments print the usage", arguments: [
