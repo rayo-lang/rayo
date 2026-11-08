@@ -174,7 +174,7 @@ A place property whose declared type is written `T?` is an **optional place prop
 
 ### Places behind a run-time check
 
-**The `value` of a `UniquePointer` or a `WeakPointer` is a place property that the language provides, and each access through it is a dynamic access** ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). The language takes the object's mark as the access begins: a shared mark for a `borrow`, and an exclusive one for a `mutate` ([03](../03-handles-and-objects.md#dynamic-exclusivity)). It releases the mark itself when the access ends, at the last use of every value that depends on the access. No accessor code runs at either end.
+**The `value` of a `UniquePointer` or a `WeakPointer` is a place property that the language provides, and each access through it is a dynamic access** ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). The language takes the object's mark as the access begins: a shared mark for a `borrow`, and an exclusive one for a `mutate` ([03](../03-handles-and-objects.md#dynamic-exclusivity)). It releases the mark itself when the access ends, at the last use of every value that depends on the access, or as rule 6 says when a panic unwinds it. No accessor code runs at either end.
 
 **A type that needs code to run when an access ends hands out a guard instead**: a value whose `deinit` runs that code, as a lock's guard releases the lock ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)). The guard's `value` is then an ordinary place property of the guard.
 
@@ -207,11 +207,11 @@ struct Flags(var bits: UInt32) {
 
 ## Panics during a change
 
-**A panic in the middle of a change leaves what a place property hands out as changed so far, and a value property as it was** ([10](../10-errors-and-safety/panics.md#panics)):
+**A panic that unwinds through a change leaves what a place property hands out as changed so far, and a value property as it was** ([10](../10-errors-and-safety/panics.md#unwinding)). No accessor code runs as the access unwinds:
 
 - **Through a place property**, code changes the storage itself. So every change made before the panic stays, exactly as if the code had written the field directly.
-- **Through a value property**, `set` isn't called. The half-changed copy is destroyed instead, so the property keeps its old value.
-- **Through an object's `value`**, a place property, the changes stay too. The language releases the object's mark as the panic leaves the frame that began the access, as it does when the access ends ([above](#places-behind-a-run-time-check)).
+- **Through a value property**, `set` isn't called. The unwind destroys the half-changed copy, as it destroys the temporary or hidden local that holds it ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)), so the property keeps its old value.
+- **Through an object's `value`**, a place property, the changes stay too. The object's mark is released as for any dynamic access that a panic unwinds ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Through an under-aligned field, a panic follows 04's rule for its temporary instead** ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 

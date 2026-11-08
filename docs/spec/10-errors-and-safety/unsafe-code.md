@@ -142,18 +142,16 @@ If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads
             count += 1                                          // sound: the slot holds a T before it is counted
 ```
 
-**Each `yield` counts as a point that can panic**, since the caller's panic may end the accessor there ([Panics](panics.md#unwinding)). So an accessor leaves every place valid at its `yield`, or restores it in a `defer` block, which runs whether the access ends or unwinds:
+**A property's accessors are calls, each a point that can panic like any other** ([Panics](panics.md#unwinding)). A place property's accessor runs nothing once it has handed out its place, so a panic while the caller uses the place can't stop it halfway. A value property's change is different: a panic between its `get` and its `set` destroys the copy and never calls `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). So a `get` never takes a value out of storage for its `set` to put back:
 
 ```swift
-modify {
-    var t = unsafe (storage + i).move()
-    yield &t                                                 // unsound: if the caller panics, slot i stays empty
-    unsafe { (storage + i).initialize(to: t) }
+var slot: T {
+    get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
+    set { unsafe (storage + i).initialize(to: newValue) }
 }
-modify {
-    var t = unsafe (storage + i).move()
-    defer { unsafe { (storage + i).initialize(to: t) } }     // sound: slot i is filled again either way
-    yield &t
+var slot: T {
+    borrow { unsafe storage[i] }                             // sound: hands out slot i itself, which stays full
+    mutate { unsafe &storage[i] }
 }
 ```
 
