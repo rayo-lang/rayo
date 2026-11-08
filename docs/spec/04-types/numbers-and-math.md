@@ -134,11 +134,13 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 **A `Simd<T, N>` is `N` lanes of one type, which its operators work on lane by lane:**
 
 - **Lane types and counts.** `Simd<T, N>` is builtin, over a number type `T`, or `Bool` for masks. It has any power of two from 1 to 64 lanes, or 3. The limit is 64 lanes since a mask of 64 lanes fits in one `UInt64` ([Masks](#masks)). `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
-- **In generic code.** Generic code may name `Simd<T, N>` for its own `T` and `N`. Its `T` and lane count are then checked where they are known, at each instantiation, as a `static error` is ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). The lane operations need a concrete `T`.
+- **In generic code.** Generic code may name `Simd<T, N>` for its own `T` and `N`. Its `T` and lane count are then checked where they are known, at each instantiation, as a `static error` is ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). Operations that compute with lanes, such as arithmetic, comparisons and reductions, need a concrete `T`. A shuffle or a swizzle only moves lanes, so it works for any `T` ([below](#shuffles-and-swizzles)).
 - **Operators.** A scalar operand broadcasts to every lane, on either side: `v * 2`, `2 * v`. A comparison gives a mask ([below](#masks)). Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
 - **`min` and `max`.** `min(a, b)` and `max(a, b)` of two vectors work lane by lane, and so do `minNumber` and `maxNumber` of two floating-point vectors. Integer lanes compare by value, and floating-point lanes follow the floating-point rules ([above](#floating-point)).
 - **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 - **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
+- **Loads and stores.** `Simd<T, N>(loading: span, at: i)` reads `N` lanes from a `Span<T>`, starting at element `i`, and `v.store(into: &out, at: i)` writes them into a `MutableSpan<T>` there. Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
+- **Bounds.** A load or a store panics when `i` is negative or `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
 **`Simd` operations never become calls at run time, in any build**, since they are builtin. A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
@@ -181,6 +183,7 @@ let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-
 - **Picking lanes.** Lane `i` of the result is lane `indices[i]` of `a` followed by `b`. An index `j` below `N` picks lane `j` of `a`, and an index from `N` to `2N - 1` picks lane `j - N` of `b`, as `8` and up do in `z` above.
 - **The result.** It is a `Simd<T, K>`, so `K` must be a lane count. It may differ from `N`, so a shuffle also takes some of a vector's lanes, or repeats them into a wider vector.
 - **Compile-time indices.** The index list is a `const` argument, which the compiler evaluates as it does a `const` initializer ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). So an index outside the vectors is a compile error, and a shuffle never checks at run time.
+- **Any lane type.** A shuffle only moves lanes and never computes with them, so it works for every lane type, a mask's `Bool` and a generic `T` included.
 
 **Any function that can run at compile time can compute an index list.** In generic code the list is evaluated at each instantiation, since it may depend on that instantiation's `N` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)):
 
@@ -191,8 +194,8 @@ func reversedLanes<let N: Int>() -> [N of Int] {      // ordinary code, run by t
     return lanes
 }
 
-func reversed<let N: Int>(_ v: Simd<UInt8, N>) -> Simd<UInt8, N> {
-    shuffle(v, reversedLanes<N>())                    // the list is computed for each N
+func reversed<T, let N: Int>(_ v: Simd<T, N>) -> Simd<T, N> {
+    shuffle(v, reversedLanes<N>())                    // computed for each N, and fine for any T
 }
 ```
 
@@ -204,19 +207,23 @@ func reversed<let N: Int>(_ v: Simd<UInt8, N>) -> Simd<UInt8, N> {
 
 ### Masks
 
-A comparison of vectors gives a **mask**, a `Simd<Bool, N>` whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan compares 64 bytes at once, and turns the mask into an integer to find the first match:
+A comparison of vectors gives a **mask**, a `Simd<Bool, N>` whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
 
 ```swift
-func firstNewline(in chunks: Span<Simd<UInt8, 64>>) -> Int? {
-    for c in 0..<chunks.count {
-        let hits = (chunks[c] == 10).bits        // a UInt64: bit i is set where byte i is a newline
-        if hits != 0 { return c * 64 + hits.trailingZeroCount }
+func firstNewline(in bytes: Span<UInt8>) -> Int? {
+    var i = 0
+    while i + 64 <= bytes.count {
+        let chunk = Simd<UInt8, 64>(loading: bytes, at: i)    // any offset: no alignment needed
+        let hits = (chunk == 10).bits                         // a UInt64: bit k is set where byte i + k is a newline
+        if hits != 0 { return i + hits.trailingZeroCount }
+        i += 64
+    }
+    for j in i..<bytes.count {                                // the last bytes, fewer than 64, one at a time
+        if bytes[j] == 10 { return j }
     }
     return nil
 }
 ```
-
-`chunks` views bytes as 64-byte vectors, as `bytes.reinterpret(as: Simd<UInt8, 64>.self)` gives them ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)).
 
 **A mask chooses lanes, tests them or becomes bits:**
 
