@@ -103,12 +103,13 @@ Some values that the code doesn't declare still count as locals, and take their 
 
 **What a destruction uses is checked in this order.** Where destroying a value uses what it borrows ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), that use is checked in this order, against what is still alive at that point. So a lock guard declared after its mutex is released before the mutex is destroyed.
 
+**An assignment stores the new value before it destroys the old one.** It moves the old value out to a temporary, moves the new value in, then destroys the temporary. So when the old value's `deinit` panics, the place already holds the new value, and nothing that reaches the place after the panic finds a destroyed value there ([10](../10-errors-and-safety/panics.md#unwinding)).
+
 ### Destruction by unwinding
 
-**A panic that unwinds through a scope ends it as a `throw` would, and destroys what it holds in the same order** ([10](../10-errors-and-safety/panics.md#unwinding)). The scopes end innermost first, and each destroys these, in the order above:
+**A panic that unwinds through a scope ends it as a `throw` would** ([10](../10-errors-and-safety/panics.md#unwinding)). The scopes end innermost first, and each destroys what it holds in this order:
 
-- its live locals, hidden locals and `owned` parameters, with each `defer` block running where it stands;
-- the temporaries that the statement the panic interrupted has made so far;
-- the fields still held by a value that a field was moved out of.
+1. the temporaries that the statement the panic interrupted has made so far, last made first;
+2. its live locals, hidden locals and `owned` parameters, last declared first, each `defer` block running where it stands. A value that a field was moved out of loses only the fields it still holds, last declared first.
 
 **So a value is destroyed once, and only while it holds one, whichever way its scope ends.** A place that holds a value on only some paths is destroyed exactly when it holds one, as at any scope's end ([Places that hold no value](moving-values-out.md#places-that-hold-no-value)). A value still being built, such as the arguments of a primary initializer or the elements of an array literal, is only the temporaries made so far. The unwind destroys those, and no half-built value ([04](../04-types/structs.md#initializers)).

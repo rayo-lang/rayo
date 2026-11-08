@@ -123,7 +123,8 @@ closure-params= identifier (',' identifier)* | param-clause ;
                    passed to a compile-time list's filter or map is instantiated per element unmarked *)
 capture-list  = '[' capture (',' capture)* ','? ']' ;
 capture       = ('move' | 'copy') (identifier | 'self')            (* 'move self' only in a consuming method (05) *)
-              | 'unwindSafe' ('&' | 'move') (identifier | 'self') ;   (* only in catchPanic's closure (10) *)
+              | 'unwindSafe' ('&' | 'move' | 'copy')? (identifier | 'self') ;
+                (* only in a closure literal written as catchPanic's argument (10); 'move self' only in a consuming method (05) *)
 trailing-closure = closure ;
 ```
 

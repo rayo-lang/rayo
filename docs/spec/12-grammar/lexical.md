@@ -55,7 +55,7 @@ associatedtype subscript`.
 - **`borrows`** and **`outlives`** only in a `where` clause, right after an item's subject. A requirement starts with a type, and a dotted path such as `out.items` parses as a type too, so the token after it tells a `borrows-item` from a constraint;
 - **`rebind`** only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and **`to`** only after `rebind` and that identifier;
 - **`discard`** only at the start of a statement when `self` follows it;
-- **`unwindSafe`** only at the start of a capture, when `&` or `move` follows it.
+- **`unwindSafe`** only at the start of a capture, when `&`, `move`, `copy`, an identifier or `self` follows it.
 
 **Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword:
 

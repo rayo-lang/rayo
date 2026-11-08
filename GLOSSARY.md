@@ -376,7 +376,7 @@ A run-time check, such as a bounds check, that keeps safe code sound; it is on i
 _Avoid_: safety check
 
 **Panic**:
-How a bug, such as unwrapping `nil` with `!`, stops the code that hit it: reported through the platform, it unwinds the thread until a recovery point stops it or the thread ends ([10](docs/spec/10-errors-and-safety/panics.md#panics)).
+How a bug, such as unwrapping `nil` with `!`, stops the code that hit it: reported through the platform, it unwinds the thread until a recovery point stops it or the thread ends ([10](docs/spec/10-errors-and-safety/panics.md#panics)). Under the abort strategy, a panic ends the program at once instead, as running out of stack always does ([10](docs/spec/10-errors-and-safety/panics.md#what-ends-the-program)).
 _Avoid_: crash, exception
 
 **Panic strategy**:

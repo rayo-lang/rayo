@@ -10,13 +10,13 @@ precondition(count < capacity, "queue full")     // panics if the caller broke t
 let share = total / players                      // panics if players is 0, in every build
 ```
 
-**A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), then unwinds the thread that panicked.** The thread leaves its frames as a `throw` leaves scopes, destroying what each one owns, until a recovery point stops it or the thread ends ([below](#what-a-panic-does)). So the code that panicked never goes on, and a program can still recover from a bug in one part of its work:
+**A panic is reported through the platform ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), then unwinds the thread that panicked.** The thread leaves its frames as a `throw` leaves scopes, destroying what each one owns, until a recovery point ([below](#catching-a-panic-catchpanic)) stops it or the thread ends. So the code that panicked never goes on, and a program can still recover from a bug in one part of its work:
 
 ```swift
 do {
     try catchPanic { handle(request) }
 } catch let p as Panic {
-    log("request failed: \(p.reason)")       // the server goes on to the next request
+    log("request failed: \(p.message)")      // the server goes on to the next request
 }
 ```
 
@@ -28,7 +28,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 
 **Failures the code asks for:**
 
-- `fatalError("…")`, `precondition(cond, "…")`, `x!` on `nil`, `try!` on an error;
+- `fatalError(…)`, `precondition(cond, …)`, `x!` on `nil`, `try!` on an error;
 - a failing `assert(cond)`, where assertions are checked ([below](#assert-and-precondition));
 - `unreachable()` reached.
 
@@ -81,9 +81,30 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 - calling `rayo_init` a second time, and detaching a thread or calling `rayo_shutdown` on a thread with a Rayo frame on any of its stacks, since those frames may still use what detaching or shutting down destroys ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
 - a wait during startup that would park with no timeout, since no other thread runs Rayo code during startup ([07](../07-concurrency/global-state.md#initialization-at-startup)), and a thread queued during startup that the platform can't start when startup ends ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)).
 
-**Poisoned locks.** `lock` on a `Mutex` or an `RwLock` that an unwind released panics until `clearPoison()` resets it ([below](#unwinding)).
+**Poisoned locks.** An unwind out of a lock's exclusive access, through a guard or a closure, poisons the lock: a `Mutex`'s access does, and an `RwLock`'s `write` access does, but its `read` access doesn't. Then `lock`, `read` and `write` on it panic until `clearPoison()` resets it, so no code takes what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
 **Names.** `Name(s)` panics when another text already has `s`'s hash, since no two texts share a `Name` ([04](../04-types/collections.md#collections-and-strings)).
+
+### Messages
+
+```swift
+func fatalError(_ message: some Formattable) -> Never
+func precondition(_ cond: Bool, _ message: some Formattable)
+func precondition(_ cond: Bool)
+func assert(_ cond: Bool, _ message: some Formattable)
+func assert(_ cond: Bool)
+
+fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted only when it panics
+```
+
+**A panic's message is any `Formattable` value, such as a string or an interpolated literal** ([04](../04-types/collections.md#strings)). Its segments are evaluated with the call's other arguments, and it is formatted only when the call panics. Where assertions aren't checked, `assert` evaluates neither its condition nor its message ([Checks and build modes](checks-and-build-modes.md#unchecked-blocks)).
+
+**A panic without a message of its own has a fixed one:**
+
+- `precondition(cond)` panics with `precondition failed`, and `assert(cond)` with `assertion failed`;
+- each check the language makes panics with a text that names the check, such as `integer overflow`, `division by zero`, `index out of range` or `unwrapped nil`.
+
+**Formatting a message allocates nothing.** When the panic happens, the message is formatted once, straight into the platform's report sink and into the `Panic` a recovery point may catch ([below](#the-panic-value)).
 
 ## What a panic does
 
@@ -95,20 +116,20 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 ### Unwinding
 
-**Unwinding a frame ends it as a `throw` that nothing catches would.** It destroys each live value the frame owns and runs each live `defer` block, in the order a scope's end destroys them ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)). That covers the temporaries of the statement the panic interrupted, and a value that holds only some of its fields, which loses exactly those.
+**Unwinding** is how a panic leaves the frames of its thread. It ends each frame as a `throw` that nothing catches would: it destroys each live value the frame owns and runs each live `defer` block, in the order a scope's end destroys them ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)). That covers the temporaries of the statement the panic interrupted, and a value that holds only some of its fields, which loses exactly those.
 
 **Unwinding ends what each frame began, as a return would:**
 
 - **Borrows and views** end with the frame, as the values that hold them are destroyed.
-- **Dynamic accesses** release their marks ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), and opens of owning values stop counting as uses of their allocators ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
-- **Lock guards** release their locks. A lock released this way is poisoned, so the next `lock` on it panics until `clearPoison()` resets it, and no code takes what the panic left half-changed for a whole value ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
+- **Dynamic accesses** release their marks once the unwind has destroyed the last value that depends on them ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Opens of owning values stop counting as uses of their allocators the same way ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
+- **Accessors** run no code after their `yield`, and no `set` is called. An unwind out of an access through a property or a subscript runs only the accessor frame's `defer` blocks and its locals' `deinit`s, as for any frame. A value that a `get` made for a `set` is destroyed.
 
 **Every point that can panic is an exit for the rules that check exits.** Those points are the operations that [What panics](#what-panics) lists, and every call, since the callee may panic. So an unwind never breaks a rule that a return keeps:
 
 - a `defer` body is checked as if written at each of them too ([Cleanup](typed-errors.md#cleanup));
 - a scoped `mutable` parameter counts as used at each of them, so a callee never leaves its caller a view of what it freed ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
-**A panic in a `deinit` or a `defer` block unwinds as any panic does, unless an unwind is running that block.** The unwind still destroys the rest of the value whose `deinit` panicked, its fields after its `deinit`, and every other live value. A panic that would unwind out of a `deinit` or a `defer` block that an unwind runs ends the program instead ([below](#what-ends-the-program)), since a recovery point catches one panic, and the thread would carry two.
+**A panic in a `deinit` or a `defer` block unwinds as any panic does, except in code an unwind runs** ([below](#what-ends-the-program)). The unwind still destroys the rest of the value whose `deinit` panicked, its fields after its `deinit`, and every other live value. An assignment whose old value's `deinit` panics has already stored its new value ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
 
 ### Uncaught panics
 
@@ -124,13 +145,15 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
     - a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included;
     - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 - **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or throws ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
-- **A panic that would unwind out of a `deinit` or a `defer` block that an unwind runs** ([above](#unwinding)).
+- **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
+- **A panic while a panic's message is formatted**, since the first panic's report isn't made yet ([above](#messages)).
+- **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
 - **A panic that would unwind into C**: out of an `@export` or `@c` function, or a closure literal converted to a `@c` type. C has no way to unwind its frames or run their cleanup ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **Every panic, under the abort strategy** ([below](#panic-strategy)).
 
 **Ending the program runs these steps:**
 
-- **The failure is reported.** A panic was reported when it happened, and any other failure is reported now. Once one failure is ending the program, a thread that fails or panics after it stops without reporting.
+- **The failure is reported.** A panic is reported when it happens, and any other failure as it ends the program. Once one failure is ending the program, a thread that fails or panics after it stops without reporting.
 - **The program ends once the report is made.** No frame unwinds and no shutdown runs, so no `deinit` or `defer` block runs either.
 - **Every other thread stops.** Where the platform can suspend threads, each stops where it stands, lent work included, so the report can show its stack as it was. Elsewhere, each stops the next time it enters Rayo from C or parks, or when the program ends, so a thread deep in a long computation may run briefly after the failure.
 
@@ -149,26 +172,60 @@ let saved = try? catchPanic { autosave(game) }     // nil if autosave panicked
 - **Not at compile time.** A panic during compile-time evaluation is a compile error, and `catchPanic` can't run there ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)).
 - **Not under the abort strategy**, where a panic ends the program before it can reach a recovery point ([below](#panic-strategy)).
 
-**A `Panic` holds the panic's reason and where it happened:**
+### The `Panic` value
 
 ```swift
-struct Panic(let reason: StaticString, let location: SourceLocation): Error
+struct Panic: Error { … }      // copyable and Sendable: up to 256 bytes of its message, inline
 struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
 ```
 
-- **The reason** is the text passed to `fatalError` or `precondition`, each of which takes a `StaticString`. A check the language makes gives a fixed reason that names the check, such as `"index out of range"`. So making a `Panic` never allocates.
-- **The location** is that of the call to `fatalError`, `precondition` or `assert`, or of the operation whose check failed.
-- **It is copyable and `Sendable`**, since all its fields are, so one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+**A `Panic` keeps a copy of its message, since the unwind destroys what the message's segments borrowed:**
+
+- **`p.message`** is a `StringView` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
+- **`p.isCut`** is `true` when the message was cut, which tells a cut message from a whole one. The report always has the whole message.
+- **`p.location`** is where the panic happened: the call to `fatalError`, `precondition` or `assert`, or the operation whose check failed.
+
+**A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+
+### Resuming a panic: `resumePanic`
+
+```swift
+func resumePanic(_ p: Panic) -> Never
+```
+
+**`resumePanic(p)` unwinds the thread with a caught panic, as if it had never been caught.** It doesn't report `p` again, and keeps its message and location, so a later recovery point catches the panic as it first happened. A library that runs work on other threads uses it to carry that work's panic to the thread that waits for it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
 ### What the closure may change
 
-**`catchPanic`'s closure may depend on no place exclusively, so code after the recovery point never sees a value that the panic left half-changed.** A closure depends on a place exclusively when it captures it exclusively ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)), or holds an exclusive view of it, such as a `MutableSpan` ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)):
+**`catchPanic`'s closure may reach nothing that a panic could leave half-changed for the code after the recovery point.** So, unless the capture is marked `unwindSafe` ([below](#marking-a-capture-unwindsafe)), the closure may not:
+
+- depend on a place exclusively, by capturing it exclusively ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)) or by holding an exclusive view of it, such as a `MutableSpan` ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views));
+- capture a value whose type holds, at any depth, an object owner, a weak pointer or a `Slice`, since an object's value and a slice's locked buffer change through a shared path ([03](../03-handles-and-objects.md#dynamic-exclusivity), [06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
+
+**A capture whose type may hold one counts as holding one.** Those are a type parameter, an `any P` and a function value, whose types don't show what they hold.
 
 ```swift
 do {
     try catchPanic { world.step(dt) }                          // error: the closure captures 'world' exclusively
-} catch let p as Panic { log("step failed: \(p.reason)") }
+} catch let p as Panic { log("step failed: \(p.message)") }
 
+let drawn = try? catchPanic { renderer.value?.submit(mesh) }   // error: 'renderer' is a weak pointer to an object
+```
+
+**The rule guards what code sees, not memory safety.** A value that a panic interrupts in safe code is still a valid value of its type, and `unsafe` code keeps it one ([Unsafe code](unsafe-code.md#panics-in-unsafe-code)). So `unwindSafe` needs no `unsafe`.
+
+**Thread-locals, globals and `Synchronized` values are outside the rule.** A closure reaches a thread-local or a global without capturing it ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), so the rule can't see one, and code after the recovery point checks those itself. A closure may capture a `Synchronized` value, since a lock that a panic may have left half-changed is poisoned ([above](#what-panics)), and each atomic operation is whole.
+
+### Marking a capture `unwindSafe`
+
+**`unwindSafe` in the closure's capture list lifts the rule for one capture.** The caller then takes on what the rule checks: that the code after the recovery point copes with whatever the panic left there. It marks a capture in one of these forms:
+
+- `[unwindSafe &world]` captures `world` by exclusive reference, and `[unwindSafe world]` by shared reference, each the whole place, used only as that capture allows ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
+- `[unwindSafe move rows]` and `[unwindSafe copy body]` capture as `[move rows]` and `[copy body]` do.
+
+`unwindSafe` appears only in a closure literal written as `catchPanic`'s argument.
+
+```swift
 do {
     try catchPanic { [unwindSafe &world] in world.step(dt) }   // fine: the caller vouches for 'world'
 } catch let p as Panic {
@@ -176,25 +233,21 @@ do {
 }
 ```
 
-**`unwindSafe` in the closure's capture list lifts the rule for one capture.** `[unwindSafe &world]` captures `world` exclusively, as the body would, and `[unwindSafe move rows]` moves `rows` in, as `[move rows]` does. Either way, the caller takes on what the rule checks: that the code after the recovery point copes with whatever the panic left there. `unwindSafe` appears only in a closure literal written as `catchPanic`'s argument.
-
-**A function value may carry exclusive dependencies its caller lent**, so a function that passes one on to `catchPanic` marks it the same way:
+**A function that passes a function value on to `catchPanic` marks it, and the mark vouches for every caller whose function value passes through.** Taking a non-`mutating` function, as `guarded` does, keeps any caller from passing one that changes the caller's places exclusively. What `guarded` vouches for is what those closures change through a shared path:
 
 ```swift
-func guarded(_ body: consuming () -> Void) {
+func guarded(_ body: () -> Void) {
     do {
-        try catchPanic { [unwindSafe move body] in body() }    // 'body' may change the caller's places
-    } catch let p as Panic { log("guarded work failed: \(p.reason)") }
+        try catchPanic { [unwindSafe copy body] in body() }    // vouches for every caller's 'body'
+    } catch let p as Panic { log("guarded work failed: \(p.message)") }
 }
 ```
 
-**The rule guards what code sees, not memory safety.** A value that a panic interrupts in safe code is still a valid value of its type, and `unsafe` code keeps it one ([Unsafe code](unsafe-code.md#values-views-and-threads)). So `unwindSafe` needs no `unsafe`.
-
-**State that changes through a shared path is outside the rule.** An object's value, a thread-local and a `Synchronized` value change with no exclusive capture ([01](../01-values-and-ownership/bindings.md#changeable-places)), so the closure may still leave one half-changed. A lock among them is poisoned ([above](#unwinding)), and code after the recovery point checks the rest itself.
-
 ## Panic strategy
 
-**The panic strategy says how a panic ends: by unwinding, the default, or by aborting.** A build chooses it with its other settings ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Under the **abort** strategy, every panic is reported and ends the program at once, as the failures above do ([above](#what-ends-the-program)). So `catchPanic` never catches: it calls its closure, and returns or throws what the closure does.
+**The panic strategy says how a panic ends: by unwinding, the default, or by aborting.** A build chooses it with its other settings ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Under the **abort** strategy, every panic is reported, then ends the program at once through the platform's abort, as the failures above do ([above](#what-ends-the-program)). So `catchPanic` never catches: it calls its closure, and returns or throws what the closure does.
+
+**The compile-time rules are the same under both strategies.** The rule on `catchPanic`'s closure applies, and every point that can panic still counts as an exit ([above](#unwinding)). So a library compiles the same whichever strategy the program uses.
 
 ## `assert` and `precondition`
 

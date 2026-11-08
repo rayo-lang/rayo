@@ -110,7 +110,6 @@ The rules say what an allocation is, what each access through a raw pointer must
 - **Places hold valid values.** Whenever Rayo code may next read, lend or destroy a place as `T`, it holds a valid `T`. So a write through a pointer of another type leaves one there. A place that `p.move()` or `p.deinitialize()` emptied is initialized again before its owner uses or destroys it, a panic's unwind included ([below](#panics-in-unsafe-code)). Otherwise the owner would use or destroy a value that has moved out or been destroyed already.
 - **Views reach live, aligned, valid places.** This holds for a span, `Borrow` or `MutableRef` that `unsafe` code makes from a raw pointer, and for a borrowed or `mutable` argument that it passes through one. For as long as such a view or argument lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. Such a mutable view's places, and such a `mutable` argument's, are also writable. A span reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
 - **A move-only value has one owner.** Its bytes stand for one value. After they are copied to a second place, only one of the two is used or destroyed as that type again, as `p.move()` leaves only the destination. That holds wherever the code can panic too, since the unwind destroys the places it finds. Two places standing for it would be two owners of what it holds, two mutable aliases, or a guard that unlocks twice.
-- **A panic leaves valid values behind.** Wherever `unsafe` code can panic, it leaves a valid value in every place that code may reach next ([below](#panics-in-unsafe-code)).
 - **Values that aren't `Sendable` stay on their thread.** Such a value is used, lent and destroyed only on the thread whose code made it, or, for a thread-bound object, on its home thread ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). That holds whatever `unsafe` code or C passes it through, since only on that thread do exclusivity and the dynamic tier check all of its aliases ([07](../07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)). A value that only the raw pointers it holds keep from being `Sendable` may cross, and each access through those pointers follows the rules on raw accesses ([above](#raw-accesses)).
 
 ### Panics in `unsafe` code
@@ -121,15 +120,17 @@ The rules say what an allocation is, what each access through a raw pointer must
 - everything that code after a recovery point can reach ([Panics](panics.md#catching-a-panic-catchpanic));
 - everything that other threads can reach, such as a queue's links or a lock's word, since they go on running.
 
-**So a value that counts its parts counts a part only once it is there.** This `Buffer` destroys its first `count` slots, so a slot it counts must hold a `T` whenever something can panic:
+**So a value that counts its parts counts a part only once it is there.** This `Buffer` destroys its first `count` slots, so a slot it counts must hold a `T` whenever something can panic. Its fields are `unsafe`, so only `unsafe` code can break that:
 
 ```swift
-struct Buffer<T>(unsafe let storage: *T, var count: Int, let capacity: Int) {
-    deinit { unsafe storage.deinitialize(count: count) }    // destroys the first 'count' slots
+struct Buffer<T>(unsafe let storage: *T, unsafe var count: Int, unsafe let capacity: Int) {
+    deinit { unsafe { storage.deinitialize(count: count) } }   // destroys the first 'count' slots
     mutating func push(_ make: () -> T) {
-        precondition(count < capacity, "buffer full")
-        count += 1                                           // unsound: if make() panics, a counted slot holds no T
-        unsafe { (storage + count - 1).initialize(to: make()) }
+        unsafe {
+            precondition(count < capacity, "buffer full")
+            count += 1                                          // unsound: if make() panics, a counted slot holds no T
+            (storage + count - 1).initialize(to: make())
+        }
     }
 }
 ```
@@ -137,9 +138,11 @@ struct Buffer<T>(unsafe let storage: *T, var count: Int, let capacity: Int) {
 If `make()` panics, the unwind destroys the buffer, or code after a recovery point reads it, and either finds a counted slot with no `T` in it. Updating `count` last fixes it:
 
 ```swift
-        unsafe { (storage + count).initialize(to: make()) }
-        count += 1                                           // sound: the slot holds a T before it is counted
+            (storage + count).initialize(to: make())
+            count += 1                                          // sound: the slot holds a T before it is counted
 ```
+
+**Work lent to other threads ends before the borrows it was lent.** A library that lends work to other threads, as a parallel loop does, waits for that work to finish before its lending call ends, whether the call returns or unwinds. Otherwise the other threads would go on using borrows that the unwind ended ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
 ## Aliasing and skipped `deinit`s
 
@@ -176,7 +179,7 @@ let q = unsafe ptr(to: particles[0])              // the shared form: the addres
 - `p.move()` moves the value out and leaves the memory uninitialized.
 - `p.deinitialize()` destroys the value in place, running its `deinit` and its fields'. `p.deinitialize(count: n)` does so for `n` values. When one of their `deinit`s panics, it still destroys the rest before the panic unwinds out of it, as an unwind destroys the rest of a value ([Panics](panics.md#unwinding)).
 
-Plain assignment through `p.pointee` assumes initialized memory and destroys the old value first, as for any place.
+Plain assignment through `p.pointee` assumes initialized memory, and replaces the old value as an assignment to any place does: the new value is stored before the old one is destroyed ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
 
 ## Raw allocations
 

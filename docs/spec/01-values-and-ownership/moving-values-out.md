@@ -74,7 +74,7 @@ extension Bag {
 - `copy place` and `place.clone()` leave it as it was;
 - through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
-So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too. A caller, an alias, a later `deinit` or code after a recovery point that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
+So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or code after a recovery point that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 
 ## Constants
 
@@ -103,7 +103,7 @@ hi = 1
 
 **A place that holds a value on only some paths is maybe-initialized where the paths join.** A **maybe-initialized** place can't be used until it is assigned again, which the compiler proves statically.
 
-**At scope end, a panic's unwind included, and when a new value is assigned, the old value is destroyed exactly when there is one.** A partly moved value is tracked per field.
+**At scope end, a panic's unwind included, and when a new value is assigned, the old value is destroyed exactly when there is one.** A partly moved value is tracked per field. An assignment stores its new value before it destroys the old one ([Destruction](moves-copies-destruction.md#destruction)).
 
 **A closure that captures a place exclusively may give it its value**, when the place holds no value, or maybe holds one, and the closure's body assigns it before any other use on every path.
 

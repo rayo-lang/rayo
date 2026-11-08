@@ -113,8 +113,7 @@ func loadOrDefault(_ path: StringView) throws(IoError) -> Level {
 **These rules say when a `defer` block runs, and what its body may do:**
 
 - **`defer { }` runs on every scope exit.** An error return is one, and so is a panic's unwind ([Panics](panics.md#unwinding)). It runs where the destruction order places it ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
-- **Control never leaves a `defer` block early.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`.
-- **A panic leaves a `defer` block by unwinding, unless an unwind is running the block.** A panic that would leave a `defer` block an unwind runs ends the program instead ([Panics](panics.md#what-ends-the-program)).
+- **Control leaves a `defer` block early only by a panic.** A `return`, a `throw`, a `try` that propagates, and a `break` or `continue` that targets a loop outside the block are compile errors in it. It may call a function that never returns, such as `fatalError`, whose panic unwinds out of the block, except where an unwind runs it ([Panics](panics.md#what-ends-the-program)).
 - **A `defer` body is checked as if written at each point where it may run.** Those are these points in its scope, so it uses only what every one of them allows:
     - every exit, a propagating `try` or `throw` included;
     - every point that can panic ([Panics](panics.md#unwinding));
