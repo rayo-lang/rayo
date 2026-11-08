@@ -18,7 +18,7 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 
 **Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
-1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)).
+1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)).
 3. Each argument that needs context, such as a literal, a closure literal or a `.member`, takes each remaining candidate's parameter type. A candidate it doesn't fit drops out.
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
@@ -51,6 +51,14 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 **A closure's parameter types come from a written parameter clause or the expected type**, never from the body, since inference is local ([11](../11-compilation-model.md#type-checking-is-local)). The grammar gives the syntax of trailing closures, `$0` and `{ x in … }` ([12](../12-grammar/constructs.md#expressions)).
 
+**Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
+
+- a nested function;
+- a member, accessor, initializer, `deinit` or field default of a local type;
+- a member of a local extension.
+
+## Trailing closures
+
 **Trailing closures fill the call's parameters in order, scanning forward from those the parentheses give.** A parameter **takes a closure** when its type is one of these:
 
 - a function type;
@@ -74,12 +82,6 @@ f { start() } { finish() }           // error: a trailing closure after the firs
 func h(_ done: (() -> Void)? = nil) { … }
 h { finish() }                       // the closure converts to the optional's .some
 ```
-
-**Only closure literals capture.** These declarations inside a body name none of the body's locals, parameters or `self`:
-
-- a nested function;
-- a member, accessor, initializer, `deinit` or field default of a local type;
-- a member of a local extension.
 
 ## Capturing places
 

@@ -33,7 +33,7 @@ let shown: DoorState = if open {
 } else { .closed }
 ```
 
-**A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
+**A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#trailing-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
 
 ```swift
 makeHandler { cfg } { event in log(event) }       // error: a trailing closure after the first carries a label
