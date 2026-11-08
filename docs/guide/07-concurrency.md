@@ -242,7 +242,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        while true { draw(rx.waitPop()) }                                    // waits for each snapshot in turn
+        for snapshot in &rx { draw(snapshot) }                               // waits for each snapshot in turn
     }
     return (render, tx)                                                      // the simulation keeps the sender
 }
@@ -250,15 +250,33 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Between items, `waitPop()` **parks** the thread: it sleeps until the next item comes.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The `&` in `&rx` is there because receiving changes the `Receiver`.
 
-**The ends are move-only.** `Sender<T>` and `Receiver<T>` are `Sendable` when `T` is, so each end can move to the thread that uses it.
+**The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 
-**Exclusivity makes the one `Receiver` the single consumer.** Its `pop()` and `waitPop()` are `mutating`, so the compiler checks that one thread at a time consumes, at no run-time cost. The sender's `push(_:)` is `mutating` too, so each `Sender` is one producer at a time.
+```swift
+let (render, var tx) = startRenderer()
+while running {
+    step(&world)
+    _ = tx.send(Shared(world.snapshot()))     // '_ =': if the render thread is gone, the snapshot is dropped
+}
+_ = tx                                        // drops the sender: the render loop ends
+render.join()                                 // waits for the last frame
+```
+
+**The channel holds at most three snapshots, its capacity.** When the simulation runs ahead and three are already waiting, `send` parks it until the render thread takes one.
+
+**`send` returns a `Result`, since the other side may be gone.** Once the `Receiver` is dropped, sending fails, and the error hands the snapshot back rather than losing it. Rayo rejects an unused value, so the simulation, which has no use for a snapshot nobody will draw, drops the result with `_ =`.
+
+**A panic on either side disconnects the channel too.** Unwinding destroys the ends the panicking thread owns, as it destroys everything else. So a render thread that panics makes each later `send` fail, and `render.join()` then carries the panic on in the simulation. If the simulation panics, its sender is destroyed, and the render loop ends instead of waiting for ever.
+
+**The ends are move-only.** `Sender<T>` and `Receiver<T>` are `Sendable` when `T` is, so each end can move to the thread that uses it. `tx.share()` makes another `Sender` of the same channel, for a second producer.
+
+**Exclusivity makes the one `Receiver` the single consumer.** Its `receive()` is `mutating`, so the compiler checks that one thread at a time consumes, at no run-time cost. `send` is `mutating` too, so each `Sender` is one producer at a time.
 
 **std's queues, such as `MpscQueue` and `SpscQueue`, are `Synchronized`**, so a global `let` of one serves any thread.
 
-**`pop()` returns `nil` at once when the queue is empty, and `waitPop()` parks the thread until an item comes.**
+**`pop()` returns `nil` at once when the queue is empty, and `waitPop()` parks the thread until an item comes.** A queue is never disconnected, since every thread only borrows it, so nothing tells it the last producer is done. When a consumer needs to know that, use a channel.
 
 **A queue with a single producer or a single consumer checks that side at run time**, and overlapping calls on it panic.
 
@@ -326,6 +344,8 @@ scripts.step(&game)                                        // resumes pending an
 - [07 Joining a thread](../spec/07-concurrency/thread-work.md#joining-a-thread): `join()`, detaching, and what a thread's panic does.
 - [07 Sendable](../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable): every rule that derives `Sendable`, and where it is required.
 - [07 Atomics and locks](../spec/07-concurrency/synchronization.md#atomics-and-locks): memory orderings, `Mutex` and `RwLock`, queues, channels, `Published`, `Once` and blocking waits.
+- [07 Disconnected channels](../spec/07-concurrency/synchronization.md#disconnected-channels): when a channel is disconnected, and what `receive`, `tryReceive` and `send` do then.
+- [07 Panics in producers and consumers](../spec/07-concurrency/synchronization.md#panics-in-producers-and-consumers): what a panic on either side disconnects, and why each end is owned inside a `ThreadScope`.
 - [07 The `Synchronized` contract](../spec/07-concurrency/synchronization.md#the-synchronized-contract): what a type of your own must uphold to declare it.
 - [07 Global state](../spec/07-concurrency/global-state.md#global-state): thread-locals, startup, thread teardown and shutdown.
 - [07 Task functions](../spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines): awaitables, wakers, and `TaskSet`.
