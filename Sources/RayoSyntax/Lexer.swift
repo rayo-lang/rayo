@@ -106,12 +106,23 @@ public struct Lexer {
         return lexUnexpectedCharacter(from: start)
     }
 
-    /// The character at `start`, all of its UTF-8 bytes, as one token.
+    /// The character at `start`, all of its UTF-8 bytes, as one token. A `"` takes its quoted text with it,
+    /// so that a bracket inside the quotes can't end the block the parser skips to when it reports the `"`.
     private mutating func lexUnexpectedCharacter(from start: SourceLocation) -> Token {
         advance()
         while let c = peek(), c & 0xC0 == 0x80 { advance() }
         let character = String(decoding: bytes[start.offset..<index], as: UTF8.self)
+        if character == "\"" { skipQuotedText() }
         return Token(.unexpected(character), SourceRange(start, location))
+    }
+
+    /// Skips to just past the closing `"` on this line, a `\"` aside, or to the end of the line if there is none.
+    private mutating func skipQuotedText() {
+        while let c = peek(), c != UInt8(ascii: "\""), c != UInt8(ascii: "\n") {
+            advance()
+            if c == UInt8(ascii: "\\"), let d = peek(), d != UInt8(ascii: "\n") { advance() }
+        }
+        if peek() == UInt8(ascii: "\"") { advance() }
     }
 
     private func matches(_ text: String) -> Bool {

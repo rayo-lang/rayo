@@ -106,12 +106,28 @@ struct TokenTests {
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [
-        "#", ".", "[", "?", "$", "`", "\"", "é",
+        "#", ".", "[", "?", "$", "`", "é",
     ])
     func unexpected(character: String) {
         let (lexed, diagnostics) = Lexer.tokenize("a \(character) b")
         #expect(diagnostics.isEmpty)
         #expect(lexed.map(\.kind) == [.identifier("a"), .unexpected(character), .identifier("b"), .eof])
+    }
+
+    @Test("a '\"' is one unexpected token up to its closing '\"' on the line, escaped quotes included",
+          arguments: [
+        ("a \"x} y\" b", "\"x} y\""),
+        ("a \"x\\\"}\" b", "\"x\\\"}\""),
+        ("a \"x}\nb", "\"x}"),
+    ])
+    func quoted(source: String, quoted: String) throws {
+        let (lexed, diagnostics) = Lexer.tokenize(source)
+        #expect(diagnostics.isEmpty)
+        let token = try #require(lexed.dropFirst().first)
+        #expect(token.kind == .unexpected("\""))
+        let text = Array(source.utf8)[token.range.start.offset..<token.range.end.offset]
+        #expect(String(decoding: text, as: UTF8.self) == quoted)
+        #expect(lexed.last(where: { $0.kind != .eof })?.kind == .identifier("b"))
     }
 
     @Test("a column counts characters, not bytes")

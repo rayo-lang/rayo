@@ -158,6 +158,7 @@ struct ErrorTests {
             "2:11: error: unexpected character '\"'",
             "3:6: error: unexpected character '['",
         ])
+        #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == ["2:11: error: unexpected character '\"'"])
     }
 
     @Test("an unclosed block is reported at the end of the file")
