@@ -39,7 +39,7 @@ A subscript counts as a property here, and wherever the spec names the two kinds
 
 A body with no accessor keyword returns a value, as a `get` does.
 
-**What a property reaches decides its kind.** A property whose value lies in storage that `self`, a parameter or static storage reaches can be a place property ([below](#the-place-lies-in-storage)). Where no such place exists, the property is a value property, as for a value worked out on the spot, such as `degrees`.
+**The declaration fixes the kind, and what the property reaches limits the choice.** A property whose value lies in storage that `self` reaches, or that its declaration names, may be declared either kind ([below](#the-place-lies-in-its-sources)). A property with no such place can only be a value property, as for a value worked out on the spot, such as `degrees`.
 
 **A property that must run code after a change is a value property, and that code goes in its `set`.** A place property hands out the place itself, so nothing of its own runs after the caller changes it.
 
@@ -52,7 +52,7 @@ A body with no accessor keyword returns a value, as a `get` does.
 
 ```swift
 struct Pool<T>(…) {
-    subscript(h: Handle<T>) -> T? where return borrows self {   // depends on the pool alone (below)
+    subscript(h: Handle<T>) -> T? {                              // hands out part of the pool, never of 'h' (below)
         borrow { if valid(h) { dense[slots[h.index].denseIndex] } else { nil } }
         mutate { if valid(h) { &dense[slots[h.index].denseIndex] } else { nil } }
     }
@@ -67,22 +67,42 @@ let pos = borrow world.enemies[h]!.pos       // the borrow accessor; '!' panics 
 
 **The access ends at the last use of the place and of every value that depends on it**, as a borrow of a stored field does, and nothing runs then. So `world.enemies[h]?.hp -= 10` changes the element where it lies in the pool. A view of the place can outlive the statement that took it, as a view of a field can ([below](#what-a-place-depends-on)).
 
-### The place lies in storage
+### The place lies in its sources
 
-**The compiler verifies that every place a body hands out lies in storage.** The place must be reached through stored fields, elements and other place properties from one of these:
+**A place property's place lies in its sources, which its declaration names.** A **source** is a place, or what a place borrows, that the handed-out place may be part of. By default the sources are `self` and what it borrows, as `where return borrows self` would name them, or static storage for a `static` property. So a subscript's arguments are only keys, as `h` is for `Pool`. A `where` item with `return` as its subject names the sources instead ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)):
 
-- `self`;
-- another parameter, such as a subscript's argument;
-- static storage ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+- **`where return borrows x`**: the parameter `x`, `self` included, and what `x` borrows;
+- **`where return outlives x`**: only what `x` borrows, such as the elements a span views ([below](#what-a-place-depends-on));
+- **`where return borrows static`**: static storage.
 
-**It is never one of these, since none is storage the caller could go on using:**
+Several items name several sources, and then `self` is a source only when an item names it:
+
+```swift
+extension Node {
+    subscript(graft g: mutable Node) -> Node where return borrows g {   // hands out part of 'g', not of self
+        borrow { g } mutate { &g }
+    }
+}
+```
+
+**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)).
+
+**The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements and other place properties. This is an error, since `other` is no source:
+
+```swift
+extension Inventory {
+    subscript(from other: Inventory) -> Item { borrow { other.items[0] } }   // error: 'other' isn't a source
+}
+```
+
+**The place is never one of these, since none is storage the caller could go on using:**
 
 - a local, a temporary or an `owned` parameter's own storage, each of which ends when the body returns;
 - the result of a value property's `get`, which is such a temporary;
 - an imported bitfield or an under-aligned field, which is reached only through a copy (above);
 - a place reached through a dynamic access the body begins, such as an object's `value`, since that access ends when the body returns ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
-**Only `unsafe` code can hand out a place reached through a raw pointer**, such as an element of a `List`'s buffer or a lock guard's protected value. That code promises that the place lies in storage that what the place depends on owns or views ([below](#what-a-place-depends-on)), and stays there for as long as those dependencies last.
+**Only `unsafe` code can hand out a place reached through a raw pointer**, such as an element of a `List`'s buffer or a lock guard's protected value. That code promises that the place lies in storage its sources own or view, and stays there for as long as the place's dependencies last ([below](#what-a-place-depends-on)).
 
 **From where the body names its place, the place is lent to the caller**: shared from a `borrow`, and exclusively from a `mutate`. So code that runs as the body exits, such as a `defer` block or a local's destruction, follows the law of exclusivity with it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)):
 
@@ -100,16 +120,20 @@ extension Inventory {
 
 ### What a place depends on
 
-**A place property's place depends on what a call's result would**, since its accessor is a call with `self` and the subscript's arguments ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). By default, that is `self` and every other borrowed or `mutable` argument, both the places and their sets, and the sets of scoped `owned` arguments. The place depends on them shared through a `borrow`, and exclusively through a `mutate`. A view taken from the place depends on the same, as a view of a stored field depends on the value that holds it:
+**A place property's place depends on its sources, as a stored field depends on the value that holds it.** It depends on each source place that a `borrows` item names, or `self` by default, and on what each source borrows. A view taken from the place depends on the same:
 
 ```swift
 struct Inventory(var items: List<Item>) {
     subscript(i: Int) -> Item { borrow { items[i] } mutate { &items[i] } }
 }
-func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: the view depends on 'inv'
+func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: the view depends on 'inv', not on '0'
 ```
 
-**A `where` item with `return` as its subject says what the place depends on** ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)). `where return borrows self` makes it depend on `self` alone, as `Pool`'s subscript does, so a handle or a key that the subscript is passed stays free.
+**The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on a `mutable` argument, and on `self` through a `mutate`. It depends shared on every other source. Each source's set keeps its own kinds.
+
+**The place depends on a source place whatever the place's type.** The shallow and sealed exemptions spare a value a call returns, which can't reach a shallow argument's own bytes ([Shallow values](dependency-projection-and-results.md#shallow-values)). A place lies inside its source, so they never apply to it. So an `any Equatable` made from `p.first`, a place of type `Int` inside a local `p`, depends on `p`, and can't be returned from `p`'s function.
+
+**Each source place is the caller's place, never a bit copy**, since the place lies inside it ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
 **On an exclusive view type, a view of the place depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views:
 
@@ -179,7 +203,7 @@ struct Flags(var bits: UInt32) {
 - **Through a value property**, `set` isn't called. The half-changed copy is destroyed instead, so the property keeps its old value.
 - **Through an object's `value`**, a place property, the changes stay too. The language releases the object's mark as the panic leaves the frame that began the access, as it does when the access ends ([above](#places-behind-a-run-time-check)).
 
-**An under-aligned field is the exception: a panic still writes its temporary back**, since the temporary holds the field's only value ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
+**Through an under-aligned field, a panic follows 04's rule for its temporary instead** ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 ```swift
 func drain(_ hp: mutable Int) { hp -= 10; precondition(hp > 0) }
@@ -205,7 +229,7 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 - **A place property meets a place requirement whose accessors it declares**: a `borrow` meets `{ borrow }`, and a `borrow` and a `mutate` meet either requirement.
 - **A stored field meets a place requirement**, subject to [05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)'s rules on `let`, hidden, static, `unsafe` and union-member fields. An under-aligned field or an imported bitfield is the exception, since it has no place to hand out.
 - **A `get` meets `{ get }`, and a `get` and a `set` meet `{ get set }`.**
-- **When the value's type is copyable, a stored field or a place property also meets `{ get }` and `{ get set }`.** Its place is copied for the `get`, and assigned for the `set`, so `{ get set }` needs a `mutate` or a `var` field.
+- **When the value's type is copyable, a stored field or a place property also meets `{ get }` and `{ get set }`.** Its place is copied for the `get`, and assigned for the `set`, so `{ get set }` needs a `mutate` or a `var` field. Generic code then changes a copy, as through any value property, so a panic before the `set` loses the change even though the witness is a place ([above](#panics-during-a-change)).
 - **A value property never meets a place requirement**, since what its `get` returns lies in no storage that generic code could keep a view of.
 - **An optional place property meets a place requirement only when the requirement's own declared type is written as an optional, `U?`**, so that generic code treats it as an optional place property too. It never meets one where an associated type or a type parameter turns out to be an optional, or where the requirement is written `Optional<U>`, which asks for a whole place.
 - **A place property that hands out a tuple of places meets no place requirement.**
@@ -213,11 +237,10 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 
 ## The standard place properties
 
-**The standard library declares its place properties with these clauses:**
+**The standard library's place properties have these sources:**
 
-- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element places are `where return borrows self`.
+- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element places hand out part of `self`, the default.
 - The place properties of `Span`, `StringView` and `Borrow` are `where return outlives self`.
-- `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self` too.
 - The `.value` of a `UniquePointer` or a `WeakPointer` is the language's own, and depends on its access ([above](#places-behind-a-run-time-check)).
 
-**Properties that build a view are value properties**, such as `span`, sub-span ranges and an `SoA` column: each `get` returns a new view, which depends on what the call was given ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). An `SoA` column's view depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+**Properties that build a view are value properties**, such as `span`, sub-span ranges and an `SoA` column: each `get` returns a new view, which depends on what the call was given ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`, so their views depend on what the span views. An `SoA` column's view depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).

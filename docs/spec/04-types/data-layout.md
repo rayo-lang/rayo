@@ -67,20 +67,22 @@ msg.header.kind = .snapshot
 msg.elements[0..<4].copy(from: payload[0..<4]) // MutableSpan<UInt8> over the trailing storage; lengths checked
 ```
 
-It is move-only, and owns its allocation, whose element count is fixed when it is made. It has a C representation when its header and element types both have one ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
+It is move-only, and owns its allocation, whose element count is fixed when it is made. **`Header` must be copyable**, since the header is read and written as a value (below). It has a C representation when its header and element types both have one ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
 
 **The header starts the allocation, and the elements follow it.** The allocation is aligned for both types. The elements follow one `Element` stride apart, from the first multiple of `Element`'s alignment at or after the header's size. The allocation is at least as large as the header's size and as the elements' end, so the whole header lies inside it.
 
-**When the header is a struct or tuple, the elements start instead where C puts a flexible array member of `Element`s after the header's fields**, as long as neither the header nor `Element` is or holds a `Synchronized` value. They replace any such member the header declares, and start:
+**When the header is a struct or tuple, the elements start instead where C puts a flexible array member of `Element`s after the header's fields**, as long as `Element` neither is nor holds a `Synchronized` value. They replace any such member the header declares, and start:
 
 - for a Rayo header, at the first multiple of `Element`'s alignment at or after the end of its last field ([Structs](structs.md#structs));
 - for an imported one, at the offset the target's C ABI gives that member.
 
 **That offset must be a multiple of `Element`'s alignment.** A packed imported header whose member C places lower, as `#pragma pack(1)` can, is a compile error as a `TrailingArray` header, since its elements couldn't be both where C reads them and aligned. So the elements can start inside the header's tail padding, or inside the storage unit of a bitfield that ends an imported header.
 
-**A `Synchronized` value on either side keeps the two from sharing bytes.** It may write any of its bytes through a shared borrow, padding included, while the other side is read with plain loads.
+**A `Synchronized` element keeps the elements from sharing the header's bytes.** It may write any of its bytes through a shared borrow, padding included, while the header is read with plain loads. The header itself holds no `Synchronized` value, since every such value is move-only ([01](../01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)).
 
-**A struct or tuple header is written field by field, so its tail padding, where elements may lie, is never written.** A whole store may write every byte of a value, padding included ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)), and a `mutate` would let any code store the header whole. So `msg.header` is a value property, and `Header` must be copyable: its `get` returns a copy of the header, and its `set` writes a new one back ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). The `set` writes a struct or tuple header field by field, each bitfield through its accessor, and any other header whole. Code that reaches the header through a pointer, C or `unsafe` Rayo, writes it the same way ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)).
+**A struct or tuple header is written field by field, so its tail padding, where elements may lie, is never written.** A whole store may write every byte of a value, padding included ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)), and a `mutate` would let any code store the header whole. So `msg.header` is a value property, which is why `Header` must be copyable: its `get` returns a copy of the header, and its `set` writes a new one back ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). Code that reaches the header through a pointer, C or `unsafe` Rayo, writes it the same way ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)).
+
+**The `set` writes a struct or tuple header field by field, each bitfield through its accessor, and any other header whole.** A scoped header can be assigned but not otherwise changed, since the copy the `get` returns depends on `msg`, which the `set` changes ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
 ## Struct of arrays: `SoA<T>`
 

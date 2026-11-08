@@ -127,7 +127,7 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 **`rebind` moves a name, such as a cursor walking down a tree, to another place** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). These rules keep the name's set covered at each step:
 
-- **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
+- **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A step through a place property also takes on the property's other sources. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
 - **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object panics, since the mark is live ([03](../../spec/03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
 - **No step targets a value property's change**, since each step would nest another change whose `set` waits for the cursor's last use.
 
@@ -135,7 +135,9 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 **A place property hands out a place in storage, and a value property a copy that `set` takes back** ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)). These rules keep a view of either covered, during the access and after it:
 
-- **Every place a place property hands out is verified to lie in storage** that `self`, a parameter or static storage reaches, never in a local, a temporary or behind a dynamic access the body begins ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-storage)). So a view of it depends on what the declaration states, as a view of a stored field does. `unsafe` code that hands out a place through a raw pointer promises the same.
+- **Every place a place property hands out is verified to lie in its sources**, `self` by default or what its `where return` items name, by rule 5 restricted to them, whatever the place's type ([02](../../spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)). It never lies in a local, a temporary or behind a dynamic access the body begins. `unsafe` code that hands out a place through a raw pointer promises the same.
+- **A view of the place depends on each source place and what it borrows**, as a view of a stored field does, with no shallow or sealed exemption, since the place lies inside its source. Each source is the caller's place, never a bit copy, so the place never lies in a copy that dies with the call.
+- **A `mutate`'s place absorbs only into what it depends on exclusively**: `self`, a `mutable` argument and what they hold exclusively. Every change a caller makes there is a change to part of those places, so their sets cover it.
 - **No code of a place property runs after the caller's access**, so nothing of the property's own changes or frees the place while a view of it lives. Code that runs as the body exits treats the place as already lent to the caller.
 - **Every path of a `borrow` or `mutate` body that returns hands out a place, or `nil`**, so the caller always gets one.
 - **An object's `value` keeps its mark until the access ends**, at the last use of every value that depends on it, and the language releases it then (rule 6).

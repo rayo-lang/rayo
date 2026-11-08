@@ -136,7 +136,7 @@ Without the clause, each element would depend exclusively on the iterator, and t
 
 - **`Span`, a span iterator and `List<StringView>` qualify.** So the function below leaves `src` free once it returns, where by default `dst` would keep the borrowed `src` itself borrowed.
 - **An iterator over a `MutableSpan` doesn't**, since it could hand out a view and then replace the data under it.
-- **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` is declared `where return borrows self`.
+- **A read guard doesn't either.** It carries only a shared borrow, but dropping it releases the lock, so a guard's `.value` depends on the guard itself, a place property's default ([02](place-and-value-properties.md#the-place-lies-in-its-sources)).
 
 ```swift
 func copyAll(from src: List<StringView>, into dst: mutable List<StringView>)
@@ -250,7 +250,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **Then `x = &p` writes that view into the place `x` names**, as `d = &crate` does in a loop over `&targets`, and `x` still names the same place.
 
-**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use.
+**A place reached through `x` keeps `x`'s set.** It lies inside the one `x` named, so the original borrow of `tree.root` lasts until `x`'s last use. A step through a place property whose sources go beyond `self` may reach a place in another argument, as `&cur[graft: &spare]` does. So `x`'s set also takes on every other dependency of the new place ([02](place-and-value-properties.md#what-a-place-depends-on)).
 
 **Any other place starts a new borrow.** `x`'s set becomes `p`'s, and the old place is free once nothing else depends on it.
 

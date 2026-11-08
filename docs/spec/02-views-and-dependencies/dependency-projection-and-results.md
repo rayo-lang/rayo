@@ -6,7 +6,7 @@ Dependencies begin where code makes a view of a place. They follow values derive
 
 ## Rule 1: Projection
 
-**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. It depends shared through a `borrow` of a place property, such as `pool[h]` or `list[i]`, and exclusively through a `mutate` ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3, since a `get` returns a value instead of handing out a place ([below](#rule-3-call-results)).
+**A view taken from a place depends on that place**, since the view reaches only that place's storage and what the place owns. A place property's place, such as `pool[h]` or `list[i]`, is part of the places it lies in, so a view of it depends on those, whatever its type ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). A view that a `get` builds, such as `list.span` or `s[a..<b]`, depends on the place by rule 3, since a `get` returns a value instead of handing out a place ([below](#rule-3-call-results)).
 
 **What a view taken from a place depends on follows from what it is taken through:** a shared view, a place that owns its value or an exclusive view, or a value property's change.
 

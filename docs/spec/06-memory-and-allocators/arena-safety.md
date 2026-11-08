@@ -63,7 +63,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 - **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense. Its object is checked at each use instead, and destroyed by a reset ([03](../03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Opening.** An open is any access that reaches storage the value owns:
-  - reading or projecting what it holds, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header;
+  - reading what it holds, or lending a place of it, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header;
   - taking a span of it;
   - iterating it;
   - growing it;

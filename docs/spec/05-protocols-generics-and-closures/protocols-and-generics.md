@@ -210,10 +210,10 @@ func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is receiv
 
 **`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning to `box.value`, or through any `mutable any P`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
 
-**`box.downcast(to: T.self)` hands out the value as an optional place of type `T`**, as an optional place property does, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. So a test that fails moves nothing:
+**`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. So a test that fails moves nothing:
 
 ```swift
-if var s = &box.downcast(to: Slider.self) { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+if var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
 ```
 
 **The unscoped existentials are types of their own, which binding a type parameter never makes.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:

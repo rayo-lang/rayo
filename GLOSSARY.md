@@ -109,6 +109,9 @@ A concrete type that holds, at any depth, no function value, closure, `any P`, `
 **Shallow type**:
 A copyable type that holds no inline array at any depth ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 
+**Source**:
+A place, or what a place borrows, that a place property's place may lie in: `self` by default, or what its `where return` items name ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)).
+
 **Static storage**:
 Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 

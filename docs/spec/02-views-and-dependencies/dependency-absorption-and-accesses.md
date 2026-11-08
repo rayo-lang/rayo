@@ -73,7 +73,7 @@ put(&out)                               // 'out' now depends on 'src'
 
 **The closure itself absorbs only what its `keep` arguments carry**, never the argument places ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). A `mutating` closure absorbs what its `keep` arguments carry into itself, and so into the places it depends on exclusively. Its other parameters are call-scoped, lent only for the call, so nothing it was lent reaches its captures. So a closure lent data for one call, such as a lock's, can't keep a view of it.
 
-**An access through a place property is a call to its accessor**, with `self` and the subscript's arguments, and its place depends on them as a result would ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). No accessor code runs after the caller's access. So what the caller stores into a `mutate`'s place is a change to part of each place that place depends on exclusively, and each of those takes it on (above).
+**An access through a place property is a call to its accessor**, with `self` and the subscript's arguments, and its place depends on its sources ([Place and value properties](place-and-value-properties.md#what-a-place-depends-on)). No accessor code runs after the caller's access. So what the caller stores into a `mutate`'s place is a change to part of each place that the place depends on exclusively: `self` or a `mutable` argument, and what they hold exclusively. Each of those takes it on (above), and a borrowed argument, such as a key, takes on nothing.
 
 ## Rule 5: The callee side
 
