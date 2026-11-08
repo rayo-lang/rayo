@@ -5,7 +5,7 @@ description: Use before implementing a feature, fix, or refactor to place the ch
 
 # Code Design
 
-Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each function at one zoom level.
+Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each function tidy.
 
 Apply the first three gates before editing. Apply the fourth while coding. Apply the last two after the behavior works. `code-comments` governs documentation and naming.
 
@@ -53,20 +53,28 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 **Done when:** you have named the closest existing concept and decided reuse or separation from its reasons to change.
 
-## 4. One zoom level
+## 4. Tidy functions
 
-A function either orchestrates named steps or performs one step. It does not switch between those altitudes.
+A function is **tidy** when a reader sees what it does at a glance. Its body is a few blocks, separated by blank lines, and each block is one named step. It either orchestrates named steps or performs one step; it stays at one altitude.
 
 Extract a function or value type when a body reveals a second level through:
 
 - numbered or section-heading comments;
 - setup followed by dispatch or detailed mechanics;
-- parallel locals assigned through the same branches; or
-- a tuple immediately unpacked and recombined by the caller.
+- parallel locals assigned through the same branches;
+- a tuple immediately unpacked and recombined by the caller; or
+- bookkeeping that tells the caller whether a step failed, such as a count taken before the step and compared after it. Have the step return nil instead.
 
-Length is not the test. A long mechanical leaf may be coherent; a short function that both coordinates and performs work is not.
+Keep each function's reading direct:
 
-**Done when:** a reader can follow each changed function without changing altitude inside it.
+- **Name covers the body.** A function does what its name says and nothing more; a second job moves to a function named for it.
+- **Steps take what the caller holds.** Pass a value the caller already has, rather than having the step work it out again.
+- **Results are ready to use.** A helper returns what its caller needs, so the caller does no index or offset arithmetic on it.
+- **One check per line.** A condition reads at a glance; a guard of several unrelated checks puts each on its own line or splits into steps.
+
+Length is not the test. A long mechanical leaf may be tidy; a short function that both coordinates and performs work is not.
+
+**Done when:** a reader who sees only a changed function's body can name what each block does in one pass, without opening a helper or working out an index.
 
 ## 5. Repetition created by the change
 
@@ -88,4 +96,4 @@ Trace every changed line back to the root problem. Remove surface area the chang
 
 Remove only excess created by this change. Adjacent cleanup is separate work.
 
-**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the clarity of one zoom level.
+**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the tidiness of a function.
