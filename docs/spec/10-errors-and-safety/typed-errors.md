@@ -126,7 +126,7 @@ func loadBossLevel(_ path: StringView) -> Level!LoadError {
 
 **`try` applies to the whole postfix chain after it**, as every prefix operator does ([12](../12-grammar/constructs.md#expressions)). So `try f().x` names the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x`.
 
-**When `try r` is expected to be a `T`, `r` is expected to be a `Result` whose success type is `T`**, with its failure type left open. So in `try deserialize(&r) as Mesh`, the `as` binds `deserialize`'s result type to `Mesh` ([09](../09-compile-time/reflection.md#constructing-values-reflectively)).
+**When `try r` is expected to be a `T`, `r` is expected to be a `Result` whose success type is `T`**, with its failure type left open. So in `try deserialize(&r) as Mesh`, the `as` binds `deserialize`'s `T` to `Mesh` ([09](../09-compile-time/reflection.md#constructing-values-reflectively)).
 
 **A `try` whose operand's failure type isn't `Never` stands in a function or closure whose result is a `Result`, or in a `do` block.** Anywhere else it is a compile error, since the error would have nowhere to go.
 
