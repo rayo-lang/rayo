@@ -159,6 +159,9 @@ _Avoid_: weak reference, weak link (a `WeakShared`)
 **Layout order**:
 The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
 
+**Mask**:
+A `Simd<Bool, N>` that a comparison of vectors gives, one lane per compared lane, which `select`, `any`, `all` and `bits` use ([04](docs/spec/04-types/numbers-and-math.md#masks)).
+
 **Narrowing**:
 Treating an optional place as its payload's type after a check that it isn't `nil`, for as long as nothing can make it `nil` ([04](docs/spec/04-types/enums.md#narrowing)).
 _Avoid_: smart cast, flow typing
@@ -177,8 +180,19 @@ _Avoid_: trivial type
 A struct's header, which lists its stored fields once and is also its initializer ([04](docs/spec/04-types/structs.md#structs)).
 _Avoid_: memberwise initializer
 
+**Reduction**:
+An operation that combines a vector's lanes into one value, such as `sum()` or a mask's `any`, in an order fixed on every target ([04](docs/spec/04-types/numbers-and-math.md#reductions)).
+_Avoid_: horizontal operation
+
 **Row**:
 A view of one index of an `SoA<T>` across every column, with one place property per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
+
+**Shuffle**:
+An operation that builds a vector from lanes of one or two vectors, picked by a list of lane indices known at compile time, as `shuffle(v, [3, 2, 1, 0])` does ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
+_Avoid_: permute
+
+**Swizzle**:
+A vector property whose name lists up to four of the lanes `x`, `y`, `z` and `w`, as `v.zyx` does: shorthand for a shuffle of one vector ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
 **Unconditional extension**:
 An extension that gives none of its type's generic arguments and has no `where` clause ([04](docs/spec/04-types/structs.md#initializers)).
