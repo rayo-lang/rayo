@@ -21,12 +21,14 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 
 | Type | Size | Notes |
 | --- | --- | --- |
-| `Int`, `UInt` | 64-bit | `Int` is the default integer type |
+| `Int`, `UInt` | 64-bit, on every target | `Int` is the default integer type |
 | `Int8` … `Int64`, `UInt8` … `UInt64` | as named | |
 | `Float` | 32-bit | |
 | `Double` | 64-bit | The default floating-point type |
 | `Half` | 16-bit | |
 | `Bool` | 1 byte | |
+
+**`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size and count fits in an `Int`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
 **A number literal takes its type from its context**, whether it is written in decimal, hexadecimal, octal or binary, or with an exponent: `1_000`, `0xFF`, `0o17`, `0b1010`, `1e-3` ([Literals](collections.md#literals)).
 

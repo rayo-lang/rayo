@@ -170,7 +170,7 @@ func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int>) {
 }
 ```
 
-**`Atomic<T>` holds a copyable value of 1, 2, 4 or 8 bytes**, such as an integer, a `Bool`, a float or a handle ([07](../spec/07-concurrency/synchronization.md#atomics-and-locks)). Each operation is lock-free: none blocks or waits for another thread.
+**`Atomic<T>` holds a copyable value of 1, 2, 4 or 8 bytes**, such as an integer, a `Bool`, a float or a handle ([07](../spec/07-concurrency/synchronization.md#atomics-and-locks)). Each operation is lock-free: none blocks or waits for another thread. So an 8-byte one, such as `spawned`, an `Atomic<Int>`, builds only for a target with lock-free 64-bit atomics. Every 64-bit target has them, and some 32-bit ones don't.
 
 **The value must be padding-free: its layout has no padding bytes**, since a compare-and-swap compares every byte, padding included.
 

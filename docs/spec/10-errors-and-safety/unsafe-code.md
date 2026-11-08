@@ -51,10 +51,10 @@ So a call the language makes on the code's behalf is allowed only where the call
 
 ## Raw pointers
 
-**`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)).
+**`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types.
-- **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe. Converting an integer to a pointer is `unsafe`.
+- **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe, and zero-extends a 32-bit address. Converting an integer to a pointer is `unsafe`. It checks that the value fits the pointer width, as an unlabeled integer conversion checks that its value fits ([04](../04-types/numbers-and-math.md#conversions)).
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 
@@ -217,7 +217,7 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
 
 **These operations serve hardware access and code that interrupts a thread:**
 
-- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed.
+- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed. An 8-byte one is a compile error where `target.has64BitAtomics` is `false` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)), since only a target with lock-free 64-bit atomics can access 8 bytes at once.
 - `fence(_:)`, given `.acquire`, `.release`, `.acqRel` or `.seqCst`, is a memory fence of that ordering ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 - `compilerFence(_:)` orders the thread's accesses only against code interrupting that same thread, such as a signal handler.
 

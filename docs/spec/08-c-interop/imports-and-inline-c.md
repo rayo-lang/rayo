@@ -94,7 +94,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | C | Rayo |
 | --- | --- |
 | `int8_t` … `int64_t`, `uint8_t` … `uint64_t` | `Int8` … `Int64`, `UInt8` … `UInt64` |
-| `ptrdiff_t`, `intptr_t`, `size_t`, `uintptr_t` | `Int`, `Int`, `UInt`, `UInt` |
+| `size_t`, `ptrdiff_t`, `intptr_t`, `uintptr_t` | `CSize`, `CPtrDiff`, `CIntPtr`, `CUIntPtr` (below) |
 | `float`, `double`, `bool` | `Float`, `Double`, `Bool` |
 | `void` as a function's result | `Void` |
 | `_Float16`, where the target's C compiler has it | `Half` |
@@ -127,6 +127,17 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 **Several rows of the table have rules of their own:**
 
 - **C's standard integer types.** `CInt`, `CLong`, `CChar` and the like, such as `CUInt` for `unsigned` and `CShort` for `short`, are type aliases. Each is the `IntN` or `UIntN` with its C type's size and signedness on the target. So `CChar` is `Int8` or `UInt8` as the target's `char` is signed or not.
+- **C's size types.** `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` are type aliases in the same way. Each is the `IntN` or `UIntN` of the target's pointer width ([11](../11-compilation-model.md#what-a-target-must-provide)), unsigned for `size_t` and `uintptr_t`. So `CSize` is `UInt32` on a 32-bit target and `UInt64` on a 64-bit one. They never alias `Int` or `UInt`, which are 64 bits on every target ([04](../04-types/numbers-and-math.md#numbers)).
+
+  Each converts to and from `Int` and `UInt` as the integer type it aliases does ([04](../04-types/numbers-and-math.md#conversions)). So the conversion is implicit only where it widens, as from a 32-bit `CSize` to `Int`. Code built for both widths writes the explicit form, which is valid on each:
+
+    ```swift
+    // C: void platform_upload(const float* data, size_t count);
+    //    size_t platform_queued(void);
+    unsafe { platform_upload(samples.baseAddress, CSize(samples.count)) }   // checks that the count fits a size_t
+    let n: Int = platform_queued()                                          // error on a 64-bit target: a UInt64 never converts implicitly to Int
+    let n = Int(platform_queued())                                          // fine on every target
+    ```
 - **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. Its `unsafe` static function `trailing(at:count:)`, called with a `p: *S` and a count `n`, gives a `MutableSpan<T>` at the member's offset from `p`, without lending the struct:
 
     ```swift

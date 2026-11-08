@@ -10,6 +10,19 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`Atomic<T>` holds a copyable, padding-free value of 1, 2, 4 or 8 bytes**, such as an integer, `Bool`, float, pointer or `Handle<T>`. It must be padding-free since a compare-and-swap compares every byte ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). Each operation takes an explicit ordering, as in `counter.add(1, .relaxed)`, and is lock-free: none blocks or waits for another thread.
 
+**An 8-byte `Atomic<T>` exists only on a target with lock-free 64-bit atomics**, where `target.has64BitAtomics` is `true` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). Elsewhere it is a compile error, since no lock-free operation on 8 bytes can be built there, and an atomic never takes a lock. So is an `AtomicArray<T>` of 8-byte elements. Every target with 64-bit pointers has these atomics ([11](../11-compilation-model.md#what-a-target-must-provide)), so the error comes only on some 32-bit targets:
+
+```swift
+let spawned = Atomic<Int>(0)          // error without 64-bit atomics: an Int is 8 bytes on every target
+let spawned = Atomic<UInt32>(0)       // 4 bytes: fine on every target
+
+static if target.has64BitAtomics {
+    typealias SpawnCount = Atomic<Int>
+} else {
+    typealias SpawnCount = Atomic<UInt32>
+}
+```
+
 **Rayo uses the C++20 memory model.** The orderings `.relaxed`, `.acquire`, `.release`, `.acqRel` and `.seqCst` mean what they mean there. So does a data race, which safe code can't write ([Why safe code can't race](race-freedom-and-sendable.md#why-safe-code-cant-race)).
 
 **An ordering is a `const` argument, and one the operation doesn't accept is a compile error:**
@@ -44,7 +57,7 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **Such a value may find no entry for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain 32-bit word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
 
 **Interning inserts the entry into the interner's table after the word's store**, then ends with a release fence before it hands the `Name` out. When the text is already present, the insert fails and returns the existing entry, so a text never gets two `Name`s. The thread then returns that entry, as a lookup that finds it does, and never hands out its own.
 
@@ -58,6 +71,27 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 **The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
 
 **A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
+
+### Targets without 64-bit atomics
+
+**The runtime's own atomic steps work on every target, including one without lock-free 64-bit atomics.** There it keeps each step that would act on a 64-bit value with 32-bit atomics, or with a lock where the step is rare. Every outcome the spec gives stays the same: generations stay unique in the run, no check reads a torn value, and `upgrade()` still never waits ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). The steps are these:
+
+- **Issuing generations.** Each object and each `Shared` value gets a generation that no other of its kind in the run gets ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). Each thread takes a block of generations at a time, with a 32-bit atomic add to a run-wide count of blocks, then issues them one by one with no atomic step. The blocks never overlap, so the generations stay unique. The count never wraps: once it runs out, no generation is left, and a creation panics ([10](../10-errors-and-safety/panics.md#what-panics)).
+- **Checking a slot.** Each object and each `Shared` value has a slot, which holds its generation, and an object's home thread too. A 32-bit word in the slot says whether it is live, and carries a tag that changes at each reuse of the slot and never repeats. A slot whose tag would wrap is abandoned, as a `Pool` slot is ([03](../03-handles-and-objects.md#pools-and-handles)).
+
+  The runtime writes a slot's generation only while its word marks it free. So a check loads the word, reads the generation in two halves, and loads the word again. It accepts the slot only when both loads give the same live word. So it never matches a torn generation, and never waits.
+- **Adding and taking owners.** A `Shared` slot's word also holds the value's count, and whether C holds a leaked owner ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So `upgrade()` adds an owner, and `adopt` takes the leaked one, with one 32-bit compare-and-swap of that word, which stands in for the check's second load. The swap fails when the slot was reused meanwhile, since the tag differs then. So neither reaches a later value, and neither waits.
+- **Opening a value.** An open compares the value's allocator word with the registry's entry for its allocator, which a registration, a reset or an unregistration rewrites ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Writes to one entry never overlap, since a reset or an unregistration panics while another that reaches the same memory runs.
+
+  The entry keeps its 64-bit fields in two copies, and a 32-bit word that names the current copy and changes at each write. A writer fills the other copy, then stores the word. A reader loads the word, reads the copy it names, and loads the word again, retrying when it changed. So an open never sees a torn entry, and retries only after a write has finished, never waiting on one in progress. The implementation's limits on registrations and resets keep the word from repeating, so a reader never takes a later copy for the one it began with ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
+- **Issuing stamps, allocator words and thread identities.** Each must come later than, or differ from, every one issued before it in the run, so the runtime issues each under a lock, held only while it takes the next number. That happens only at a registration, a reset, or a thread's start or attachment, never in an open, a check or an `Atomic` operation.
+- **Numbering panics.** The runtime reports panics one at a time ([10](../10-errors-and-safety/panics.md#what-a-panic-does)), so it gives each its 64-bit `sequence` inside that report, with no atomic step.
+
+**Other atomic state needs no 64-bit step on any target:**
+
+- **Counts.** The counts the runtime keeps, such as a `Shared` value's or a pin's, may be 32 bits or narrower, since how far each goes is the implementation's choice ([11](../11-compilation-model.md#what-the-language-leaves-open)).
+- **The interner's word.** It is 32 bits on every target ([above](#atomics-and-locks)).
+- **Handles.** A handle's generation is 32 bits, and only a pool's `mutating` methods change it ([03](../03-handles-and-objects.md#pools-and-handles)).
 
 ### Locks: `Mutex` and `RwLock`
 

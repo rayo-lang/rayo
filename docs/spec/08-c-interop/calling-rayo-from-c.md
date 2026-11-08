@@ -36,13 +36,14 @@ A C or C++ program uses a library written in Rayo:
 
 **A type's C representation is the C type its values cross to C as.** It has the Rayo type's size and alignment, and these rules give it:
 
-- **Imported types.** Each Rayo type that a C type imports as ([What imports as what](imports-and-inline-c.md#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type. When several import as it, it crosses as the first one the import table lists that the target has: `Int` as `ptrdiff_t`, `UInt` as `size_t` and `*T?` as `T*`.
+- **Imported types.** Each Rayo type that a C type imports as ([What imports as what](imports-and-inline-c.md#what-imports-as-what)), such as `Int32`, `Bool`, a raw pointer, `Simd<Float, 4>` or an imported `@c union`, crosses as that C type. When several import as it, it crosses as the first one the import table lists that the target has, so `*T?` crosses as `T*`.
 - **C aliases.** A type written with one of the C aliases, such as `CChar` or `CLong`, crosses as the C type it stands for, so `*CChar` is a `char*` in a generated header.
 - **The table below.** The types in it cross as it gives, provided every type they are built from, such as a struct's fields or a `List<T>`'s `T`, has a C representation too. The `T` of a `Handle` or of a weak pointer to a concrete type needn't have one, since only the bits cross.
 - **No size 0.** Since a C representation has its type's size and C has no type of size 0, a struct with no stored fields or a `[0 of T]` has none.
 
 | Rayo | C representation |
 | --- | --- |
+| `Int`, `UInt` | `int64_t`, `uint64_t`, on every target, since both are 64 bits on each ([04](../04-types/numbers-and-math.md#numbers)) |
 | `Span<T>` | `struct { const T* ptr; int64_t count; }` |
 | `StringView` | `struct { const char* ptr; int64_t count; }` |
 | `MutableSpan<T>` | `struct { T* ptr; int64_t count; }` |

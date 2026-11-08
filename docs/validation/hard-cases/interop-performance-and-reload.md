@@ -78,6 +78,16 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 - **Must accept** calling each, within C's obligations, by declaring its need where the function or the pointer type is declared.
 
+### E8 · One library on 32-bit and 64-bit targets
+
+**A library ships for a 64-bit console, a 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `Int`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
+
+- **Must accept** one source for all three targets, with `unsafe` only around the C calls.
+- **Must hold:** every integer result is the same on each target, including where `Int` arithmetic overflows.
+- **Must accept** passing an `Int` count to a `size_t` parameter on each target. State what happens when the count doesn't fit.
+- **Must accept** a 64-bit atomic counter where the target has 64-bit atomics, and a narrower one, chosen at compile time, where it doesn't. State what the plain `Atomic<Int>` gives on the microcontroller.
+- **Must hold:** the bits of handles, weak pointers and weak links are 8 bytes on each target. On the microcontroller, `WeakShared(bits:)`, `upgrade()` and opens give the outcomes they give on the console.
+
 ---
 
 ## F. Performance

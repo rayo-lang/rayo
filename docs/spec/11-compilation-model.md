@@ -157,14 +157,16 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ## What a target must provide
 
-**Everything the language defines can be implemented in portable C.** So a platform whose only toolchain is its vendor's C compiler can run Rayo when that compiler and its C ABI meet the requirements below. Most of them make C's types and arithmetic match Rayo's own.
+**Everything the language defines can be implemented in portable C.** So Rayo can run on any platform that has a C compiler meeting the requirements below. That includes a platform whose only toolchain is its vendor's C compiler, such as a console or an embedded processor. It also includes small and sandboxed targets, such as a 32-bit microcontroller or WebAssembly. Most of the requirements make C's types and arithmetic match Rayo's own.
+
+**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)).
 
 **A target's C ABI:**
 
 - represents integers in two's complement, and `float` and `double` as IEEE 754 binary32 and binary64, as Rayo's integers and its `Float` and `Double` are ([04](04-types/numbers-and-math.md#numbers));
 - has an 8-bit `char`, the exact-width integer types, and a one-byte `bool` holding 0 or 1, which import as Rayo's sized integers and `Bool` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
-- has 64-bit data and function pointers, whose null is all zero bits;
-- has 64-bit `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t`, which import as Rayo's 64-bit `Int` and `UInt` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- has data and function pointers of its pointer width, whose null is all zero bits;
+- has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
 **Its C compiler:**
@@ -172,7 +174,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - evaluates each `float` and `double` operation in its own type and rounds it once (`FLT_EVAL_METHOD` 0, no contraction), as Rayo evaluates each floating-point operation ([04](04-types/numbers-and-math.md#floating-point));
 - keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
 - provides thread-local storage;
-- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
+- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have;
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
 - doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
 - keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
@@ -187,7 +189,9 @@ ISO C guarantees neither of the last two, so the target's compiler must.
 
 Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`.
 
-**"Synchronized" covers the writes that happen before a release, not the release store itself, once a thread synchronizes with it.** A lock's acquisition of any design does, since it reads a release sequence headed by the unlock, perhaps at a later read-modify-write. Program order alone isn't enough: a write followed on its own thread by an acquire read isn't ordered before that thread's later store. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores. ARMv8 gives this through other-multi-copy atomicity, and Power through `lwsync` cumulativity under the standard C++ mapping, as do stronger processors.
+**"Synchronized" covers the writes that happen before a release, not the release store itself, once a thread synchronizes with it.** A lock's acquisition of any design does, since it reads a release sequence headed by the unlock, perhaps at a later read-modify-write. Program order alone isn't enough: a write followed on its own thread by an acquire read isn't ordered before that thread's later store. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores.
+
+**Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 

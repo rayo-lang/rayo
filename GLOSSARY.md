@@ -451,5 +451,9 @@ What a panic does to its thread's frames, innermost first: it ends each as a `th
 
 ### Compilation
 
+**Pointer width**:
+The size of a target's pointers and of C's size types, 32 or 64 bits, which `Int` and `UInt` don't follow ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide)).
+_Avoid_: word size, bitness
+
 **Prelude**:
 The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude)).

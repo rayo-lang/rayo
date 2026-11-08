@@ -155,6 +155,8 @@ No `import` goes inside a `static for`, at any depth.
 **`target` is a `const` the prelude declares, which describes the build** ([11](../11-compilation-model.md#the-prelude)). It exposes:
 
 - `platform`, `arch` and `endian`;
+- `pointerBitWidth`, the target's pointer width, an `Int` of 32 or 64 ([11](../11-compilation-model.md#what-a-target-must-provide));
+- `has64BitAtomics`, a `Bool` that says whether the target has lock-free 8-byte atomics, without which an 8-byte `Atomic` is a compile error ([07](../07-concurrency/synchronization.md#atomics-and-locks));
 - `mode`, the build mode: `.debug` or `.release` ([10](../10-errors-and-safety/checks-and-build-modes.md#build-modes));
 - `checks`: the set of diagnostic checks that are on where it is read, as `@checks` names them ([10](../10-errors-and-safety/checks-and-build-modes.md#check-levels));
 - `cStackReserve`: the stack, in bytes, that a call into C checks is left, unless the C function called declares its own need with `stack(n)` ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs));

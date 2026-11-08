@@ -25,7 +25,7 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 }
 ```
 
-**`Handle` is 8-aligned, so C holds it as a `uint64_t`** ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has: a handle's generation is never 0 ([04](04-types/enums.md#optionals)).
+**`Handle` is 8-aligned, so C holds it as a `uint64_t`** ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). A handle holds an index and a generation, never an address, so it is 8 bytes on every target, whatever its pointer width ([11](11-compilation-model.md#what-a-target-must-provide)). `Handle<T>?` is 8 bytes too, since its `nil` is all zero bits, which no handle has: a handle's generation is never 0 ([04](04-types/enums.md#optionals)).
 
 **Other modules build a handle only through `init?(bits:)`, since its primary initializer is private.** So `Handle` isn't `Pod` ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)): a type that guards an invariant, here a generation that is never 0, must not be forged from bytes.
 
@@ -63,7 +63,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 - **The object is destroyed only on its home thread.** A reset or an unregistration on another thread panics instead ([below](#objects-in-arenas-and-other-allocators)).
 - **A home thread's identity is never given to another thread**, not even to one that C starts after the home thread exits without calling `rayo_thread_detach`. So the home thread's objects are then reached from no thread, and leak: `WeakPointer(bits:)` and `adopt` read `nil` for them ([07](07-concurrency/global-state.md#thread-teardown)).
 
-**Owners and weak pointers are 8 bytes and 8-aligned.** Their `nil` is all zero bits, so `UniquePointer<T>?` and `WeakPointer<T>?` are 8 bytes too, and a weak pointer's bits fit a C `uint64_t` ([below](#weak-pointers-as-bits-and-handing-objects-to-c)).
+**Owners and weak pointers are 8 bytes and 8-aligned, on every target.** Their size doesn't follow the target's pointer width ([11](11-compilation-model.md#what-a-target-must-provide)), since a weak pointer names its object by a generation, not by an address alone ([below](#destroying-an-object)). Their `nil` is all zero bits, so `UniquePointer<T>?` and `WeakPointer<T>?` are 8 bytes too, and a weak pointer's bits fit a C `uint64_t` ([below](#weak-pointers-as-bits-and-handing-objects-to-c)).
 
 ### Dynamic exclusivity
 
