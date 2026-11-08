@@ -13,6 +13,14 @@ private func lexErrors(_ source: String) -> [ErrorCode] {
     Lexer.tokenize(source).diagnostics.map(\.code)
 }
 
+/// The source text each error the lexer reports for `source` covers.
+private func lexCoveredText(_ source: String) -> [String] {
+    let bytes = Array(source.utf8)
+    return Lexer.tokenize(source).diagnostics.map {
+        String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self)
+    }
+}
+
 struct NewlineTests {
     @Test("a line that ends in a binary operator continues")
     func binaryOperatorContinues() {
@@ -104,11 +112,8 @@ struct TokenTests {
         ("let x = 18446744073709551616", .literalExceeds64Bits, "18446744073709551616"),
     ])
     func errors(source: String, expected: ErrorCode, literal: String) {
-        let diagnostics = Lexer.tokenize(source).diagnostics
-        #expect(diagnostics.map(\.code) == [expected])
-        let bytes = Array(source.utf8)
-        #expect(diagnostics.map { String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self) }
-            == [literal])
+        #expect(lexErrors(source) == [expected])
+        #expect(lexCoveredText(source) == [literal])
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [

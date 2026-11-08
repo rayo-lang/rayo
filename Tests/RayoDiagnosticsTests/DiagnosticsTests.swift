@@ -75,4 +75,11 @@ struct ErrorCodeTests {
     func argumentCounts(count: ArgumentCount, text: String) {
         #expect(count.description == text)
     }
+
+    @Test("a found token is named by its spelling, or as a newline or the end of the file", arguments: [
+        (FoundToken.token("="), "'='"), (.newline, "a newline"), (.endOfFile, "the end of the file"),
+    ])
+    func foundTokens(found: FoundToken, text: String) {
+        #expect(found.description == text)
+    }
 }

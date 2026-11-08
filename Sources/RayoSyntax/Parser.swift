@@ -366,7 +366,7 @@ private extension BinaryOperator {
 }
 
 private extension Expectation {
-    /// The punctuation an expectation of one names. `expect` takes only those.
+    /// The punctuation this expectation names. Only the expectations that `expect` takes name one.
     var punct: Punct {
         switch self {
         case .parametersOpen: return .lparen

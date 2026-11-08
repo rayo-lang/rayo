@@ -7,14 +7,13 @@ func errors(_ source: String) -> [ErrorCode] {
     diagnostics(source).map(\.code)
 }
 
-/// The source text each error `rayoc check` reports for `source` covers.
-func coveredText(_ source: String) -> [String] {
+/// The source text each of `diagnostics` covers in `source`.
+private func coveredText(_ diagnostics: [Diagnostic], in source: String) -> [String] {
     let bytes = Array(source.utf8)
-    return diagnostics(source).map {
-        String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self)
-    }
+    return diagnostics.map { String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self) }
 }
 
+/// The diagnostics `rayoc check` reports for `source`, saved as `main.rayo`.
 private func diagnostics(_ source: String) -> [Diagnostic] {
     let result = Driver.run(["check", "main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
     #expect(result.exitCode == (result.diagnostics.isEmpty ? 0 : 1))
@@ -61,8 +60,10 @@ struct ProgramTests {
         ("print(0xFFFFFFFFFFFFFFFF)", "0xFFFFFFFFFFFFFFFF"),
     ])
     func literals(body: String, literal: String) {
-        #expect(errors("func main() { \(body) }") == [.literalExceedsInt])
-        #expect(coveredText("func main() { \(body) }") == [literal])
+        let source = "func main() { \(body) }"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.literalExceedsInt])
+        #expect(coveredText(reported, in: source) == [literal])
     }
 
     @Test("calls match the function's arguments and their types", arguments: [
