@@ -34,8 +34,9 @@ public enum Driver {
           run      compile the file and run it
 
         build modes:
-          --debug    integer overflow panics
-          --release  integer overflow wraps; a build that names no mode is a release build
+          --debug    integer overflow panics, and the program isn't optimised
+          --release  integer overflow wraps, and the program is optimised; a build that names no mode is a
+                     release build
 
         """
 
@@ -43,7 +44,8 @@ public enum Driver {
         case check, build, run
     }
 
-    /// A build's mode, which turns the diagnostic checks on in a debug build and off in a release one.
+    /// A build's mode, which turns the diagnostic checks on and optimisation off in a debug build, and the other way
+    /// round in a release one.
     private enum BuildMode: String {
         case debug = "--debug"
         case release = "--release"
@@ -97,16 +99,19 @@ public enum Driver {
             guard let program = checked.program else { return failure(checked.diagnostics, in: path) }
             if command == .check { return Result(exitCode: 0, output: "", errors: "") }
 
-            let llvmIR = LLVMEmitter.emit(Lowering.lower(program), sourcePath: path,
-                                          checksOverflow: invocation.mode == .debug)
+            let objectCode = try LLVMEmitter.objectCode(for: Lowering.lower(program), sourcePath: path,
+                                                        checksOverflow: invocation.mode == .debug,
+                                                        optimizes: invocation.mode == .release)
             let toolchain = Toolchain(environment: environment)
             if let executable {
-                try toolchain.link(llvmIR, to: executable)
+                try toolchain.link(objectCode, to: executable)
                 return Result(exitCode: 0, output: "", errors: "")
             }
-            return try toolchain.compileAndRun(llvmIR, output: programOutput)
+            return try toolchain.linkAndRun(objectCode, output: programOutput)
         } catch let failure as Failure {
             return Self.failure(failure.message)
+        } catch let error as LLVMError {
+            return failure("internal error: \(error.message)")
         } catch {
             return failure(error.localizedDescription)
         }
