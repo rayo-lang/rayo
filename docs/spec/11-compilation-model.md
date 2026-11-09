@@ -135,7 +135,7 @@ let step = vec.normalized * speed   // vector arithmetic: no hidden call where t
 speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 ```
 
-**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so calling one never becomes a call at run time. Its body's own operations run as they would anywhere, so one the processor lacks may still call a software routine, as a `Simd` operation may ([04](04-types/numbers-and-math.md#simd-and-math)).
+**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so calling one never becomes a call at run time. Its body's own operations run as they would anywhere, so one the processor lacks may still call a software routine, as 04 allows a `Simd` operation to ([04](04-types/numbers-and-math.md#simd-and-math)).
 
 **A direct call to an `@inline` function is never a call at run time, in any build: its body runs in place.** The same holds for an `@inline` initializer, and for the accessors of an `@inline` computed property or subscript, which are functions too. The one exception is the call that would close a cycle that an instantiation makes (below).
 

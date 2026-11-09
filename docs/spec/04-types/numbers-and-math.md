@@ -126,7 +126,7 @@ let t = fma(0.1, 3.0, -0.3)           // only literals: T is Double, their defau
 let u: Float = fma(0.1, 3.0, -0.3)    // the expected type makes T a Float
 ```
 
-**A floating-point operation that the target's processor lacks, or would give a different result for, such as by flushing a subnormal to zero, is computed another way.** It runs in software where the processor offers no other way, with the result this section gives. So a target without a fused multiply-add instruction computes `fma` with a single rounding, never as a multiply and an add that each round, and a processor without floating-point hardware, such as a Cortex-M0, computes every operation in software. So the hardware changes how long an operation takes, never its result.
+**A floating-point operation that the target's processor lacks, or would give a different result for, such as by flushing a subnormal to zero, is computed another way.** It runs in software where the processor offers no other way, with the result this section gives. On a target without a fused multiply-add instruction, `fma` still rounds once, never as a multiply and an add that each round, and on a processor without floating-point hardware, such as a Cortex-M0, every operation runs in software. So the hardware changes how long an operation takes, never its result.
 
 ```swift
 let lo = min(x, Float.nan)              // NaN: min passes a NaN on
