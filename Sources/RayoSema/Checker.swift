@@ -56,7 +56,7 @@ final class FileChecker {
         case .failed:
             return nil
         case .givenByBody(let id) where checking.contains(id):
-            errors.report(.resultDependsOnItself(name: signature.name), at: range)
+            errors.report(.resultDependsOnItself(signature: "\(signature)"), at: range)
             return nil
         case .givenByBody(let id):
             return body(of: id).result
@@ -142,7 +142,7 @@ final class FileChecker {
         } else {
             statements = body.check(function.body)
             if let result, result != .void, function.body.canComplete {
-                errors.report(.missingReturn(name: function.name), at: function.body.closingBrace)
+                errors.report(.missingReturn(signature: "\(signatures[id.index])"), at: function.body.closingBrace)
             }
         }
         return CheckedBody(result: result, locals: body.locals, statements: statements)
