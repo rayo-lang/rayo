@@ -16,6 +16,15 @@ eachMut(enemies.span) { e in if e.hp <= 0 { dead += 1 } }    // writes 'dead': a
 each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating closure where a non-mutating one is expected
 ```
 
+**Each parameter has an argument label, which a call writes before the matching argument.** A name written before the parameter's own name is its **argument label**. A `_` there leaves the argument unlabeled, and a parameter with neither takes its own name as its label:
+
+```swift
+func damage(_ enemy: Enemy, by amount: Int, critical: Bool) { … }
+
+damage(boss, by: 10, critical: true)    // 'enemy' is unlabeled, and 'critical' is labeled by its name
+damage(boss, 10, critical: true)        // error: the second argument needs the label 'by'
+```
+
 **Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
