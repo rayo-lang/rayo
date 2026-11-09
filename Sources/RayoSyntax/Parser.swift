@@ -205,8 +205,8 @@ public struct Parser {
     private mutating func parseBlock() throws(Failure) -> Block {
         try expect(.lbrace, else: ErrorCode.missingBlock)
         let statements = parseStatements()
-        try expect(.rbrace, else: ErrorCode.unclosedBlock)
-        return Block(statements: statements)
+        let closingBrace = try expect(.rbrace, else: ErrorCode.unclosedBlock).range
+        return Block(statements: statements, closingBrace: closingBrace)
     }
 
     private mutating func parseStatements() -> [Stmt] {
@@ -229,6 +229,8 @@ public struct Parser {
             kind = .breakStmt
         } else if consume(.continue) {
             kind = .continueStmt
+        } else if consume(.return) {
+            kind = .returnStmt(atStatementEnd ? nil : try parseExpression())
         } else {
             kind = try parseExpressionStatement()
         }
@@ -252,8 +254,9 @@ public struct Parser {
         if consume(.else) {
             if current.isKeyword(.if) {
                 let start = advance().range
-                let nested = try parseIf()
-                otherwise = Block(statements: [Stmt(kind: nested, range: range(from: start))])
+                let nested = Stmt(kind: try parseIf(), range: range(from: start))
+                // The nested 'if' ends with the '}' of its last block, which ends this one too.
+                otherwise = Block(statements: [nested], closingBrace: tokens[position - 1].range)
             } else {
                 otherwise = try parseBlock()
             }

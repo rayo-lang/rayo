@@ -3,14 +3,15 @@ import RayoSource
 
 public enum Lowering {
     public static func lower(_ program: CheckedProgram) -> IRProgram {
-        IRProgram(main: lower(program.main))
+        IRProgram(functions: program.functions.map(lower), main: program.main)
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
         var builder = FunctionBuilder(locals: function.locals.map(\.type))
         builder.lower(function.body)
-        builder.end(with: .return)
-        return builder.function
+        // The checker has made every path of a function with a result end in a 'return'.
+        builder.end(with: function.result == .void ? .return(nil) : .unreachable)
+        return builder.function(named: function.name, returning: function.result)
     }
 }
 
@@ -31,8 +32,8 @@ private struct FunctionBuilder {
         self.locals = locals
     }
 
-    var function: IRFunction {
-        IRFunction(locals: locals, blocks: blocks.map { block in
+    func function(named name: String, returning result: RayoType) -> IRFunction {
+        IRFunction(name: name, result: result, locals: locals, blocks: blocks.map { block in
             guard let terminator = block.terminator else { preconditionFailure("a block was left unterminated") }
             return BasicBlock(statements: block.statements, terminator: terminator)
         })
@@ -84,7 +85,20 @@ private struct FunctionBuilder {
             end(with: .goto(loops[loops.count - 1].exit), continuingIn: newBlock())
         case .continueStmt:
             end(with: .goto(loops[loops.count - 1].header), continuingIn: newBlock())
+        case .returnStmt(let value):
+            lowerReturn(value)
         }
+    }
+
+    /// Leaves the function with `value`. A Void value is computed for what it does, and leaves with no result.
+    private mutating func lowerReturn(_ value: CheckedExpr?) {
+        var result: Operand?
+        if let value, value.type == .void {
+            emit(rvalue(of: value), into: nil, range: value.range)
+        } else if let value {
+            result = operand(of: value)
+        }
+        end(with: .return(result), continuingIn: newBlock())
     }
 
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: [CheckedStmt], _ otherwise: [CheckedStmt]) {

@@ -12,7 +12,8 @@ func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
 
 /// A program whose `main` holds `locals` and is made of `blocks`.
 func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
-    IRProgram(main: IRFunction(locals: locals, blocks: blocks))
+    IRProgram(functions: [IRFunction(name: "main()", result: .void, locals: locals, blocks: blocks)],
+              main: FunctionID(index: 0))
 }
 
 /// A program that prints what `value` computes.
@@ -21,7 +22,7 @@ func printing(_ value: Rvalue) -> IRProgram {
         BasicBlock(statements: [
             statement(storingIn: 0, value),
             Statement(destination: nil, value: .call(.printInt, arguments: [.local(LocalID(index: 0))]), range: nowhere),
-        ], terminator: .return),
+        ], terminator: .return(nil)),
     ])
 }
 

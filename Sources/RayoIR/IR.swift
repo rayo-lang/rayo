@@ -5,21 +5,29 @@ import RayoSyntax
 /// Rayo IR: a checked program as a control-flow graph of basic blocks over numbered locals, which code
 /// generation works from.
 public struct IRProgram: Sendable {
-    public var main: IRFunction
+    /// The program's functions, indexed by `FunctionID`.
+    public var functions: [IRFunction]
+    public var main: FunctionID
 
-    public init(main: IRFunction) {
+    public init(functions: [IRFunction], main: FunctionID) {
+        self.functions = functions
         self.main = main
     }
 }
 
 public struct IRFunction: Sendable {
+    /// The function's name and parameters, such as `f()`, which no other function of the program has.
+    public var name: String
+    public var result: RayoType
     /// The type of each local, indexed by `LocalID`: the function's own locals first, then the temporaries
     /// that lowering adds.
     public var locals: [RayoType]
     /// The blocks, indexed by `BlockID`; the first is the entry.
     public var blocks: [BasicBlock]
 
-    public init(locals: [RayoType], blocks: [BasicBlock]) {
+    public init(name: String, result: RayoType, locals: [RayoType], blocks: [BasicBlock]) {
+        self.name = name
+        self.result = result
         self.locals = locals
         self.blocks = blocks
     }
@@ -89,5 +97,8 @@ public enum Terminator: Sendable {
     case goto(BlockID)
     /// Continues in `then` when the Bool `condition` is true, and in `otherwise` when it is false.
     case branch(Operand, then: BlockID, otherwise: BlockID)
-    case `return`
+    /// Leaves the function with the operand as its result, or with none when the function returns Void.
+    case `return`(Operand?)
+    /// Ends a block that no path reaches, such as the end of a function every path through which returns.
+    case unreachable
 }

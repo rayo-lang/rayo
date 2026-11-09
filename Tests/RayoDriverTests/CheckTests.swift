@@ -76,7 +76,7 @@ struct ProgramTests {
         ("print(1) + 2", .operandTypes(op: "+", needs: "Int", left: "Void", right: "Int")),
         ("print", .functionAsValue(name: "print")),
         ("print(main)", .functionAsValue(name: "main")),
-        ("main()", .notCallable(name: "main")),
+        ("main(1)", .argumentCount(name: "main", takes: 0, passes: 1)),
     ])
     func calls(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])
@@ -118,12 +118,12 @@ struct ProgramTests {
     @Test("both operands of an operator are checked, and errors are listed in source order")
     func everyError() {
         #expect(errors("func main() { print(a + b) }\nfunc main() {}") == [
-            .notDeclared(name: "a"), .notDeclared(name: "b"), .mainDeclaredTwice,
+            .notDeclared(name: "a"), .notDeclared(name: "b"), .functionDeclaredTwice(signature: "main()"),
         ])
     }
 
     @Test("a call's arguments are checked even when the call doesn't match its function", arguments: [
-        ("main(a)", [ErrorCode.notCallable(name: "main"), .notDeclared(name: "a")]),
+        ("main(a)", [ErrorCode.argumentCount(name: "main", takes: 0, passes: 1), .notDeclared(name: "a")]),
         ("print(a, b)", [.argumentCount(name: "print", takes: 1, passes: 2), .notDeclared(name: "a"),
                          .notDeclared(name: "b")]),
     ])
@@ -131,10 +131,10 @@ struct ProgramTests {
         #expect(errors("func main() { \(body) }") == expected)
     }
 
-    @Test("a program's only function is 'main', declared once, and a second 'main' is still checked")
-    func onlyMain() {
+    @Test("'main' is declared once, and a second 'main' is still checked")
+    func mainOnce() {
         #expect(errors("func f() {}\nfunc main() {}\nfunc main() -> Bool { print(a) }") == [
-            .functionNotMain, .mainDeclaredTwice, .mainReturnsNonVoid, .notDeclared(name: "a"),
+            .functionDeclaredTwice(signature: "main()"), .mainReturnsNonVoid, .notDeclared(name: "a"),
         ])
     }
 }

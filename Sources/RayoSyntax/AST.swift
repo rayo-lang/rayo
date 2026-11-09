@@ -29,6 +29,14 @@ public enum TypeExpr: Sendable {
 
 public struct Block: Sendable {
     public var statements: [Stmt]
+    /// The `}` that ends the block.
+    public var closingBrace: SourceRange
+
+    /// The block's one statement, when it is an expression.
+    public var singleExpression: Expr? {
+        guard statements.count == 1, case .expression(let expr) = statements[0].kind else { return nil }
+        return expr
+    }
 }
 
 public enum BindingKind: Sendable, Hashable {
@@ -78,6 +86,7 @@ public indirect enum StmtKind: Sendable {
     case whileStmt(condition: Expr, body: Block)
     case breakStmt
     case continueStmt
+    case returnStmt(Expr?)
 }
 
 public enum BinaryOperator: String, Sendable, Hashable {

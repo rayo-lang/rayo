@@ -11,17 +11,22 @@ struct BodyChecker {
         case failed
     }
 
-    let declarations: Declarations
-    var errors: ErrorList
+    /// The file the body is in, which gives the result types of the functions it calls.
+    let file: FileChecker
+    /// The function's result type, or nil when it isn't known.
+    let result: RayoType?
     private(set) var locals: [CheckedLocal] = []
     /// The names each enclosing block declares, innermost last.
     private var scopes: [[String: ScopeEntry]] = []
     private var loopDepth = 0
 
-    init(declarations: Declarations, errors: ErrorList) {
-        self.declarations = declarations
-        self.errors = errors
+    init(file: FileChecker, result: RayoType?) {
+        self.file = file
+        self.result = result
     }
+
+    var declarations: Declarations { file.declarations }
+    var errors: ErrorList { file.errors }
 
     mutating func check(_ block: Block) -> [CheckedStmt] {
         scopes.append([:])
@@ -58,11 +63,24 @@ struct BodyChecker {
             return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
         case .continueStmt:
             return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
+        case .returnStmt(let value?):
+            return returned(value).map { .returnStmt($0) }
+        case .returnStmt(nil):
+            guard let result, result != .void else { return .returnStmt(nil) }
+            errors.report(.missingReturnValue(type: "\(result)"), at: statement.range)
+            return nil
         }
     }
 
+    /// Checks `expr` as the value the function returns.
+    mutating func returned(_ expr: Expr) -> CheckedExpr? {
+        guard let value = checkTaken(expr) else { return nil }
+        guard let result else { return value }
+        return expect(value, result) ? value : nil
+    }
+
     private mutating func check(_ binding: Binding) -> CheckedStmt? {
-        let declared = binding.type.flatMap { declarations.resolve($0, reporting: &errors) }
+        let declared = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
         let value = checkTaken(binding.value)
         if binding.name == "_" {
             errors.report(.underscoreDeclared, at: binding.nameRange)
@@ -82,8 +100,8 @@ struct BodyChecker {
         return .binding(local, value)
     }
 
-    /// Checks `expr` as the value a declaration or an assignment takes, which takes a local's value only
-    /// with `copy`.
+    /// Checks `expr` as the value a declaration, an assignment or a `return` takes, which takes a local's value
+    /// only with `copy`.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
         if case .name(let name) = expr.kind, case .local = value.kind {
@@ -113,7 +131,7 @@ struct BodyChecker {
 
     /// Whether `name` already names a local or a function, reporting it when it does.
     private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
-        guard lookUp(name) != nil || declarations.functionNames.contains(name) else { return false }
+        guard lookUp(name) != nil || declarations.function(named: name) != nil else { return false }
         errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
@@ -148,7 +166,7 @@ struct BodyChecker {
                 return local
             case .failed:
                 break
-            case nil where declarations.functionNames.contains(name):
+            case nil where declarations.function(named: name) != nil:
                 errors.report(.assignToFunction(name: name), at: target.range)
             case nil:
                 errors.report(.notDeclared(name: name), at: target.range)
