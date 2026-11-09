@@ -6,7 +6,7 @@
 
 ### J1 · A state machine with timers
 
-**Write a state machine with five states, timers and transitions**, such as an enemy's AI moving between idle, patrol, chase, attack and flee.
+**Write a state machine with five states, timers and transitions**, such as a network connection moving between connecting, handshaking, open, draining and closed, or an enemy's AI moving between idle, patrol, chase, attack and flee.
 
 - The code must read like ordinary application code: no ownership ceremony beyond `mutable`, and at most one handle lookup per object per state.
 - Compare its length to the same code in C#.

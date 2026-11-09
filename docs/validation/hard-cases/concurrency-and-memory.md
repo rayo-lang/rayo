@@ -18,6 +18,8 @@ ThreadScope.run { s in s.spawn { … } }      // starts threads that may borrow 
 
 Work handed to other threads this way is **lent work** ([07](../../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)). The library's `unsafe` core, its scheduling and its error policy are its own design. The cases check that its safe uses can be written, and that its own `unsafe` promise is small and easy to state.
 
+**Work that waits without a thread of its own is a `task`**, which its runner steps each time it is woken. The runner may be std's `block(on:)`, or a `TaskSet` that `run` or a loop of the program's own steps ([07](../../spec/07-concurrency/tasks.md#running-tasks)).
+
 ### C1 · Parallel scatter into shared data
 
 **In a parallel loop, each element adds a value to one cell of a shared grid, and many elements may pick the same cell.** In C++:
@@ -40,7 +42,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C3 · Two threads on alternate buffers
 
-**One thread reads snapshot N while another writes snapshot N+1, concurrently and for longer than any one call**, as a renderer and a simulation do. A thread that outlives the call that started it owns its captures, and can't borrow ([07](../../spec/07-concurrency/thread-work.md#what-a-thread-can-share)).
+**One thread reads snapshot N while another writes snapshot N+1, concurrently and for longer than any one call**, as a database's readers and its writer do, or a renderer and a simulation. A thread that outlives the call that started it owns its captures, and can't borrow ([07](../../spec/07-concurrency/thread-work.md#what-a-thread-can-share)).
 
 - **Must accept** a safe idiom. State what the language checks and what only the library enforces.
 
@@ -113,6 +115,38 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 - State where each panic goes, and what the other side sees.
 - **Answered by** [Panics in producers and consumers](../../spec/07-concurrency/synchronization.md#panics-in-producers-and-consumers).
 
+### C19 · An I/O-bound server whose handlers are tasks
+
+**A network service runs each connection's handler as a task, so thousands of connections wait at once without a thread each** ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). A reactor of the program's own waits on the platform's readiness or completion API, such as epoll, kqueue or an I/O completion port, through `import c`. Its awaitables hand each task's `Waker` to the reactor, which calls it once the socket is ready or the operation completes, and arrange each timeout with `wake(at:)` ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). K2 follows such a server's memory over weeks, and this case checks its tasks.
+
+The criteria below use these statements, the first five in the tasks that handle a connection, and the rest outside them:
+
+```swift
+let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
+await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
+let digest = await hashed                                          // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
+using allocator = lease.arena { … }                                // lease: the handler's own value naming its request's arena; a block with an await inside
+let host = req.host.view; try await write(sock, page); log(host)   // error: the view 'host' is live across the await
+
+guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
+conns.cancel(h)                                                    // the client is gone: its handler is destroyed where it waits
+let db = try block(on: connect(dbAddress))                         // in main, before serving: waits for one task whose Context is Void
+```
+
+- **Must accept** the handlers run either way that 07 allows ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)):
+    - by an event loop of the program's own, which waits in the readiness or completion API and steps a `TaskSet` whose notifying `Waker` ends that wait;
+    - by `TaskSet.run`, which parks the handlers' thread, while a reactor on another thread calls their `Waker`s.
+- **Must hold:** a thread whose handlers all wait does no work until a socket is ready, a deadline passes or another thread wakes a task, apart from the early polls that a deadline allows. It never spins, and a wake from another thread or a C completion callback runs no handler code there.
+- **Must accept** the `read` timeout and the backoff above, and a worker thread that waits for jobs with `receive(timeout:)`. The worker ends once it has been idle for a minute, or once every `Sender` is gone.
+- **Must accept** a handler that hands CPU-bound work, such as hashing a password, to worker threads through a `Channel`, with a `Promise` that the worker fulfills, and awaits the `Future`. A channel has one `Receiver` ([07](../../spec/07-concurrency/synchronization.md#queues-and-channels)), so each worker owns a channel of its own, or the workers share one `Receiver` behind a `Mutex`. State what each choice costs.
+- **Must accept** handing a job off with `trySend`, which never parks the loop's thread. State what the handler does when the channel is full, or its worker is gone ([07](../../spec/07-concurrency/synchronization.md#disconnected-channels)).
+- **Must reject** a job that holds a value bound to the loop's thread, such as a `LocalShared` buffer. The channel's ends then aren't `Sendable`, so no worker's body can own or borrow its `Receiver` ([07](../../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+- **Must accept** a per-request arena while many requests are in flight on one thread, so that no one arena can be reset between them. Each handler takes an arena from a pool that the server registers once, and builds its request's values in it across `await`s. A value the handler owns resets the arena and returns it to the pool when the handler is destroyed.
+- State where that pool lives, given that a handler destroyed after its first step has no resume parameter ([07](../../spec/07-concurrency/tasks.md#semantics)). State what happens when the reset comes while a worker still reads a job built in the arena, and show how the server avoids it.
+- **Must accept** cancelling a request by dropping its task: `cancel` when the client goes, a failed `start` when the set is full, and dropping the whole set at shutdown. **Must hold:** each destroyed handler closes its socket. One destroyed after its first step also runs its `defer`s and `deinit`s and returns its arena, and its dropped `Future` makes the worker's `fulfill` fail. A later wake through the handler's old `Waker` costs at most a poll with nothing changed.
+- **Must reject** the line with `host` above, and any view of the reactor's buffers live across an `await` ([07](../../spec/07-concurrency/tasks.md#semantics)).
+- **Must accept** `block(on:)` in synchronous code, as in `db`'s line above, when a reactor on another thread wakes the task. State what happens when the only reactor that could wake it is the parked thread's own.
+
 ---
 
 ## M. Memory
@@ -121,7 +155,7 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 
 ### M1 · Keeping short-lived results in long-lived state
 
-**Code builds a `List` in a scratch arena that is reset regularly, such as once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
+**Code builds a `List` in a scratch arena that is reset regularly, such as once per request or once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
 
 ```swift
 using allocator = .system { world.results = scratch.clone() }   // clones the list while .system is the current allocator
@@ -133,7 +167,7 @@ world.results.append(r)                                         // grows the kep
 
 ### M2 · Freeing a large set of objects at once
 
-**Every value of one phase of a program, such as a level's entities, graph nodes and strings, is freed at once**, and the cost on the thread that frees them must not grow with their number. They live in one heap, some of them objects, some pinned for C, and the heap is unregistered while weak pointers to them are still stored elsewhere.
+**Every value of one phase of a program, such as a compiler pass's syntax trees or a level's entities and strings, is freed at once.** The cost on the thread that frees them must not grow with their number. They live in one heap, some of them objects, some pinned for C, and the heap is unregistered while weak pointers to them are still stored elsewhere.
 
 - **Must accept** an idiom whose cost on the freeing thread doesn't depend on how many objects and values the heap holds. State which thread runs the objects' `deinit`s, and when ([03](../../spec/03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 

@@ -8,7 +8,7 @@
 
 ### H1 · Loading data written by older versions of its types
 
-**Load data written by an older version of a program's types**, as a save game from version 3 is loaded into version 7, or as a hot reload carries live values into new code. Fields were renamed, added, retyped, and removed across versions, and enum cases removed. The second criterion's migration is this one:
+**Load data written by an older version of a program's types.** An application at version 7 of its types reads documents or messages that version 3 wrote, as a game loads an old save, or a hot reload carries live values into new code. Fields were renamed, added, retyped, and removed across versions, and enum cases removed. The second criterion's migration is this one:
 
 ```swift
 let migrated = T.construct { static field in consume old[field] }   // builds each field by moving it out of 'old'

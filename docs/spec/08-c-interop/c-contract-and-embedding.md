@@ -21,7 +21,7 @@ At a C boundary, Rayo can check only what the imported or exported types express
     - a span, or the pointer that a `mutable` parameter passes, reaches its `count` places, or one. For the whole call, each of those places is live, aligned for its type and holding a valid value, and writable for a `MutableSpan` or `mutable` parameter;
     - a `MutableSpan` or `mutable` parameter is the only access to its memory during the call, by C or by Rayo, and nothing writes the memory a `Span` or `StringView` parameter views;
     - a view, or a value holding one, that C returns to Rayo or writes into Rayo memory, through a `mutable` parameter, a `MutableSpan` or a pointer, addresses live memory for as long as its dependency set says. Rayo gives it that set by rules 3 and 4 ([02](../02-views-and-dependencies.md#dependencies)).
-- **Known stacks.** Rayo code runs only on a stack whose bounds the runtime knows, so running out of it panics instead of writing past its end ([10](../10-errors-and-safety/panics.md#panics)):
+- **Known stacks.** Rayo code runs only on a stack whose bounds the runtime knows, so running out of it ends the program instead of writing past its end ([10](../10-errors-and-safety/panics.md#what-ends-the-program)):
     - C that switches a thread between stacks, as a fiber scheduler does, declares the new stack's bounds with `rayo_thread_set_stack` after each switch, back to the thread's own stack included, before Rayo code runs there ([below](#embedding-rayo-in-a-c-program));
     - a Rayo frame that such a switch suspends resumes only on the thread it began on, whose accesses, allocator uses and thread-locals it uses;
     - a fiber abandoned with Rayo frames on it never returns from them. C keeps its stack allocated and unmoved for the rest of the run. What the frames own leaks, and what they borrow stays borrowed, so a reset of an allocator they use panics ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does)).
@@ -72,7 +72,7 @@ enum NavMode: Int32 { case walk, fly }
     - its thread identity ([07](../07-concurrency/global-state.md#thread-identity));
     - its current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator));
     - the bounds of the stack it runs on, and the rest of the runtime's state for the thread;
-- the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
+- the bounds of each stack Rayo code runs on, so running out of one ends the program instead of writing past its end ([10](../10-errors-and-safety/panics.md#what-ends-the-program)): a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock with nanosecond counts, which `MonotonicClock` reads for timeouts and task deadlines ([07](../07-concurrency/synchronization.md#time-duration-and-instant)). On every target, a read of it is whole, and never returns less than a read that happens before it, on any thread;
 - random bytes for the process seed (below);

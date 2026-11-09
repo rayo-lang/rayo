@@ -68,7 +68,7 @@ The difficulty is that, by default, a call's result depends on everything the ca
 
 ### A5 · Long-lived views into a long-lived buffer
 
-**A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives**, as the components of a loaded level hold views of its package. Separately, code keeps `Slice<T>`s into a blob that several threads share under a lock, replaces the whole blob with a shorter one, and reads through an old slice. An old slice may then reach past the new blob's end ([06](../../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
+**A large buffer is loaded once, and many long-lived structs hold views of ranges inside it for as long as it lives.** A parsed document's nodes hold views of its source text this way, as the components of a loaded level do of its package. Separately, code keeps `Slice<T>`s into a blob that several threads share under a lock, replaces the whole blob with a shorter one, and reads through an old slice. An old slice may then reach past the new blob's end ([06](../../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
 
 - **Must accept** storing those views in long-lived structs, without copying the data. Name the cost of whatever replaces the views (offsets, a shared owner): run-time checks, and bytes per view where the spec fixes a layout.
 - **Must accept** reads through slices that still fit, without re-creating them.
@@ -124,7 +124,7 @@ if let c = h?.cell { use(c.tag.span) }               // a view through an option
 
 ### A8 · A graph with cross-links, freed all at once
 
-**A graph of many nodes that link to each other is built, searched and freed all at once**, as a navigation graph is per level. Each node has links to its neighbors, and a parent link set during a search. In C++:
+**A graph of many nodes that link to each other is built, searched and freed all at once**, as a compiler's control-flow graph is per function, or a navigation graph per level. Each node has links to its neighbors, and a parent link set during a search. In C++:
 
 ```cpp
 struct NavNode {
@@ -274,7 +274,7 @@ for (Damageable* t : targets) t->takeDamage(10);
 
 ### B2 · Two arguments that may be one value
 
-**A function mutates two values that may be the same one**, as `attack(attacker, target)` does when an entity damages itself. In C++:
+**A function mutates two values that may be the same one**, as `transfer(from:to:)` does when an account pays itself, or `attack(attacker, target)` when an entity damages itself. In C++:
 
 ```cpp
 void attack(Entity& attacker, Entity& target) {
@@ -290,7 +290,7 @@ The law of exclusivity lets nothing else reach a place while it is mutably borro
 
 ### B3 · A coroutine waiting on an object that is destroyed
 
-**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its owner steps explicitly ([07](../../spec/07-concurrency/tasks.md#semantics)). This one waits for an enemy to be gone:
+**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its runner steps each time it is woken ([07](../../spec/07-concurrency/tasks.md#running-tasks)). This one waits for an enemy to be gone:
 
 ```swift
 await until { [copy target] game in game.enemies[target] == nil }   // the condition, polled at each step

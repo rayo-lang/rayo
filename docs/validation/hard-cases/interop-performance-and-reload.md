@@ -74,7 +74,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E7 · C code that needs a large stack
 
-**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack panics before anything is written past the stack's end, so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack ends the program before anything is written past the stack's end ([10](../../spec/10-errors-and-safety/panics.md#what-ends-the-program)), so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 
 - **Must accept** calling each, within C's obligations, by declaring its need where the function or the pointer type is declared.
 
@@ -87,6 +87,40 @@ A packed struct can put a field at a misaligned address, where a load or store o
 - **Must accept** passing an `Int` count to a `size_t` parameter on each target. State what happens when the count doesn't fit.
 - **Must accept** a 64-bit atomic counter where the target has 64-bit atomics, and a narrower one, chosen at compile time, where it doesn't. State what the plain `Atomic<Int>` gives on the microcontroller.
 - **Must hold:** the bits of handles, weak pointers and weak links are 8 bytes on each target. On the microcontroller, `WeakShared(bits:)`, `upgrade()` and opens give the outcomes they give on the console.
+
+### E9 · Firmware on a 32-bit microcontroller
+
+**Firmware for a dual-core 32-bit microcontroller runs over its vendor's C SDK, with no operating system.** The cores have 32-bit atomic instructions, but no 64-bit ones, no floating-point unit and no divide instruction ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)). The firmware drives a UART through memory-mapped registers, filters sensor samples in `Float`, and counts time in `Int` nanoseconds. It keeps a `Map` of the commands it reads from the UART, and its tests run on a 64-bit host from the same source.
+
+The criteria below use these declarations from the SDK's header, and these statements, where `msg` is a `Span<UInt8>` and `byte` a `UInt8`:
+
+```c
+size_t board_uart_write(const uint8_t* data, size_t len);   // queues bytes to send, and returns how many it took
+size_t board_uart_pending(void);                            // how many queued bytes are still unsent
+```
+
+```swift
+import c "board.h" as board where prefix: "board_" unsafe { noalloc board_uart_write }   // the vendor's SDK
+
+let queued = Int(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))   // size_t is CSize: a UInt32 here
+let pending: Int = unsafe board.uart_pending()          // compiles here, where a UInt32 widens to Int, and not on the host
+let received = Atomic<UInt32>(0)                        // fine on every target
+let uptime = Atomic<Int>(0)                             // error here: an Int is 8 bytes, and the cores have no 64-bit atomics
+
+const uartData: CUIntPtr = 0x4000_C000                  // the UART's data register, as an address
+if let reg = unsafe *UInt32?(bitPattern: uartData) {    // a pointer made from an integer
+    unsafe volatileStore(reg, UInt32(byte))             // one 4-byte store, never merged, split or removed
+}
+```
+
+- **Must accept** the SDK imported and called with `unsafe` only around its calls, its `size_t`s as `CSize` and its `uintptr_t`s as `CUIntPtr`, from source that builds for the host too ([08](../../spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)). **Must hold:** `pending`'s line above is an error on the host, and the explicit form in `queued`'s line is valid on both.
+- **Must accept** `Atomic<UInt32>` counters that both cores change. **Must reject** `uptime`'s line above ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)), so the firmware chooses its uptime counter at compile time, as E8's library chooses its counter.
+- *(inherently unsafe)*: **Must accept** the UART's registers read and written through volatile accesses of 4 bytes or fewer, in one small `unsafe` wrapper, as I13 asks. **Must reject** an 8-byte volatile access where `target.pointerBitWidth` is 32, such as the timer's 64-bit count read in one load ([10](../../spec/10-errors-and-safety/unsafe-code.md#hardware-access)). **Must accept** reading that count as two 4-byte halves, and state what keeps the halves consistent.
+- *(inherently unsafe)*: **Must accept** a UART interrupt that hands each received byte through a ring buffer to a task waiting for input, with no lock and no allocation. No byte is lost while the ring has room; state what happens when it fills. State what code may run inside the interrupt handler, given that C never enters Rayo from an interrupt ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and how the byte reaches Rayo code.
+- **Must accept** a main loop of the program's own, which steps a `TaskSet` and sleeps the core until the next interrupt, a wake from the other core, or the set's `deadline` ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)). It handles each event in a `@noalloc` function that calls the SDK functions the import declares `noalloc`.
+- **Must hold:** `Float` and `Double` math, `fma` included, and `Int` multiplication and division give the host's results, bit for bit. The cores lack instructions for some of them, and a sequence of instructions or a software routine computes each of those ([04](../../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts), [04](../../spec/04-types/numbers-and-math.md#floating-point)). The stack check on entry to each function counts what those routines use.
+- State what the firmware's platform layer must supply to the runtime with no operating system ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and where the process seed comes from on a chip with no source of randomness. State what protection the command `Map` then has against keys chosen to collide.
+- **Must accept** the same firmware on a single-core part without atomic read-modify-write instructions, such as a Cortex-M0+. State how its atomics stay lock-free there, whether `uptime`'s line compiles there, and which uptime counter the compile-time choice picks. State what the language promises when that build runs on a chip with a second core.
 
 ---
 
@@ -103,7 +137,7 @@ pos += vel * dt          // vector arithmetic on each value
 vel = lerp(…)            // a call to a small math function
 ```
 
-- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([11](../../spec/11-compilation-model.md#runtime-costs)).
+- **Must accept** unoptimized code with no hidden check beyond bounds checks, and no function call per operation where the processor has the operation ([11](../../spec/11-compilation-model.md#runtime-costs)). An operation it lacks may take a sequence of instructions, or call a software routine where none serves ([04](../../spec/04-types/numbers-and-math.md#simd-and-math)).
 - **Must accept** generic vector code over `T: VectorSpace` whose requirement calls reach `@inline` operators, each running in place in every build, and `@inline` functions that call each other in a cycle through a generic witness.
 
 ### F2 · Generic code size
@@ -115,7 +149,7 @@ vel = lerp(…)            // a call to a small math function
 
 ### F3 · Many types behind one interface
 
-**Many types that conform to one protocol are run each iteration through the protocol**, as an engine's render passes are. The second criterion passes each value, held as an existential, to this generic function:
+**Many types that conform to one protocol are run each iteration through the protocol**, as a server's middleware stages are for each request, or an engine's render passes for each frame. The second criterion passes each value, held as an existential, to this generic function:
 
 ```swift
 func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conforming types

@@ -90,6 +90,8 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
     - A left shift drops bits past the top whatever the sign, so it never overflows.
     - The masking shifts `&<<` and `&>>` use only the count's low bits, `count & (bitWidth - 1)`, as an unsigned amount.
 
+**An integer operation that the target's processor has no instruction for is computed another way: by a sequence of instructions, or by a software routine where none serves, with the result this section gives.** A 64-bit addition on a 32-bit processor takes a few instructions, where `Int` and `UInt` are still 64 bits ([Numbers](#numbers)). Any division on a Cortex-M0, and a 64-bit division on many 32-bit processors, take a software routine. So the hardware changes how long an integer operation takes, never its result, as it does for a floating-point one ([below](#floating-point)).
+
 **`x.trailingZeroCount` is the number of zero bits below `x`'s lowest set bit, as an `Int`**, for every integer type. When `x` is 0 it is the bit width, so `UInt64(0).trailingZeroCount` is 64.
 
 ### Floating point
@@ -193,7 +195,7 @@ let checked = Simd<UInt8, 8>(converting: wide)   // panics where overflow checks
 **`Simd` operations never become calls at run time, in any build**, since they are builtin. The exception is an operation that the target's processor lacks, or would compute with a different result, which may call a software routine that gives the result this chapter defines. Such operations include:
 
 - `fma` on a processor without a fused multiply-add instruction, such as core WebAssembly, and every floating-point operation on one without floating-point hardware ([Floating point](#floating-point));
-- an integer multiplication or division the processor has no instruction for, such as any division on a Cortex-M0, or a 64-bit one on many 32-bit processors.
+- an integer operation that only a software routine serves, such as any division on a Cortex-M0, or a 64-bit division on many 32-bit processors ([Integer overflow, division and shifts](#integer-overflow-division-and-shifts)).
 
 A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
