@@ -67,7 +67,7 @@ Six principles decide Rayo's trade-offs.
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
 | GC pauses at times you don't choose | No GC. Memory is released at points visible in source: a scope end, an overwrite, a `consume`, a removal from a container, the drop of a reference-counted value's last owner, a thread's end, an arena reset or an unregistration. A reset or an unregistration never frees memory a view, on any thread, may still read: it panics instead. | [03](spec/03-handles-and-objects.md#destroying-an-object), [06](spec/06-memory-and-allocators/arena-safety.md#arena-safety-checked-values-and-checked-resets) |
-| Closed platforms such as consoles and iOS forbid JIT, so C# reaches them only through a separate ahead-of-time toolchain, such as IL2CPP, with its own runtime | Nothing in Rayo generates code while a program runs, so every program compiles ahead of time and no target needs a JIT or a separate toolchain. The runtime is small, and needs only a few services from the platform. | [11](spec/11-compilation-model.md#what-a-target-must-provide), [08](spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform) |
+| Closed platforms such as consoles and iOS forbid JIT, so C# reaches them only through a separate ahead-of-time toolchain, such as IL2CPP, with its own runtime | Nothing in Rayo generates code while a program runs, so every program compiles ahead of time and no target needs a JIT or a separate toolchain. The runtime needs only a few services from the platform. | [11](spec/11-compilation-model.md#what-a-target-must-provide), [08](spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform) |
 
 ## A taste
 
