@@ -127,6 +127,8 @@
 
 **A task holds no borrow across an `await`** ([07](../../spec/07-concurrency/tasks.md#semantics)). Its owner may move or destroy its state between steps. Its own locals are worked out again on resuming, since only its body reaches them, and its resume parameter is lent anew at each step. Its parameters are owned and unscoped, a `defer` live across an `await` uses only its state, and a finished task panics when polled.
 
+**A task never crosses threads through its wakes** ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). What another thread holds is a `Waker`, which is `Sendable` and reaches the runner's `Synchronized` wake target through a weak link, so a wake after the runner is gone does nothing. The wake only marks the task woken. The runner's own thread then steps it, so a `TaskSet` and its tasks stay on one thread. A pending task with no wake arranged waits for ever, as a thread parked on an `Event` that nothing signals does, and touches no memory meanwhile.
+
 ## Targets without 64-bit atomics
 
 **These steps show that a runtime can keep 07's guarantees with 32-bit atomics alone** ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). They are one way to do it, not the spec's: an implementation may use any other that keeps the guarantees.

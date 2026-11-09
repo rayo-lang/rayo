@@ -61,7 +61,7 @@ Six principles decide Rayo's trade-offs.
 | Unoptimized builds are dramatically slower | No build makes runtime calls beyond the ones [11](spec/11-compilation-model.md#runtime-costs) lists, and generic code is always specialized. | [11](spec/11-compilation-model.md#runtime-costs) |
 | Slow type checking | No bidirectional constraint solver, bounded operator lookup, and one local step to type each literal. | [11](spec/11-compilation-model.md#type-checking-is-local) |
 | No per-container allocators | Same answer as for Rust | [06](spec/06-memory-and-allocators.md) |
-| Actors and async/await suit I/O, not fork-join job graphs | std's structured concurrency (`join`, parallel loops, scoped threads), race-free under the ordinary borrow and closure rules, and [`task` coroutines](spec/07-concurrency/tasks.md#semantics) the program steps explicitly. | [07](spec/07-concurrency.md) |
+| Async functions keep their frames in task memory that the runtime allocates, and actors don't fit fork-join job graphs | For job graphs, std's structured concurrency (`join`, parallel loops, scoped threads), race-free under the ordinary borrow and closure rules. For I/O and other waiting, [`task` coroutines](spec/07-concurrency/tasks.md#waking-a-task) whose size is known at compile time, which never allocate on their own. A task hands its `Waker` to whatever it waits on, such as an I/O library, which wakes it once its socket or file is ready, and std's runners wake it at a deadline. The program runs its tasks itself: once a frame with `step`, from its own event loop, or with `run`, which parks the thread until a task is woken. | [07](spec/07-concurrency.md) |
 
 ### C#'s problems
 
@@ -78,7 +78,7 @@ A tiny game: enemies chase a player, updated on several threads at once, and a s
 import std.math                             // normalized and other vector math
 import std.pool                             // Pool; Handle is in the prelude
 import std.jobs                             // forEachInParallel, from std's job system
-import std.tasks                            // TaskSet, seconds(_:)
+import std.tasks                            // TaskSet, elapsed(_:)
 import engine.editor                        // the engine's own Bounds attribute
 import c "platform.h" as plat where prefix: "platform_"   // a C header: platform_time_seconds() is plat.time_seconds()
 
@@ -100,11 +100,11 @@ struct World(
     var players = Pool<Player>(),           // a Pool stores its elements densely and hands out Handles to them
     var enemies = Pool<Enemy>(capacity: 4096),
     var doors = Pool<Door>(),
-    var clock: Double = 0,                  // simulation time, in seconds
+    var clock = Instant<World>(nanoseconds: 0),   // simulation time, on the World's own clock
 )
 
-extension World: TimeSource {               // what seconds(_:) counts in: here, simulation time
-    var now: Double { copy clock }          // a copy, written out: the World keeps its clock
+extension World: TimeSource {               // what elapsed(_:) counts in: here, simulation time
+    var now: Instant<World> { copy clock }  // a copy, written out: the World keeps its clock
 }
 
 // Moves every enemy toward its target.
@@ -121,7 +121,7 @@ func steer(_ world: mutable World, dt: Float) {
 // it returns the task's state, and whoever holds that state steps it.
 task func openDoor(_ door: owned Handle<Door>) with (world: mutable World) {   // owns its door; each step lends it the World
     world.doors[door]?.state = .opening     // '?': does nothing if the door is gone
-    await seconds(0.5)                      // suspends until a step finds half a second of world time has passed
+    await elapsed(.seconds(0.5))            // suspends until a step finds half a second of world time has passed
     world.doors[door]?.state = .open        // no borrow survives an await: 'world' is re-lent on resume
 }
 
@@ -137,9 +137,9 @@ func main() {
     var last = unsafe plat.time_seconds()   // calling C is unsafe: the compiler can't check C code
     while true {
         let now = unsafe plat.time_seconds()
-        world.clock += now - last
+        world.clock += Duration.seconds(now - last)
         steer(&world, dt: Float(now - last)) // '&' marks a mutable borrow
-        scripts.step(&world)                // runs each script to its next await that isn't done
+        scripts.step(&world)                // runs each woken script to its next await that isn't done
         last = now
     }
 }
@@ -149,7 +149,7 @@ What it shows:
 
 - **Values and handles.** Game data is ordinary values in `Pool`s. An enemy's `target` is a `Handle`, so once the player is removed, `world.players[t]` reads `nil`. `hero` moves into the new enemy, and `copy clock` is a copy written out ([01](spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
 - **Race-free parallel loops.** The closure in `steer` runs on several threads at once. It compiles because it writes only its own enemy and only reads `world.players`; also writing `world.players` would be a compile error ([07](spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
-- **Stepped tasks.** `openDoor` pauses at `await` and continues when its owner steps it, here once per pass of the main loop. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](spec/07-concurrency/tasks.md#semantics)).
+- **Tasks.** `openDoor` pauses at `await`, and continues when it is woken and its owner steps it. Its wait counts the world's own time, so it wakes itself at every pass of the main loop, and each pass checks the clock. It holds no borrow across an `await`, so it never keeps a stale pointer into `world` ([07](spec/07-concurrency/tasks.md#semantics)).
 - **Reflection and attributes.** `Bounds` is an ordinary struct used as an attribute. The editor finds it by reflecting over `Enemy`'s fields, and `@reflect(private)` lets it see fields that aren't public ([09](spec/09-compile-time.md)).
 - **C, called directly.** `import c` makes a header's declarations available, and every call into C is `unsafe` ([08](spec/08-c-interop.md)).
 

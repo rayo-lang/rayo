@@ -42,12 +42,12 @@ public struct World(
     var players = Pool<Player>(capacity: 8),
     var enemies = Pool<Enemy>(capacity: 4096),
     var commands = List<Command>(),
-    var clock: Double = 0,
+    var clock = Instant<World>(nanoseconds: 0),
     var viewport: IVec2 = .zero,
 )
 
-extension World: TimeSource {                       // lets tasks stepped with a World use seconds(_:)
-    var now: Double { copy clock }                  // simulation time, not wall time, copied out
+extension World: TimeSource {                       // lets tasks stepped with a World use elapsed(_:)
+    var now: Instant<World> { copy clock }          // simulation time, not wall time, copied out
 }
 
 // MARK: - Systems
@@ -115,15 +115,15 @@ func applyCommands(_ world: mutable World) {
 
 // MARK: - A scripted sequence spanning frames
 
-task func waveSpawner(count: owned Int, every interval: owned Float, around center: owned Vec3) with (world: mutable World) {
+task func waveSpawner(count: owned Int, every interval: owned Duration, around center: owned Vec3) with (world: mutable World) {
     for i in 0..<count {
         let angle = Float(i) / Float(count) * 2 * .pi
         let pos = center + Vec3(cos(angle), 0, sin(angle)) * 12
         world.commands.append(.spawn(if i % 5 == 0 { .brute } else { .grunt }, at: pos))
-        await seconds(interval)                       // no borrows are live here
+        await elapsed(interval)                       // no borrows are live here
     }
     await until { w in w.enemies.isEmpty }            // the resume parameter is lent to the condition on each poll
-    log("wave cleared at t=\(world.clock)")           // interpolation into the log sink: no allocation
+    log("wave cleared at t=\(world.clock.nanoseconds)ns")   // interpolation into the log sink: no allocation
 }
 
 // MARK: - Frame entry
@@ -137,12 +137,12 @@ public struct Game(
 public func newGame(viewport: IVec2) -> UniquePointer<Game> {
     var game = Game()
     game.world.viewport = copy viewport               // 'viewport' is a borrowed parameter
-    game.scripts.start(waveSpawner(count: 10, every: 2, around: .zero))   // the first wave; tick steps it each frame
+    _ = game.scripts.start(waveSpawner(count: 10, every: .seconds(2), around: .zero))   // the first wave; tick steps it each frame
     return UniquePointer(consume game)
 }
 
 public func tick(_ game: mutable Game, dt: Float) {
-    game.world.clock += dt                            // Float widens to Double implicitly
+    game.world.clock += Duration.seconds(dt)          // Float widens to Double implicitly
     acquireTargets(&game.world)
     steer(&game.world, dt: dt)
     contact(&game.world)
