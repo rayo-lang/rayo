@@ -7,31 +7,30 @@ import Darwin
 #endif
 import Foundation
 
-/// The host tools that turn LLVM IR into an executable and run it.
+/// The host tools that link object code into an executable and run it.
 struct Toolchain {
     /// The environment that holds the search path for `clang`, and that a program runs in.
     var environment: [String: String]
 
-    /// Compiles and links `llvmIR` into an executable at `output`, with the `clang` on the search path.
-    func link(_ llvmIR: String, to output: URL) throws {
+    /// Links `objectCode` with the C library into an executable at `output`, with the `clang` on the search path.
+    func link(_ objectCode: [UInt8], to output: URL) throws {
         let clang = try findClang()
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
-        let module = directory.appendingPathComponent("module.ll")
-        try Data(llvmIR.utf8).write(to: module)
-        // The module leaves the target to clang, which would otherwise warn that it chose one.
-        let result = try runCapturingOutput(clang, arguments: ["-Wno-override-module", module.path, "-o", output.path])
+        let object = directory.appendingPathComponent("program.o")
+        try Data(objectCode).write(to: object)
+        let result = try runCapturingOutput(clang, arguments: [object.path, "-o", output.path])
         if result.exitCode != 0 {
             throw Failure("clang failed:\n\(result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors)")
         }
     }
 
-    /// Links `llvmIR` into a temporary executable, runs it, and removes it.
-    func compileAndRun(_ llvmIR: String, output: Driver.ProgramOutput) throws -> Driver.Result {
+    /// Links `objectCode` into a temporary executable, runs it, and removes it.
+    func linkAndRun(_ objectCode: [UInt8], output: Driver.ProgramOutput) throws -> Driver.Result {
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let executable = directory.appendingPathComponent("program")
-        try link(llvmIR, to: executable)
+        try link(objectCode, to: executable)
         switch output {
         case .captured: return try runCapturingOutput(executable)
         case .inherited: return Driver.Result(exitCode: try runAttached(executable), output: "", errors: "")

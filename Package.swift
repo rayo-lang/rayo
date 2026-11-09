@@ -1,6 +1,38 @@
 // swift-tools-version: 6.0
 import CompilerPluginSupport
+import Foundation
 import PackageDescription
+
+/// The major release of LLVM whose C API `rayoc` compiles programs with.
+let llvmMajorVersion = 23
+
+/// The directory LLVM `llvmMajorVersion` is installed under: `LLVM_PREFIX` when it's set, and otherwise the first
+/// of the places a package manager installs it that holds that release.
+let llvmPrefix: String = {
+    let candidates = Context.environment["LLVM_PREFIX"].map { [$0] } ?? [
+        "/usr/lib/llvm-\(llvmMajorVersion)",
+        "/opt/homebrew/opt/llvm@\(llvmMajorVersion)",
+        "/opt/homebrew/opt/llvm",
+        "/usr/local/opt/llvm@\(llvmMajorVersion)",
+        "/usr/local/opt/llvm",
+    ]
+    let installs = candidates.compactMap { candidate in llvmMajorVersion(at: candidate).map { (candidate, $0) } }
+    if let match = installs.first(where: { $0.1 == llvmMajorVersion }) { return match.0 }
+    let others = installs.map { "LLVM \($0.1) in \($0.0)" }
+    fatalError("""
+        rayoc builds against LLVM \(llvmMajorVersion), and found it in none of \(candidates)\
+        \(others.isEmpty ? "" : ", only \(others.joined(separator: " and "))"): install it as TOOLCHAIN.md says, \
+        or set LLVM_PREFIX to the directory it's installed under, then run 'swift package purge-cache'
+        """)
+}()
+
+/// The major release of the LLVM installed under `prefix`, or nil when none is.
+func llvmMajorVersion(at prefix: String) -> Int? {
+    let definition = "#define LLVM_VERSION_MAJOR "
+    let config = try? String(contentsOfFile: prefix + "/include/llvm/Config/llvm-config.h", encoding: .utf8)
+    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    return line.flatMap { Int($0.dropFirst(definition.count)) }
+}
 
 let package = Package(
     name: "Rayo",
@@ -22,7 +54,12 @@ let package = Package(
         .target(name: "RayoSyntax", dependencies: ["RayoDiagnostics", "RayoSource"]),
         .target(name: "RayoSema", dependencies: ["RayoDiagnostics", "RayoSource", "RayoSyntax"]),
         .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSource", "RayoSyntax"]),
-        .target(name: "RayoLLVM", dependencies: ["RayoIR", "RayoSema", "RayoSource", "RayoSyntax"]),
+        .systemLibrary(name: "CLLVM"),
+        .target(
+            name: "RayoLLVM",
+            dependencies: ["CLLVM", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax"],
+            linkerSettings: [.unsafeFlags(["-L\(llvmPrefix)/lib"]), .linkedLibrary("LLVM-\(llvmMajorVersion)")]
+        ),
         .target(name: "RayoDriver", dependencies: ["RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM"]),
         .executableTarget(name: "rayoc", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
@@ -35,3 +72,20 @@ let package = Package(
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
     ]
 )
+
+// A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers.
+for target in package.targets where dependsOnCLLVM(target, among: package.targets) {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(llvmPrefix)/include"])]
+}
+
+/// Whether `target` depends on CLLVM, directly or through others of `targets`.
+func dependsOnCLLVM(_ target: Target, among targets: [Target]) -> Bool {
+    target.dependencies.contains { dependency in
+        switch dependency {
+        case .targetItem(let name, _), .byNameItem(let name, _):
+            return name == "CLLVM" || targets.contains { $0.name == name && dependsOnCLLVM($0, among: targets) }
+        default:
+            return false
+        }
+    }
+}

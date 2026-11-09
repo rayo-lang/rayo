@@ -100,6 +100,30 @@ struct BuildTests {
         }
     }
 
+    @Test("rayoc compiles the program itself, and clang only links it")
+    func clangOnlyLinks() throws {
+        let path = ProcessInfo.processInfo.environment["PATH", default: ""]
+        try withTemporaryDirectory { directory in
+            // Hands what it is given to the clang on the search path, unless it is source clang would compile.
+            let clang = directory.appendingPathComponent("clang")
+            try Data("""
+                #!/bin/sh
+                for argument in "$@"; do
+                    case "$argument" in
+                        *.ll|*.bc|*.c|*.s) echo "clang: asked to compile $argument" >&2; exit 1 ;;
+                    esac
+                done
+                PATH='\(path)' exec clang "$@"
+
+                """.utf8).write(to: clang)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: clang.path)
+            let result = Driver.run(["run", "main.rayo"], environment: ["PATH": "\(directory.path):\(path)"]) { _ in
+                Array("func main() { print(42) }".utf8)
+            }
+            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+        }
+    }
+
     @Test("build builds in the mode it names")
     func buildMode() throws {
         try withTemporaryDirectory { directory in
