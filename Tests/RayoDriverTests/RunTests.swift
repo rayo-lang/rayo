@@ -196,7 +196,8 @@ struct BuildTests {
                 Driver.Result(exitCode: 0, output: "", errors: ""))
 
             let nm = Process()
-            nm.executableURL = URL(fileURLWithPath: "/usr/bin/nm")
+            nm.executableURL = Driver.LinkTools.installed.clang.deletingLastPathComponent()
+                .appendingPathComponent("llvm-nm")
             nm.arguments = ["--extern-only", "--defined-only", directory.appendingPathComponent("empty").path]
             let listing = Pipe()
             nm.standardOutput = listing
