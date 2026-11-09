@@ -50,9 +50,9 @@ func scan() {
 
 ### Thread identity
 
-**Every thread of a run has a thread identity that no other thread of the run has or had**, however it started:
+**Every thread has a thread identity while it runs Rayo code, one that no other thread, and no earlier attachment of the same thread, has or had in the run**, however it started:
 
-- the startup thread, which runs `main` or calls `rayo_init`;
+- the startup thread, which runs `main`, or calls `rayo_init` and is attached by that call ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
 - a thread that `Runtime.startThread` starts;
 - a C thread that attaches, which gets a new identity each time it attaches again after detaching ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
 
