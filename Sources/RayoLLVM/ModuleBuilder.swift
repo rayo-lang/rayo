@@ -9,6 +9,7 @@ final class ModuleBuilder {
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
+    let int32: LLVMTypeRef
     let int64: LLVMTypeRef
 
     init(named name: String, for target: TargetMachine) {
@@ -17,6 +18,7 @@ final class ModuleBuilder {
         builder = LLVMCreateBuilderInContext(context)
         void = LLVMVoidTypeInContext(context)
         bool = LLVMInt1TypeInContext(context)
+        int32 = LLVMInt32TypeInContext(context)
         int64 = LLVMInt64TypeInContext(context)
         target.configure(module)
         // Without a handler, LLVM prints what it reports to rayoc's standard error, and exits on an error.
@@ -47,15 +49,14 @@ final class ModuleBuilder {
 
     /// Parses `llvmIR` into a module of this context, for the same target as this one.
     func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) -> LLVMModuleRef {
+        // The copy ends in a NUL, which LLVM's lexer reads as the end of the text.
+        let buffer = llvmIR.withUnsafeBufferPointer { bytes in
+            bytes.withMemoryRebound(to: CChar.self) { LLVMCreateMemoryBufferWithMemoryRangeCopy($0.baseAddress, $0.count, name) }
+        }
+        defer { LLVMDisposeMemoryBuffer(buffer) }
         var parsed: LLVMModuleRef?
         var message: UnsafeMutablePointer<CChar>?
-        let failed = llvmIR.withUnsafeBufferPointer { bytes in
-            bytes.withMemoryRebound(to: CChar.self) { text in
-                let buffer = LLVMCreateMemoryBufferWithMemoryRange(text.baseAddress, text.count, name, 0)
-                defer { LLVMDisposeMemoryBuffer(buffer) }
-                return LLVMParseIRInContext2(context, buffer, &parsed, &message) != 0
-            }
-        }
+        let failed = LLVMParseIRInContext2(context, buffer, &parsed, &message) != 0
         let report = takeMessage(message)
         guard !failed, let parsed else { throw LLVMError(message: "LLVM couldn't parse \(name):\n\(report)") }
         LLVMSetTarget(parsed, LLVMGetTarget(module))
@@ -68,6 +69,29 @@ final class ModuleBuilder {
         if LLVMLinkModules2(module, other) != 0 {
             throw LLVMError(message: "LLVM couldn't link the runtime:\n" + diagnostics.errors.joined(separator: "\n"))
         }
+    }
+
+    /// Gives every function and global the module defines, but `entryPoint`, a linkage that keeps it out of the
+    /// executable's symbols, so that optimisation can drop what nothing uses.
+    func hideDefinitions(except entryPoint: String) {
+        var function = LLVMGetFirstFunction(module)
+        while let current = function {
+            if LLVMIsDeclaration(current) == 0 && name(of: current) != entryPoint {
+                LLVMSetLinkage(current, LLVMInternalLinkage)
+            }
+            function = LLVMGetNextFunction(current)
+        }
+        var global = LLVMGetFirstGlobal(module)
+        while let current = global {
+            if LLVMIsDeclaration(current) == 0 { LLVMSetLinkage(current, LLVMPrivateLinkage) }
+            global = LLVMGetNextGlobal(current)
+        }
+    }
+
+    private func name(of value: LLVMValueRef) -> String {
+        var length = 0
+        let name = LLVMGetValueName2(value, &length)!
+        return String(decoding: UnsafeRawBufferPointer(start: name, count: length), as: UTF8.self)
     }
 
     /// Declares the function `name` that one of `modules` defines, with the type it is defined with.
@@ -92,16 +116,26 @@ final class ModuleBuilder {
                              type: LLVMIntrinsicGetType(context, id, &types, 1))
     }
 
-    /// Adds a private constant array holding `bytes`, and returns it.
+    /// Adds a constant array holding `bytes`, and returns it.
     func addConstant(_ name: String, bytes: [UInt8]) -> LLVMValueRef {
-        let initializer = bytes.withUnsafeBufferPointer { buffer in
+        let initializer: LLVMValueRef = bytes.withUnsafeBufferPointer { buffer in
             buffer.withMemoryRebound(to: CChar.self) { LLVMConstStringInContext2(context, $0.baseAddress, $0.count, 1) }
         }
+        let constant = addConstant(name, initializer)
+        LLVMSetUnnamedAddress(constant, LLVMGlobalUnnamedAddr)
+        return constant
+    }
+
+    /// Adds a constant `value` named `name`, for code linked into the module to read.
+    func addConstant(_ name: String, int32 value: Int32) {
+        addConstant(name, LLVMConstInt(int32, UInt64(UInt32(bitPattern: value)), 1))
+    }
+
+    @discardableResult
+    private func addConstant(_ name: String, _ initializer: LLVMValueRef) -> LLVMValueRef {
         let constant = LLVMAddGlobal(module, LLVMTypeOf(initializer), name)!
         LLVMSetInitializer(constant, initializer)
         LLVMSetGlobalConstant(constant, 1)
-        LLVMSetLinkage(constant, LLVMPrivateLinkage)
-        LLVMSetUnnamedAddress(constant, LLVMGlobalUnnamedAddr)
         return constant
     }
 
