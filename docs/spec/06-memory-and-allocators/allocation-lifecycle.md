@@ -34,7 +34,7 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 }
 ```
 
-**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a span. That includes the calls the language makes for the code ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)), so `[1, 2] as List<_>` is an error there ([04](../04-types/collections.md#literals)). A call with no static callee is checked through its type:
+**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a span. Arithmetic that a software routine computes counts as such an operation, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). That includes the calls the language makes for the code ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)), so `[1, 2] as List<_>` is an error there ([04](../04-types/collections.md#literals)). A call with no static callee is checked through its type:
 
 - a call through a function value may allocate unless its type is `@noalloc` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values));
 - a call through `any P`, and a requirement call in generic code, may allocate unless the protocol declares the requirement `@noalloc`, which every witness to it must then be.
