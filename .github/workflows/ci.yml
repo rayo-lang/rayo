@@ -12,6 +12,8 @@ jobs:
     container: swift:6.4-noble
     env:
       LLVM_MAJOR_VERSION: 23
+      # The fingerprint apt.llvm.org publishes for the key that signs its packages.
+      LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
     steps:
       - uses: actions/checkout@v7
       - name: Install LLVM
@@ -19,11 +21,17 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl gnupg
           curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg
+          fingerprint=$(gpg --show-keys --with-colons /usr/share/keyrings/llvm.gpg | awk -F: '$1 == "fpr" { print $10; exit }')
+          if [ "$fingerprint" != "$LLVM_KEY_FINGERPRINT" ]; then
+            echo "::error::apt.llvm.org's key has fingerprint '$fingerprint', not $LLVM_KEY_FINGERPRINT"
+            exit 1
+          fi
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR_VERSION main" \
             > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          apt-get install -y --no-install-recommends \
-            llvm-$LLVM_MAJOR_VERSION-dev clang-$LLVM_MAJOR_VERSION lld-$LLVM_MAJOR_VERSION
+          version="1:$LLVM_MAJOR_VERSION.1.*"
+          apt-get install -y --no-install-recommends "llvm-$LLVM_MAJOR_VERSION-dev=$version" \
+            "clang-$LLVM_MAJOR_VERSION=$version" "lld-$LLVM_MAJOR_VERSION=$version"
       - name: Build
         run: swift build --build-tests
       - name: Test

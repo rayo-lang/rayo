@@ -2,7 +2,8 @@
 /// report a panic. It is written in LLVM IR by hand until `rayoc` can compile a runtime written in Rayo, and
 /// `rayoc` embeds it, so it needs no files beside it to compile a program.
 public enum ProgramRuntime {
-    /// The exit code of a program that panics, which `panic.ll` exits with.
+    /// The exit code of a program that panics. `rayoc` defines it in each program as `rayo.panic_exit_code`, which
+    /// `panic.ll` reads, so the runtime can't exit with one code while `rayoc` reports another.
     public static let panicExitCode: Int32 = 101
 
     /// The runtime's LLVM IR files, in the syntax of the LLVM release `rayoc` builds against.
