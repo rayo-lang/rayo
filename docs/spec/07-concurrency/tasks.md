@@ -302,7 +302,7 @@ func block<A: Awaitable>(on work: owned A) -> A.Output!A.Failure where A.Context
 
 **No wake is lost in that order.** A wake that comes before 3 is seen at 6, or, for a `runWaker` wake, by `done` at 5, since 4 clears the flag first. A wake that comes after 3 is seen at 6, or changes the word, so the park at 7 returns at once. A park may also return with no wake, which leads to a step that polls nothing.
 
-**`done` is checked only after a step**, so a condition that changes with no wake is seen after the next wake. **The park's timeout ends at the earliest deadline**, so a task that awaits `sleep(for:)` wakes on time, and the thread sleeps until then.
+**`done` is checked only after a step**, so a condition that changes with no wake is seen after the next wake. **The park's timeout ends at the earliest deadline**, so a task that awaits `sleep(for:)` wakes no sooner than its deadline, as every wait on `MonotonicClock` ends no sooner than its deadline ([Time](synchronization.md#time-duration-and-instant)), and the thread sleeps until then.
 
 **`runWaker` lets another thread stop `run`, or hand it work.** It is a `Waker` of the set itself, which wakes no task. Its `wake()` sets the run flag and wakes a parked `run`, which steps the set and checks `done` again. So the other thread first changes what `done` reads, through a `Synchronized` value such as an `Atomic`, and then wakes the set. Clearing the flag at 4 synchronizes with the wake that set it, so `done` sees the change:
 

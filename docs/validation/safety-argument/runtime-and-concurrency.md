@@ -179,7 +179,7 @@ A check whose field load reads a newer write synchronizes, through the two fence
 
 **Recording can't livelock, since no thread holds anything another waits for.** A wake marks the task woken only when its deadline is due, or when a clear raced the wake's own steps. A clear needs a step, and a step needs some other wake.
 
-**The cost is slack, never a missed wake.** Clamping and rounding cost at most one early poll per 2^31 units, which a stale wake may cost anyway ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is timer slack, below what a park overshoots on a 64-bit target too.
+**The cost is slack, never a missed wake.** Clamping and rounding cost at most one early poll per 2^31 units, which a stale wake may cost anyway ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is within the contract, since every wait on real time ends no sooner than its deadline ([07](../../spec/07-concurrency/synchronization.md#time-duration-and-instant)).
 
 **An open checks one 32-bit floor.** An allocator word names a registry slot and a 32-bit date. Dates come from one run-wide ordered sequence, issued with the stamps under the lock that parks its waiters. Each registry slot keeps a floor, which only rises:
 
