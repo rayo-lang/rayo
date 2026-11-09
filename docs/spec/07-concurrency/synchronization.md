@@ -403,7 +403,7 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 
 **`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game whose simulation time stops while it is paused. Their instants can't reach a wait on real time, such as a `Waker`'s `wake(at:)`, which takes an `Instant<MonotonicClock>`.
 
-**Every wait on real time ends no sooner than its deadline, and may end later**, since the platform wakes a parked thread some time after the moment it asked for. That holds for a timeout, `Thread.sleep(for:)`, a park's `timeout`, and a task's `sleep(for:)` and `wake(at:)`, on every target.
+**Every wait on real time ends no sooner than its deadline, and may end later**, since the platform wakes a parked thread some time after the moment it asked for. That holds, on every target, for a timeout, `Thread.sleep(for:)`, and a park that returns `false`. It holds too for a task's `sleep(for:)`, which returns `.done` only once its deadline has passed.
 
 **The arithmetic is `Int64` arithmetic on the nanoseconds**, so an overflow does what an `Int64` overflow does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)):
 
