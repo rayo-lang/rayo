@@ -165,14 +165,14 @@ struct ParameterTests {
 
     @Test("a parameter can't have type Void, and the error covers its type, whether or not the function is called",
           arguments: [
-        "func main() {}\nfunc f(_ x: ()) {}",
-        "func main() { f(print(1)) }\nfunc f(_ x: Void) {}",
-        "func main() {\n    f(1)\n    f(print(1))\n}\nfunc f(_ x: ()) {}\nfunc f(_ x: Int) {}",
+        ("func main() {}\nfunc f(_ x: ()) {}", "()"),
+        ("func main() { f(print(1)) }\nfunc f(_ x: Void) {}", "Void"),
+        ("func main() {\n    f(1)\n    f(print(1))\n}\nfunc f(_ x: ()) {}\nfunc f(_ x: Int) {}", "()"),
     ])
-    func voidParameter(source: String) {
+    func voidParameter(source: String, covered: String) {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.voidParameter])
-        #expect(["()", "Void"].contains(coveredText(reported, in: source).first ?? ""))
+        #expect(coveredText(reported, in: source) == [covered])
         #expect(run(source).diagnostics.map(\.code) == [.voidParameter])
     }
 
