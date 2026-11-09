@@ -13,7 +13,7 @@ swift run rayoc run program.rayo
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
 - **CI runs on Linux**, in the `swift:6.4-noble` container, and code must pass there whatever it does on macOS.
-- **LLVM is the default backend, and C an alternative one.** The C backend is supported and tested, but never the main path.
+- **LLVM is the backend.**
 
 ## Layout
 
