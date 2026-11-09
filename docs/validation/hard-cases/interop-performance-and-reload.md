@@ -74,7 +74,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E7 · C code that needs a large stack
 
-**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack panics before anything is written past the stack's end, so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
+**A C library's function recurses deeply, and a plugin's callback is documented to need 1 MiB of stack.** Running out of stack ends the program before anything is written past the stack's end ([10](../../spec/10-errors-and-safety/panics.md#what-ends-the-program)), so a call into C first checks that the stack its target needs is left ([08](../../spec/08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
 
 - **Must accept** calling each, within C's obligations, by declaring its need where the function or the pointer type is declared.
 
@@ -137,7 +137,7 @@ pos += vel * dt          // vector arithmetic on each value
 vel = lerp(…)            // a call to a small math function
 ```
 
-- **Must accept** unoptimized code with no function call per operation and no hidden check beyond bounds checks ([11](../../spec/11-compilation-model.md#runtime-costs)).
+- **Must accept** unoptimized code with no hidden check beyond bounds checks, and no function call per operation where the processor has the operation ([11](../../spec/11-compilation-model.md#runtime-costs)). An operation it lacks may call a software routine ([04](../../spec/04-types/numbers-and-math.md#simd-and-math)).
 - **Must accept** generic vector code over `T: VectorSpace` whose requirement calls reach `@inline` operators, each running in place in every build, and `@inline` functions that call each other in a cycle through a generic witness.
 
 ### F2 · Generic code size
@@ -149,7 +149,7 @@ vel = lerp(…)            // a call to a small math function
 
 ### F3 · Many types behind one interface
 
-**Many types that conform to one protocol are run each iteration through the protocol**, as an engine's render passes are. The second criterion passes each value, held as an existential, to this generic function:
+**Many types that conform to one protocol are run each iteration through the protocol**, as a server's middleware stages are for each request, or an engine's render passes for each frame. The second criterion passes each value, held as an existential, to this generic function:
 
 ```swift
 func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conforming types

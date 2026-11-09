@@ -42,7 +42,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C3 · Two threads on alternate buffers
 
-**One thread reads snapshot N while another writes snapshot N+1, concurrently and for longer than any one call**, as a renderer and a simulation do. A thread that outlives the call that started it owns its captures, and can't borrow ([07](../../spec/07-concurrency/thread-work.md#what-a-thread-can-share)).
+**One thread reads snapshot N while another writes snapshot N+1, concurrently and for longer than any one call**, as a database's readers and its writer do, or a renderer and a simulation. A thread that outlives the call that started it owns its captures, and can't borrow ([07](../../spec/07-concurrency/thread-work.md#what-a-thread-can-share)).
 
 - **Must accept** a safe idiom. State what the language checks and what only the library enforces.
 
@@ -153,7 +153,7 @@ let db = try block(on: connect(dbAddress))                         // in main, b
 
 ### M1 · Keeping short-lived results in long-lived state
 
-**Code builds a `List` in a scratch arena that is reset regularly, such as once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
+**Code builds a `List` in a scratch arena that is reset regularly, such as once per request or once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
 
 ```swift
 using allocator = .system { world.results = scratch.clone() }   // clones the list while .system is the current allocator
@@ -165,7 +165,7 @@ world.results.append(r)                                         // grows the kep
 
 ### M2 · Freeing a large set of objects at once
 
-**Every value of one phase of a program, such as a level's entities, graph nodes and strings, is freed at once**, and the cost on the thread that frees them must not grow with their number. They live in one heap, some of them objects, some pinned for C, and the heap is unregistered while weak pointers to them are still stored elsewhere.
+**Every value of one phase of a program, such as a compiler pass's syntax trees or a level's entities and strings, is freed at once.** The cost on the thread that frees them must not grow with their number. They live in one heap, some of them objects, some pinned for C, and the heap is unregistered while weak pointers to them are still stored elsewhere.
 
 - **Must accept** an idiom whose cost on the freeing thread doesn't depend on how many objects and values the heap holds. State which thread runs the objects' `deinit`s, and when ([03](../../spec/03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 

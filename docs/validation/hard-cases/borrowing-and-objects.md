@@ -290,7 +290,7 @@ The law of exclusivity lets nothing else reach a place while it is mutably borro
 
 ### B3 · A coroutine waiting on an object that is destroyed
 
-**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its owner steps explicitly ([07](../../spec/07-concurrency/tasks.md#semantics)). This one waits for an enemy to be gone:
+**A coroutine waits on a condition about an object, and meanwhile another part of the program destroys the object and a new one reuses its slot.** The coroutine is a `task`, which its runner steps each time it is woken ([07](../../spec/07-concurrency/tasks.md#running-tasks)). This one waits for an enemy to be gone:
 
 ```swift
 await until { [copy target] game in game.enemies[target] == nil }   // the condition, polled at each step
