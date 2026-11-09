@@ -5,6 +5,7 @@ final class ModuleBuilder {
     let context: LLVMContextRef
     let module: LLVMModuleRef
     let builder: LLVMBuilderRef
+    private let diagnostics = DiagnosticLog()
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
@@ -22,6 +23,10 @@ final class ModuleBuilder {
         int64 = LLVMInt64TypeInContext(context)
         pointer = LLVMPointerTypeInContext(context, 0)
         target.configure(module)
+        // Without a handler, LLVM prints what it reports to rayoc's standard error, and exits on an error.
+        LLVMContextSetDiagnosticHandler(context, { info, log in
+            Unmanaged<DiagnosticLog>.fromOpaque(log!).takeUnretainedValue().record(info!)
+        }, Unmanaged.passUnretained(diagnostics).toOpaque())
     }
 
     deinit {
@@ -36,6 +41,12 @@ final class ModuleBuilder {
         let broken = LLVMVerifyModule(module, LLVMReturnStatusAction, &message) != 0
         let report = takeMessage(message)
         if broken { throw LLVMError(message: "LLVM rejected the module it was given:\n\(report)") }
+    }
+
+    /// Throws the errors LLVM has reported in this module's context, if any. A warning fails nothing.
+    func checkReportedErrors() throws(LLVMError) {
+        let errors = diagnostics.errors
+        if !errors.isEmpty { throw LLVMError(message: "LLVM reported errors:\n" + errors.joined(separator: "\n")) }
     }
 
     func addFunction(_ name: String, returning result: LLVMTypeRef, parameters: [LLVMTypeRef] = [],
@@ -84,6 +95,19 @@ final class ModuleBuilder {
 
     func constant(_ value: Bool) -> LLVMValueRef {
         LLVMConstInt(bool, value ? 1 : 0, 0)
+    }
+}
+
+/// What LLVM reports through a context's diagnostic handler, with the severity of each report.
+private final class DiagnosticLog {
+    private var reports: [(severity: LLVMDiagnosticSeverity, message: String)] = []
+
+    var errors: [String] {
+        reports.filter { $0.severity == LLVMDSError }.map(\.message)
+    }
+
+    func record(_ info: LLVMDiagnosticInfoRef) {
+        reports.append((LLVMGetDiagInfoSeverity(info), takeMessage(LLVMGetDiagInfoDescription(info))))
     }
 }
 
