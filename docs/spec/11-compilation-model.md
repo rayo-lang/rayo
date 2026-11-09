@@ -63,7 +63,7 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 - the literal protocols ([04](04-types/collections.md#literals));
 - the C type aliases ([08](08-c-interop.md));
 - the protocols the compiler derives or checks;
-- the functions it gives meaning to, such as `precondition` and `typeInfo`.
+- the functions it gives meaning to, such as `precondition`, `typeInfo` and `fma`.
 
 ## Type checking is local
 
@@ -203,6 +203,8 @@ Then the second load reads a value no older, in its location's modification orde
 **Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
+**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
 
 ### WebAssembly
 
