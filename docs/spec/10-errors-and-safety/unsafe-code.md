@@ -217,7 +217,7 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
 
 **These operations serve hardware access and code that interrupts a thread:**
 
-- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed. An 8-byte one is a compile error where `target.pointerBitWidth` is 32 ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)), since a 32-bit bus splits it into two accesses, whatever the target's atomics. Masking interrupts doesn't help, since a device sees the two halves apart.
+- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed. An 8-byte one is a compile error where `target.pointerBitWidth` is 32 ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)), since such a target can't promise one 8-byte access, whatever its atomics. Masking interrupts doesn't help, since a device would see two halves apart.
 - `fence(_:)`, given `.acquire`, `.release`, `.acqRel` or `.seqCst`, is a memory fence of that ordering ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 - `compilerFence(_:)` orders the thread's accesses only against code interrupting that same thread, such as a signal handler.
 

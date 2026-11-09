@@ -30,7 +30,7 @@ A C or C++ program uses a library written in Rayo:
 - every type that the signature of one of the module's exported functions, `@c func`s or `extern c func`s uses;
 - every type that one of the module's `@c` types uses.
 
-**Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. Each typedef is guarded by `#ifndef`, so several generated headers can be included together. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-inline-c.md#what-imports-as-what)).
+**Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. C's `#ifndef` can't test for a typedef, so the header guards each with a macro it defines alongside it, as `_SIZE_T_DEFINED` guards `size_t`. So several generated headers can be included together. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-inline-c.md#what-imports-as-what)).
 
 **For each `List`, `String` and `TrailingArray` type among them, the header declares a free function**: an `@export` function that takes the value `owned` and destroys it. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
