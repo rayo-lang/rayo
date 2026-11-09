@@ -26,6 +26,8 @@ public struct CheckedProgram: Sendable {
 public struct CheckedFunction: Sendable {
     /// The function's name and parameters, such as `f()`, which no other function of the program has.
     public var name: String
+    /// How many parameters the function takes, which are its first locals, in order.
+    public var parameterCount: Int
     public var result: RayoType
     /// The function's locals, indexed by `LocalID`.
     public var locals: [CheckedLocal]
@@ -53,8 +55,16 @@ public struct LocalID: Hashable, Sendable {
 public struct CheckedLocal: Sendable {
     public var name: String
     public var type: RayoType
-    /// True for a `var`, which may be assigned after its declaration.
-    public var isVar: Bool
+    public var kind: LocalKind
+}
+
+/// What declares a local, which decides whether it may change.
+public enum LocalKind: Sendable {
+    case `let`
+    /// The one kind of local that may be assigned after its declaration.
+    case `var`
+    /// A borrowed parameter, which holds the caller's argument.
+    case parameter
 }
 
 /// A place that a statement writes, and where the source names it.

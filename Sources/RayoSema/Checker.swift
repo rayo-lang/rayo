@@ -68,22 +68,39 @@ final class FileChecker {
         var main: FunctionID?
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
-            let signature = Signature(name: function.name, callee: .function(id), parameters: [],
-                                      result: result(of: function, id))
+            let parameters = function.parameters.map(parameter(from:))
+            let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
+                                      result: declaredResult(of: function, id))
             signatures.append(signature)
             if !declarations.declare(signature) {
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
             } else if function.name == "main" {
-                main = id
+                main = main ?? id
+                if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
             }
         }
-        _ = declarations.declare(.print)
+        declarations.declarePrelude()
         return main
+    }
+
+    /// What a call needs to know about `parameter`, reporting what in it rayoc doesn't support: every parameter
+    /// is borrowed, and every argument written. A parameter of type Void gets no type, since no local holds one.
+    private func parameter(from parameter: Param) -> Parameter {
+        if let convention = parameter.convention {
+            errors.report(.unsupportedConvention(convention: convention.rawValue), at: parameter.range)
+        }
+        if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
+        var type = declarations.resolve(parameter.type, reporting: errors)
+        if type == .void {
+            errors.report(.voidParameter, at: parameter.type.range)
+            type = nil
+        }
+        return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling)
     }
 
     /// The result type that `function`, which is `id`, declares. Without '->', it is Void, unless the body is a
     /// single expression of a function other than `main`, whose type is the result type.
-    private func result(of function: FuncDecl, _ id: FunctionID) -> DeclaredResult {
+    private func declaredResult(of function: FuncDecl, _ id: FunctionID) -> DeclaredResult {
         let isMain = function.name == "main"
         guard let written = function.result else {
             return !isMain && function.body.singleExpression != nil ? .givenByBody(id) : .type(.void)
@@ -100,8 +117,9 @@ final class FileChecker {
     private func function(_ id: FunctionID) -> CheckedFunction? {
         let body = body(of: id)
         guard let result = body.result else { return nil }
-        return CheckedFunction(name: "\(signatures[id.index])", result: result, locals: body.locals,
-                               body: body.statements)
+        let signature = signatures[id.index]
+        return CheckedFunction(name: "\(signature)", parameterCount: signature.parameters.count, result: result,
+                               locals: body.locals, body: body.statements)
     }
 
     /// The body of the function `id`, checked when this first asks for it.
@@ -118,6 +136,7 @@ final class FileChecker {
         let function = file.functions[id.index]
         let declared = signatures[id.index].result
         var body = BodyChecker(file: self, result: declared.type)
+        body.declare(function.parameters, types: signatures[id.index].parameters.map(\.type))
         var result = declared.type
         let statements: [CheckedStmt]
         if result != .void, let value = function.body.singleExpression {

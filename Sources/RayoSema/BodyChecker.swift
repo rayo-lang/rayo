@@ -16,8 +16,8 @@ struct BodyChecker {
     /// The function's result type, or nil when it isn't known.
     let result: RayoType?
     private(set) var locals: [CheckedLocal] = []
-    /// The names each enclosing block declares, innermost last.
-    private var scopes: [[String: ScopeEntry]] = []
+    /// The names each enclosing block declares, innermost last, inside the scope of the function's parameters.
+    private var scopes: [[String: ScopeEntry]] = [[:]]
     private var loopDepth = 0
 
     init(file: FileChecker, result: RayoType?) {
@@ -27,6 +27,19 @@ struct BodyChecker {
 
     var declarations: Declarations { file.declarations }
     var errors: ErrorList { file.errors }
+
+    /// Declares `parameters`, whose types are `types`, as the function's first locals, in order.
+    mutating func declare(_ parameters: [Param], types: [RayoType?]) {
+        for (parameter, type) in zip(parameters, types) {
+            if parameter.name == "_" {
+                errors.report(.underscoreDeclared, at: parameter.nameRange)
+            } else if let type {
+                _ = declare(parameter.name, type: type, kind: .parameter, at: parameter.nameRange)
+            } else {
+                _ = declareFailed(parameter.name, at: parameter.nameRange)
+            }
+        }
+    }
 
     mutating func check(_ block: Block) -> [CheckedStmt] {
         scopes.append([:])
@@ -95,8 +108,8 @@ struct BodyChecker {
             errors.report(.voidLocal, at: value.range)
             return declareFailed(binding.name, at: binding.nameRange)
         }
-        guard let local = declare(binding.name, type: type, isVar: binding.kind == .var, at: binding.nameRange)
-        else { return nil }
+        let kind: LocalKind = binding.kind == .var ? .var : .let
+        guard let local = declare(binding.name, type: type, kind: kind, at: binding.nameRange) else { return nil }
         return .binding(local, value)
     }
 
@@ -111,13 +124,13 @@ struct BodyChecker {
         return value
     }
 
-    private mutating func declare(_ name: String, type: RayoType, isVar: Bool, at range: SourceRange) -> LocalID? {
+    private mutating func declare(_ name: String, type: RayoType, kind: LocalKind, at range: SourceRange) -> LocalID? {
         guard !isVisible(name, reportingRedeclarationAt: range) else {
             scopes[scopes.count - 1][name] = .failed
             return nil
         }
         let local = LocalID(index: locals.count)
-        locals.append(CheckedLocal(name: name, type: type, isVar: isVar))
+        locals.append(CheckedLocal(name: name, type: type, kind: kind))
         scopes[scopes.count - 1][name] = .local(local)
         return local
     }
@@ -131,7 +144,7 @@ struct BodyChecker {
 
     /// Whether `name` already names a local or a function, reporting it when it does.
     private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
-        guard lookUp(name) != nil || declarations.function(named: name) != nil else { return false }
+        guard lookUp(name) != nil || declarations.declaresFunction(named: name) else { return false }
         errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
@@ -152,8 +165,15 @@ struct BodyChecker {
 
     /// Whether `local` is a `var`, reporting it when it isn't.
     private mutating func isVar(_ local: LocalID, at range: SourceRange) -> Bool {
-        if locals[local.index].isVar { return true }
-        errors.report(.assignToLet(name: locals[local.index].name), at: range)
+        let name = locals[local.index].name
+        switch locals[local.index].kind {
+        case .var:
+            return true
+        case .let:
+            errors.report(.assignToLet(name: name), at: range)
+        case .parameter:
+            errors.report(.assignToParameter(name: name), at: range)
+        }
         return false
     }
 
@@ -166,7 +186,7 @@ struct BodyChecker {
                 return local
             case .failed:
                 break
-            case nil where declarations.function(named: name) != nil:
+            case nil where declarations.declaresFunction(named: name):
                 errors.report(.assignToFunction(name: name), at: target.range)
             case nil:
                 errors.report(.notDeclared(name: name), at: target.range)

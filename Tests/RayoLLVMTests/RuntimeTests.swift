@@ -21,10 +21,10 @@ struct RuntimeTests {
 
     @Test("a program's own functions are defined in its object, and none is exported")
     func programFunctionsHidden() throws {
-        let answer = IRFunction(name: "answer()", result: .int, locals: [], blocks: [
+        let answer = IRFunction(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
             BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
         ])
-        let main = IRFunction(name: "main()", result: .void, locals: [.int], blocks: [
+        let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: [.int], blocks: [
             BasicBlock(statements: [
                 statement(storingIn: 0, .call(.function(FunctionID(index: 1)), arguments: [])),
                 Statement(destination: nil, value: .call(.printInt, arguments: [.local(LocalID(index: 0))]),

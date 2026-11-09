@@ -74,6 +74,15 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(118, error: "expected ')' to close the parenthesized expression, found {found}")
     case unclosedParenthesizedExpression(found: FoundToken)
 
+    @Code(119, error: "expected ')' to close the parameters, found {found}")
+    case unclosedParameters(found: FoundToken)
+
+    @Code(120, error: "expected the parameter's name, found {found}")
+    case missingParameterName(found: FoundToken)
+
+    @Code(121, error: "expected ':' and the parameter's type, found {found}")
+    case missingParameterType(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the program has no 'main' function")
@@ -131,7 +140,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(219, error: "a local can't have type Void")
     case voidLocal
 
-    @Code(220, error: "a local's value is taken with 'copy {name}'")
+    @Code(220, error: "the value of '{name}' is taken with 'copy {name}'")
     case takenWithoutCopy(name: String)
 
     @Code(221, error: "'{name}' is a 'let', so it can't change")
@@ -154,6 +163,27 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(227, error: "the result type of '{signature}' depends on itself")
     case resultDependsOnItself(signature: String)
+
+    @Code(228, error: "expected {expected} before the argument, found {found}")
+    case argumentLabel(expected: ArgumentLabel, found: ArgumentLabel)
+
+    @Code(229, error: "'main' takes no parameters")
+    case mainTakesParameters
+
+    @Code(230, error: "'{name}' is a borrowed parameter, so it can't change")
+    case assignToParameter(name: String)
+
+    @Code(231, error: "no '{name}' takes the arguments ({arguments})")
+    case noMatchingFunction(name: String, arguments: String)
+
+    @Code(232, error: "'{convention}' parameters aren't supported")
+    case unsupportedConvention(convention: String)
+
+    @Code(233, error: "default arguments aren't supported")
+    case defaultArgument
+
+    @Code(234, error: "a parameter can't have type Void")
+    case voidParameter
 }
 
 extension ErrorCode {
@@ -176,6 +206,23 @@ public enum FoundToken: Sendable, Hashable, CustomStringConvertible {
         case .token(let spelling): return "'\(spelling)'"
         case .newline: return "a newline"
         case .endOfFile: return "the end of the file"
+        }
+    }
+}
+
+/// The label an argument is written with, as an error names it: `'by:'`, or `no label`.
+public enum ArgumentLabel: Sendable, Hashable, CustomStringConvertible {
+    case label(String)
+    case none
+
+    public init(_ label: String?) {
+        self = label.map { .label($0) } ?? .none
+    }
+
+    public var description: String {
+        switch self {
+        case .label(let label): return "'\(label):'"
+        case .none: return "no label"
         }
     }
 }

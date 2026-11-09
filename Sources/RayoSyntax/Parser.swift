@@ -175,16 +175,65 @@ public struct Parser {
         }
     }
 
-    /// `'func' identifier '(' ')' ('->' type)? block`.
+    /// `'func' identifier '(' parameters ')' ('->' type)? block`.
     private mutating func parseFunction() throws(Failure) -> FuncDecl {
         guard consume(.func) else { throw fail(ErrorCode.missingFunc) }
         let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
         try expect(.lparen, else: ErrorCode.missingParameterList)
-        try expect(.rparen, else: ErrorCode.unclosedEmptyParentheses)
+        var parameters: [Param] = []
+        while !current.isPunct(.rparen) {
+            parameters.append(try parseParameter())
+            if !consume(.comma) { break }
+        }
+        try expect(.rparen, else: ErrorCode.unclosedParameters)
         var result: TypeExpr?
         if consume(.arrow) { result = try parseType() }
         let body = try parseBlock()
-        return FuncDecl(name: name, nameRange: nameRange, result: result, body: body)
+        return FuncDecl(name: name, nameRange: nameRange, parameters: parameters, result: result, body: body)
+    }
+
+    /// `(label | '_')? identifier ':' ('mutable' | 'owned')? type ('=' expression)?`, where a label may be a
+    /// keyword.
+    private mutating func parseParameter() throws(Failure) -> Param {
+        let start = current.range
+        var label: String?
+        var isLabelWritten = false
+        if let spelling = labelSpelling(of: current), case .identifier = peek().kind {
+            advance()
+            label = spelling == "_" ? nil : spelling
+            isLabelWritten = true
+        }
+        let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingParameterName)
+        if !isLabelWritten && name != "_" { label = name }
+        guard consume(.colon) else { throw fail(ErrorCode.missingParameterType) }
+        let convention = parseConvention()
+        let type = try parseType()
+        let defaultValue = consume(.assign) ? try parseExpression() : nil
+        return Param(label: label, name: name, nameRange: nameRange, convention: convention,
+                     type: type, defaultValue: defaultValue, range: range(from: start))
+    }
+
+    /// `mutable` or `owned`, which are names everywhere but before a parameter's type.
+    private mutating func parseConvention() -> ParamConvention? {
+        guard case .identifier(let word) = current.kind, let convention = ParamConvention(rawValue: word) else {
+            return nil
+        }
+        switch peek().kind {
+        case .identifier, .punct(.lparen):
+            advance()
+            return convention
+        default:
+            return nil
+        }
+    }
+
+    /// How `token` is spelled as an argument label: any identifier or keyword is one.
+    private func labelSpelling(of token: Token) -> String? {
+        switch token.kind {
+        case .identifier(let name): return name
+        case .keyword(let keyword): return keyword.rawValue
+        default: return nil
+        }
     }
 
     // MARK: Types
@@ -339,13 +388,26 @@ public struct Parser {
     /// After the `(` that follows a name: the arguments, separated by commas with an optional trailing comma,
     /// and the `)`.
     private mutating func parseCall(to name: String, at nameRange: SourceRange) throws(Failure) -> Expr {
-        var arguments: [Expr] = []
+        var arguments: [Argument] = []
         while !current.isPunct(.rparen) {
-            arguments.append(try parseExpression())
+            arguments.append(try parseArgument())
             if !consume(.comma) { break }
         }
         try expect(.rparen, else: ErrorCode.unclosedArguments)
         return Expr(kind: .call(name: name, nameRange: nameRange, arguments: arguments), range: range(from: nameRange))
+    }
+
+    /// `(label ':')? expression`, where a label may be a keyword.
+    private mutating func parseArgument() throws(Failure) -> Argument {
+        let start = current.range
+        var label: String?
+        if let spelling = labelSpelling(of: current), peek().isPunct(.colon) {
+            advance()
+            advance()
+            label = spelling
+        }
+        let value = try parseExpression()
+        return Argument(label: label, value: value, range: range(from: start))
     }
 
     /// After the `(`: an expression in parentheses and the `)`.

@@ -55,7 +55,7 @@ extension BodyChecker {
             return CheckedExpr(kind: .local(local), type: locals[local.index].type, range: range)
         case .failed:
             return nil
-        case nil where declarations.function(named: name) != nil:
+        case nil where declarations.declaresFunction(named: name):
             errors.report(.functionAsValue(name: name), at: range)
             return nil
         case nil:

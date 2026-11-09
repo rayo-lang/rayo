@@ -12,8 +12,8 @@ func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
 
 /// A program whose `main` holds `locals` and is made of `blocks`.
 func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
-    IRProgram(functions: [IRFunction(name: "main()", result: .void, locals: locals, blocks: blocks)],
-              main: FunctionID(index: 0))
+    let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals, blocks: blocks)
+    return IRProgram(functions: [main], main: FunctionID(index: 0))
 }
 
 /// A program that prints what `value` computes.

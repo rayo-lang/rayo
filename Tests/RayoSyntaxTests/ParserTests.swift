@@ -17,7 +17,7 @@ struct ParserErrorTests {
     @Test("a declaration whose header fails is skipped, and the parser goes on at the next declaration")
     func declarationRecovery() {
         #expect(errors("func f(x) {\n    print(1)\n}\nfunc g() { copy }") == [
-            .unclosedEmptyParentheses(found: .token("x")), .missingCopiedName(found: .token("}")),
+            .missingParameterType(found: .token(")")), .missingCopiedName(found: .token("}")),
         ])
     }
 
@@ -58,6 +58,14 @@ struct ParserErrorTests {
         #expect(errors("func f() { return 1 2 }") == [.unendedStatement(found: .token("2"))])
         #expect(errors("func f() { return ) }") == [.missingExpression(found: .token(")"))])
         #expect(errors("func f() { let return = 1 }") == [.missingBindingName(found: .token("return"))])
+    }
+
+    @Test("parameters and arguments are separated by commas, may end in one, and may carry keyword labels")
+    func parameters() {
+        #expect(errors("func f(_ a: Int, in b: Bool, c: Int,) { f(1, in: true, c: 2,) }") == [])
+        #expect(errors("func f(if x: Int) { f(if: 1) }") == [])
+        #expect(errors("func f(a: Int,, b: Int) {}") == [.missingParameterName(found: .token(","))])
+        #expect(errors("func f(a b c: Int) {}") == [.missingParameterType(found: .token("c"))])
     }
 
     @Test("malformed declarations and statements", arguments: [
