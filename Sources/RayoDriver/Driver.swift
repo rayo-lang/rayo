@@ -27,7 +27,7 @@ public enum Driver {
 
     static let usage = """
         usage: rayoc <command> <file>
-               rayoc build|run [--debug | --release] <file>
+               rayoc build|run [--debug | --release] [--linker=lld | --linker=platform] <file>
 
         commands:
           check    check the file and report its errors
@@ -38,6 +38,10 @@ public enum Driver {
           --debug    integer overflow panics, and the program isn't optimised
           --release  integer overflow wraps, and the program is optimised; a build that names no mode is a
                      release build
+
+        linkers:
+          --linker=lld       LLD, from the LLVM that rayoc was built with; the linker when none is named
+          --linker=platform  the platform's own linker
 
         """
 
@@ -55,20 +59,49 @@ public enum Driver {
     /// What the arguments ask `rayoc` to do.
     private struct Invocation {
         var command: Command
-        var mode = BuildMode.release
+        var mode: BuildMode
+        var linker: Linker
         var path: String
 
-        /// Nil when `arguments` don't fit the usage.
-        init?(_ arguments: [String]) {
-            guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { return nil }
+        init(_ arguments: [String]) throws(CommandLineError) {
+            guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { throw .usage }
             var operands = arguments.dropFirst()
-            if command == .build || command == .run, let mode = operands.first.flatMap(BuildMode.init(rawValue:)) {
-                self.mode = mode
+            var mode: BuildMode?
+            var linker: Linker?
+            while command != .check, operands.count > 1, let option = operands.first {
+                if let newMode = BuildMode(rawValue: option), mode == nil {
+                    mode = newMode
+                } else if let name = Self.value(of: option, named: "--linker"), linker == nil {
+                    guard let newLinker = Linker(rawValue: name) else { throw .unknownLinker(name) }
+                    linker = newLinker
+                } else {
+                    throw .usage
+                }
                 operands = operands.dropFirst()
             }
-            guard operands.count == 1, let path = operands.first else { return nil }
+            guard operands.count == 1, let path = operands.first else { throw .usage }
             self.command = command
+            self.mode = mode ?? .release
+            self.linker = linker ?? .lld
             self.path = path
+        }
+
+        /// The value `option` gives, when it is `name=value`.
+        private static func value(of option: String, named name: String) -> String? {
+            option.hasPrefix(name + "=") ? String(option.dropFirst(name.count + 1)) : nil
+        }
+    }
+
+    /// Why the arguments don't make a command `rayoc` can run.
+    private enum CommandLineError: Error {
+        case usage
+        case unknownLinker(String)
+
+        var errors: String {
+            switch self {
+            case .usage: return Driver.usage
+            case .unknownLinker(let name): return "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
+            }
         }
     }
 
@@ -81,12 +114,17 @@ public enum Driver {
     }
 
     /// Runs `rayoc` with `arguments`, which exclude the program's name, reading source files through
-    /// `readFile`, which returns nil for a file it can't read. `environment` holds the search path for
-    /// `clang`, and is the environment a program runs in.
+    /// `readFile`, which returns nil for a file it can't read. `build` and `run` link with `linkTools`, and
+    /// `environment` is the environment that clang and a program run in.
     public static func run(_ arguments: [String], programOutput: ProgramOutput = .captured,
                            environment: [String: String] = ProcessInfo.processInfo.environment,
-                           readFile: (String) -> [UInt8]?) -> Result {
-        guard let invocation = Invocation(arguments) else { return Result(exitCode: 2, output: "", errors: usage) }
+                           linkTools: LinkTools = .installed, readFile: (String) -> [UInt8]?) -> Result {
+        let invocation: Invocation
+        do {
+            invocation = try Invocation(arguments)
+        } catch {
+            return Result(exitCode: 2, output: "", errors: error.errors)
+        }
         let command = invocation.command
         let path = invocation.path
         do {
@@ -103,7 +141,7 @@ public enum Driver {
             let objectCode = try LLVMEmitter.objectCode(for: Lowering.lower(program), sourcePath: path,
                                                         checksOverflow: invocation.mode == .debug,
                                                         optimizes: invocation.mode == .release)
-            let toolchain = Toolchain(environment: environment)
+            let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
             if let executable {
                 try toolchain.link(objectCode, to: executable)
                 return Result(exitCode: 0, output: "", errors: "")

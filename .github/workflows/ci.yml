@@ -22,7 +22,8 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR_VERSION main" \
             > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          apt-get install -y --no-install-recommends llvm-$LLVM_MAJOR_VERSION-dev
+          apt-get install -y --no-install-recommends \
+            llvm-$LLVM_MAJOR_VERSION-dev clang-$LLVM_MAJOR_VERSION lld-$LLVM_MAJOR_VERSION
       - name: Build
         run: swift build --build-tests
       - name: Test

@@ -45,6 +45,31 @@ func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
     return try body(directory)
 }
 
+/// Runs an empty `main`, linked with `linkTools` in the way `options` name.
+private func runEmptyMain(options: [String] = [], linkTools: Driver.LinkTools) -> Driver.Result {
+    Driver.run(["run"] + options + ["main.rayo"], linkTools: linkTools) { _ in Array("func main() {}".utf8) }
+}
+
+/// Writes a shell script running `body` to `url`, makes it executable, and returns `url`.
+private func script(_ body: String, at url: URL) throws -> URL {
+    try Data("#!/bin/sh\n\(body)\n".utf8).write(to: url)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    return url
+}
+
+/// What `executable` writes to its standard output, once it exits with 0.
+private func runExecutable(_ executable: URL) throws -> String {
+    let process = Process()
+    process.executableURL = executable
+    let output = Pipe()
+    process.standardOutput = output
+    try process.run()
+    let written = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    process.waitUntilExit()
+    #expect(process.terminationStatus == 0)
+    return written
+}
+
 struct BuildTests {
     @Test("build writes an executable beside the source, named after it")
     func build() throws {
@@ -76,52 +101,73 @@ struct BuildTests {
             Driver.Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n"))
     }
 
-    @Test("build and run need clang on the search path")
-    func clangMissing() {
-        let result = Driver.run(["run", "main.rayo"], environment: ["PATH": "/nonexistent"]) { _ in
-            Array("func main() {}".utf8)
+    @Test("build and run need the clang of the LLVM install, and a directory named clang isn't one")
+    func clangMissing() throws {
+        try withTemporaryDirectory { directory in
+            let decoy = directory.appendingPathComponent("clang")
+            try FileManager.default.createDirectory(at: decoy, withIntermediateDirectories: true)
+            for clang in [directory.appendingPathComponent("nonexistent"), decoy] {
+                let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+                #expect(runEmptyMain(linkTools: tools) ==
+                    Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't find clang at '\(clang.path)'\n"))
+            }
         }
-        #expect(result == Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't find clang on the search path\n"))
     }
 
-    @Test("a clang that fails has its errors reported, and a directory named clang isn't one")
+    @Test("a clang that fails has its errors reported")
     func clangFails() throws {
         try withTemporaryDirectory { directory in
-            let decoy = directory.appendingPathComponent("decoy")
-            try FileManager.default.createDirectory(at: decoy.appendingPathComponent("clang"),
-                                                    withIntermediateDirectories: true)
-            let clang = directory.appendingPathComponent("clang")
-            try Data("#!/bin/sh\necho 'clang: something broke' >&2\nexit 1\n".utf8).write(to: clang)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: clang.path)
-            let result = Driver.run(["run", "main.rayo"], environment: ["PATH": "\(decoy.path):\(directory.path)"]) { _ in
-                Array("func main() {}".utf8)
-            }
-            #expect(result == Driver.Result(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
+            let clang = try script("echo 'clang: something broke' >&2\nexit 1", at: directory.appendingPathComponent("clang"))
+            let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+            #expect(runEmptyMain(linkTools: tools) ==
+                Driver.Result(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
         }
     }
 
     @Test("rayoc compiles the program itself, and clang only links it")
     func clangOnlyLinks() throws {
-        let path = ProcessInfo.processInfo.environment["PATH", default: ""]
         try withTemporaryDirectory { directory in
-            // Hands what it is given to the clang on the search path, unless it is source clang would compile.
-            let clang = directory.appendingPathComponent("clang")
-            try Data("""
-                #!/bin/sh
+            // Hands what it is given to the installed clang, unless it is source clang would compile.
+            let clang = try script("""
                 for argument in "$@"; do
                     case "$argument" in
                         *.ll|*.bc|*.c|*.s) echo "clang: asked to compile $argument" >&2; exit 1 ;;
                     esac
                 done
-                PATH='\(path)' exec clang "$@"
-
-                """.utf8).write(to: clang)
-            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: clang.path)
-            let result = Driver.run(["run", "main.rayo"], environment: ["PATH": "\(directory.path):\(path)"]) { _ in
-                Array("func main() { print(42) }".utf8)
-            }
+                exec '\(Driver.LinkTools.installed.clang.path)' "$@"
+                """, at: directory.appendingPathComponent("clang"))
+            let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+            let result = Driver.run(["run", "main.rayo"], linkTools: tools) { _ in Array("func main() { print(42) }".utf8) }
             #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
         }
+    }
+
+    @Test("each linker links an executable that runs, and LLD links unless the platform's linker is asked for",
+          arguments: [(["--linker=lld"], true), (["--linker=platform"], false), ([], true)])
+    func linkers(options: [String], linksWithLLD: Bool) throws {
+        try withTemporaryDirectory { directory in
+            // Records that it ran, and hands what it is given to the installed LLD.
+            let ran = directory.appendingPathComponent("lld-ran")
+            let lld = try script("touch '\(ran.path)'\nexec '\(Driver.LinkTools.installed.lld.path)' \"$@\"",
+                                 at: directory.appendingPathComponent(Driver.LinkTools.installed.lld.lastPathComponent))
+            let source = directory.appendingPathComponent("answer.rayo").path
+            let result = Driver.run(["build"] + options + [source], linkTools: Driver.LinkTools(clang: Driver.LinkTools.installed.clang, lld: lld)) {
+                $0 == source ? Array("func main() { print(42) }".utf8) : nil
+            }
+            #expect(result == Driver.Result(exitCode: 0, output: "", errors: ""))
+            #expect(try runExecutable(directory.appendingPathComponent("answer")) == "42\n")
+            #expect(FileManager.default.fileExists(atPath: ran.path) == linksWithLLD)
+        }
+    }
+
+    @Test("linking with LLD needs the LLD of the LLVM install, and the platform's linker doesn't")
+    func lldMissing() throws {
+        let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
+        let tools = Driver.LinkTools(clang: Driver.LinkTools.installed.clang, lld: lld)
+        #expect(runEmptyMain(linkTools: tools) == Driver.Result(exitCode: 1, output: "",
+            errors: "rayoc: can't find LLD at '/nonexistent/ld.lld': install it, or link with --linker=platform\n"))
+        #expect(runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
+            Driver.Result(exitCode: 0, output: "", errors: ""))
     }
 
     @Test("build builds in the mode it names")

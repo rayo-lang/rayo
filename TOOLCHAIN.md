@@ -8,7 +8,7 @@ swift test
 swift run rayoc run program.rayo
 ```
 
-`rayoc build` and `rayoc run` compile a program to object code themselves, and link it with the `clang` on the search path.
+`rayoc build` and `rayoc run` compile a program to object code themselves, and link it with the clang and LLD of the LLVM they were built against.
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
@@ -17,14 +17,16 @@ swift run rayoc run program.rayo
 
 ## LLVM
 
-`rayoc` builds against one major release of LLVM, 23, and links its shared library. Install it before you build:
+`rayoc` builds against one major release of LLVM, 23, and links its shared library. It links programs with that release's clang and LLD. Install all three before you build:
 
 | Platform | Install |
 | --- | --- |
-| macOS | `brew install llvm@23` |
-| Ubuntu or Debian | `llvm-23-dev`, from [apt.llvm.org](https://apt.llvm.org) or the distribution |
+| macOS | `brew install llvm@23 lld@23` |
+| Ubuntu or Debian | `llvm-23-dev clang-23 lld-23`, from [apt.llvm.org](https://apt.llvm.org) or the distribution |
 
 `Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
+
+`rayoc` runs the `clang` in that LLVM's `bin`. It looks for LLD there too, where apt installs it, and otherwise in Homebrew's `opt/lld@23` or `opt/lld` beside LLVM's, whichever holds release 23. Both paths are fixed when `rayoc` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayoc` is built.
 
 The release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. A move to a new release changes both, with any changes the C API and the program runtime's LLVM IR need.
 
@@ -35,6 +37,17 @@ Optimisation follows the build mode: a debug build runs no LLVM passes and gener
 The program runtime is the code every Rayo program links besides its own: the C entry point, and the functions a program calls to print and to report a panic. It will be written in Rayo, once `rayoc` can compile it. Until then it is LLVM IR written by hand, in the `.ll` files of `Sources/RayoRuntime`, in the syntax of the LLVM release `rayoc` builds against.
 
 `rayoc` embeds those files in its own binary. For each program it parses them into the program's LLVM context, links them into the program's module, and then verifies and compiles the whole. So the runtime is part of every program's object code, and nothing is left to find when the program is linked or run.
+
+## Linking
+
+clang drives every link, so the platform's C startup files, C library and system library paths are the ones it would use for a C program. Which linker it runs is a choice of `rayoc build` and `rayoc run`:
+
+| Option | Linker |
+| --- | --- |
+| `--linker=lld`, the default | LLD: `ld64.lld` for Mach-O on macOS, `ld.lld` for ELF on Linux |
+| `--linker=platform` | The platform's own: Apple's `ld` on macOS, the system `ld` on Linux |
+
+LLD is the default because it is the same linker, from the same LLVM, on every machine, and on Windows it needs no Visual Studio. The platform's linker is there for when a platform's own tools are required.
 
 ## Layout
 
@@ -49,7 +62,7 @@ The program runtime is the code every Rayo program links besides its own: the C 
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
-| `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files, and the `clang` it links with |
+| `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files, and the clang and linker it links a program with |
 | `Sources/rayoc` | The executable: reads files and writes the driver's output and errors |
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |

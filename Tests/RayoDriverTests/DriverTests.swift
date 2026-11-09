@@ -41,11 +41,19 @@ struct DriverTests {
         ["run", "a.rayo", "b.rayo"],
         ["check", "--debug", "a.rayo"], ["run", "--fast", "a.rayo"], ["run", "a.rayo", "--debug"],
         ["build", "--debug", "--release", "a.rayo"],
+        ["check", "--linker=lld", "a.rayo"], ["build", "--linker=lld", "--linker=platform", "a.rayo"],
+        ["run", "--linker", "a.rayo"], ["run", "a.rayo", "--linker=lld"],
     ])
     func usage(arguments: [String]) {
         let result = run(arguments, files: ["a.rayo": ""])
         #expect(result.exitCode == 2)
         #expect(result.output == "")
         #expect(result.errors.hasPrefix("usage: rayoc <command> <file>\n"))
+    }
+
+    @Test("a linker rayoc doesn't know is rejected", arguments: ["gold", "", "LLD"])
+    func unknownLinker(name: String) {
+        #expect(run(["build", "--linker=\(name)", "a.rayo"], files: ["a.rayo": ""]) == Driver.Result(
+            exitCode: 2, output: "", errors: "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"))
     }
 }

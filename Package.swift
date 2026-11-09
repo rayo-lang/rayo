@@ -30,6 +30,21 @@ let llvmPrefix: String = {
     return prefix
 }()
 
+/// The directory that holds LLD `llvmMajorVersion`: LLVM's own tools, where LLD is installed with LLVM as apt
+/// installs it, and otherwise the bin of Homebrew's keg for LLD, beside LLVM's. Where neither holds it, it is
+/// LLVM's own tools, so that `rayoc` reports LLD missing from there.
+let lldDirectory: String = {
+    let llvmTools = llvmPrefix + "/bin"
+    if FileManager.default.fileExists(atPath: llvmTools + "/lld") { return llvmTools }
+    let kegs = URL(fileURLWithPath: llvmPrefix).deletingLastPathComponent().path
+    let version = "set(PACKAGE_VERSION \"\(llvmMajorVersion)."
+    let keg = ["\(kegs)/lld@\(llvmMajorVersion)", "\(kegs)/lld"].first { keg in
+        let config = try? String(contentsOfFile: keg + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
+        return config?.contains(version) ?? false
+    }
+    return keg.map { $0 + "/bin" } ?? llvmTools
+}()
+
 let package = Package(
     name: "Rayo",
     products: [
@@ -76,7 +91,12 @@ let package = Package(
     ]
 )
 
-// Every target that imports RayoLLVM, however indirectly, loads CLLVM and so reads LLVM's headers.
+// Every target that imports RayoLLVM, however indirectly, loads CLLVM and so reads LLVM's headers, and the
+// directories of the tools that link a program, which CLLVM's header holds.
 for target in package.targets where target.type != .system {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(llvmPrefix)/include"])]
+    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
+        "-Xcc", "-I\(llvmPrefix)/include",
+        "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(llvmPrefix)/bin\"",
+        "-Xcc", "-DRAYO_LLD_DIRECTORY=\"\(lldDirectory)\"",
+    ])]
 }
