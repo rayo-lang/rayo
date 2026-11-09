@@ -183,14 +183,14 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ISO C guarantees neither of the last two, so the target's compiler must.
 
-**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
-
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
 **Where the C compiler doesn't report an operation lock-free, the implementation may supply it itself**, such as a library call that masks interrupts. Masking brings two conditions:
 
 - **Single-core is the declared target's property.** Building for such a target and running on a chip with more cores breaks it, since masking interrupts doesn't stop the other cores.
 - **Masking needs privileged execution.** Code that runs unprivileged, as under a memory protection unit, reaches those atomics through a privileged call. A target that offers no such call can't use masking, so it isn't such a target.
+
+**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
 
 **Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 

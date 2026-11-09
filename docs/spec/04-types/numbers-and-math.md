@@ -112,15 +112,18 @@ let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names
 
 **`fma(a, b, c)` computes `a * b + c` with a single rounding, as IEEE 754's `fusedMultiplyAdd` does.** That makes it one correctly rounded IEEE 754 operation, under the rule above. The compiler never fuses `a * b + c` itself, so code that wants one rounding, or a target's fused multiply-add instruction, names `fma`.
 
-**`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It has an overload for each floating-point type, and one for each floating-point vector type, which works lane by lane ([SIMD and math](#simd-and-math)). Each borrows its operands, as `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)):
+**`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It is one generic function, which borrows its operands, as `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)):
 
 ```swift
-func fma(_ a: Half, _ b: Half, _ c: Half) -> Half
-func fma(_ a: Float, _ b: Float, _ c: Float) -> Float
-func fma(_ a: Double, _ b: Double, _ c: Double) -> Double
-func fma<let N: Int>(_ a: Simd<Half, N>, _ b: Simd<Half, N>, _ c: Simd<Half, N>) -> Simd<Half, N>
-func fma<let N: Int>(_ a: Simd<Float, N>, _ b: Simd<Float, N>, _ c: Simd<Float, N>) -> Simd<Float, N>
-func fma<let N: Int>(_ a: Simd<Double, N>, _ b: Simd<Double, N>, _ c: Simd<Double, N>) -> Simd<Double, N>
+func fma<T>(_ a: T, _ b: T, _ c: T) -> T    // T: Half, Float, Double, or a Simd of one of them
+```
+
+**`T` binds as any generic call's type parameter does** ([05](../05-protocols-generics-and-closures/operators.md#operators)): to the type the typed arguments widen to, else to the expected type, else to `Double`, the floating-point literals' default. `T` must then be `Half`, `Float`, `Double`, or a `Simd` of one of them, and any other type is a compile error. `fma` is builtin, as `zip` is ([Iteration](collections.md#iteration)), so no protocol states that constraint. A vector `T` works lane by lane ([SIMD and math](#simd-and-math)).
+
+```swift
+let s = fma(h, f, f)                  // h is a Half and f a Float: h widens, and T is Float
+let t = fma(0.1, 3.0, -0.3)           // only literals: T is Double, their default
+let u: Float = fma(0.1, 3.0, -0.3)    // the expected type makes T a Float
 ```
 
 **A target without a fused multiply-add instruction computes `fma` in software, still with a single rounding**, never as a multiply and an add that each round. So the hardware changes how long `fma` takes, never its result.
@@ -167,7 +170,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 - **Moving lanes.** Any operation that only moves lanes works for every `T: SimdLane`, generic or not: indexing and lane assignment, array literals, the initializers from lanes and `repeating:`, loads and stores, `select`, shuffles and swizzles. Operations that compute with lanes, such as arithmetic, comparisons, conversions and [reductions](#reductions), need a concrete `T`.
 - **Operators.** A scalar operand broadcasts to every lane, on either side: `v * 2`, `2 * v`. A comparison gives a mask ([below](#masks)). Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
 - **`min` and `max`.** `a.min(b)` and `a.max(b)` of two vectors work lane by lane, and so do the vector forms of the free `min(a, b)` and `max(a, b)`, each lane through its type's `Comparable` witness. All of them borrow their operands and return a new vector. So integer lanes compare by value and floating-point lanes as [above](#floating-point). `minNumber` and `maxNumber` of two floating-point vectors work lane by lane too. The reductions `v.min()` and `v.max()` take no argument, which tells them apart ([below](#reductions)).
-- **`fma`.** `fma(a, b, c)` of three floating-point vectors of one type works lane by lane, and rounds each lane once, as the scalar `fma` does ([above](#floating-point)). It returns a new vector. A scalar operand doesn't broadcast, as it does for an operator, so code passes `Simd<T, N>(repeating: s)` instead.
+- **`fma`.** `fma(a, b, c)` of three floating-point vectors of one type works lane by lane, and rounds each lane once, as the scalar `fma` does ([above](#floating-point)). It returns a new vector. A scalar and a vector can't bind one `T`, so a scalar operand doesn't broadcast as it does for an operator: code passes a vector made with `repeating:` instead, such as `Vec4(repeating: s)`.
 - **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 - **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
 - **Converting lanes.** `Simd<U, N>(converting: v)` converts each lane of `v` as the unlabeled scalar conversion `U(x)` does ([Conversions](#conversions)). A widening conversion is exact, and any other rounds or checks each lane, and panics where `U(x)` would.
