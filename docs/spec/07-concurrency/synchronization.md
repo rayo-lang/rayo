@@ -383,9 +383,9 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 - an `Instant<C>` plus or minus a `Duration` is an `Instant<C>`;
 - an `Instant<C>` minus an `Instant<C>` is the `Duration` between them.
 
-**std's own waits saturate the deadlines they compute instead.** `sleep(for:)`, `receive(timeout:)`, `Thread.sleep(for:)` and a park's `timeout` each add their `Duration` to `now` without overflowing. So a deadline past the end of `Instant`'s range never passes, and such a wait lasts until something else ends it.
+**std's own waits saturate the deadlines they compute instead.** `sleep(for:)`, `elapsed(_:)`, `receive(timeout:)`, `Thread.sleep(for:)` and a park's `timeout` each add their `Duration` to `now` without overflowing. So a deadline past the end of `Instant`'s range never passes, and such a wait lasts until something else ends it.
 
-**`seconds(_:)` rounds to the nearest nanosecond**, and panics on NaN or on a value out of range, as converting a float to an integer does ([04](../04-types/numbers-and-math.md#conversions)).
+**`seconds(_:)` rounds to the nearest nanosecond, ties to even**, which is IEEE 754's rounding to nearest, as a conversion to a floating-point type uses. It panics on NaN or on a value out of range, as converting a float to an integer does ([04](../04-types/numbers-and-math.md#conversions)).
 
 **`Thread.sleep(for:)` parks the calling thread for at least `d`**, and returns at once when `d` is zero or less:
 

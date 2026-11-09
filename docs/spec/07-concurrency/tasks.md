@@ -330,7 +330,7 @@ let level = try block(on: loadLevel(id), with: &loader)   // parks while the loa
 
 **Called from a task's step, `block(on:)` parks the thread of that task's runner**, so the runner's other tasks wait too. When only those tasks could wake the work, `block(on:)` waits for ever.
 
-**During startup, a `run` or `block(on:)` that would park with no deadline panics**, as any wait that would park until another thread acts does ([Initialization at startup](global-state.md#initialization-at-startup)).
+**During startup, a `run` or `block(on:)` that would park with no deadline panics**, as any wait that would park until another thread acts does ([Initialization at startup](global-state.md#initialization-at-startup)). A saturated deadline, which never passes, counts as none ([Time](synchronization.md#time-duration-and-instant)).
 
 **A program that waits in an event loop of its own**, such as one in `epoll_wait`, steps the set from that loop. It makes the set with a notifying `Waker`, whose target ends the loop's wait, such as by writing an eventfd. The set calls that `Waker` after recording each wake or deadline, on the waking thread, so a wake from another thread ends the wait too. The set uses only its `wake()`. Each pass waits no longer than the set's `deadline`, and not at all while `hasWoken` is true:
 
