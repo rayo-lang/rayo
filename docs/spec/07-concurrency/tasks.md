@@ -146,7 +146,7 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 - **The earliest wins.** An awaitable that waits on two times at once, such as a library's choice between two timed waits, wakes the task at the earlier deadline.
 - **A stale `Waker` costs a poll at most.** A deadline that an earlier awaitable arranged may wake the task early, which only polls it with nothing changed (below).
 - **A pending poll keeps its deadline.** The step clears the old deadline before the poll, so the one that the poll arranges again survives.
-- **A deadline may also cost an early poll, but never a spin.** A runner may step a pending task with nothing changed when the task's deadline lies further ahead than a span that the implementation states. It may also do so when a `wake(at:)` reaches the runner as the task's step begins. The first comes at most once per that span, and the second at most once per step.
+- **A deadline may also cost an early poll, but never a spin.** A runner may step a pending task that has a deadline, with nothing changed, once a span that the implementation states has passed since the task's last step began. It may also do so when a `wake(at:)` reaches the runner as the task's step begins. The first comes at most once per that span, and the second at most once per step.
 
 **A task is pending only when the awaitable it is suspended on is.** `await x` polls `x` with the `Waker` that the task's own poll was given. So the wake that `x` arranged wakes the task, and a sub-task passes the same `Waker` on to what it awaits.
 
@@ -215,7 +215,7 @@ var scripts = TaskSet<Game>(capacity: 512)                       // resume conte
 guard let door = try? scripts.start(openDoor(frontDoor)) else { return }   // nil when all 512 slots are taken
 scripts.cancel(door)                                             // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
 
-scripts.step(&game)                                              // wherever the program steps: one step for each task woken since the last
+scripts.step(&game)                                              // wherever the program steps: one step for each task woken, or allowed an early poll, since the last
 ```
 
 **A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, by its deadline passing, or early in the bounded cases that a deadline allows ([Waking a task](#waking-a-task)).
@@ -243,7 +243,7 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 **`step` takes the set's woken tasks as it begins, and gives each of them one step:**
 
-- **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins. It clears a task's deadline as that task's step begins ([Waking a task](#waking-a-task)).
+- **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins. It may also count as woken a task whose early poll a deadline allows ([Waking a task](#waking-a-task)). It clears a task's deadline as that task's step begins ([Waking a task](#waking-a-task)).
 - **Order.** It steps them in the order of their slots, and `start` fills the lowest free slot. A step that follows a panic starts after the task that panicked instead (below).
 - **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until a wake.
 - **Wakes during the step.** A wake that comes while the step runs, from the task itself, another task or another thread, counts for the next step. So each task gets one step at most, and `nextStep()` waits for the next `step` ([above](#awaitables-in-std)).

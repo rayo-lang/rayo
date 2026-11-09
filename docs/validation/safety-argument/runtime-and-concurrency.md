@@ -163,7 +163,7 @@ A check whose field load reads a newer write synchronizes, through the two fence
 **A wake from another thread records `wake(at: D)` in these steps:**
 
 1. It loads the base `b1`, then the deadline word `w`, and reads the clock as `now1`. If `D` isn't after `now1`, the deadline is due, so the wake only marks the task woken and signals the runner, as step 5 does.
-2. It clamps `D` to at most `now1` plus 2^31 units of `u`, and rounds it up to a multiple of `u`.
+2. It clamps `D` to at most `now1` plus 2^31 units of `u`, and rounds it up to a multiple of `u`. The clamped time comes at least 2^31 units after the slot's base, so its early poll is one that 07 allows ([07](../../spec/07-concurrency/tasks.md#waking-a-task)).
 3. It computes the offset `(D − b1) mod 2^32`, avoiding the empty value. A compare-and-swap with acquire-release ordering stores the smaller of that offset and `w`'s, and on failure the wake starts again at 1.
 4. It loads the base `b2`, and reads the clock as `now2`. If `b2` differs from `b1`, or `D` isn't after `now2`, it also marks the task woken.
 5. It sets the slot's bit in the mask with a release fetch-or, and signals the runner as `wake()` does.
@@ -172,14 +172,14 @@ A check whose field load reads a newer write synchronizes, through the two fence
 
 **The runner never honours a deadline later than it was recorded:**
 
-- **The same base.** If `b2` equals `b1` and `D` is after `now2`, every clear the compare-and-swap could have followed had a base no later than `now2`, so before `D`, with `b1`'s bits. So the stored offset is congruent to `D − B`, and reading it as `B + ((D − B) mod 2^32)` gives at most `D`. A wrap in the offset only makes the wake earlier.
+- **The same base.** If `b2` equals `b1` and `D` is after `now2`, every clear the compare-and-swap could have followed had a base no later than `now2`, so before `D`, with `b1`'s bits. So the stored offset is congruent to `D − B`, and reading it as `B + ((D − B) mod 2^32)` gives at most `D`. A wrap in the offset can make the wake early, but only once `D − B` reaches 2^32 units. The clamp then puts the clock at least 2^31 units past `B`, the start of the task's last step, so 07 allows that early poll ([07](../../spec/07-concurrency/tasks.md#waking-a-task)).
 - **Another base.** Otherwise the task is marked woken, which costs the early poll that 07 allows when a deadline reaches the runner as a step begins ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). The value is discarded at that step's clear. Before the wake reaches step 4, the runner may already have folded the value against the newer base, and parked on that late time. Step 5's mask bit and signal end any such park.
 - **Synchronization.** Every write to the deadline word is a read-modify-write: a wake's compare-and-swap, a clear's exchange, or a fold's exchange. So a compare-and-swap that reads any value at or after a clear's exchange synchronizes with that exchange through its release sequence, and `b2` sees that clear's base or a later one. That lets the base store be relaxed, and `b1` needs no acquire.
 - **The clock.** The argument needs clock reads that never decrease, in happens-before order across threads, which 08 requires ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
 **Recording can't livelock, since no thread holds anything another waits for.** A wake marks the task woken only when its deadline is due, or when a clear raced the wake's own steps. A clear needs a step, and a step needs some other wake.
 
-**The cost is slack, never a missed wake.** Clamping costs at most one early poll per 2^31 units, and a race with a clear at most one per step, as 07 allows a deadline to ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is within 07's rule that a wait on real time may end after its deadline ([07](../../spec/07-concurrency/synchronization.md#time-duration-and-instant)).
+**The cost is slack, never a missed wake.** The span that 07 lets the implementation state is 2^31 units. Clamping and wrapping cost at most one early poll per span since the task's last step, and a race with a clear at most one per step ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is within 07's rule that a wait on real time may end after its deadline ([07](../../spec/07-concurrency/synchronization.md#time-duration-and-instant)).
 
 **An open checks one 32-bit floor.** An allocator word names a registry slot and a 32-bit date. Dates come from one run-wide ordered sequence, issued with the stamps under the lock that parks its waiters. Each registry slot keeps a floor, which only rises:
 
