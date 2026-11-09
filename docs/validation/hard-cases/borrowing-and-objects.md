@@ -336,10 +336,10 @@ let b = borrow attr ?? Bounds(lo: 0, hi: 1)                 // the same, through
 - **Must accept** the loop over `consume tags` above, over an inline array of `String`s, with a `break`.
 - **Must accept** the bindings of `e` and `b` above, each borrowing on one path and owning on the other, used in later statements.
 
-### B7 · Queries over optional components
+### B7 · Queries over optional columns and components
 
-**Entities have optional components of many types.** A query needs every entity with two given components but not a third, with dense iteration.
+**Records have optional parts of many types, stored apart by type.** A columnar store's tables each have their own set of column types, and an ECS's entities each have their own set of components. A query needs every record with two given parts but not a third, with dense iteration.
 
-- **Must accept** an ECS-style library written in Rayo with no macros, using reflection or generics, iterating in parallel through a job system with statically checked disjointness between component storages.
+- **Must accept** such a library written in Rayo with no macros, whether a columnar store or an ECS, using reflection or generics. It iterates in parallel through a job system, with statically checked disjointness between the storages of different columns or components.
 
 ---

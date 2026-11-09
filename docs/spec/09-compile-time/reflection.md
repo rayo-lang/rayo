@@ -241,10 +241,41 @@ func rebuild<T>(_ old: owned T) -> T {
 
 ## Tuples, field lists, and queries
 
-An ECS system runs over every table whose entities have a given set of components, reading some of each row's components and changing others:
+Generic code often needs a part of a value picked by its type rather than its name, and several such parts at once. A columnar store, for one, keeps each table as an `SoA` whose row is a tuple of column types. A query runs over every table that has the columns it needs, reading some columns and changing others. Here every sensor table with a `Reading` and a `Calibration` column has its readings calibrated in place:
 
 ```swift
+struct Reading(var value: Double)
+struct Calibration(var gain: Double, var offset: Double)
+
 protocol Table { associatedtype Row }
+struct Columns<Row>(                                      // Row: a tuple of column types
+    var rows = SoA<Row>(),                                // current allocator, as for List
+): Table
+
+func calibrate<Row>(_ table: mutable Columns<Row>) {
+    const rf = Row.field(ofType: Reading.self)            // per instantiation; a compile error if absent
+    const cf = Row.field(ofType: Calibration.self)
+    let (var rs, cs) = &table.rows[fields: (rf, cf)]    // MutableSpan<Reading>, Span<Calibration>
+    for (r, c) in zip(&rs, cs) { r.value = r.value * c.gain + c.offset }
+}
+
+struct Telemetry(                                         // one table per kind of sensor
+    var thermometers = Columns<(Timestamp, Reading, Calibration)>(),
+    var flowMeters   = Columns<(Timestamp, Reading, Calibration, Pipe)>(),
+    var counters     = Columns<(Timestamp, Count)>(),
+)
+
+func calibrateAll(_ t: mutable Telemetry) {               // every table with a Reading and a Calibration
+    static for f in Telemetry.fields where f.type.Row.hasField(ofType: Reading.self)
+                                         && f.type.Row.hasField(ofType: Calibration.self) {
+        calibrate(&t[f])                                  // instantiated for 'thermometers' and 'flowMeters'
+    }
+}
+```
+
+An entity-component system (ECS) has the same shape. Each archetype is a table whose row is a tuple of component types, and a system runs over every table whose entities have the components it uses. `hasField(ofType:)` can also leave a table out, as "Transform and Velocity, but not Asleep" does:
+
+```swift
 struct Archetype<Row>(                                    // Row: a tuple of component types
     var rows = SoA<Row>(),                                // current allocator, as for List
     var entities = List<Entity>(),
@@ -272,7 +303,7 @@ func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Ve
 }
 ```
 
-**Tuples are reflected like structs.** A tuple type's elements are its `T.fields`, so generic code can take a tuple of types, such as `Archetype<(Transform, Velocity)>`, and `static for` over it.
+**Tuples are reflected like structs.** A tuple type's elements are its `T.fields`, so generic code can take a tuple of types, such as `Columns<(Timestamp, Reading, Calibration)>` or `Archetype<(Transform, Velocity)>`, and `static for` over it.
 
 **`value[fields: (f1, f2, …)]` projects several fields of one value at once, as a tuple of places.** In generic code, two separate projections whose fields may be one overlap where the borrows are checked, as two that `Row.field(ofType:)` picks may ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). A field list is checked at instantiation instead:
 
@@ -285,26 +316,26 @@ For one row of a table, held in a `var`:
 
 ```swift
 var row: Row = …
-let (t, var v) = &row[fields: (tf, vf)]       // t borrows the Transform shared, v the Velocity exclusively
+let (var r, c) = &row[fields: (rf, cf)]       // r borrows the Reading exclusively, c the Calibration shared
 ```
 
 ## Enumerating a module's types
 
-A registry of every component type is a `const` built from a module's list of types:
+A registry of every type in a module that conforms to a protocol is a `const` built from the module's list of types. A network service keeps one of the message types it decodes, and an ECS one of its component types:
 
 ```swift
-const componentTypes: [_ of TypeInfo] = Module("gameplay").types
-    .filter { $0.conforms(Component.self) }
+const messageTypes: [_ of TypeInfo] = Module("messages").types
+    .filter { $0.conforms(Message.self) }
     .map { typeInfo($0.self) }                        // a const table in read-only data
 ```
 
-**`Module.current.types` and `Module("gameplay").types` are compile-time lists of a module's type declarations**, usable in `static for` and in `const` evaluation. A module can list its own types and those of the modules it imports.
+**`Module.current.types` and `Module("messages").types` are compile-time lists of a module's type declarations**, usable in `static for` and in `const` evaluation. A module can list its own types and those of the modules it imports.
 
-**A module's list holds its type declarations, top-level and nested, generated ones included, in source order** ([What a build declares](attributes-and-runtime-data.md#what-a-build-declares)). It holds only those that neither have generic parameters nor lie inside a generic type or a function, and, for another module, only its `public` ones. Each element names one type, usable as a type, as `field.type` is, so `$0.self` is its type value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)). `Module("gameplay")` takes the name the build declares for the module, never an `import … as` name.
+**A module's list holds its type declarations, top-level and nested, generated ones included, in source order** ([What a build declares](attributes-and-runtime-data.md#what-a-build-declares)). It holds only those that neither have generic parameters nor lie inside a generic type or a function, and, for another module, only its `public` ones. Each element names one type, usable as a type, as `field.type` is, so `$0.self` is its type value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)). `Module("messages")` takes the name the build declares for the module, never an `import … as` name.
 
 **Only imported lists and a module's declared types drive generation.** A module's own `types` list includes the types it generates, so no declaration may be generated from it, directly or through a `const`. `Module.current.declaredTypes` lists, in the same order, only those declared outside any `static if` or `static for`. So it may drive generation under the rule for the facts generation reads ([Generation runs in dependency order](declaration-generation.md#generation-runs-in-dependency-order)).
 
-For example, an `enum AnyEvent` can have a case per type in `declaredTypes` that conforms to `Event`, as long as no case changes which of them do. `Module.current.types` may be read in function bodies, and in `const`s that no generating `static for` or `static if` reads. So `gameplay` could build the registry above from its own list ([Generation runs in dependency order](declaration-generation.md#generation-runs-in-dependency-order)).
+For example, an `enum AnyEvent` can have a case per type in `declaredTypes` that conforms to `Event`, as long as no case changes which of them do. `Module.current.types` may be read in function bodies, and in `const`s that no generating `static for` or `static if` reads. So `messages` could build the registry above from its own list ([Generation runs in dependency order](declaration-generation.md#generation-runs-in-dependency-order)).
 
 ## Compile-time lists
 
