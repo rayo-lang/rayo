@@ -54,7 +54,7 @@ So a call the language makes on the code's behalf is allowed only where the call
 **`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types.
-- **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe, and zero-extends a 32-bit address. Converting an integer to a pointer is `unsafe`. It checks that the value fits the pointer width, as an unlabeled integer conversion checks that its value fits ([04](../04-types/numbers-and-math.md#conversions)).
+- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)` is safe, and converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 

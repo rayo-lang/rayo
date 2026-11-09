@@ -80,7 +80,7 @@ Breaking that promise is undefined behavior, as in C. Code that makes such promi
 ```swift
 var raw = plat.pad()
 let p = unsafe ptr(to: &raw)                    // the address of 'raw': a *plat.pad
-let address = UInt(bitPattern: p)               // safe: a pointer turned into an integer
+let address = CUIntPtr(bitPattern: p)           // safe: a pointer turned into an integer of its size
 unsafe {
     p.pointee.buttons = 0                       // the plat.pad that 'p' points at
     let bytes = p.cast(to: UInt8.self)          // the same address, as a *UInt8
@@ -98,7 +98,7 @@ unsafe {
 
 **`*Void` points at memory of no stated type.** `p.cast(to: U.self)` converts between pointer types, so you can read such memory as bytes.
 
-**Turning a pointer into an integer is safe, and turning an integer into a pointer is `unsafe`.**
+**Turning a pointer into an integer is safe, and turning an integer into a pointer is `unsafe`.** Both go through `CUIntPtr`, C's `uintptr_t`, which is exactly a pointer's size, so neither drops a bit.
 
 **A raw pointer borrows nothing**, so the compiler won't stop you from using one after its place is gone. Using it only while the place lives is part of what `unsafe` promises.
 

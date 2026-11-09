@@ -70,7 +70,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 - **Must accept** a `@c func` callback taking two `WeakShared<T>`s, registered with a C library whose callback type takes two `uint64_t`s, and that calls it on its own threads.
 - **Must accept** the same with `WeakPointer<T>`, for a library that calls back on the thread that drives it.
 - State what the C library must uphold in each.
-- **Must accept** `Handle` bits that C passes back as a `void* user` which addresses nothing, converted back only by `unsafe` code.
+- **Must accept** C passing a handle back through a `void* user` which addresses nothing, on 32-bit and 64-bit targets alike, with `unsafe` only for the C call. A 32-bit pointer can't hold a handle's 64 bits, so state what the pointer carries instead, such as a ticket the program maps back to the handle.
 
 ### E7 · C code that needs a large stack
 
@@ -83,7 +83,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 **A library ships for a 64-bit console, a 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `Int`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
 
 - **Must accept** one source for all three targets, with `unsafe` only around the C calls.
-- **Must hold:** every integer result is the same on each target, including where `Int` arithmetic overflows.
+- **Must hold:** integer arithmetic gives the same results on each target, including where `Int` arithmetic overflows.
 - **Must accept** passing an `Int` count to a `size_t` parameter on each target. State what happens when the count doesn't fit.
 - **Must accept** a 64-bit atomic counter where the target has 64-bit atomics, and a narrower one, chosen at compile time, where it doesn't. State what the plain `Atomic<Int>` gives on the microcontroller.
 - **Must hold:** the bits of handles, weak pointers and weak links are 8 bytes on each target. On the microcontroller, `WeakShared(bits:)`, `upgrade()` and opens give the outcomes they give on the console.

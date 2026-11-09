@@ -157,9 +157,9 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ## What a target must provide
 
-**Everything the language defines can be implemented in portable C.** So Rayo can run on any platform that has a C compiler meeting the requirements below. That includes a platform whose only toolchain is its vendor's C compiler, such as a console or an embedded processor. It also includes small and sandboxed targets, such as a 32-bit microcontroller or WebAssembly. Most of the requirements make C's types and arithmetic match Rayo's own.
+**Everything the language defines can be implemented in portable C.** So Rayo can run on any platform whose C compiler meets the requirements below, and that provides the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). That includes a platform whose only toolchain is its vendor's C compiler, such as a console or an embedded processor. It also includes small and sandboxed targets, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)). Most of the requirements make C's types and arithmetic match Rayo's own.
 
-**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)).
+**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
 
 **A target's C ABI:**
 
@@ -174,12 +174,14 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - evaluates each `float` and `double` operation in its own type and rounds it once (`FLT_EVAL_METHOD` 0, no contraction), as Rayo evaluates each floating-point operation ([04](04-types/numbers-and-math.md#floating-point));
 - keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
 - provides thread-local storage;
-- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have;
+- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have (below);
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
 - doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
 - keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
 
 ISO C guarantees neither of the last two, so the target's compiler must.
+
+**An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
 **Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
@@ -194,6 +196,12 @@ Then the second load reads a value no older, in its location's modification orde
 **Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
+### WebAssembly
+
+**WebAssembly without shared memory is a target, and counts as single-core**, since its one thread sees its memory alone. WebAssembly with shared memory isn't covered: its memory model gives no ordering through an address dependency, and a browser's main thread can't park ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
+
+**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that the C compiler reports on. Rayo's stack checks cover only the latter. So exhausting the engine's stack traps and ends the program, where running out of the checked stack panics ([10](10-errors-and-safety/panics.md#what-panics)).
 
 ## What the language leaves open
 

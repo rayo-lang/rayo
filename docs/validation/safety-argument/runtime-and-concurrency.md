@@ -117,7 +117,7 @@
 
 **Each creation is entered in a shared table that behaves as a linearizable map**: the interner's entry table, the weak-link slots and the allocator registry ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)). Its inserts, lookups and removals take effect in one total order consistent with happens-before, and a resize changes no entry. Each lookup or bit check that finds an entry synchronizes with some release that the entry's insert happens before. A weak link's key is its slot and generation, and an allocator's its word, which no other creation in the run holds, so a reused slot never matches old bits. How a table keeps this, by a lock, compare-and-swap or a mix, is the implementation's choice.
 
-**On a target without lock-free 64-bit atomics, the same arguments hold** ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). Generations come from per-thread blocks that never overlap, so they stay unique in the run. A slot check accepts a slot only between two equal loads of a word whose tag never repeats, so it never matches a torn or reused slot. `upgrade()`'s compare-and-swap on that word fails when the slot was reused. An open reads one copy of a registry entry between two equal loads of the entry's word, so it reads a value the entry held. So **Owned** and **Live** hold there as on other targets.
+**On a target without lock-free 64-bit atomics, the same arguments hold**, since the runtime keeps every guarantee there ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). 32-bit atomics suffice for that ([below](#targets-without-64-bit-atomics)).
 
 **A value rebuilt with no carried chain**, such as `WeakShared(bits:)` from integers passed through C, finds the entry or none, never stale contents. Finding none for a live creation gives `nil` from `WeakShared(bits:)` or `Shared.adopt`, or the panic of an unregistered allocator word, each safe and defined. A value C hands back gets the same defined outcomes, so C has no obligation here ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and an open that misses its allocator this way panics as 06 says ([06](../../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 
@@ -126,3 +126,39 @@
 **A text has one `Name` however many threads intern it at once**, since the interner holds at most one entry per text. An insert of a text already present fails and returns the existing entry, which the thread holds as though it had looked it up, and it never hands out its own.
 
 **A task holds no borrow across an `await`** ([07](../../spec/07-concurrency/tasks.md#semantics)). Its owner may move or destroy its state between steps. Its own locals are worked out again on resuming, since only its body reaches them, and its resume parameter is lent anew at each step. Its parameters are owned and unscoped, a `defer` live across an `await` uses only its state, and a finished task panics when polled.
+
+## Targets without 64-bit atomics
+
+**These steps show that a runtime can keep 07's guarantees with 32-bit atomics alone** ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). They are one way to do it, not the spec's: an implementation may use any other that keeps the guarantees.
+
+**Generations come from blocks.** A run-wide 32-bit count names the next free block of generations. A thread takes a block with a compare-and-swap that never moves the count past its last block, then issues that block's generations one by one with no atomic step. Blocks never overlap, so generations are unique for the run. Once the last block is taken, no generation is left, and a creation panics as 10 says ([10](../../spec/10-errors-and-safety/panics.md#what-panics)).
+
+**A 32-bit sequence word guards each slot of an object or a `Shared` value.** The slot holds the generation in two 32-bit halves, an object's home thread, and for a `Shared` value a 32-bit word with its count and leaked mark. Every field is read and written with 32-bit atomic accesses, so no access is a data race. The word is even while the slot is settled:
+
+- **Writing.** To rewrite a slot's generation or home thread, as a reuse does, the runtime stores its word plus one, issues a release fence, writes the fields, then stores the word plus two with a release store.
+- **Reading.** A check loads the word with an acquire load, then the generation's halves and the home thread. It issues an acquire fence, then loads the word again, and accepts the slot only when both loads give the same even word.
+
+A check whose field load reads a newer write synchronizes, through the two fences, with the writer's first store. So its second load sees the word changed, and it never accepts a torn generation or home thread.
+
+**A slot isn't reused twice while another thread checks it.** Each thread has a 32-bit hazard word. A check that may read a slot another thread reuses stores the slot's index there, then a sequentially consistent fence, before its first load of the slot's word. Before reusing a freed slot, the runtime issues a sequentially consistent fence and reads every thread's hazard word, passing over a slot that one names:
+
+- **At most one reuse per check.** A reuse whose scan came before the hazard may still run, but no later one can, so the slot's word never comes back to a value the check saw.
+- **Bounded memory.** A slot passed over is reused at a later scan, so each thread holds back at most one slot at a time, and memory doesn't grow with the number of creations.
+- **Objects at home.** An object's slot is reused only by its home thread while that thread lives. So the home thread's own checks read slots only it writes, and need no hazard.
+
+**An added owner never reaches a later value.** `upgrade()`, under its hazard, reads the count word between its two loads of the sequence word, and goes on only when the generation matches and the count is above zero. That value was live during the check, so its slot isn't reused before the check ends. A compare-and-swap with acquire-release ordering then adds one to the count. It fails only when another owner was added or dropped meanwhile, and then retries, reading `nil` once the count is zero, which never rises again.
+
+**The other owner steps work the same way, and none of them waits.** `adopt` clears the leaked mark the same way, `leak` sets it while its own owner keeps the value live, and `Published.snapshot()` adds an owner as `upgrade()` does. A `Waker`'s `wake()` is an `upgrade()`.
+
+**An open makes one 32-bit acquire load.** An allocator word names a registry slot and the 32-bit date of the value's storage: that of its arena block, or of its registration for a heap. Each registry slot keeps a floor, which only rises:
+
+- a reset raises it to the date of the blocks it then serves from;
+- an unregistration raises it past every date the slot has issued;
+- a later registration of the slot starts at that floor.
+
+An open accepts a word whose date isn't below its slot's floor. The one writer of a slot at a time is the registration, reset or unregistration, which never overlap ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)). A slot whose date would wrap is never registered again, so no word is issued twice. That is a limit on registrations and resets, which 06 allows, and which any 8-byte word needs on any target.
+
+**What remains needs no 64-bit atomic step:**
+
+- **Ordered numbers.** Stamps, registry slots and thread identities are issued under a lock that parks its waiters ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). A panic's `sequence` is issued inside its report, which the runtime makes one at a time ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)).
+- **Narrow state.** The interner's word is 32 bits, the runtime's counts fit in 32 bits, and a handle's generation changes only through a pool's `mutating` methods ([03](../../spec/03-handles-and-objects.md#pools-and-handles)).

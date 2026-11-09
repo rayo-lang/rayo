@@ -27,7 +27,7 @@ cam.look(dx: 0.1, dy: 0)
 
 **The body never declares a stored field.** It declares computed properties, methods, subscripts, secondary initializers, a `deinit`, static members, nested types and type aliases. A struct with no stored fields may leave the header out, and its primary initializer is then `init()`.
 
-**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose size follows the target's pointer width, such as a raw pointer, a `Span` or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
+**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose layout follows the target's pointer width, such as a raw pointer, a `Span` or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 **A `@c` or `@packed` struct's layout order is its declaration order**, for a layout that something outside the program fixes, such as a C header, a file format or a network packet.
 

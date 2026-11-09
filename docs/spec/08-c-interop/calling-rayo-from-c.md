@@ -30,6 +30,8 @@ A C or C++ program uses a library written in Rayo:
 - every type that the signature of one of the module's exported functions, `@c func`s or `extern c func`s uses;
 - every type that one of the module's `@c` types uses.
 
+**Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-inline-c.md#what-imports-as-what)).
+
 **For each `List`, `String` and `TrailingArray` type among them, the header declares a free function**: an `@export` function that takes the value `owned` and destroys it. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
 ## C representations
@@ -43,13 +45,12 @@ A C or C++ program uses a library written in Rayo:
 
 | Rayo | C representation |
 | --- | --- |
-| `Int`, `UInt` | `int64_t`, `uint64_t`, on every target, since both are 64 bits on each ([04](../04-types/numbers-and-math.md#numbers)) |
-| `Span<T>` | `struct { const T* ptr; int64_t count; }` |
-| `StringView` | `struct { const char* ptr; int64_t count; }` |
-| `MutableSpan<T>` | `struct { T* ptr; int64_t count; }` |
+| `Span<T>` | `struct { const T* ptr; rayo_int_t count; }` |
+| `StringView` | `struct { const char* ptr; rayo_int_t count; }` |
+| `MutableSpan<T>` | `struct { T* ptr; rayo_int_t count; }` |
 | `mutable T` parameter | `T*` |
 | `Void` or `Never` as a result | `void`, and `_Noreturn` for `Never` |
-| `StaticSpan<T>`, `StaticString` | `struct { const T* ptr; int64_t count; }`, with `char` as a `StaticString`'s `T`: immortal data, which C may keep. A `StaticString`'s bytes are followed by a NUL, so its `cString` passes to C as a `const char*` |
+| `StaticSpan<T>`, `StaticString` | `struct { const T* ptr; rayo_int_t count; }`, with `char` as a `StaticString`'s `T`: immortal data, which C may keep. A `StaticString`'s bytes are followed by a NUL, so its `cString` passes to C as a `const char*` |
 | struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), each in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | a C struct whose member `_i` is element `i`, declared in layout order ([04](../04-types/collections.md#tuples-ranges-and-arrays)), each in its representation |
@@ -63,12 +64,13 @@ A C or C++ program uses a library written in Rayo:
 | `T?` with a niche | same layout as `T`, with one value meaning `nil` (below) |
 | other `T?` | `struct { T value; bool has; }` |
 | `Handle<T>`, `WeakPointer<T>`, `WeakShared<T>` | `uint64_t`: the bits (`h.bits`, `w.bits`), which only Rayo resolves |
-| `List<T>`, `String` | `struct { T* ptr; int64_t count; int64_t cap; uint64_t alloc; }` (below) |
-| `RawAllocation` | `struct { void* address; int64_t size; int64_t align; uint64_t alloc; }` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)) |
-| `TrailingArray<H, E>` | `struct { H* ptr; int64_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](../04-types/data-layout.md#variable-sized-structs-trailingarray)), which the generated header names |
+| `List<T>`, `String` | `struct { T* ptr; rayo_int_t count; rayo_int_t cap; uint64_t alloc; }` (below) |
+| `RawAllocation` | `struct { void* address; rayo_int_t size; rayo_int_t align; uint64_t alloc; }` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)) |
+| `TrailingArray<H, E>` | `struct { H* ptr; rayo_int_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](../04-types/data-layout.md#variable-sized-structs-trailingarray)), which the generated header names |
 
 - **The `nil` value of a niche** is the one 04 gives ([04](../04-types/enums.md#optionals)), and the generated header names it.
 - **A `String` that still uses a literal's immortal bytes** ([04](../04-types/collections.md#literals)) has `cap` 0 and a non-null `ptr`.
+- **The builtins in the table are laid out as their C structs**, interior padding included. So on a 32-bit target, a `Span<T>` has 4 bytes of padding after its `ptr`, and it isn't padding-free there, nor is a type that holds one ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
 **Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes:
 

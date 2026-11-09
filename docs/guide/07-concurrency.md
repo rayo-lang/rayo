@@ -163,7 +163,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 let spawned = Atomic(0)
 spawned.add(1, .relaxed)                 // through a shared borrow, from any thread
 
-func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int>) {
+func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int32>) {
     enemies.forEachInParallel { e in
         cells.add(cellOf(e.pos), 1, .relaxed)     // fine: an atomic add, through a shared borrow of 'cells'
     }

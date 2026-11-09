@@ -14,7 +14,7 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 ```swift
 let spawned = Atomic<Int>(0)          // error without 64-bit atomics: an Int is 8 bytes on every target
-let spawned = Atomic<UInt32>(0)       // 4 bytes: fine on every target
+let kills = Atomic<UInt32>(0)         // 4 bytes: fine on every target
 
 static if target.has64BitAtomics {
     typealias SpawnCount = Atomic<Int>
@@ -74,24 +74,15 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 ### Targets without 64-bit atomics
 
-**The runtime's own atomic steps work on every target, including one without lock-free 64-bit atomics.** There it keeps each step that would act on a 64-bit value with 32-bit atomics, or with a lock where the step is rare. Every outcome the spec gives stays the same: generations stay unique in the run, no check reads a torn value, and `upgrade()` still never waits ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). The steps are these:
+**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give, with the same visible behavior as on a 64-bit target.** Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
 
-- **Issuing generations.** Each object and each `Shared` value gets a generation that no other of its kind in the run gets ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). Each thread takes a block of generations at a time, with a 32-bit atomic add to a run-wide count of blocks, then issues them one by one with no atomic step. The blocks never overlap, so the generations stay unique. The count never wraps: once it runs out, no generation is left, and a creation panics ([10](../10-errors-and-safety/panics.md#what-panics)).
-- **Checking a slot.** Each object and each `Shared` value has a slot, which holds its generation, and an object's home thread too. A 32-bit word in the slot says whether it is live, and carries a tag that changes at each reuse of the slot and never repeats. A slot whose tag would wrap is abandoned, as a `Pool` slot is ([03](../03-handles-and-objects.md#pools-and-handles)).
+- **Uniqueness.** Every generation is unique for the whole run ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and no allocator word is issued twice ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
+- **The shared tables.** Each of the three tables keeps its contract ([above](#atomics-and-locks)).
+- **Whole values.** No check, `upgrade()`, `adopt` or open acts on a torn value, on a slot reused for a later creation, or on a registry entry that a later write replaced.
+- **Reuse.** The slots that objects and `Shared` values take are reused however often they are freed, so memory doesn't grow with the number of them created over the run.
+- **Progress.** Each operation the spec promises never waits still never waits. These include `upgrade()`, `adopt`, `leak`, `Published`'s `snapshot()` ([below](#snapshots-one-time-values-and-waits)), a `Waker`'s `wake()` ([Tasks](tasks.md#semantics)), the checks of weak pointers and weak links, and opens. std's `Synchronized` types keep theirs too.
 
-  The runtime writes a slot's generation only while its word marks it free. So a check loads the word, reads the generation in two halves, and loads the word again. It accepts the slot only when both loads give the same live word. So it never matches a torn generation, and never waits.
-- **Adding and taking owners.** A `Shared` slot's word also holds the value's count, and whether C holds a leaked owner ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So `upgrade()` adds an owner, and `adopt` takes the leaked one, with one 32-bit compare-and-swap of that word, which stands in for the check's second load. The swap fails when the slot was reused meanwhile, since the tag differs then. So neither reaches a later value, and neither waits.
-- **Opening a value.** An open compares the value's allocator word with the registry's entry for its allocator, which a registration, a reset or an unregistration rewrites ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Writes to one entry never overlap, since a reset or an unregistration panics while another that reaches the same memory runs.
-
-  The entry keeps its 64-bit fields in two copies, and a 32-bit word that names the current copy and changes at each write. A writer fills the other copy, then stores the word. A reader loads the word, reads the copy it names, and loads the word again, retrying when it changed. So an open never sees a torn entry, and retries only after a write has finished, never waiting on one in progress. The implementation's limits on registrations and resets keep the word from repeating, so a reader never takes a later copy for the one it began with ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
-- **Issuing stamps, allocator words and thread identities.** Each must come later than, or differ from, every one issued before it in the run, so the runtime issues each under a lock, held only while it takes the next number. That happens only at a registration, a reset, or a thread's start or attachment, never in an open, a check or an `Atomic` operation.
-- **Numbering panics.** The runtime reports panics one at a time ([10](../10-errors-and-safety/panics.md#what-a-panic-does)), so it gives each its 64-bit `sequence` inside that report, with no atomic step.
-
-**Other atomic state needs no 64-bit step on any target:**
-
-- **Counts.** The counts the runtime keeps, such as a `Shared` value's or a pin's, may be 32 bits or narrower, since how far each goes is the implementation's choice ([11](../11-compilation-model.md#what-the-language-leaves-open)).
-- **The interner's word.** It is 32 bits on every target ([above](#atomics-and-locks)).
-- **Handles.** A handle's generation is 32 bits, and only a pool's `mutating` methods change it ([03](../03-handles-and-objects.md#pools-and-handles)).
+**Issuing a number may wait, but never for a use.** A registration, a reset, an unregistration, and a thread's start or attachment each take a number that must differ from, or come after, every one issued before it. Taking one may wait for another of these taking its own, but never for a use of an allocator, an object or a `Shared` value. A lock held for this parks the threads that wait for it, never spinning, so a single-core target that runs threads by priority can't deadlock on it.
 
 ### Locks: `Mutex` and `RwLock`
 
