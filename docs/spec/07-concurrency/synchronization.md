@@ -76,7 +76,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 ### Targets without 64-bit atomics
 
-**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give.** Their visible behavior is the same as on a 64-bit target, apart from the limits that 11 leaves to the implementation ([11](../11-compilation-model.md#what-the-language-leaves-open)). Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
+**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give.** Their visible behavior is the same as on a 64-bit target, apart from the points that 11 leaves open, such as limits and timing ([11](../11-compilation-model.md#what-the-language-leaves-open)). Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
 
 - **Uniqueness.** Every generation is unique for the whole run ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and no allocator word is issued twice ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 - **The shared tables.** Each of the three tables keeps its contract ([above](#atomics-and-locks)).

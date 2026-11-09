@@ -216,7 +216,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 
 **What is left is timing and order, some representations, what libraries and builds choose, and limits:**
 
-- **Thread timing.**
+- **Thread timing**, and the early polls that a task's deadline may cost it ([07](07-concurrency/tasks.md#waking-a-task)).
 - **The process seed**, which startup draws anew for each run ([04](04-types/collections.md#hash-maps-and-sets)). So what a `Hasher` whose seed derives from it outputs can differ even between two runs of one build, and so can any order that depends on that output, such as that of a `Map` with the default `SeededHashing`.
 - **Destruction order**: the order in which a reset or an unregistration runs the `deinit`s of the objects it destroys ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)), and in which a thread's teardown destroys its objects ([07](07-concurrency/global-state.md#thread-teardown)).
 - **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.

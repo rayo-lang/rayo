@@ -139,13 +139,14 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **`.pending` means the awaitable has arranged for its `Waker` to be called.** Before a poll returns `.pending`, it hands the `Waker` it was given to whatever will let the awaitable make progress. That may be a `Future`'s `Promise` or an I/O completion. An awaitable that waits for a time calls `wake(at:)`, and one that can only find out by looking again, as `until` does, calls `wake()` itself before it returns ([below](#awaitables-in-std)).
 
-**So a task that waits costs nothing until the wake** ([Running tasks](#running-tasks)), however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
+**So a task that waits costs nothing until the wake** ([Running tasks](#running-tasks)), apart from the few early polls a deadline allows (below), however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
 
 **`wake(at:)` asks the task's runner to wake it once `MonotonicClock` reaches `deadline`** ([Time](synchronization.md#time-duration-and-instant)), or at once when the deadline has passed. A runner keeps, for each task, the earliest deadline given to it since its last step began, and clears it as the next step begins, before the poll:
 
 - **The earliest wins.** An awaitable that waits on two times at once, such as a library's choice between two timed waits, wakes the task at the earlier deadline.
 - **A stale `Waker` costs a poll at most.** A deadline that an earlier awaitable arranged may wake the task early, which only polls it with nothing changed (below).
 - **A pending poll keeps its deadline.** The step clears the old deadline before the poll, so the one that the poll arranges again survives.
+- **A deadline may also cost an early poll, but never a spin.** A runner may step a pending task with nothing changed when the task's deadline lies further ahead than a span that the implementation states. It may also do so when a `wake(at:)` reaches the runner as the task's step begins. The first comes at most once per that span, and the second at most once per step.
 
 **A task is pending only when the awaitable it is suspended on is.** `await x` polls `x` with the `Waker` that the task's own poll was given. So the wake that `x` arranged wakes the task, and a sub-task passes the same `Waker` on to what it awaits.
 
@@ -217,7 +218,7 @@ scripts.cancel(door)                                             // runs live lo
 scripts.step(&game)                                              // wherever the program steps: one step for each task woken since the last
 ```
 
-**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, or by its deadline passing ([Waking a task](#waking-a-task)).
+**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, by its deadline passing, or early in the bounded cases that a deadline allows ([Waking a task](#waking-a-task)).
 
 **std's `TaskSet` takes ownership of each task it starts:**
 
