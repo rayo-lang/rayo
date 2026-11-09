@@ -19,10 +19,9 @@ final class ModuleBuilder {
         bool = LLVMInt1TypeInContext(context)
         int64 = LLVMInt64TypeInContext(context)
         target.configure(module)
-        // Without a handler, LLVM prints what it reports, and exits on an error.
+        // Without a handler, LLVM prints what it reports to rayoc's standard error, and exits on an error.
         LLVMContextSetDiagnosticHandler(context, { info, log in
-            let message = takeMessage(LLVMGetDiagInfoDescription(info))
-            Unmanaged<DiagnosticLog>.fromOpaque(log!).takeUnretainedValue().messages.append(message)
+            Unmanaged<DiagnosticLog>.fromOpaque(log!).takeUnretainedValue().record(info!)
         }, Unmanaged.passUnretained(diagnostics).toOpaque())
     }
 
@@ -38,6 +37,12 @@ final class ModuleBuilder {
         let broken = LLVMVerifyModule(module, LLVMReturnStatusAction, &message) != 0
         let report = takeMessage(message)
         if broken { throw LLVMError(message: "LLVM rejected the module it was given:\n\(report)") }
+    }
+
+    /// Throws the errors LLVM has reported in this module's context, if any. A warning fails nothing.
+    func checkReportedErrors() throws(LLVMError) {
+        let errors = diagnostics.errors
+        if !errors.isEmpty { throw LLVMError(message: "LLVM reported errors:\n" + errors.joined(separator: "\n")) }
     }
 
     /// Parses `llvmIR` into a module of this context, for the same target as this one.
@@ -60,9 +65,8 @@ final class ModuleBuilder {
 
     /// Links `other` into this module, which consumes it.
     func link(_ other: LLVMModuleRef) throws(LLVMError) {
-        diagnostics.messages = []
         if LLVMLinkModules2(module, other) != 0 {
-            throw LLVMError(message: "LLVM couldn't link the runtime:\n" + diagnostics.messages.joined(separator: "\n"))
+            throw LLVMError(message: "LLVM couldn't link the runtime:\n" + diagnostics.errors.joined(separator: "\n"))
         }
     }
 
@@ -120,9 +124,17 @@ final class ModuleBuilder {
     }
 }
 
-/// The messages LLVM reports through a context's diagnostic handler.
+/// What LLVM reports through a context's diagnostic handler, with the severity of each report.
 private final class DiagnosticLog {
-    var messages: [String] = []
+    private var reports: [(severity: LLVMDiagnosticSeverity, message: String)] = []
+
+    var errors: [String] {
+        reports.filter { $0.severity == LLVMDSError }.map(\.message)
+    }
+
+    func record(_ info: LLVMDiagnosticInfoRef) {
+        reports.append((LLVMGetDiagInfoSeverity(info), takeMessage(LLVMGetDiagInfoDescription(info))))
+    }
 }
 
 /// An LLVM function, with the type that a call to it names.

@@ -16,8 +16,10 @@ public enum LLVMEmitter {
             .emit(program)
         try runtime.link(into: module)
         try module.verify()
+        let objectCode = try target.objectCode(of: module)
 
-        return try target.objectCode(of: module)
+        try module.checkReportedErrors()
+        return objectCode
     }
 }
 
