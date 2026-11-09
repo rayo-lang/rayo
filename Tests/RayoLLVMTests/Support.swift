@@ -4,6 +4,7 @@ import RayoIR
 import RayoLLVM
 import RayoSema
 import RayoSource
+import Testing
 
 /// Compiles `program` the way a debug or a release build does.
 func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
@@ -53,6 +54,7 @@ func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     try process.run()
     let written = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     process.waitUntilExit()
+    #expect(process.terminationStatus == 0, "\(tool) \(arguments.joined(separator: " ")) failed")
     return written
 }
 
