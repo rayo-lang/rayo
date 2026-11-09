@@ -149,11 +149,11 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(225, error: "'return' needs a value of type {type}")
     case missingReturnValue(type: String)
 
-    @Code(226, error: "'{name}' can reach its end without returning a value")
-    case missingReturn(name: String)
+    @Code(226, error: "'{signature}' can reach its end without returning a value")
+    case missingReturn(signature: String)
 
-    @Code(227, error: "the result type of '{name}' depends on itself")
-    case resultDependsOnItself(name: String)
+    @Code(227, error: "the result type of '{signature}' depends on itself")
+    case resultDependsOnItself(signature: String)
 }
 
 extension ErrorCode {

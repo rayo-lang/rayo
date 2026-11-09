@@ -66,7 +66,7 @@ struct FunctionTests {
     func endReached(body: String) {
         let source = "func main() {}\nfunc f() -> Int {\n\(body)\n}"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.missingReturn(name: "f")])
+        #expect(reported.map(\.code) == [.missingReturn(signature: "f()")])
         #expect(coveredText(reported, in: source) == ["}"])
         #expect(reported.first?.range.start.offset == source.utf8.count - 1)
     }
@@ -88,14 +88,14 @@ struct FunctionTests {
     }
 
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [
-        ("func f() { f() }", "f()", "f"),
-        ("func f() { g() + 1 }\nfunc g() { f() }", "f()", "f"),
-        ("func f() { g() }\nfunc g() { 1 + h() }\nfunc h() { f() }", "f()", "f"),
+        ("func f() { f() }", "f()", "f()"),
+        ("func f() { g() + 1 }\nfunc g() { f() }", "f()", "f()"),
+        ("func f() { g() }\nfunc g() { 1 + h() }\nfunc h() { f() }", "f()", "f()"),
     ])
-    func resultCycle(declarations: String, call: String, name: String) {
+    func resultCycle(declarations: String, call: String, signature: String) {
         let source = "func main() {}\n" + declarations
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.resultDependsOnItself(name: name)])
+        #expect(reported.map(\.code) == [.resultDependsOnItself(signature: signature)])
         #expect(coveredText(reported, in: source) == [call])
     }
 
