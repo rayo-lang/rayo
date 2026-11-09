@@ -101,7 +101,7 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 for e in enemies.span {             // a plain loop over memory, in every build
     total += e.hp
 }
-let step = vec.normalized * speed   // vector arithmetic, never a hidden call
+let step = vec.normalized * speed   // vector arithmetic: no hidden call where the processor has the operations
 ```
 
 **No build of a program does work at run time that its source doesn't show, beyond the calls the language makes for it**, such as a `deinit` at a scope's end ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). That means:
@@ -132,10 +132,10 @@ let step = vec.normalized * speed   // vector arithmetic, never a hidden call
 ```swift
 @inline func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
 
-speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every build
+speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 ```
 
-**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so they never become calls at run time, as `Simd`'s builtin ones never do ([04](04-types/numbers-and-math.md#simd-and-math)).
+**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so calling one never becomes a call at run time. Its body's own operations run as they would anywhere, so one the processor lacks may still call a software routine, as 04 allows a `Simd` operation to ([04](04-types/numbers-and-math.md#simd-and-math)).
 
 **A direct call to an `@inline` function is never a call at run time, in any build: its body runs in place.** The same holds for an `@inline` initializer, and for the accessors of an `@inline` computed property or subscript, which are functions too. The one exception is the call that would close a cycle that an instantiation makes (below).
 
@@ -159,11 +159,13 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ## What a target must provide
 
-**Everything the language defines can be implemented in portable C.** So Rayo can run on any platform whose C compiler meets the requirements below, and that provides the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). That includes a platform whose only toolchain is its vendor's C compiler, such as a console or an embedded processor. It also includes small and sandboxed targets, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)). Most of the requirements make C's types and arithmetic match Rayo's own.
+**A target is the processor and platform a program is built for, and the language asks of it only what this section and 08 state.** The language assumes no particular compiler or way of generating code. Its main requirements are a pointer width of 32 or 64 bits, a C ABI that matches Rayo's types, atomics that are lock-free at the sizes `Atomic<T>` accepts, and a processor that orders loads through a loaded address. Its platform also supplies the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). The implementation, in turn, keeps the rules below on every target. So small and sandboxed targets qualify, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)).
 
-**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
+**Nothing the language defines generates code while a program runs.** Generics are instantiated ([05](05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)), and compile-time code runs ([09](09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), when the program builds. So every program can be compiled ahead of time, and runs on platforms that forbid generating code at run time, such as iOS and many consoles.
 
-**A target's C ABI:**
+**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so their range, and the point where their arithmetic overflows, are the same on every target ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
+
+**A target's C ABI, which every call into C and every export follows, matches Rayo's own types where the two meet ([08](08-c-interop/calling-rayo-from-c.md#c-representations)).** It:
 
 - represents integers in two's complement, and `float` and `double` as IEEE 754 binary32 and binary64, as Rayo's integers and its `Float` and `Double` are ([04](04-types/numbers-and-math.md#numbers));
 - has an 8-bit `char`, the exact-width integer types, and a one-byte `bool` holding 0 or 1, which import as Rayo's sized integers and `Bool` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
@@ -171,26 +173,16 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
-**Its C compiler:**
-
-- evaluates each `float` and `double` operation in its own type and rounds it once (`FLT_EVAL_METHOD` 0, no contraction), as Rayo evaluates each floating-point operation ([04](04-types/numbers-and-math.md#floating-point));
-- keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
-- provides thread-local storage;
-- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have (below);
-- reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
-- doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
-- keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
-
-ISO C guarantees neither of the last two, so the target's compiler must.
+**A target's atomic operations and fences have the guarantees of the C++20 memory model that Rayo uses, and are lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
 
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
-**Where the C compiler doesn't report an operation lock-free, the implementation may supply it itself**, such as a library call that masks interrupts. Masking brings two conditions:
+**On a single-core target whose processor has no atomic instruction for an operation, the implementation may build the operation by masking interrupts**, inline or as a call into its runtime. Masking brings two conditions:
 
 - **Single-core is the declared target's property.** Building for such a target and running on a chip with more cores breaks it, since masking interrupts doesn't stop the other cores.
 - **Masking needs privileged execution.** Code that runs unprivileged, as under a memory protection unit, reaches those atomics through a privileged call. A target that offers no such call can't use masking, so it isn't such a target.
 
-**Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
+**A target's processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
 - **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
 - **Synchronized.** `W` happens before a release that `S`'s thread synchronized with before `S`. An acquire read by that thread synchronizes with it, or a read followed by an acquire fence, both before `S`.
@@ -202,15 +194,22 @@ Then the second load reads a value no older, in its location's modification orde
 
 **Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
-So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+**The implementation keeps every dependency that this ordering acts on**, since the processor orders only the dependencies the code it runs still has. Every function the implementation supplies, whether compiled from Rayo or part of its runtime or software routines:
 
-**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
+- never breaks an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed;
+- keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
+
+So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
+**The implementation knows a bound on the stack that each function it supplies uses**, its runtime's and its software routines' included. The stack check on entry to each function needs that bound ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+
+**A target needs no floating-point hardware**, since a floating-point operation its processor lacks is computed in software, with the same result ([04](04-types/numbers-and-math.md#floating-point)).
 
 ### WebAssembly
 
 **WebAssembly without shared memory is a target, and counts as single-core**, since its one thread sees its memory alone. WebAssembly with shared memory isn't covered: its memory model gives no ordering through an address dependency, and a browser's main thread can't park ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
-**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that the C compiler reports on. Rayo's stack checks cover only the latter. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
+**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that compiled code keeps its frames' data on. Rayo's stack checks cover only the stack in linear memory. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ## What the language leaves open
 

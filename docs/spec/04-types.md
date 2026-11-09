@@ -12,7 +12,7 @@ let scale = Float(total) / 1024                   // a conversion that may round
 
 var particles = SoA<Particle>(capacity: 100_000)  // one buffer per field, still used with field syntax
 for p in &particles {
-    p.pos += p.vel * dt                           // vector math: no hidden calls
+    p.pos += p.vel * dt                           // vector math: no hidden calls where the processor has the operations
 }
 ```
 

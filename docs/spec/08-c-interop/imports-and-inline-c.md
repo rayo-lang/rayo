@@ -98,7 +98,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | `rayo_int_t`, `rayo_uint_t`, which every header Rayo generates declares ([Calling Rayo from C](calling-rayo-from-c.md#calling-rayo-from-c)) | `Int`, `UInt`, when they are typedefs of `int64_t` and `uint64_t`; otherwise as any typedef |
 | `float`, `double`, `bool` | `Float`, `Double`, `Bool` |
 | `void` as a function's result | `Void` |
-| `_Float16`, where the target's C compiler has it | `Half` |
+| `_Float16`, where the target's C ABI has it | `Half` |
 | `int`, `long`, `char` and C's other standard integer types | `CInt`, `CLong`, `CChar` and the like (below) |
 | `T*` | `*T?` (nullable), or `*T` when annotated `_Nonnull` or inside `NS_ASSUME_NONNULL`-style regions |
 | `const T*` | as `T*`, with the `const` dropped: Rayo has no pointer-const |
