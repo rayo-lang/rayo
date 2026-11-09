@@ -183,6 +183,29 @@ let verts = bytes.reinterpret(as: Vertex.self)         // U is Vertex
 
 **`T == U`, `T != U` and `T.conforms(P.self)` are `const`**, usable in `static if`. A `where` clause states the same as `T == U`, `T != U` and `T: P` ([12](../12-grammar/declarations.md#files-and-declarations)).
 
+## Default type arguments
+
+Most maps hash the same way, so std's `Map` lets code leave its hashing type out ([04](../04-types/collections.md#hash-maps-and-sets)):
+
+```swift
+struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
+
+let a: Map<Name, Int> = [:]                           // Map<Name, Int, SeededHashing>
+let b: Map<Name, Int, FixedHashing> = [:]             // the default replaced
+let c: Map<Name, Int, FixedHashing> = Map()           // H comes from the expected type
+func report<K>(_ m: Map<K, Int>) { … }                // takes only maps with SeededHashing
+func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any hashing type
+```
+
+**A type parameter of a struct, enum or union may name a type after `=`**, which a written type that leaves the argument out takes instead. That type is the parameter's **default type argument**. A function's, an initializer's or a subscript's type parameters name none, and neither does a value parameter. A default follows these rules:
+
+- **Trailing.** Every type parameter after one with a default has one too, so written arguments fill the parameters in order.
+- **Checked at the declaration.** The default meets the parameter's constraints, and names none of the type's own parameters.
+- **Taken where an argument is left out.** A type written with fewer arguments than it has parameters takes the default for each one left out. That holds wherever the type is written: in an annotation, a parameter's or field's type, after `as`, or in an extension's header, as `extension Map<Name, Int>` extends only `Map<Name, Int, SeededHashing>`.
+- **Taken where inference gives nothing.** Where a type's arguments come from a call, as for `Map()` above, the default is the last way a parameter binds, after the call's arguments and its expected type ([Operators](operators.md#operators)). So a `_` written for such a parameter, as in `Map<_, _, _>`, takes the default when the initializer leaves it unbound.
+
+**A type written with no arguments at all, in an extension's header, still covers every instance**, so `extension Map` extends maps with every hashing type ([04](../04-types/structs.md#initializers)). **Generic code that should take any hashing type declares a parameter for it**, as `reportAny` does, since `Map<K, V>` in a signature means `Map<K, V, SeededHashing>`.
+
 ## Conformances
 
 **A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.

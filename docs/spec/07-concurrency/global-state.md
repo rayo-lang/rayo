@@ -48,6 +48,16 @@ func scan() {
 
 **A panic in a copy's initializer unwinds as any panic does**, so a recovery point inside the initializer can catch it. On the startup thread, one that would unwind out of the initializer ends startup, as any uncaught panic during startup does ([below](#initialization-at-startup)). On any other thread it ends the program at once, since no joiner can learn of it ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
 
+### Thread identity
+
+**Every thread has a thread identity while it runs Rayo code, one that no other thread, and no earlier attachment of the same thread, has or had in the run**, however it started:
+
+- the startup thread, which runs `main`, or calls `rayo_init` and is attached by that call ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program));
+- a thread that `Runtime.startThread` starts;
+- a C thread that attaches, which gets a new identity each time it attaches again after detaching ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).
+
+So an identity names one thread, and what is keyed by it, such as an object's home thread or a hash seed's input, never passes to another ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [04](../04-types/collections.md#hash-maps-and-sets)).
+
 ### Thread teardown
 
 **A thread's teardown destroys its copies and its objects, on that thread, once it has no other Rayo code to run.** That is when its body returns, at shutdown on the thread that shuts down ([below](#shutdown)), or when a C thread calls `rayo_thread_detach`. It runs these steps:
@@ -72,7 +82,11 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
 
 **A global `let` goes into read-only data, in every build, exactly when it can be computed and frozen at compile time:** its initializer can run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), and its value passes the **freezable** test ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`. One that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value.
 
+For a global `Map` or `Set`, its hashing type and its keys decide whether it goes there ([04](../04-types/collections.md#hash-maps-and-sets)).
+
 **Every other global is initialized at startup**, one module at a time, each module's declarations in source order. **Startup** runs before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](../08-c-interop.md)). The next module is always the first in the build's list ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) whose imports are all initialized. A module outside the prelude's modules and every module they import counts all of those as imports ([11](../11-compilation-model.md#the-prelude)).
+
+**Startup first draws the process seed from the platform, before any initializer runs**, so a global `Map` or `Set` built at startup can use it ([04](../04-types/collections.md#hash-maps-and-sets)). The draw may wait until the platform's source of randomness is ready. That wait is a platform call, not a park, so the rule below against parking during startup doesn't cover it. A draw that fails ends startup, with the outcome of a panic during startup that nothing catches (below).
 
 **No global is destroyed** ([below](#shutdown)) **or consumed** ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)), other than a thread-local's copy, which ends in its thread's teardown.
 

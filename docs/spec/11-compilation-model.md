@@ -121,6 +121,7 @@ let step = vec.normalized * speed   // vector arithmetic, never a hidden call
 
 **The runtime's own work happens in these places:**
 
+- at startup, which draws the process seed before any global's initializer runs ([07](07-concurrency/global-state.md#initialization-at-startup));
 - at each entry from C, the first of which on a thread attaches that thread ([08](08-c-interop/calling-rayo-from-c.md#c-entries-and-threads));
 - at a thread's teardown ([07](07-concurrency/global-state.md#thread-teardown));
 - at shutdown ([07](07-concurrency/global-state.md#shutdown));
@@ -199,9 +200,10 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 **What is left is timing and order, some representations, what libraries and builds choose, and limits:**
 
 - **Thread timing.**
+- **The process seed**, which startup draws anew for each run ([04](04-types/collections.md#hash-maps-and-sets)). So what a `Hasher` whose seed derives from it outputs can differ even between two runs of one build, and so can any order that depends on that output, such as that of a `Map` with the default `SeededHashing`.
 - **Destruction order**: the order in which a reset or an unregistration runs the `deinit`s of the objects it destroys ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)), and in which a thread's teardown destroys its objects ([07](07-concurrency/global-state.md#thread-teardown)).
 - **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.
-- **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a span of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Safe code never sees where a function's code lives.
+- **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a span of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Compile-time code observes neither, since only queries whose answer freezing keeps run there ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)). Safe code never sees where a function's code lives.
 - **The bits of weak pointers and weak links**, which `w.bits` shows ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 - **The values of the ids and hashes that the language defines only by what they identify**: `T.id` and `T.layoutId`. Each implementation keeps them the same from build to build ([09](09-compile-time/reflection.md#what-reflection-can-read)). The order of an error union's members, which follows its members' `T.id`s, is left open with them ([10](10-errors-and-safety/typed-errors.md#error-unions)).
 - **Whether two types' `T.id`s collide.** A collision fails the build ([09](09-compile-time/reflection.md#what-reflection-can-read)).
@@ -214,7 +216,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
     - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 - **What a library leaves open**, such as:
     - the last bits of a math function like `sin`;
-    - `Hasher`'s output, and so any order that depends on it;
+    - `Hasher`'s algorithm, and so what a `Hasher` outputs from a given seed, such as `FixedHashing`'s, and any order that depends on it, though one build gives the same output at compile time and in every run ([04](04-types/collections.md#hash-maps-and-sets));
     - the layout of its types, such as std's `Pin<T>`, `LocalPin<T>` or `FieldInfo`;
     - the bits of handles ([03](03-handles-and-objects.md#pools-and-handles)).
 - **What a build reports**: the call sites it passes to allocators, or 0 ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)), and what a panic report contains ([10](10-errors-and-safety/panics.md#what-a-panic-does)).

@@ -60,7 +60,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
 | `StaticSpan<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)) |
-| `Map<K, V>`, `Set<T>` | yes | Hash map and set |
+| `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
 | `StablePool<T>` | yes | Stable and pinnable element addresses |
@@ -71,7 +71,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `String` | yes | UTF-8 bytes, allocator |
 | `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
 | `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
-| `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by a hash stored with it (below) |
+| `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by its entry or by a hash stored with it (below) |
 
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
 
@@ -82,7 +82,17 @@ if action == jump { player.jump() }       // compares one pointer-sized value, n
 log("pressed \(jump.text)")               // the text, as a StaticString
 ```
 
-**A `Name` hashes a hash of its text stored with it, never its address.** The build computes an entry's hash when it makes a literal's entry, and the interner computes it at run time. So the hash comes from one fixed function of the text alone, which the build and the interner share, and which gives the same value at both stages whatever `Hasher` does. Its algorithm is the library's choice, but it gives one value for a given text at every stage of one build. A `Name`'s `hash(into:)` feeds that stored value to the `Hasher`, so a `Name` hashes as an integer key does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
+**A `Name`'s entry stores a hash of its text.** The build computes an entry's hash when it makes a literal's entry, and the interner computes it at run time. So the hash comes from one fixed function of the text alone, which the build and the interner share, and which gives one value for a given text at every stage of one build. Its algorithm is the library's choice, within two limits that keep anyone from finding many texts with one hash:
+
+- it is at least 64 bits wide;
+- it comes from a function with no known way to build multicollisions, sets of many texts that share one hash.
+
+**What a `Name`'s `hash(into:)` feeds a `Hasher` depends on where the hasher's seed came from** ([Hash maps and sets](#hash-maps-and-sets)):
+
+- **From the process seed**, it feeds the address of the `Name`'s entry. Each text has one entry, which is never freed, and a loader binds new code's literals to existing entries (below). So two `Name`s feed one address exactly when they are equal, and no two keys collide. Such a `Hasher` exists only at run time, where the address never changes.
+- **From a given seed**, as under `FixedHashing`, it feeds the stored hash, which the build and the interner compute alike. So a frozen map finds its `Name` keys at run time. Texts whose stored hashes collide collide under every given seed, which the limits above make hard to arrange.
+
+std's `Name` tells the two apart by `hasher.startsFromProcessSeed`, the one property `Hasher` exposes for it.
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.system` memory, whatever the current allocator is, and makes a new one. `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
@@ -101,6 +111,75 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 **`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
 **A string literal of type `Name` is interned by the build, so it costs nothing at run time.** The build makes one entry for each text it converts to a `Name` literal in checked code, merged across modules, and freezes it into read-only data. A literal is the `Name` of its text's entry, so it converts at compile time and is `@noalloc` ([Interned literals](#interned-literals)). So it may be a `const`, an attribute argument or part of a `static if` condition. std's interner holds every such entry before any code can intern at run time, so a literal and `Name("jump")` give the same `Name`.
+
+### Hash maps and sets
+
+```swift
+enum Action { case jump, fire, crouch }
+
+const bindings: Map<Name, Action, FixedHashing> = ["jump": .jump]   // frozen into read-only data
+const aliases: Map<Name, Action> = ["leap": .jump]                  // error: a seeded Map can't be made at compile time
+let shortcuts: Map<Name, Action> = ["leap": .jump]                  // fine: a global 'let', built at startup
+```
+
+**By default, `Map` and `Set` hash their keys with a seed that nobody outside the program can learn, so nobody can choose keys that collide.** A program that hashes keys from outside, such as a server reading a request's headers, would otherwise let whoever sends them pick keys that all land in one bucket. Each lookup would then walk every one of those keys, and a few thousand of them could stall the server.
+
+**std's `Hasher` is a keyed pseudorandom function: without its seed, nobody can predict what it outputs.** SipHash-1-3 is one such function. Which one std uses is the library's choice. A `Hasher` starts from a 128-bit `HashSeed`:
+
+```swift
+struct HashSeed private init(…): Copyable {       // its fields are private too
+    init(_ high: UInt64, _ low: UInt64)           // a given seed
+    static func fromProcessSeed() -> HashSeed     // a new seed, derived from the process seed
+}
+
+struct Hasher(…) {
+    init(seed: HashSeed)
+    var startsFromProcessSeed: Bool { get }       // whether its seed came from fromProcessSeed()
+}
+```
+
+**The process seed is a random value of at least 128 bits, which startup draws from the platform before any initializer runs** ([07](../07-concurrency/global-state.md#initialization-at-startup)). Reading it reads a random value from the platform, so it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)).
+
+**`HashSeed.fromProcessSeed()` derives each seed through a pseudorandom function keyed by the process seed.** Its input is the calling thread's identity ([07](../07-concurrency/global-state.md#thread-identity)) and a 64-bit count that the thread advances. No two calls give one input, so the seeds they derive are independent, and the count needs no atomic operation, even on a 32-bit target.
+
+**A `HashSeed` isn't `Pod`, and only those two functions make one**, so safe code can't mark a seed it chose as derived from the process seed. Unsafe code that forges that mark only changes what a `Name` feeds its `Hasher` (above). That can't reach compile time, since a `Name` then feeds an address, and turning a pointer into an integer can't run there.
+
+**Each map or set takes a type parameter, `H`, which decides how it seeds the `Hasher`s it feeds its keys to.** `H` defaults to `SeededHashing` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#default-type-arguments)), so `Map<Name, Action>` is `Map<Name, Action, SeededHashing>`:
+
+```swift
+struct Map<K: Hashable, V, H: Hashing = SeededHashing> private init(…)
+struct Set<T: Hashable, H: Hashing = SeededHashing> private init(…)
+
+protocol Hashing: Copyable {
+    @noalloc init()                               // the value a map keeps, unless it is given one
+    @noalloc func makeHasher() -> Hasher          // a new hash state, for one key
+}
+```
+
+A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one value of it, calls that value's `makeHasher()` for each key it hashes, and feeds the key to the result through `hash(into:)` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
+
+**Every `Hasher` that one hashing value or any copy of it makes starts from the same seed**, so a key hashes the same way at every lookup, and a clone's copied table still finds its keys (below). A map whose hashing value breaks this misses keys it holds, but stays memory-safe.
+
+**The primary initializers of `Map` and `Set` are private.** `Map(hashing:)` and `Set(hashing:)` take an owned hashing value, so a program can give a map one it configured, and every other initializer makes one with `H()`. A map's `clone()` keeps a copy of its hashing value and copies its table as it is, so the clone hashes as the original does.
+
+**std provides two hashing types:**
+
+- **`SeededHashing`**, the default, takes a seed of its own from `HashSeed.fromProcessSeed()` when it is made, and starts each `Hasher` from it. So a key's hash, and the order in which a map visits its entries, can differ between maps made separately, and between two runs of one build ([11](../11-compilation-model.md#what-the-language-leaves-open)).
+- **`FixedHashing`** holds nothing, so it adds nothing to a map's size. It starts each `Hasher` from a seed that std fixes, so a key's hash depends only on the key. That hash is public: anyone can work out which keys collide, so `FixedHashing` is unsafe for keys that come from outside the program.
+
+A program may declare its own, such as one that holds a secret seed it read at startup, and pass a value of it to `Map(hashing:)`.
+
+**The process seed exists only at run time, so a map or set with `SeededHashing` can't be made at compile time.** The compiler has no run's seed, and keys placed by any other seed would lie where the run's lookups never look. So a map's or set's hashing value decides whether it can be frozen into read-only data:
+
+- **A `const` of one with `SeededHashing` is a compile error**, since a `const`'s initializer must run at compile time.
+- **A global `let` of one with `SeededHashing` is built at startup**, since only a value computed at compile time goes into read-only data ([07](../07-concurrency/global-state.md#initialization-at-startup)).
+- **One with `FixedHashing` can be frozen**, when what it holds is freezable ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) and no key's `hash(into:)` feeds an address. So a lookup table such as `bindings` above lies in read-only data, and costs nothing at startup.
+
+**A key that hashes an address keeps its map out of read-only data, whatever the hashing type.** Turning a pointer into an integer can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), since freezing and the platform move what it points at. So a map keyed by raw pointers is built at startup. Every hash computed at compile time therefore comes from values that run time sees unchanged, and a `FixedHashing` hash is the same at compile time and in every run of one build.
+
+**A seeded map's order repeats neither from run to run nor between maps made separately, and no setting makes it repeat.** Two maps given copies of one hashing value share one order. So inserting one's entries into the other in that order can cluster them in its table, and slow each insert toward a walk of the whole table, which separate seeds avoid.
+
+**Code that needs one order every run doesn't take it from a seeded map.** A replay, or a test that compares printed output, sorts the keys it visits or uses `FixedHashing`. A lockstep simulation, which compares state across builds and targets, sorts them, since `FixedHashing`'s order depends on std's algorithm.
 
 ### Strings
 
@@ -198,6 +277,8 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 
 **Any other literal runs its initializer on each evaluation**: a `List`'s allocates from the current allocator, and a `String`'s only records it. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 
+**A `Map` or `Set` literal with two equal keys breaks its initializer's precondition, so it panics at run time** ([10](../10-errors-and-safety/panics.md#assert-and-precondition)). Keys that are constants are checked before then, whatever the hashing type: the compiler compares them with `==` at compile time, wherever their `==` can run there, without building the map. So two equal constant keys are a compile error even in a literal of a `SeededHashing` map, whose initializer runs only at run time ([Hash maps and sets](#hash-maps-and-sets)).
+
 **`true` and `false` are only `Bool`, and `nil` only an optional.**
 
 #### Interned literals
@@ -230,7 +311,8 @@ protocol ExpressibleByInternedLiteral {
 - **`internLoaded(_:binding:)` takes the new code's entries before that code runs.** The conformer interns each one, and stores in `bound[i]` the entry that `entries[i]`'s text binds to: `entries[i]` itself for a new text, or the entry the text already has. The loader binds each symbol to that entry, so equal texts still give one `Name`.
 - **It is `unsafe`**, since its contract assumes what only the loader knows: that `entries` is the new code's table, and that the loader binds each symbol through `bound` as placed ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)).
 - **It fails with `AllocError` when the interner can't grow**, so the loader can refuse the code. std's `Name` implements it with its interner.
-- **Loaded code shares the program's hash function.** Its entries carry hashes its own build computed, so it must come from a build whose function for an entry's hash is the running program's. A loader that can't confirm this refuses the code.
+- **Loaded code shares the program's function for an entry's hash.** Its entries carry hashes its own build computed, so it must come from a build whose function for an entry's hash is the running program's. A loader that can't confirm this refuses the code.
+- **Loaded code shares std's hashing code with the program**: `Hasher`, `FixedHashing`'s seed, how `HashSeed` derives seeds, and std's `hash(into:)` implementations. It may look up a map that the program built or froze, which only the same code finds its keys in ([Hash maps and sets](#hash-maps-and-sets)). A loader that can't confirm this refuses the code.
 
 ### Iteration
 
