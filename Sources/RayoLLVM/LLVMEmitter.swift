@@ -53,7 +53,8 @@ struct ProgramEmitter {
     private func declare(_ id: FunctionID, of program: IRProgram) -> FunctionValue {
         let function = program.functions[id.index]
         let name = id == program.main ? "rayo.main" : function.name
-        return module.addFunction(name, returning: llvmType(function.result))
+        let parameters = function.locals.prefix(function.parameterCount).map(llvmType)
+        return module.addFunction(name, taking: parameters, returning: llvmType(function.result))
     }
 
     /// The LLVM type that holds a value of `type`.

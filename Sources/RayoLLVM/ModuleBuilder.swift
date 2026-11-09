@@ -110,8 +110,9 @@ final class ModuleBuilder {
         return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
     }
 
-    func addFunction(_ name: String, returning result: LLVMTypeRef) -> FunctionValue {
-        let type = LLVMFunctionType(result, nil, 0, 0)!
+    func addFunction(_ name: String, taking parameters: [LLVMTypeRef], returning result: LLVMTypeRef) -> FunctionValue {
+        var parameters = parameters.map { Optional($0) }
+        let type = LLVMFunctionType(result, &parameters, UInt32(parameters.count), 0)!
         return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
     }
 

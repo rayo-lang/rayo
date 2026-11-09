@@ -11,7 +11,7 @@ public enum Lowering {
         builder.lower(function.body)
         // The checker has made every path of a function with a result end in a 'return'.
         builder.end(with: function.result == .void ? .return(nil) : .unreachable)
-        return builder.function(named: function.name, returning: function.result)
+        return builder.function(lowering: function)
     }
 }
 
@@ -32,11 +32,14 @@ private struct FunctionBuilder {
         self.locals = locals
     }
 
-    func function(named name: String, returning result: RayoType) -> IRFunction {
-        IRFunction(name: name, result: result, locals: locals, blocks: blocks.map { block in
+    /// The IR function these blocks make of `checked`.
+    func function(lowering checked: CheckedFunction) -> IRFunction {
+        let blocks = blocks.map { block in
             guard let terminator = block.terminator else { preconditionFailure("a block was left unterminated") }
             return BasicBlock(statements: block.statements, terminator: terminator)
-        })
+        }
+        return IRFunction(name: checked.name, parameterCount: checked.parameterCount, result: checked.result,
+                          locals: locals, blocks: blocks)
     }
 
     // MARK: Blocks

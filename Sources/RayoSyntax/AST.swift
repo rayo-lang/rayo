@@ -5,12 +5,32 @@ public struct SourceFile: Sendable {
     public init(functions: [FuncDecl]) { self.functions = functions }
 }
 
-/// `func name() -> Result { … }`, where the result type is optional.
+/// `func name(parameters) -> Result { … }`, where the result type is optional.
 public struct FuncDecl: Sendable {
     public var name: String
     public var nameRange: SourceRange
+    public var parameters: [Param]
     public var result: TypeExpr?
     public var body: Block
+}
+
+/// `label name: convention Type = default`, where all but the name and the type are optional.
+public struct Param: Sendable {
+    /// The label a call writes before the argument, or nil for `_`. A parameter declared without a label takes
+    /// its name as its label.
+    public var label: String?
+    public var name: String
+    public var nameRange: SourceRange
+    public var convention: ParamConvention?
+    public var type: TypeExpr
+    /// The value a call that leaves the argument out passes.
+    public var defaultValue: Expr?
+    public var range: SourceRange
+}
+
+/// How a parameter takes its argument, when it doesn't borrow it.
+public enum ParamConvention: String, Sendable {
+    case mutable, owned
 }
 
 public enum TypeExpr: Sendable {
@@ -23,6 +43,14 @@ public enum TypeExpr: Sendable {
         switch self {
         case .named(_, let range), .void(let range):
             return range
+        }
+    }
+
+    /// The type as the source writes it.
+    public var spelling: String {
+        switch self {
+        case .named(let name, _): return name
+        case .void: return "()"
         }
     }
 }
@@ -105,6 +133,14 @@ public struct Expr: Sendable {
     public var range: SourceRange
 }
 
+/// `label: value`, or the value alone.
+public struct Argument: Sendable {
+    public var label: String?
+    public var value: Expr
+    /// The label, when there is one, and the value.
+    public var range: SourceRange
+}
+
 public indirect enum ExprKind: Sendable {
     /// The literal's digits.
     case intLiteral(UInt64)
@@ -114,7 +150,7 @@ public indirect enum ExprKind: Sendable {
     case boolLiteral(Bool)
     case name(String)
     /// `name(arguments)`.
-    case call(name: String, nameRange: SourceRange, arguments: [Expr])
+    case call(name: String, nameRange: SourceRange, arguments: [Argument])
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
     /// `copy name`: the value of a local, which the local keeps.

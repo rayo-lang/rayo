@@ -28,6 +28,9 @@ struct FunctionEmitter {
     mutating func emit() {
         LLVMPositionBuilderAtEnd(builder, appendBlock(named: "entry"))
         slots = function.locals.map { LLVMBuildAlloca(builder, llvmType($0), "") }
+        for index in 0..<function.parameterCount {
+            LLVMBuildStore(builder, LLVMGetParam(llvmFunction, UInt32(index)), slots[index])
+        }
         blocks = function.blocks.indices.map { appendBlock(named: "bb\($0)") }
         LLVMBuildBr(builder, blocks[0])
         for (block, llvmBlock) in zip(function.blocks, blocks) {

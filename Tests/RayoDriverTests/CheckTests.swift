@@ -40,10 +40,12 @@ struct ProgramTests {
         #expect(errors(source) == [expected])
     }
 
-    @Test("a program is functions, each a name, '()', an optional result type and a body", arguments: [
+    @Test("a program is functions, each a name, parameters, an optional result type and a body", arguments: [
         ("struct S {}", ErrorCode.missingFunc(found: .token("struct"))),
         ("func 1() {}", .missingFunctionName(found: .token("1"))),
-        ("func main(_ x: Int) {}", .unclosedEmptyParentheses(found: .token("_"))),
+        ("func main(x) {}", .missingParameterType(found: .token(")"))),
+        ("func f(1: Int) {}", .missingParameterName(found: .token("1"))),
+        ("func f(a: Int b: Int) {}", .unclosedParameters(found: .token("b"))),
         ("func main<T>() {}", .missingParameterList(found: .token("<"))),
         ("func main() throws {}", .missingBlock(found: .token("throws"))),
         ("func main() -> (Int) {}", .unclosedEmptyParentheses(found: .token("Int"))),
@@ -95,7 +97,7 @@ struct ProgramTests {
     }
 
     @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
-        ("print(value: 1)", ErrorCode.unclosedArguments(found: .token(":"))),
+        ("print(1 2)", ErrorCode.unclosedArguments(found: .token("2"))),
         ("print(copy 1)", .missingCopiedName(found: .token("1"))),
         ("print(1)(2)", .unendedStatement(found: .token("("))),
         ("let t = (1, 2)", .unclosedParenthesizedExpression(found: .token(","))),

@@ -68,17 +68,30 @@ final class FileChecker {
         var main: FunctionID?
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
-            let signature = Signature(name: function.name, callee: .function(id), parameters: [],
+            let parameters = function.parameters.map(declare)
+            let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
                                       result: result(of: function, id))
             signatures.append(signature)
             if !declarations.declare(signature) {
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
             } else if function.name == "main" {
-                main = id
+                main = main ?? id
+                if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
             }
         }
-        _ = declarations.declare(.print)
+        declarations.declarePrelude()
         return main
+    }
+
+    /// What a call needs to know about `parameter`, reporting what in it rayoc doesn't support: every parameter
+    /// is borrowed, and every argument written.
+    private func declare(_ parameter: Param) -> Parameter {
+        if let convention = parameter.convention {
+            errors.report(.unsupportedConvention(convention: convention.rawValue), at: parameter.range)
+        }
+        if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
+        return Parameter(label: parameter.label, type: declarations.resolve(parameter.type, reporting: errors),
+                         spelledType: parameter.type.spelling)
     }
 
     /// The result type that `function`, which is `id`, declares. Without '->', it is Void, unless the body is a
@@ -100,8 +113,9 @@ final class FileChecker {
     private func function(_ id: FunctionID) -> CheckedFunction? {
         let body = body(of: id)
         guard let result = body.result else { return nil }
-        return CheckedFunction(name: "\(signatures[id.index])", result: result, locals: body.locals,
-                               body: body.statements)
+        let signature = signatures[id.index]
+        return CheckedFunction(name: "\(signature)", parameterCount: signature.parameters.count, result: result,
+                               locals: body.locals, body: body.statements)
     }
 
     /// The body of the function `id`, checked when this first asks for it.
@@ -118,6 +132,7 @@ final class FileChecker {
         let function = file.functions[id.index]
         let declared = signatures[id.index].result
         var body = BodyChecker(file: self, result: declared.type)
+        body.declare(function.parameters, types: signatures[id.index].parameters.map(\.type))
         var result = declared.type
         let statements: [CheckedStmt]
         if result != .void, let value = function.body.singleExpression {
