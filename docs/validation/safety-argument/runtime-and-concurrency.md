@@ -147,7 +147,7 @@ A check whose field load reads a newer write synchronizes, through the two fence
 - **At most one reuse per check.** A reuse whose scan came before the hazard may still run, but no later one can, so the slot's word never comes back to a value the check saw.
 - **Bounded memory.** A slot passed over is reused at a later scan, so each thread's hazard holds back at most one slot at a time, and memory doesn't grow with the number of creations.
 - **Objects at home.** An object's slot is reused only by its home thread while that thread lives. So the home thread's own checks read slots only it writes, and need no hazard.
-- **Recycled records.** A thread that ends clears its hazard, and puts its record on a list that later threads take records from. No record goes back to the allocator, so the records number at most the most threads alive at once. A scan that reads a record a new thread has taken over sees only that thread's hazard, which at worst passes over one slot for a while.
+- **Recycled records.** A thread that ends, or a C thread that detaches, clears its hazard, and puts its record on a list that later threads take records from. No record goes back to the allocator, so the records number at most the most threads alive at once. A scan that reads a record a new thread has taken over sees only that thread's hazard, which at worst passes over one slot for a while.
 
 **An added owner never reaches a later value.** `upgrade()`, under its hazard, reads the count word between its two loads of the sequence word, and goes on only when the generation matches and the count is above zero. That value was live during the check, so its slot isn't reused before the check ends. A compare-and-swap with acquire-release ordering then adds one to the count. It fails only when, meanwhile, another owner was added or dropped, or `leak` or `adopt` flipped the leaked mark. It then retries, reading `nil` once the count is zero, which never rises again.
 
@@ -162,7 +162,7 @@ A check whose field load reads a newer write synchronizes, through the two fence
 
 **A wake from another thread records `wake(at: D)` in these steps:**
 
-1. It loads the base `b1` with an acquire load, then the deadline word `w`, and reads the clock as `now1`. If `D` isn't after `now1`, the deadline is due, so the wake only marks the task woken.
+1. It loads the base `b1`, then the deadline word `w`, and reads the clock as `now1`. If `D` isn't after `now1`, the deadline is due, so the wake only marks the task woken and signals the runner, as step 5 does.
 2. It clamps `D` to at most `now1` plus 2^31 units of `u`, and rounds it up to a multiple of `u`.
 3. It computes the offset `(D − b1) mod 2^32`, avoiding the empty value. A compare-and-swap with acquire-release ordering stores the smaller of that offset and `w`'s, and on failure the wake starts again at 1.
 4. It loads the base `b2`, and reads the clock as `now2`. If `b2` differs from `b1`, or `D` isn't after `now2`, it also marks the task woken.
@@ -173,22 +173,22 @@ A check whose field load reads a newer write synchronizes, through the two fence
 **The runner never honours a deadline later than it was recorded:**
 
 - **The same base.** If `b2` equals `b1` and `D` is after `now2`, every clear the compare-and-swap could have followed had a base no later than `now2`, so before `D`, with `b1`'s bits. So the stored offset is congruent to `D − B`, and reading it as `B + ((D − B) mod 2^32)` gives at most `D`. A wrap in the offset only makes the wake earlier.
-- **Another base.** Otherwise the task is marked woken. The value is discarded at that step's clear, and the woken mark keeps the runner from parking on it meanwhile.
-- **Synchronization.** The compare-and-swap that reads a clear's empty value synchronizes with that clear's exchange, so `b2` sees that clear's base.
+- **Another base.** Otherwise the task is marked woken, and the value is discarded at that step's clear. Before the wake reaches step 4, the runner may already have folded the value against the newer base, and parked on that late time. Step 5's mask bit and signal end any such park.
+- **Synchronization.** Every write to the deadline word is a read-modify-write: a wake's compare-and-swap, a clear's exchange, or a fold's exchange. So a compare-and-swap that reads any value at or after a clear's exchange synchronizes with that exchange through its release sequence, and `b2` sees that clear's base or a later one. That lets the base store be relaxed, and `b1` needs no acquire.
 - **The clock.** The argument needs clock reads that never decrease, in happens-before order across threads, which 08 requires ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
 **Recording can't livelock, since no thread holds anything another waits for.** A wake marks the task woken only when its deadline is due, or when a clear raced the wake's own steps. A clear needs a step, and a step needs some other wake.
 
-**The cost is slack, never a missed wake.** Clamping and rounding cost at most one early poll per 2^31 units, which a stale wake may cost anyway ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is within the contract, since every wait on real time ends no sooner than its deadline ([07](../../spec/07-concurrency/synchronization.md#time-duration-and-instant)).
+**The cost is slack, never a missed wake.** Clamping and rounding cost at most one early poll per 2^31 units, which a stale wake may cost anyway ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Rounding up makes a wake late by less than `u`. That is within 07's rule that a wait on real time may end after its deadline ([07](../../spec/07-concurrency/synchronization.md#time-duration-and-instant)).
 
 **An open checks one 32-bit floor.** An allocator word names a registry slot and a 32-bit date. Dates come from one run-wide ordered sequence, issued with the stamps under the lock that parks its waiters. Each registry slot keeps a floor, which only rises:
 
-- a registration takes a fresh date `r`, and sets its slot's floor to `r`;
+- a registration takes a fresh date `r` and sets its slot's floor to `r`, and an arena's first blocks take `r` as their date;
 - a reset takes a fresh date, raises the floor to it, and serves its new blocks with that date;
 - an unregistration takes a fresh date, and raises the floor to it;
 - a reset or an unregistration also raises, in the same step and to the same date, the floor of every allocator built on the one it resets or unregisters, since a wrapper's values go stale with its backing's memory ([06](../../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators)).
 
-**A value records the date of its storage**: its arena block's date, its heap's registration date, or, through a wrapper, the later of that date and the wrapper's own `r`. So a valid value's date is never below its slot's floor. A stale value's always is, since the registration or reset that made it stale took a date above every one issued before it. A registration into a reused slot takes a date above the floor its last user left, so no stale word of that user passes.
+**A value records the date of its storage**: its arena block's date, its heap's registration date, or, through a wrapper, the later of that date and the wrapper's own `r`. So a valid value's date is never below its slot's floor. A stale value's always is, since the reset or unregistration that made it stale took a date above every one issued before it. A registration into a reused slot takes a date above the floor its last user left, so no stale word of that user passes.
 
 Each floor has one writer at a time, since resets and unregistrations that reach the same memory never overlap ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)). Dates never wrap: once the run-wide sequence runs out, a registration or a reset panics. That is a limit on registrations and resets, which 06 allows, so no word is issued twice.
 
@@ -196,5 +196,5 @@ Each floor has one writer at a time, since resets and unregistrations that reach
 
 **What remains needs no 64-bit atomic step:**
 
-- **Ordered numbers.** Stamps, dates, registry slots and thread identities are issued under a lock that parks its waiters ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)). A panic's `sequence` is issued inside its report, which the runtime makes one at a time ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)).
+- **Ordered numbers.** Stamps, dates, registry slots and thread identities ([07](../../spec/07-concurrency/global-state.md#thread-identity)) are issued under a lock that parks its waiters ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)). A panic's `sequence` is issued inside its report, which the runtime makes one at a time ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)).
 - **Narrow state.** The interner's word is 32 bits, the runtime's counts fit in 32 bits, and a handle's generation changes only through a pool's `mutating` methods ([03](../../spec/03-handles-and-objects.md#pools-and-handles)).

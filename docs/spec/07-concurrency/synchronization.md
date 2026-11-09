@@ -217,7 +217,7 @@ enum ReceiveTimeoutError: Error {
 }
 ```
 
-It fails with `.timedOut` no sooner than `timeout` after the call, as `Thread.sleep(for:)` parks for at least its `Duration`. An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
+It fails with `.timedOut` once its deadline, `timeout` after the call, has passed ([Time](#time-duration-and-instant)). An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
 
 **`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
@@ -403,6 +403,8 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 
 **`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game whose simulation time stops while it is paused. Their instants can't reach a wait on real time, such as a `Waker`'s `wake(at:)`, which takes an `Instant<MonotonicClock>`.
 
+**Every wait on real time ends no sooner than its deadline, and may end later**, since the platform wakes a parked thread some time after the moment it asked for. That holds for a timeout, `Thread.sleep(for:)`, a park's `timeout`, and a task's `sleep(for:)` and `wake(at:)`, on every target.
+
 **The arithmetic is `Int64` arithmetic on the nanoseconds**, so an overflow does what an `Int64` overflow does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)):
 
 - two `Duration`s add and subtract, and a `Duration` multiplies by an `Int64`;
@@ -413,7 +415,7 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 
 **`seconds(_:)` rounds to the nearest nanosecond, ties to even**, which is IEEE 754's rounding to nearest, as a conversion to a floating-point type uses. It panics on NaN or on a value out of range, as converting a float to an integer does ([04](../04-types/numbers-and-math.md#conversions)).
 
-**`Thread.sleep(for:)` parks the calling thread for at least `d`**, and returns at once when `d` is zero or less:
+**`Thread.sleep(for:)` parks the calling thread until `d` has passed** ([above](#time-duration-and-instant)), and returns at once when `d` is zero or less:
 
 ```swift
 static func sleep(for d: Duration) { … }        // Thread's
