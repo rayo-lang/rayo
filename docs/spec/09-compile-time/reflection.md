@@ -241,11 +241,15 @@ func rebuild<T>(_ old: owned T) -> T {
 
 ## Tuples, field lists, and queries
 
-Generic code often needs a part of a value picked by its type rather than its name, and several such parts at once. A columnar store, for one, keeps each table as an `SoA` whose row is a tuple of column types. A query runs over every table that has the columns it needs, reading some columns and changing others. Here every sensor table with a `Reading` and a `Calibration` column has its readings calibrated in place:
+Generic code often needs a part of a value picked by its type rather than its name, and several such parts at once. A columnar store, for one, keeps each table as an `SoA` whose row is a tuple of column types. A query runs over every table that has the columns it needs, reading some columns and changing others. Here every sensor table with `Reading`, `Calibration` and `Calibrated` columns computes its calibrated values from the raw readings, which it leaves as they are:
 
 ```swift
-struct Reading(var value: Double)
+struct Timestamp(var nanoseconds: Int64)
+struct Reading(var value: Double)                         // as the sensor reports it
 struct Calibration(var gain: Double, var offset: Double)
+struct Calibrated(var value: Double)                      // the reading, corrected
+struct Pipe(var id: UInt32)
+struct Count(var value: Int)
 
 protocol Table { associatedtype Row }
 struct Columns<Row>(                                      // Row: a tuple of column types
@@ -253,21 +257,23 @@ struct Columns<Row>(                                      // Row: a tuple of col
 ): Table
 
 func calibrate<Row>(_ table: mutable Columns<Row>) {
-    const rf = Row.field(ofType: Reading.self)            // per instantiation; a compile error if absent
-    const cf = Row.field(ofType: Calibration.self)
-    let (var rs, cs) = &table.rows[fields: (rf, cf)]    // MutableSpan<Reading>, Span<Calibration>
-    for (r, c) in zip(&rs, cs) { r.value = r.value * c.gain + c.offset }
+    const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
+    const cal = Row.field(ofType: Calibration.self)
+    const out = Row.field(ofType: Calibrated.self)
+    let (rs, cs, var os) = &table.rows[fields: (raw, cal, out)]   // Span, Span, MutableSpan<Calibrated>
+    for (r, c, o) in zip(rs, cs, &os) { o.value = r.value * c.gain + c.offset }
 }
 
 struct Telemetry(                                         // one table per kind of sensor
-    var thermometers = Columns<(Timestamp, Reading, Calibration)>(),
-    var flowMeters   = Columns<(Timestamp, Reading, Calibration, Pipe)>(),
+    var thermometers = Columns<(Timestamp, Reading, Calibration, Calibrated)>(),
+    var flowMeters   = Columns<(Timestamp, Pipe, Reading, Calibration, Calibrated)>(),
     var counters     = Columns<(Timestamp, Count)>(),
 )
 
-func calibrateAll(_ t: mutable Telemetry) {               // every table with a Reading and a Calibration
+func calibrateAll(_ t: mutable Telemetry) {               // every table with all three columns
     static for f in Telemetry.fields where f.type.Row.hasField(ofType: Reading.self)
-                                         && f.type.Row.hasField(ofType: Calibration.self) {
+                                         && f.type.Row.hasField(ofType: Calibration.self)
+                                         && f.type.Row.hasField(ofType: Calibrated.self) {
         calibrate(&t[f])                                  // instantiated for 'thermometers' and 'flowMeters'
     }
 }
@@ -303,7 +309,7 @@ func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Ve
 }
 ```
 
-**Tuples are reflected like structs.** A tuple type's elements are its `T.fields`, so generic code can take a tuple of types, such as `Columns<(Timestamp, Reading, Calibration)>` or `Archetype<(Transform, Velocity)>`, and `static for` over it.
+**Tuples are reflected like structs.** A tuple type's elements are its `T.fields`, so generic code can take a tuple of types, such as `Columns<(Timestamp, Count)>` or `Archetype<(Transform, Velocity)>`, and `static for` over it.
 
 **`value[fields: (f1, f2, …)]` projects several fields of one value at once, as a tuple of places.** In generic code, two separate projections whose fields may be one overlap where the borrows are checked, as two that `Row.field(ofType:)` picks may ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). A field list is checked at instantiation instead:
 
@@ -316,7 +322,7 @@ For one row of a table, held in a `var`:
 
 ```swift
 var row: Row = …
-let (var r, c) = &row[fields: (rf, cf)]       // r borrows the Reading exclusively, c the Calibration shared
+let (var o, r) = &row[fields: (out, raw)]     // o borrows the Calibrated exclusively, r the Reading shared
 ```
 
 ## Enumerating a module's types
@@ -325,7 +331,7 @@ A registry of every type in a module that conforms to a protocol is a `const` bu
 
 ```swift
 const messageTypes: [_ of TypeInfo] = Module("messages").types
-    .filter { $0.conforms(Message.self) }
+    .filter { $0.conforms(WireMessage.self) }
     .map { typeInfo($0.self) }                        // a const table in read-only data
 ```
 
