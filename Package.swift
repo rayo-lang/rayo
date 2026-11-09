@@ -70,27 +70,12 @@ let package = Package(
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
-        .testTarget(name: "RayoLLVMTests", dependencies: [
-            "CLLVM", "RayoIR", "RayoLLVM", "RayoSema", "RayoSource", "RayoSyntax",
-        ]),
     ]
 )
 
-// A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
-// directory of LLVM's tools, which CLLVM's header holds.
+// A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers.
 for target in package.targets where dependsOnCLLVM(target, among: package.targets) {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
-        "-Xcc", "-I\(llvmPrefix)/include",
-        "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(checkedForDefine(llvmPrefix + "/bin"))\"",
-    ])]
-}
-
-/// `path`, which the manifest writes into a C string literal, so it can't hold a quote or a backslash.
-func checkedForDefine(_ path: String) -> String {
-    if path.contains("\"") || path.contains("\\") {
-        fatalError("rayoc can't be built against an LLVM whose path holds a quote or a backslash: \(path)")
-    }
-    return path
+    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(llvmPrefix)/include"])]
 }
 
 /// Whether `target` depends on CLLVM, directly or through others of `targets`.
