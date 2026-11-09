@@ -20,15 +20,21 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl gnupg
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg
-          fingerprint=$(gpg --show-keys --with-colons /usr/share/keyrings/llvm.gpg | awk -F: '$1 == "fpr" { print $10; exit }')
-          if [ "$fingerprint" != "$LLVM_KEY_FINGERPRINT" ]; then
-            echo "::error::apt.llvm.org's key has fingerprint '$fingerprint', not $LLVM_KEY_FINGERPRINT"
+          # apt trusts every key in the keyring, so it gets the one key with the published fingerprint and no other
+          # key the download might hold.
+          keys=$(mktemp -d)
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o "$keys/llvm.asc"
+          gpg --homedir "$keys" --batch --import "$keys/llvm.asc"
+          gpg --homedir "$keys" --batch --export "$LLVM_KEY_FINGERPRINT" > /usr/share/keyrings/llvm.gpg
+          if [ ! -s /usr/share/keyrings/llvm.gpg ]; then
+            echo "::error::apt.llvm.org's key file holds no key with fingerprint $LLVM_KEY_FINGERPRINT"
             exit 1
           fi
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR_VERSION main" \
             > /etc/apt/sources.list.d/llvm.list
           apt-get update
+          # The pin keeps the major release: apt.llvm.org serves only the newest build of it, so no exact build
+          # can be named.
           version="1:$LLVM_MAJOR_VERSION.1.*"
           apt-get install -y --no-install-recommends "llvm-$LLVM_MAJOR_VERSION-dev=$version" \
             "clang-$LLVM_MAJOR_VERSION=$version" "lld-$LLVM_MAJOR_VERSION=$version"

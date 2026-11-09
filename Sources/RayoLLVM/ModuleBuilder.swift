@@ -43,8 +43,14 @@ final class ModuleBuilder {
 
     /// Throws the errors LLVM has reported in this module's context, if any. A warning fails nothing.
     func checkReportedErrors() throws(LLVMError) {
-        let errors = diagnostics.errors
-        if !errors.isEmpty { throw LLVMError(message: "LLVM reported errors:\n" + errors.joined(separator: "\n")) }
+        if !diagnostics.errors.isEmpty { throw error("LLVM reported errors:") }
+    }
+
+    /// An error that says `summary`, then `detail` and the errors LLVM has reported in this module's context,
+    /// whichever there are.
+    func error(_ summary: String, detail: String = "") -> LLVMError {
+        let reasons = ([detail] + diagnostics.errors).filter { !$0.isEmpty }
+        return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
 
     /// Parses `llvmIR` into a module of this context, for the same target as this one.
@@ -66,26 +72,27 @@ final class ModuleBuilder {
 
     /// Links `other` into this module, which consumes it.
     func link(_ other: LLVMModuleRef) throws(LLVMError) {
-        if LLVMLinkModules2(module, other) != 0 {
-            throw LLVMError(message: "LLVM couldn't link the runtime:\n" + diagnostics.errors.joined(separator: "\n"))
-        }
+        if LLVMLinkModules2(module, other) != 0 { throw error("LLVM couldn't link the runtime:") }
     }
 
     /// Gives every function and global the module defines, but `entryPoint`, a linkage that keeps it out of the
-    /// executable's symbols, so that optimisation can drop what nothing uses.
+    /// executable's symbols, so that optimisation can drop what nothing uses. It leaves LLVM's own globals, such
+    /// as `llvm.used` and `llvm.global_ctors`, whose linkage LLVM requires to stay as it is.
     func hideDefinitions(except entryPoint: String) {
         var function = LLVMGetFirstFunction(module)
         while let current = function {
-            if LLVMIsDeclaration(current) == 0 && name(of: current) != entryPoint {
-                LLVMSetLinkage(current, LLVMInternalLinkage)
-            }
+            if isHideable(current) && name(of: current) != entryPoint { LLVMSetLinkage(current, LLVMInternalLinkage) }
             function = LLVMGetNextFunction(current)
         }
         var global = LLVMGetFirstGlobal(module)
         while let current = global {
-            if LLVMIsDeclaration(current) == 0 { LLVMSetLinkage(current, LLVMPrivateLinkage) }
+            if isHideable(current) { LLVMSetLinkage(current, LLVMPrivateLinkage) }
             global = LLVMGetNextGlobal(current)
         }
+    }
+
+    private func isHideable(_ value: LLVMValueRef) -> Bool {
+        LLVMIsDeclaration(value) == 0 && !name(of: value).hasPrefix("llvm.")
     }
 
     private func name(of value: LLVMValueRef) -> String {

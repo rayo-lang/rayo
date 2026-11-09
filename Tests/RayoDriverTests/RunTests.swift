@@ -188,6 +188,27 @@ struct BuildTests {
         }
     }
 
+    @Test("an executable exports the C entry point and nothing of the program or the runtime")
+    func exportedSymbols() throws {
+        try withTemporaryDirectory { directory in
+            let source = directory.appendingPathComponent("empty.rayo").path
+            #expect(Driver.run(["build", source]) { _ in Array("func main() {}".utf8) } ==
+                Driver.Result(exitCode: 0, output: "", errors: ""))
+
+            let nm = Process()
+            nm.executableURL = URL(fileURLWithPath: "/usr/bin/nm")
+            nm.arguments = ["--extern-only", "--defined-only", directory.appendingPathComponent("empty").path]
+            let listing = Pipe()
+            nm.standardOutput = listing
+            try nm.run()
+            let symbols = String(decoding: listing.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                .split(separator: "\n").compactMap { $0.split(separator: " ").last.map(String.init) }
+            nm.waitUntilExit()
+            #expect(symbols.contains { $0 == "main" || $0 == "_main" })
+            #expect(symbols.filter { $0.contains("rayo.") } == [])
+        }
+    }
+
     @Test("build builds in the mode it names")
     func buildMode() throws {
         try withTemporaryDirectory { directory in
