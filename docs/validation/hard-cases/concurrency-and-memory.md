@@ -18,7 +18,7 @@ ThreadScope.run { s in s.spawn { … } }      // starts threads that may borrow 
 
 Work handed to other threads this way is **lent work** ([07](../../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)). The library's `unsafe` core, its scheduling and its error policy are its own design. The cases check that its safe uses can be written, and that its own `unsafe` promise is small and easy to state.
 
-**Work that waits without a thread of its own is a `task`**, which a runner steps each time it is woken, such as std's `TaskSet` or `block(on:)`, or a loop of the program's own ([07](../../spec/07-concurrency/tasks.md#running-tasks)).
+**Work that waits without a thread of its own is a `task`**, which its runner steps each time it is woken. The runner may be std's `block(on:)`, or a `TaskSet` that `run` or a loop of the program's own steps ([07](../../spec/07-concurrency/tasks.md#running-tasks)).
 
 ### C1 · Parallel scatter into shared data
 
@@ -117,7 +117,7 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 
 ### C19 · An I/O-bound server whose handlers are tasks
 
-**A network service runs each connection's handler as a task, so thousands of connections wait at once without a thread each** ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). A reactor of the program's own waits on the platform's readiness API, such as epoll, kqueue or an I/O completion port, through `import c`. Its awaitables hand each task's `Waker` to the reactor, which calls it once the socket is ready, and arrange each timeout with `wake(at:)` ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). K2 follows such a server's memory over weeks, and this case checks its tasks.
+**A network service runs each connection's handler as a task, so thousands of connections wait at once without a thread each** ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). A reactor of the program's own waits on the platform's readiness or completion API, such as epoll, kqueue or an I/O completion port, through `import c`. Its awaitables hand each task's `Waker` to the reactor, which calls it once the socket is ready or the operation completes, and arrange each timeout with `wake(at:)` ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). K2 follows such a server's memory over weeks, and this case checks its tasks.
 
 The criteria below use these statements, the first five in the tasks that handle a connection, and the rest outside them:
 
@@ -125,7 +125,7 @@ The criteria below use these statements, the first five in the tasks that handle
 let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
 await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
 let digest = await hashed                                          // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
-using allocator = lease.arena { … }                                // the request's own arena, for a block with an await inside
+using allocator = lease.arena { … }                                // lease: the handler's own value naming its request's arena; a block with an await inside
 let host = req.host.view; try await write(sock, page); log(host)   // error: the view 'host' is live across the await
 
 guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
@@ -134,14 +134,16 @@ let db = try block(on: connect(dbAddress))                         // in main, b
 ```
 
 - **Must accept** the handlers run either way that 07 allows ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)):
-    - by an event loop of the program's own, which waits in the readiness API and steps a `TaskSet` whose notifying `Waker` ends that wait;
+    - by an event loop of the program's own, which waits in the readiness or completion API and steps a `TaskSet` whose notifying `Waker` ends that wait;
     - by `TaskSet.run`, which parks the handlers' thread, while a reactor on another thread calls their `Waker`s.
 - **Must hold:** a thread whose handlers all wait does no work until a socket is ready, a deadline passes or another thread wakes a task, apart from the early polls that a deadline allows. It never spins, and a wake from another thread or a C completion callback runs no handler code there.
 - **Must accept** the `read` timeout and the backoff above, and a worker thread that waits for jobs with `receive(timeout:)`. The worker ends once it has been idle for a minute, or once every `Sender` is gone.
-- **Must accept** a handler that hands CPU-bound work, such as hashing a password, to worker threads through a `Channel`, with a `Promise` that the worker fulfills, and awaits the `Future`. **Must reject** a job that holds a value bound to the loop's thread, such as a `LocalShared` buffer. The channel's ends then aren't `Sendable`, so no worker's body can own its `Receiver` ([07](../../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+- **Must accept** a handler that hands CPU-bound work, such as hashing a password, to worker threads through a `Channel`, with a `Promise` that the worker fulfills, and awaits the `Future`. A channel has one `Receiver` ([07](../../spec/07-concurrency/synchronization.md#queues-and-channels)), so each worker owns a channel of its own, or the workers share one `Receiver` behind a `Mutex`. State what each choice costs.
+- **Must accept** handing a job off with `trySend`, which never parks the loop's thread. State what the handler does when the channel is full, or its worker is gone ([07](../../spec/07-concurrency/synchronization.md#disconnected-channels)).
+- **Must reject** a job that holds a value bound to the loop's thread, such as a `LocalShared` buffer. The channel's ends then aren't `Sendable`, so no worker's body can own or borrow its `Receiver` ([07](../../spec/07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 - **Must accept** a per-request arena while many requests are in flight on one thread, so that no one arena can be reset between them. Each handler takes an arena from a pool that the server registers once, and builds its request's values in it across `await`s. A value the handler owns resets the arena and returns it to the pool when the handler is destroyed.
-- State where that pool lives, given that a handler destroyed between steps has no resume parameter ([07](../../spec/07-concurrency/tasks.md#semantics)). State what happens when the reset comes while a worker still reads a job built in the arena, and show how the server avoids it.
-- **Must accept** cancelling a request by dropping its task: `cancel` when the client goes, a failed `start` when the set is full, and dropping the whole set at shutdown. **Must hold:** each destroyed handler runs its `defer`s and `deinit`s, closes its socket and returns its arena, and its dropped `Future` makes the worker's `fulfill` fail. A later wake through the handler's old `Waker` costs at most a poll with nothing changed.
+- State where that pool lives, given that a handler destroyed after its first step has no resume parameter ([07](../../spec/07-concurrency/tasks.md#semantics)). State what happens when the reset comes while a worker still reads a job built in the arena, and show how the server avoids it.
+- **Must accept** cancelling a request by dropping its task: `cancel` when the client goes, a failed `start` when the set is full, and dropping the whole set at shutdown. **Must hold:** each destroyed handler closes its socket. One destroyed after its first step also runs its `defer`s and `deinit`s and returns its arena, and its dropped `Future` makes the worker's `fulfill` fail. A later wake through the handler's old `Waker` costs at most a poll with nothing changed.
 - **Must reject** the line with `host` above, and any view of the reactor's buffers live across an `await` ([07](../../spec/07-concurrency/tasks.md#semantics)).
 - **Must accept** `block(on:)` in synchronous code, as in `db`'s line above, when a reactor on another thread wakes the task. State what happens when the only reactor that could wake it is the parked thread's own.
 
