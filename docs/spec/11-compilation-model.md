@@ -63,7 +63,7 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 - the literal protocols ([04](04-types/collections.md#literals));
 - the C type aliases ([08](08-c-interop.md));
 - the protocols the compiler derives or checks;
-- the functions it gives meaning to, such as `precondition` and `typeInfo`.
+- the functions it gives meaning to, such as `precondition`, `typeInfo` and `fma`.
 
 ## Type checking is local
 
@@ -182,6 +182,8 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
 
 ISO C guarantees neither of the last two, so the target's compiler must.
+
+**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
 
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 

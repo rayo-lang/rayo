@@ -100,19 +100,30 @@ let q = (a + b) + c     // never reassociated into a + (b + c), which can round 
 let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names fma
 ```
 
-**Every `Half`, `Float` and `Double` operation, and every floating-point `Simd` lane operation, is one IEEE 754 operation rounded to its own type, in every build.** Nothing is kept in wider precision, contracted, as a multiply and an add are into one fused multiply-add, reassociated or otherwise rewritten. Subnormals are never flushed to zero. So `+ - * /`, square root, comparisons and conversions are bit-identical on every target, toolchain and build. Two things are left open: which NaN a NaN result is, and the results of functions that IEEE 754 doesn't require to be correctly rounded, such as `sin`.
+**Every `Half`, `Float` and `Double` operation, and every floating-point `Simd` lane operation, is one IEEE 754 operation rounded to its own type, in every build.** Nothing is kept in wider precision, contracted, as a multiply and an add are into one fused multiply-add, reassociated or otherwise rewritten. Subnormals are never flushed to zero. So `+ - * /`, `fma`, square root, comparisons and conversions are bit-identical on every target, toolchain and build. Two things are left open: which NaN a NaN result is, and the results of functions that IEEE 754 doesn't require to be correctly rounded, such as `sin`.
 
 **Bit-identical results let a program compare a floating-point result exactly with one computed on another machine, or by another build.** A compiler that fused or reordered operations would change results between targets, toolchains and build modes, so a result checked in a debug build could differ in a release build. Programs of many kinds rely on exact results:
 
 - **Reproducible science.** A computation that another team reruns on other hardware gives the same numbers, to the last bit.
 - **Financial computation.** A pricing or risk model gives the same figure on every server that runs it, and when an audit reruns it later.
 - **Deterministic tests and replays.** A test compares its output with a recorded result exactly, and a replay of recorded inputs reaches the recorded state.
-- **Distributed consensus.** Replicas that each compute a state from the same inputs agree on it, and so on its hash.
-- **Lockstep simulation.** Machines on different platforms run one simulation from the same inputs, and compare a hash of its state at each step.
+- **Distributed consensus.** Replicas that each compute a state from the same inputs agree on it. They agree on its hash too, once each replaces every NaN with one canonical NaN, since which NaN a result is stays open.
+- **Lockstep simulation.** Machines on different platforms run one simulation from the same inputs, and compare a hash of its state at each step. Each makes its NaNs canonical before it hashes, as replicas do.
 
-**`fma(a, b, c)` computes `a * b + c` with a single rounding, as IEEE 754's `fusedMultiplyAdd` does.** Its operands are of one type, `Half`, `Float` or `Double`, and so is its result. It is one correctly rounded IEEE 754 operation, so it keeps the rule above, and its result is bit-identical on every target, toolchain and build. The compiler never fuses `a * b + c` itself, so code that wants one rounding, or a target's fused multiply-add instruction, names `fma`. Its vector form works lane by lane ([SIMD and math](#simd-and-math)).
+**`fma(a, b, c)` computes `a * b + c` with a single rounding, as IEEE 754's `fusedMultiplyAdd` does.** That makes it one correctly rounded IEEE 754 operation, under the rule above. The compiler never fuses `a * b + c` itself, so code that wants one rounding, or a target's fused multiply-add instruction, names `fma`.
 
-**A target without a fused multiply-add instruction computes `fma` in software, still with a single rounding**, never as a multiply and an add that each round. So the hardware changes how long `fma` takes, never its result. A `const` initializer that calls `fma` gets the same bits as a call at run time, since compile-time evaluation computes what run time does ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)).
+**`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It has an overload for each floating-point type, and one for each floating-point vector type, which works lane by lane ([SIMD and math](#simd-and-math)). Each borrows its operands, as `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)):
+
+```swift
+func fma(_ a: Half, _ b: Half, _ c: Half) -> Half
+func fma(_ a: Float, _ b: Float, _ c: Float) -> Float
+func fma(_ a: Double, _ b: Double, _ c: Double) -> Double
+func fma<let N: Int>(_ a: Simd<Half, N>, _ b: Simd<Half, N>, _ c: Simd<Half, N>) -> Simd<Half, N>
+func fma<let N: Int>(_ a: Simd<Float, N>, _ b: Simd<Float, N>, _ c: Simd<Float, N>) -> Simd<Float, N>
+func fma<let N: Int>(_ a: Simd<Double, N>, _ b: Simd<Double, N>, _ c: Simd<Double, N>) -> Simd<Double, N>
+```
+
+**A target without a fused multiply-add instruction computes `fma` in software, still with a single rounding**, never as a multiply and an add that each round. So the hardware changes how long `fma` takes, never its result.
 
 ```swift
 let lo = min(x, Float.nan)              // NaN: min passes a NaN on
@@ -156,7 +167,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 - **Moving lanes.** Any operation that only moves lanes works for every `T: SimdLane`, generic or not: indexing and lane assignment, array literals, the initializers from lanes and `repeating:`, loads and stores, `select`, shuffles and swizzles. Operations that compute with lanes, such as arithmetic, comparisons, conversions and [reductions](#reductions), need a concrete `T`.
 - **Operators.** A scalar operand broadcasts to every lane, on either side: `v * 2`, `2 * v`. A comparison gives a mask ([below](#masks)). Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
 - **`min` and `max`.** `a.min(b)` and `a.max(b)` of two vectors work lane by lane, and so do the vector forms of the free `min(a, b)` and `max(a, b)`, each lane through its type's `Comparable` witness. All of them borrow their operands and return a new vector. So integer lanes compare by value and floating-point lanes as [above](#floating-point). `minNumber` and `maxNumber` of two floating-point vectors work lane by lane too. The reductions `v.min()` and `v.max()` take no argument, which tells them apart ([below](#reductions)).
-- **`fma`.** `fma(a, b, c)` of three floating-point vectors of one type works lane by lane, and rounds each lane once, as the scalar `fma` does ([above](#floating-point)). It borrows its operands and returns a new vector.
+- **`fma`.** `fma(a, b, c)` of three floating-point vectors of one type works lane by lane, and rounds each lane once, as the scalar `fma` does ([above](#floating-point)). It returns a new vector. A scalar operand doesn't broadcast, as it does for an operator, so code passes `Simd<T, N>(repeating: s)` instead.
 - **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
 - **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
 - **Converting lanes.** `Simd<U, N>(converting: v)` converts each lane of `v` as the unlabeled scalar conversion `U(x)` does ([Conversions](#conversions)). A widening conversion is exact, and any other rounds or checks each lane, and panics where `U(x)` would.
@@ -176,7 +187,7 @@ let checked = Simd<UInt8, 8>(converting: wide)   // panics where overflow checks
 
 **`SimdLane` is the prelude's marker protocol for the types a lane may hold.** It refines `Copyable` and `Sendable`, and every `T: SimdLane` also meets `T: ~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). Only the language gives conformances to it: the number types and `Bool` conform, and declaring a conformance to it is a compile error ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So generic code may treat every `T: SimdLane` as copyable, `Sendable` and unscoped, and copy lanes freely.
 
-**`Simd` operations never become calls at run time, in any build**, since they are builtin. A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
+**`Simd` operations never become calls at run time, in any build**, since they are builtin. The exception is `fma` on a target without a fused multiply-add instruction, such as core WebAssembly: there it may call the software routine that rounds once ([Floating point](#floating-point)). A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 
 **A target splits a vector wider than its vector registers into parts that fit**, and runs each operation on each part. Every lane gets the same result either way, since a lane operation reads only its own lanes, and a reduction combines lanes in its own fixed order ([Reductions](#reductions)). A shuffle's permutation is fixed at compile time, so the target lowers it to its own lane moves across the parts. So every lane count works on every target, with more instructions where the registers are narrower.
 

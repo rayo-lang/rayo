@@ -141,7 +141,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 ```
 
 - **Must accept** bit-identical state on every target, under every toolchain and in every build mode, from the language's rules alone, `fma` on a target without a fused multiply-add instruction included. Name the rule that fixes each result.
-- State what the program must avoid or supply itself to stay deterministic, such as its own `sin`, or a sorted order for the entries of a `Map` it steps through.
+- State what the program must avoid or supply itself to stay deterministic, such as its own `sin`, or a sorted order for the entries of a `Map` it steps through. Before it hashes or compares bits, it must replace every NaN with one canonical NaN.
 
 ### F6 · Integer and float edge cases
 
