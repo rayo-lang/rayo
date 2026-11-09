@@ -3,13 +3,13 @@ import RayoIR
 import RayoLLVM
 
 struct RuntimeTests {
-    @Test("a program that panics has the runtime's panic and its exit code linked in, each defined once")
+    @Test("a program that panics has the runtime's panic and its exit code linked in, leaving nothing undefined")
     func panicLinked() throws {
         let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), debug: true)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
-        let defined = try symbols(["--defined-only"], in: dividesByZero)
-        #expect(defined.filter { $0.hasSuffix("rayo.panic") }.count == 1)
-        #expect(defined.filter { $0.hasSuffix("rayo.panic_exit_code") }.count == 1)
+        // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
+        // counted.
+        #expect(try symbols(["--defined-only"], in: dividesByZero).filter { $0.hasSuffix("rayo.panic") }.count == 1)
     }
 
     @Test("an object exports only the C entry point, in debug and in release", arguments: [true, false])
