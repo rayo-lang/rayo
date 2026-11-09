@@ -26,7 +26,7 @@ struct Pad(
 func now() -> Double { unsafe plat.time_seconds() }       // no pointers, no preconditions
 
 func log(_ level: Int32, _ text: StringView) {
-    unsafe { plat.log(level, text.cchars.baseAddress, UInt(text.cchars.count)) }
+    unsafe { plat.log(level, text.cchars.baseAddress, CSize(text.cchars.count)) }
 }
 
 func pad(_ index: Int32) -> Pad? {
@@ -47,31 +47,42 @@ enum LoadState { case pending, done(List<UInt8>), failed(Int32) }
 
 struct Loads(
     var requests = Pool<LoadState>(capacity: 256),
+    var tickets = Map<UInt32, Handle<LoadState>>(),   // each load in flight, by the ticket C carries for it
+    var nextTicket: UInt32 = 1,
 )
 
-// Called by the SDK on its I/O thread. The request is identified by its handle,
-// packed into the user pointer, so no Rayo pointer crosses into C. A call from C
-// attaches the middleware thread on first use (09).
-@c func onFileLoaded(_ user: *Void?, _ data: *UInt8?, _ len: UInt, _ error: Int32) {
-    guard let h = Handle<LoadState>(bits: UInt64(UInt(bitPattern: user))) else { return }   // nil only for generation 0, which no real handle has
+// Called by the SDK on its I/O thread. The request is identified by a ticket in the
+// user pointer, so no Rayo pointer crosses into C. A ticket, unlike a handle's 64 bits,
+// fits a pointer on a 32-bit target too. A call from C attaches the thread on first use (09).
+@c func onFileLoaded(_ user: *Void?, _ data: *UInt8?, _ len: CSize, _ error: Int32) {
+    let raw = CUIntPtr(bitPattern: user)                               // the pointer's bits, at its own width
+    guard raw <= CUIntPtr(UInt32.max) else { return }                  // no ticket: a value C made up, ignored
+    let ticket = UInt32(truncating: raw)                               // drops only zero bits, after the guard
     var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
     if error == 0 && data != nil {
         result = .done(unsafe List(copying: data, count: Int(len)))    // copied with the current allocator
     }
-    completedLoads.push((h, consume result))                           // Synchronized: safe from any thread
+    completedLoads.push((ticket, consume result))                      // Synchronized: safe from any thread
 }
 
-let completedLoads = MpscQueue<(Handle<LoadState>, LoadState)>(capacity: 256)
+let completedLoads = MpscQueue<(UInt32, LoadState)>(capacity: 256)
 
 func requestFile(_ path: StaticString, _ loads: mutable Loads) -> Handle<LoadState> {
     let h = loads.requests.insert(.pending)
-    unsafe { plat.read_file_async(path.cString, onFileLoaded, .init(bitPattern: UInt(h.bits))) }
+    while loads.nextTicket == 0 || loads.tickets[loads.nextTicket] != nil {   // 0 would be a null user pointer
+        loads.nextTicket &+= 1                                               // skips tickets still in flight after a wrap
+    }
+    let ticket = copy loads.nextTicket
+    loads.nextTicket &+= 1
+    loads.tickets[ticket] = copy h
+    unsafe { plat.read_file_async(path.cString, onFileLoaded, .init(bitPattern: CUIntPtr(ticket))) }
     return h
 }
 
 /// Called once per frame by main.
 func pumpLoads(_ loads: mutable Loads) {
-    while let (h, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
+    while let (ticket, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
+        guard let h = loads.tickets.removeValue(forKey: ticket) else { continue }   // a ticket never issued: ignored
         loads.requests[h]? = consume result   // optional assignment: skipped (and result dropped) if the request was cancelled
     }
 }

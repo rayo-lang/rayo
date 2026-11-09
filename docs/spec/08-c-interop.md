@@ -6,10 +6,10 @@ A Rayo program can use a C library without rewriting its interface. Imported hea
 import c "platform.h"          // the header's declarations become Rayo declarations, in module 'platform'
 
 // platform.h declares:  void platform_upload(const float* data, size_t count);
-// Rayo sees it as an unsafe func taking (*Float?, UInt)
+// Rayo sees it as an unsafe func taking (*Float?, CSize)
 
 func upload(_ samples: Span<Float>) {          // a safe wrapper: a span always knows how many elements it has
-    unsafe { platform_upload(samples.baseAddress, UInt(samples.count)) }
+    unsafe { platform_upload(samples.baseAddress, CSize(samples.count)) }
 }
 ```
 

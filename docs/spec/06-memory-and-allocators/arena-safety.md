@@ -26,7 +26,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ### What a reset does
 
-**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it.** It never waits: it panics instead, in every build, in these cases:
+**`arena.reset()` frees everything the arena handed out, at once, after checking that nothing uses it.** It never waits for a use. The one wait it may make is for another registration, reset or unregistration, or a thread's start or attachment, while it takes its new stamp ([07](../07-concurrency/synchronization.md#atomics-and-locks)). Instead of waiting, it panics, in every build, in these cases:
 
 - **Any thread still uses the arena's memory.** Freeing the memory would leave that use reaching freed memory. The uses are:
   - an open of a value in it whose borrow is live ([below](#opening-an-owning-value-checks-it));

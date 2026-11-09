@@ -139,13 +139,14 @@ protocol WakeTarget: Synchronized {   // reached only by shared access, so it ch
 
 **`.pending` means the awaitable has arranged for its `Waker` to be called.** Before a poll returns `.pending`, it hands the `Waker` it was given to whatever will let the awaitable make progress. That may be a `Future`'s `Promise` or an I/O completion. An awaitable that waits for a time calls `wake(at:)`, and one that can only find out by looking again, as `until` does, calls `wake()` itself before it returns ([below](#awaitables-in-std)).
 
-**So a task that waits costs nothing until the wake** ([Running tasks](#running-tasks)), however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
+**So a task that waits costs nothing until the wake** ([Running tasks](#running-tasks)), apart from the few early polls a deadline allows (below), however many tasks wait with it, and a runner with no woken task can park its thread ([below](#waiting-for-wakes-run-and-blockon)).
 
 **`wake(at:)` asks the task's runner to wake it once `MonotonicClock` reaches `deadline`** ([Time](synchronization.md#time-duration-and-instant)), or at once when the deadline has passed. A runner keeps, for each task, the earliest deadline given to it since its last step began, and clears it as the next step begins, before the poll:
 
 - **The earliest wins.** An awaitable that waits on two times at once, such as a library's choice between two timed waits, wakes the task at the earlier deadline.
 - **A stale `Waker` costs a poll at most.** A deadline that an earlier awaitable arranged may wake the task early, which only polls it with nothing changed (below).
 - **A pending poll keeps its deadline.** The step clears the old deadline before the poll, so the one that the poll arranges again survives.
+- **A deadline may also cost an early poll, but never a spin.** A runner may step a pending task that has a deadline, with nothing changed, once a span that the implementation states has passed since the task's last step began. It may also do so when a `wake(at:)` reaches the runner as the task's step begins. The first comes at most once per that span, and the second at most once per step.
 
 **A task is pending only when the awaitable it is suspended on is.** `await x` polls `x` with the `Waker` that the task's own poll was given. So the wake that `x` arranged wakes the task, and a sub-task passes the same `Waker` on to what it awaits.
 
@@ -214,10 +215,10 @@ var scripts = TaskSet<Game>(capacity: 512)                       // resume conte
 guard let door = try? scripts.start(openDoor(frontDoor)) else { return }   // nil when all 512 slots are taken
 scripts.cancel(door)                                             // runs live locals' deinits and live defers, or, unstepped, destroys its parameters
 
-scripts.step(&game)                                              // wherever the program steps: one step for each task woken since the last
+scripts.step(&game)                                              // wherever the program steps: one step for each task woken, or allowed an early poll, since the last
 ```
 
-**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, or by its deadline passing ([Waking a task](#waking-a-task)).
+**A task's runner polls it and makes its `Waker`s.** A **runner** may be std's `TaskSet`, std's `block(on:)` ([below](#waiting-for-wakes-run-and-blockon)), or a library's own, whose `Waker`s reach a `WakeTarget` of its own. The runners in std give a pending task its next step only after the task is woken: by a `wake()`, by its deadline passing, or early in the bounded cases that a deadline allows ([Waking a task](#waking-a-task)).
 
 **std's `TaskSet` takes ownership of each task it starts:**
 
@@ -242,9 +243,9 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 **`step` takes the set's woken tasks as it begins, and gives each of them one step:**
 
-- **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins. It clears a task's deadline as that task's step begins ([Waking a task](#waking-a-task)).
+- **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins. It may also count as woken a task whose early poll a deadline allows ([Waking a task](#waking-a-task)). It clears a task's deadline as that task's step begins ([Waking a task](#waking-a-task)).
 - **Order.** It steps them in the order of their slots, and `start` fills the lowest free slot. A step that follows a panic starts after the task that panicked instead (below).
-- **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until a wake.
+- **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until they are woken.
 - **Wakes during the step.** A wake that comes while the step runs, from the task itself, another task or another thread, counts for the next step. So each task gets one step at most, and `nextStep()` waits for the next `step` ([above](#awaitables-in-std)).
 
 **A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay woken for the next `step`, which starts with the task after the one that panicked and wraps around. So a task that panics often can't keep the tasks after it from being stepped.
@@ -302,7 +303,7 @@ func block<A: Awaitable>(on work: owned A) -> A.Output!A.Failure where A.Context
 
 **No wake is lost in that order.** A wake that comes before 3 is seen at 6, or, for a `runWaker` wake, by `done` at 5, since 4 clears the flag first. A wake that comes after 3 is seen at 6, or changes the word, so the park at 7 returns at once. A park may also return with no wake, which leads to a step that polls nothing.
 
-**`done` is checked only after a step**, so a condition that changes with no wake is seen after the next wake. **The park's timeout ends at the earliest deadline**, so a task that awaits `sleep(for:)` wakes on time, and the thread sleeps until then.
+**`done` is checked only after a step**, so a condition that changes with no wake is seen after the next wake. **The park's timeout ends at the earliest deadline**, so the thread sleeps until a task's `sleep(for:)` is due, and that task resumes once its deadline has passed ([Time](synchronization.md#time-duration-and-instant)).
 
 **`runWaker` lets another thread stop `run`, or hand it work.** It is a `Waker` of the set itself, which wakes no task. Its `wake()` sets the run flag and wakes a parked `run`, which steps the set and checks `done` again. So the other thread first changes what `done` reads, through a `Synchronized` value such as an `Atomic`, and then wakes the set. Clearing the flag at 4 synchronizes with the wake that set it, so `done` sees the change:
 

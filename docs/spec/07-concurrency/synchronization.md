@@ -10,6 +10,19 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **`Atomic<T>` holds a copyable, padding-free value of 1, 2, 4 or 8 bytes**, such as an integer, `Bool`, float, pointer or `Handle<T>`. It must be padding-free since a compare-and-swap compares every byte ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). Each operation takes an explicit ordering, as in `counter.add(1, .relaxed)`, and is lock-free: none blocks or waits for another thread.
 
+**An 8-byte `Atomic<T>` exists only on a target with lock-free 64-bit atomics**, where `target.has64BitAtomics` is `true` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). Elsewhere it is a compile error, since no lock-free operation on 8 bytes can be built there, and an atomic never takes a lock. So is an `AtomicArray<T>` of 8-byte elements. Every target with 64-bit pointers has these atomics ([11](../11-compilation-model.md#what-a-target-must-provide)), so the error comes only on some 32-bit targets:
+
+```swift
+let spawned = Atomic<Int>(0)          // error without 64-bit atomics: an Int is 8 bytes on every target
+let kills = Atomic<UInt32>(0)         // 4 bytes: fine on every target
+
+static if target.has64BitAtomics {
+    typealias SpawnCount = Atomic<Int>
+} else {
+    typealias SpawnCount = Atomic<UInt32>
+}
+```
+
 **Rayo uses the C++20 memory model.** The orderings `.relaxed`, `.acquire`, `.release`, `.acqRel` and `.seqCst` mean what they mean there. So does a data race, which safe code can't write ([Why safe code can't race](race-freedom-and-sendable.md#why-safe-code-cant-race)).
 
 **An ordering is a `const` argument, and one the operation doesn't accept is a compile error:**
@@ -44,7 +57,7 @@ Some values must be shared even while their state changes. Atomics, locks and qu
 
 **Such a value may find no entry for a creation that is still live**, since nothing orders the creation before the check. Then `WeakShared(bits:)` and `Shared.adopt` read `nil`, and opening a value through the allocator panics as it does for an unregistered allocator word ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Each outcome is safe and defined.
 
-**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
+**Interning a text happens before every read of that `Name`'s text or of its stored hash**, however the `Name` was passed on, by stores whose value came from loads. Interning a new entry writes its text and hash, then a plain 32-bit word, written once with a release store. Every read of the text or the hash first loads that word with an acquire load.
 
 **Interning inserts the entry into the interner's table after the word's store**, then ends with a release fence before it hands the `Name` out. When the text is already present, the insert fails and returns the existing entry, so a text never gets two `Name`s. The thread then returns that entry, as a lookup that finds it does, and never hands out its own.
 
@@ -58,6 +71,19 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 **The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
 
 **A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing under a given seed reads the stored hash, so the rule above orders it. Under a process-derived seed it feeds the entry's address and, like `==`, reads no entry, so neither promises anything beyond the value it reads ([04](../04-types/collections.md#collections-and-strings)).
+
+**On every target, issuing a number may wait, but never for a use.** A registration, a reset, an unregistration, and a thread's start or attachment each take a number that must differ from, or come after, every one issued before it. Taking one may wait for another of these taking its own, but never for a use of an allocator, an object or a `Shared` value. A lock held for this parks the threads that wait for it, never spinning, so a single-core target that runs threads by priority can't deadlock on it.
+
+### Targets without 64-bit atomics
+
+**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give.** Their visible behavior is the same as on a 64-bit target, apart from the points that 11 leaves open, such as limits and timing ([11](../11-compilation-model.md#what-the-language-leaves-open)). Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
+
+- **Uniqueness.** Every generation is unique for the whole run ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and no allocator word is issued twice ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
+- **The shared tables.** Each of the three tables keeps its contract ([above](#atomics-and-locks)).
+- **Whole values.** No check, `upgrade()`, `adopt` or open acts on a torn value, on a slot reused for a later creation, or on a registry entry that a later write replaced.
+- **Deadlines.** A deadline that a `Waker` sets is never torn, and recording it blocks no more than it may on a 64-bit target ([Tasks](tasks.md#running-tasks)).
+- **Reuse.** The slots that objects and `Shared` values take are reused however often they are freed, so memory doesn't grow with the number of them created over the run.
+- **Progress.** Each operation the spec promises never waits still never waits. These include `upgrade()`, `adopt`, `leak`, the checks of weak pointers and weak links, and opens. They also include `Published`'s `snapshot()` ([below](#snapshots-one-time-values-and-waits)) and a `Waker`'s reaching its target ([Tasks](tasks.md#waking-a-task)). std's `Synchronized` types keep theirs too.
 
 ### Locks: `Mutex` and `RwLock`
 
@@ -191,7 +217,7 @@ enum ReceiveTimeoutError: Error {
 }
 ```
 
-It fails with `.timedOut` no sooner than `timeout` after the call, as `Thread.sleep(for:)` parks for at least its `Duration`. An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
+It fails with `.timedOut` once its deadline, `timeout` after the call, has passed ([Time](#time-duration-and-instant)). An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
 
 **`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
@@ -377,6 +403,8 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 
 **`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game whose simulation time stops while it is paused. Their instants can't reach a wait on real time, such as a `Waker`'s `wake(at:)`, which takes an `Instant<MonotonicClock>`.
 
+**Every wait on real time ends no sooner than its deadline, and may end later**, since the platform wakes a parked thread some time after the moment it asked for. That holds, on every target, for a timeout, `Thread.sleep(for:)`, and a park that returns `false`. It holds too for a task's `sleep(for:)`, which returns `.done` only once its deadline has passed.
+
 **The arithmetic is `Int64` arithmetic on the nanoseconds**, so an overflow does what an `Int64` overflow does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)):
 
 - two `Duration`s add and subtract, and a `Duration` multiplies by an `Int64`;
@@ -387,7 +415,7 @@ struct MonotonicClock(): TimeSource { … }       // the system's clock for wait
 
 **`seconds(_:)` rounds to the nearest nanosecond, ties to even**, which is IEEE 754's rounding to nearest, as a conversion to a floating-point type uses. It panics on NaN or on a value out of range, as converting a float to an integer does ([04](../04-types/numbers-and-math.md#conversions)).
 
-**`Thread.sleep(for:)` parks the calling thread for at least `d`**, and returns at once when `d` is zero or less:
+**`Thread.sleep(for:)` parks the calling thread until `d` has passed** ([above](#time-duration-and-instant)), and returns at once when `d` is zero or less:
 
 ```swift
 static func sleep(for d: Duration) { … }        // Thread's

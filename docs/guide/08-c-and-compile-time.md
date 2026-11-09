@@ -39,7 +39,7 @@ Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop
 - `plat.window_create` is an `unsafe func` taking `(Int32, Int32, *CChar?)` and returning a `*plat.window?`.
 - `plat.poll_pad` is an `unsafe func` taking `(Int32, *plat.pad?)` and returning a `Bool`.
 
-A C pointer imports as a raw pointer that may be null, `*T?`, unless the header marks it `_Nonnull` ([below](#raw-pointers)). C's `int` and `char` become `CInt` and `CChar`, whose size and signedness follow the target. A C enum is **open**: it may hold any value of its underlying type, so a `when` over it needs an `else` ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+A C pointer imports as a raw pointer that may be null, `*T?`, unless the header marks it `_Nonnull` ([below](#raw-pointers)). C's `int` and `char` become `CInt` and `CChar`, whose size and signedness follow the target. In the same way `size_t` becomes `CSize`, which is as wide as the target's pointers: 32 bits on a 32-bit target, though Rayo's `Int` is 64 bits on every target. A C enum is **open**: it may hold any value of its underlying type, so a `when` over it needs an `else` ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
 
 Function-like macros do not import. You can wrap one in a C function inside an `extern c` block ([08](../spec/08-c-interop/imports-and-inline-c.md#inline-c)). Importing the header itself adds no implementation to your program; the SDK's code comes from linking its library.
 
@@ -80,7 +80,7 @@ Breaking that promise is undefined behavior, as in C. Code that makes such promi
 ```swift
 var raw = plat.pad()
 let p = unsafe ptr(to: &raw)                    // the address of 'raw': a *plat.pad
-let address = UInt(bitPattern: p)               // safe: a pointer turned into an integer
+let address = CUIntPtr(bitPattern: p)           // safe: a pointer turned into an integer of its size
 unsafe {
     p.pointee.buttons = 0                       // the plat.pad that 'p' points at
     let bytes = p.cast(to: UInt8.self)          // the same address, as a *UInt8
@@ -98,7 +98,7 @@ unsafe {
 
 **`*Void` points at memory of no stated type.** `p.cast(to: U.self)` converts between pointer types, so you can read such memory as bytes.
 
-**Turning a pointer into an integer is safe, and turning an integer into a pointer is `unsafe`.**
+**Turning a pointer into an integer is safe, and turning an integer into a pointer is `unsafe`.** Both go through `CUIntPtr`, C's `uintptr_t`, which is exactly a pointer's size, so neither drops a bit.
 
 **A raw pointer borrows nothing**, so the compiler won't stop you from using one after its place is gone. Using it only while the place lives is part of what `unsafe` promises.
 
@@ -108,10 +108,10 @@ unsafe {
 
 ```swift
 func upload(_ samples: Span<Float>) {                   // safe: a span always knows its count
-    unsafe { plat.upload(samples.baseAddress, UInt(samples.count)) }
+    unsafe { plat.upload(samples.baseAddress, CSize(samples.count)) }
 }
 func log(_ level: Int32, _ text: StringView) {
-    unsafe { plat.log(level, text.cchars.baseAddress, UInt(text.cchars.count)) }
+    unsafe { plat.log(level, text.cchars.baseAddress, CSize(text.cchars.count)) }
 }
 ```
 
@@ -282,6 +282,8 @@ func endFrame(_ game: Game) {
 **`target` is a `const` that describes the build.** It has, among others:
 
 - `platform`, `arch` and `endian`;
+- `pointerBitWidth`, which is 32 or 64;
+- `has64BitAtomics`, which says whether an 8-byte `Atomic` builds there;
 - `mode`, which is `.debug` or `.release`;
 - `flag("editor")`, a flag the build defines.
 

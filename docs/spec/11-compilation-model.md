@@ -159,14 +159,16 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ## What a target must provide
 
-**Everything the language defines can be implemented in portable C.** So a platform whose only toolchain is its vendor's C compiler can run Rayo when that compiler and its C ABI meet the requirements below. Most of them make C's types and arithmetic match Rayo's own.
+**Everything the language defines can be implemented in portable C.** So Rayo can run on any platform whose C compiler meets the requirements below, and that provides the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). That includes a platform whose only toolchain is its vendor's C compiler, such as a console or an embedded processor. It also includes small and sandboxed targets, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)). Most of the requirements make C's types and arithmetic match Rayo's own.
+
+**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
 
 **A target's C ABI:**
 
 - represents integers in two's complement, and `float` and `double` as IEEE 754 binary32 and binary64, as Rayo's integers and its `Float` and `Double` are ([04](04-types/numbers-and-math.md#numbers));
 - has an 8-bit `char`, the exact-width integer types, and a one-byte `bool` holding 0 or 1, which import as Rayo's sized integers and `Bool` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
-- has 64-bit data and function pointers, whose null is all zero bits;
-- has 64-bit `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t`, which import as Rayo's 64-bit `Int` and `UInt` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- has data and function pointers of its pointer width, whose null is all zero bits;
+- has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
 **Its C compiler:**
@@ -174,12 +176,19 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - evaluates each `float` and `double` operation in its own type and rounds it once (`FLT_EVAL_METHOD` 0, no contraction), as Rayo evaluates each floating-point operation ([04](04-types/numbers-and-math.md#floating-point));
 - keeps subnormals, which Rayo never flushes ([04](04-types/numbers-and-math.md#floating-point));
 - provides thread-local storage;
-- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks));
+- provides C11's atomic operations and fences, with the guarantees of the C++20 memory model that Rayo uses, and lock-free for every size `Atomic<T>` accepts, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have (below);
 - reports a bound on the stack each function it compiles uses, as GCC's and Clang's `-fstack-usage` do, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks));
 - doesn't break an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed (below);
 - keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
 
 ISO C guarantees neither of the last two, so the target's compiler must.
+
+**An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
+
+**Where the C compiler doesn't report an operation lock-free, the implementation may supply it itself**, such as a library call that masks interrupts. Masking brings two conditions:
+
+- **Single-core is the declared target's property.** Building for such a target and running on a chip with more cores breaks it, since masking interrupts doesn't stop the other cores.
+- **Masking needs privileged execution.** Code that runs unprivileged, as under a memory protection unit, reaches those atomics through a privileged call. A target that offers no such call can't use masking, so it isn't such a target.
 
 **Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
@@ -189,9 +198,17 @@ ISO C guarantees neither of the last two, so the target's compiler must.
 
 Then the second load reads a value no older, in its location's modification order, than any write that counts for `S`.
 
-**"Synchronized" covers the writes that happen before a release, not the release store itself, once a thread synchronizes with it.** A lock's acquisition of any design does, since it reads a release sequence headed by the unlock, perhaps at a later read-modify-write. Program order alone isn't enough: a write followed on its own thread by an acquire read isn't ordered before that thread's later store. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores. ARMv8 gives this through other-multi-copy atomicity, and Power through `lwsync` cumulativity under the standard C++ mapping, as do stronger processors.
+**"Synchronized" covers the writes that happen before a release, not the release store itself, once a thread synchronizes with it.** A lock's acquisition of any design does, since it reads a release sequence headed by the unlock, perhaps at a later read-modify-write. Program order alone isn't enough: a write followed on its own thread by an acquire read isn't ordered before that thread's later store. The "Carried" condition covers the rest: a write that only counts for `R`, without happening before the read, such as one released on a third thread and passed along by dependent stores.
+
+**Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
+### WebAssembly
+
+**WebAssembly without shared memory is a target, and counts as single-core**, since its one thread sees its memory alone. WebAssembly with shared memory isn't covered: its memory model gives no ordering through an address dependency, and a browser's main thread can't park ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
+
+**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that the C compiler reports on. Rayo's stack checks cover only the latter. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ## What the language leaves open
 
@@ -199,7 +216,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 
 **What is left is timing and order, some representations, what libraries and builds choose, and limits:**
 
-- **Thread timing.**
+- **Thread timing**, and the early polls that a task's deadline may cost it ([07](07-concurrency/tasks.md#waking-a-task)).
 - **The process seed**, which startup draws anew for each run ([04](04-types/collections.md#hash-maps-and-sets)). So what a `Hasher` whose seed derives from it outputs can differ even between two runs of one build, and so can any order that depends on that output, such as that of a `Map` with the default `SeededHashing`.
 - **Destruction order**: the order in which a reset or an unregistration runs the `deinit`s of the objects it destroys ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)), and in which a thread's teardown destroys its objects ([07](07-concurrency/global-state.md#thread-teardown)).
 - **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.
