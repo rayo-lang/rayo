@@ -113,6 +113,9 @@ let package = Package(
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
+        .testTarget(name: "RayoLLVMTests", dependencies: [
+            "CLLVM", "RayoIR", "RayoLLVM", "RayoSema", "RayoSource", "RayoSyntax",
+        ]),
     ]
 )
 

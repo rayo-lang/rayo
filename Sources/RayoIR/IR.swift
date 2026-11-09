@@ -6,6 +6,10 @@ import RayoSyntax
 /// generation works from.
 public struct IRProgram: Sendable {
     public var main: IRFunction
+
+    public init(main: IRFunction) {
+        self.main = main
+    }
 }
 
 public struct IRFunction: Sendable {
@@ -14,15 +18,29 @@ public struct IRFunction: Sendable {
     public var locals: [RayoType]
     /// The blocks, indexed by `BlockID`; the first is the entry.
     public var blocks: [BasicBlock]
+
+    public init(locals: [RayoType], blocks: [BasicBlock]) {
+        self.locals = locals
+        self.blocks = blocks
+    }
 }
 
 public struct BlockID: Hashable, Sendable {
     public var index: Int
+
+    public init(index: Int) {
+        self.index = index
+    }
 }
 
 public struct BasicBlock: Sendable {
     public var statements: [Statement]
     public var terminator: Terminator
+
+    public init(statements: [Statement], terminator: Terminator) {
+        self.statements = statements
+        self.terminator = terminator
+    }
 }
 
 /// Computes `value`, and stores it in `destination` when there is one.
@@ -31,6 +49,12 @@ public struct Statement: Sendable {
     public var value: Rvalue
     /// The source of the operation, where it reports a panic.
     public var range: SourceRange
+
+    public init(destination: LocalID?, value: Rvalue, range: SourceRange) {
+        self.destination = destination
+        self.value = value
+        self.range = range
+    }
 }
 
 public enum Constant: Sendable {
