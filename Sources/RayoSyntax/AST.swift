@@ -17,7 +17,7 @@ public struct FuncDecl: Sendable {
 /// `label name: convention Type = default`, where all but the name and the type are optional.
 public struct Param: Sendable {
     /// The label a call writes before the argument, or nil for `_`. A parameter declared without a label takes
-    /// its name as its label.
+    /// its name as its label, unless the name is `_`.
     public var label: String?
     public var name: String
     public var nameRange: SourceRange

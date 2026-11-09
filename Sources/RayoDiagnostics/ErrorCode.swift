@@ -181,6 +181,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(233, error: "default arguments aren't supported")
     case defaultArgument
+
+    @Code(234, error: "a parameter can't have type Void")
+    case voidParameter
 }
 
 extension ErrorCode {

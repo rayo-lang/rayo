@@ -17,10 +17,12 @@ struct Signature: CustomStringConvertible {
         "\(name)(\(parameters.map { "\($0.label ?? "_"): \($0.spelledType)" }.joined(separator: ", ")))"
     }
 
-    /// Whether `other` takes arguments with the same labels and types, so no call could tell the two apart.
+    /// Whether `other` takes arguments with the same labels and types, so no call could tell the two apart. A type
+    /// that isn't known matches none, since it was reported where it is written.
     func takesArguments(like other: Signature) -> Bool {
-        parameters.map(\.label) == other.parameters.map(\.label)
-            && parameters.map(\.type) == other.parameters.map(\.type)
+        parameters.count == other.parameters.count && zip(parameters, other.parameters).allSatisfy { mine, theirs in
+            mine.label == theirs.label && mine.type != nil && mine.type == theirs.type
+        }
     }
 
     /// Whether a call may pass `arguments`, in order. A parameter whose type isn't known takes any argument, so a

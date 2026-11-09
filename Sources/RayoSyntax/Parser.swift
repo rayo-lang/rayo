@@ -204,11 +204,12 @@ public struct Parser {
             isLabelWritten = true
         }
         let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingParameterName)
+        if !isLabelWritten && name != "_" { label = name }
         guard consume(.colon) else { throw fail(ErrorCode.missingParameterType) }
         let convention = parseConvention()
         let type = try parseType()
         let defaultValue = consume(.assign) ? try parseExpression() : nil
-        return Param(label: isLabelWritten ? label : name, name: name, nameRange: nameRange, convention: convention,
+        return Param(label: label, name: name, nameRange: nameRange, convention: convention,
                      type: type, defaultValue: defaultValue, range: range(from: start))
     }
 

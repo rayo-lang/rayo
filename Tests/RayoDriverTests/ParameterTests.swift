@@ -163,6 +163,36 @@ struct ParameterTests {
             [.unexpectedCharacter(character: "&")])
     }
 
+    @Test("a parameter can't have type Void, and the error covers its type, whether or not the function is called",
+          arguments: [
+        "func main() {}\nfunc f(_ x: ()) {}",
+        "func main() { f(print(1)) }\nfunc f(_ x: Void) {}",
+        "func main() {\n    f(1)\n    f(print(1))\n}\nfunc f(_ x: ()) {}\nfunc f(_ x: Int) {}",
+    ])
+    func voidParameter(source: String) {
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.voidParameter])
+        #expect(["()", "Void"].contains(coveredText(reported, in: source).first ?? ""))
+        #expect(run(source).diagnostics.map(\.code) == [.voidParameter])
+    }
+
+    @Test("overloads whose parameter types aren't types aren't declared twice")
+    func unknownTypesDiffer() {
+        #expect(errors("func main() {}\nfunc f(_ x: Foo) {}\nfunc f(_ x: Bar) {}") ==
+            [.notAType(name: "Foo"), .notAType(name: "Bar")])
+    }
+
+    @Test("a parameter named '_' with no label written takes an argument with no label")
+    func underscoreName() {
+        #expect(errors("func main() { print(f(1)) }\nfunc f(_: Int) -> Int { 1 }") == [.underscoreDeclared])
+    }
+
+    @Test("an error about a function's end names its signature")
+    func missingReturnSignature() {
+        #expect(errors("func main() {}\nfunc f(_ x: Int, y: Bool) -> Int {}") ==
+            [.missingReturn(signature: "f(_: Int, y: Bool)")])
+    }
+
     @Test("'main' takes no parameters, and the error covers the first")
     func mainParameters() {
         let source = "func main(_ x: Int, y: Bool) {}"

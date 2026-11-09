@@ -68,9 +68,9 @@ final class FileChecker {
         var main: FunctionID?
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
-            let parameters = function.parameters.map(declare)
+            let parameters = function.parameters.map(parameter(from:))
             let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
-                                      result: result(of: function, id))
+                                      result: declaredResult(of: function, id))
             signatures.append(signature)
             if !declarations.declare(signature) {
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
@@ -84,19 +84,23 @@ final class FileChecker {
     }
 
     /// What a call needs to know about `parameter`, reporting what in it rayoc doesn't support: every parameter
-    /// is borrowed, and every argument written.
-    private func declare(_ parameter: Param) -> Parameter {
+    /// is borrowed, and every argument written. A parameter of type Void gets no type, since no local holds one.
+    private func parameter(from parameter: Param) -> Parameter {
         if let convention = parameter.convention {
             errors.report(.unsupportedConvention(convention: convention.rawValue), at: parameter.range)
         }
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
-        return Parameter(label: parameter.label, type: declarations.resolve(parameter.type, reporting: errors),
-                         spelledType: parameter.type.spelling)
+        var type = declarations.resolve(parameter.type, reporting: errors)
+        if type == .void {
+            errors.report(.voidParameter, at: parameter.type.range)
+            type = nil
+        }
+        return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling)
     }
 
     /// The result type that `function`, which is `id`, declares. Without '->', it is Void, unless the body is a
     /// single expression of a function other than `main`, whose type is the result type.
-    private func result(of function: FuncDecl, _ id: FunctionID) -> DeclaredResult {
+    private func declaredResult(of function: FuncDecl, _ id: FunctionID) -> DeclaredResult {
         let isMain = function.name == "main"
         guard let written = function.result else {
             return !isMain && function.body.singleExpression != nil ? .givenByBody(id) : .type(.void)
