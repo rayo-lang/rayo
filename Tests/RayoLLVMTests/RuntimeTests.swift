@@ -3,7 +3,7 @@ import RayoIR
 import RayoLLVM
 
 struct RuntimeTests {
-    @Test("a program that panics has the runtime's panic and its exit code linked in, leaving nothing undefined")
+    @Test("a program that panics defines the runtime's panic once and leaves no runtime symbol undefined")
     func panicLinked() throws {
         let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), debug: true)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])

@@ -294,6 +294,25 @@ struct IntegerTests {
         }
     }
 
+    @Test("in a release build, arithmetic that overflows at run time wraps")
+    func overflowWrapsAtRunTime() {
+        // A thousand rounds of x * 3 + 1 are too many for LLVM to unroll and have no closed form it can compute,
+        // so the multiplications that overflow run in the executable.
+        let source = """
+            func main() {
+                var x = 1
+                var i = 0
+                while i < 1000 {
+                    x = x * 3 + 1
+                    i += 1
+                }
+                print(x)
+            }
+            """
+        #expect(run(source, options: ["--release"]) ==
+            Driver.Result(exitCode: 0, output: "-9141782528521893711\n", errors: ""))
+    }
+
     @Test("a panic names the operation that fails, not the expression around it")
     func nestedPanic() {
         #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == Driver.Result(

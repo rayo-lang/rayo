@@ -36,7 +36,7 @@ struct ObjectCodeTests {
         }
     }
 
-    @Test("a debug build checks integer arithmetic for overflow, and a release build wraps it")
+    @Test("a debug build checks integer arithmetic for overflow, and a release build emits no check")
     func overflowChecks() throws {
         let overflows = printing(.binary(.add, .constant(.int(.max)), .constant(.int(1))))
         let report = Array("panic: integer overflow".utf8)
