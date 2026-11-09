@@ -46,12 +46,12 @@ final class TargetMachine {
 
     /// Optimises `module` if this optimises, and returns its object code.
     func objectCode(of module: ModuleBuilder) throws(LLVMError) -> [UInt8] {
-        if optimizes { try optimize(module.module) }
+        if optimizes { try optimize(module) }
         var buffer: LLVMMemoryBufferRef?
         var error: UnsafeMutablePointer<CChar>?
         guard LLVMTargetMachineEmitToMemoryBuffer(machine, module.module, LLVMObjectFile, &error, &buffer) == 0,
               let buffer else {
-            throw LLVMError(message: "LLVM couldn't write object code: \(takeMessage(error))")
+            throw module.error("LLVM couldn't write object code:", detail: takeMessage(error))
         }
         defer { LLVMDisposeMemoryBuffer(buffer) }
         let bytes = UnsafeRawBufferPointer(start: LLVMGetBufferStart(buffer), count: LLVMGetBufferSize(buffer))
@@ -59,12 +59,12 @@ final class TargetMachine {
     }
 
     /// Runs the optimisations a C compiler runs at -O2.
-    private func optimize(_ module: LLVMModuleRef) throws(LLVMError) {
+    private func optimize(_ module: ModuleBuilder) throws(LLVMError) {
         let options = LLVMCreatePassBuilderOptions()
         defer { LLVMDisposePassBuilderOptions(options) }
-        guard let error = LLVMRunPasses(module, "default<O2>", machine, options) else { return }
+        guard let error = LLVMRunPasses(module.module, "default<O2>", machine, options) else { return }
         let message = LLVMGetErrorMessage(error)
         defer { LLVMDisposeErrorMessage(message) }
-        throw LLVMError(message: "LLVM couldn't optimise the module: \(message.map { String(cString: $0) } ?? "")")
+        throw module.error("LLVM couldn't optimise the module:", detail: message.map { String(cString: $0) } ?? "")
     }
 }
