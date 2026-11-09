@@ -26,6 +26,42 @@ let llvmPrefix: String = {
         """)
 }()
 
+/// The directory that holds LLD `llvmMajorVersion`: `LLD_PREFIX`'s `bin` when it's set, and otherwise that of the
+/// first of LLVM's prefix and the places a package manager installs LLD that holds that release. Where none does,
+/// it is LLVM's own `bin`, so that `rayoc` reports LLD missing from there.
+let lldDirectory: String = {
+    if let prefix = Context.environment["LLD_PREFIX"] { return prefix + "/bin" }
+    let candidates = [
+        llvmPrefix,
+        "/usr/lib/llvm-\(llvmMajorVersion)",
+        "/opt/homebrew/opt/lld@\(llvmMajorVersion)",
+        "/opt/homebrew/opt/lld",
+        "/usr/local/opt/lld@\(llvmMajorVersion)",
+        "/usr/local/opt/lld",
+    ]
+    let prefix = candidates.first { lldMajorVersion(at: $0) == llvmMajorVersion } ?? llvmPrefix
+    return prefix + "/bin"
+}()
+
+/// The major release of the LLD installed under `prefix`, or nil when none is. LLD's own version file says it,
+/// and otherwise an LLVM installed with it under the same prefix does.
+func lldMajorVersion(at prefix: String) -> Int? {
+    guard FileManager.default.fileExists(atPath: prefix + "/bin/lld") else { return nil }
+    let definition = "set(PACKAGE_VERSION \""
+    let config = try? String(contentsOfFile: prefix + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
+    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    let major = line.flatMap { Int($0.dropFirst(definition.count).prefix { $0.isNumber }) }
+    return major ?? llvmMajorVersion(at: prefix)
+}
+
+/// `path`, which the manifest writes into C string literals, so it can't hold a quote or a backslash.
+func checkedForDefine(_ path: String) -> String {
+    if path.contains("\"") || path.contains("\\") {
+        fatalError("rayoc can't be built against an LLVM whose path holds a quote or a backslash: \(path)")
+    }
+    return path
+}
+
 /// The major release of the LLVM installed under `prefix`, or nil when none is.
 func llvmMajorVersion(at prefix: String) -> Int? {
     let definition = "#define LLVM_VERSION_MAJOR "
@@ -78,26 +114,19 @@ let package = Package(
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
         .testTarget(name: "RayoLLVMTests", dependencies: [
-            "CLLVM", "RayoIR", "RayoLLVM", "RayoSema", "RayoSource", "RayoSyntax",
+            "RayoIR", "RayoLLVM", "RayoSema", "RayoSource", "RayoSyntax",
         ]),
     ]
 )
 
 // A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
-// directory of LLVM's tools, which CLLVM's header holds.
+// directories of the tools that link a program, which CLLVM's header holds.
 for target in package.targets where dependsOnCLLVM(target, among: package.targets) {
     target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
         "-Xcc", "-I\(llvmPrefix)/include",
         "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(checkedForDefine(llvmPrefix + "/bin"))\"",
+        "-Xcc", "-DRAYO_LLD_DIRECTORY=\"\(checkedForDefine(lldDirectory))\"",
     ])]
-}
-
-/// `path`, which the manifest writes into a C string literal, so it can't hold a quote or a backslash.
-func checkedForDefine(_ path: String) -> String {
-    if path.contains("\"") || path.contains("\\") {
-        fatalError("rayoc can't be built against an LLVM whose path holds a quote or a backslash: \(path)")
-    }
-    return path
 }
 
 /// Whether `target` depends on CLLVM, directly or through others of `targets`.

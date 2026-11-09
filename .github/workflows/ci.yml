@@ -35,7 +35,9 @@ jobs:
           apt-get update
           # The pin keeps the major release: apt.llvm.org serves only the newest build of it, so no exact build
           # can be named.
-          apt-get install -y --no-install-recommends "llvm-$LLVM_MAJOR_VERSION-dev=1:$LLVM_MAJOR_VERSION.1.*"
+          version="1:$LLVM_MAJOR_VERSION.1.*"
+          apt-get install -y --no-install-recommends "llvm-$LLVM_MAJOR_VERSION-dev=$version" \
+            "clang-$LLVM_MAJOR_VERSION=$version" "lld-$LLVM_MAJOR_VERSION=$version"
       - name: Build
         run: swift build --build-tests
       - name: Test

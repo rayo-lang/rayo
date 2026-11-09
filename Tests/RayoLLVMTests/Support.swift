@@ -1,4 +1,3 @@
-import CLLVM
 import Foundation
 import RayoIR
 import RayoLLVM
@@ -47,7 +46,7 @@ func llvmTool(_ tool: String, _ arguments: [String], on objectCode: [UInt8]) thr
 /// What `tool`, from the LLVM install `rayoc` builds against, writes to its standard output given `arguments`.
 func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: String(cString: RayoLLVMToolDirectory)).appendingPathComponent(tool)
+    process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(tool)
     process.arguments = arguments
     let output = Pipe()
     process.standardOutput = output
