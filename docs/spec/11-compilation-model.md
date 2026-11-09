@@ -104,7 +104,7 @@ for e in enemies.span {             // a plain loop over memory, in every build
 let step = vec.normalized * speed   // vector arithmetic: no hidden call where the processor has the operations
 ```
 
-**No build of a program does work at run time that its source doesn't show, beyond the calls the language makes for it**, such as a `deinit` at a scope's end ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). That means:
+**No build of a program does work at run time that its source doesn't show, beyond the calls the language makes for it**, such as a `deinit` at a scope's end ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). Those calls include the software routines that compute an integer or floating-point operation the target's processor lacks ([04](04-types/numbers-and-math.md#integer-overflow-division-and-shifts), [04](04-types/numbers-and-math.md#floating-point)). That means:
 
 - no reference counting;
 - no copy-on-write uniqueness checks;
