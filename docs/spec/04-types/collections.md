@@ -140,7 +140,7 @@ struct Hasher(…) {
 
 **The process seed is a random value of at least 128 bits, which startup draws from the platform before any initializer runs** ([07](../07-concurrency/global-state.md#initialization-at-startup)). Reading it reads a random value from the platform, so it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)).
 
-**`HashSeed.fromProcessSeed()` derives each seed through a pseudorandom function keyed by the process seed.** Its input is the calling thread's identity, which no other thread of the run shares, and a 64-bit count that the thread advances. No two calls give one input, so the seeds they derive are independent, and the count needs no atomic operation, even on a 32-bit target.
+**`HashSeed.fromProcessSeed()` derives each seed through a pseudorandom function keyed by the process seed.** Its input is the calling thread's identity, which no other thread of the run shares ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)), and a 64-bit count that the thread advances. Every attach of a thread gets an identity that no earlier attach in the run had, including a C thread that detaches and attaches again, so its count never restarts on an input already used. No two calls give one input, so the seeds they derive are independent, and the count needs no atomic operation, even on a 32-bit target.
 
 **A `HashSeed` isn't `Pod`, and only those two functions make one**, so safe code can't mark a seed it chose as derived from the process seed. Unsafe code that forges that mark only changes what a `Name` feeds its `Hasher` (above). That can't reach compile time, since a `Name` then feeds an address, and turning a pointer into an integer can't run there.
 
@@ -158,7 +158,7 @@ protocol Hashing: Copyable {
 
 A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one value of it, calls that value's `makeHasher()` for each key it hashes, and feeds the key to the result through `hash(into:)` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
-**Every `Hasher` that one hashing value makes starts from the same seed**, so a key hashes the same way at every lookup. A map whose hashing value breaks this misses keys it holds, but stays memory-safe.
+**Every `Hasher` that one hashing value or any copy of it makes starts from the same seed**, so a key hashes the same way at every lookup, and a clone's copied table still finds its keys (below). A map whose hashing value breaks this misses keys it holds, but stays memory-safe.
 
 **The primary initializers of `Map` and `Set` are private.** `Map(hashing:)` and `Set(hashing:)` take an owned hashing value, so a program can give a map one it configured, and every other initializer makes one with `H()`. A map's `clone()` keeps a copy of its hashing value and copies its table as it is, so the clone hashes as the original does.
 
@@ -169,7 +169,7 @@ A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one 
 
 A program may declare its own, such as one that holds a secret seed it read at startup, and pass a value of it to `Map(hashing:)`.
 
-**The process seed exists only at run time, so a map or set with `SeededHashing` can't be made at compile time.** The compiler has no run's seed, and keys placed by any other seed would lie where the run's lookups never look. So a map's or set's hashing type decides whether it can be frozen into read-only data:
+**The process seed exists only at run time, so a map or set with `SeededHashing` can't be made at compile time.** The compiler has no run's seed, and keys placed by any other seed would lie where the run's lookups never look. So a map's or set's hashing value decides whether it can be frozen into read-only data:
 
 - **A `const` of one with `SeededHashing` is a compile error**, since a `const`'s initializer must run at compile time.
 - **A global `let` of one with `SeededHashing` is built at startup**, since only a value computed at compile time goes into read-only data ([07](../07-concurrency/global-state.md#initialization-at-startup)).
@@ -177,7 +177,9 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 **A key that hashes an address keeps its map out of read-only data, whatever the hashing type.** Turning a pointer into an integer can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), since freezing and the platform move what it points at. So a map keyed by raw pointers is built at startup. Every hash computed at compile time therefore comes from values that run time sees unchanged, and a `FixedHashing` hash is the same at compile time and in every run of one build.
 
-**A seeded map's order repeats neither from run to run nor from map to map, and no setting makes it repeat.** So a replay, or a test that compares printed output, sorts the keys it visits or uses `FixedHashing`. A lockstep simulation, which compares state across builds and targets, sorts them, since `FixedHashing`'s order depends on std's algorithm.
+**A seeded map's order repeats neither from run to run nor between maps made separately, and no setting makes it repeat.** Two maps given copies of one hashing value share one order. So inserting one's entries into the other in that order can cluster them in its table, and slow each insert toward a walk of the whole table, which separate seeds avoid.
+
+**Code that needs one order every run doesn't take it from a seeded map.** A replay, or a test that compares printed output, sorts the keys it visits or uses `FixedHashing`. A lockstep simulation, which compares state across builds and targets, sorts them, since `FixedHashing`'s order depends on std's algorithm.
 
 ### Strings
 

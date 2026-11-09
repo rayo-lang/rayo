@@ -55,6 +55,7 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 - **What its own arguments bind counts.** The parts of its type that its arguments bind, such as `K` and `V` from a dictionary's pairs, bind the callee's parameters as a typed argument's would.
 - **The part left to the default binds nothing.** It waits for the parameter's type, so a callee's type parameter that only the nested default would bind stays unbound, which is an error.
 - **Overloads that differ only in that part make the call ambiguous**, since the argument fits each of them ([Functions and closures](functions-and-closures.md#functions-and-closures)).
+- **A closure literal's body is typed before the callee's parameter is known**, since step 3 binds from its result type. So a call that the body returns takes its default there: in `run { Map(dictionaryLiteral: pairs) }` below, `R` becomes `Map<Name, Int, SeededHashing>`.
 
 ```swift
 func takesFixed(_ m: Map<Name, Int, FixedHashing>) { … }
@@ -62,6 +63,7 @@ func merge<K, H>(_ into: mutable Map<K, Int, H>, _ from: Map<K, Int, H>) { … }
 func g<K, H>(_ m: Map<K, Int, H>) { … }
 func h(_ m: Map<Name, Int, SeededHashing>) { … }
 func h(_ m: Map<Name, Int, FixedHashing>) { … }
+func run<R>(_ body: () -> R) -> R { … }
 var fixed: Map<Name, Int, FixedHashing> = [:]
 let pairs: [2 of (Name, Int)] = [("jump", 0), ("fire", 1)]
 
@@ -71,6 +73,7 @@ merge(&fixed, Map<Name, Int>())                 // error: a written Map<Name, In
 g(Map(dictionaryLiteral: pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
 g(Map<Name, Int>(dictionaryLiteral: pairs))     // fine: the written type takes its default, so H is SeededHashing
 h(Map())                                        // error: ambiguous, since Map() fits both overloads
+let m = run { Map(dictionaryLiteral: pairs) }   // R is Map<Name, Int, SeededHashing>: the body takes the default
 ```
 
 **A closure literal binds through the type its body gives it, which the rule for a bare `!` works out** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)):

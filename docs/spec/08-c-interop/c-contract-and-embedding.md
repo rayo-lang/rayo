@@ -76,9 +76,9 @@ enum NavMode: Int32 { case walk, fly }
 **The process seed's bytes must be ones nobody outside the program can predict**, since `Map` and `Set` hash with seeds derived from it by default ([04](../04-types/collections.md#hash-maps-and-sets)). A platform with no source of randomness, such as a small embedded target, takes them from elsewhere:
 
 - **Embedded in a C program**, from that program, through the same layer that supplies the services above.
-- **As a Rayo program**, from the build, which declares them ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Every run of that build then starts from the same seed.
+- **As a Rayo program**, from the build, which declares them ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). A build for such a platform that declares none fails, so a program never runs with a seed of zeros. Every run of that build starts from the same seed.
 
-Protection against chosen colliding keys is only as strong as the bytes supplied.
+Protection against chosen colliding keys is only as strong as the bytes supplied. Anyone holding the binary can read bytes the build declared, so against such a reader the default hashing is no stronger than `FixedHashing`.
 
 ### Embedding Rayo in a C program
 

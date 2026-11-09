@@ -32,7 +32,7 @@ func makeSinTable() -> [1024 of Float] {
 
 **A `const` whose initializer does anything else is a compile error**, while a global `let`'s runs at startup instead ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 
-**Allocator code still runs at compile time**, since it aligns and measures memory with pointer queries that expose no address, not with `UInt(bitPattern:)` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
+**Allocator code that aligns with the pointer queries that expose no address, not `UInt(bitPattern:)`, runs at compile time** ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
 
 **Evaluation runs ordinary code, under these rules:**
 

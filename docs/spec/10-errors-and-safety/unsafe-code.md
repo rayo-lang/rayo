@@ -59,10 +59,16 @@ So a call the language makes on the code's behalf is allowed only where the call
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 - **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
 
-**Those queries run at compile time too, where turning a pointer into an integer can't** ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). None of them exposes an address, and each gives the same answer at run time:
+**`q - p` is the byte distance from `p` to `q` divided by `T`'s size**, so it follows these rules:
 
-- an alignment query, for an `n` up to the alignment of the allocation `p` points into, which freezing keeps ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time));
-- `q - p`, for two pointers into one allocation, whose offsets freezing keeps.
+- it needs a `T` whose size is known and nonzero, as `p + n` does;
+- a distance that isn't a multiple of that size rounds toward zero;
+- a distance that overflows `Int` panics where overflow checks are on, and wraps where they are off, as integer arithmetic does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)).
+
+**None of the queries exposes an address** (below): a pointer rebuilt from `p`'s address plus `q - p` reaches `q`'s allocation only when an earlier conversion exposed that allocation. They run at compile time too, where turning a pointer into an integer can't ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), in the cases where each gives the same answer at run time:
+
+- an alignment query, for an `n` up to the alignment of the allocation `p` points into, which freezing keeps ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). That allocation is the compile-time heap allocation, or other lasting storage, that freezing copies or keeps, never a part of it that an allocator hands out;
+- `q - p`, for two pointers into one such allocation, whose offsets freezing keeps.
 
 Any other use of them can't run at compile time. So an allocator aligns with these queries, never with `UInt(bitPattern:)`, and still runs in the compiler.
 
