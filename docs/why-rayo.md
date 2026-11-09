@@ -100,11 +100,11 @@ struct World(
     var players = Pool<Player>(),           // a Pool stores its elements densely and hands out Handles to them
     var enemies = Pool<Enemy>(capacity: 4096),
     var doors = Pool<Door>(),
-    var clock = Instant(nanoseconds: 0),    // simulation time
+    var clock = Instant<World>(nanoseconds: 0),   // simulation time, on the World's own clock
 )
 
 extension World: TimeSource {               // what elapsed(_:) counts in: here, simulation time
-    var now: Instant { copy clock }         // a copy, written out: the World keeps its clock
+    var now: Instant<World> { copy clock }  // a copy, written out: the World keeps its clock
 }
 
 // Moves every enemy toward its target.

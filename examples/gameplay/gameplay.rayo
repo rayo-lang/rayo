@@ -42,12 +42,12 @@ public struct World(
     var players = Pool<Player>(capacity: 8),
     var enemies = Pool<Enemy>(capacity: 4096),
     var commands = List<Command>(),
-    var clock = Instant(nanoseconds: 0),
+    var clock = Instant<World>(nanoseconds: 0),
     var viewport: IVec2 = .zero,
 )
 
 extension World: TimeSource {                       // lets tasks stepped with a World use elapsed(_:)
-    var now: Instant { copy clock }                 // simulation time, not wall time, copied out
+    var now: Instant<World> { copy clock }          // simulation time, not wall time, copied out
 }
 
 // MARK: - Systems

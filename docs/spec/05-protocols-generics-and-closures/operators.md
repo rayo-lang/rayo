@@ -23,7 +23,7 @@ pos += vel * dt                                                 // pos = pos + v
 - **The set is fixed.** The declarable operators are the ones the grammar lists ([12](../12-grammar/declarations.md#files-and-declarations)), with fixed precedence. The others are built in:
     - `&&` and `||` take `Bool`s, and `??` takes an optional ([04](../04-types/enums.md#optionals)). Each evaluates its right side only when needed.
     - `..<` and `...` make a range of a copyable `Comparable` type. They borrow their operands and copy them in, so `0..<count` leaves `count` usable.
-- **Typed operands may widen.** When both operands are typed, a candidate applies when each operand is of its parameter's type or widens to it ([04](../04-types/numbers-and-math.md#conversions)). If exactly one candidate needs no widening, it wins; otherwise exactly one must apply, or the expression is ambiguous. So with `clock` a `Double` and `dt` a `Float`, `clock += dt` adds two `Double`s.
+- **Typed operands may widen.** When both operands are typed, a candidate applies when each operand is of its parameter's type or widens to it ([04](../04-types/numbers-and-math.md#conversions)). If exactly one candidate needs no widening, it wins; otherwise exactly one must apply, or the expression is ambiguous. So with `total` a `Double` and `dt` a `Float`, `total += dt` adds two `Double`s.
 - **The parameter count decides the form.** A function with one parameter declares a prefix operator, and one with two a binary operator. `-` has both forms, `!` and `~` are only prefix, and the rest only binary.
 - **Compound assignment is shorthand.** `a ⊕= b` means `a = a ⊕ b`, with the place `a` worked out once ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), so `hp[next()] -= 1` calls `next()` once. No type declares `+=`, so it always agrees with `+`.
 
@@ -67,12 +67,12 @@ let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }
 let level: Level = catchPanic { try loadLevel(path) } recover: { _ in Level() }    // error: the call is a Level!(IoError | ParseError); write 'try'
 ```
 
-**Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and last of those ways, and the last call gives its untyped `0` the type `Float`:
+**Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and last of those ways. The third then gives its untyped `.seconds(0.5)` the type `Duration`, and the last call gives its untyped `0` the type `Float`:
 
 ```swift
 let m = max(f, d)                      // f: Float, d: Double: T is Double, which f widens to
 let b: Float = max(0, 1)               // from the expected type: a Float call
-let s: Elapsed<Game> = elapsed(d)      // from the expected type: C is Game
+let s: Elapsed<Game> = elapsed(.seconds(0.5))   // from the expected type: C is Game
 let n = max(0, 1)                      // from the literals' default: an Int call
 hp = max(0, hp - amount)               // T is Float, from 'hp - amount', so 0 is a Float
 ```

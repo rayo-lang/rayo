@@ -182,7 +182,7 @@ enum TryReceiveError: Error {
 }
 ```
 
-**`receive(timeout:)` parks as `receive()` does, but for at most `timeout` on `MonotonicClock`, and tells a timeout from a disconnection** ([Time](#time-duration-and-instant)):
+**`receive(timeout:)` parks as `receive()` does, until `timeout` has passed on `MonotonicClock`, and tells a timeout from a disconnection** ([Time](#time-duration-and-instant)):
 
 ```swift
 enum ReceiveTimeoutError: Error {
@@ -191,7 +191,7 @@ enum ReceiveTimeoutError: Error {
 }
 ```
 
-An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
+It fails with `.timedOut` no sooner than `timeout` after the call, as `Thread.sleep(for:)` parks for at least its `Duration`. An item that is there already comes back at once, so a `timeout` of zero or less acts as `tryReceive()` does. A consumer that must notice producers that have stalled, such as a watchdog, waits this way instead of parking for ever.
 
 **`send` fails once the channel is disconnected for sending, and an item a send can't deliver comes back to its sender:**
 
@@ -358,32 +358,34 @@ extension SpinQueue: unsafe Synchronized {}          // or, instead, in an exten
 
 ### Time: `Duration` and `Instant`
 
-**std counts time in whole nanoseconds, held in an `Int64`, so times add and compare exactly on every target.** A `Duration` is a length of time, and an `Instant` is a point in time on one clock:
+**std counts time in whole nanoseconds, held in an `Int64`, so times add and compare exactly on every target.** A `Duration` is a length of time, which every clock shares. An `Instant<Clock>` is a point in time on one clock, so the instants of two clocks have different types, and never mix:
 
 ```swift
-struct Duration(let nanoseconds: Int64): Hashable, Comparable   // may be negative; Duration.zero is no time
-struct Instant(let nanoseconds: Int64): Hashable, Comparable    // nanoseconds since its clock's own start
+struct Duration(let nanoseconds: Int64): Hashable, Comparable                     // may be negative; Duration.zero is no time
+struct Instant<Clock: TimeSource>(let nanoseconds: Int64): Hashable, Comparable   // nanoseconds since Clock's own start
 
 static func seconds(_ s: Double) -> Duration { … }              // Duration's: .seconds(0.5)
 static func milliseconds(_ ms: Int64) -> Duration { … }         // Duration's, as are microseconds(_:) and nanoseconds(_:)
 ```
 
+**A clock is a `TimeSource`, whose `now` is an instant of its own:**
+
+```swift
+protocol TimeSource { var now: Instant<Self> { get } }
+struct MonotonicClock(): TimeSource { … }       // the system's clock for waits: MonotonicClock().now is an Instant<MonotonicClock>
+```
+
+**`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game whose simulation time stops while it is paused. Their instants can't reach a wait on real time, such as a `Waker`'s `wake(at:)`, which takes an `Instant<MonotonicClock>`.
+
 **The arithmetic is `Int64` arithmetic on the nanoseconds**, so an overflow does what an `Int64` overflow does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)):
 
 - two `Duration`s add and subtract, and a `Duration` multiplies by an `Int64`;
-- an `Instant` plus or minus a `Duration` is an `Instant`;
-- an `Instant` minus an `Instant` is the `Duration` between them.
+- an `Instant<C>` plus or minus a `Duration` is an `Instant<C>`;
+- an `Instant<C>` minus an `Instant<C>` is the `Duration` between them.
 
-**`seconds(_:)` converts as `Int64(s * 1e9)` does**, so it rounds toward zero, and panics on NaN or on a value out of range ([04](../04-types/numbers-and-math.md#conversions)).
+**std's own waits saturate the deadlines they compute instead.** `sleep(for:)`, `receive(timeout:)`, `Thread.sleep(for:)` and a park's `timeout` each add their `Duration` to `now` without overflowing. So a deadline past the end of `Instant`'s range never passes, and such a wait lasts until something else ends it.
 
-**A clock is a `TimeSource`, and an `Instant` means something only beside the instants of the same clock:**
-
-```swift
-protocol TimeSource { var now: Instant { get } }
-struct MonotonicClock(): TimeSource { … }       // the system's clock for waits: MonotonicClock().now
-```
-
-**`MonotonicClock` is the clock of every wait on real time**: a timeout, `Thread.sleep(for:)`, and a task's `sleep(for:)` ([Awaitables in std](tasks.md#awaitables-in-std)). Its `now` never decreases, and how it relates to a calendar is left open. A program supplies other clocks as types of its own, such as a game's simulation time, which stops while the game is paused.
+**`seconds(_:)` rounds to the nearest nanosecond**, and panics on NaN or on a value out of range, as converting a float to an integer does ([04](../04-types/numbers-and-math.md#conversions)).
 
 **`Thread.sleep(for:)` parks the calling thread for at least `d`**, and returns at once when `d` is zero or less:
 
