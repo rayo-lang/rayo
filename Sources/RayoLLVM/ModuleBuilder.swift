@@ -43,8 +43,14 @@ final class ModuleBuilder {
 
     /// Throws the errors LLVM has reported in this module's context, if any. A warning fails nothing.
     func checkReportedErrors() throws(LLVMError) {
-        let errors = diagnostics.errors
-        if !errors.isEmpty { throw LLVMError(message: "LLVM reported errors:\n" + errors.joined(separator: "\n")) }
+        if !diagnostics.errors.isEmpty { throw error("LLVM reported errors:") }
+    }
+
+    /// An error that says `summary`, then `detail` and the errors LLVM has reported in this module's context,
+    /// whichever there are.
+    func error(_ summary: String, detail: String = "") -> LLVMError {
+        let reasons = ([detail] + diagnostics.errors).filter { !$0.isEmpty }
+        return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
 
     /// Parses `llvmIR` into a module of this context, for the same target as this one.
