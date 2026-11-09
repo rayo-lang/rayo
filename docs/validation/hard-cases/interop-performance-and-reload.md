@@ -132,13 +132,15 @@ func run<T: P>(_ x: mutable T, …)      // generic over the protocol's conformi
 
 ### F5 · Bit-identical results on every target
 
-**A computation must give bit-identical results on every machine**, as a lockstep simulation does when it compares a hash of its state across machines with different platforms and compilers. It uses `Float` and `Simd` math with `a * b + c` patterns, square roots, conversions, and sums and minimums of a vector's lanes, and calls whose arguments have side effects, such as this one:
+**A computation must give bit-identical results on every machine and in every build.** Scientific code that another team reruns needs that, as do a pricing model that every server must agree on, a test or replay that compares its output with a recorded one, and replicas that reach consensus on a computed state. So does a lockstep simulation, which compares a hash of its state across machines with different platforms and compilers.
+
+The computation uses `Float` and `Simd` math: `a * b + c` patterns, explicit `fma` calls, square roots, conversions, and sums and minimums of a vector's lanes. It also makes calls whose arguments have side effects, such as this one:
 
 ```swift
 spawn(at: rng.next(), heading: rng.next())    // each argument draws the next random number
 ```
 
-- **Must accept** bit-identical state on every target, under every toolchain and in every build mode, from the language's rules alone. Name the rule that fixes each result.
+- **Must accept** bit-identical state on every target, under every toolchain and in every build mode, from the language's rules alone, `fma` on a target without a fused multiply-add instruction included. Name the rule that fixes each result.
 - State what the program must avoid or supply itself to stay deterministic, such as its own `sin`, or a sorted order for the entries of a `Map` it steps through.
 
 ### F6 · Integer and float edge cases
