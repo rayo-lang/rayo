@@ -26,7 +26,7 @@ swift run rayoc run program.rayo
 
 `Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
-`rayoc` runs the `clang` in that LLVM's `bin`. It looks for LLD there too, where apt installs it, and otherwise in Homebrew's `opt/lld@23` or `opt/lld` beside LLVM's, whichever holds release 23. Both paths are fixed when `rayoc` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayoc` is built.
+`rayoc` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayoc` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayoc` is built.
 
 SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLVM install changes. After installing, moving or upgrading LLVM, run `swift package purge-cache`, which clears that cache, and build again.
 
@@ -51,9 +51,9 @@ clang drives every link, so the platform's C startup files, C library and system
 | Option | Linker |
 | --- | --- |
 | `--linker=lld`, the default | LLD: `ld64.lld` for Mach-O on macOS, `ld.lld` for ELF on Linux |
-| `--linker=platform` | The platform's own: Apple's `ld` on macOS, the system `ld` on Linux |
+| `--linker=platform` | The platform's own: the `ld` that `xcrun --find ld` names on macOS, or `/usr/bin/ld` where it names none, and `/usr/bin/ld` on Linux |
 
-LLD is the default because it is the same linker, from the same LLVM, on every machine, and on Windows it needs no Visual Studio. The platform's linker is there for when a platform's own tools are required.
+LLD is the default because it is the same linker, from the same LLVM, on every machine. The platform's linker is there for when a platform's own tools are required. Neither is taken from the search path.
 
 ## Layout
 
@@ -65,7 +65,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
-| `Sources/CLLVM` | The module map that imports LLVM's C API into Swift |
+| `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
 | `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files, and the clang and linker it links a program with |

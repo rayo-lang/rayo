@@ -79,11 +79,16 @@ public enum Driver {
                 }
                 operands = operands.dropFirst()
             }
-            guard operands.count == 1, let path = operands.first else { throw .usage }
+            guard operands.count == 1, let path = operands.first, !Self.isOption(path) else { throw .usage }
             self.command = command
             self.mode = mode ?? .release
             self.linker = linker ?? .lld
             self.path = path
+        }
+
+        /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
+        private static func isOption(_ operand: String) -> Bool {
+            BuildMode(rawValue: operand) != nil || operand == "--linker" || value(of: operand, named: "--linker") != nil
         }
 
         /// The value `option` gives, when it is `name=value`.

@@ -164,10 +164,28 @@ struct BuildTests {
     func lldMissing() throws {
         let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
         let tools = Driver.LinkTools(clang: Driver.LinkTools.installed.clang, lld: lld)
-        #expect(runEmptyMain(linkTools: tools) == Driver.Result(exitCode: 1, output: "",
-            errors: "rayoc: can't find LLD at '/nonexistent/ld.lld': install it, or link with --linker=platform\n"))
+        #expect(runEmptyMain(linkTools: tools) == Driver.Result(exitCode: 1, output: "", errors: """
+            rayoc: can't find LLD at '/nonexistent/ld.lld': install LLD 23, run 'swift package purge-cache' and \
+            build rayoc again, or link with --linker=platform
+
+            """))
         #expect(runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
             Driver.Result(exitCode: 0, output: "", errors: ""))
+    }
+
+    @Test("the platform's linker is the platform's, not an ld first on the search path")
+    func platformLinkerIgnoresSearchPath() throws {
+        try withTemporaryDirectory { directory in
+            let ran = directory.appendingPathComponent("ld-ran")
+            _ = try script("touch '\(ran.path)'\nexit 1", at: directory.appendingPathComponent("ld"))
+            let path = ProcessInfo.processInfo.environment["PATH", default: ""]
+            let result = Driver.run(["run", "--linker=platform", "main.rayo"],
+                                    environment: ["PATH": "\(directory.path):\(path)"]) { _ in
+                Array("func main() { print(42) }".utf8)
+            }
+            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            #expect(!FileManager.default.fileExists(atPath: ran.path))
+        }
     }
 
     @Test("build builds in the mode it names")

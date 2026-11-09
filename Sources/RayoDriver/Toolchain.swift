@@ -28,8 +28,10 @@ extension Driver {
 
         #if canImport(Darwin)
         private static let hostLLD = "ld64.lld"
-        #else
+        #elseif os(Linux)
         private static let hostLLD = "ld.lld"
+        #else
+        #error("rayoc links with LLD only on macOS and Linux")
         #endif
     }
 }
@@ -80,14 +82,30 @@ struct Toolchain {
         switch linker {
         case .lld:
             guard Self.isExecutableFile(tools.lld) else {
-                throw Failure("can't find LLD at '\(tools.lld.path)': install it, or link with --linker=platform")
+                throw Failure("""
+                    can't find LLD at '\(tools.lld.path)': install LLD \(LLVMInstall.majorVersion), run \
+                    'swift package purge-cache' and build rayoc again, or link with --linker=platform
+                    """)
             }
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
             return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
         case .platform:
-            // -fuse-ld=ld names the platform's linker, even for a clang built to prefer another.
-            return ["-fuse-ld=ld"]
+            return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
         }
+    }
+
+    /// The platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld` where
+    /// it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
+    private func platformLinker() throws(Failure) -> URL {
+        #if canImport(Darwin)
+        let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
+        let path = found.flatMap { $0.exitCode == 0 ? $0.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+        let linker = URL(fileURLWithPath: path ?? "/usr/bin/ld")
+        #else
+        let linker = URL(fileURLWithPath: "/usr/bin/ld")
+        #endif
+        guard Self.isExecutableFile(linker) else { throw Failure("can't find the platform's linker at '\(linker.path)'") }
+        return linker
     }
 
     private static func isExecutableFile(_ url: URL) -> Bool {

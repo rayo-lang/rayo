@@ -43,6 +43,8 @@ struct DriverTests {
         ["build", "--debug", "--release", "a.rayo"],
         ["check", "--linker=lld", "a.rayo"], ["build", "--linker=lld", "--linker=platform", "a.rayo"],
         ["run", "--linker", "a.rayo"], ["run", "a.rayo", "--linker=lld"],
+        ["run", "--linker=bogus"], ["run", "--linker=lld"], ["run", "--linker"], ["run", "--debug"],
+        ["build", "--release"], ["check", "--debug"],
     ])
     func usage(arguments: [String]) {
         let result = run(arguments, files: ["a.rayo": ""])

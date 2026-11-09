@@ -26,20 +26,41 @@ let llvmPrefix: String = {
         """)
 }()
 
-/// The directory that holds LLD `llvmMajorVersion`: LLVM's own tools, where LLD is installed with LLVM as apt
-/// installs it, and otherwise the bin of Homebrew's keg for LLD, beside LLVM's. Where neither holds it, it is
-/// LLVM's own tools, so that `rayoc` reports LLD missing from there.
+/// The directory that holds LLD `llvmMajorVersion`: `LLD_PREFIX`'s `bin` when it's set, and otherwise that of the
+/// first of LLVM's prefix and the places a package manager installs LLD that holds that release. Where none does,
+/// it is LLVM's own `bin`, so that `rayoc` reports LLD missing from there.
 let lldDirectory: String = {
-    let llvmTools = llvmPrefix + "/bin"
-    if FileManager.default.fileExists(atPath: llvmTools + "/lld") { return llvmTools }
-    let kegs = URL(fileURLWithPath: llvmPrefix).deletingLastPathComponent().path
-    let version = "set(PACKAGE_VERSION \"\(llvmMajorVersion)."
-    let keg = ["\(kegs)/lld@\(llvmMajorVersion)", "\(kegs)/lld"].first { keg in
-        let config = try? String(contentsOfFile: keg + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
-        return config?.contains(version) ?? false
-    }
-    return keg.map { $0 + "/bin" } ?? llvmTools
+    if let prefix = Context.environment["LLD_PREFIX"] { return prefix + "/bin" }
+    let candidates = [
+        llvmPrefix,
+        "/usr/lib/llvm-\(llvmMajorVersion)",
+        "/opt/homebrew/opt/lld@\(llvmMajorVersion)",
+        "/opt/homebrew/opt/lld",
+        "/usr/local/opt/lld@\(llvmMajorVersion)",
+        "/usr/local/opt/lld",
+    ]
+    let prefix = candidates.first { lldMajorVersion(at: $0) == llvmMajorVersion } ?? llvmPrefix
+    return prefix + "/bin"
 }()
+
+/// The major release of the LLD installed under `prefix`, or nil when none is. LLD's own version file says it,
+/// and otherwise an LLVM installed with it under the same prefix does.
+func lldMajorVersion(at prefix: String) -> Int? {
+    guard FileManager.default.fileExists(atPath: prefix + "/bin/lld") else { return nil }
+    let definition = "set(PACKAGE_VERSION \""
+    let config = try? String(contentsOfFile: prefix + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
+    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    let major = line.flatMap { Int($0.dropFirst(definition.count).prefix { $0.isNumber }) }
+    return major ?? llvmMajorVersion(at: prefix)
+}
+
+/// `path`, which the manifest writes into C string literals, so it can't hold a quote or a backslash.
+func checkedForDefine(_ path: String) -> String {
+    if path.contains("\"") || path.contains("\\") {
+        fatalError("rayoc can't be built against an LLVM whose path holds a quote or a backslash: \(path)")
+    }
+    return path
+}
 
 /// The major release of the LLVM installed under `prefix`, or nil when none is.
 func llvmMajorVersion(at prefix: String) -> Int? {
@@ -100,8 +121,8 @@ let package = Package(
 for target in package.targets where dependsOnCLLVM(target, among: package.targets) {
     target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
         "-Xcc", "-I\(llvmPrefix)/include",
-        "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(llvmPrefix)/bin\"",
-        "-Xcc", "-DRAYO_LLD_DIRECTORY=\"\(lldDirectory)\"",
+        "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(checkedForDefine(llvmPrefix + "/bin"))\"",
+        "-Xcc", "-DRAYO_LLD_DIRECTORY=\"\(checkedForDefine(lldDirectory))\"",
     ])]
 }
 
