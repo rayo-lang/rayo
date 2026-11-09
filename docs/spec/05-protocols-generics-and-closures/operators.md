@@ -55,7 +55,7 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 - **What its own arguments bind counts.** The parts of its type that its arguments bind, such as `K` and `V` from a dictionary's pairs, bind the callee's parameters as a typed argument's would.
 - **The part left to the default binds nothing.** It waits for the parameter's type, so a callee's type parameter that only the nested default would bind stays unbound, which is an error.
 - **Overloads that differ only in that part make the call ambiguous**, since the argument fits each of them ([Functions and closures](functions-and-closures.md#functions-and-closures)).
-- **A closure literal's body is typed before the callee's unbound type parameters are known**, since step 3 binds them from its result type. The parts of that result type which the parameter's type fixes still reach the body first. Only a part that depends on an unbound type parameter takes its default in the body. So in `run { Map(dictionaryLiteral: pairs) }` below, `R` becomes `Map<Name, Int, SeededHashing>`, while `f`'s parameter type fixes `FixedHashing` for its body's map.
+- **A closure literal's body is typed before the callee's unbound type parameters are known**, since step 3 binds them from its result type. The parts of that result type that the parameter's type fixes still reach the body first. Only a part that depends on an unbound type parameter takes its default in the body. So in `run { Map(dictionaryLiteral: copy pairs) }` below, `R` becomes `Map<Name, Int, SeededHashing>`, while `f`'s parameter type fixes `FixedHashing` for its body's map.
 
 ```swift
 func takesFixed(_ m: Map<Name, Int, FixedHashing>) { … }
@@ -68,14 +68,14 @@ func f<K>(_ body: () -> Map<K, Int, FixedHashing>) { … }
 var fixed: Map<Name, Int, FixedHashing> = [:]
 let pairs: [2 of (Name, Int)] = [("jump", 0), ("fire", 1)]
 
-takesFixed(Map())                               // H is FixedHashing, from the parameter's type
-merge(&fixed, Map())                            // K and H bind from 'fixed', and Map() takes them from the parameter's type
-merge(&fixed, Map<Name, Int>())                 // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
-g(Map(dictionaryLiteral: pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
-g(Map<Name, Int>(dictionaryLiteral: pairs))     // fine: the written type takes its default, so H is SeededHashing
-h(Map())                                        // error: ambiguous, since Map() fits both overloads
-let m = run { Map(dictionaryLiteral: pairs) }   // R is Map<Name, Int, SeededHashing>: the body takes the default
-f { Map(dictionaryLiteral: pairs) }             // FixedHashing, fixed by f's parameter type; K binds to Name
+takesFixed(Map())                                    // H is FixedHashing, from the parameter's type
+merge(&fixed, Map())                                 // K and H bind from 'fixed', and Map() takes them from the parameter's type
+merge(&fixed, Map<Name, Int>())                      // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
+g(Map(dictionaryLiteral: copy pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
+g(Map<Name, Int>(dictionaryLiteral: copy pairs))     // fine: the written type takes its default, so H is SeededHashing
+h(Map())                                             // error: ambiguous, since Map() fits both overloads
+let m = run { Map(dictionaryLiteral: copy pairs) }   // R is Map<Name, Int, SeededHashing>: the body takes the default
+f { Map(dictionaryLiteral: copy pairs) }             // FixedHashing, fixed by f's parameter type; K binds to Name
 ```
 
 **A closure literal binds through the type its body gives it, which the rule for a bare `!` works out** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)):

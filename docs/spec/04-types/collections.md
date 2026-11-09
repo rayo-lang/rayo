@@ -140,7 +140,7 @@ struct Hasher(…) {
 
 **The process seed is a random value of at least 128 bits, which startup draws from the platform before any initializer runs** ([07](../07-concurrency/global-state.md#initialization-at-startup)). Reading it reads a random value from the platform, so it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)).
 
-**`HashSeed.fromProcessSeed()` derives each seed through a pseudorandom function keyed by the process seed.** Its input is the calling thread's identity and a 64-bit count that the thread advances. Every attach of a thread gets an identity that no earlier attach in the run had ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)), so a count never restarts on an input already used. No two calls give one input, so the seeds they derive are independent, and the count needs no atomic operation, even on a 32-bit target.
+**`HashSeed.fromProcessSeed()` derives each seed through a pseudorandom function keyed by the process seed.** Its input is the calling thread's identity ([07](../07-concurrency/global-state.md#thread-identity)) and a 64-bit count that the thread advances. No two calls give one input, so the seeds they derive are independent, and the count needs no atomic operation, even on a 32-bit target.
 
 **A `HashSeed` isn't `Pod`, and only those two functions make one**, so safe code can't mark a seed it chose as derived from the process seed. Unsafe code that forges that mark only changes what a `Name` feeds its `Hasher` (above). That can't reach compile time, since a `Name` then feeds an address, and turning a pointer into an integer can't run there.
 

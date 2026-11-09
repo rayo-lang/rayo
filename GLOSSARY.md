@@ -387,6 +387,10 @@ _Avoid_: async function, future (a `Future` is one awaitable), state machine val
 **Teardown**:
 The end of a thread's Rayo code, which destroys its copies of the thread-locals and its objects, on that thread ([07](docs/spec/07-concurrency/global-state.md#thread-teardown)).
 
+**Thread identity**:
+What tells a thread from every other thread of the run, before or since, however it started ([07](docs/spec/07-concurrency/global-state.md#thread-identity)).
+_Avoid_: thread id
+
 ### C interop
 
 **C entry**:
