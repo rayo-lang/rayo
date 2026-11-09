@@ -201,7 +201,9 @@ Then the second load reads a value no older, in its location's modification orde
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
-**The implementation knows a bound on the stack that each function it supplies uses**, its runtime's and its software routines' included. The stack check on entry to each function needs that bound ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)). **No software routine allocates**, so an operation that calls one is still one that `@noalloc` code may use ([06](06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+**The implementation knows a bound on the stack that each function it supplies uses**, its runtime's and its software routines' included. The stack check on entry to each function needs that bound ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+
+**No software routine allocates** ([06](06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
 **A target needs no floating-point hardware**, since a floating-point operation its processor lacks is computed in software, with the same result ([04](04-types/numbers-and-math.md#floating-point)).
 
