@@ -145,7 +145,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **`_ =` drops a value on purpose.** Rayo rejects any value that code never uses, unless its type is `Void`, because an ignored result is usually a bug, such as an error nobody handled. So code that has no use for a value, such as the `Thread` that `Thread.start` returns below, drops it with `_ =` ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
-**A guard is scoped.** It can't be stored in a global or an object, returned past the mutex it came from, or held across an `await` ([below](#stepped-tasks)).
+**A guard is scoped.** It can't be stored in a global or an object, returned past the mutex it came from, or held across an `await` ([below](#tasks)).
 
 **A guard isn't `Sendable`, so it's released on the thread that took it**, as many platform mutexes require ([02](../spec/02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)).
 
@@ -309,23 +309,23 @@ func tick() {
 
 **Reading a global before it is initialized is a compile error where the compiler can see it, and a panic where it can't.**
 
-## Stepped tasks
+## Tasks
 
 ```swift
 task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
     guard let d = game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
-    await seconds(0.5)                                     // suspends here; a later step resumes
+    await elapsed(.seconds(0.5))                           // half a second of game time; a later step resumes
     game.audio.play(d.slamSound, at: d.pos)                // error: 'd' borrows 'game.doors' across an 'await'
     game.doors[door]?.state = .open                        // fine: looks the door up again
 }
 
 var scripts = TaskSet<Game>(capacity: 512)
 _ = scripts.start(openDoor(frontDoor))                     // calling openDoor runs nothing: it returns the task
-scripts.step(&game)                                        // resumes pending and woken tasks once each
+scripts.step(&game)                                        // steps each task that has been woken since the last step
 ```
 
-**A `task func` can suspend at `await`, and continues when its owner steps it** ([07](../spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines)). It suits a script that spans frames, and it never runs on its own.
+**A `task func` can suspend at `await`, and continues once what it waits on wakes it and its owner steps it** ([07](../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). It suits a script that spans frames, or any work that spends its time waiting, and it never runs on its own.
 
 **Calling a `task func` runs nothing: it returns the task**, a value that its owner keeps and steps.
 
@@ -336,6 +336,28 @@ scripts.step(&game)                                        // resumes pending an
 **The `with` clause names the resume parameter, which the owner lends anew at every step.** So the task never holds it between steps, and it may be used on both sides of an `await`.
 
 **A `TaskSet` owns the tasks it starts, and steps them together.** It isn't `Sendable`, so it and its tasks stay on one thread.
+
+**An `await` that isn't done yet arranges for its task to be woken, and `step` skips every task that hasn't been woken.** `elapsed` counts the game's own time, and only the game knows when that advances, so it wakes its task at every step, and each `step` checks the clock again. An `await` on another thread's work hands the task's waker to that thread instead, which wakes the task once the work is done. Until then the task costs a `step` nothing ([07](../spec/07-concurrency/tasks.md#waking-a-task)).
+
+**A thread with nothing to do but run its tasks calls `run` instead of `step`:**
+
+```swift
+let quitLoading = Atomic(false)                                  // a global, which the main thread sets
+var loads = TaskSet<Loader>(capacity: 64)
+_ = loads.start(streamZone(next))                                // its reads go through an I/O library, which wakes it as each completes
+loads.run(&loader, until: { _ in quitLoading.load(.acquire) })   // parks the thread whenever no task is woken
+```
+
+**`run` steps the set each time a task is woken, and parks the thread in between**, so a loading thread sleeps while its reads are under way. It returns once its condition holds after a step, or once no task is left ([07](../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)).
+
+**Another thread stops `run` through the set's `runWaker`**, a waker that wakes no task, only `run`, which then checks its condition again. Here the main thread holds a copy of it, `wakeLoads`:
+
+```swift
+quitLoading.store(true, .release)
+wakeLoads.wake()                                                 // run wakes, finds quitLoading set, and returns
+```
+
+**Under `run`, a task that waits for real time awaits `sleep(for:)`**, which tells the set when it is due, so the thread sleeps until then. `elapsed` would keep the thread busy instead, since it checks the game's clock at every step.
 
 ## In the spec
 
@@ -348,6 +370,6 @@ scripts.step(&game)                                        // resumes pending an
 - [07 Panics in producers and consumers](../spec/07-concurrency/synchronization.md#panics-in-producers-and-consumers): what a panic on either side disconnects, and why each end is owned inside a `ThreadScope`.
 - [07 The `Synchronized` contract](../spec/07-concurrency/synchronization.md#the-synchronized-contract): what a type of your own must uphold to declare it.
 - [07 Global state](../spec/07-concurrency/global-state.md#global-state): thread-locals, startup, thread teardown and shutdown.
-- [07 Task functions](../spec/07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines): awaitables, wakers, and `TaskSet`.
+- [07 Task functions](../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread): awaitables, wakes and timed waits, `TaskSet`'s `step` and `run`, and `block(on:)`.
 - [05 Closure kinds](../spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds) and [unscoped closures](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref): what decides a closure's kind, and capture lists.
 - [Hard cases](../validation/hard-cases/concurrency-and-memory.md#c-concurrency): concurrency patterns the design must accept, such as nested parallelism and errors in lent work.
