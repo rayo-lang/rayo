@@ -70,10 +70,15 @@ enum NavMode: Int32 { case walk, fly }
 - the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock for timeouts, such as a parked thread's;
-- random bytes that nobody outside the program can predict, from which startup draws the process seed that `Map` and `Set` hash with by default ([04](../04-types/collections.md#hash-maps-and-sets));
+- random bytes for the process seed (below);
 - a way to report a panic ([10](../10-errors-and-safety/panics.md#panics)).
 
-**A platform with no source of randomness, such as a small embedded target, takes the seed's bytes from the program that embeds Rayo**, through the same layer that supplies the services above. Protection against chosen colliding keys is then only as strong as the bytes it supplies.
+**The process seed's bytes must be ones nobody outside the program can predict**, since `Map` and `Set` hash with seeds derived from it by default ([04](../04-types/collections.md#hash-maps-and-sets)). A platform with no source of randomness, such as a small embedded target, takes them from elsewhere:
+
+- **Embedded in a C program**, from that program, through the same layer that supplies the services above.
+- **As a Rayo program**, from the build, which declares them ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)). Every run of that build then starts from the same seed.
+
+Protection against chosen colliding keys is only as strong as the bytes supplied.
 
 ### Embedding Rayo in a C program
 

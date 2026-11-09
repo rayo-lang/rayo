@@ -57,6 +57,14 @@ So a call the language makes on the code's behalf is allowed only where the call
 - **Integers.** Converting a pointer to an integer (`UInt(bitPattern: p)`) is safe, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Converting an integer to a pointer is `unsafe`.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
+- **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
+
+**Those queries run at compile time too, where turning a pointer into an integer can't** ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). None of them exposes an address, and each gives the same answer at run time:
+
+- an alignment query, for an `n` up to the alignment of the allocation `p` points into, which freezing keeps ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time));
+- `q - p`, for two pointers into one allocation, whose offsets freezing keeps.
+
+Any other use of them can't run at compile time. So an allocator aligns with these queries, never with `UInt(bitPattern:)`, and still runs in the compiler.
 
 ## What `unsafe` code upholds
 

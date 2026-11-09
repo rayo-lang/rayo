@@ -72,11 +72,11 @@ let table = buildTable()     // may read 'names'; reading a global declared afte
 
 **A global `let` goes into read-only data, in every build, exactly when it can be computed and frozen at compile time:** its initializer can run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), and its value passes the **freezable** test ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A compile-time run of it that panics is a compile error, as for a `const`. One that exceeds the toolchain's evaluation limits leaves the global to startup, which computes the same value.
 
-For a global `Map` or `Set`, its hashing type decides whether it goes there ([04](../04-types/collections.md#hash-maps-and-sets)).
+For a global `Map` or `Set`, its hashing type and its keys decide whether it goes there ([04](../04-types/collections.md#hash-maps-and-sets)).
 
-**Every other global is initialized at startup**, one module at a time, each module's declarations in source order. **Startup** runs before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](../08-c-interop.md)).
+**Every other global is initialized at startup**, one module at a time, each module's declarations in source order. **Startup** runs before `main`, or in `rayo_init()` when a C program embeds Rayo ([08](../08-c-interop.md)). The next module is always the first in the build's list ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) whose imports are all initialized. A module outside the prelude's modules and every module they import counts all of those as imports ([11](../11-compilation-model.md#the-prelude)).
 
-**Startup first draws the process seed from the platform, before any initializer runs**, so a global `Map` or `Set` built at startup can use it ([04](../04-types/collections.md#hash-maps-and-sets)). The draw may wait until the platform's source of randomness is ready. A draw that fails ends startup as an uncaught panic in it does (below). The next module is always the first in the build's list ([09](../09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)) whose imports are all initialized. A module outside the prelude's modules and every module they import counts all of those as imports ([11](../11-compilation-model.md#the-prelude)).
+**Startup first draws the process seed from the platform, before any initializer runs**, so a global `Map` or `Set` built at startup can use it ([04](../04-types/collections.md#hash-maps-and-sets)). The draw may wait until the platform's source of randomness is ready. A draw that fails ends startup, with the outcome of a panic during startup that nothing catches (below).
 
 **No global is destroyed** ([below](#shutdown)) **or consumed** ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)), other than a thread-local's copy, which ends in its thread's teardown.
 

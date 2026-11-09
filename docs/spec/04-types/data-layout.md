@@ -54,7 +54,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 **Casts between `Pod` types depend on padding**, so that no uninitialized byte is read as data:
 
 - **Bit casts.** `U(bitPattern: t)` between `Pod` types of equal size is safe when `t`'s type is padding-free.
-- **Span casts.** `span.reinterpret(as: Vertex.self)` views a span of a `Pod` type `A` as a `Span<U>?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. A shared cast needs `A` padding-free, so every byte read is initialized. A mutable cast needs both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see `A`.
+- **Span casts.** `span.reinterpret(as: Vertex.self)` views a span of a `Pod` type `A` as a `Span<U>?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. Its alignment check is an alignment query, so it runs at compile time for a `U` aligned no more than the span's allocation ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A shared cast needs `A` padding-free, so every byte read is initialized. A mutable cast needs both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see `A`.
 
 ## Variable-sized structs: `TrailingArray`
 

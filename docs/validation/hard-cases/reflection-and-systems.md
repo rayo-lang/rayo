@@ -48,6 +48,7 @@ struct Node(var pending: Delta<Node>)      // a field whose type is generated fr
 - **Must accept** a `const` hash map of `Name` keys, built by ordinary code in the compiler and looked up at run time with no work at startup.
 - **Must hold:** no map lies in read-only data with its keys placed by hashes that the running program computes differently, including keys that hash an address. Show what happens to a `const` and to a global `let` of each kind of map.
 - **Must hold:** a client can't choose header names, or `Name`s it gets interned, that collide in a `Map` the server keys by them, without the server asking for that protection.
+- State that interning a client's header names still grows the interner without bound, and show how the server avoids it.
 
 ---
 
