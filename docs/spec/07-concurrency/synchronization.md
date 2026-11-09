@@ -70,7 +70,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 **The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
 
-**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
+**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing under a given seed reads the stored hash, so the rule above orders it. Under a process-derived seed it feeds the entry's address and, like `==`, reads no entry, so neither promises anything beyond the value it reads ([04](../04-types/collections.md#collections-and-strings)).
 
 **On every target, issuing a number may wait, but never for a use.** A registration, a reset, an unregistration, and a thread's start or attachment each take a number that must differ from, or come after, every one issued before it. Taking one may wait for another of these taking its own, but never for a use of an allocator, an object or a `Shared` value. A lock held for this parks the threads that wait for it, never spinning, so a single-core target that runs threads by priority can't deadlock on it.
 

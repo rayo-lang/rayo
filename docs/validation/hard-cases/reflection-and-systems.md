@@ -41,6 +41,15 @@ struct Node(var pending: Delta<Node>)      // a field whose type is generated fr
 - **Must hold:** `TypeInfo` and reflection see generated types as they see written ones.
 - **Must accept** two closures of one `join` writing two generated fields of one `Delta<Enemy>`, and `Node` above.
 
+### H5 · Hash tables built at compile time
+
+**A compiler's keyword table, or a game's table of input bindings, is a hash map fixed before the program runs**, which C++ and Rust build with an external generator or a perfect-hashing library. The same program hashes keys from outside in other maps, such as a server's request headers, where a client that can predict the hashes can send keys that collide.
+
+- **Must accept** a `const` hash map of `Name` keys, built by ordinary code in the compiler and looked up at run time with no work at startup.
+- **Must hold:** no map lies in read-only data with its keys placed by hashes that the running program computes differently, including keys that hash an address. Show what happens to a `const` and to a global `let` of each kind of map.
+- **Must hold:** a client can't choose header names, or `Name`s it gets interned, that collide in a `Map` the server keys by them, without the server asking for that protection.
+- State that interning a client's header names still grows the interner without bound, and show how the server avoids it.
+
 ---
 
 ## I. Systems patterns that must not be forbidden

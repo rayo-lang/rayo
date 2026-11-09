@@ -26,9 +26,13 @@ func makeSinTable() -> [1024 of Float] {
 - accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
 - starts, parks and wakes no thread: it reaches no blocking wait, `Runtime.park` or `Runtime.wake`;
 - makes no volatile access, and no access through a pointer made from an integer;
-- reads no clock.
+- turns no pointer into an integer, since freezing moves what a pointer points at and the platform places the program anew in each run, so the integer would differ at run time;
+- reads no clock;
+- reads no random value from the platform, such as the process seed, which a `Map` or `Set` with the default `SeededHashing` reads when it is made ([04](../04-types/collections.md#hash-maps-and-sets)).
 
 **A `const` whose initializer does anything else is a compile error**, while a global `let`'s runs at startup instead ([07](../07-concurrency/global-state.md#initialization-at-startup)).
+
+**Allocator code that aligns with the pointer queries that expose no address, not `CUIntPtr(bitPattern:)`, runs at compile time** ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
 
 **Evaluation runs ordinary code, under these rules:**
 
@@ -84,7 +88,7 @@ func setUp(_ world: mutable World) {
 **Freezing copies the value out of the compile-time heap, which the running program lacks.** It does three things:
 
 - **Allocations.** It copies each compile-time heap allocation that the value reaches through a raw pointer, a container's included, once, as one allocation ([10](../10-errors-and-safety/unsafe-code.md#allocations)). The copy is in read-only data, aligned at least as the allocation was.
-- **Pointers.** It points each pointer into a copied allocation at the same offset in its copy. An address that evaluation turned into an integer names nothing at run time ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)).
+- **Pointers.** It points each pointer into a copied allocation at the same offset in its copy. Evaluation never turns a pointer into an integer (above), so no integer in the value is an address that freezing would leave stale.
 - **Allocator words.** It makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none.
 
 **A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)). Its views and its strings work as follows:
@@ -101,15 +105,19 @@ func setUp(_ world: mutable World) {
 - **No weak pointers or weak links.** It holds none at any depth, since the objects and `Shared` values they name exist only at run time ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So a `Slice` or a `Waker`, which holds a weak link, isn't freezable either.
 - **No allocator ids but `.system`.** It holds no `Allocator` id but `.system`, since an allocator registered at compile time doesn't exist at run time. So a global `let` that registers one, such as `frameArena` below, is initialized at startup.
 - **No stale values.** It holds no stale owning value: every owning value in it would pass an open when evaluation ends ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
-- **Pointers only into memory that lasts.** Through its raw pointers it reaches only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, what a `StaticSpan` or `StaticString` views, another `const`'s frozen data, type metadata and code. It reaches no freed memory. No raw pointer it holds or reaches is made from an integer that evaluation got from a pointer, since such an address names nothing at run time (above). A pointer made from an integer that never was an address, such as a device register's, is frozen as it is.
+- **Pointers only into memory that lasts.** Through its raw pointers it reaches only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, what a `StaticSpan` or `StaticString` views, another `const`'s frozen data, type metadata and code. It reaches no freed memory. A pointer made from an integer, such as a device register's, is frozen as it is, since evaluation never got that integer from a pointer (above).
 - **Unscoped.** It is unscoped ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). Freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a `StaticSpan` or a `StaticString` (above).
 - **Readable from any thread.** It has a `Sendable` type, as every global that safe code reaches does ([07](../07-concurrency/global-state.md#global-state)).
 
-**The same test decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So these two are initialized at startup:
+**Which maps and sets can be frozen follows from these rules**: a value whose layout comes from the process seed or from an address is never built at compile time ([04](../04-types/collections.md#hash-maps-and-sets)).
+
+**The same test, with the rules above for what can run at compile time, decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So the first three below are initialized at startup, and only the last is frozen:
 
 ```swift
-let frameArena = Allocator.register(Arena(size: 64.mb))   // holds an allocator id other than .system
-let godMode = Atomic(false)                               // Synchronized: kept in memory its methods can write
+let frameArena = Allocator.register(Arena(size: 64.mb))                // holds an allocator id other than .system
+let godMode = Atomic(false)                                            // Synchronized: kept in memory its methods can write
+let presetIds: Map<Name, Int> = ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
+let fixedIds: Map<Name, Int, FixedHashing> = ["grunt": 0, "brute": 1]  // fixed hashing: frozen into read-only data
 ```
 
 **A `const` that doesn't reach run time, such as a list iterated by `static for`, may hold anything.** An attribute made from one must still be freezable ([Attributes](attributes-and-runtime-data.md#attributes)).

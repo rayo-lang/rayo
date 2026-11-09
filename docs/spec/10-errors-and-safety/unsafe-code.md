@@ -54,9 +54,23 @@ So a call the language makes on the code's behalf is allowed only where the call
 **`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types.
-- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0. Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
+- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
+- **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
+
+**`q - p` is the byte distance from `p` to `q` divided by `T`'s size**, so it follows these rules:
+
+- it needs a `T` whose size is known and nonzero, as `p + n` does;
+- a distance that isn't a multiple of that size rounds toward zero;
+- a distance that overflows `Int` panics where overflow checks are on, and wraps where they are off, as integer arithmetic does ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)).
+
+**None of the queries exposes an address** (below): a pointer rebuilt from `p`'s address plus `q - p` reaches `q`'s allocation only when an earlier conversion exposed that allocation. They run at compile time too, where turning a pointer into an integer can't ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), in the cases where each gives the same answer at run time:
+
+- an alignment query, for an `n` up to the alignment of the allocation `p` points into, which freezing keeps ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). That allocation is the compile-time heap allocation, or other lasting storage, that freezing copies or keeps, never a part of it that an allocator hands out;
+- `q - p`, for two pointers into one such allocation, whose offsets freezing keeps.
+
+Any other use of them can't run at compile time. So an allocator aligns with these queries, never with `CUIntPtr(bitPattern:)`, and still runs in the compiler.
 
 ## What `unsafe` code upholds
 
