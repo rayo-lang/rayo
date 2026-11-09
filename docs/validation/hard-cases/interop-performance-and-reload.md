@@ -88,6 +88,40 @@ A packed struct can put a field at a misaligned address, where a load or store o
 - **Must accept** a 64-bit atomic counter where the target has 64-bit atomics, and a narrower one, chosen at compile time, where it doesn't. State what the plain `Atomic<Int>` gives on the microcontroller.
 - **Must hold:** the bits of handles, weak pointers and weak links are 8 bytes on each target. On the microcontroller, `WeakShared(bits:)`, `upgrade()` and opens give the outcomes they give on the console.
 
+### E9 · Firmware on a 32-bit microcontroller
+
+**Firmware for a dual-core 32-bit microcontroller runs over its vendor's C SDK, with no operating system.** The cores have 32-bit atomic instructions, but no 64-bit ones, no floating-point unit and no divide instruction ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)). The firmware drives a UART through memory-mapped registers, filters sensor samples in `Float`, and counts time in `Int` nanoseconds. It keeps a `Map` of the commands it reads from the UART, and its tests run on a 64-bit host from the same source.
+
+The criteria below use these declarations from the SDK's header, and these statements, where `msg` is a `Span<UInt8>` and `byte` a `UInt8`:
+
+```c
+size_t board_uart_write(const uint8_t* data, size_t len);   // queues bytes to send, and returns how many it took
+size_t board_uart_pending(void);                            // how many queued bytes are still unsent
+```
+
+```swift
+import c "board.h" as board where prefix: "board_" unsafe { noalloc board_uart_write }   // the vendor's SDK
+
+let queued = Int(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))   // size_t is CSize: a UInt32 here
+let pending: Int = unsafe board.uart_pending()          // compiles here, where a UInt32 widens to Int, and not on the host
+let received = Atomic<UInt32>(0)                        // fine on every target
+let uptime = Atomic<Int>(0)                             // error here: an Int is 8 bytes, and the cores have no 64-bit atomics
+
+const uartData: CUIntPtr = 0x4000_C000                  // the UART's data register, as an address
+if let reg = unsafe *UInt32?(bitPattern: uartData) {    // a pointer made from an integer
+    unsafe volatileStore(reg, UInt32(byte))             // one 4-byte store, never merged, split or removed
+}
+```
+
+- **Must accept** the SDK imported and called with `unsafe` only around its calls, its `size_t`s as `CSize` and its `uintptr_t`s as `CUIntPtr`, from source that builds for the host too ([08](../../spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)). **Must hold:** `pending`'s line above is an error on the host, and the explicit form in `queued`'s line is valid on both.
+- **Must accept** `Atomic<UInt32>` counters that both cores change, and a 64-bit uptime counter chosen with `static if target.has64BitAtomics` ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)). **Must reject** `uptime`'s line above.
+- **Must accept** the UART's registers read and written through volatile accesses of 4 bytes or fewer, in one small `unsafe` wrapper. **Must reject** an 8-byte volatile access where `target.pointerBitWidth` is 32, such as the timer's 64-bit count read in one load ([10](../../spec/10-errors-and-safety/unsafe-code.md#hardware-access)). **Must accept** reading that count as two 4-byte halves, and state what keeps the halves consistent.
+- **Must accept** a UART interrupt that hands each received byte to a task waiting for input, with no lost byte, no lock and no allocation. State what code may run inside the interrupt handler, given that C never enters Rayo from an interrupt ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)), and how the byte reaches Rayo code.
+- **Must accept** a main loop of the program's own, which steps a `TaskSet` and sleeps the core until the next interrupt or the set's `deadline` ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)). It handles each event in a `@noalloc` function that calls the SDK functions the import declares `noalloc`.
+- **Must hold:** `Float` and `Double` math, `fma` included, and `Int` multiplication and division give the host's results, bit for bit, through software routines where the cores lack an instruction ([04](../../spec/04-types/numbers-and-math.md#floating-point)). The stack check on entry to each function counts what those routines use.
+- State what the firmware's platform layer must supply to the runtime with no operating system ([08](../../spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)), and where the process seed comes from on a chip with no source of randomness. State what protection the command `Map` then has against keys chosen to collide.
+- **Must accept** the same firmware on a single-core part without atomic read-modify-write instructions, such as a Cortex-M0+. State how its atomics stay lock-free there, and what the language promises when that build runs on a chip with a second core.
+
 ---
 
 ## F. Performance
