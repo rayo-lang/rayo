@@ -101,7 +101,7 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 for e in enemies.span {             // a plain loop over memory, in every build
     total += e.hp
 }
-let step = vec.normalized * speed   // vector arithmetic, never a hidden call
+let step = vec.normalized * speed   // vector arithmetic: no hidden call where the processor has the operations
 ```
 
 **No build of a program does work at run time that its source doesn't show, beyond the calls the language makes for it**, such as a `deinit` at a scope's end ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)). That means:
@@ -135,7 +135,7 @@ let step = vec.normalized * speed   // vector arithmetic, never a hidden call
 speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every build
 ```
 
-**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so they never become calls at run time, as `Simd`'s builtin ones never do ([04](04-types/numbers-and-math.md#simd-and-math)).
+**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so they never become calls at run time, as `Simd`'s builtin ones don't wherever the processor has the operation ([04](04-types/numbers-and-math.md#simd-and-math)).
 
 **A direct call to an `@inline` function is never a call at run time, in any build: its body runs in place.** The same holds for an `@inline` initializer, and for the accessors of an `@inline` computed property or subscript, which are functions too. The one exception is the call that would close a cycle that an instantiation makes (below).
 
@@ -159,7 +159,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 ## What a target must provide
 
-**A target is the processor and platform a program is built for, and the language asks of it only what this section and 08 state.** The language assumes no particular compiler or way of generating code. A target provides a C ABI that matches Rayo's types, lock-free atomics, a processor that orders loads through a loaded address, and the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). The implementation, in turn, keeps the rules below on every target. So small and sandboxed targets qualify, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)).
+**A target is the processor and platform a program is built for, and the language asks of it only what this section and 08 state.** The language assumes no particular compiler or way of generating code. Its main requirements are a pointer width of 32 or 64 bits, a C ABI that matches Rayo's types, atomics that are lock-free at the sizes `Atomic<T>` accepts, and a processor that orders loads through a loaded address. Its platform also supplies the few services the runtime needs ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). The implementation, in turn, keeps the rules below on every target. So small and sandboxed targets qualify, such as a Cortex-M microcontroller or WebAssembly without shared memory ([below](#webassembly)).
 
 **Nothing the language defines generates code while a program runs.** Generics are instantiated ([05](05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)), and compile-time code runs ([09](09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), when the program builds. So every program can be compiled ahead of time, and runs on platforms that forbid generating code at run time, such as iOS and many consoles.
 
@@ -173,7 +173,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
-**A target has atomic operations and fences with the guarantees of the C++20 memory model that Rayo uses, lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
+**A target's atomic operations and fences have the guarantees of the C++20 memory model that Rayo uses, and are lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). They are lock-free through the processor's atomic instructions or, on a single-core target, by masking interrupts (below). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
 
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
@@ -194,16 +194,16 @@ Then the second load reads a value no older, in its location's modification orde
 
 **Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
-**The implementation keeps every dependency that this ordering acts on**, since the processor orders only the dependencies the code it runs still has. The code the implementation generates:
+**The implementation keeps every dependency that this ordering acts on**, since the processor orders only the dependencies the code it runs still has. Every function the implementation supplies, whether compiled from Rayo or part of its runtime or software routines:
 
 - never breaks an address dependency between a load and a later load through the pointer it loaded, such as by replacing that pointer with a value it guessed;
 - keeps a store whose value or address comes from a load after that load, and never stores a value it guessed.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
 
-**The implementation bounds the stack each function it compiles uses**, which the stack check on entry to each function needs ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+**The implementation knows a bound on the stack that each function it supplies uses**, its runtime's and its software routines' included. The stack check on entry to each function needs that bound ([10](10-errors-and-safety/checks-and-build-modes.md#the-checks)).
 
-**A target needs no floating-point hardware, since the implementation gives the results 04 defines on every target** ([04](04-types/numbers-and-math.md#floating-point)). Where the processor lacks an operation, or would compute it otherwise, such as by flushing subnormals to zero, the implementation computes it another way, in software if need be. So `fma` rounds once on a processor without a fused multiply-add instruction too.
+**A target needs no floating-point hardware**, since a floating-point operation its processor lacks is computed in software, with the same result ([04](04-types/numbers-and-math.md#floating-point)).
 
 ### WebAssembly
 

@@ -67,7 +67,7 @@ enum NavMode: Int32 { case walk, fly }
 
 - memory for `.system`, the platform's general-purpose heap ([06](../06-memory-and-allocators/allocator-basics.md#allocator-values));
 - threads, which `Runtime.startThread` starts ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
-- thread-local storage, which holds each thread's own copies of the `@threadlocal var`s ([07](../07-concurrency/global-state.md#thread-locals));
+- thread-local storage, which holds each thread's own state: its copies of the `@threadlocal var`s and their access marks ([07](../07-concurrency/global-state.md#thread-locals)), and the runtime's state for the thread, such as its thread identity, its stack's bounds and its current allocator;
 - the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock with nanosecond counts, which `MonotonicClock` reads for timeouts and task deadlines ([07](../07-concurrency/synchronization.md#time-duration-and-instant)). On every target, a read of it is whole, and never returns less than a read that happens before it, on any thread;
