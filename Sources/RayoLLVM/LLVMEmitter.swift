@@ -3,18 +3,19 @@ import RayoIR
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
 public enum LLVMEmitter {
-    /// The exit code of a program that panics.
-    public static let panicExitCode: Int32 = 101
-
-    /// The object code of `program`, whose panics name `sourcePath` as the file they happen in, ready to link into
-    /// an executable for the host. Integer overflow panics where `checksOverflow` is true, and wraps where it's
-    /// false; `optimizes` runs LLVM's optimisations over the module.
+    /// The object code of `program` and the program runtime, whose panics name `sourcePath` as the file they
+    /// happen in, ready to link into an executable for the host. Integer overflow panics where `checksOverflow` is
+    /// true, and wraps where it's false; `optimizes` runs LLVM's optimisations over the module.
     public static func objectCode(for program: IRProgram, sourcePath: String, checksOverflow: Bool,
                                   optimizes: Bool) throws(LLVMError) -> [UInt8] {
         let target = try TargetMachine(optimizes: optimizes)
         let module = ModuleBuilder(named: sourcePath, for: target)
+        let runtime = try Runtime(in: module)
 
-        ProgramEmitter(module: module, sourcePath: sourcePath, checksOverflow: checksOverflow).emit(program)
+        ProgramEmitter(module: module, runtime: runtime, sourcePath: sourcePath, checksOverflow: checksOverflow)
+            .emit(program)
+        try runtime.link(into: module)
+        module.hideDefinitions(except: Runtime.entryPoint)
         try module.verify()
         let objectCode = try target.objectCode(of: module)
 
@@ -29,23 +30,16 @@ public struct LLVMError: Error {
     public var message: String
 }
 
-/// Emits a program into an LLVM module, with the runtime its functions call.
+/// Emits a program into an LLVM module, calling the runtime's functions.
 struct ProgramEmitter {
     let module: ModuleBuilder
+    let runtime: Runtime
     let sourcePath: String
     let checksOverflow: Bool
-    let runtime: Runtime
 
-    init(module: ModuleBuilder, sourcePath: String, checksOverflow: Bool) {
-        self.module = module
-        self.sourcePath = sourcePath
-        self.checksOverflow = checksOverflow
-        self.runtime = Runtime(in: module, panicExitCode: LLVMEmitter.panicExitCode)
-    }
-
+    /// Defines the program's `main` as `rayo.main`, which the runtime's C entry point runs.
     func emit(_ program: IRProgram) {
-        let main = module.addFunction("rayo.main", returning: module.void, linkage: LLVMPrivateLinkage)
-        runtime.defineEntryPoint(calling: main)
+        let main = module.addFunction("rayo.main", returning: module.void)
         var function = FunctionEmitter(function: program.main, into: main.value, program: self)
         function.emit()
     }

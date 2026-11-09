@@ -13,7 +13,7 @@ swift run rayoc run program.rayo
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
 - **CI runs on Linux**, in the `swift:6.4-noble` container, and code must pass there whatever it does on macOS.
-- **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes or reads LLVM IR as text.
+- **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## LLVM
 
@@ -32,9 +32,15 @@ Homebrew's `libLLVM` names `opt/llvm` as the place it's loaded from, even when i
 
 On macOS the linker warns that `libLLVM` was built for a newer macOS than `rayoc` is. Homebrew builds its bottles per macOS release, and installs the one for the machine's own, so the warning is harmless on that machine.
 
-The release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. A move to a new release changes both, with any changes the C API needs.
+The release lives in two places: `llvmMajorVersion` in `Package.swift`, and `LLVM_MAJOR_VERSION` in `.github/workflows/ci.yml`. A move to a new release changes both, with any changes the C API and the program runtime's LLVM IR need.
 
 Optimisation follows the build mode: a debug build runs no LLVM passes and generates code at `-O0`, and a release build runs LLVM's `-O2` pipeline and generates code at `-O2`.
+
+## Program runtime
+
+The program runtime is the code every Rayo program links besides its own: the C entry point, and the functions a program calls to print and to report a panic. It will be written in Rayo, once `rayoc` can compile it. Until then it is LLVM IR written by hand, in the `.ll` files of `Sources/RayoRuntime`, in the syntax of the LLVM release `rayoc` builds against.
+
+`rayoc` embeds those files in its own binary. For each program it parses them into the program's LLVM context, links them into the program's module, and then verifies and compiles the whole. So the runtime is part of every program's object code, and nothing is left to find when the program is linked or run.
 
 ## Layout
 
@@ -47,7 +53,8 @@ Optimisation follows the build mode: a debug build runs no LLVM passes and gener
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift |
-| `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, with the runtime that reports panics |
+| `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
+| `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
 | `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files, and the `clang` it links with |
 | `Sources/rayoc` | The executable: reads files and writes the driver's output and errors |
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
