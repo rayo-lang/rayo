@@ -44,7 +44,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
     - a bug the chapter's problem shows, as a C++ reference that dangles.
 
   The case for the design against other languages belongs in `why-rayo.md`.
-- **A teacher's voice.** Talk to the reader, and introduce each concept by what it does for them, tied to the example at hand. The examples come from a game, which the reader isn't building.
+- **A teacher's voice.** Talk to the reader, and introduce each concept by what it does for them, tied to the example at hand. The examples come from a game, which the reader isn't building. The guide stays with one game by design, but it never presents a construct as existing for games.
 - **Write about Rayo.** In the numbered chapters, the subject is the language rather than the guide itself. A pointer to the chapter that teaches a topic, such as "chapter 3 shows why", is the exception. The introduction may explain how to use the guide.
 
 ## Links
