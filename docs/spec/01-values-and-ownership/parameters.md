@@ -34,7 +34,7 @@ remember(copy e.pos)                                    // a copy moves in, and 
 
 ## Argument labels
 
-**A call writes each argument after its parameter's argument label, in the order of the parameters.** A parameter of a function or an initializer gets its **argument label** in one of three ways:
+**A call writes each argument after its argument label, if it has one, and in the order of the parameters.** A parameter of a function or an initializer gets its **argument label** in one of three ways:
 
 - a name written before the parameter's own name is its label, as `by` is below;
 - a `_` written there leaves the argument unlabeled, so the call writes no label;
@@ -49,10 +49,11 @@ heal(e: &boss, by: 10, overcharge: true)    // error: the first argument takes n
 heal(&boss, overcharge: true, by: 10)       // error: 'by' comes before 'overcharge'
 ```
 
-A label may be a keyword, as `in` is in `index(of: h, in: handles.span)` ([12](../12-grammar/lexical.md#lexical)). Two kinds of declaration differ from functions:
+A label may be a keyword, as `in` is in `index(of: h, in: handles.span)` ([12](../12-grammar/lexical.md#lexical)). Three kinds of call differ from a call to a named function:
 
 - **Subscripts.** A subscript's parameter is unlabeled unless a label is written, so `list[i]` passes `i` to `subscript(i: Int)`, and `a[as: Tooltip.self]` passes a type to a parameter written `as t`.
 - **Operators.** An operator's parameters take no labels, since `a + b` writes none ([05](../05-protocols-generics-and-closures/operators.md#operators)).
+- **Function values.** A function type's parameters have no labels, so a call to a function value, such as `body(x)`, writes none ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
 ## Default arguments
 

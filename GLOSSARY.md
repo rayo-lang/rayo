@@ -7,7 +7,7 @@ Rayo is a systems programming language with the control of C++ and memory safety
 ### Ownership and borrowing
 
 **Argument label**:
-The name a call writes before an argument, as `by` in `damage(&boss, by: 10)`; a function's parameter declared without one takes its own name, and `_` leaves the argument unlabeled ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
+The name a call writes before an argument, as `by` in `damage(&boss, by: 10)` ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
 
 **Borrow**:
 Use of a value by code that doesn't own it: a **shared** borrow only reads it, and a **mutable** borrow may change it ([01](docs/spec/01-values-and-ownership.md)).
