@@ -19,7 +19,7 @@ ThreadScope.run { s in                                     // threads that may b
 
 The first `join` can write two separate fields of `world` at once. The second is rejected because one job reads `world.bodies` while the other changes it. `ThreadScope.run` lets the spawned work borrow a local value because the work finishes before the scope returns, or before a panic unwinds out of it. A panic in work on another thread reaches the thread that waits for it, as a panic in a closure it called itself would ([Panics in lent work](07-concurrency/thread-work.md#panics-in-lent-work)).
 
-**Threads, locks and job systems are libraries.** The language gives them checking rules that keep safe code free of data races ([Why safe code can't race](07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)), and the marker protocol `Sendable` for what may cross threads. The runtime starts, parks and wakes threads ([Starting a thread: `Runtime.startThread`](07-concurrency/thread-work.md#starting-a-thread-runtimestartthread), [Parking and waking a thread](07-concurrency/synchronization.md#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that its owner resumes one step at a time ([`task` functions: explicitly stepped coroutines](07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines)).
+**Threads, locks and job systems are libraries.** The language gives them checking rules that keep safe code free of data races ([Why safe code can't race](07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)), and the marker protocol `Sendable` for what may cross threads. The runtime starts, parks and wakes threads ([Starting a thread: `Runtime.startThread`](07-concurrency/thread-work.md#starting-a-thread-runtimestartthread), [Parking and waking a thread](07-concurrency/synchronization.md#parking-and-waking-a-thread)). The language's own construct is the `task` function, a coroutine that waits without a thread of its own, and that its owner runs again each time what it waits on wakes it ([`task` functions: coroutines that wait without a thread](07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)).
 
 ## Subchapters
 
@@ -27,4 +27,4 @@ The first `join` can write two separate fields of `world` at once. The second is
 - [Lending work and starting threads](07-concurrency/thread-work.md)
 - [Atomics and synchronization](07-concurrency/synchronization.md)
 - [Global and thread-local state](07-concurrency/global-state.md)
-- [Explicitly stepped tasks](07-concurrency/tasks.md)
+- [Tasks](07-concurrency/tasks.md)

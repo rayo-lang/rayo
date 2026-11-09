@@ -38,7 +38,7 @@ using allocator = .system { kept = spawns.clone() }   // 'spawns' is in an arena
 
 - **It reads the id in `a` once, on entry.** So reassigning `a` inside the block doesn't change the block's allocator. The read needs no `copy` written, as a `static const` is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)).
 - **It holds no borrow of `a`.** So the block may contain an `await`, across which no borrow may be live ([07](../07-concurrency/tasks.md#semantics)).
-- **A task suspended inside the block restores its owner's current allocator at the `await`, and makes `a` current again when it resumes** ([07](../07-concurrency/tasks.md#task-functions-explicitly-stepped-coroutines)). Destroying it while it is suspended there changes no thread's current allocator.
+- **A task suspended inside the block restores its owner's current allocator at the `await`, and makes `a` current again when it resumes** ([07](../07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). Destroying it while it is suspended there changes no thread's current allocator.
 
 ### The static allocator
 
