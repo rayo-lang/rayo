@@ -32,6 +32,29 @@ remember(copy e.pos)                                    // a copy moves in, and 
 - **Function values that change or consume their captures.** This covers a parameter of a `mutating` or `consuming` function type, and one of a type parameter constrained to one, written `some F` or named. Calling such a value changes or consumes the closure, so a borrowed one could never be called ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
 - **`mutable any P`.** It is a view of its own, and calling a `mutating` requirement through it needs the view in a changeable place ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
+## Argument labels
+
+**A call writes each argument after its argument label, if it has one, and in the order of the parameters.** A parameter of a function or an initializer gets its **argument label** in one of three ways:
+
+- a name written before the parameter's own name is its label, as `by` is below;
+- a `_` written there leaves the argument unlabeled, so the call writes no label;
+- with neither, the parameter's own name is its label, as `overcharge`'s is below.
+
+```swift
+func heal(_ e: mutable Enemy, by amount: Float, overcharge: Bool) { ... }
+
+heal(&boss, by: 10, overcharge: true)       // 'e' takes no label, and 'overcharge' is labeled by its name
+heal(&boss, 10, overcharge: true)           // error: the second argument needs the label 'by'
+heal(e: &boss, by: 10, overcharge: true)    // error: the first argument takes no label
+heal(&boss, overcharge: true, by: 10)       // error: 'by' comes before 'overcharge'
+```
+
+A label may be a keyword, as `in` is in `index(of: h, in: handles.span)` ([12](../12-grammar/lexical.md#lexical)). Three kinds of call differ from a call to a named function:
+
+- **Subscripts.** A subscript's parameter is unlabeled unless a label is written, so `list[i]` passes `i` to `subscript(i: Int)`, and `a[as: Tooltip.self]` passes a type to a parameter written `as t`.
+- **Operators.** An operator's parameters take no labels, since `a + b` writes none ([05](../05-protocols-generics-and-closures/operators.md#operators)).
+- **Function values.** A function type's parameters have no labels, so a call to a function value, such as `body(x)`, writes none ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+
 ## Default arguments
 
 **A default value makes an argument optional:**

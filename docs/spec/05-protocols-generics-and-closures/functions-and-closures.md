@@ -16,7 +16,7 @@ eachMut(enemies.span) { e in if e.hp <= 0 { dead += 1 } }    // writes 'dead': a
 each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating closure where a non-mutating one is expected
 ```
 
-**Functions may share a name when their argument labels or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
+**Functions may share a name when their argument labels ([01](../01-values-and-ownership/parameters.md#argument-labels)) or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).

@@ -56,13 +56,13 @@ associatedtype subscript`.
 - **`rebind`** only at the start of a statement when an identifier follows it, so a call `rebind(x)` still parses, and **`to`** only after `rebind` and that identifier;
 - **`discard`** only at the start of a statement when `self` follows it.
 
-**Argument labels may be keywords.** A parameter's external label, and the label of an argument, can be any keyword:
+**Argument labels may be keywords.** A parameter's argument label ([01](../01-values-and-ownership/parameters.md#argument-labels)), and the label a call writes before an argument, can be any keyword:
 
 ```swift
-func index<T: Equatable>(of x: T, in s: Span<T>) -> Int?    // 'of' and 'in' as external labels
-let i = index(of: h, in: handles.span)                      // and as argument labels
+func index<T: Equatable>(of x: T, in s: Span<T>) -> Int?    // 'of' and 'in' as the parameters' labels
+let i = index(of: h, in: handles.span)                      // and before the arguments
 ```
 
-**A keyword label is never ambiguous.** An argument's label is always followed by `:`, and a parameter's external label by its internal name and then `:`, with the convention after the `:`.
+**A keyword label is never ambiguous.** A label before an argument is always followed by `:`, and a label in a parameter by the parameter's name and then `:`, with the convention after the `:`.
 
 **A trailing closure's label is an identifier, never a keyword**, so a keyword after a closure's `}`, such as `else` or `catch`, always reads as that keyword. A parameter whose argument label is a keyword takes its closure inside the parentheses.
