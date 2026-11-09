@@ -61,3 +61,4 @@ The program runtime is the code every Rayo program links besides its own: the C 
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
 | `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
+| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools |
