@@ -24,7 +24,8 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **Paragraphs stay under about 120 words.** A section that needs more splits where the subject changes.
 - **An exception sits next to its rule**, so a reader who finds the rule also finds what it doesn't cover.
 - **Each rule is stated once**, in the section that owns it. Other sections link to it. A numbered landing page introduces and links its subchapters; the subchapter owns the detailed rules.
-- **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Examples use the spec's running game code, such as `Enemy`, `world` and `Mesh`.
+- **A rule whose consequence isn't obvious gets an example**: a short code block of what compiles and what doesn't, with the reason in a trailing comment, as in `// error: 'seen' is still used below`. Example code may draw on the spec's running game code, such as `Enemy`, `world` and `Mesh`.
+- **A rule that serves more than games has a general motivation and lead example.** Rayo is a general systems language, so no construct or reason reads as existing for games. A game example may follow as a second case, as an ECS query follows a columnar store's.
 
 ## Terms and links
 
