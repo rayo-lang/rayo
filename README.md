@@ -45,7 +45,8 @@ enemies[h]?.hp -= 10               // skipped: the element is gone, so enemies[h
     - **`unsafe`:** raw pointers and calls into C aren't checked, and the source marks them. A module declared `@safe` can't contain them ([10](docs/spec/10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
   No build setting turns the memory-safety checks off. Bounds checks stay on in release builds ([10](docs/spec/10-errors-and-safety/checks-and-build-modes.md#check-levels)).
-- **Rayo runs where C runs.** Every feature can be implemented in portable C. So Rayo can run on a platform whose only toolchain is a C compiler, such as a console or an embedded processor, and on small or sandboxed targets, from a Cortex-M0 microcontroller to single-threaded WebAssembly. The target needs to meet only a few basic requirements ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide), [08](docs/spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). Rayo calls C and exports C directly. It has no C++ interop.
+- **Rayo calls C and exports C directly**, so every platform SDK is reachable, and a C program can embed a Rayo library ([08](docs/spec/08-c-interop.md)). It has no C++ interop.
+- **Rayo runs on small and sandboxed targets too**, from a Cortex-M0 microcontroller to single-threaded WebAssembly. Programs are compiled ahead of time, and the runtime needs only a few services from the platform ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide), [08](docs/spec/08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
 ## Why Rayo
 
