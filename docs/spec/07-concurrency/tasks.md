@@ -245,7 +245,7 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 - **Deadlines.** It counts as woken each task whose deadline has passed on `MonotonicClock` as it begins. It may also count as woken a task whose early poll a deadline allows ([Waking a task](#waking-a-task)). It clears a task's deadline as that task's step begins ([Waking a task](#waking-a-task)).
 - **Order.** It steps them in the order of their slots, and `start` fills the lowest free slot. A step that follows a panic starts after the task that panicked instead (below).
-- **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until a wake.
+- **Tasks that aren't woken.** It skips them, so they stay suspended, holding their state, until they are woken.
 - **Wakes during the step.** A wake that comes while the step runs, from the task itself, another task or another thread, counts for the next step. So each task gets one step at most, and `nextStep()` waits for the next `step` ([above](#awaitables-in-std)).
 
 **A task's panic finishes that task, and `step` stops there, letting the panic unwind out of it at once.** The panic finishes only the task that panicked ([above](#semantics)), and the set frees that task's slot as the panic leaves `step`, so the task's handle goes stale. The tasks the step hasn't reached stay woken for the next `step`, which starts with the task after the one that panicked and wraps around. So a task that panics often can't keep the tasks after it from being stepped.
