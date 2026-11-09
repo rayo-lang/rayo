@@ -118,7 +118,7 @@ let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names
 func fma<T>(_ a: T, _ b: T, _ c: T) -> T    // T: Half, Float, Double, or a Simd of one of them
 ```
 
-**`T` binds as any generic call's type parameter does** ([05](../05-protocols-generics-and-closures/operators.md#operators)): to the type the typed arguments widen to, else to the expected type, else to `Double`, the floating-point literals' default. `T` must then be `Half`, `Float`, `Double`, or a `Simd` of one of them, and any other type is a compile error. `fma` is builtin, as `zip` is ([Iteration](collections.md#iteration)), so no protocol states that constraint. A vector `T` works lane by lane ([SIMD and math](#simd-and-math)).
+**`T` binds as any generic call's type parameter does** ([05](../05-protocols-generics-and-closures/operators.md#operators)): to the type the typed arguments widen to, else to the expected type, else to the literals' default, as an array literal's elements take one. `T` must then be `Half`, `Float`, `Double`, or a `Simd` of one of them, and any other type is a compile error. So `fma(1, 2, 3)` is an error, since `T` is then `Int`. A type parameter is none of those types, so generic code calls `fma` only on a concrete floating-point type, or on a `Simd` of one with a generic `N`. `fma` is builtin, as `zip` is ([Iteration](collections.md#iteration)), so no protocol states that constraint. A vector `T` works lane by lane ([SIMD and math](#simd-and-math)).
 
 ```swift
 let s = fma(h, f, f)                  // h is a Half and f a Float: h widens, and T is Float

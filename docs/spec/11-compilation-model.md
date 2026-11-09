@@ -190,8 +190,6 @@ ISO C guarantees neither of the last two, so the target's compiler must.
 - **Single-core is the declared target's property.** Building for such a target and running on a chip with more cores breaks it, since masking interrupts doesn't stop the other cores.
 - **Masking needs privileged execution.** Code that runs unprivileged, as under a memory protection unit, reaches those atomics through a privileged call. A target that offers no such call can't use masking, so it isn't such a target.
 
-**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
-
 **Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
 - **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
@@ -205,6 +203,8 @@ Then the second load reads a value no older, in its location's modification orde
 **Common processors give this ordering, 32-bit ones included.** ARMv8 and RISC-V give it through other-multi-copy atomicity, and Power and ARMv7 through the cumulativity of their barriers under the standard C++ mapping, as do stronger processors. A single-core processor, as many microcontrollers are, gives it since all its threads see one memory.
 
 So an address passed on through any chain of threads, by `.relaxed` atomics included, still brings what was released before it was first stored, since passing a value on stores what was read. With the compiler's bullets above, the emitted C keeps each such dependency. The rules by which creating a `Shared` value, registering an allocator or interning a `Name` happens before its uses rest on this ([07](07-concurrency/synchronization.md#atomics-and-locks)).
+
+**The implementation supplies its own correctly rounded `fma` wherever the target's C library doesn't provide one** ([04](04-types/numbers-and-math.md#floating-point)). ISO C requires `fma` and `fmaf` to round once, but not every C library meets that: some fall back to a multiply and an add that each round. A correctly rounded `fma` needs only integer arithmetic, so portable C can compute it.
 
 ### WebAssembly
 
