@@ -79,11 +79,10 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(201, error: "the program has no 'main' function")
     case noMain
 
-    @Code(202, error: "'main' is declared more than once")
-    case mainDeclaredTwice
+    @Code(202, error: "'{signature}' is declared more than once")
+    case functionDeclaredTwice(signature: String)
 
-    @Code(203, error: "a program's only function is 'main'")
-    case functionNotMain
+    // 203 is unused, and stays so.
 
     @Code(204, error: "'main' returns Void")
     case mainReturnsNonVoid
@@ -100,8 +99,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(208, error: "'{name}' isn't a function")
     case notAFunction(name: String)
 
-    @Code(209, error: "'{name}' can't be called")
-    case notCallable(name: String)
+    // 209 is unused, and stays so.
 
     @Code(210, error: "'{name}' takes {takes}, but the call passes {passes}")
     case argumentCount(name: String, takes: ArgumentCount, passes: Int)
@@ -147,6 +145,15 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(224, error: "'{keyword}' is only allowed inside a loop")
     case outsideLoop(keyword: String)
+
+    @Code(225, error: "'return' needs a value of type {type}")
+    case missingReturnValue(type: String)
+
+    @Code(226, error: "'{name}' can reach its end without returning a value")
+    case missingReturn(name: String)
+
+    @Code(227, error: "the result type of '{name}' depends on itself")
+    case resultDependsOnItself(name: String)
 }
 
 extension ErrorCode {

@@ -19,12 +19,12 @@ struct ObjectCodeTests {
     func rejectedIR(debug: Bool) throws {
         let addsBoolToInt = function(locals: [.bool, .int, .int], [
             BasicBlock(statements: [statement(storingIn: 2, .binary(.add, .local(LocalID(index: 0)), .local(LocalID(index: 1))))],
-                       terminator: .return),
+                       terminator: .return(nil)),
         ])
         let branchesOnInt = function(locals: [.int], [
             BasicBlock(statements: [], terminator: .branch(.local(LocalID(index: 0)), then: BlockID(index: 1),
                                                            otherwise: BlockID(index: 1))),
-            BasicBlock(statements: [], terminator: .return),
+            BasicBlock(statements: [], terminator: .return(nil)),
         ])
         for program in [addsBoolToInt, branchesOnInt] {
             do {

@@ -10,8 +10,9 @@ extension BodyChecker {
             arguments.forEach { _ = check($0) }
             return nil
         }
-        guard let checked = check(arguments, against: signature, in: range) else { return nil }
-        return CheckedExpr(kind: .call(.printInt, arguments: checked), type: signature.result, range: range)
+        guard let checked = check(arguments, against: signature, in: range),
+              let result = file.result(of: signature, calledAt: range) else { return nil }
+        return CheckedExpr(kind: .call(signature.callee, arguments: checked), type: result, range: range)
     }
 
     /// The signature of the function called `name`, reporting it when no function of that name can be called.
@@ -25,15 +26,11 @@ extension BodyChecker {
         case nil:
             break
         }
-        guard declarations.functionNames.contains(name) else {
+        guard let signature = declarations.function(named: name) else {
             errors.report(.notDeclared(name: name), at: range)
             return nil
         }
-        guard name == "print" else {
-            errors.report(.notCallable(name: name), at: range)
-            return nil
-        }
-        return .print
+        return signature
     }
 
     /// Checks `arguments` against `signature`'s parameter types, in order.

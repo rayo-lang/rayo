@@ -1,5 +1,6 @@
 internal import CLLVM
 import RayoIR
+import RayoSema
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
 public enum LLVMEmitter {
@@ -37,10 +38,30 @@ struct ProgramEmitter {
     let sourcePath: String
     let checksOverflow: Bool
 
-    /// Defines the program's `main` as `rayo.main`, which the runtime's C entry point runs.
+    /// Defines the program's functions, each before any body calls it.
     func emit(_ program: IRProgram) {
-        let main = module.addFunction("rayo.main", returning: module.void)
-        var function = FunctionEmitter(function: program.main, into: main.value, program: self)
-        function.emit()
+        let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: program) }
+        for (function, llvmFunction) in zip(program.functions, functions) {
+            var emitter = FunctionEmitter(function: function, into: llvmFunction.value, functions: functions, program: self)
+            emitter.emit()
+        }
+    }
+
+    /// Declares the function `id`. The program's `main` is `rayo.main`, which the runtime's C entry point runs. Each
+    /// other function is named as the program names it, with its parentheses, so it takes no name the runtime or
+    /// the C library defines or calls, none of which holds a parenthesis.
+    private func declare(_ id: FunctionID, of program: IRProgram) -> FunctionValue {
+        let function = program.functions[id.index]
+        let name = id == program.main ? "rayo.main" : function.name
+        return module.addFunction(name, returning: llvmType(function.result))
+    }
+
+    /// The LLVM type that holds a value of `type`.
+    func llvmType(_ type: RayoType) -> LLVMTypeRef {
+        switch type {
+        case .int: return module.int64
+        case .bool: return module.bool
+        case .void: return module.void
+        }
     }
 }

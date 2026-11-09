@@ -8,13 +8,16 @@ import RayoSyntax
 struct FunctionEmitter {
     let function: IRFunction
     let llvmFunction: LLVMValueRef
+    /// The program's functions, indexed by `FunctionID`, which calls call.
+    let functions: [FunctionValue]
     let program: ProgramEmitter
     private var slots: [LLVMValueRef] = []
     private var blocks: [LLVMBasicBlockRef] = []
 
-    init(function: IRFunction, into llvmFunction: LLVMValueRef, program: ProgramEmitter) {
+    init(function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], program: ProgramEmitter) {
         self.function = function
         self.llvmFunction = llvmFunction
+        self.functions = functions
         self.program = program
     }
 
@@ -36,11 +39,8 @@ struct FunctionEmitter {
 
     /// The type of a local's stack slot.
     private func llvmType(_ type: RayoType) -> LLVMTypeRef {
-        switch type {
-        case .int: return module.int64
-        case .bool: return module.bool
-        case .void: preconditionFailure("lowering makes no local of type Void")
-        }
+        precondition(type != .void, "lowering makes no local of type Void")
+        return program.llvmType(type)
     }
 
     func appendBlock(named name: String) -> LLVMBasicBlockRef {
@@ -60,8 +60,12 @@ struct FunctionEmitter {
             LLVMBuildBr(builder, blocks[target.index])
         case .branch(let condition, let then, let otherwise):
             LLVMBuildCondBr(builder, read(condition), blocks[then.index], blocks[otherwise.index])
-        case .return:
+        case .return(let result?):
+            LLVMBuildRet(builder, read(result))
+        case .return(nil):
             LLVMBuildRetVoid(builder)
+        case .unreachable:
+            LLVMBuildUnreachable(builder)
         }
     }
 
@@ -93,6 +97,9 @@ struct FunctionEmitter {
             case .printInt:
                 module.call(program.runtime.printInt, [values[0]])
                 return nil
+            case .function(let id):
+                let result = module.call(functions[id.index], values)
+                return LLVMTypeOf(result) == module.void ? nil : result
             }
         }
     }

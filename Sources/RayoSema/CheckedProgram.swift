@@ -18,13 +18,27 @@ public enum RayoType: Hashable, Sendable, CustomStringConvertible {
 
 /// A program that type-checked: every name is resolved, and every expression has its type.
 public struct CheckedProgram: Sendable {
-    public var main: CheckedFunction
+    /// The file's functions, indexed by `FunctionID`.
+    public var functions: [CheckedFunction]
+    public var main: FunctionID
 }
 
 public struct CheckedFunction: Sendable {
+    /// The function's name and parameters, such as `f()`, which no other function of the program has.
+    public var name: String
+    public var result: RayoType
     /// The function's locals, indexed by `LocalID`.
     public var locals: [CheckedLocal]
     public var body: [CheckedStmt]
+}
+
+/// Identifies a function of a program.
+public struct FunctionID: Hashable, Sendable {
+    public var index: Int
+
+    public init(index: Int) {
+        self.index = index
+    }
 }
 
 /// Identifies a local of a function.
@@ -59,6 +73,8 @@ public enum CheckedStmt: Sendable {
     case whileStmt(condition: CheckedExpr, body: [CheckedStmt])
     case breakStmt
     case continueStmt
+    /// Evaluates the value, when there is one, and leaves the function with it as the result.
+    case returnStmt(CheckedExpr?)
 }
 
 public struct CheckedExpr: Sendable {
@@ -80,4 +96,5 @@ public indirect enum CheckedExprKind: Sendable {
 public enum Callee: Hashable, Sendable {
     /// The prelude's `print(_: Int)`, which writes the integer and a newline to standard output.
     case printInt
+    case function(FunctionID)
 }

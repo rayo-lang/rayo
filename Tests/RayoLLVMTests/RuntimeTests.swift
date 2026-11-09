@@ -1,6 +1,7 @@
 import Testing
 import RayoIR
 import RayoLLVM
+import RayoSema
 
 struct RuntimeTests {
     @Test("a program that panics defines the runtime's panic once and leaves no runtime symbol undefined")
@@ -18,9 +19,26 @@ struct RuntimeTests {
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
+    @Test("a program's own functions are defined in its object, and none is exported")
+    func programFunctionsHidden() throws {
+        let answer = IRFunction(name: "answer()", result: .int, locals: [], blocks: [
+            BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
+        ])
+        let main = IRFunction(name: "main()", result: .void, locals: [.int], blocks: [
+            BasicBlock(statements: [
+                statement(storingIn: 0, .call(.function(FunctionID(index: 1)), arguments: [])),
+                Statement(destination: nil, value: .call(.printInt, arguments: [.local(LocalID(index: 0))]),
+                          range: nowhere),
+            ], terminator: .return(nil)),
+        ])
+        let objectCode = try compile(IRProgram(functions: [main, answer], main: FunctionID(index: 0)), debug: true)
+        #expect(try symbols(["--defined-only"], in: objectCode).contains { $0.hasSuffix("answer()") })
+        #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
+    }
+
     @Test("a release build drops the runtime code a program doesn't call, and a debug build keeps it")
     func unusedRuntimeDropped() throws {
-        let empty = function(locals: [], [BasicBlock(statements: [], terminator: .return)])
+        let empty = function(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
         #expect(try symbols([], in: compile(empty, debug: true)).contains { $0.hasSuffix("rayo.panic") })
         #expect(try symbols([], in: compile(empty, debug: false)).filter { $0.contains("rayo.") } == [])
     }
