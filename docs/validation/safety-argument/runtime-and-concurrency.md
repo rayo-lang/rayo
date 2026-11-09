@@ -142,25 +142,36 @@
 
 A check whose field load reads a newer write synchronizes, through the two fences, with the writer's first store. So its second load sees the word changed, and it never accepts a torn generation or home thread.
 
-**A slot isn't reused twice while another thread checks it.** Each thread has a 32-bit hazard word. A check that may read a slot another thread reuses stores the slot's index there, then a sequentially consistent fence, before its first load of the slot's word. Before reusing a freed slot, the runtime issues a sequentially consistent fence and reads every thread's hazard word, passing over a slot that one names:
+**A slot isn't reused twice while another thread checks it.** Each thread has a 32-bit hazard word, in a record kept for each thread identity and never freed. A thread joins the list that reuses scan with an atomic store, ordered before its first hazard fence. A check that may read a slot another thread reuses stores the slot's index there, then a sequentially consistent fence, before its first load of the slot's word. Before reusing a freed slot, the runtime issues a sequentially consistent fence and reads every thread's hazard word, passing over a slot that one names:
 
 - **At most one reuse per check.** A reuse whose scan came before the hazard may still run, but no later one can, so the slot's word never comes back to a value the check saw.
-- **Bounded memory.** A slot passed over is reused at a later scan, so each thread holds back at most one slot at a time, and memory doesn't grow with the number of creations.
+- **Bounded memory.** A slot passed over is reused at a later scan, so each thread's hazard holds back at most one slot at a time, and memory doesn't grow with the number of creations.
 - **Objects at home.** An object's slot is reused only by its home thread while that thread lives. So the home thread's own checks read slots only it writes, and need no hazard.
 
-**An added owner never reaches a later value.** `upgrade()`, under its hazard, reads the count word between its two loads of the sequence word, and goes on only when the generation matches and the count is above zero. That value was live during the check, so its slot isn't reused before the check ends. A compare-and-swap with acquire-release ordering then adds one to the count. It fails only when another owner was added or dropped meanwhile, and then retries, reading `nil` once the count is zero, which never rises again.
+**An added owner never reaches a later value.** `upgrade()`, under its hazard, reads the count word between its two loads of the sequence word, and goes on only when the generation matches and the count is above zero. That value was live during the check, so its slot isn't reused before the check ends. A compare-and-swap with acquire-release ordering then adds one to the count. It fails only when, meanwhile, another owner was added or dropped, or `leak` or `adopt` flipped the leaked mark. It then retries, reading `nil` once the count is zero, which never rises again.
 
-**The other owner steps work the same way, and none of them waits.** `adopt` clears the leaked mark the same way, `leak` sets it while its own owner keeps the value live, and `Published.snapshot()` adds an owner as `upgrade()` does. A `Waker`'s `wake()` is an `upgrade()`.
+**The other owner steps work the same way, and none of them waits.** `adopt` clears the leaked mark the same way, `leak` sets it while its own owner keeps the value live, and `Published.snapshot()` adds an owner as `upgrade()` does. A `Waker`'s `wake()` reaches its target through an `upgrade()`.
 
-**An open makes one 32-bit acquire load.** An allocator word names a registry slot and the 32-bit date of the value's storage: that of its arena block, or of its registration for a heap. Each registry slot keeps a floor, which only rises:
+**A deadline reaches the runner whole, and recording it never waits.** A wake on the runner's own thread, during a step, writes the runner's deadlines directly. For a wake from another thread, each slot of a `TaskSet`'s wake target has one node, allocated with the target:
+
+- **Recording.** The wake claims the slot's idle node with a 32-bit compare-and-swap, writes the deadline in two 32-bit halves, and marks the node full with a release store. It then pushes the node onto the set's list with a pointer-sized compare-and-swap.
+- **Folding.** Before it steps, parks or reports its `deadline`, the runner's own thread takes the whole list with one exchange. It reads each node after an acquire load of its mark, keeps the earlier deadline, and marks the node idle.
+- **A busy node.** A wake that finds its slot's node already claimed marks the task woken instead. Its next step arranges its wake again, which costs one poll with nothing changed, as a stale wake may ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). Only another thread's wake takes this path, so it never makes a runner busy-wait.
+
+A node is claimed only while idle, so it is on the list at most once, and the list never needs memory beyond its nodes.
+
+**An open checks one 32-bit floor.** An allocator word names a registry slot and the 32-bit date of the value's storage: that of its arena block, or of its registration for a heap. Dates come from one run-wide ordered sequence, issued with the stamps under the lock that parks its waiters. Each registry slot keeps a floor, which only rises:
 
 - a reset raises it to the date of the blocks it then serves from;
-- an unregistration raises it past every date the slot has issued;
+- an unregistration raises it past every date issued so far;
+- a reset or an unregistration raises the floor of every allocator built on the one it ends, in the same step, since a wrapper's values go stale with its backing's memory ([06](../../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators));
 - a later registration of the slot starts at that floor.
 
-An open accepts a word whose date isn't below its slot's floor. The one writer of a slot at a time is the registration, reset or unregistration, which never overlap ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)). A slot whose date would wrap is never registered again, so no word is issued twice. That is a limit on registrations and resets, which 06 allows, and which any 8-byte word needs on any target.
+Each floor has one writer at a time, since resets and unregistrations that reach the same memory never overlap ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)). Dates never wrap: once the run-wide sequence runs out, a registration or a reset panics. That is a limit on registrations and resets, which 06 allows, so no word is issued twice.
+
+**The open and the reset meet in a fenced handshake.** An open increments its thread's count of uses of the allocator, issues a sequentially consistent fence, then loads the floor, and fails when the word's date is below it. A reset or an unregistration stores the new floor, issues a sequentially consistent fence, then reads every thread's counts. So either the open sees the new floor and fails, or the reset sees the use and panics, as 06 orders them ([06](../../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). The floor load takes the place of the 64-bit check inside that handshake.
 
 **What remains needs no 64-bit atomic step:**
 
-- **Ordered numbers.** Stamps, registry slots and thread identities are issued under a lock that parks its waiters ([07](../../spec/07-concurrency/synchronization.md#targets-without-64-bit-atomics)). A panic's `sequence` is issued inside its report, which the runtime makes one at a time ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)).
+- **Ordered numbers.** Stamps, dates, registry slots and thread identities are issued under a lock that parks its waiters ([07](../../spec/07-concurrency/synchronization.md#atomics-and-locks)). A panic's `sequence` is issued inside its report, which the runtime makes one at a time ([10](../../spec/10-errors-and-safety/panics.md#what-a-panic-does)).
 - **Narrow state.** The interner's word is 32 bits, the runtime's counts fit in 32 bits, and a handle's generation changes only through a pool's `mutating` methods ([03](../../spec/03-handles-and-objects.md#pools-and-handles)).

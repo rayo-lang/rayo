@@ -72,17 +72,18 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 **A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
 
+**On every target, issuing a number may wait, but never for a use.** A registration, a reset, an unregistration, and a thread's start or attachment each take a number that must differ from, or come after, every one issued before it. Taking one may wait for another of these taking its own, but never for a use of an allocator, an object or a `Shared` value. A lock held for this parks the threads that wait for it, never spinning, so a single-core target that runs threads by priority can't deadlock on it.
+
 ### Targets without 64-bit atomics
 
-**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give, with the same visible behavior as on a 64-bit target.** Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
+**On a target without lock-free 64-bit atomics, the runtime and std keep every guarantee that 03, 06 and this chapter give.** Their visible behavior is the same as on a 64-bit target, apart from the limits that 11 leaves to the implementation ([11](../11-compilation-model.md#what-the-language-leaves-open)). Their own atomic steps on 64-bit values, such as a generation or an allocator word, use 32-bit atomics there instead. What they keep includes these:
 
 - **Uniqueness.** Every generation is unique for the whole run ([03](../03-handles-and-objects.md#destroying-an-object), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and no allocator word is issued twice ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 - **The shared tables.** Each of the three tables keeps its contract ([above](#atomics-and-locks)).
 - **Whole values.** No check, `upgrade()`, `adopt` or open acts on a torn value, on a slot reused for a later creation, or on a registry entry that a later write replaced.
+- **Deadlines.** A deadline that a `Waker` sets is never torn, and recording it blocks no more than it may on a 64-bit target ([Tasks](tasks.md#running-tasks)).
 - **Reuse.** The slots that objects and `Shared` values take are reused however often they are freed, so memory doesn't grow with the number of them created over the run.
-- **Progress.** Each operation the spec promises never waits still never waits. These include `upgrade()`, `adopt`, `leak`, `Published`'s `snapshot()` ([below](#snapshots-one-time-values-and-waits)), a `Waker`'s `wake()` ([Tasks](tasks.md#semantics)), the checks of weak pointers and weak links, and opens. std's `Synchronized` types keep theirs too.
-
-**Issuing a number may wait, but never for a use.** A registration, a reset, an unregistration, and a thread's start or attachment each take a number that must differ from, or come after, every one issued before it. Taking one may wait for another of these taking its own, but never for a use of an allocator, an object or a `Shared` value. A lock held for this parks the threads that wait for it, never spinning, so a single-core target that runs threads by priority can't deadlock on it.
+- **Progress.** Each operation the spec promises never waits still never waits. These include `upgrade()`, `adopt`, `leak`, the checks of weak pointers and weak links, and opens. They also include `Published`'s `snapshot()` ([below](#snapshots-one-time-values-and-waits)) and a `Waker`'s reaching its target ([Tasks](tasks.md#waking-a-task)). std's `Synchronized` types keep theirs too.
 
 ### Locks: `Mutex` and `RwLock`
 

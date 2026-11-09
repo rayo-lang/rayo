@@ -80,7 +80,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E8 · One library on 32-bit and 64-bit targets
 
-**A library ships for a 64-bit console, a 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `Int`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
+**A library ships for a 64-bit console, a dual-core 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `Int`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
 
 - **Must accept** one source for all three targets, with `unsafe` only around the C calls.
 - **Must hold:** integer arithmetic gives the same results on each target, including where `Int` arithmetic overflows.

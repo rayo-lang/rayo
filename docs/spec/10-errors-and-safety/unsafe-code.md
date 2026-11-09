@@ -54,7 +54,7 @@ So a call the language makes on the code's behalf is allowed only where the call
 **`*T` is a non-null raw pointer.** `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 - **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types.
-- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)` is safe, and converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
+- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0. Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
 - **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 
@@ -217,7 +217,7 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
 
 **These operations serve hardware access and code that interrupts a thread:**
 
-- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed. An 8-byte one is a compile error where `target.has64BitAtomics` is `false` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)), since only a target with lock-free 64-bit atomics can access 8 bytes at once.
+- `volatileLoad(p)` and `volatileStore(p, v)`, for a `T` of 1, 2, 4 or 8 bytes, are each performed exactly once, at `T`'s width, and in program order with the thread's other volatile accesses. They are never merged, split or removed. An 8-byte one is a compile error where `target.pointerBitWidth` is 32 ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)), since a 32-bit bus splits it into two accesses, whatever the target's atomics. Masking interrupts doesn't help, since a device sees the two halves apart.
 - `fence(_:)`, given `.acquire`, `.release`, `.acqRel` or `.seqCst`, is a memory fence of that ordering ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 - `compilerFence(_:)` orders the thread's accesses only against code interrupting that same thread, such as a signal handler.
 

@@ -184,6 +184,11 @@ ISO C guarantees neither of the last two, so the target's compiler must.
 
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
+**Where the C compiler doesn't report an operation lock-free, the implementation may supply it itself**, such as a library call that masks interrupts. Masking brings two conditions:
+
+- **Single-core is the declared target's property.** Building for such a target and running on a chip with more cores breaks it, since masking interrupts doesn't stop the other cores.
+- **Masking needs privileged execution.** Code that runs unprivileged, as under a memory protection unit, reaches those atomics through a privileged call. A target that offers no such call can't use masking, so it isn't such a target.
+
 **Its processor orders a load before a later load through the address that load read, cumulatively.** Say the first load read its address from a store `S`. A write `W` counts for `S` when any of these holds:
 
 - **Released.** `W` happens before a release fence that comes before `S` on `S`'s thread, or `S` is a release store that `W` happens before.
@@ -202,7 +207,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 
 **WebAssembly without shared memory is a target, and counts as single-core**, since its one thread sees its memory alone. WebAssembly with shared memory isn't covered: its memory model gives no ordering through an address dependency, and a browser's main thread can't park ([08](08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 
-**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that the C compiler reports on. Rayo's stack checks cover only the latter. So exhausting the engine's stack traps and ends the program, where running out of the checked stack panics ([10](10-errors-and-safety/panics.md#what-panics)).
+**On WebAssembly, the engine keeps a call stack of its own**, beside the stack in linear memory that the C compiler reports on. Rayo's stack checks cover only the latter. Running out of either stack ends the program, but exhausting the engine's stack traps, so the program ends without the report and the other steps that end it otherwise ([10](10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ## What the language leaves open
 

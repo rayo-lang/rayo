@@ -69,7 +69,7 @@ enum NavMode: Int32 { case walk, fly }
 - threads, which `Runtime.startThread` starts ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
 - the bounds of each stack Rayo code runs on, so running out of one panics instead of writing past its end: a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
-- a monotonic clock with nanosecond counts, which `MonotonicClock` reads for timeouts and task deadlines ([07](../07-concurrency/synchronization.md#time-duration-and-instant));
+- a monotonic clock with nanosecond counts, which `MonotonicClock` reads for timeouts and task deadlines ([07](../07-concurrency/synchronization.md#time-duration-and-instant)). On every target, a read of it is whole and never decreases;
 - a way to report a panic ([10](../10-errors-and-safety/panics.md#panics)).
 
 ### Embedding Rayo in a C program

@@ -95,7 +95,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | --- | --- |
 | `int8_t` … `int64_t`, `uint8_t` … `uint64_t` | `Int8` … `Int64`, `UInt8` … `UInt64` |
 | `size_t`, `ptrdiff_t`, `intptr_t`, `uintptr_t` | `CSize`, `CPtrDiff`, `CIntPtr`, `CUIntPtr` (below) |
-| `rayo_int_t`, `rayo_uint_t`, which every header Rayo generates declares ([Calling Rayo from C](calling-rayo-from-c.md#calling-rayo-from-c)) | `Int`, `UInt` |
+| `rayo_int_t`, `rayo_uint_t`, which every header Rayo generates declares ([Calling Rayo from C](calling-rayo-from-c.md#calling-rayo-from-c)) | `Int`, `UInt`, when they are typedefs of `int64_t` and `uint64_t`; otherwise as any typedef |
 | `float`, `double`, `bool` | `Float`, `Double`, `Bool` |
 | `void` as a function's result | `Void` |
 | `_Float16`, where the target's C compiler has it | `Half` |
