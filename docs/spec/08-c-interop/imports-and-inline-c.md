@@ -77,7 +77,7 @@ extern c stack(512 * 1024) func solve(_ d: CInt) -> CInt         // on an extern
 typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C function pointer's type
 ```
 
-**A call into C first checks that the stack its target needs is left, and panics otherwise**, so running out of stack is caught before anything is written past the stack's end ([10](../10-errors-and-safety/panics.md#what-panics)).
+**A call into C first checks that the stack its target needs is left, and ends the program otherwise**, so running out of stack is caught before anything is written past the stack's end ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
 
 **The need is the one declared where the call's target is**, in one of the three places above, each `n` a `const` `Int` expression. When nothing is declared there, the need is `target.cStackReserve` bytes ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)).
 
