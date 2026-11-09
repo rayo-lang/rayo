@@ -126,7 +126,7 @@ let t = fma(0.1, 3.0, -0.3)           // only literals: T is Double, their defau
 let u: Float = fma(0.1, 3.0, -0.3)    // the expected type makes T a Float
 ```
 
-**A floating-point operation that the target's processor lacks, or would compute otherwise, is computed in software, with the result the rules above give.** A target without a fused multiply-add instruction computes `fma` with a single rounding, never as a multiply and an add that each round. A processor without floating-point hardware, such as a Cortex-M0, gets every operation this way, and one that flushes subnormals to zero gets the operations that would. So the hardware changes how long an operation takes, never its result.
+**A floating-point operation that the target's processor lacks, or would give a different result for, such as by flushing a subnormal to zero, is computed another way.** It runs in software where the processor offers no other way, with the result this section gives. So a target without a fused multiply-add instruction computes `fma` with a single rounding, never as a multiply and an add that each round, and a processor without floating-point hardware, such as a Cortex-M0, computes every operation in software. So the hardware changes how long an operation takes, never its result.
 
 ```swift
 let lo = min(x, Float.nan)              // NaN: min passes a NaN on
@@ -190,10 +190,10 @@ let checked = Simd<UInt8, 8>(converting: wide)   // panics where overflow checks
 
 **`SimdLane` is the prelude's marker protocol for the types a lane may hold.** It refines `Copyable` and `Sendable`, and every `T: SimdLane` also meets `T: ~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). Only the language gives conformances to it: the number types and `Bool` conform, and declaring a conformance to it is a compile error ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). So generic code may treat every `T: SimdLane` as copyable, `Sendable` and unscoped, and copy lanes freely.
 
-**`Simd` operations never become calls at run time, in any build**, since they are builtin. The exception is an operation that the target's processor lacks, which may call a software routine that gives the same result. Such operations include:
+**`Simd` operations never become calls at run time, in any build**, since they are builtin. The exception is an operation that the target's processor lacks, or would compute with a different result, which may call a software routine that gives the result this chapter defines. Such operations include:
 
 - `fma` on a processor without a fused multiply-add instruction, such as core WebAssembly, and every floating-point operation on one without floating-point hardware ([Floating point](#floating-point));
-- a 64-bit integer multiplication or division on a 32-bit processor that has no instruction for it.
+- an integer multiplication or division the processor has no instruction for, such as any division on a Cortex-M0, or a 64-bit one on many 32-bit processors.
 
 A library type gets the same by declaring its operations `@inline` ([11](../11-compilation-model.md#functions-that-are-never-calls-inline)), as `std.math`'s `Vec3` does.
 

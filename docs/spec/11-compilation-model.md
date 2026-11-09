@@ -132,10 +132,10 @@ let step = vec.normalized * speed   // vector arithmetic: no hidden call where t
 ```swift
 @inline func lerp(_ a: Float, _ b: Float, _ t: Float) -> Float { a + (b - a) * t }
 
-speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every build
+speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 ```
 
-**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so they never become calls at run time, as `Simd`'s builtin ones don't wherever the processor has the operation ([04](04-types/numbers-and-math.md#simd-and-math)).
+**`@inline` lets a library function run without a call, as a builtin operation does.** `std.math`'s `Vec3` declares its operations `@inline`, so calling one never becomes a call at run time. Its body's own operations run as they would anywhere, so one the processor lacks may still call a software routine, as a `Simd` operation may ([04](04-types/numbers-and-math.md#simd-and-math)).
 
 **A direct call to an `@inline` function is never a call at run time, in any build: its body runs in place.** The same holds for an `@inline` initializer, and for the accessors of an `@inline` computed property or subscript, which are functions too. The one exception is the call that would close a cycle that an instantiation makes (below).
 
@@ -163,7 +163,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 
 **Nothing the language defines generates code while a program runs.** Generics are instantiated ([05](05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)), and compile-time code runs ([09](09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)), when the program builds. So every program can be compiled ahead of time, and runs on platforms that forbid generating code at run time, such as iOS and many consoles.
 
-**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so no integer result depends on it ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
+**A target's pointer width is 32 or 64 bits.** The **pointer width** is the size of the target's pointers, Rayo's raw pointers included ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)), and code reads it as `target.pointerBitWidth` ([09](09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)). `Int` and `UInt` stay 64 bits on every target, so their range, and the point where their arithmetic overflows, are the same on every target ([04](04-types/numbers-and-math.md#numbers)). A type larger than `CPtrDiff.max` bytes, such as `[1 << 32 of UInt8]` on a 32-bit target, is a compile error there, since no pointer difference could span it.
 
 **A target's C ABI, which every call into C and every export follows, matches Rayo's own types where the two meet ([08](08-c-interop/calling-rayo-from-c.md#c-representations)).** It:
 
@@ -173,7 +173,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the arithmetic runs in place, in every bu
 - has `size_t`, `ptrdiff_t`, `intptr_t` and `uintptr_t` of its pointer width too, which import as `CSize`, `CPtrDiff`, `CIntPtr` and `CUIntPtr` ([08](08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - places a struct's members, in the order it declares them, by the rules of 04 ([04](04-types/structs.md#structs)), so a Rayo struct crosses to C as the C struct that declares its fields in layout order ([08](08-c-interop/calling-rayo-from-c.md#c-representations)). Each integer, floating-point value, `bool` and pointer is aligned to its size.
 
-**A target's atomic operations and fences have the guarantees of the C++20 memory model that Rayo uses, and are lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). They are lock-free through the processor's atomic instructions or, on a single-core target, by masking interrupts (below). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
+**A target's atomic operations and fences have the guarantees of the C++20 memory model that Rayo uses, and are lock-free at every size `Atomic<T>` accepts**, since none of Rayo's atomic operations blocks ([07](07-concurrency/synchronization.md#atomics-and-locks)). Those sizes are 1, 2 and 4 bytes on every target, and 8 bytes on a target with lock-free 64-bit atomics, which every target with 64-bit pointers must have.
 
 **An atomic operation is lock-free when it never waits for another thread.** On a target with several cores, that takes the processor's own atomic instructions. On a single-core target, an operation that masks interrupts around its plain loads and stores is lock-free too, since no other thread can run until it ends. So a single-core processor without atomic read-modify-write instructions is a target, such as ARMv6-M, the Cortex-M0 and M0+, or a RISC-V core without the A extension.
 
