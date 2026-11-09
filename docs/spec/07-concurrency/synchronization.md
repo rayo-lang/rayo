@@ -57,7 +57,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 **The fence costs little.** On x86 it is only a compiler barrier, and on ARMv8 and Power one barrier instruction per creation, set against the allocation or the interning step it ends.
 
-**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing reads the stored hash, so the rule above orders it. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
+**A literal's entry has the word already set in its frozen data**, in read-only data before the program starts ([04](../04-types/collections.md#interned-literals)). Hashing under a given seed reads the stored hash, so the rule above orders it. Under a seed derived from the process seed, it feeds the entry's address and, like `==`, reads no entry. `==` reads no entry, so it promises nothing beyond the value it compares ([04](../04-types/collections.md#collections-and-strings)).
 
 ### Locks: `Mutex` and `RwLock`
 
