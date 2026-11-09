@@ -5,12 +5,11 @@ final class ModuleBuilder {
     let context: LLVMContextRef
     let module: LLVMModuleRef
     let builder: LLVMBuilderRef
+    private let diagnostics = DiagnosticLog()
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
-    let int32: LLVMTypeRef
     let int64: LLVMTypeRef
-    let pointer: LLVMTypeRef
 
     init(named name: String, for target: TargetMachine) {
         context = LLVMContextCreate()
@@ -18,10 +17,13 @@ final class ModuleBuilder {
         builder = LLVMCreateBuilderInContext(context)
         void = LLVMVoidTypeInContext(context)
         bool = LLVMInt1TypeInContext(context)
-        int32 = LLVMInt32TypeInContext(context)
         int64 = LLVMInt64TypeInContext(context)
-        pointer = LLVMPointerTypeInContext(context, 0)
         target.configure(module)
+        // Without a handler, LLVM prints what it reports, and exits on an error.
+        LLVMContextSetDiagnosticHandler(context, { info, log in
+            let message = takeMessage(LLVMGetDiagInfoDescription(info))
+            Unmanaged<DiagnosticLog>.fromOpaque(log!).takeUnretainedValue().messages.append(message)
+        }, Unmanaged.passUnretained(diagnostics).toOpaque())
     }
 
     deinit {
@@ -38,13 +40,44 @@ final class ModuleBuilder {
         if broken { throw LLVMError(message: "LLVM rejected the module it was given:\n\(report)") }
     }
 
-    func addFunction(_ name: String, returning result: LLVMTypeRef, parameters: [LLVMTypeRef] = [],
-                     isVariadic: Bool = false, linkage: LLVMLinkage = LLVMExternalLinkage) -> FunctionValue {
-        var parameters = parameters.map { Optional($0) }
-        let type = LLVMFunctionType(result, &parameters, UInt32(parameters.count), isVariadic ? 1 : 0)!
-        let function = LLVMAddFunction(module, name, type)!
-        LLVMSetLinkage(function, linkage)
-        return FunctionValue(value: function, type: type)
+    /// Parses `llvmIR` into a module of this context, for the same target as this one.
+    func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) -> LLVMModuleRef {
+        var parsed: LLVMModuleRef?
+        var message: UnsafeMutablePointer<CChar>?
+        let failed = llvmIR.withUnsafeBufferPointer { bytes in
+            bytes.withMemoryRebound(to: CChar.self) { text in
+                let buffer = LLVMCreateMemoryBufferWithMemoryRange(text.baseAddress, text.count, name, 0)
+                defer { LLVMDisposeMemoryBuffer(buffer) }
+                return LLVMParseIRInContext2(context, buffer, &parsed, &message) != 0
+            }
+        }
+        let report = takeMessage(message)
+        guard !failed, let parsed else { throw LLVMError(message: "LLVM couldn't parse \(name):\n\(report)") }
+        LLVMSetTarget(parsed, LLVMGetTarget(module))
+        LLVMSetDataLayout(parsed, LLVMGetDataLayoutStr(module))
+        return parsed
+    }
+
+    /// Links `other` into this module, which consumes it.
+    func link(_ other: LLVMModuleRef) throws(LLVMError) {
+        diagnostics.messages = []
+        if LLVMLinkModules2(module, other) != 0 {
+            throw LLVMError(message: "LLVM couldn't link the runtime:\n" + diagnostics.messages.joined(separator: "\n"))
+        }
+    }
+
+    /// Declares the function `name` that one of `modules` defines, with the type it is defined with.
+    func declare(_ name: String, definedIn modules: [LLVMModuleRef]) throws(LLVMError) -> FunctionValue {
+        guard let definition = modules.lazy.compactMap({ LLVMGetNamedFunction($0, name) }).first else {
+            throw LLVMError(message: "the runtime defines no function '\(name)'")
+        }
+        let type = LLVMGlobalGetValueType(definition)!
+        return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
+    }
+
+    func addFunction(_ name: String, returning result: LLVMTypeRef) -> FunctionValue {
+        let type = LLVMFunctionType(result, nil, 0, 0)!
+        return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
     }
 
     /// The declaration of the LLVM intrinsic `name`, for the overload on `type`.
@@ -85,6 +118,11 @@ final class ModuleBuilder {
     func constant(_ value: Bool) -> LLVMValueRef {
         LLVMConstInt(bool, value ? 1 : 0, 0)
     }
+}
+
+/// The messages LLVM reports through a context's diagnostic handler.
+private final class DiagnosticLog {
+    var messages: [String] = []
 }
 
 /// An LLVM function, with the type that a call to it names.

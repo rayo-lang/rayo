@@ -91,7 +91,7 @@ struct FunctionEmitter {
             let values = arguments.map { read($0) }
             switch callee {
             case .printInt:
-                module.call(program.runtime.printf, [program.runtime.intFormat, values[0]])
+                module.call(program.runtime.printInt, [values[0]])
                 return nil
             }
         }

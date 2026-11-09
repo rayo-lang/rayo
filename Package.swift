@@ -51,12 +51,19 @@ let package = Package(
         .target(name: "RayoSema", dependencies: ["RayoDiagnostics", "RayoSource", "RayoSyntax"]),
         .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSource", "RayoSyntax"]),
         .systemLibrary(name: "CLLVM"),
+        .target(name: "RayoRuntime", resources: [
+            .embedInCode("entry.ll"),
+            .embedInCode("print.ll"),
+            .embedInCode("panic.ll"),
+        ]),
         .target(
             name: "RayoLLVM",
-            dependencies: ["CLLVM", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax"],
+            dependencies: ["CLLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"],
             linkerSettings: [.unsafeFlags(["-L\(llvmPrefix)/lib"]), .linkedLibrary("LLVM-\(llvmMajorVersion)")]
         ),
-        .target(name: "RayoDriver", dependencies: ["RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM"]),
+        .target(name: "RayoDriver", dependencies: [
+            "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoLLVM", "RayoRuntime",
+        ]),
         .executableTarget(name: "rayoc", dependencies: ["RayoDriver"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
         .testTarget(name: "RayoDiagnosticsMacrosTests", dependencies: [

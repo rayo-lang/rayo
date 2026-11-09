@@ -2,6 +2,7 @@ import Foundation
 import RayoDiagnostics
 import RayoIR
 import RayoLLVM
+import RayoRuntime
 import RayoSema
 import RayoSyntax
 
@@ -22,7 +23,7 @@ public enum Driver {
     }
 
     /// The exit code of a run whose program panics.
-    public static let panicExitCode = LLVMEmitter.panicExitCode
+    public static let panicExitCode = ProgramRuntime.panicExitCode
 
     static let usage = """
         usage: rayoc <command> <file>
