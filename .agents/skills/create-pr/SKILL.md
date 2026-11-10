@@ -50,7 +50,7 @@ Closes #<N>
 
 Check the title, the body, and every commit message in `git log origin/<base>..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3.
 
-If a commit message breaks either rule, reword it; if the branch is already pushed, push it again with `git push --force-with-lease=<branch>:<sha> origin <branch>`, `<sha>` the `git rev-parse origin/<branch>` you read before rewording, then move each held branch stacked on it, as `pr-workflow` step 2 says.
+Run this check before each push, while a commit that breaks either rule can still be reworded: a pushed commit stays as it is.
 
 **Done when:** none of the title, body, or commit messages credits an AI in any form, and the title and every commit subject follow Conventional Commits.
 
