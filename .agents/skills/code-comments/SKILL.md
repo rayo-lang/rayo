@@ -133,7 +133,7 @@ steps without rebuilding each from its lines. It describes the block whole, neve
 
 ```swift
 // After — what the block achieves.
-// Lower the body with this loop innermost, so its `break` and `continue` reach this loop.
+// Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
 ```
 
 ## Reach for the code before the comment
@@ -144,8 +144,8 @@ puzzles; a block's opening comment is called for by `docs/agents/code-style.md`,
 
 Two shapes are always a refactor, never a comment:
 
-- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own, written inline. Each becomes a
-  function, and the numbering leaves with them.
+- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own (`docs/agents/code-style.md`,
+  "Functions"), written inline. Each becomes a function, and the numbering leaves with them.
 - **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted.
 
 And a comment explaining what a name means is a rename. Rename the thing.

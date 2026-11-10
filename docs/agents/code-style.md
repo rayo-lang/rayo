@@ -6,7 +6,7 @@ These rules decide how the code in `Sources/` and `Tests/` is split into files, 
 
 **A file holds one primary type and is named after it.** `Lowering.swift` holds `Lowering`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` holds `Stmt` and `StmtKind`, even though the parser builds both.
 
-**A type that stands on its own gets a file of its own**, even when it is small. A type stands on its own when other code uses it for itself, not only as part of another type, as the parser, the checker and lowering all use `BinaryOperator`. A family of such types, such as the AST's, gathers its files in a directory named for the family (`Sources/RayoSyntax/AST/`).
+**A type that stands on its own gets a file of its own**, even when it is small. A type stands on its own when more than one type stores it, as `ExprKind`, `CheckedExprKind` and `Rvalue` all store `BinaryOperator`. A type that only the primary type and its parts store is a part, however much other code builds or reads it. A family of such types, such as the AST's, gathers its files in a directory named for the family (`Sources/RayoSyntax/AST/`).
 
 **A file over the limit is split** along the line where its contents stop sharing a reason to change ([Limits](#limits)).
 
@@ -24,15 +24,15 @@ These rules decide how the code in `Sources/` and `Tests/` is split into files, 
 
 These rules cover every body: functions, initializers, accessors, subscripts and closures.
 
-**A function does one job, as one of two kinds.** Every line of a function works at one level of abstraction, and the kind follows from that level:
+**A function does one job, as one of two kinds:**
 
-- **An orchestrator** works at the level of its job's steps. Every line calls or binds a function that does one whole step, and the call names say the steps.
-- **A leaf** works at the level of the data it holds. Its body is mechanics: reading and writing its own state and arguments, arithmetic, indexing, and calls to small primitives such as `append` or a builder's `newBlock()`. It may run in several blocks.
+- **An orchestrator** calls a function for each step of its job. Each line calls a step, binds a step's result, tests that result in a `guard`, `if` or `switch`, or returns it, as `Driver.checkAndLower` does.
+- **A leaf** does its job with mechanics. It reads and writes its own state and arguments, and calls primitives: standard-library operations, and members of its own type that only read or write its stored state, such as `advance()`, `newBlock()` or `end(with:)`. A leaf may also call its helpers and recurse on part of its input, as `lowerWhile` calls `headerTerminator` and `lower(body)`. A body with any line of mechanics is a leaf, and it may run in several blocks.
 
-**A body that mixes the two levels, or takes on a second job, gets a function extracted.** These show it:
+**A body that takes on a second job gets a function extracted.** These show it:
 
 - a block whose opening comment could be a function's doc comment, with inputs and a result of its own;
-- setup followed by dispatch or by detailed mechanics;
+- mechanics that build values, followed by a `switch` that hands them to different steps;
 - parallel locals assigned through the same branches;
 - a body over the limit ([Limits](#limits)).
 
@@ -68,12 +68,12 @@ The same leaf, with its steps set apart and said:
 
 ```swift
 private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]) {
-    // The loop's header tests the condition, and goes on to its body or its exit.
+    // Make the loop's blocks: its header, its body, and its exit.
     let header = newBlock()
     let bodyBlock = newBlock()
     let exit = newBlock()
 
-    // Enter the loop at its header.
+    // Enter the loop at its header, which tests the condition and goes on to the body or the exit.
     end(with: .goto(header), continuingIn: header)
     end(with: headerTerminator(testing: condition, body: bodyBlock, exit: exit), continuingIn: bodyBlock)
 
@@ -95,19 +95,19 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 
 ## Limits
 
-**A file holds at most 400 lines, a type at most 250, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. A type counts its nested types and every extension of it in the module. The numbers are SwiftLint's `file_length`, `type_body_length` and `function_body_length` defaults, with one change: a type counts its extensions, so moving code into an extension file doesn't hide its size.
+**A file holds at most 400 lines, a type at most 250, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. A type counts its nested types and every extension of it in the module. The numbers are SwiftLint's `file_length`, `type_body_length` and `function_body_length` defaults, with two changes: blank and comment lines never count, and a type counts its extensions, so moving code into an extension file doesn't hide its size.
 
-**A data table is exempt from the limits on its file and its type.** A data table is a type whose body is one declaration per case with no logic between them, such as `ErrorCode`, or a test's `arguments:` table. Every other rule still applies to it.
+**A data table is exempt from the limits.** A data table is a type whose body is one declaration per case with no logic between them, such as `ErrorCode`, whose lines don't count toward its file or its type, or a test's `arguments:` table, whose lines don't count toward its file or its suite. Every other rule still applies to it.
 
 ## Tests
 
-**A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. Each suite counts as a type for the limits. A helper that several test files share goes in a file named for what it helps with.
+**A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. In `Tests/`, this replaces the file rule under [Files](#files). Each suite counts as a type for the limits. A helper that several test files share goes in a file named for what it helps with.
 
 ## Before you open a pull request
 
 Audit every file, type and function you add or change against this list, and fix what falls short:
 
-- **Every file** holds one primary type and its parts, is named after it, and is within the limits.
+- **Every file** holds one primary type and its parts and is named after it (in `Tests/`, is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job, and is within the limits.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
