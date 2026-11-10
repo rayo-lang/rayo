@@ -38,7 +38,7 @@ attribute-arg = ((identifier | keyword) ':')? (expression | keyword) ;   (* @pac
 const-decl    = 'const' identifier (':' type)? '=' expression ;
 let-decl      = 'let' binding (',' binding)* ;                      (* let lo = 0, hi = 10 *)
 var-decl      = 'var' binding (',' binding)* | 'var' identifier ':' type where-clause? accessor-block ;
-binding       = pattern (':' type)? ('=' expression)? ;            (* the pattern binds a name: 'let _ = x' is an error, and '_ = x' drops x (01) *)
+binding       = pattern (':' type)? ('=' expression)? ;            (* each binding binds a name, so 'let _ = x' is an error (01); '_ = x' drops x (05) *)
 
 func-decl     = 'func' func-name generic-params? param-clause ('->' result-type)?
                 where-clause? block ;

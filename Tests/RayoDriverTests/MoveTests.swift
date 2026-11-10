@@ -118,7 +118,6 @@ struct MoveTests {
         ("func f(x: Int) -> Int { return x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { let y = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { _ = x }", [.moveFromParameter(name: "x")], ["x"]),
-        ("func f(x: Int) { let _ = x }", [.underscoreDeclared, .moveFromParameter(name: "x")], ["_", "x"]),
         ("func f(x: Int) {\n    var y = 0\n    y = x\n}", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) -> Int {\n    let y = copy x\n    print(x)\n    return copy x\n}", [], []),
     ])

@@ -132,7 +132,7 @@ trailing-closure = closure ;
 
 ```ebnf
 pattern       = '_' | identifier | tuple-pattern | enum-pattern | expression-pattern
-              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); the pattern under 'let' or 'var' binds a name (01) *)
+              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); each 'let' or 'var' binds a name, so 'let _' and 'let _ as E' are errors (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
 enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identifier ':')? pattern)* ','? ')')? ;
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)

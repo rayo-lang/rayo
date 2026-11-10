@@ -103,20 +103,30 @@ when &shape {
 
 ## Bindings with no name
 
-**A `let` or `var` whose pattern binds no name is a compile error**, in a declaration, a condition or a part of a pattern. The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. A `_` beside a name is fine, since the pattern still binds that name:
+**Every `let` and every `var` binds at least one name, or it is a compile error.** The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. The rule counts the names that each one covers:
+
+- **In a declaration, each binding binds a name**, so `let lo = 0, _ = f()` is an error, though `lo` is bound.
+- **In a condition, the pattern after `let` or `var` binds a name.**
+- **In a pattern, each `let` or `var` part binds a name**, so `.pair(let a, let _)` is an error, though `a` is bound. A type pattern binds a name too, so `let _ as E` is an error.
+
+A `_` is fine inside a pattern whose `let` or `var` binds another name, as in `let (a, _) = pair`.
 
 ```swift
-let (a, _) = pair                  // fine: binds 'a'
-let _ = save(level)                // error: binds no name
-let (_, _) = pair                  // error: the same
-if let _ = target { ... }          // error: the same
+let (a, _) = pair                         // fine: binds 'a'
+let _ = save(level)                       // error: binds no name
+let lo = 0, _ = f()                       // error: the second binding binds no name
+let (_, _) = pair                         // error: binds no name
+if let _ = target { ... }                 // error: binds no name
+if case .pair(let a, _) = p { ... }       // fine: the 'let' binds 'a'
+if case .pair(let a, let _) = p { ... }   // error: the second 'let' binds no name
 ```
 
 **Code that binds nothing has a form without `let` or `var`:**
 
 - `_ = x` drops a value on purpose ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
 - `x != nil` tests whether an optional holds a value ([04](../04-types/enums.md#optionals));
-- a `_` on its own matches any part of a pattern without binding it, as in `.circle(_)` ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- `is E` matches a value of type `E` without binding it ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
+- a `_` on its own matches any part of a pattern without binding it, as in `.pair(let a, _)` ([12](../12-grammar/constructs.md#patterns)).
 
 ## `if` and `when` as values
 
