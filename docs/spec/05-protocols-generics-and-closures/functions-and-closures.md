@@ -81,7 +81,7 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 
 **An unqualified name is looked up in these scopes, in order:**
 
-1. the body's locals and parameters;
+1. the body's locals and parameters ([01](../01-values-and-ownership/bindings.md#names-in-scope));
 2. the generic parameters of the function the body belongs to;
 3. the instance members the body sees (above);
 4. the body's own type, then each enclosing type outward: its generic parameters, static members and nested types;

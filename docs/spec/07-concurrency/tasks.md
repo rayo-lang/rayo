@@ -33,7 +33,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
     game.doors[door]?.state = .opening
     await elapsed(.seconds(0.5))           // half a second of the game's own time
     game.doors[door]?.state = .open
-    await until { [copy door] game in game.playerDistance(to: door) > 5 }   // game is lent to the condition on each poll
+    await until { [copy door] g in g.playerDistance(to: door) > 5 }   // 'g' is the game, lent to the condition on each poll
     await closeDoor(door)                   // awaiting a sub-task runs it inline, with its state nested
 }
 ```
@@ -205,7 +205,7 @@ It stores the condition by value in the task's state, never boxed, with its capt
 
 ```swift
 await until { game.isOver }             // error: the condition captures the resume parameter
-await until { game in game.isOver }     // fine: the condition takes it as its argument
+await until { g in g.isOver }           // fine: the condition takes it as its argument
 ```
 
 ### Running tasks

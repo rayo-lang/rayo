@@ -32,6 +32,15 @@ let speed: Float = 4            // the 4 becomes a Float to match
 var level: UInt8 = 1            // and this 1 a UInt8
 ```
 
+A name stays with one variable, too. While `hp` is in scope, declaring another `hp` doesn't compile, even inside a nested block such as the body of an `if`:
+
+```swift
+let hp = hp + 10                // error: 'hp' is already declared
+let boosted = hp + 10           // fine: the new value has a name of its own
+```
+
+In Rust, the second `let` would start a new variable that shadows the first, and Swift allows the same inside a nested block. In Rayo, a name you read always means the variable you saw declared ([01](../spec/01-values-and-ownership/bindings.md#names-in-scope)).
+
 ## Numbers
 
 Rayo has the number types you'd expect. `Int8`, `Int16`, `Int32` and `Int64` hold whole numbers of different sizes, `UInt8` to `UInt64` hold whole numbers that can't be negative, and `Int` and `UInt` are 64 bits wide. For numbers with a fractional part, there are `Float` and `Double` ([04](../spec/04-types/numbers-and-math.md#numbers)).
@@ -205,6 +214,7 @@ for i in 0..<100 {
 
 ## In the spec
 
+- [01 Values and ownership](../spec/01-values-and-ownership/bindings.md#names-in-scope): where a variable's name is in scope, and why no other variable may take it there.
 - [04 Types](../spec/04-types/numbers-and-math.md#numbers): the number types, how a number written in the code takes its type, and which conversions happen on their own.
 - [04 Types](../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts): what every integer operation does at its limits.
 - [05 Protocols, generics and closures](../spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures): functions, their parameters and what they return.
