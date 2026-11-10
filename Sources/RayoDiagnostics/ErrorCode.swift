@@ -184,6 +184,17 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(234, error: "a parameter can't have type Void")
     case voidParameter
+
+    // MARK: Ownership
+
+    @Code(300, error: "'{name}' is a borrowed parameter, so it can't be moved")
+    case moveFromParameter(name: String)
+
+    @Code(301, error: "'{name}' was moved")
+    case usedAfterMove(name: String)
+
+    @Code(302, error: "'{name}' may have been moved")
+    case usedAfterMaybeMove(name: String)
 }
 
 extension ErrorCode {

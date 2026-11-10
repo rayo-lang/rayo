@@ -118,6 +118,15 @@ public enum Rvalue: Sendable {
     /// Any binary operator but `&&` and `||`, which lowering turns into branches.
     case binary(BinaryOperator, Operand, Operand)
     case call(Callee, arguments: [Operand])
+
+    /// The operands, in the order the operation evaluates them.
+    public var operands: [Operand] {
+        switch self {
+        case .use(let operand), .unary(_, let operand): return [operand]
+        case .binary(_, let left, let right): return [left, right]
+        case .call(_, let arguments): return arguments
+        }
+    }
 }
 
 public enum Terminator: Sendable {
@@ -128,4 +137,21 @@ public enum Terminator: Sendable {
     case `return`(Operand?)
     /// Ends a block that no path reaches, such as the end of a function every path through which returns.
     case unreachable
+
+    public var operand: Operand? {
+        switch self {
+        case .branch(let condition, _, _): return condition
+        case .return(let result): return result
+        case .goto, .unreachable: return nil
+        }
+    }
+
+    /// The blocks that a run can continue in.
+    public var successors: [BlockID] {
+        switch self {
+        case .goto(let target): return [target]
+        case .branch(_, let then, let otherwise): return [then, otherwise]
+        case .return, .unreachable: return []
+        }
+    }
 }
