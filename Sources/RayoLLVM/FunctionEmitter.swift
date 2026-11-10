@@ -53,14 +53,19 @@ struct FunctionEmitter {
     private func emit(_ statement: Statement) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
-            let value = compute(rvalue, at: range)
-            guard let destination else { return }
-            guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
-            LLVMBuildStore(builder, value, slots[destination.local.index])
+            emit(rvalue, into: destination, at: range)
         case .declare:
             // The slot keeps whatever it holds: the program reads it only once a statement has stored a value.
             break
         }
+    }
+
+    /// Emits the instructions that compute `rvalue`, and stores its result in `destination` when there is one.
+    private func emit(_ rvalue: Rvalue, into destination: Place?, at range: SourceRange) {
+        let value = compute(rvalue, at: range)
+        guard let destination else { return }
+        guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
+        LLVMBuildStore(builder, value, slots[destination.local.index])
     }
 
     private func emit(_ terminator: Terminator) {
