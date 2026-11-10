@@ -79,7 +79,7 @@ final class FileChecker {
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
             let parameters = function.parameters.map(parameter(from:))
-            let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
+            let signature = Signature(name: function.name, target: .callee(.function(id)), parameters: parameters,
                                       result: declaredResult(of: function, id))
             signatures.append(signature)
             // A function named like a struct before it is reported, since a name names one struct or functions.
@@ -116,7 +116,7 @@ final class FileChecker {
             errors.report(.voidParameter, at: parameter.type.range)
             type = nil
         }
-        return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling)
+        return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling, convention: nil)
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.

@@ -2,7 +2,7 @@ import RayoDiagnostics
 import RayoSyntax
 
 /// Checks a file's structs: that each has a name of its own, that its fields have names of their own and types that
-/// hold values, and that none contains itself. It declares each struct's type.
+/// hold values, and that none contains itself. It declares each struct's type and primary initializer.
 struct StructChecker {
     /// A struct whose declaration took its name, with the types of its fields, nil where one isn't known.
     private struct DeclaredStruct {
@@ -13,13 +13,14 @@ struct StructChecker {
 
     let errors: ErrorList
 
-    /// Declares the types of `structs` in `declarations`, and returns the types they make, or nil when they can't be
-    /// laid out. A struct can't take the name of one of `functions` that comes before it.
+    /// Declares the types and initializers of `structs` in `declarations`, and returns the types they make, or nil
+    /// when they can't be laid out. A struct can't take the name of one of `functions` that comes before it.
     func declare(_ structs: [StructDecl], besides functions: [FuncDecl],
                  in declarations: inout Declarations) -> TypeTable? {
         let ids = declareNames(of: structs, besides: functions, in: &declarations)
         // A field may name any struct, so every name is declared before a field is checked.
         let declared = checkFields(of: structs, declaredAs: ids, in: declarations)
+        declareInitializers(of: declared, in: &declarations)
         guard !reportContainment(among: declared) else { return nil }
         return types(of: declared)
     }
@@ -117,6 +118,23 @@ struct StructChecker {
             return nil
         }
         return type
+    }
+
+    /// Declares the primary initializer of each of `structs`.
+    private func declareInitializers(of structs: [DeclaredStruct], in declarations: inout Declarations) {
+        for structure in structs {
+            declarations.declare(initializer: initializer(of: structure), of: structure.id)
+        }
+    }
+
+    /// The primary initializer of `structure`, which takes each field's value, owned and labeled by the field's
+    /// name, in the order the struct declares its fields.
+    private func initializer(of structure: DeclaredStruct) -> Signature {
+        let parameters = zip(structure.declaration.fields, structure.fieldTypes).map { field, type in
+            Parameter(label: field.name, type: type, spelledType: field.type?.spelling ?? "", convention: .owned)
+        }
+        return Signature(name: structure.id.name, target: .initializer(structure.id), parameters: parameters,
+                         result: .type(.structure(structure.id)))
     }
 
     /// Reports each of `structs`, which are indexed by `StructID`, that contains itself through its fields at any

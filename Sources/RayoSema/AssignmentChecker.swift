@@ -85,6 +85,11 @@ struct AssignmentChecker {
             errors.report(.assignToFunction(name: name), at: range)
             return nil
 
+        // Nor can a struct.
+        case .type:
+            errors.report(.assignToType(name: name), at: range)
+            return nil
+
         // Nothing has the name.
         case nil:
             errors.report(.notDeclared(name: name), at: range)

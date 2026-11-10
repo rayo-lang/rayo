@@ -14,6 +14,7 @@ struct ExpressionLowering {
         case .unary(let op, let operand): return .unary(op, self.operand(of: operand))
         case .binary(let op, let left, let right): return .binary(op, operand(of: left), operand(of: right))
         case .call(let callee, let arguments): return .call(callee, arguments: arguments.map { operand(of: $0) })
+        case .structure(let id, let fields): return .structure(id, fields: fields.map { operand(of: $0) })
         }
     }
 

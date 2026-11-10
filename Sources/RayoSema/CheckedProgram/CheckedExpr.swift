@@ -17,4 +17,6 @@ public indirect enum CheckedExprKind: Sendable {
     case unary(UnaryOperator, CheckedExpr)
     case binary(BinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])
+    /// A value of the struct, made of its fields' values in the order the struct declares them.
+    case structure(StructID, fields: [CheckedExpr])
 }

@@ -9,9 +9,9 @@ func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
     return program(of: [main])
 }
 
-/// A program of `functions`, the first of them its `main`, which declares no structs.
-func program(of functions: [IRFunction]) -> IRProgram {
-    IRProgram(types: TypeTable(structs: []), functions: functions, main: FunctionID(index: 0))
+/// A program of `functions`, the first of them its `main`, which declares `structs`.
+func program(of functions: [IRFunction], structs: [StructType] = []) -> IRProgram {
+    IRProgram(types: TypeTable(structs: structs), functions: functions, main: FunctionID(index: 0))
 }
 
 /// An operand that reads the local `index`.

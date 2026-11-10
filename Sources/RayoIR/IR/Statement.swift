@@ -19,6 +19,8 @@ public enum Rvalue: Sendable {
     /// Any binary operator but `&&` and `||`, which lowering turns into branches.
     case binary(BinaryOperator, Operand, Operand)
     case call(Callee, arguments: [Operand])
+    /// A value of the struct, made of its fields' values in the order the struct declares them.
+    case structure(StructID, fields: [Operand])
 
     /// The operands, in the order the operation evaluates them.
     public var operands: [Operand] {
@@ -26,6 +28,7 @@ public enum Rvalue: Sendable {
         case .use(let operand), .unary(_, let operand): return [operand]
         case .binary(_, let left, let right): return [left, right]
         case .call(_, let arguments): return arguments
+        case .structure(_, let fields): return fields
         }
     }
 }

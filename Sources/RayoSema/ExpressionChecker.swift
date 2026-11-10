@@ -110,6 +110,11 @@ struct ExpressionChecker {
             errors.report(.functionAsValue(name: name), at: range)
             return nil
 
+        // Nor is a struct.
+        case .type:
+            errors.report(.typeAsValue(name: name), at: range)
+            return nil
+
         // Nothing has the name.
         case nil:
             errors.report(.notDeclared(name: name), at: range)

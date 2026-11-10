@@ -66,6 +66,26 @@ struct ObjectCodeTests {
         #expect(try compile(declared, debug: debug) == compile(empty, debug: debug))
     }
 
+    @Test("fields lie in memory by alignment, so structs declaring the same fields in two orders compile alike")
+    func structFieldOrder() throws {
+        /// A program whose `main` stores in a local a struct that declares `fields`, of the values `values` holds.
+        func storing(_ fields: [Field], _ values: [Constant]) -> IRProgram {
+            let hit = StructID(index: 0, name: "Hit")
+            let stored = statement(storingIn: 0, .structure(hit, fields: values.map(Operand.constant)))
+            let main = IRFunction(name: "main()", parameterCount: 0, result: .void,
+                                  locals: [.temporary(.structure(hit))],
+                                  blocks: [BasicBlock(statements: [stored], terminator: .return(nil))])
+            return program(of: [main], structs: [StructType(name: "Hit", fields: fields)])
+        }
+
+        // Both orders lay `damage` out first, then `crit` and `team`.
+        let crit = Field(name: "crit", type: .bool)
+        let damage = Field(name: "damage", type: .int)
+        let team = Field(name: "team", type: .bool)
+        #expect(try compile(storing([crit, damage, team], [.bool(true), .int(30), .bool(false)]), debug: true) ==
+            compile(storing([damage, crit, team], [.int(30), .bool(true), .bool(false)]), debug: true))
+    }
+
     @Test("a debug build checks integer arithmetic for overflow, and a release build emits no check")
     func overflowChecks() throws {
         let overflows = printing(.binary(.add, .constant(.int(.max)), .constant(.int(1))))

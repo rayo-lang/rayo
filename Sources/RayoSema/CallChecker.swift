@@ -23,17 +23,20 @@ struct CallChecker {
         guard let match = match(arguments, among: candidates, in: range) else { return nil }
         // A result type that isn't known was reported where it is declared, or as a cycle.
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
-        let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
-        return CheckedExpr(kind: kind, type: result, range: range)
+        return CheckedExpr(kind: match.signature.target.call(passing: match.arguments), type: result, range: range)
     }
 
-    /// The functions a call of `name` reaches, reporting it when it reaches none, unless a declaration of the name
-    /// failed.
+    /// The functions a call of `name` reaches, a struct's initializer among them, reporting it when it reaches
+    /// none, unless a declaration of the name failed.
     private func functions(named name: String, at range: SourceRange) -> [Signature] {
         switch expressions.names.lookUp(name, for: .call) {
         // The name's functions are the call's candidates.
         case .functions(let functions):
             return functions
+
+        // A struct's name calls its primary initializer.
+        case .type(let initializer):
+            return [initializer]
 
         // A local can't be called.
         case .inScope(.local):
@@ -96,13 +99,18 @@ struct CallChecker {
             errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
         }
 
-        // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
-        guard let type = parameter.type else {
-            _ = expressions.check(argument.value)
-            return nil
-        }
-        let value = expressions.check(argument.value, expecting: type)
+        // Check the value against the parameter's type.
+        let value = checkValue(of: argument, passedTo: parameter)
+        // A value that failed, or a parameter whose type isn't known, was reported.
+        guard let type = parameter.type, let value else { return nil }
+        // So was a value of another type.
+        guard expressions.expect(value, type) else { return nil }
         return isLabeledRight ? value : nil
+    }
+
+    /// Checks `argument`'s value. An owned parameter takes it, which moves a local's value out of the local.
+    private func checkValue(of argument: Argument, passedTo parameter: Parameter) -> CheckedExpr? {
+        parameter.convention == .owned ? expressions.checkTaken(argument.value) : expressions.check(argument.value)
     }
 
     /// The one of `candidates` whose labels and parameter types `arguments` fit, with the checked arguments.

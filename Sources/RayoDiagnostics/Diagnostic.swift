@@ -237,6 +237,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(239, error: "'{name}' contains itself")
     case containsItself(name: String)
 
+    @Code(240, error: "'{name}' is a type, not a value")
+    case typeAsValue(name: String)
+
+    @Code(241, error: "'{name}' is a type, so it can't change")
+    case assignToType(name: String)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

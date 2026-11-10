@@ -1,12 +1,14 @@
-/// What a call needs to know about the function it calls.
+import RayoSyntax
+
+/// What a call needs to know about the function or the initializer it calls.
 struct Signature: CustomStringConvertible {
     var name: String
-    var callee: Callee
+    var target: CallTarget
     var parameters: [Parameter]
     var result: DeclaredResult
 
-    static let print = Signature(name: "print", callee: .printInt,
-                                 parameters: [Parameter(label: nil, type: .int, spelledType: "Int")],
+    static let print = Signature(name: "print", target: .callee(.printInt),
+                                 parameters: [Parameter(label: nil, type: .int, spelledType: "Int", convention: nil)],
                                  result: .type(.void))
 
     /// The name and the parameters, such as `f(_: Int, by: Bool)`, which tell the function apart from every other.
@@ -32,7 +34,22 @@ struct Signature: CustomStringConvertible {
     }
 }
 
-/// What a call needs to know about one parameter of the function it calls.
+/// What a call of a signature does.
+enum CallTarget {
+    case callee(Callee)
+    /// Makes a value of the struct from its fields' values: the struct's primary initializer.
+    case initializer(StructID)
+
+    /// The expression that a call passing `arguments`, in the order of the parameters, makes.
+    func call(passing arguments: [CheckedExpr]) -> CheckedExprKind {
+        switch self {
+        case .callee(let callee): return .call(callee, arguments: arguments)
+        case .initializer(let id): return .structure(id, fields: arguments)
+        }
+    }
+}
+
+/// What a call needs to know about one parameter of the function or the initializer it calls.
 struct Parameter {
     /// The label an argument for it is written with, or nil when it is written with none.
     var label: String?
@@ -40,6 +57,8 @@ struct Parameter {
     var type: RayoType?
     /// The type as the declaration writes it.
     var spelledType: String
+    /// How the parameter takes its argument, or nil for a borrow, which leaves the argument with the caller.
+    var convention: ParamConvention?
 }
 
 /// A function's result type, as its declaration gives it.

@@ -1,7 +1,8 @@
 import RayoDiagnostics
 import RayoSource
 
-/// The names a function body sees: its locals and parameters, block by block, and the module's functions.
+/// The names a function body sees: its locals and parameters, block by block, and the module's structs and
+/// functions.
 final class NameScopes {
     private let declarations: Declarations
     private let errors: ErrorList
@@ -29,18 +30,18 @@ final class NameScopes {
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
-    /// functions. A call prefers the functions; any other use prefers the locals and parameters.
+    /// structs and functions. A call prefers the module's; any other use prefers the locals and parameters.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
-        let functions = functionMatch(for: name)
+        let inModule = moduleMatch(for: name)
         switch use {
-        // A call prefers the functions, even over a local whose declaration failed, since no local can be called.
+        // A call prefers the module's, even over a local whose declaration failed, since no local can be called.
         case .call:
-            return functions ?? inScope
+            return inModule ?? inScope
 
-        // Any other use prefers the locals and parameters, which shadow the functions.
+        // Any other use prefers the locals and parameters, which shadow the module's.
         case .ordinary:
-            return inScope ?? functions
+            return inScope ?? inModule
         }
     }
 
@@ -69,8 +70,10 @@ final class NameScopes {
         blocks.reversed().lazy.compactMap { $0[name] }.first
     }
 
-    /// The module's functions called `name`, unless it has none.
-    private func functionMatch(for name: String) -> NameMatch? {
+    /// The module's struct called `name`, or its functions of that name, unless it has neither.
+    private func moduleMatch(for name: String) -> NameMatch? {
+        // A struct takes a name no function of the module has.
+        if let id = declarations.structure(named: name) { return .type(initializer: declarations.initializer(of: id)) }
         let functions = declarations.functions(named: name)
         return functions.isEmpty ? nil : .functions(functions)
     }

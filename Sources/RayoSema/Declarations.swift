@@ -6,6 +6,8 @@ import RayoSyntax
 struct Declarations {
     private var functions: [String: [Signature]] = [:]
     private var structs: [String: StructID] = [:]
+    /// Each struct's primary initializer, once its fields are checked.
+    private var initializers: [StructID: Signature] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
 
     /// Declares `signature`, unless a function with its name, labels and parameter types is declared already, and
@@ -23,6 +25,11 @@ struct Declarations {
         structs[id.name] = id
     }
 
+    /// Declares `initializer` as the primary initializer of the struct it makes.
+    mutating func declare(initializer: Signature, of id: StructID) {
+        initializers[id] = initializer
+    }
+
     /// Declares the prelude's functions whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
         let name = Signature.print.name
@@ -36,6 +43,13 @@ struct Declarations {
 
     func structure(named name: String) -> StructID? {
         structs[name]
+    }
+
+    /// The primary initializer of the struct `id`, whose fields must be checked already.
+    func initializer(of id: StructID) -> Signature {
+        // The checker declares every initializer before it checks a body that could call one.
+        guard let initializer = initializers[id] else { preconditionFailure("'\(id.name)' has no initializer yet") }
+        return initializer
     }
 
     /// The type that `type` names: one of the file's structs, which shadow the prelude's types, or one of those.

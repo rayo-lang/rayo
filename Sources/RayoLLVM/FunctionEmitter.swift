@@ -146,7 +146,18 @@ struct FunctionEmitter {
         case .unary(let op, let operand): return operators.unary(op, read(operand), at: range)
         case .binary(let op, let left, let right): return operators.binary(op, read(left), read(right), at: range)
         case .call(let callee, let arguments): return call(callee, passing: arguments.map { read($0) })
+        case .structure(let id, let fields): return structure(id, of: fields.map { read($0) })
         }
+    }
+
+    /// Emits the instructions that make a value of the struct `id` of `fields`, its fields' values in the order the
+    /// struct declares them, and returns the value. The bytes that pad the struct's end hold nothing.
+    private func structure(_ id: StructID, of fields: [LLVMValueRef]) -> LLVMValueRef {
+        var value = LLVMGetPoison(types.llvmType(.structure(id)))!
+        for (field, fieldValue) in fields.enumerated() {
+            value = LLVMBuildInsertValue(builder, value, fieldValue, types.element(holding: field, of: id), "")
+        }
+        return value
     }
 
     /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing.
