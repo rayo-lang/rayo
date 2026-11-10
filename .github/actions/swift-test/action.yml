@@ -1,0 +1,56 @@
+name: Test with SwiftPM
+description: Runs swift test from the build main last saved, and saves the build on a push to main.
+
+inputs:
+  platform:
+    description: The platform the build is for, which names its cache.
+    required: true
+  llvm-version:
+    description: The exact build of LLVM the compiler links, which a cached build depends on.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check the Swift release
+      shell: bash
+      run: |
+        release=$(swift --version 2>&1 | grep -o -E 'Swift version [0-9]+\.[0-9]+' | head -n 1)
+        if [ "$release" != "Swift version $SWIFT_RELEASE" ]; then
+          echo "::error::this job runs '${release:-no Swift}', and CI tests with Swift $SWIFT_RELEASE"
+          exit 1
+        fi
+
+    # A build is reused only by the same Swift compiler and the same LLVM, down to the patch and the package
+    # build, since either one changing can leave modules or links the next build can't use.
+    - name: Name the build's cache
+      id: name
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        LLVM_VERSION: ${{ inputs.llvm-version }}
+        SOURCES: ${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
+      run: |
+        toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
+        prefix="build-$PLATFORM-$RUNNER_ARCH-$toolchain-"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "key=$prefix$SOURCES" >> "$GITHUB_OUTPUT"
+
+    # A pull request starts from the build main last saved, so it compiles only what it changed. Only a push to
+    # main saves a build, which keeps the cache to one build per platform.
+    - name: Restore the build
+      id: build
+      uses: actions/cache/restore@v6
+      with:
+        path: .build
+        key: ${{ steps.name.outputs.key }}
+        restore-keys: ${{ steps.name.outputs.prefix }}
+    - name: Test
+      shell: bash
+      run: swift test
+    - name: Save the build
+      if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .build
+        key: ${{ steps.build.outputs.cache-primary-key }}

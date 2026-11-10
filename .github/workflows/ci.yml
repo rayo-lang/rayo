@@ -5,21 +5,112 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+# A new push to a pull request makes the run on its last push moot. A push to main runs to the end, since its run
+# saves the caches that pull requests start from.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  # The Swift release every platform tests with. The Linux job's container is named from it, and each test job
+  # checks that its Swift is this release.
+  SWIFT_RELEASE: "6.4"
+  LLVM_MAJOR_VERSION: 23
+
 jobs:
-  test:
-    name: Build and test on Linux
+  changes:
+    name: Find what changed
     runs-on: ubuntu-latest
-    container: swift:6.4-noble
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+      docs: ${{ steps.paths.outputs.docs }}
+      swift-release: ${{ env.SWIFT_RELEASE }}
+    steps:
+      # A pull request needs only its merge commit and the merge's parents; a push to main needs the commit main
+      # was at, however far back.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+      - name: Sort the changed paths into code and docs
+        id: paths
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # A pull request's run checks out the merge of its head into its base, so the merge's first parent is
+          # the base. A push to main compares with the commit main was at. Where there is nothing sure to compare
+          # with, such as a merge with one parent or a push whose old commit is gone, everything runs.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && git rev-parse -q --verify HEAD^2 > /dev/null; then
+            base=HEAD^1
+          elif [ "$GITHUB_EVENT_NAME" = push ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            base=$BEFORE
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A rename counts as its old path and its new one, so a file moved out of the sources still runs the
+          # tests.
+          changed=$(git diff --name-only --no-renames "$base" HEAD)
+          deleted=$(git diff --name-only --no-renames --diff-filter=D "$base" HEAD)
+
+          # The compiler's build reads only its sources, its tests and the package manifest, and the tests run
+          # through this workflow and its actions. The docs check reads every Markdown file, its own scripts and
+          # every file a link names, so a deleted file of any kind can break a link.
+          code='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
+          docs='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
+          if grep -q -E "$code" <<< "$changed"; then code=true; else code=false; fi
+          if grep -q -E "$docs" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "docs=$docs" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: Test on Linux
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: swift:${{ needs.changes.outputs.swift-release }}-noble
     env:
-      LLVM_MAJOR_VERSION: 23
       # The fingerprint apt.llvm.org publishes for the key that signs its packages.
       LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+      # Where the LLVM packages are kept between runs. Raising the revision fetches apt.llvm.org's newest build of
+      # the release, since the cache otherwise keeps the build it first fetched.
+      LLVM_PACKAGES: /var/cache/rayo-llvm
+      LLVM_PACKAGES_REVISION: 1
     steps:
       - uses: actions/checkout@v7
-      - name: Install LLVM
+
+      # The cached packages are what LLVM needs on top of the packages the container's image holds, at their exact
+      # versions. A new build of the image can change those, so the cache is keyed on them too.
+      - name: Name the LLVM packages' cache
+        id: image
         run: |
+          packages=$(dpkg-query -W -f='${Package}=${Version}\n' | git hash-object --stdin | cut -c 1-16)
+          echo "key=llvm-$LLVM_MAJOR_VERSION-noble-$packages-r$LLVM_PACKAGES_REVISION" >> "$GITHUB_OUTPUT"
+      - name: Restore the LLVM packages
+        id: llvm-packages
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.LLVM_PACKAGES }}
+          key: ${{ steps.image.outputs.key }}
+      - name: Fetch the LLVM packages
+        if: steps.llvm-packages.outputs.cache-hit != 'true'
+        run: |
+          # Fetch Ubuntu's packages from Azure's mirror of the archive rather than archive.ubuntu.com, which has
+          # stalled for minutes at a time from GitHub's runners. A server that stalls fails the step within
+          # minutes rather than holding the job until it times out.
+          sed -i -E 's#https?://(archive|security)\.ubuntu\.com#http://azure.archive.ubuntu.com#' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            > /etc/apt/apt.conf.d/80-rayo-ci
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl gnupg
+
           # apt trusts every key in the keyring, so it gets the one key with the published fingerprint and no other
           # key the download might hold.
           keys=$(mktemp -d)
@@ -30,25 +121,139 @@ jobs:
             echo "::error::apt.llvm.org's key file holds no key with fingerprint $LLVM_KEY_FINGERPRINT"
             exit 1
           fi
-          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR_VERSION main" \
+
+          # Fetch LLVM, clang and LLD with each dependency the container lacks, into the directory the cache keeps,
+          # without apt's working files. The pin keeps the major release: apt.llvm.org serves only the newest build
+          # of it, so no exact build can be named.
+          suite="llvm-toolchain-noble-$LLVM_MAJOR_VERSION"
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ $suite main" \
             > /etc/apt/sources.list.d/llvm.list
           apt-get update
-          # The pin keeps the major release: apt.llvm.org serves only the newest build of it, so no exact build
-          # can be named.
+          mkdir -p "$LLVM_PACKAGES/partial"
           version="1:$LLVM_MAJOR_VERSION.1.*"
-          apt-get install -y --no-install-recommends "llvm-$LLVM_MAJOR_VERSION-dev=$version" \
-            "clang-$LLVM_MAJOR_VERSION=$version" "lld-$LLVM_MAJOR_VERSION=$version"
-      - name: Build
-        run: swift build --build-tests
-      - name: Test
-        run: swift test --skip-build
+          apt-get install -y --no-install-recommends --download-only -o Dir::Cache::Archives="$LLVM_PACKAGES" \
+            "llvm-$LLVM_MAJOR_VERSION-dev=$version" "clang-$LLVM_MAJOR_VERSION=$version" \
+            "lld-$LLVM_MAJOR_VERSION=$version"
+          rm -rf "$LLVM_PACKAGES/partial" "$LLVM_PACKAGES/lock"
+      - name: Install LLVM
+        id: llvm
+        # The cache holds each package LLVM needs that the container lacks, so apt installs them from their files
+        # alone, with no package index and no network. apt rather than dpkg, since only apt orders the packages so
+        # that each one's pre-dependencies are configured before it is unpacked.
+        run: |
+          apt-get install -y --no-install-recommends --no-download -o Dir::Cache::Archives="$LLVM_PACKAGES" \
+            "$LLVM_PACKAGES"/*.deb
+          echo "version=$(dpkg-query -W -f='${Version}' "llvm-$LLVM_MAJOR_VERSION-dev")" >> "$GITHUB_OUTPUT"
+      # Only a push to main saves the packages, as it does the build, so pull requests share main's one copy.
+      - name: Save the LLVM packages
+        if: github.event_name == 'push' && steps.llvm-packages.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.LLVM_PACKAGES }}
+          key: ${{ steps.llvm-packages.outputs.cache-primary-key }}
+
+      - uses: ./.github/actions/swift-test
+        with:
+          platform: linux
+          llvm-version: ${{ steps.llvm.outputs.version }}
+
+  macos:
+    name: Test on macOS
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Swift 6.4 comes with Xcode 27, which GitHub installs only on its image of that name. A new Swift release
+    # changes this label with it, and the step that selects Xcode fails until it does.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      # Install the formulae the runner's Homebrew already knows, without the update it would run first.
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      # Keep the bottles Homebrew downloads after it installs them, so the cache can hold them.
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
+        run: |
+          for xcode in /Applications/Xcode*.app; do
+            developer="$xcode/Contents/Developer"
+            swift=$(DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null)
+            release=$(grep -o -E 'Swift version [0-9]+\.[0-9]+' <<< "$swift" | head -n 1)
+            if [ "$release" = "Swift version $SWIFT_RELEASE" ]; then
+              echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
+              exit 0
+            fi
+          done
+          echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
+          exit 1
+
+      # Homebrew keeps each bottle it downloads, so a cache keyed on every formula the install pours, LLVM's
+      # dependencies among them, holds those bottles. A new version of any of them gets a cache of its own.
+      - name: Find the formulae Homebrew installs
+        id: brew
+        run: |
+          formulae=("llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION")
+          formulae+=($(brew deps "${formulae[@]}"))
+          info=$(brew info --json=v2 "${formulae[@]}")
+          versions=$(jq -r '.formulae[] | .name + "=" + .versions.stable' <<< "$info" | sort)
+          hash=$(git hash-object --stdin <<< "$versions" | cut -c 1-16)
+          echo "key=brew-$hash-$RUNNER_ARCH" >> "$GITHUB_OUTPUT"
+
+          # Homebrew may list llvm@N under its own name, llvm, with llvm@N as an alias.
+          llvm=$(jq -r --arg name "llvm@$LLVM_MAJOR_VERSION" \
+            '.formulae[] | select(.name == $name or (.aliases | index($name))) | .versions.stable' <<< "$info")
+          echo "llvm=$llvm" >> "$GITHUB_OUTPUT"
+      - name: Restore Homebrew's downloads
+        id: bottles
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/Library/Caches/Homebrew/downloads
+          key: ${{ steps.brew.outputs.key }}
+      - name: Install LLVM
+        run: brew install "llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION"
+      # Only a push to main saves the bottles, as it does the build, so pull requests share main's one copy.
+      - name: Save Homebrew's downloads
+        if: github.event_name == 'push' && steps.bottles.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/Library/Caches/Homebrew/downloads
+          key: ${{ steps.brew.outputs.key }}
+
+      - uses: ./.github/actions/swift-test
+        with:
+          platform: macos
+          llvm-version: ${{ steps.brew.outputs.llvm }}
 
   docs:
     name: Check docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - name: Test the checker
         run: python3 -m unittest discover -s scripts
       - name: Check links, layout and readability
         run: python3 scripts/check_docs.py
+
+  # The one check main's ruleset requires. A job that a change doesn't touch is skipped, and a skipped job passes
+  # here, so a change runs only the jobs it needs and still reports one result. It runs even when a job it needs
+  # was cancelled, and fails then, since a skipped required check would pass.
+  ci:
+    name: CI
+    needs: [changes, linux, macos, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job that ran to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "::error::a job CI needs ended in '$result'"; exit 1 ;;
+            esac
+          done
