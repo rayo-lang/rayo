@@ -78,7 +78,7 @@ struct InitializationState: Equatable {
         }
     }
 
-    /// Gives `destination`'s local a value.
+    /// Hands `store` the state of `destination`'s local, then gives the local a value.
     private mutating func assign(_ destination: Place, store: PlaceVisitor) {
         store(destination, locals[destination.local.index])
         locals[destination.local.index] = .initialized
