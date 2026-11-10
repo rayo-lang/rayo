@@ -30,10 +30,7 @@ public struct Parser {
     public static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
         var parser = Parser(bytes)
         let file = parser.parseFile()
-        let ordered = parser.diagnostics.enumerated().sorted { a, b in
-            (a.element.range.start.offset, a.offset) < (b.element.range.start.offset, b.offset)
-        }
-        return (file, ordered.map(\.element))
+        return (file, parser.diagnostics.inSourceOrder)
     }
 
     // MARK: Tokens
