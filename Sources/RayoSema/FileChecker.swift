@@ -160,24 +160,26 @@ final class FileChecker {
 
     /// Checks the body of the function `id`, with its parameters as its first locals.
     private func checkBody(of id: FunctionID) -> CheckedBody {
-        // Give the body a checker of its own.
+        // Give the body checkers of its own, whose first locals are the parameters.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
-        var body = BodyChecker(file: self, result: signature.result.type)
-        body.declare(function.parameters, types: signature.parameters.map(\.type))
+        let names = NameScopes(declarations: declarations, errors: errors)
+        let expressions = ExpressionChecker(file: self, names: names)
+        BindingChecker(expressions: expressions).declare(function.parameters, types: signature.parameters.map(\.type))
+        var body = BodyChecker(expressions: expressions, result: signature.result.type)
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
             let returned = body.returned(value)
             let statements: [CheckedStmt] = returned.map { [.returnStmt($0)] } ?? []
-            return CheckedBody(result: bodyResult(of: signature, returning: returned), locals: body.locals,
+            return CheckedBody(result: bodyResult(of: signature, returning: returned), locals: names.locals,
                                statements: statements)
         }
 
         // Any other body is checked statement by statement, and a missing `return` on a path to its end is reported.
         let statements = body.check(function.body)
         reportMissingReturn(from: function, as: signature)
-        return CheckedBody(result: signature.result.type, locals: body.locals, statements: statements)
+        return CheckedBody(result: signature.result.type, locals: names.locals, statements: statements)
     }
 
     /// The result type of the function that `signature` declares, whose body is a single expression that checks to
