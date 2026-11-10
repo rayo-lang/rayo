@@ -26,19 +26,19 @@ struct MoveTests {
     }
 
     @Test("a use of a moved local is an error at the use", arguments: [
-        ("let x = 1\nlet y = x\nprint(x)", "4:7: error[E0301]: 'x' was moved"),
-        ("let x = 1\nlet y = (x)\nprint(x)", "4:7: error[E0301]: 'x' was moved"),
-        ("let x = 1\nlet y = x\nlet z = x", "4:9: error[E0301]: 'x' was moved"),
-        ("var x = 1\nlet y = x\nx += 1", "4:1: error[E0301]: 'x' was moved"),
-        ("let x = true\nlet y = x\nif x { }", "4:4: error[E0301]: 'x' was moved"),
-        ("let x = 1\nlet y = x\nprint(copy x + 1)", "4:7: error[E0301]: 'x' was moved"),
+        ("let x = 1\nlet y = x\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
+        ("let x = 1\nlet y = (x)\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
+        ("let x = 1\nlet y = x\nlet z = x", "4:9: error[E0302]: 'x' was moved"),
+        ("var x = 1\nlet y = x\nx += 1", "4:1: error[E0302]: 'x' was moved"),
+        ("let x = true\nlet y = x\nif x { }", "4:4: error[E0302]: 'x' was moved"),
+        ("let x = 1\nlet y = x\nprint(copy x + 1)", "4:7: error[E0302]: 'x' was moved"),
     ])
     func useAfterMove(body: String, expected: String) {
         #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [expected])
     }
 
     @Test("a 'return' moves its local, and a use after it on no path is no error", arguments: [
-        ("func f() -> Int {\n    let x = 1\n    let y = x\n    return x\n}", ["5:12: error[E0301]: 'x' was moved"]),
+        ("func f() -> Int {\n    let x = 1\n    let y = x\n    return x\n}", ["5:12: error[E0302]: 'x' was moved"]),
         ("func f() -> Int {\n    let x = 1\n    return x\n    print(x)\n}", []),
     ])
     func returned(declaration: String, expected: [String]) {
@@ -47,8 +47,8 @@ struct MoveTests {
 
     @Test("a local moved on one path of an 'if' may have been moved after it, and one moved on both was moved",
           arguments: [
-        ("if true { let y = x }", "'x' may have been moved", "E0302"),
-        ("if true { let y = x } else { var z = 0\nz = x }", "'x' was moved", "E0301"),
+        ("if true { let y = x }", "'x' may have been moved", "E0303"),
+        ("if true { let y = x } else { var z = 0\nz = x }", "'x' was moved", "E0302"),
     ])
     func branches(statement: String, message: String, code: String) {
         let reported = diagnostics("func main() {\nvar x = 1\n\(statement)\nprint(x)\n}")
@@ -60,7 +60,7 @@ struct MoveTests {
     func loops() {
         let moves = "var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}"
         #expect(diagnostics("func main() {\n\(moves)\n}").map(\.description) == [
-            "6:9: error[E0302]: 'x' may have been moved",
+            "6:9: error[E0303]: 'x' may have been moved",
         ])
         #expect(output("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\nprint(y)\nx = 2\n}") == "1\n2\n")
     }
@@ -79,7 +79,7 @@ struct MoveTests {
     func continues() {
         let body = "var x = 1\nvar i = 0\nwhile i < 3 {\ni += 1\nprint(copy x)\nif i == 1 {\nlet y = x\ncontinue\n}\nx = 5\n}"
         #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [
-            "6:7: error[E0302]: 'x' may have been moved", "8:9: error[E0302]: 'x' may have been moved",
+            "6:7: error[E0303]: 'x' may have been moved", "8:9: error[E0303]: 'x' may have been moved",
         ])
         #expect(output(body.replacingOccurrences(of: "continue\n", with: "")) == "1\n5\n5\n")
     }
