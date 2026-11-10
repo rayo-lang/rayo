@@ -63,8 +63,8 @@ struct BodyChecker {
     }
 
     /// Looks `name` up in the body's locals and parameters, innermost block first, then among the module's
-    /// functions, and gives the nearest match. A call skips the locals and parameters, since none has a type that can
-    /// be called, not even one whose declaration failed, and gives the local only when no function has the name.
+    /// functions, and gives the nearest match. A call skips the locals and parameters, failed ones too, since none
+    /// can be called; it gives the nearest of them only when no function has the name.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         let functions = declarations.functions(named: name)
         if let entry = scopeEntry(for: name), use == .ordinary || functions.isEmpty { return .inScope(entry) }
