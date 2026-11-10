@@ -79,37 +79,64 @@ struct BodyChecker {
 
     /// Checks `statement`. A declaration gives a checked statement for each of its bindings.
     private mutating func check(_ statement: Stmt) -> [CheckedStmt] {
-        switch statement.kind {
-        case .expression(let expr):
-            return checkUnused(expr).map { [.expression($0)] } ?? []
-        case .declaration(let kind, let bindings):
-            return bindings.compactMap { check($0, declaredWith: kind) }
-        case .drop(let value):
-            return checkTaken(value).map { [.expression($0)] } ?? []
-        case .assign(let target, let op, let value):
-            return assign(value, op: op, to: target, in: statement.range).map { [$0] } ?? []
-        case .ifStmt(let condition, let then, let otherwise):
-            let condition = check(condition, expecting: .bool)
-            let then = check(then)
-            let otherwise = otherwise.map { check($0) } ?? []
-            return condition.map { [.ifStmt(condition: $0, then: then, otherwise: otherwise)] } ?? []
-        case .whileStmt(let condition, let body):
-            let condition = check(condition, expecting: .bool)
-            loopDepth += 1
-            let body = check(body)
-            loopDepth -= 1
-            return condition.map { [.whileStmt(condition: $0, body: body)] } ?? []
-        case .breakStmt:
-            return isInsideLoop("break", at: statement.range) ? [.breakStmt] : []
-        case .continueStmt:
-            return isInsideLoop("continue", at: statement.range) ? [.continueStmt] : []
-        case .returnStmt(let value?):
-            return returned(value).map { [.returnStmt($0)] } ?? []
-        case .returnStmt(nil):
-            guard let result, result != .void else { return [.returnStmt(nil)] }
-            errors.report(.missingReturnValue(type: "\(result)"), at: statement.range)
-            return []
+        guard case .declaration(let kind, let bindings) = statement.kind else {
+            return checkSingle(statement).map { [$0] } ?? []
         }
+        return bindings.compactMap { check($0, declaredWith: kind) }
+    }
+
+    /// Checks `statement`, which isn't a declaration.
+    private mutating func checkSingle(_ statement: Stmt) -> CheckedStmt? {
+        switch statement.kind {
+        case .declaration:
+            preconditionFailure("a declaration gives a checked statement for each of its bindings")
+        case .expression(let expr):
+            return checkUnused(expr).map { .expression($0) }
+        case .drop(let value):
+            return checkTaken(value).map { .expression($0) }
+        case .assign(let target, let op, let value):
+            return assign(value, op: op, to: target, in: statement.range)
+        case .ifStmt(let condition, let then, let otherwise):
+            return checkIf(condition, then: then, otherwise: otherwise)
+        case .whileStmt(let condition, let body):
+            return checkWhile(condition, body: body)
+        case .breakStmt:
+            return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
+        case .continueStmt:
+            return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
+        case .returnStmt(let value?):
+            return returned(value).map { .returnStmt($0) }
+        case .returnStmt(nil):
+            return checkEmptyReturn(at: statement.range)
+        }
+    }
+
+    private mutating func checkIf(_ condition: Expr, then: Block, otherwise: Block?) -> CheckedStmt? {
+        let condition = check(condition, expecting: .bool)
+        let then = check(then)
+        let otherwise = otherwise.map { check($0) } ?? []
+        return condition.map { .ifStmt(condition: $0, then: then, otherwise: otherwise) }
+    }
+
+    private mutating func checkWhile(_ condition: Expr, body: Block) -> CheckedStmt? {
+        let condition = check(condition, expecting: .bool)
+        let body = checkLoopBody(body)
+        return condition.map { .whileStmt(condition: $0, body: body) }
+    }
+
+    /// Checks `body` as a loop's body, where a `break` or a `continue` may be.
+    private mutating func checkLoopBody(_ body: Block) -> [CheckedStmt] {
+        loopDepth += 1
+        defer { loopDepth -= 1 }
+        return check(body)
+    }
+
+    /// Checks a `return` without a value, which a function may have only when its result type is Void or isn't
+    /// known.
+    private mutating func checkEmptyReturn(at range: SourceRange) -> CheckedStmt? {
+        guard let result, result != .void else { return .returnStmt(nil) }
+        errors.report(.missingReturnValue(type: "\(result)"), at: range)
+        return nil
     }
 
     /// Checks `expr` as the value the function returns.
