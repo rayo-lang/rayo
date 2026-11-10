@@ -5,6 +5,7 @@ struct MessageTemplate {
     enum Part {
         /// Text as written in the source, escapes included.
         case text(String)
+        /// A placeholder for the case's value with that label.
         case value(label: String)
     }
 
@@ -13,7 +14,9 @@ struct MessageTemplate {
     /// The template `expression` holds, or nil when it isn't a one-line string literal without
     /// interpolation. Only `{name}` is a placeholder, so other braces, and `\u{…}`, are text.
     init?(_ expression: ExprSyntax) {
+        // An expression that isn't a plain string literal holds no template.
         guard let source = Self.plainSource(of: expression) else { return nil }
+
         parts = Self.parts(of: Array(source.unicodeScalars))
     }
 
@@ -39,10 +42,14 @@ struct MessageTemplate {
 
     /// The source text inside `expression`, when it is a one-line string literal without interpolation.
     private static func plainSource(of expression: ExprSyntax) -> String? {
+        // A raw or multi-line literal, or any other expression, is no plain literal.
         guard let literal = expression.as(StringLiteralExprSyntax.self), literal.openingPounds == nil,
               literal.openingQuote.tokenKind == .stringQuote else { return nil }
+
+        // Join the literal's text, which a plain literal holds in segments of text alone.
         var source = ""
         for segment in literal.segments {
+            // A segment that interpolates a value makes the literal no plain one.
             guard let plain = segment.as(StringSegmentSyntax.self) else { return nil }
             source += plain.content.text
         }
@@ -56,10 +63,12 @@ struct MessageTemplate {
         var index = 0
         while index < scalars.count {
             if let placeholder = placeholder(in: scalars, at: index) {
+                // A placeholder ends the text before it, and the next text starts after it.
                 parts += [.text(String(text)), .value(label: placeholder.label)]
                 text = String.UnicodeScalarView()
                 index = placeholder.end
             } else {
+                // Any other scalar is text.
                 text.append(scalars[index])
                 index += 1
             }
@@ -69,17 +78,21 @@ struct MessageTemplate {
 
     /// The `{identifier}` that starts at `start`: the identifier, and the index just past the `}`.
     private static func placeholder(in scalars: [Unicode.Scalar], at start: Int) -> (label: String, end: Int)? {
+        // Only a brace that opens no escape, then an identifier, then a closing brace make a placeholder.
         guard scalars[start] == "{", !isUnicodeEscape(scalars, braceAt: start),
               let labelEnd = identifierEnd(in: scalars, from: start + 1), labelEnd < scalars.count,
               scalars[labelEnd] == "}" else { return nil }
+
         let label = String(String.UnicodeScalarView(scalars[(start + 1)..<labelEnd]))
         return (label, labelEnd + 1)
     }
 
-    /// Whether the brace at `brace` opens a `\u{…}` escape: it follows a `u` after an odd run of
-    /// backslashes, since an even run is that many escaped backslashes.
+    /// Whether the brace at `brace` opens a `\u{…}` escape.
     private static func isUnicodeEscape(_ scalars: [Unicode.Scalar], braceAt brace: Int) -> Bool {
+        // A brace without a `u` before it, and room before that for a backslash, opens no escape.
         guard brace >= 2, scalars[brace - 1] == "u" else { return false }
+
+        // The `u` starts an escape after an odd run of backslashes, since an even run is that many escaped ones.
         var backslashes = 0
         while brace - 2 - backslashes >= 0, scalars[brace - 2 - backslashes] == "\\" { backslashes += 1 }
         return backslashes % 2 == 1
@@ -87,7 +100,10 @@ struct MessageTemplate {
 
     /// The index just past the Swift identifier that starts at `start`, or nil when none starts there.
     private static func identifierEnd(in scalars: [Unicode.Scalar], from start: Int) -> Int? {
+        // An identifier starts with `_` or a letter that may start one.
         guard start < scalars.count, scalars[start] == "_" || scalars[start].properties.isXIDStart else { return nil }
+
+        // It runs on through every scalar that may continue one.
         var end = start + 1
         while end < scalars.count, scalars[end].properties.isXIDContinue { end += 1 }
         return end

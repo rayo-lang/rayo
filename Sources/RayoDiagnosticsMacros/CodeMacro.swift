@@ -7,18 +7,28 @@ import SwiftSyntaxMacros
 public struct CodeMacro: PeerMacro {
     public static func expansion(of node: AttributeSyntax, providingPeersOf declaration: some DeclSyntaxProtocol,
                                  in context: some MacroExpansionContext) throws -> [DeclSyntax] {
-        let table = context.lexicalContext.first?.as(EnumDeclSyntax.self)
-        let isInTable = table?.attributes.contains { attribute in
-            attribute.as(AttributeSyntax.self).map { isDiagnostics($0.attributeName) } ?? false
-        } ?? false
-        if !declaration.is(EnumCaseDeclSyntax.self) || !isInTable {
+        // A `@Code` on anything but a case of a `@Diagnostics` enum is one no table reads.
+        if !declaration.is(EnumCaseDeclSyntax.self) || !isInTable(context) {
             context.diagnose(Diagnostic(node: node, message: CodeTableError.codeOutsideTable))
         }
         return []
     }
 
+    /// Whether the declaration that `context` expands in sits directly inside an enum marked `@Diagnostics`.
+    private static func isInTable(_ context: some MacroExpansionContext) -> Bool {
+        // Outside an enum there is no table.
+        guard let table = context.lexicalContext.first?.as(EnumDeclSyntax.self) else { return false }
+
+        return table.attributes.contains { element in
+            // An `#if` among the enum's attributes is no `@Diagnostics`.
+            guard let attribute = element.as(AttributeSyntax.self) else { return false }
+            return isDiagnostics(attribute.attributeName)
+        }
+    }
+
     /// Whether `name` names `@Diagnostics`, alone or after its module's name.
     private static func isDiagnostics(_ name: TypeSyntax) -> Bool {
+        // `@Diagnostics` written alone.
         if let identifier = name.as(IdentifierTypeSyntax.self) { return identifier.name.text == "Diagnostics" }
         return name.as(MemberTypeSyntax.self)?.name.text == "Diagnostics"
     }

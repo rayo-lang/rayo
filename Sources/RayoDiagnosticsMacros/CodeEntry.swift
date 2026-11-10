@@ -30,7 +30,11 @@ struct CodeEntry {
 
     /// The pattern that matches the case and binds its values in order, as `v0`, `v1` and so on.
     var bindingPattern: String {
-        labels.isEmpty ? ".\(name)" : ".\(name)(\(labels.indices.map { "let v\($0)" }.joined(separator: ", ")))"
+        // A case without values is matched by its name alone.
+        guard !labels.isEmpty else { return ".\(name)" }
+
+        let bindings = labels.indices.map { "let v\($0)" }.joined(separator: ", ")
+        return ".\(name)(\(bindings))"
     }
 
     /// The message as a Swift string literal that interpolates the values `bindingPattern` binds.
@@ -43,6 +47,7 @@ struct CodeEntry {
     /// The one case `caseDecl` declares, reporting a declaration of several.
     private static func onlyElement(of caseDecl: EnumCaseDeclSyntax,
                                     reporting errors: inout [Diagnostic]) -> EnumCaseElementSyntax? {
+        // A `@Code` before `case a, b` can't say which of them it numbers.
         guard caseDecl.elements.count == 1 else {
             errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.oneCasePerCode))
             return nil
@@ -50,14 +55,18 @@ struct CodeEntry {
         return caseDecl.elements.first
     }
 
-    /// The `@Code` on `caseDecl`, which declares the case `name`, reporting none, and any after the first.
+    /// The first `@Code` on `caseDecl`, which declares the case `name`. Reports a case without one, and each one
+    /// after the first.
     private static func onlyCode(on caseDecl: EnumCaseDeclSyntax, named name: String,
                                  reporting errors: inout [Diagnostic]) -> AttributeSyntax? {
         let codes = caseDecl.attributes.compactMap { $0.as(AttributeSyntax.self) }.filter(isCode)
+
+        // A case without a `@Code` has nothing to read.
         guard let code = codes.first else {
             errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.caseWithoutCode(name)))
             return nil
         }
+
         errors += codes.dropFirst().map { Diagnostic(node: $0, message: CodeTableError.oneCodePerCase) }
         return code
     }
@@ -65,41 +74,56 @@ struct CodeEntry {
     /// `element`'s values with their labels, or nil after reporting each value without one.
     private static func labeledValues(of element: EnumCaseElementSyntax,
                                       reporting errors: inout [Diagnostic]) -> [LabeledValue]? {
+        // Report every value without a label, so that one expansion shows them all.
         let parameters = element.parameterClause?.parameters.map { $0 } ?? []
         let unlabeled = parameters.filter { LabeledValue($0) == nil }
         errors += unlabeled.map { Diagnostic(node: $0, message: CodeTableError.unlabeledValue(element.name.text)) }
-        return unlabeled.isEmpty ? parameters.compactMap(LabeledValue.init) : nil
+
+        // A value without a label can't be named by the message, so the case has no entry.
+        guard unlabeled.isEmpty else { return nil }
+
+        return parameters.compactMap(LabeledValue.init)
     }
 
     /// The positive integer `expression` writes, reporting anything else.
     private static func number(in expression: ExprSyntax, reporting errors: inout [Diagnostic]) -> Int? {
+        // A positive integer literal is the number.
         if let value = expression.as(IntegerLiteralExprSyntax.self)?.representedLiteralValue, value > 0 { return value }
+
+        // Anything else, a constant's name or a negative number among them, is no number the macro can read.
         errors.append(Diagnostic(node: expression, message: CodeTableError.numberNotLiteral))
         return nil
     }
 
     /// The message `expression` writes, reporting one that isn't a plain string literal.
     private static func message(in expression: ExprSyntax, reporting errors: inout [Diagnostic]) -> MessageTemplate? {
+        // A plain string literal is the message.
         if let message = MessageTemplate(expression) { return message }
+
+        // Anything else is no message the macro can read.
         errors.append(Diagnostic(node: expression, message: CodeTableError.messageNotPlain))
         return nil
     }
 
-    /// Whether `message` names each of `values` and nothing else, reporting a placeholder that names no
-    /// value, and a value no placeholder names. A macro's error is placed at the start of a syntax node,
-    /// so a placeholder's error is at the whole message, `expression`.
+    /// Whether `message` names each of `values` and nothing else. Reports each placeholder that names no value at
+    /// `expression`, and each value that no placeholder names at the value.
     private static func placeholdersMatch(_ message: MessageTemplate, writtenAt expression: ExprSyntax,
                                           values: [LabeledValue], reporting errors: inout [Diagnostic]) -> Bool {
+        // Find the placeholders that name no value, and the values that no placeholder names.
         let named = message.placeholderLabels
         let unknown = named.filter { label in !values.contains { $0.label == label } }
         let unused = values.filter { !named.contains($0.label) }
+
+        // A macro's error goes at the start of a syntax node, so a placeholder's error goes at the whole message.
         errors += unknown.map { Diagnostic(node: expression, message: CodeTableError.unknownPlaceholder($0)) }
         errors += unused.map { Diagnostic(node: $0.parameter, message: CodeTableError.unusedValue($0.label)) }
+
         return unknown.isEmpty && unused.isEmpty
     }
 
     /// Whether `attribute` is `@Code`, written alone or after its module's name.
     private static func isCode(_ attribute: AttributeSyntax) -> Bool {
+        // `@Code` written alone.
         if let name = attribute.attributeName.as(IdentifierTypeSyntax.self) { return name.name.text == "Code" }
         return attribute.attributeName.as(MemberTypeSyntax.self)?.name.text == "Code"
     }
@@ -110,9 +134,12 @@ private struct LabeledValue {
     var label: String
     var parameter: EnumCaseParameterSyntax
 
-    /// Nil when `parameter` has no label, or `_`.
+    /// The value `parameter` declares, or nil when it has no label, or `_` for one.
     init?(_ parameter: EnumCaseParameterSyntax) {
+        // A value without a label is one no message can name.
         guard let label = parameter.firstName, label.tokenKind != .wildcard else { return nil }
+
+        // A label written in backticks is named without them, and a keyword such as `in` by its text.
         self.label = label.identifier?.name ?? label.text
         self.parameter = parameter
     }
@@ -123,10 +150,12 @@ private struct CodeArguments {
     var number: ExprSyntax
     var message: ExprSyntax
 
-    /// Nil when the arguments don't fit `@Code`, which the compiler reports.
+    /// The arguments of `code`, or nil when they don't fit `@Code`, which the compiler reports.
     init?(_ code: AttributeSyntax) {
+        // Arguments that don't fit `@Code` are left for the compiler to report.
         guard case .argumentList(let arguments) = code.arguments, arguments.count == 2,
               let number = arguments.first, let message = arguments.last else { return nil }
+
         self.number = number.expression
         self.message = message.expression
     }

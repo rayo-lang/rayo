@@ -36,22 +36,10 @@ enum CodeTableError: DiagnosticMessage, Equatable {
 
     /// Names the kind of error, without its values.
     var diagnosticID: MessageID {
+        // A case with values reflects as a child labeled with its name; a case without is described by its name.
         let kind = Mirror(reflecting: self).children.first?.label ?? "\(self)"
         return MessageID(domain: "RayoDiagnosticsMacros", id: kind)
     }
 
     var severity: DiagnosticSeverity { .error }
-}
-
-/// A note that points at a code's number where the number is first used.
-enum CodeTableNote: NoteMessage, Equatable {
-    case firstUse(Int)
-
-    var message: String {
-        switch self {
-        case .firstUse(let number): "the number \(number) is first used here"
-        }
-    }
-
-    var noteID: MessageID { MessageID(domain: "RayoDiagnosticsMacros", id: "firstUse") }
 }

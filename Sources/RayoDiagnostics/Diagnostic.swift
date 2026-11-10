@@ -16,8 +16,10 @@ public struct Diagnostic: Sendable, Hashable, CustomStringConvertible {
 extension Array where Element == Diagnostic {
     /// The diagnostics by where they start in the source, those that start at one place in the order they come in.
     public var inSourceOrder: [Diagnostic] {
-        enumerated().sorted { a, b in
+        // Break a tie by the order the diagnostics come in, which `sorted` alone doesn't promise to keep.
+        let sorted = enumerated().sorted { a, b in
             (a.element.range.start, a.offset) < (b.element.range.start, b.offset)
-        }.map(\.element)
+        }
+        return sorted.map(\.element)
     }
 }
