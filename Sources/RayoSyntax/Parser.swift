@@ -280,14 +280,20 @@ public struct Parser {
             kind = .continueStmt
         } else if consume(.return) {
             kind = .returnStmt(atStatementEnd ? nil : try parseExpression())
-        } else if current.kind == .identifier("_"), peek().isPunct(.assign) {
-            advance()
-            advance()
+        } else if consumeDrop() {
             kind = .drop(try parseExpression())
         } else {
             kind = try parseExpressionStatement()
         }
         return Stmt(kind: kind, range: range(from: start))
+    }
+
+    /// Consumes `_ =`, which starts a statement that drops a value, when it comes next.
+    private mutating func consumeDrop() -> Bool {
+        guard current.kind == .identifier("_"), peek().isPunct(.assign) else { return false }
+        advance()
+        advance()
+        return true
     }
 
     /// An expression, or an assignment to one.
