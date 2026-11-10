@@ -142,6 +142,7 @@ public enum Driver {
 
             let checked = Checker.check(file)
             guard let program = checked.program else { return failure(checked.diagnostics, in: path) }
+
             let lowered = Lowering.lower(program)
             let ownershipErrors = InitializationChecker.check(lowered)
             if !ownershipErrors.isEmpty { return failure(ownershipErrors, in: path) }
