@@ -1,5 +1,6 @@
 import RayoSema
 import RayoSource
+import RayoSyntax
 
 public enum Lowering {
     public static func lower(_ program: CheckedProgram) -> IRProgram {
@@ -82,8 +83,7 @@ private struct FunctionBuilder {
         case .assign(let place, let value):
             emit(rvalue(of: value), into: Place(place), range: value.range)
         case .compoundAssign(let place, let op, let value):
-            let value = operand(of: value)
-            emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
+            lowerCompoundAssign(place, op, value)
         case .ifStmt(let condition, let then, let otherwise):
             lowerIf(condition, then, otherwise)
         case .whileStmt(let condition, let body):
@@ -95,6 +95,12 @@ private struct FunctionBuilder {
         case .returnStmt(let value):
             lowerReturn(value)
         }
+    }
+
+    /// Lowers `place op= value` as `place = place op value`.
+    private mutating func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
+        let value = operand(of: value)
+        emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
     }
 
     /// Starts the life of `place`'s local, and stores `value` in it when there is one.
@@ -164,7 +170,8 @@ private struct FunctionBuilder {
         }
     }
 
-    /// An operand that holds `expr`'s value, computed into a new temporary unless it is a constant or a local.
+    /// Lowers `expr` to an operand that holds its value, computing it into a new temporary unless it is a constant
+    /// or a local.
     private mutating func operand(of expr: CheckedExpr) -> Operand {
         switch expr.kind {
         case .intLiteral(let value):
@@ -180,14 +187,19 @@ private struct FunctionBuilder {
         case .binary(.or, let left, let right):
             return shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
         default:
-            let temporary = newTemporary(expr.type, at: expr.range)
-            emit(rvalue(of: expr), into: temporary, range: expr.range)
-            return .read(temporary)
+            return lowerIntoTemporary(expr)
         }
     }
 
-    /// `left && right` or `left || right`: the result is `left` when `left` is `decidingValue`, and
-    /// `right` is evaluated only otherwise.
+    /// Computes `expr` into a new temporary, and returns an operand that reads it.
+    private mutating func lowerIntoTemporary(_ expr: CheckedExpr) -> Operand {
+        let temporary = newTemporary(expr.type, at: expr.range)
+        emit(rvalue(of: expr), into: temporary, range: expr.range)
+        return .read(temporary)
+    }
+
+    /// Lowers `left && right` or `left || right` into branches, and returns an operand that holds the result: `left`
+    /// when `left` is `decidingValue`, and otherwise `right`, which is evaluated only then.
     private mutating func shortCircuit(_ left: CheckedExpr, _ right: CheckedExpr, decidedWhenLeftIs decidingValue: Bool,
                                        range: SourceRange) -> Operand {
         let result = newTemporary(.bool, at: range)
@@ -204,7 +216,8 @@ private struct FunctionBuilder {
         return resultValue
     }
 
-    /// A new temporary of `type`, which holds the value of the expression at `range`.
+    /// Adds a temporary of `type` to the function, and returns its place, at `range`, the expression whose value
+    /// it holds.
     private mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
         locals.append(.temporary(type))
         return Place(local: LocalID(index: locals.count - 1), range: range)
