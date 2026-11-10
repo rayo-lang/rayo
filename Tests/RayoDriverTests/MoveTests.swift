@@ -35,7 +35,7 @@ struct MoveTests {
         ("let x = 1\nlet y = x\nprint(copy x + 1)", "4:7: error[E0302]: 'x' was moved"),
     ])
     func useAfterMove(body: String, expected: String) {
-        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [expected])
+        #expect(reported(body) == [expected])
     }
 
     @Test("a 'return' moves its local, and a use after it on no path is no error", arguments: [
@@ -48,19 +48,18 @@ struct MoveTests {
 
     @Test("a local moved on one path of an 'if' may have been moved after it, and one moved on both was moved",
           arguments: [
-        ("if true { let y = x }", "'x' may have been moved", "E0303"),
-        ("if true { let y = x } else { var z = 0\nz = x }", "'x' was moved", "E0302"),
+        ("if true { let y = x }", "E0303: 'x' may have been moved", 4),
+        ("if true { let y = x } else { var z = 0\nz = x }", "E0302: 'x' was moved", 5),
     ])
-    func branches(statement: String, message: String, code: String) {
+    func branches(statement: String, expected: String, line: Int) {
         let reported = diagnostics("func main() {\nvar x = 1\n\(statement)\nprint(x)\n}")
-        #expect(reported.map { "\($0.code.identifier): \($0.code.message)" } == ["\(code): \(message)"])
-        #expect(reported.map(\.range.start.line) == [statement.split(separator: "\n").count + 3])
+        #expect(reported.map { "\($0.code.identifier): \($0.code.message)" } == [expected])
+        #expect(reported.map(\.range.start.line) == [line])
     }
 
     @Test("a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it")
     func loops() {
-        let moves = "var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}"
-        #expect(diagnostics("func main() {\n\(moves)\n}").map(\.description) == [
+        #expect(reported("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}") == [
             "6:9: error[E0303]: 'x' may have been moved",
         ])
         #expect(output("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\nprint(y)\nx = 2\n}") == "1\n2\n")
@@ -78,10 +77,20 @@ struct MoveTests {
 
     @Test("a 'continue' after a move goes on to the next pass without the local's value")
     func continues() {
-        let body = "var x = 1\nvar i = 0\nwhile i < 3 {\ni += 1\nprint(copy x)\nif i == 1 {\nlet y = x\ncontinue\n}\nx = 5\n}"
-        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [
-            "6:7: error[E0303]: 'x' may have been moved",
-        ])
+        let body = """
+            var x = 1
+            var i = 0
+            while i < 3 {
+            i += 1
+            print(copy x)
+            if i == 1 {
+            let y = x
+            continue
+            }
+            x = 5
+            }
+            """
+        #expect(reported(body) == ["6:7: error[E0303]: 'x' may have been moved"])
         #expect(output(body.replacingOccurrences(of: "continue\n", with: "")) == "1\n5\n5\n")
     }
 
@@ -91,20 +100,32 @@ struct MoveTests {
         ("var x = 1\nif true { let y = x }\nprint(x)\nlet z = x", "4:7: error[E0303]: 'x' may have been moved"),
     ])
     func reportedOnce(body: String, expected: String) {
-        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [expected])
+        #expect(reported(body) == [expected])
     }
 
     @Test("a use that other moves reach is another error")
     func reportedAgain() {
-        let body = "var x = 1\nlet y = x\nprint(x)\nx = 2\nlet z = x\nprint(x)"
-        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [
+        #expect(reported("var x = 1\nlet y = x\nprint(x)\nx = 2\nlet z = x\nprint(x)") == [
             "4:7: error[E0302]: 'x' was moved", "7:7: error[E0302]: 'x' was moved",
         ])
     }
 
     @Test("a path that returns after a move leaves the local's value on the others")
     func returnsAfterMove() {
-        let source = "func main() {\n    f(true)\n    f(false)\n}\nfunc f(_ c: Bool) {\n    let x = 1\n    if c {\n        let y = x\n        return\n    }\n    print(x)\n}"
+        let source = """
+            func main() {
+                f(true)
+                f(false)
+            }
+            func f(_ c: Bool) {
+                let x = 1
+                if c {
+                    let y = x
+                    return
+                }
+                print(x)
+            }
+            """
         #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n", errors: ""))
     }
 

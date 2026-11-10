@@ -81,7 +81,8 @@ struct LocalTests {
 
     @Test("a call skips a local or a parameter whose declaration failed, and reaches the functions of its name",
           arguments: [
-        ("func main() {\n    let sum = nope\n    let y: Bool = sum(3)\n    sum(true)\n}\nfunc sum(_ x: Int) -> Int { copy x }",
+        ("func main() {\n    let sum = nope\n    let y: Bool = sum(3)\n    sum(true)\n}\n"
+            + "func sum(_ x: Int) -> Int { copy x }",
          [ErrorCode.notDeclared(name: "nope"), .typeMismatch(expected: "Bool", found: "Int"),
           .typeMismatch(expected: "Int", found: "Bool")], ["nope", "sum(3)", "true"]),
         ("func main() {}\nfunc f(print: Int8) { print(1, 2) }",

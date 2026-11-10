@@ -21,6 +21,11 @@ func diagnostics(_ source: String) -> [Diagnostic] {
     return result.diagnostics
 }
 
+/// The errors that `body`, as `main`'s body, reports, each as its position, code and message.
+func reported(_ body: String) -> [String] {
+    diagnostics("func main() {\n\(body)\n}").map(\.description)
+}
+
 struct ProgramTests {
     @Test("a program that checks reports nothing", arguments: [
         "func main() { print(-9223372036854775808) }",

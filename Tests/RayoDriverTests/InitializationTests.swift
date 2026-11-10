@@ -2,11 +2,6 @@ import Testing
 import RayoDiagnostics
 import RayoDriver
 
-/// The errors that `body`, as `main`'s body, reports, each as its position, code and message.
-private func reported(_ body: String) -> [String] {
-    diagnostics("func main() {\n\(body)\n}").map(\.description)
-}
-
 struct InitializationTests {
     @Test("a local declared without a value is given one later, in debug and in release",
           arguments: [["--debug"], ["--release"]])
@@ -139,7 +134,8 @@ struct InitializationTests {
         ("while i < 3 {\ni += 1\nx = copy i\n}", "8:7: error[E0305]: 'x' isn't initialized on every path"),
         ("while i < 3 {\ni += 1\nif i == 2 { continue }\nx = copy i\n}",
          "9:7: error[E0305]: 'x' isn't initialized on every path"),
-        ("while true {\nif i == 0 { break }\nx = 1\nbreak\n}", "9:7: error[E0305]: 'x' isn't initialized on every path"),
+        ("while true {\nif i == 0 { break }\nx = 1\nbreak\n}",
+         "9:7: error[E0305]: 'x' isn't initialized on every path"),
     ])
     func loops(loop: String, expected: String) {
         #expect(reported("var x: Int\nvar i = 0\n\(loop)\nprint(x)") == [expected])
@@ -147,12 +143,25 @@ struct InitializationTests {
 
     @Test("a loop that a 'break' leaves only once the body has assigned a local leaves it initialized")
     func breakAfterAssignment() {
-        #expect(output("let x: Int\nvar i = 0\nwhile true {\ni += 1\nif i == 3 {\nx = copy i\nbreak\n}\n}\nprint(x)") == "3\n")
+        let body = """
+            let x: Int
+            var i = 0
+            while true {
+                i += 1
+                if i == 3 {
+                    x = copy i
+                    break
+                }
+            }
+            print(x)
+            """
+        #expect(output(body) == "3\n")
     }
 
     @Test("a 'let' declared outside a loop and assigned in its body may be assigned again on the next pass",
           arguments: [
-        ("while i < 3 {\ni += 1\nx = copy i\n}", "6:1: error[E0307]: 'x' is a 'let', and may have been assigned already"),
+        ("while i < 3 {\ni += 1\nx = copy i\n}",
+         "6:1: error[E0307]: 'x' is a 'let', and may have been assigned already"),
         ("while i < 3 {\ni += 1\nif i == 1 { continue }\nx = copy i\n}",
          "7:1: error[E0307]: 'x' is a 'let', and may have been assigned already"),
     ])
@@ -162,7 +171,17 @@ struct InitializationTests {
 
     @Test("a local declared in a loop's body is a new local on each pass", arguments: [["--debug"], ["--release"]])
     func declaredInLoop(mode: [String]) {
-        let source = "func main() {\n    var i = 0\n    while i < 3 {\n        i += 1\n        let x: Int\n        x = i * 10\n        print(x)\n    }\n}"
+        let source = """
+            func main() {
+                var i = 0
+                while i < 3 {
+                    i += 1
+                    let x: Int
+                    x = i * 10
+                    print(x)
+                }
+            }
+            """
         #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "10\n20\n30\n", errors: ""))
         #expect(reported("var i = 0\nwhile i < 3 {\ni += 1\nvar x: Int\nprint(x)\nx = copy i\n}") == [
             "6:7: error[E0304]: 'x' isn't initialized",
@@ -175,7 +194,8 @@ struct InitializationTests {
         ("let x = 1\nx = 2\nx = 3", ["3:1: error[E0306]: 'x' is a 'let', so it can't be assigned again",
                                      "4:1: error[E0306]: 'x' is a 'let', so it can't be assigned again"]),
         ("let x = 1\nx += 1", ["3:1: error[E0306]: 'x' is a 'let', so it can't be assigned again"]),
-        ("let x: Int\nif true { x = 1 }\nx = 2", ["4:1: error[E0307]: 'x' is a 'let', and may have been assigned already"]),
+        ("let x: Int\nif true { x = 1 }\nx = 2",
+         ["4:1: error[E0307]: 'x' is a 'let', and may have been assigned already"]),
         ("let x: Int\nif true { x = 1 } else { x = 2 }\nprint(x)", []),
     ])
     func letAssignedOnce(body: String, expected: [String]) {
