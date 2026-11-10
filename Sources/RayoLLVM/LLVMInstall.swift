@@ -2,6 +2,7 @@ internal import CLLVM
 
 /// The LLVM install that `rayoc` was built against, whose clang and LLD link the programs it compiles.
 public enum LLVMInstall {
+    /// The install's major release, such as 23.
     public static let majorVersion = Int(LLVM_VERSION_MAJOR)
 
     /// The directory that holds LLVM's tools, clang among them.

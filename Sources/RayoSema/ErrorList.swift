@@ -1,8 +1,8 @@
 import RayoDiagnostics
 import RayoSource
 
-/// Collects the errors of a check. Every function body of a file reports into one list, also a body checked
-/// while another is, for a call that needs its result type.
+/// The errors a check of a file finds, in the order they are reported. It is a class so that a body checked while
+/// another is, for a call that needs its result type, reports into the same list.
 final class ErrorList {
     private(set) var list: [Diagnostic] = []
 

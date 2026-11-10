@@ -6,9 +6,10 @@ declare i32 @fflush(ptr)
 declare i64 @write(i32, ptr, i64)
 declare void @exit(i32) noreturn
 
-; Reports a panic, given its message and the message's length, and exits with the panic exit code. It writes what
-; the program printed before it reports the panic, so the report comes last.
+; Writes the `length` bytes of `message` to standard error, after all that the program printed, and exits with the
+; panic exit code.
 define void @rayo.panic(ptr %message, i64 %length) noreturn {
+  ; Flush what the program printed first, so that the report comes last.
   call i32 @fflush(ptr null)
   call i64 @write(i32 2, ptr %message, i64 %length)
   %exit_code = load i32, ptr @rayo.panic_exit_code
