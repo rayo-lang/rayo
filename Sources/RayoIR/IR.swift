@@ -21,18 +21,29 @@ public struct IRFunction: Sendable {
     /// How many parameters the function takes, which are its first locals, in order.
     public var parameterCount: Int
     public var result: RayoType
-    /// The type of each local, indexed by `LocalID`: the function's own locals first, then the temporaries
-    /// that lowering adds.
-    public var locals: [RayoType]
+    /// The locals, indexed by `LocalID`: the function's own locals first, then the temporaries that lowering
+    /// adds.
+    public var locals: [IRLocal]
     /// The blocks, indexed by `BlockID`; the first is the entry.
     public var blocks: [BasicBlock]
 
-    public init(name: String, parameterCount: Int, result: RayoType, locals: [RayoType], blocks: [BasicBlock]) {
+    public init(name: String, parameterCount: Int, result: RayoType, locals: [IRLocal], blocks: [BasicBlock]) {
         self.name = name
         self.parameterCount = parameterCount
         self.result = result
         self.locals = locals
         self.blocks = blocks
+    }
+}
+
+public struct IRLocal: Sendable {
+    public var type: RayoType
+    /// The name the source declares the local with, or nil for a temporary that lowering adds.
+    public var name: String?
+
+    public init(type: RayoType, name: String?) {
+        self.type = type
+        self.name = name
     }
 }
 
@@ -82,8 +93,21 @@ public enum Constant: Sendable {
 
 public enum Operand: Sendable {
     case constant(Constant)
-    /// Reads the local's value.
-    case local(LocalID)
+    /// Reads the local's value, which the local keeps.
+    case read(Place)
+    /// Takes the local's value, which leaves the local without one until it is assigned again.
+    case move(Place)
+}
+
+/// A local that an operand names, and where the source names it, which is where an error about the use points.
+public struct Place: Sendable {
+    public var local: LocalID
+    public var range: SourceRange
+
+    public init(local: LocalID, range: SourceRange) {
+        self.local = local
+        self.range = range
+    }
 }
 
 /// An operation that makes a value. Integer arithmetic panics on division or remainder by zero, and on

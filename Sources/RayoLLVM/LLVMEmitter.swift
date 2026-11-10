@@ -53,7 +53,7 @@ struct ProgramEmitter {
     private func declare(_ id: FunctionID, of program: IRProgram) -> FunctionValue {
         let function = program.functions[id.index]
         let name = id == program.main ? "rayo.main" : function.name
-        let parameters = function.locals.prefix(function.parameterCount).map(llvmType)
+        let parameters = function.locals.prefix(function.parameterCount).map { llvmType($0.type) }
         return module.addFunction(name, taking: parameters, returning: llvmType(function.result))
     }
 

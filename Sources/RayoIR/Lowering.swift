@@ -7,7 +7,7 @@ public enum Lowering {
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
-        var builder = FunctionBuilder(locals: function.locals.map(\.type))
+        var builder = FunctionBuilder(locals: function.locals.map { IRLocal(type: $0.type, name: $0.name) })
         builder.lower(function.body)
         // The checker has made every path of a function with a result end in a 'return'.
         builder.end(with: function.result == .void ? .return(nil) : .unreachable)
@@ -22,13 +22,13 @@ private struct FunctionBuilder {
         var exit: BlockID
     }
 
-    private var locals: [RayoType]
+    private var locals: [IRLocal]
     /// The blocks so far; a block has no terminator until lowering leaves it.
     private var blocks: [(statements: [Statement], terminator: Terminator?)] = [([], nil)]
     private var current = BlockID(index: 0)
     private var loops: [Loop] = []
 
-    init(locals: [RayoType]) {
+    init(locals: [IRLocal]) {
         self.locals = locals
     }
 
@@ -79,7 +79,8 @@ private struct FunctionBuilder {
             emit(rvalue(of: value), into: place.local, range: value.range)
         case .compoundAssign(let place, let op, let value):
             let value = operand(of: value)
-            emit(.binary(op, .local(place.local), value), into: place.local, range: place.range)
+            let current = Operand.read(Place(local: place.local, range: place.range))
+            emit(.binary(op, current, value), into: place.local, range: place.range)
         case .ifStmt(let condition, let then, let otherwise):
             lowerIf(condition, then, otherwise)
         case .whileStmt(let condition, let body):
@@ -152,7 +153,7 @@ private struct FunctionBuilder {
         case .boolLiteral(let value):
             return .constant(.bool(value))
         case .local(let local):
-            return .local(local)
+            return .read(Place(local: local, range: expr.range))
         case .binary(.and, let left, let right):
             return shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
         case .binary(.or, let left, let right):
@@ -160,7 +161,7 @@ private struct FunctionBuilder {
         default:
             let temporary = newTemporary(expr.type)
             emit(rvalue(of: expr), into: temporary, range: expr.range)
-            return .local(temporary)
+            return .read(Place(local: temporary, range: expr.range))
         }
     }
 
@@ -169,20 +170,21 @@ private struct FunctionBuilder {
     private mutating func shortCircuit(_ left: CheckedExpr, _ right: CheckedExpr, decidedWhenLeftIs decidingValue: Bool,
                                        range: SourceRange) -> Operand {
         let result = newTemporary(.bool)
+        let resultValue = Operand.read(Place(local: result, range: range))
         emit(.use(operand(of: left)), into: result, range: range)
         let evaluateRight = newBlock()
         let join = newBlock()
         let branch: Terminator = decidingValue
-            ? .branch(.local(result), then: join, otherwise: evaluateRight)
-            : .branch(.local(result), then: evaluateRight, otherwise: join)
+            ? .branch(resultValue, then: join, otherwise: evaluateRight)
+            : .branch(resultValue, then: evaluateRight, otherwise: join)
         end(with: branch, continuingIn: evaluateRight)
         emit(.use(operand(of: right)), into: result, range: range)
         end(with: .goto(join), continuingIn: join)
-        return .local(result)
+        return resultValue
     }
 
     private mutating func newTemporary(_ type: RayoType) -> LocalID {
-        locals.append(type)
+        locals.append(IRLocal(type: type, name: nil))
         return LocalID(index: locals.count - 1)
     }
 }
