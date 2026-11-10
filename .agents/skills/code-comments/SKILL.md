@@ -6,7 +6,8 @@ description: "Read before writing or changing any code in this repo, every time 
 # Code Comments
 
 Binding on every line you write or change, whether or not this skill was invoked explicitly. It governs what a line
-*says* — names, doc comments, inline comments. How a change is shaped is `code-design`'s.
+*says* — names, doc comments, inline comments. Where a change goes is `code-design`'s, and how its code is split and
+laid out is `code-style`'s.
 
 It binds comments you leave in place as much as ones you write. A comment standing in code you touched is a comment you
 are keeping, so judge it the same way.

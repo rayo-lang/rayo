@@ -17,7 +17,7 @@ These rules decide how the repo's code and tests are split into files, types and
 
 ## Types
 
-**A type does one job: it has one reason to change.** Two parts of a type are one job when the same future requirement would change both; when either can change without the other, they are two. Split a type when it takes on a second job. These show one:
+**A type does one job: it has one reason to change.** The **reasons-to-change test** tells whether two pieces of code, such as two parts of a type or two sites that look alike, are one job: they are one when the same future requirement would change both, and two when either can change without the other. Split a type when it takes on a second job. These show one:
 
 - a group of members that reads and writes state the rest of the type doesn't touch, whether it sits under a `// MARK:` or in an extension file;
 - a name that needs *and*, or a vague noun such as *Manager*, *Helper* or *Context*, to cover what it does;
