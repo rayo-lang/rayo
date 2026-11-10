@@ -55,9 +55,9 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 ## 4. Tidy files, types and functions
 
-Write to `docs/agents/code-style.md`, which says how code is split into files, types and functions, and how a body runs in blocks.
+Load the `code-style` skill and write to it: it says how code is split into files, types and functions, and how a body runs in blocks.
 
-**Done when:** every file, type and function you added or changed passes the audit list at the end of `docs/agents/code-style.md`.
+**Done when:** every file, type and function you added or changed passes the `code-style` skill's audit list.
 
 ## 5. Repetition created by the change
 

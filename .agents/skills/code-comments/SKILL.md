@@ -17,9 +17,9 @@ are keeping, so judge it the same way.
 it does. It earns its place only by saying something the signature does not already say. When the signature says it
 all, write nothing.
 
-**Inside a body.** A comment goes in two places. One opens a block, where `docs/agents/code-style.md` ("Blocks") calls
-for it, and says what the block achieves. The other sits on a line that is not obvious, or where something happens the
-line does not show: a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
+**Inside a body.** A comment goes in two places. One opens a block, and the `code-style` skill says when it is called
+for and what it says. The other sits on a line that is not obvious, or where something happens the line does not show:
+a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -123,29 +123,16 @@ guard case .paid = account.plan else { return nil }
 Put it on the line it explains. A comment describing the branch below the one it sits above is a comment in the wrong
 place.
 
-**A block's opening comment** says what the block achieves, in the terms of the function's job, so a reader skims the
-steps without rebuilding each from its lines. It describes the block whole, never one line of it.
-
-```swift
-// Before — the lines, read back.
-// Push the loop, lower the body, then pop the loop.
-```
-
-```swift
-// After — what the block achieves.
-// Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
-```
-
 ## Reach for the code before the comment
 
 Where a reader would stop to work out what a line is for, reach in this order: a better name, a smaller function, a
 type that makes the illegal state unrepresentable. The comment is the last resort. That order is for a line that
-puzzles; a block's opening comment is called for by `docs/agents/code-style.md`, not reached for.
+puzzles; a block's opening comment is called for by the `code-style` skill, not reached for.
 
 Two shapes are always a refactor, never a comment:
 
-- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own (`docs/agents/code-style.md`,
-  "Functions"), written inline. Each becomes a function, and the numbering leaves with them.
+- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own, written inline. Each becomes a
+  function, and the numbering leaves with them.
 - **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted.
 
 And a comment explaining what a name means is a rename. Rename the thing.
