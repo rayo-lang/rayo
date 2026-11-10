@@ -74,6 +74,7 @@ public struct CheckedPlace: Sendable {
 }
 
 public enum CheckedStmt: Sendable {
+    /// Computes the value and drops it.
     case expression(CheckedExpr)
     /// A declaration, which gives the new local its first value.
     case binding(LocalID, CheckedExpr)

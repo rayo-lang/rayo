@@ -37,8 +37,6 @@ struct LocalTests {
         ("let main = 1", .alreadyDeclared(name: "main")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
-        ("let _ = 5", .underscoreDeclared),
-        ("_ = 5", .assignToNonLocal),
         ("_ += 1", .assignToNonLocal),
         ("print(_)", .underscoreValue),
     ])

@@ -84,7 +84,8 @@ struct FunctionTests {
             """
         #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n1\n", errors: ""))
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
-        #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") == [.voidLocal])
+        #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
+            [.voidLocal, .unusedValue(type: "Int")])
     }
 
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [

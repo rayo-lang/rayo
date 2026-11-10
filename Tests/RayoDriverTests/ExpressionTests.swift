@@ -47,7 +47,10 @@ struct LineTests {
 
     @Test("a line that starts with '-' starts a statement, and one that starts with another operator joins")
     func leadingOperator() {
-        #expect(output("let a = 3\n-2\nprint(a)") == "3\n")
+        let source = "func main() {\nlet a = 3\n-2\n}"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.unusedValue(type: "Int")])
+        #expect(coveredText(reported, in: source) == ["-2"])
         #expect(output("let a = 3\n    * 2\nprint(a)") == "6\n")
     }
 
