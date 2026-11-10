@@ -4,11 +4,26 @@ import RayoSyntax
 
 /// Checks a function body: its statements, its locals and the names they declare, and its expressions.
 struct BodyChecker {
-    /// What a name in scope stands for.
+    /// What a name that a block or the parameter list declares stands for.
     enum ScopeEntry {
         case local(LocalID)
         /// A name whose declaration failed, which was reported there, so its uses report nothing more.
         case failed
+    }
+
+    /// What an unqualified name stands for where the body uses it.
+    enum NameMatch {
+        /// A local or a parameter.
+        case inScope(ScopeEntry)
+        /// The module's functions of that name, the prelude's among them.
+        case functions([Signature])
+    }
+
+    /// How the body uses a name, which decides the matches its lookup skips.
+    enum NameUse {
+        case call
+        /// Any use but a call.
+        case ordinary
     }
 
     /// The file the body is in, which gives the result types of the functions it calls.
@@ -47,7 +62,16 @@ struct BodyChecker {
         return block.statements.compactMap { check($0) }
     }
 
-    func lookUp(_ name: String) -> ScopeEntry? {
+    /// Looks `name` up in the body's locals and parameters, innermost block first, then among the module's
+    /// functions, and gives the nearest match. A call skips the locals and parameters, failed ones too, since none
+    /// can be called; it gives the nearest of them only when no function has the name.
+    func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
+        let functions = declarations.functions(named: name)
+        if let entry = scopeEntry(for: name), use == .ordinary || functions.isEmpty { return .inScope(entry) }
+        return functions.isEmpty ? nil : .functions(functions)
+    }
+
+    private func scopeEntry(for name: String) -> ScopeEntry? {
         scopes.reversed().lazy.compactMap { $0[name] }.first
     }
 
@@ -140,7 +164,7 @@ struct BodyChecker {
     }
 
     private mutating func declare(_ name: String, type: RayoType, kind: LocalKind, at range: SourceRange) -> LocalID? {
-        guard !isVisible(name, reportingRedeclarationAt: range) else {
+        guard !isLocal(name, reportingRedeclarationAt: range) else {
             scopes[scopes.count - 1][name] = .failed
             return nil
         }
@@ -152,14 +176,14 @@ struct BodyChecker {
 
     /// Declares `name` for a declaration that failed, so that its uses report nothing more.
     private mutating func declareFailed(_ name: String, at range: SourceRange) -> CheckedStmt? {
-        _ = isVisible(name, reportingRedeclarationAt: range)
+        _ = isLocal(name, reportingRedeclarationAt: range)
         scopes[scopes.count - 1][name] = .failed
         return nil
     }
 
-    /// Whether `name` already names a local or a function, reporting it when it does.
-    private mutating func isVisible(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
-        guard lookUp(name) != nil || declarations.declaresFunction(named: name) else { return false }
+    /// Whether `name` already names a local or a parameter, reporting it when it does.
+    private mutating func isLocal(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
+        guard scopeEntry(for: name) != nil else { return false }
         errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
@@ -196,12 +220,12 @@ struct BodyChecker {
     private mutating func assignedLocal(_ target: Expr) -> LocalID? {
         switch target.kind {
         case .name(let name) where name != "_":
-            switch lookUp(name) {
-            case .local(let local):
+            switch lookUp(name, for: .ordinary) {
+            case .inScope(.local(let local)):
                 return local
-            case .failed:
+            case .inScope(.failed):
                 break
-            case nil where declarations.declaresFunction(named: name):
+            case .functions:
                 errors.report(.assignToFunction(name: name), at: target.range)
             case nil:
                 errors.report(.notDeclared(name: name), at: target.range)

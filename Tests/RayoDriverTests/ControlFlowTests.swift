@@ -33,8 +33,6 @@ struct LocalTests {
         ("let x = print(1)", .voidLocal),
         ("let x: Int", .missingBindingValue(found: .newline)),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
-        ("let print = 1\nprint(print)", .alreadyDeclared(name: "print")),
-        ("let main = 1", .alreadyDeclared(name: "main")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
         ("_ += 1", .assignToNonLocal),
@@ -42,6 +40,18 @@ struct LocalTests {
     ])
     func rejected(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
+    }
+
+    @Test("a local may share a function's name: a call reaches the function, and every other use the local")
+    func sharesFunctionName() {
+        #expect(output("""
+            var print = 1
+            print = 3
+            print += 2
+            print(print)
+            let main = copy print
+            print(main + 1)
+            """) == "5\n6\n")
     }
 
     @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [
@@ -71,6 +81,22 @@ struct LocalTests {
     ])
     func noCascade(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
+    }
+
+    @Test("a call skips a local or a parameter whose declaration failed, and reaches the functions of its name",
+          arguments: [
+        ("func main() {\n    let sum = nope\n    let y: Bool = sum(3)\n    sum(true)\n}\nfunc sum(_ x: Int) -> Int { copy x }",
+         [ErrorCode.notDeclared(name: "nope"), .typeMismatch(expected: "Bool", found: "Int"),
+          .typeMismatch(expected: "Int", found: "Bool")], ["nope", "sum(3)", "true"]),
+        ("func main() {}\nfunc f(print: Int8) { print(1, 2) }",
+         [.notAType(name: "Int8"), .argumentCount(name: "print", takes: 1, passes: 2)], ["Int8", "print(1, 2)"]),
+        ("func main() {\n    let x = 1\n    let x = 2\n    x(1)\n    x(true)\n}\nfunc x(_ a: Int) {}",
+         [.alreadyDeclared(name: "x"), .typeMismatch(expected: "Int", found: "Bool")], ["x", "true"]),
+    ])
+    func callSkipsFailedLocal(source: String, expected: [ErrorCode], covered: [String]) {
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == expected)
+        #expect(coveredText(reported, in: source) == covered)
     }
 
     @Test("an assignment's target and value are checked even when the other fails", arguments: [
