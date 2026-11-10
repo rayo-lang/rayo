@@ -72,17 +72,28 @@ struct BodyChecker {
         return block.statements.flatMap { check($0) }
     }
 
-    /// Looks `name` up in the body's locals and parameters, innermost block first, then among the module's
-    /// functions, and gives the nearest match. A call skips the locals and parameters, failed ones too, since none
-    /// can be called; it gives the nearest of them only when no function has the name.
+    /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
+    /// functions. A call, since no local or parameter can be called, takes the functions over them, failed ones
+    /// too; any other use takes them over the functions.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
-        let functions = declarations.functions(named: name)
-        if let entry = scopeEntry(for: name), use == .ordinary || functions.isEmpty { return .inScope(entry) }
-        return functions.isEmpty ? nil : .functions(functions)
+        let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
+        let functions = functionMatch(for: name)
+        switch use {
+        case .call:
+            return functions ?? inScope
+        case .ordinary:
+            return inScope ?? functions
+        }
     }
 
     private func scopeEntry(for name: String) -> ScopeEntry? {
         scopes.reversed().lazy.compactMap { $0[name] }.first
+    }
+
+    /// The module's functions called `name`, unless it has none.
+    private func functionMatch(for name: String) -> NameMatch? {
+        let functions = declarations.functions(named: name)
+        return functions.isEmpty ? nil : .functions(functions)
     }
 
     // MARK: Statements
@@ -228,12 +239,19 @@ struct BodyChecker {
     }
 
     /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
-    /// value out of it. A borrowed parameter can't be moved from, since its caller still owns the value.
+    /// value out of it.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
+        // A `copy` of a local checks to a read of it too, so only a bare name moves.
         guard case .name(let name) = expr.kind, case .local(let local) = value.kind else { return value }
-        if locals[local.index].kind == .parameter {
-            errors.report(.moveFromParameter(name: name), at: expr.range)
+        return move(local, named: name, readBy: value)
+    }
+
+    /// `value`, which reads `local`, as a move of its value. A borrowed parameter can't be moved from, since its
+    /// caller still owns the value.
+    private mutating func move(_ local: LocalID, named name: String, readBy value: CheckedExpr) -> CheckedExpr? {
+        guard locals[local.index].kind != .parameter else {
+            errors.report(.moveFromParameter(name: name), at: value.range)
             return nil
         }
         return CheckedExpr(kind: .move(local), type: value.type, range: value.range)
