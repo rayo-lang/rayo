@@ -1,0 +1,4 @@
+module CLLVMJIT [system] {
+    header "CLLVMJIT.h"
+    export *
+}

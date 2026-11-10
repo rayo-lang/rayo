@@ -49,6 +49,10 @@ func statement(printing operand: Operand) -> Statement {
 /// The range of an operation no source file wrote.
 let nowhere = SourceRange(SourceLocation(line: 1, column: 1, offset: 0), SourceLocation(line: 1, column: 1, offset: 0))
 
+/// The source range of every operator the operator tests emit.
+let operatorRange = SourceRange(SourceLocation(line: 3, column: 7, offset: 20),
+                                SourceLocation(line: 3, column: 12, offset: 25))
+
 /// What `tool`, from the LLVM install `rayoc` builds against, writes to its standard output when it reads
 /// `objectCode` from a file named after `arguments`.
 func llvmTool(_ tool: String, _ arguments: [String], on objectCode: [UInt8]) throws -> String {

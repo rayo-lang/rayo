@@ -14,8 +14,7 @@ public enum LLVMEmitter {
         ProgramEmitter(module: module, runtime: runtime, sourcePath: sourcePath, checksOverflow: checksOverflow)
             .emit(program)
         try runtime.link(into: module)
-        module.hideDefinitions(except: Runtime.entryPoint)
-        try module.verify()
+        try target.ready(module, exporting: [Runtime.entryPoint])
         let objectCode = try target.objectCode(of: module)
 
         try module.checkReportedErrors()
