@@ -184,6 +184,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(234, error: "a parameter can't have type Void")
     case voidParameter
 
+    @Code(235, error: "the {type} value isn't used")
+    case unusedValue(type: String)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

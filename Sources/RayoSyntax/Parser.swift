@@ -280,6 +280,10 @@ public struct Parser {
             kind = .continueStmt
         } else if consume(.return) {
             kind = .returnStmt(atStatementEnd ? nil : try parseExpression())
+        } else if current.kind == .identifier("_"), peek().isPunct(.assign) {
+            advance()
+            advance()
+            kind = .drop(try parseExpression())
         } else {
             kind = try parseExpressionStatement()
         }

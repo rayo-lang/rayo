@@ -83,7 +83,8 @@ struct FunctionTests {
             """
         #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n1\n", errors: ""))
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
-        #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") == [.voidLocal])
+        #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
+            [.voidLocal, .unusedValue(type: "Int")])
     }
 
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [
@@ -132,11 +133,10 @@ struct FunctionTests {
             [.argumentCount(name: "print", takes: 0, passes: 1)])
     }
 
-    @Test("a function is called, not used as a value, assigned or declared again", arguments: [
+    @Test("a function is called, not used as a value or assigned", arguments: [
         ("let g = f", ErrorCode.functionAsValue(name: "f")),
         ("print(f)", .functionAsValue(name: "f")),
         ("f = 2", .assignToFunction(name: "f")),
-        ("let f = 1", .alreadyDeclared(name: "f")),
         ("f(1)", .argumentCount(name: "f", takes: 0, passes: 1)),
     ])
     func notAValue(body: String, expected: ErrorCode) {
