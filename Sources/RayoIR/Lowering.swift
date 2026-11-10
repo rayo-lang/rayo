@@ -216,8 +216,8 @@ private struct FunctionBuilder {
         return resultValue
     }
 
-    /// Adds a temporary of `type` to the function, and returns its place, at `range`, the expression whose value
-    /// it holds.
+    /// Adds a temporary of `type` to the function, and returns its place, whose range is that of the expression it
+    /// holds.
     private mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
         locals.append(.temporary(type))
         return Place(local: LocalID(index: locals.count - 1), range: range)
