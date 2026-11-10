@@ -7,7 +7,7 @@ private func run(_ arguments: [String], files: [String: String] = [:]) -> Driver
     Driver.run(arguments) { files[$0].map { Array($0.utf8) } }
 }
 
-struct DriverTests {
+struct CommandLineTests {
     @Test("errors fail the run, and go to the error stream as the file's path, the position, the code and the message")
     func errorFormat() {
         let result = run(["check", "a.rayo"], files: ["a.rayo": "func f() {\n    let = 1\n    x = )\n}"])
@@ -55,7 +55,8 @@ struct DriverTests {
 
     @Test("a linker rayoc doesn't know is rejected", arguments: ["gold", "", "LLD"])
     func unknownLinker(name: String) {
-        #expect(run(["build", "--linker=\(name)", "a.rayo"], files: ["a.rayo": ""]) == Driver.Result(
-            exitCode: 2, output: "", errors: "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"))
+        let errors = "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
+        #expect(run(["build", "--linker=\(name)", "a.rayo"], files: ["a.rayo": ""])
+            == Driver.Result(exitCode: 2, output: "", errors: errors))
     }
 }
