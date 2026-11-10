@@ -15,11 +15,12 @@ are keeping, so judge it the same way.
 ## The two rules
 
 **Above a property, a type, or a function.** The comment describes that declaration as a black box, the way its user
-sees it: what it is, or what it does. It never says how — no steps, no cases the body tells apart, no state or helper
+sees it: what it is, or what it does. What it returns or throws, and for which inputs, is that behaviour, and belongs
+here. How it gets there never does — no steps, no tests the body makes to tell its inputs apart, no state or helper
 the body uses. Those are explained in the body, on the code they belong to. The comment earns its place only by saying
 something the signature does not already say. When the signature says it all, write nothing.
 
-**Inside a body.** A comment goes in three places. One opens a block, and one opens each case the body tells apart; the
+**Inside a body.** A comment goes in three places. One opens a block, and one opens each case a leaf tells apart; the
 `code-style` skill says when each is called for and what it says. The third sits on a line that is not obvious, or
 where something happens the line does not show: a side effect, an ordering that matters, a trap. Never a translation
 of the line back into English.
@@ -55,7 +56,8 @@ static func significantNewlines(_ raw: [Token]) -> [Token]
 ```
 
 ```swift
-// After — what the function does. Each rule moves into the body, onto the test that applies it.
+// After — what the function does. Each rule moves into the body, onto the test that applies it, as the
+// `code-style` skill shows.
 /// Keeps the newlines that end a statement, and drops those that only break a line.
 static func significantNewlines(_ raw: [Token]) -> [Token]
 ```
@@ -104,7 +106,7 @@ function does too much, and the fix is in the function.
 A method leads with what it does. A type or a property leads with what it is or what it carries. Then stop.
 
 ```swift
-/// Lowers `param` to the RIL type a call passes it as.
+/// Lowers `param` to the RIL type that a call passes it in.
 private func parameterType(of param: SignatureParameter, isCABI: Bool) -> RILType
 ```
 
@@ -118,9 +120,10 @@ How the write replaces the file — a temporary file renamed over it, say — is
 
 ## Inside a body
 
-The test is whether a reader stumbles. Two comments on the same guard; only one is worth keeping.
+Every case a leaf tells apart takes an opening comment, as the `code-style` skill says. What the comment says is
+decided by whether a reader would stumble without it. Two comments on the same guard; only one does its job.
 
-**A second copy of the code — delete it.** `case .paid` already says "paid". The comment is the guard translated back
+**A second copy of the code — rewrite it.** `case .paid` already says "paid". The comment is the guard translated back
 into English, and it drifts.
 
 ```swift
@@ -128,15 +131,16 @@ into English, and it drifts.
 guard case .paid = account.plan else { return nil }
 ```
 
-**An explanation — keep it.** The guard shows *which* accounts are skipped, not what becomes of them, and that is
-where a reader stumbles.
+**An explanation — write this one.** The guard shows *which* accounts are skipped, not what becomes of them, and that
+is where a reader stumbles.
 
 ```swift
-// A trial account is skipped rather than billed: the job that expires trials
-// charges the card itself on the last day, and billing here as well would
-// take the money twice.
+// A trial account is skipped rather than billed, since the job that expires trials charges it on the last day.
 guard case .paid = account.plan else { return nil }
 ```
+
+The same test applies to a line that is no case: a comment that only translates it is deleted, and one that explains
+it is kept.
 
 Put it on the line it explains. A comment describing the branch below the one it sits above is a comment in the wrong
 place.
@@ -145,7 +149,7 @@ place.
 
 Where a reader would stop to work out what a line is for, reach in this order: a better name, a smaller function, a
 type that makes the illegal state unrepresentable. The comment is the last resort. That order is for a line that
-puzzles; a block's opening comment is called for by the `code-style` skill, not reached for.
+puzzles; a block's or a case's opening comment is called for by the `code-style` skill, not reached for.
 
 Two shapes are always a refactor, never a comment:
 
