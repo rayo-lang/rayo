@@ -17,9 +17,9 @@ are keeping, so judge it the same way.
 it does. It earns its place only by saying something the signature does not already say. When the signature says it
 all, write nothing.
 
-**Inside a body.** The comment exists only where the code is not obvious, or where something happens the line does not
-show: a side effect, an ordering that matters, a trap. Never a translation of the line back into English. A block of
-mechanics also opens with a one-line comment that says what its step achieves (`docs/agents/code-style.md`, "Blocks").
+**Inside a body.** A comment goes in two places. One opens a block, where `docs/agents/code-style.md` ("Blocks") calls
+for it, and says what the block achieves. The other sits on a line that is not obvious, or where something happens the
+line does not show: a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -123,27 +123,30 @@ guard case .paid = account.plan else { return nil }
 Put it on the line it explains. A comment describing the branch below the one it sits above is a comment in the wrong
 place.
 
-**A block's opening comment — write it.** It says what the block's step achieves, so a reader skims the steps without
-reconstructing each from its lines. It describes the block whole, never one line of it.
+**A block's opening comment** says what the block achieves, in the terms of the function's job, so a reader skims the
+steps without rebuilding each from its lines. It describes the block whole, never one line of it.
 
 ```swift
-// A `break` or `continue` in the body leaves through this loop's blocks.
-loops.append(Loop(header: header, exit: exit))
-lower(body)
-loops.removeLast()
+// Before — the lines, read back.
+// Push the loop, lower the body, then pop the loop.
+```
+
+```swift
+// After — what the block achieves.
+// Lower the body with this loop innermost, so its `break` and `continue` reach this loop.
 ```
 
 ## Reach for the code before the comment
 
 Where a reader would stop to work out what a line is for, reach in this order: a better name, a smaller function, a
-type that makes the illegal state unrepresentable. The comment is the last resort.
+type that makes the illegal state unrepresentable. The comment is the last resort. That order is for a line that
+puzzles; a block's opening comment is called for by `docs/agents/code-style.md`, not reached for.
 
 Two shapes are always a refactor, never a comment:
 
-- **Numbered steps.** A function needing `// 1.`, `// 2.`, `// 3.` to be readable is naming its steps in comments
-  instead of in function names. Each step is a function, and the numbering leaves with them.
-- **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted. So does a block
-  comment that names a job of its own rather than a step of the function's one job.
+- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own, written inline. Each becomes a
+  function, and the numbering leaves with them.
+- **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted.
 
 And a comment explaining what a name means is a rename. Rename the thing.
 

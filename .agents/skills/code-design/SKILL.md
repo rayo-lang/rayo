@@ -1,6 +1,6 @@
 ---
 name: code-design
-description: Use before implementing a feature, fix, or refactor to place the change, reuse existing concepts, and keep seams and functions coherent.
+description: Use before implementing a feature, fix, or refactor to place the change, reuse existing concepts, and keep seams, files, types and functions coherent.
 ---
 
 # Code Design
@@ -55,7 +55,7 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 ## 4. Tidy files, types and functions
 
-Write to `docs/agents/code-style.md`: each file one primary type, each type one job, each function a tidy orchestrator or leaf, and each body in logical blocks that say their steps.
+Write to `docs/agents/code-style.md`, which says how code is split into files, types and functions, and how a body runs in blocks.
 
 **Done when:** every file, type and function you added or changed passes the audit list at the end of `docs/agents/code-style.md`.
 

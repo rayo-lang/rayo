@@ -1,59 +1,54 @@
-# Writing code
+# Code style
 
-These rules govern how every file, type and function in `Sources/` and `Tests/` is split up and laid out. They bind every line you write or change, and every review. Two skills apply alongside them: `code-design` places a change before you write it, and `code-comments` decides what each comment and name says.
-
-The goal is code a reader takes in at a glance: each file one concept, each type one job, and each function a few logical blocks that say what they do.
+These rules decide how the code in `Sources/` and `Tests/` is split into files, types and functions, and how a function's body is laid out. The aim is code a reader takes in at a glance: each file one concept, each type one job, and each function a few blocks whose steps a reader can see.
 
 ## Files
 
-**A file holds one primary type and is named after it.** `Lowering.swift` holds `Lowering`. Beside it, a file may hold only the types that exist to serve its primary type and that no other file names, such as a private helper, or a `Kind` enum that its cases' payloads use.
+**A file holds one primary type and is named after it.** `Lowering.swift` holds `Lowering`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` holds `Stmt` and `StmtKind`, even though the parser builds both.
 
-**A second type that other files use moves to a file of its own.** So a family of data types, such as the AST's expressions, statements and declarations, is one file per type, gathered in a directory named for the family (`Sources/RayoSyntax/AST/`).
+**A type that stands on its own gets a file of its own**, even when it is small. A type stands on its own when other code uses it for itself, not only as part of another type, as the parser, the checker and lowering all use `BinaryOperator`. A family of such types, such as the AST's, gathers its files in a directory named for the family (`Sources/RayoSyntax/AST/`).
 
-**A file past 400 lines splits now**, along the line where its contents stop sharing a reason to change. Data tables, such as `ErrorCode.swift`, are the exception: one entry per case, read by lookup.
+**A file over the limit is split** along the line where its contents stop sharing a reason to change ([Limits](#limits)).
 
 ## Types
 
-**A type does one job: it has one reason to change.** Split it when it takes on a second one. These show the second job:
+**A type does one job: it has one reason to change**, as `code-design`'s reasons-to-change test decides. Split it when it takes on a second job. These show one:
 
-- groups of members that read and write separate parts of its state;
-- a `// MARK:` section or an extension file that gathers one concern, such as `BodyChecker+Calls.swift`;
+- a group of members that reads and writes state the rest of the type doesn't touch, whether it sits under a `// MARK:` or in an extension file;
 - a name that needs *and*, or a vague noun such as *Manager*, *Helper* or *Context*, to cover what it does;
-- more than 250 lines, counting every extension of it in every file.
+- a type over the limit ([Limits](#limits)).
 
-**Splitting a type means giving the concern a type of its own**, with its own state and a narrow interface that the first type calls. Moving members into an extension in another file spreads the type over two files without dividing its job, so it isn't a split. An extension in a file of its own is for a protocol conformance.
+**Splitting a type gives the second job a type of its own**, with its own state and a narrow interface that the first type calls. Moving members into an extension in another file spreads the type over two files and leaves its job whole, so it is no split. A file of its own holds an extension only for a protocol conformance, named `Type+Protocol.swift`. A private extension of another type, inside the file that uses it, is fine.
 
 ## Functions
 
-**A function is tidy: a reader sees what it does at a glance.** It does one job, as one of two kinds:
+These rules cover every body: functions, initializers, accessors, subscripts and closures.
 
-- **An orchestrator.** Its body is a few blocks, and every line of a block calls or binds a named step, with no mechanics inline.
-- **A leaf.** It performs one step, however long its mechanics run.
+**A function does one job, as one of two kinds.** Every line of a function works at one level of abstraction, and the kind follows from that level:
 
-Extract a function or a value type when a body takes on a second job, however small, or mixes the two kinds. These show it:
+- **An orchestrator** works at the level of its job's steps. Every line calls or binds a function that does one whole step, and the call names say the steps.
+- **A leaf** works at the level of the data it holds. Its body is mechanics: reading and writing its own state and arguments, arithmetic, indexing, and calls to small primitives such as `append` or a builder's `newBlock()`. It may run in several blocks.
 
-- a block whose comment names a job of its own, as a heading would;
+**A body that mixes the two levels, or takes on a second job, gets a function extracted.** These show it:
+
+- a block whose opening comment could be a function's doc comment, with inputs and a result of its own;
 - setup followed by dispatch or by detailed mechanics;
 - parallel locals assigned through the same branches;
-- a body past 50 lines.
+- a body over the limit ([Limits](#limits)).
 
 A tidy function also has:
 
 - **Inputs from its caller.** A step takes the values its caller already holds as arguments.
 - **Results ready to use.** A helper returns what its caller needs, in the shape the caller uses it.
-- **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result before passing it on. A step takes values its caller has already tested, never an optional that it unwraps for the caller.
-- **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
-- **Only the cases its inputs reach.** A case that no input reaches, kept only to satisfy a switch, means the type of the input is too wide.
+- **Failure in its result.** A step that can fail says so in what it returns or throws. Its caller tests that result, and passes the step after it a value already tested, never an optional to unwrap.
 
 ## Blocks
 
-**A function's body is a sequence of logical blocks, separated by one blank line.** A block is one step of the function: the lines in it serve that step and nothing else. A reader skims the blocks to see the steps, then reads the one they need.
+**A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A block of mechanics opens with a one-line comment that says what the step achieves**, in words a reader who hasn't seen the code follows. The comment states the step's purpose, never a translation of each line. An orchestrator's blocks of well-named calls need no comment where the names already say the step.
+**A leaf's block of more than one line opens with a one-line comment that says what the block achieves.** `code-comments` says how to write it. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no comment of its own.
 
-**A short body is one block.** A leaf of three or four lines that do one thing needs no blank line and no comment.
-
-This body runs four steps without a break, and a reader has to reconstruct them:
+This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
 ```swift
 private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]) {
@@ -69,19 +64,20 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 }
 ```
 
-The same body, with its steps set apart and named:
+The same leaf, with its steps set apart and said:
 
 ```swift
 private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]) {
+    // The loop's header tests the condition, and goes on to its body or its exit.
     let header = newBlock()
     let bodyBlock = newBlock()
     let exit = newBlock()
 
-    // Each pass enters the header, which tests the condition.
+    // Enter the loop at its header.
     end(with: .goto(header), continuingIn: header)
     end(with: headerTerminator(testing: condition, body: bodyBlock, exit: exit), continuingIn: bodyBlock)
 
-    // A `break` or `continue` in the body leaves through this loop's blocks.
+    // Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
     loops.append(Loop(header: header, exit: exit))
     lower(body)
     loops.removeLast()
@@ -93,17 +89,28 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 
 ## Lines
 
-**A line does one thing a reader takes in at once.** A chain of closures, a ternary inside a call, or a `map` used for its side effect, which the reader has to unpick, becomes a named step or a local named for what it holds.
+**A line does one thing that a reader takes in at once.** Related unwraps may share a guard. Unrelated checks each take a line, or become a step. A chain of closures, a ternary or a `map` used for its side effect that a reader has to unpick becomes a named step, or a local named for what it holds.
 
-**Lines stay within 120 columns.** Break a long call at its arguments, one per line, rather than packing a dense expression.
+**A line fits in 120 columns.** A longer call breaks at its arguments.
+
+## Limits
+
+**A file holds at most 400 lines, a type at most 250, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. A type counts its nested types and every extension of it in the module. The numbers are SwiftLint's `file_length`, `type_body_length` and `function_body_length` defaults, with one change: a type counts its extensions, so moving code into an extension file doesn't hide its size.
+
+**A data table is exempt from the limits on its file and its type.** A data table is a type whose body is one declaration per case with no logic between them, such as `ErrorCode`, or a test's `arguments:` table. Every other rule still applies to it.
+
+## Tests
+
+**A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. Each suite counts as a type for the limits. A helper that several test files share goes in a file named for what it helps with.
 
 ## Before you open a pull request
 
-Audit every file, type and function that you add or change against these rules, and fix what falls short:
+Audit every file, type and function you add or change against this list, and fix what falls short:
 
-- **Every file** holds one primary type, is named after it, and is under 400 lines.
-- **Every type** has one job, and is under 250 lines counting all its extensions.
-- **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and a body under 50 lines.
-- **Every body** longer than a few lines is in blocks, and each block of mechanics opens with a comment that says its step.
+- **Every file** holds one primary type and its parts, is named after it, and is within the limits.
+- **Every type** does one job, and is within the limits.
+- **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
+- **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
+- **Every line** does one thing and fits in 120 columns.
 
-A file or type you touch that already breaks a rule gets split in a `refactor` pull request of its own, before the change that touches it, so a feature never lands on code that breaks these rules. A reviewer audits the same list, one file, type and function at a time.
+**Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and stack your change on it (`AGENTS.md`, "Pull requests"). A reviewer audits the same list, one file, type and function at a time.
