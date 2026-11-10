@@ -26,6 +26,21 @@ struct BodyChecker {
         case ordinary
     }
 
+    /// What a binding's type annotation and value give the local it declares.
+    private enum Declared {
+        /// The local's type, which the source gives at `typeRange`, and its first value, if the binding gives one.
+        case typed(RayoType, typeRange: SourceRange, value: CheckedExpr?)
+        /// Neither an annotation nor a value, so nothing gives the local a type.
+        case untyped
+        /// An annotation or a value that failed, which was reported there.
+        case failed
+
+        var value: CheckedExpr? {
+            guard case .typed(_, _, let value) = self else { return nil }
+            return value
+        }
+    }
+
     /// The file the body is in, which gives the result types of the functions it calls.
     let file: FileChecker
     /// The function's result type, or nil when it isn't known.
@@ -46,13 +61,8 @@ struct BodyChecker {
     /// Declares `parameters`, whose types are `types`, as the function's first locals, in order.
     mutating func declare(_ parameters: [Param], types: [RayoType?]) {
         for (parameter, type) in zip(parameters, types) {
-            if parameter.name == "_" {
-                errors.report(.underscoreDeclared, at: parameter.nameRange)
-            } else if let type {
-                _ = declare(parameter.name, type: type, kind: .parameter, at: parameter.nameRange)
-            } else {
-                _ = declareFailed(parameter.name, at: parameter.nameRange)
-            }
+            guard bindsName(parameter.name, at: parameter.nameRange) else { continue }
+            _ = declare(parameter.name, type: type, kind: .parameter, at: parameter.nameRange)
         }
     }
 
@@ -158,57 +168,63 @@ struct BodyChecker {
 
     /// Checks `binding`, which declares a local.
     private mutating func check(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
-        guard let valueExpr = binding.value else { return checkUnassigned(binding, declaredWith: kind) }
-        // Checked before the name, so a declaration of `_` still reports its value's errors.
-        let value = value(valueExpr, givenBy: binding)
-        guard bindsName(binding) else { return nil }
-        guard let value else { return declareFailed(binding.name, at: binding.nameRange) }
-        return declare(binding, declaredWith: kind, type: value.type, typeGivenAt: value.range).map {
-            .binding($0, value)
+        // Checked before the name, so a declaration of `_` still reports its type's and its value's errors.
+        let declared = declared(by: binding)
+        guard bindsName(binding.name, at: binding.nameRange) else { return nil }
+        let type = localType(declared, of: binding)
+        let local = declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
+        return local.map { .binding(CheckedPlace(local: $0, range: binding.nameRange), declared.value) }
+    }
+
+    /// Checks `binding`'s type annotation and value, and the value against the annotation when it has both.
+    private mutating func declared(by binding: Binding) -> Declared {
+        let annotated = annotation(of: binding)
+        guard let valueExpr = binding.value else { return annotated }
+        return declared(by: checkTaken(valueExpr), annotated: annotated)
+    }
+
+    /// What `binding`'s type annotation gives the local it declares.
+    private func annotation(of binding: Binding) -> Declared {
+        guard let annotation = binding.type else { return .untyped }
+        guard let type = declarations.resolve(annotation, reporting: errors) else { return .failed }
+        return .typed(type, typeRange: annotation.range, value: nil)
+    }
+
+    /// What `value` gives the local whose type annotation gives it `annotated`. The source gives the local's type
+    /// at the value.
+    private mutating func declared(by value: CheckedExpr?, annotated: Declared) -> Declared {
+        guard let value else { return .failed }
+        switch annotated {
+        case .typed(let type, _, _):
+            return expect(value, type) ? .typed(type, typeRange: value.range, value: value) : .failed
+        case .untyped:
+            return .typed(value.type, typeRange: value.range, value: value)
+        case .failed:
+            return .failed
         }
     }
 
-    /// Checks `binding`, which declares a local without a value, so its type annotation gives the local's type.
-    private mutating func checkUnassigned(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
-        // Resolved before the name, so a declaration of `_` still reports its type's errors.
-        let type = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
-        guard bindsName(binding) else { return nil }
-        guard let annotation = binding.type else {
-            errors.report(.missingLocalType(name: binding.name), at: binding.nameRange)
-            return declareFailed(binding.name, at: binding.nameRange)
-        }
-        guard let type else { return declareFailed(binding.name, at: binding.nameRange) }
-        return declare(binding, declaredWith: kind, type: type, typeGivenAt: annotation.range).map { .binding($0, nil) }
-    }
-
-    /// Whether `binding` binds a name, reporting it when it binds `_`.
-    private mutating func bindsName(_ binding: Binding) -> Bool {
-        guard binding.name == "_" else { return true }
-        errors.report(.underscoreDeclared, at: binding.nameRange)
-        return false
-    }
-
-    /// Checks `expr`, the value `binding` gives, against the binding's type annotation when it has one.
-    private mutating func value(_ expr: Expr, givenBy binding: Binding) -> CheckedExpr? {
-        let declared = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
-        let value = checkTaken(expr)
-        guard let value, binding.type == nil || declared != nil else { return nil }
-        return expect(value, declared ?? value.type) ? value : nil
-    }
-
-    /// Declares the local that `binding` names, of `type`, which the source gives at `typeRange`. A local can't
-    /// have type Void.
-    private mutating func declare(_ binding: Binding, declaredWith kind: BindingKind, type: RayoType,
-                                  typeGivenAt typeRange: SourceRange) -> CheckedPlace? {
-        guard type != .void else {
+    /// The type that `declared` gives the local `binding` declares, reporting it when there is none or it is Void.
+    private func localType(_ declared: Declared, of binding: Binding) -> RayoType? {
+        switch declared {
+        case .typed(.void, let typeRange, _):
             errors.report(.voidLocal, at: typeRange)
-            _ = declareFailed(binding.name, at: binding.nameRange)
+            return nil
+        case .typed(let type, _, _):
+            return type
+        case .untyped:
+            errors.report(.missingLocalType(name: binding.name), at: binding.nameRange)
+            return nil
+        case .failed:
             return nil
         }
-        let localKind: LocalKind = kind == .var ? .var : .let
-        return declare(binding.name, type: type, kind: localKind, at: binding.nameRange).map {
-            CheckedPlace(local: $0, range: binding.nameRange)
-        }
+    }
+
+    /// Whether `name` is a name to bind, reporting it when it is `_`.
+    private func bindsName(_ name: String, at range: SourceRange) -> Bool {
+        guard name == "_" else { return true }
+        errors.report(.underscoreDeclared, at: range)
+        return false
     }
 
     /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
@@ -223,8 +239,11 @@ struct BodyChecker {
         return CheckedExpr(kind: .move(local), type: value.type, range: value.range)
     }
 
-    private mutating func declare(_ name: String, type: RayoType, kind: LocalKind, at range: SourceRange) -> LocalID? {
-        guard !isLocal(name, reportingRedeclarationAt: range) else {
+    /// Declares `name` in the innermost block as a new local of `type`, or, when `type` is nil or the name is
+    /// declared already, as a failed declaration, whose uses report nothing more.
+    private mutating func declare(_ name: String, type: RayoType?, kind: LocalKind, at range: SourceRange) -> LocalID? {
+        let isRedeclared = isLocal(name, reportingRedeclarationAt: range)
+        guard let type, !isRedeclared else {
             scopes[scopes.count - 1][name] = .failed
             return nil
         }
@@ -232,13 +251,6 @@ struct BodyChecker {
         locals.append(CheckedLocal(name: name, type: type, kind: kind))
         scopes[scopes.count - 1][name] = .local(local)
         return local
-    }
-
-    /// Declares `name` for a declaration that failed, so that its uses report nothing more.
-    private mutating func declareFailed(_ name: String, at range: SourceRange) -> CheckedStmt? {
-        _ = isLocal(name, reportingRedeclarationAt: range)
-        scopes[scopes.count - 1][name] = .failed
-        return nil
     }
 
     /// Whether `name` already names a local or a parameter, reporting it when it does.
@@ -314,5 +326,15 @@ struct BodyChecker {
         if loopDepth > 0 { return true }
         errors.report(.outsideLoop(keyword: keyword), at: range)
         return false
+    }
+}
+
+private extension LocalKind {
+    /// The kind of local that a declaration with `kind` declares.
+    init(_ kind: BindingKind) {
+        switch kind {
+        case .let: self = .let
+        case .var: self = .var
+        }
     }
 }
