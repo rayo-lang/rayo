@@ -128,10 +128,14 @@ struct BodyChecker {
         return value
     }
 
-    /// Checks `binding`, which declares a local, or drops its value when its name is `_`.
+    /// Checks `binding`, which declares a local.
     private mutating func check(_ binding: Binding) -> CheckedStmt? {
+        // Checked before the name, so a declaration of `_` still reports its value's errors.
         let value = value(of: binding)
-        guard binding.name != "_" else { return value.map { .expression($0) } }
+        guard binding.name != "_" else {
+            errors.report(.underscoreDeclared, at: binding.nameRange)
+            return nil
+        }
         guard let value else { return declareFailed(binding.name, at: binding.nameRange) }
         if value.type == .void {
             errors.report(.voidLocal, at: value.range)

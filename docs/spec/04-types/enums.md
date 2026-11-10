@@ -72,7 +72,7 @@ if case .chase(let t) = state { track(t) }     // one pattern as a condition
 
 - **One pattern as a condition.** `if case` tests one pattern as a `when` arm does, and binds its names for its block, as in the last line above. `guard case` and `while case` work the same way.
 - **A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
-- **Patterns that always match.** A `let` or `var` declaration, a `for` loop, and a `let` or `var` condition (whose pattern matches the optional's value) take only `_`, a name, or a tuple of these, under the binding kinds the position allows ([12](../12-grammar/constructs.md#statements)).
+- **Patterns that always match.** A `let` or `var` declaration, a `for` loop, and a `let` or `var` condition (whose pattern matches the optional's value) take only `_`, a name, or a tuple of these, under the binding kinds the position allows ([12](../12-grammar/constructs.md#statements)). Under a `let` or `var`, the pattern binds at least one name ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 
 **A `when` and an `if` are expressions, whose value is that of the arm that runs:**
 

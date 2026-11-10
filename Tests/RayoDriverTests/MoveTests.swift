@@ -29,7 +29,6 @@ struct MoveTests {
         ("let x = 1\nlet y = x\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
         ("let x = 1\nlet y = (x)\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
         ("let x = 1\n_ = x\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
-        ("let x = 1\nlet _ = x\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
         ("let x = 1\nlet y = x\nlet z = x", "4:9: error[E0302]: 'x' was moved"),
         ("var x = 1\nlet y = x\nx += 1", "4:1: error[E0302]: 'x' was moved"),
         ("let x = true\nlet y = x\nif x { }", "4:4: error[E0302]: 'x' was moved"),
@@ -119,7 +118,7 @@ struct MoveTests {
         ("func f(x: Int) -> Int { return x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { let y = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { _ = x }", [.moveFromParameter(name: "x")], ["x"]),
-        ("func f(x: Int) { let _ = x }", [.moveFromParameter(name: "x")], ["x"]),
+        ("func f(x: Int) { let _ = x }", [.underscoreDeclared, .moveFromParameter(name: "x")], ["_", "x"]),
         ("func f(x: Int) {\n    var y = 0\n    y = x\n}", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) -> Int {\n    let y = copy x\n    print(x)\n    return copy x\n}", [], []),
     ])

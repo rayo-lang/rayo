@@ -164,7 +164,7 @@ let saved = save(level)           // error if no code reads 'saved': its error w
 - held in a local or an `owned` parameter that no code reads after its declaration;
 - overwritten by an assignment before any code reads it, as the first `r` is in `var r = save(a); r = save(b)`.
 
-**`_ = x` and `let _ = x` drop a value on purpose.** Each takes `x` as a value, and destroys it at the end of its statement.
+**`_ = x` drops a value on purpose.** It takes `x` as a value, and destroys it at the end of its statement. A declaration can't drop one: `let _ = x` is a compile error, since a `let` or `var` must bind a name ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 
 ```swift
 _ = r.value?.submit(mesh)         // a Void?: nil if the object was gone and 'submit' never ran

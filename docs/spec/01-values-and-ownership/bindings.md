@@ -101,6 +101,23 @@ when &shape {
 
 **`for` patterns bind elements in place, changeable when the loop lends its sequence with `&`**, and own what the iterator hands out as a value of its own, such as a `Range`'s `Int`. So a `for` pattern writes no `let`, and writes `var` only on a part that owns its value ([04](../04-types/collections.md#iteration)).
 
+## Bindings with no name
+
+**A `let` or `var` whose pattern binds no name is a compile error**, in a declaration, a condition or a part of a pattern. The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. A `_` beside a name is fine, since the pattern still binds that name:
+
+```swift
+let (a, _) = pair                  // fine: binds 'a'
+let _ = save(level)                // error: binds no name
+let (_, _) = pair                  // error: the same
+if let _ = target { ... }          // error: the same
+```
+
+**Code that binds nothing has a form without `let` or `var`:**
+
+- `_ = x` drops a value on purpose ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
+- `x != nil` tests whether an optional holds a value ([04](../04-types/enums.md#optionals));
+- a `_` on its own matches any part of a pattern without binding it, as in `.circle(_)` ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+
 ## `if` and `when` as values
 
 **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, lends it for change, moves it or returns it. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](../10-errors-and-safety/unsafe-code.md#unsafe-code)).

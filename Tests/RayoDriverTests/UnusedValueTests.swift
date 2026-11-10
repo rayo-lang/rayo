@@ -27,15 +27,14 @@ struct UnusedValueTests {
         #expect(coveredText(reported, in: source) == [expression])
     }
 
-    @Test("'_ =' and 'let _ =' drop a value on purpose, which is still computed")
+    @Test("'_ =' drops a value on purpose, which is still computed")
     func dropped() {
         let source = """
             func main() {
                 _ = say(1)
-                let _ = say(2)
-                var _: Int = say(3)
-                _ = print(4)
-                let x = 5
+                _ = say(2)
+                _ = print(3)
+                let x = 4
                 _ = copy x
             }
             func say(_ x: Int) -> Int {
@@ -43,12 +42,33 @@ struct UnusedValueTests {
                 return copy x
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n3\n4\n", errors: ""))
+        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n3\n", errors: ""))
+    }
+
+    @Test("a declaration that binds no name is an error, which covers the '_'", arguments: [
+        "let _ = 1", "var _ = 1", "let _: Int = 1", "var _: Int = 1",
+    ])
+    func declaredUnderscore(body: String) {
+        let source = "func main() {\n\(body)\n}"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.underscoreDeclared])
+        #expect(coveredText(reported, in: source) == ["_"])
+    }
+
+    @Test("the value of a declaration that binds no name is still checked, and '_' declares nothing", arguments: [
+        ("let _ = nope", [ErrorCode.underscoreDeclared, .notDeclared(name: "nope")]),
+        ("let _: Bool = 1", [.underscoreDeclared, .typeMismatch(expected: "Bool", found: "Int")]),
+        ("var _: Int8 = 1", [.underscoreDeclared, .notAType(name: "Int8")]),
+        ("let _ = 1\nlet _ = 2", [.underscoreDeclared, .underscoreDeclared]),
+        ("let _ = 1\nprint(_)", [.underscoreDeclared, .underscoreValue]),
+    ])
+    func declaredUnderscoreChecked(body: String, expected: [ErrorCode]) {
+        #expect(errors("func main() {\n\(body)\n}") == expected)
     }
 
     @Test("computing a dropped value still panics", arguments: [
         ("let z = 0\n_ = 1 / z", ["--release"], "division by zero"),
-        ("let z = 0\nlet _ = 1 % z", ["--release"], "remainder by zero"),
+        ("let z = 0\n_ = 1 % z", ["--release"], "remainder by zero"),
         ("let big = 9223372036854775807\n_ = big + 1", ["--debug"], "integer overflow"),
     ])
     func droppedPanics(body: String, mode: [String], reason: String) {
@@ -57,15 +77,11 @@ struct UnusedValueTests {
 
     @Test("a dropped value is checked, a local's value is moved, and '_' declares nothing", arguments: [
         ("let x = 1\n_ = x", [ErrorCode]()),
-        ("let x = 1\nlet _ = x", []),
-        ("let _: Bool = 1", [.typeMismatch(expected: "Bool", found: "Int")]),
-        ("let _: Int8 = 1", [.notAType(name: "Int8")]),
         ("_ = nope", [.notDeclared(name: "nope")]),
         ("_ = _", [.underscoreValue]),
         ("_ == 1", [.underscoreValue]),
         ("(_) = 1", [.assignToNonLocal]),
-        ("let _ = 1\nprint(_)", [.underscoreValue]),
-        ("let _ = 1\nlet _ = nope\nvar _ = 2", [.notDeclared(name: "nope")]),
+        ("_ = 1\nprint(_)", [.underscoreValue]),
     ])
     func droppedChecked(body: String, expected: [ErrorCode]) {
         #expect(errors("func main() {\n\(body)\n}") == expected)

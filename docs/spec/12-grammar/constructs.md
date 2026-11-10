@@ -57,7 +57,7 @@ rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebin
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
 condition     = expression
-              | 'owned'? ('let' | 'var') pattern '=' expression        (* a place already named narrows instead (04) *)
+              | 'owned'? ('let' | 'var') pattern '=' expression        (* the pattern binds a name (01); a place already named narrows instead (04) *)
               | 'case' pattern '=' expression ;
 when-expr     = 'when' expression? '{' when-arm+ '}' ;
 when-arm      = (pattern (',' pattern)* ('where' expression)? | 'else') block ;
@@ -132,7 +132,7 @@ trailing-closure = closure ;
 
 ```ebnf
 pattern       = '_' | identifier | tuple-pattern | enum-pattern | expression-pattern
-              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p) *)
+              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); the pattern under 'let' or 'var' binds a name (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
 enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identifier ':')? pattern)* ','? ')')? ;
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)
