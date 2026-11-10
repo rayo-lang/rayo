@@ -1,6 +1,7 @@
 import Testing
 import RayoDiagnostics
 
+/// Codes written in each of the ways that `@Diagnostics` reads.
 @Diagnostics
 enum SampleCode: Equatable {
     @Code(1, error: "the program has no 'main' function")
@@ -48,7 +49,8 @@ struct DiagnosticsTests {
 
     @Test("a brace that doesn't enclose a name, and an escape, are written as they are")
     func literalText() {
-        #expect(SampleCode.braces(name: "if").message == "expected '{' after 'if', then '}' A and \"\\\" on\nanother line")
+        let message = "expected '{' after 'if', then '}' A and \"\\\" on\nanother line"
+        #expect(SampleCode.braces(name: "if").message == message)
     }
 
     @Test("each code has its number", arguments: [

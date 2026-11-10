@@ -3,6 +3,7 @@ import SwiftSyntaxMacrosGenericTestSupport
 import Testing
 @testable import RayoDiagnosticsMacros
 
+/// The macros under test, by the names their attributes are written with.
 private let macros = [
     "Diagnostics": MacroSpec(type: DiagnosticsMacro.self),
     "Code": MacroSpec(type: CodeMacro.self),
@@ -18,12 +19,13 @@ private func error(_ error: CodeTableError, _ line: Int, _ column: Int,
 /// Expands `source`, which must report `errors` and expand to `expanded`.
 private func expect(_ source: String, expandsTo expanded: String, reporting errors: [DiagnosticSpec],
                     sourceLocation: SourceLocation = #_sourceLocation) {
-    assertMacroExpansion(source, expandedSource: expanded, diagnostics: errors, macroSpecs: macros,
-                         failureHandler: { Issue.record(Comment(rawValue: $0.message), sourceLocation: sourceLocation) })
+    assertMacroExpansion(source, expandedSource: expanded, diagnostics: errors, macroSpecs: macros) { failure in
+        Issue.record(Comment(rawValue: failure.message), sourceLocation: sourceLocation)
+    }
 }
 
 /// The members a table written wrong still gets, so that only the table's own errors are reported.
-private let placeholderMembers = """
+private let fallbackMembers = """
         var number: Int {
             0
         }
@@ -49,7 +51,7 @@ struct DiagnosticsMacroTests {
                 case a
                 case b
 
-            \(placeholderMembers)
+            \(fallbackMembers)
             }
             """, reporting: [error(.duplicateNumber(1), 5, 11, notes: [(.firstUse(1), line: 3, column: 11)])])
     }
@@ -66,12 +68,12 @@ struct DiagnosticsMacroTests {
             enum E {
                 case notDeclared(name: String)
 
-            \(placeholderMembers)
+            \(fallbackMembers)
             }
             """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21), error(.unusedValue("name"), 4, 22)])
     }
 
-    @Test("every case has one code, and every value a label for its message to name it, before its placeholders are checked")
+    @Test("every case has one code, and every value a label its message names, before placeholders are checked")
     func caseShape() {
         expect("""
             @Diagnostics
@@ -95,7 +97,7 @@ struct DiagnosticsMacroTests {
 
                 case twice
 
-            \(placeholderMembers)
+            \(fallbackMembers)
             }
             """, reporting: [
                 error(.caseWithoutCode("bare"), 3, 5),
@@ -106,7 +108,7 @@ struct DiagnosticsMacroTests {
             ])
     }
 
-    @Test("a code's number is a positive integer literal, and its message a one-line string literal without interpolation")
+    @Test("a code's number is a positive integer literal, and its message a one-line literal without interpolation")
     func literals() {
         expect(#"""
             @Diagnostics
@@ -135,7 +137,7 @@ struct DiagnosticsMacroTests {
                 case e
                 case f
 
-            \#(placeholderMembers)
+            \#(fallbackMembers)
             }
             """#, reporting: [
                 error(.numberNotLiteral, 3, 11), error(.numberNotLiteral, 5, 11), error(.numberNotLiteral, 7, 11),
@@ -159,7 +161,7 @@ struct DiagnosticsMacroTests {
                 case a
                 #endif
 
-            \(placeholderMembers)
+            \(fallbackMembers)
             }
             """, reporting: [error(.conditionalCase, 5, 5)])
     }
