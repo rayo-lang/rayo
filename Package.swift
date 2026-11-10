@@ -9,6 +9,7 @@ let llvmMajorVersion = 23
 /// The directory LLVM `llvmMajorVersion` is installed under: `LLVM_PREFIX` when it's set, and otherwise the first
 /// of the places a package manager installs it that holds that release.
 let llvmPrefix: String = {
+    // Read the release installed under each candidate.
     let candidates = Context.environment["LLVM_PREFIX"].map { [$0] } ?? [
         "/usr/lib/llvm-\(llvmMajorVersion)",
         "/opt/homebrew/opt/llvm@\(llvmMajorVersion)",
@@ -17,7 +18,11 @@ let llvmPrefix: String = {
         "/usr/local/opt/llvm",
     ]
     let installs = candidates.compactMap { candidate in llvmMajorVersion(at: candidate).map { (candidate, $0) } }
+
+    // The first install of the release is the one to build against.
     if let match = installs.first(where: { $0.1 == llvmMajorVersion }) { return match.0 }
+
+    // Without one, the build stops, and says what it found instead.
     let others = installs.map { "LLVM \($0.1) in \($0.0)" }
     fatalError("""
         rayoc builds against LLVM \(llvmMajorVersion), and found it in none of \(candidates)\
@@ -30,7 +35,10 @@ let llvmPrefix: String = {
 /// first of LLVM's prefix and the places a package manager installs LLD that holds that release. Where none does,
 /// it is LLVM's own `bin`, so that `rayoc` reports LLD missing from there.
 let lldDirectory: String = {
+    // `LLD_PREFIX` names the install to use.
     if let prefix = Context.environment["LLD_PREFIX"] { return prefix + "/bin" }
+
+    // Otherwise the first prefix that holds the release is the one, and LLVM's is where none does.
     let candidates = [
         llvmPrefix,
         "/usr/lib/llvm-\(llvmMajorVersion)",
@@ -43,10 +51,12 @@ let lldDirectory: String = {
     return prefix + "/bin"
 }()
 
-/// The major release of the LLD installed under `prefix`, or nil when none is. LLD's own version file says it,
-/// and otherwise an LLVM installed with it under the same prefix does.
+/// The major release of the LLD installed under `prefix`, or nil when none is.
 func lldMajorVersion(at prefix: String) -> Int? {
+    // A prefix without the `lld` tool holds no LLD.
     guard FileManager.default.fileExists(atPath: prefix + "/bin/lld") else { return nil }
+
+    // LLD's version file says its release; without one, an LLVM installed with it under the same prefix does.
     let definition = "set(PACKAGE_VERSION \""
     let config = try? String(contentsOfFile: prefix + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
     let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
@@ -54,8 +64,9 @@ func lldMajorVersion(at prefix: String) -> Int? {
     return major ?? llvmMajorVersion(at: prefix)
 }
 
-/// `path`, which the manifest writes into C string literals, so it can't hold a quote or a backslash.
+/// `path`, which the manifest writes into C string literals, stopping the build when it holds a quote or a backslash.
 func checkedForDefine(_ path: String) -> String {
+    // A quote or a backslash would end or escape the literal early.
     if path.contains("\"") || path.contains("\\") {
         fatalError("rayoc can't be built against an LLVM whose path holds a quote or a backslash: \(path)")
     }
@@ -137,8 +148,11 @@ for target in package.targets where dependsOnCLLVM(target, among: package.target
 func dependsOnCLLVM(_ target: Target, among targets: [Target]) -> Bool {
     target.dependencies.contains { dependency in
         switch dependency {
+        // A dependency reaches CLLVM when it is CLLVM, or one of `targets` that depends on it.
         case .targetItem(let name, _), .byNameItem(let name, _):
             return name == "CLLVM" || targets.contains { $0.name == name && dependsOnCLLVM($0, among: targets) }
+
+        // A product of another package isn't CLLVM.
         default:
             return false
         }
