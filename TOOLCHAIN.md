@@ -77,6 +77,6 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
-| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools, of the code each operator emits, run in the test process through LLVM's JIT, and of the LLVM type each Rayo type is held in |
+| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM type that holds each Rayo type |
 | `Tests/CLLVMJIT` | The module map that imports LLVM's JIT into the LLVM tests, and into nothing that ships |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |

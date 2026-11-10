@@ -24,10 +24,10 @@ struct OperatorModule {
     private let target: TargetMachine
 
     init(for build: Build) throws {
-        target = try TargetMachine(optimizes: build == .release)
-        module = ModuleBuilder(named: "main.rayo", for: target)
-        program = ProgramEmitter(module: module, runtime: try Runtime(in: module), sourcePath: "main.rayo",
-                                 checksOverflow: build == .debug)
+        let emitting = try ProgramModule(optimizes: build == .release)
+        target = emitting.target
+        module = emitting.module
+        program = emitting.emitter
     }
 
     /// The text of the module's IR.

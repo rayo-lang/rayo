@@ -14,12 +14,12 @@ struct ValueTypeTests {
         #expect(LLVMGetIntTypeWidth(llvmType) == width)
     }
 
-    @Test func `a function that returns nothing returns void`() throws(LLVMError) {
+    @Test func `Void is LLVM's void type`() throws(LLVMError) {
         #expect(LLVMGetTypeKind(try types().llvmType(.void)) == LLVMVoidTypeKind)
     }
 
-    /// The LLVM types of a new module's values.
+    /// The LLVM types of the values of a program emitted into a new module.
     private func types() throws(LLVMError) -> LLVMTypes {
-        LLVMTypes(in: ModuleBuilder(named: "types", for: try TargetMachine(optimizes: false)))
+        try ProgramModule(optimizes: false).emitter.types
     }
 }

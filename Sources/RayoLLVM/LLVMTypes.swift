@@ -1,7 +1,7 @@
 internal import CLLVM
 import RayoSema
 
-/// The LLVM types that hold a program's values.
+/// The LLVM types of a program's values, and of a function's result.
 struct LLVMTypes {
     private let module: ModuleBuilder
 
