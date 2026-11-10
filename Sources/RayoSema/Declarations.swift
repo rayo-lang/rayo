@@ -82,10 +82,6 @@ struct Declarations {
         functions[name, default: []]
     }
 
-    func declaresFunction(named name: String) -> Bool {
-        functions[name] != nil
-    }
-
     func resolve(_ type: TypeExpr, reporting errors: ErrorList) -> RayoType? {
         switch type {
         case .named("Int", _):

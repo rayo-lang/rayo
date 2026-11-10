@@ -33,8 +33,6 @@ struct LocalTests {
         ("let x = print(1)", .voidLocal),
         ("let x: Int", .missingBindingValue(found: .newline)),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
-        ("let print = 1\nprint(print)", .alreadyDeclared(name: "print")),
-        ("let main = 1", .alreadyDeclared(name: "main")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
         ("let _ = 5", .underscoreDeclared),
@@ -44,6 +42,18 @@ struct LocalTests {
     ])
     func rejected(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
+    }
+
+    @Test("a local may share a function's name: a call reaches the function, and every other use the local")
+    func sharesFunctionName() {
+        #expect(output("""
+            var print = 1
+            print = 3
+            print += 2
+            print(print)
+            let main = copy print
+            print(main + 1)
+            """) == "5\n6\n")
     }
 
     @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [

@@ -95,13 +95,37 @@ struct ParameterTests {
 
     @Test("a parameter's name is declared like a local's", arguments: [
         ("func f(a: Int, a: Bool) {}", [ErrorCode.alreadyDeclared(name: "a")]),
-        ("func f(f: Int) {}", [.alreadyDeclared(name: "f")]),
         ("func f(x: Int) { let x = 1 }", [.alreadyDeclared(name: "x")]),
         ("func f(_: Int) {}", [.underscoreDeclared]),
         ("func f(x: Int8) { print(x) }", [.notAType(name: "Int8")]),
     ])
     func names(declaration: String, expected: [ErrorCode]) {
         #expect(errors("func main() {}\n" + declaration) == expected)
+    }
+
+    @Test("a parameter may share a function's name, and a use of the name other than a call reaches the parameter")
+    func sharesFunctionName() {
+        let source = """
+            func main() { print(next(41)) }
+            func next(_ next: Int) -> Int { copy next + 1 }
+            """
+        #expect(run(source) == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+    }
+
+    @Test("a call skips a parameter, which can't be called, and reaches the functions of its name")
+    func callSkipsParameter() {
+        let source = """
+            func main() {
+                print(sum(3))
+                show(print: 7)
+            }
+            func sum(_ sum: Int) -> Int {
+                if sum == 0 { return 0 }
+                return sum + sum(sum - 1)
+            }
+            func show(print: Int) { print(print) }
+            """
+        #expect(run(source) == Driver.Result(exitCode: 0, output: "6\n7\n", errors: ""))
     }
 
     @Test("functions may share a name when their labels or parameter types differ, and a call picks the one it fits")

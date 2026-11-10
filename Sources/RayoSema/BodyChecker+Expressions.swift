@@ -50,12 +50,12 @@ extension BodyChecker {
             errors.report(.underscoreValue, at: range)
             return nil
         }
-        switch lookUp(name) {
+        switch lookUp(name, for: .ordinary) {
         case .local(let local):
             return CheckedExpr(kind: .local(local), type: locals[local.index].type, range: range)
         case .failed:
             return nil
-        case nil where declarations.declaresFunction(named: name):
+        case .functions:
             errors.report(.functionAsValue(name: name), at: range)
             return nil
         case nil:
