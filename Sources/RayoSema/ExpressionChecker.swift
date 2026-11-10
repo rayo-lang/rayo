@@ -2,8 +2,14 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-extension BodyChecker {
-    mutating func check(_ expr: Expr) -> CheckedExpr? {
+/// Checks expressions: the names they use, their operators' operands, and the types they give.
+struct ExpressionChecker {
+    let file: FileChecker
+    let names: NameScopes
+
+    private var errors: ErrorList { file.errors }
+
+    func check(_ expr: Expr) -> CheckedExpr? {
         switch expr.kind {
         // An integer literal is an Int, if it fits in one.
         case .intLiteral(let digits):
@@ -39,7 +45,7 @@ extension BodyChecker {
 
         // A call reaches one of the functions its name names.
         case .call(let name, let nameRange, let arguments):
-            return call(name, at: nameRange, arguments, in: expr.range)
+            return CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range)
 
         // A `copy` reads the local and leaves its value in it, and it covers the whole `copy name`.
         case .copy(let name, let nameRange):
@@ -49,30 +55,51 @@ extension BodyChecker {
         }
     }
 
-    mutating func check(_ expr: Expr, expecting type: RayoType) -> CheckedExpr? {
+    func check(_ expr: Expr, expecting type: RayoType) -> CheckedExpr? {
         // An expression that failed, or that has another type, was reported.
         guard let checked = check(expr), expect(checked, type) else { return nil }
         return checked
     }
 
     /// Whether `expr` has `type`, reporting it when it doesn't.
-    mutating func expect(_ expr: CheckedExpr, _ type: RayoType) -> Bool {
+    func expect(_ expr: CheckedExpr, _ type: RayoType) -> Bool {
         // A value of the type passes.
         if expr.type == type { return true }
         errors.report(.typeMismatch(expected: "\(type)", found: "\(expr.type)"), at: expr.range)
         return false
     }
 
-    private mutating func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
+    /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
+    /// value out of it.
+    func checkTaken(_ expr: Expr) -> CheckedExpr? {
+        // An expression that failed was reported already.
+        guard let value = check(expr) else { return nil }
+        // A `copy` of a local checks to a read of it too, so only a bare name moves.
+        guard case .name(let name) = expr.kind, case .local(let local) = value.kind else { return value }
+        return move(local, named: name, readBy: value)
+    }
+
+    /// Turns `value`, which reads `local`, into a move of its value, reporting it when `local` is a borrowed
+    /// parameter.
+    private func move(_ local: LocalID, named name: String, readBy value: CheckedExpr) -> CheckedExpr? {
+        // A borrowed parameter can't be moved from, since its caller still owns the value.
+        guard names[local].kind != .parameter else {
+            errors.report(.moveFromParameter(name: name), at: value.range)
+            return nil
+        }
+        return CheckedExpr(kind: .move(local), type: value.type, range: value.range)
+    }
+
+    private func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
         // `_` names no value; it only drops one, or leaves a parameter unnamed.
         if name == "_" {
             errors.report(.underscoreValue, at: range)
             return nil
         }
-        switch lookUp(name, for: .ordinary) {
+        switch names.lookUp(name, for: .ordinary) {
         // A local reads its value.
         case .inScope(.local(let local)):
-            return CheckedExpr(kind: .local(local), type: locals[local.index].type, range: range)
+            return CheckedExpr(kind: .local(local), type: names[local].type, range: range)
 
         // A local whose declaration failed was reported there.
         case .inScope(.failed):
@@ -92,8 +119,8 @@ extension BodyChecker {
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a
     /// compound assignment's `+`.
-    mutating func binary(_ op: BinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
-                         in range: SourceRange) -> CheckedExpr? {
+    func binary(_ op: BinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
+                in range: SourceRange) -> CheckedExpr? {
         let result: RayoType
         switch op {
         // Arithmetic takes two Ints, and gives an Int.
@@ -129,8 +156,8 @@ extension BodyChecker {
     }
 
     /// Whether `left` and `right` both have `type`, reporting it when they don't.
-    private mutating func operands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
-                                   are type: RayoType, in range: SourceRange) -> Bool {
+    private func operands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
+                          are type: RayoType, in range: SourceRange) -> Bool {
         // Two operands of the type pass.
         if left.type == type && right.type == type { return true }
         let code = ErrorCode.operandTypes(op: spelled, needs: "\(type)", left: "\(left.type)", right: "\(right.type)")
@@ -139,7 +166,7 @@ extension BodyChecker {
     }
 
     /// Checks an integer literal, whose `value` is nil when the literal doesn't fit in an `Int`.
-    private mutating func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
+    private func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
         // A literal that doesn't fit is reported.
         guard let value else {
             errors.report(.literalExceedsInt, at: range)

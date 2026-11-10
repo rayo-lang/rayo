@@ -159,20 +159,22 @@ final class FileChecker {
         // Check the body in names of its own, which start with the parameters.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
-        var body = BodyChecker(file: self, result: signature.result.type)
-        body.declare(function.parameters, types: signature.parameters.map(\.type))
+        let names = NameScopes(declarations: declarations, errors: errors)
+        let expressions = ExpressionChecker(file: self, names: names)
+        BindingChecker(expressions: expressions).declare(function.parameters, types: signature.parameters.map(\.type))
+        var body = BodyChecker(expressions: expressions, result: signature.result.type)
 
         // A function with a result whose body is a single expression returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
             let returned = body.returned(value)
-            return CheckedBody(result: result(of: signature, returning: returned), locals: body.locals,
+            return CheckedBody(result: result(of: signature, returning: returned), locals: names.locals,
                                statements: returned.map { [.returnStmt($0)] } ?? [])
         }
 
         // Any other body runs its statements, which return the result, if there is one, on every path.
         let statements = body.check(function.body)
         reportMissingReturn(from: function, as: signature)
-        return CheckedBody(result: signature.result.type, locals: body.locals, statements: statements)
+        return CheckedBody(result: signature.result.type, locals: names.locals, statements: statements)
     }
 
     /// The result type of the function `signature` declares, whose body is a single expression that checks to
