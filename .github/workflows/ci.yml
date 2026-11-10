@@ -3,7 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  # Only a pull request into main runs CI. One stacked on another pull request merges only after the one below it,
+  # and since a stack merges by squashing, it is then rebased onto main and pushed, which runs CI on it.
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
