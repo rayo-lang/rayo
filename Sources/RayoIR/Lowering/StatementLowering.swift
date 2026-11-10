@@ -22,10 +22,10 @@ struct StatementLowering: ~Copyable {
     }
 
     /// Ends the last block, and makes the IR function of `checked`, whose body is the statements lowered so far.
-    consuming func function(lowering checked: CheckedFunction) -> IRFunction {
+    consuming func function(of checked: CheckedFunction) -> IRFunction {
         // End the last block, which a run reaches only in a Void function: the checker makes others return first.
         builder.end(with: checked.result == .void ? .return(nil) : .unreachable)
-        return builder.function(lowering: checked)
+        return builder.function(of: checked)
     }
 
     private mutating func lower(_ statement: CheckedStmt) {
@@ -70,8 +70,8 @@ struct StatementLowering: ~Copyable {
 
     /// Lowers `place op= value` as `place = place op value`.
     private mutating func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
-        let value = ExpressionLowering.operand(of: value, in: &builder)
-        builder.emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
+        let operand = ExpressionLowering.operand(of: value, in: &builder)
+        builder.emit(.binary(op, .read(Place(place)), operand), into: Place(place), range: place.range)
     }
 
     /// Starts the life of `place`'s local, and stores `value` in it when there is one.

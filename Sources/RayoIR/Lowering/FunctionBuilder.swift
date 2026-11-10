@@ -17,13 +17,15 @@ struct FunctionBuilder: ~Copyable {
         self.locals = locals
     }
 
-    /// The IR function these blocks make of `checked`.
-    consuming func function(lowering checked: CheckedFunction) -> IRFunction {
+    /// Makes the IR function of `checked` from the blocks and locals built so far, every block of which has ended.
+    consuming func function(of checked: CheckedFunction) -> IRFunction {
+        // Every block has its terminator by now: lowering ends each block before it makes the function.
         let blocks = blocks.map { block in
-            // Lowering ends every block before it makes the function.
             guard let terminator = block.terminator else { preconditionFailure("a block was left unterminated") }
             return BasicBlock(statements: block.statements, terminator: terminator)
         }
+
+        // The function takes its name, parameters and result from `checked`.
         return IRFunction(
             name: checked.name, parameterCount: checked.parameterCount, result: checked.result,
             locals: locals, blocks: blocks,

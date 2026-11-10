@@ -7,9 +7,10 @@ public enum Lowering {
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
-        var lowering = StatementLowering(builder: FunctionBuilder(locals: function.locals.map(IRLocal.init)))
+        let builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
+        var lowering = StatementLowering(builder: builder)
         lowering.lower(function.body)
-        return lowering.function(lowering: function)
+        return lowering.function(of: function)
     }
 }
 

@@ -29,8 +29,8 @@ enum ExpressionLowering {
         // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range, in: &builder)
-        // Any other expression is computed into a temporary.
-        default:
+        // Any other operation, and a call, is computed into a temporary.
+        case .unary, .binary, .call:
             lowerIntoTemporary(expr, in: &builder)
         }
     }
