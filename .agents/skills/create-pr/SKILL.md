@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Write and open a pull request on rayo-lang/rayo with the project's Purpose / What changed body. Use when opening or drafting a PR, or rewriting a PR's title or description.
+description: Write the title and Purpose / What changed body of a pull request on rayo-lang/rayo, and open it. Use when `pr-workflow` opens one, or to rewrite a PR's title or description.
 ---
 
 # Create PR
@@ -9,13 +9,13 @@ A PR description tells a reviewer why the change exists and what it does, in the
 
 ## 1. Check the branch
 
-Confirm the current branch is not `main`, and is named `impl-<feature-slug>`, with `-via-<model>-<version>` appended when an AI model does the work. On `main`, stop and move the work to a correctly named branch first.
+Confirm the current branch is not `main`, and is named `impl-<feature-slug>`, with `-via-<model>-<version>` appended when an AI model does the work. On `main`, stop and move the work to a correctly named branch first. Open a new PR only from `pr-workflow`'s step 3, once its steps 1 and 2 pass, and load `pr-workflow` first if it isn't loaded; rewriting an open PR's title or body needs neither.
 
-**Done when:** you are on a correctly named branch, and `git log main..HEAD` lists the commits the PR will carry.
+**Done when:** you are on a correctly named branch, you know its base — `main`, or the branch of the open pull request it is stacked on — and `git log origin/<base>..HEAD` lists the commits the PR will carry.
 
 ## 2. Read the whole change
 
-Read every commit message in `git log main..HEAD` and the full `git diff main...HEAD`. Write from the diff, not from memory of the session: the PR describes what the branch contains.
+After `git fetch origin`, read every commit message in `git log origin/<base>..HEAD` and the full `git diff origin/<base>...HEAD`. Write from the diff, not from memory of the session: the PR describes what the branch contains.
 
 Find the issues the branch works on: the issue the task started from, or else an open issue the diff addresses, found with `gh issue list -R rayo-lang/rayo --state open --search "<keywords>"`. Read each candidate with `gh issue view <N> -R rayo-lang/rayo` and decide whether the diff resolves all of it or only part.
 
@@ -48,9 +48,9 @@ Closes #<N>
 
 ## 4. Check the messages
 
-Check the title, the body, and every commit message in `git log main..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3.
+Check the title, the body, and every commit message in `git log origin/<base>..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3.
 
-If a commit message breaks either rule, reword it. If those commits are already pushed, ask before force-pushing the reworded history.
+If a commit message breaks either rule, reword it; if the branch is already pushed, push it again with `git push --force-with-lease=<branch>:<sha> origin <branch>`, `<sha>` the `git rev-parse origin/<branch>` you read before rewording, then move each held branch stacked on it, as `pr-workflow` step 2 says.
 
 **Done when:** none of the title, body, or commit messages credits an AI in any form, and the title and every commit subject follow Conventional Commits.
 
@@ -58,7 +58,7 @@ If a commit message breaks either rule, reword it. If those commits are already 
 
 ```sh
 git push -u origin <branch>
-gh pr create -R rayo-lang/rayo --base main --head <branch> --title "<title>" --body-file - <<'EOF'
+gh pr create -R rayo-lang/rayo --base <base> --head <branch> --title "<title>" --body-file - <<'EOF'
 <body>
 EOF
 ```
