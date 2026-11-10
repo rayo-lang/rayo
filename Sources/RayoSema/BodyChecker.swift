@@ -248,18 +248,37 @@ struct BodyChecker {
         return true
     }
 
+    /// Checks `target op valueExpr`, checking the value even when the target fails.
     private mutating func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr,
                                  in range: SourceRange) -> CheckedStmt? {
-        let local = assignedLocal(target)
-        let canChange = local.map { isAssignable($0, at: target.range) } ?? false
-        let value = op.binary == nil ? checkTaken(valueExpr) : check(valueExpr)
-        guard let local, canChange, let value else { return nil }
-        let place = CheckedPlace(local: local, range: target.range)
-        let type = locals[local.index].type
-        guard let binaryOp = op.binary else { return expect(value, type) ? .assign(place, value) : nil }
-        let current = CheckedExpr(kind: .local(local), type: type, range: target.range)
-        guard binary(binaryOp, current, value, spelled: op.rawValue, in: range) != nil else { return nil }
-        return .compoundAssign(place, binaryOp, value)
+        let place = assignedPlace(target)
+        if let binaryOp = op.binary {
+            return compoundAssign(check(valueExpr), binaryOp, spelled: op.rawValue, to: place, in: range)
+        }
+        return assign(checkTaken(valueExpr), to: place)
+    }
+
+    /// Checks `place = value`, whose value must have the type of the local.
+    private mutating func assign(_ value: CheckedExpr?, to place: CheckedPlace?) -> CheckedStmt? {
+        guard let place, let value else { return nil }
+        guard expect(value, locals[place.local.index].type) else { return nil }
+        return .assign(place, value)
+    }
+
+    /// Checks `place op= value`, whose operator the source spells `spelled`, as `place op value`.
+    private mutating func compoundAssign(_ value: CheckedExpr?, _ op: BinaryOperator, spelled: String,
+                                         to place: CheckedPlace?, in range: SourceRange) -> CheckedStmt? {
+        guard let place, let value else { return nil }
+        let current = CheckedExpr(kind: .local(place.local), type: locals[place.local.index].type, range: place.range)
+        guard binary(op, current, value, spelled: spelled, in: range) != nil else { return nil }
+        return .compoundAssign(place, op, value)
+    }
+
+    /// The place that `target` names, when it names a local that may be assigned.
+    private mutating func assignedPlace(_ target: Expr) -> CheckedPlace? {
+        guard let local = assignedLocal(target) else { return nil }
+        guard isAssignable(local, at: target.range) else { return nil }
+        return CheckedPlace(local: local, range: target.range)
     }
 
     /// Whether `local` may be assigned, reporting it when it can't. A `let` may be, though only once on each path,
