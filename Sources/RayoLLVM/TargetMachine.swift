@@ -34,10 +34,11 @@ final class TargetMachine {
         // Make the code generator for the triple, at the optimisation level asked for.
         machine = LLVMCreateTargetMachine(
             target, triple,
-            // A generic CPU without extra features, like a C compiler's default, runs on any machine of the triple.
+            // Code for a generic CPU without extra features, a C compiler's default, runs on any machine of the triple.
             "", "",
             optimizes ? LLVMCodeGenLevelDefault : LLVMCodeGenLevelNone,
-            // Position-independent code links into the position-independent executables clang makes on Linux.
+            // Position-independent code links into the position-independent executables clang makes by default on
+            // Linux.
             LLVMRelocPIC, LLVMCodeModelDefault)
         self.triple = triple
         self.optimizes = optimizes
@@ -71,15 +72,17 @@ final class TargetMachine {
         }
         defer { LLVMDisposeMemoryBuffer(buffer) }
 
+        // Copy the object code out of the buffer, which is freed once this returns.
         let bytes = UnsafeRawBufferPointer(start: LLVMGetBufferStart(buffer), count: LLVMGetBufferSize(buffer))
         return Array(bytes)
     }
 
     /// Runs on `module` the optimisations a C compiler runs at -O2. Throws when LLVM can't run them.
     private func optimize(_ module: ModuleBuilder) throws(LLVMError) {
-        // Run the passes, and leave when they all succeed.
+        // Run the passes of -O2 over the module.
         let options = LLVMCreatePassBuilderOptions()
         defer { LLVMDisposePassBuilderOptions(options) }
+        // Passes that all succeed leave nothing to report.
         guard let error = LLVMRunPasses(module.module, "default<O2>", machine, options) else { return }
 
         // A pass that fails reports why.

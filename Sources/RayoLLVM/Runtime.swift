@@ -8,9 +8,9 @@ struct Runtime {
     static let entryPoint = "main"
 
     private let modules: [LLVMModuleRef]
-    /// Prints an Int on a line of its own.
+    /// The runtime function that prints an Int on a line of its own.
     let printInt: FunctionValue
-    /// Reports a panic with a message, and ends the program.
+    /// The runtime function that reports a panic with a message, and ends the program.
     let panic: FunctionValue
 
     /// Parses the runtime in `module`'s context, declares in `module` the functions a program calls, and defines
