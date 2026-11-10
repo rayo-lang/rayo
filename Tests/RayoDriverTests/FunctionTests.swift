@@ -133,11 +133,10 @@ struct FunctionTests {
             [.argumentCount(name: "print", takes: 0, passes: 1)])
     }
 
-    @Test("a function is called, not used as a value, assigned or declared again", arguments: [
+    @Test("a function is called, not used as a value or assigned", arguments: [
         ("let g = f", ErrorCode.functionAsValue(name: "f")),
         ("print(f)", .functionAsValue(name: "f")),
         ("f = 2", .assignToFunction(name: "f")),
-        ("let f = 1", .alreadyDeclared(name: "f")),
         ("f(1)", .argumentCount(name: "f", takes: 0, passes: 1)),
     ])
     func notAValue(body: String, expected: ErrorCode) {

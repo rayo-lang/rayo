@@ -22,20 +22,20 @@ extension BodyChecker {
                            range: range)
     }
 
-    /// The functions called `name`, reporting it when no function of that name can be called.
+    /// The functions a call of `name` reaches, reporting it when it reaches none, unless a declaration of the name
+    /// failed.
     private mutating func functions(named name: String, at range: SourceRange) -> [Signature] {
-        switch lookUp(name) {
-        case .local:
+        switch lookUp(name, for: .call) {
+        case .functions(let functions):
+            return functions
+        case .inScope(.local):
             errors.report(.notAFunction(name: name), at: range)
-            return []
-        case .failed:
-            return []
-        case nil:
+        case .inScope(.failed):
             break
+        case nil:
+            errors.report(.notDeclared(name: name), at: range)
         }
-        let functions = declarations.functions(named: name)
-        if functions.isEmpty { errors.report(.notDeclared(name: name), at: range) }
-        return functions
+        return []
     }
 
     /// Checks `arguments` against `signature`'s parameters, in order, reporting each mismatch.
