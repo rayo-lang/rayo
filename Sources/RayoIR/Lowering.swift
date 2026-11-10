@@ -219,6 +219,6 @@ private extension Place {
 
 private extension IRLocal {
     init(_ local: CheckedLocal) {
-        self.init(type: local.type, name: local.name, isLet: local.kind == .let)
+        self = .source(name: local.name, kind: local.kind, type: local.type)
     }
 }

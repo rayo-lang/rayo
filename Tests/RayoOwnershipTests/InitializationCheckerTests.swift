@@ -247,8 +247,8 @@ private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagno
 /// parameters.
 private func function(_ blocks: [BasicBlock], parameterCount: Int = 0) -> IRFunction {
     let locals = [
-        IRLocal(type: .int, name: "x", isLet: false), IRLocal(type: .int, name: "y", isLet: false),
-        IRLocal(type: .int, name: "k", isLet: true),
+        IRLocal.source(name: "x", kind: .var, type: .int), .source(name: "y", kind: .var, type: .int),
+        .source(name: "k", kind: .let, type: .int),
     ]
     return IRFunction(name: "f()", parameterCount: parameterCount, result: .void, locals: locals, blocks: blocks)
 }

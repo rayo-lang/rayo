@@ -50,29 +50,23 @@ private struct FunctionErrors {
 
     mutating func use(_ place: Place, holding state: LocalState) {
         guard !state.isInitialized else { return }
-        let code = useError(naming: name(of: place.local), holding: state)
+        // Lowering writes a temporary before it reads it and never moves one, so no temporary is used without a
+        // value.
+        guard case .source(let name, _, _) = function.locals[place.local.index] else { return }
+        let code = useError(naming: name, holding: state)
         keep(Diagnostic(code, at: place.range), for: Cause(local: place.local, moves: state.moves))
     }
 
     mutating func store(to place: Place, holding state: LocalState) {
-        guard function.locals[place.local.index].isLet else { return }
+        guard case .source(let name, .let, _) = function.locals[place.local.index] else { return }
         guard state.isAssignedOnSomePath else { return }
-        let code = storeError(naming: name(of: place.local), holding: state)
-        stores.append(Diagnostic(code, at: place.range))
+        stores.append(Diagnostic(storeError(naming: name, holding: state), at: place.range))
     }
 
     /// Keeps `diagnostic` as the error of `cause`, unless the one kept for it starts no later in the source.
     private mutating func keep(_ diagnostic: Diagnostic, for cause: Cause) {
         if let kept = firstUses[cause], kept.range.start <= diagnostic.range.start { return }
         firstUses[cause] = diagnostic
-    }
-
-    /// The name the source declares `local` with.
-    private func name(of local: LocalID) -> String {
-        guard let name = function.locals[local.index].name else {
-            preconditionFailure("lowering never moves a temporary, reads one before writing it, or makes one a 'let'")
-        }
-        return name
     }
 
     /// The error for a use of the local `name` where it holds `state`, which leaves it without a value on some path.
