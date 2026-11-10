@@ -18,6 +18,7 @@ public enum Punct: String, Sendable, CaseIterable {
 
     static let byLengthDescending: [Punct] = Punct.allCases.sorted { $0.rawValue.utf8.count > $1.rawValue.utf8.count }
 
+    var unaryOperator: UnaryOperator? { UnaryOperator(rawValue: rawValue) }
     var binaryOperator: BinaryOperator? { BinaryOperator(rawValue: rawValue) }
     var assignOperator: AssignOperator? { AssignOperator(rawValue: rawValue) }
 }
@@ -30,11 +31,9 @@ public enum TokenKind: Sendable, Hashable {
     case punct(Punct)
     case newline
     case eof
-    /// Text the lexer reported an error for. The parser skips the statement that holds it without reporting
-    /// it again.
+    /// Text the lexer reported an error for, which needs no second report.
     case invalid
-    /// A character no token starts with. The lexer leaves it to the parser, which reports the first one in
-    /// a statement and skips the rest of that statement.
+    /// A character no token starts with, which the lexer leaves for the parser to report.
     case unexpected(String)
 }
 
@@ -62,4 +61,13 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
 
     public func isPunct(_ punct: Punct) -> Bool { kind == .punct(punct) }
     public func isKeyword(_ keyword: Keyword) -> Bool { kind == .keyword(keyword) }
+
+    /// How the token is spelled as an argument label, when it can be one: any identifier or keyword is one.
+    var labelSpelling: String? {
+        switch kind {
+        case .identifier(let name): return name
+        case .keyword(let keyword): return keyword.rawValue
+        default: return nil
+        }
+    }
 }
