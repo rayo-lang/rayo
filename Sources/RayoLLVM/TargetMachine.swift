@@ -60,9 +60,13 @@ final class TargetMachine {
 
     /// Runs the optimisations a C compiler runs at -O2.
     private func optimize(_ module: ModuleBuilder) throws(LLVMError) {
+        // Run clang's -O2 pipeline, which reads the host's details from this machine.
         let options = LLVMCreatePassBuilderOptions()
         defer { LLVMDisposePassBuilderOptions(options) }
-        guard let error = LLVMRunPasses(module.module, "default<O2>", machine, options) else { return }
+        let error = LLVMRunPasses(module.module, "default<O2>", machine, options)
+
+        // A pipeline that ran reports no error; one that didn't throws LLVM's message for it.
+        guard let error else { return }
         let message = LLVMGetErrorMessage(error)
         defer { LLVMDisposeErrorMessage(message) }
         throw module.error("LLVM couldn't optimise the module:", detail: message.map { String(cString: $0) } ?? "")
