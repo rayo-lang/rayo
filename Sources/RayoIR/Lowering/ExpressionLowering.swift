@@ -4,7 +4,7 @@ import RayoSource
 /// Lowers expressions into the current block of a function's control-flow graph, as the operations that compute
 /// them and the operands that hold their values.
 struct ExpressionLowering {
-    let graph: GraphBuilder
+    let builder: FunctionBuilder
 
     func rvalue(of expr: CheckedExpr) -> Rvalue {
         switch expr.kind {
@@ -38,8 +38,8 @@ struct ExpressionLowering {
 
     /// Computes `expr` into a new temporary, and returns an operand that reads it.
     private func lowerIntoTemporary(_ expr: CheckedExpr) -> Operand {
-        let temporary = graph.newTemporary(expr.type, at: expr.range)
-        graph.emit(rvalue(of: expr), into: temporary, range: expr.range)
+        let temporary = builder.newTemporary(expr.type, at: expr.range)
+        builder.emit(rvalue(of: expr), into: temporary, range: expr.range)
         return .read(temporary)
     }
 
@@ -48,19 +48,19 @@ struct ExpressionLowering {
     private func shortCircuit(_ left: CheckedExpr, _ right: CheckedExpr, decidedWhenLeftIs decidingValue: Bool,
                               range: SourceRange) -> Operand {
         // The result starts as `left`'s value, which is the result when it is `decidingValue`.
-        let result = graph.newTemporary(.bool, at: range)
+        let result = builder.newTemporary(.bool, at: range)
         let resultValue = Operand.read(result)
-        graph.emit(.use(operand(of: left)), into: result, range: range)
+        builder.emit(.use(operand(of: left)), into: result, range: range)
 
         // `right` is evaluated in a block of its own, which only a `left` that doesn't decide reaches.
-        let evaluateRight = graph.newBlock()
-        let join = graph.newBlock()
+        let evaluateRight = builder.newBlock()
+        let join = builder.newBlock()
         let branch: Terminator = decidingValue
             ? .branch(resultValue, then: join, otherwise: evaluateRight)
             : .branch(resultValue, then: evaluateRight, otherwise: join)
-        graph.end(with: branch, continuingIn: evaluateRight)
-        graph.emit(.use(operand(of: right)), into: result, range: range)
-        graph.end(with: .goto(join), continuingIn: join)
+        builder.end(with: branch, continuingIn: evaluateRight)
+        builder.emit(.use(operand(of: right)), into: result, range: range)
+        builder.end(with: .goto(join), continuingIn: join)
         return resultValue
     }
 }

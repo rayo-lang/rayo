@@ -8,13 +8,13 @@ public enum Lowering {
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
         // Lower the body into a graph whose first locals are the function's own.
-        let graph = GraphBuilder(locals: function.locals.map(IRLocal.init))
-        var statements = StatementLowering(graph: graph)
+        let builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
+        var statements = StatementLowering(builder: builder)
         statements.lower(function.body)
 
         // End the last block, which a run reaches only in a Void function: the checker makes others return first.
-        graph.end(with: function.result == .void ? .return(nil) : .unreachable)
-        return graph.function(lowering: function)
+        builder.end(with: function.result == .void ? .return(nil) : .unreachable)
+        return builder.function(lowering: function)
     }
 }
 

@@ -1,9 +1,9 @@
 import RayoSema
 import RayoSource
 
-/// Builds one function's control-flow graph: its blocks, the block that lowering adds statements to, and the
-/// temporaries it adds to the function's locals.
-final class GraphBuilder {
+/// Builds one IR function: the blocks of its control-flow graph, the block that lowering adds statements to, and
+/// the temporaries it adds to the function's locals.
+final class FunctionBuilder {
     private var locals: [IRLocal]
     /// The blocks so far; a block has no terminator until lowering leaves it.
     private var blocks: [(statements: [Statement], terminator: Terminator?)] = [([], nil)]
