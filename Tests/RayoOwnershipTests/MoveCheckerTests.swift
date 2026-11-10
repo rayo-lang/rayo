@@ -74,10 +74,11 @@ struct MoveCheckerTests {
         let blocks = [
             BasicBlock(statements: [store(1, in: x), store(move(x, at: 1), in: y)],
                        terminator: .branch(read(x, at: 2), then: BlockID(index: 1), otherwise: BlockID(index: 1))),
-            BasicBlock(statements: [], terminator: .return(move(x, at: 3))),
+            BasicBlock(statements: [store(1, in: x), store(move(x, at: 3), in: y)],
+                       terminator: .return(move(x, at: 4))),
         ]
         #expect(errors(in: blocks) == [
-            Diagnostic(.usedAfterMove(name: "x"), at: at(2)), Diagnostic(.usedAfterMove(name: "x"), at: at(3)),
+            Diagnostic(.usedAfterMove(name: "x"), at: at(2)), Diagnostic(.usedAfterMove(name: "x"), at: at(4)),
         ])
     }
 
@@ -90,18 +91,46 @@ struct MoveCheckerTests {
         #expect(errors(in: blocks) == [])
     }
 
-    @Test("every use without a value is reported, in source order across the program's functions")
-    func sourceOrder() {
-        let movesTwice = function([
-            BasicBlock(statements: [store(1, in: x), store(move(x, at: 1), in: y), printing(read(x, at: 6)),
-                                    printing(read(x, at: 4))], terminator: .return(nil)),
+    @Test("the uses that the same moves reach are reported once, at the first of them in the source")
+    func sameMovesReportedOnce() {
+        let readsTwice = Statement(destination: LocalID(index: y), value: .binary(.add, read(x, at: 3), read(x, at: 2)),
+                                   range: at(0))
+        let blocks = [
+            BasicBlock(statements: [
+                store(1, in: x), store(move(x, at: 1), in: y), readsTwice, printing(read(x, at: 4)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
+    }
+
+    @Test("a use that other moves reach is reported again")
+    func otherMovesReportedAgain() {
+        let blocks = [
+            BasicBlock(statements: [store(1, in: x)], terminator: branch(then: 1, otherwise: 2)),
+            BasicBlock(statements: [store(move(x, at: 1), in: y)], terminator: goto(3)),
+            BasicBlock(statements: [], terminator: goto(3)),
+            BasicBlock(statements: [
+                printing(read(x, at: 2)), store(2, in: x), store(move(x, at: 3), in: y), printing(read(x, at: 4)),
+                printing(read(x, at: 5)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [
+            Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2)), Diagnostic(.usedAfterMove(name: "x"), at: at(4)),
         ])
-        let movesOnce = function([
+    }
+
+    @Test("the errors come in source order across the program's functions")
+    func sourceOrder() {
+        let usesLate = function([
+            BasicBlock(statements: [store(1, in: x), store(move(x, at: 1), in: y), printing(read(x, at: 6))],
+                       terminator: .return(nil)),
+        ])
+        let usesEarly = function([
             BasicBlock(statements: [store(1, in: x), store(move(x, at: 2), in: y), printing(read(x, at: 5))],
                        terminator: .return(nil)),
         ])
-        let program = IRProgram(functions: [movesTwice, movesOnce], main: FunctionID(index: 0))
-        #expect(MoveChecker.check(program).map(\.range.start.offset) == [4, 5, 6])
+        let program = IRProgram(functions: [usesLate, usesEarly], main: FunctionID(index: 0))
+        #expect(MoveChecker.check(program).map(\.range.start.offset) == [5, 6])
     }
 }
 

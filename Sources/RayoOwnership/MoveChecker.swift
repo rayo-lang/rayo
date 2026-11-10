@@ -1,24 +1,29 @@
 import RayoDiagnostics
 import RayoIR
+import RayoSource
 
 /// Checks that a program uses each local only where it holds a value, which a move takes out of it.
 public enum MoveChecker {
-    /// Reports each use of a local that a move may have left without a value, in source order.
+    /// Reports the uses of locals that a move may have left without a value, in source order. Of the uses that the
+    /// same moves reach, only the first in the source is reported, since each of them has the same cause.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
         program.functions.flatMap(check).sorted { $0.range.start < $1.range.start }
     }
 
     private static func check(_ function: IRFunction) -> [Diagnostic] {
-        var diagnostics: [Diagnostic] = []
+        var firstUses: [Set<SourceRange>: Diagnostic] = [:]
         let analysis = InitializationAnalysis(function)
         for (block, entryState) in zip(function.blocks, analysis.entryStates) {
             guard var state = entryState else { continue }
-            state.apply(block) { place, initialization in
-                guard let code = error(using: place, holding: initialization, in: function) else { return }
-                diagnostics.append(Diagnostic(code, at: place.range))
+            state.apply(block) { place, local in
+                guard let code = error(using: place, holding: local.initialization, in: function) else { return }
+                let diagnostic = Diagnostic(code, at: place.range)
+                if firstUses[local.moves].map({ diagnostic.range.start < $0.range.start }) ?? true {
+                    firstUses[local.moves] = diagnostic
+                }
             }
         }
-        return diagnostics
+        return Array(firstUses.values)
     }
 
     /// The error for a use of `place` where its local holds `initialization`, or nil when it holds a value.

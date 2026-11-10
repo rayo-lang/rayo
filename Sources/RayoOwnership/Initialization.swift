@@ -1,4 +1,5 @@
 import RayoIR
+import RayoSource
 
 /// Whether a local holds a value at a point of a function, over all the paths that reach the point.
 enum Initialization: Equatable {
@@ -13,15 +14,30 @@ enum Initialization: Equatable {
     }
 }
 
+/// What a local holds at a point of a function, and which moves may have taken its value on the way there.
+struct LocalState: Equatable {
+    var initialization: Initialization
+    /// The ranges of the moves after which no assignment gives the local a value on some path to the point.
+    /// Lowering gives each move a range of its own.
+    var moves: Set<SourceRange>
+
+    static let initialized = LocalState(initialization: .initialized, moves: [])
+
+    func joined(with other: LocalState) -> LocalState {
+        LocalState(initialization: initialization.joined(with: other.initialization), moves: moves.union(other.moves))
+    }
+}
+
 /// What each local of a function holds at a point.
 struct InitializationState: Equatable {
     /// Indexed by `LocalID`.
-    private var locals: [Initialization]
+    private var locals: [LocalState]
 
     /// The state on entry to `function`, where its parameters hold their arguments and its other locals hold
     /// nothing yet.
     init(enteringFunction function: IRFunction) {
-        locals = function.locals.indices.map { $0 < function.parameterCount ? .initialized : .uninitialized }
+        let declared = LocalState(initialization: .uninitialized, moves: [])
+        locals = function.locals.indices.map { $0 < function.parameterCount ? .initialized : declared }
     }
 
     func joined(with other: InitializationState) -> InitializationState {
@@ -30,9 +46,9 @@ struct InitializationState: Equatable {
         return joined
     }
 
-    /// Applies what `block` does to the locals, handing `use` each operand that names a local, with what that
-    /// local holds just before the block evaluates the operand.
-    mutating func apply(_ block: BasicBlock, use: (Place, Initialization) -> Void) {
+    /// Applies what `block` does to the locals, handing `use` each operand that names a local, with that local's
+    /// state just before the block evaluates the operand.
+    mutating func apply(_ block: BasicBlock, use: (Place, LocalState) -> Void) {
         for statement in block.statements {
             statement.value.operands.forEach { apply($0, use: use) }
             if let destination = statement.destination { locals[destination.index] = .initialized }
@@ -40,7 +56,7 @@ struct InitializationState: Equatable {
         block.terminator.operand.map { apply($0, use: use) }
     }
 
-    private mutating func apply(_ operand: Operand, use: (Place, Initialization) -> Void) {
+    private mutating func apply(_ operand: Operand, use: (Place, LocalState) -> Void) {
         switch operand {
         case .constant:
             break
@@ -48,7 +64,7 @@ struct InitializationState: Equatable {
             use(place, locals[place.local.index])
         case .move(let place):
             use(place, locals[place.local.index])
-            locals[place.local.index] = .uninitialized
+            locals[place.local.index] = LocalState(initialization: .uninitialized, moves: [place.range])
         }
     }
 }

@@ -79,9 +79,26 @@ struct MoveTests {
     func continues() {
         let body = "var x = 1\nvar i = 0\nwhile i < 3 {\ni += 1\nprint(copy x)\nif i == 1 {\nlet y = x\ncontinue\n}\nx = 5\n}"
         #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [
-            "6:7: error[E0303]: 'x' may have been moved", "8:9: error[E0303]: 'x' may have been moved",
+            "6:7: error[E0303]: 'x' may have been moved",
         ])
         #expect(output(body.replacingOccurrences(of: "continue\n", with: "")) == "1\n5\n5\n")
+    }
+
+    @Test("the uses that the same moves reach are one error, at the first of them", arguments: [
+        ("let x = 1\nlet y = x\nprint(x + x)\nprint(x)", "4:7: error[E0302]: 'x' was moved"),
+        ("var x = 1\nwhile x > 0 {\nlet y = x\n}", "3:7: error[E0303]: 'x' may have been moved"),
+        ("var x = 1\nif true { let y = x }\nprint(x)\nlet z = x", "4:7: error[E0303]: 'x' may have been moved"),
+    ])
+    func reportedOnce(body: String, expected: String) {
+        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [expected])
+    }
+
+    @Test("a use that other moves reach is another error")
+    func reportedAgain() {
+        let body = "var x = 1\nlet y = x\nprint(x)\nx = 2\nlet z = x\nprint(x)"
+        #expect(diagnostics("func main() {\n\(body)\n}").map(\.description) == [
+            "4:7: error[E0302]: 'x' was moved", "7:7: error[E0302]: 'x' was moved",
+        ])
     }
 
     @Test("a path that returns after a move leaves the local's value on the others")

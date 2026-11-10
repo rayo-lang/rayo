@@ -65,7 +65,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
-| `Sources/RayoOwnership` | The move checker, which follows what each local holds through Rayo IR's control flow, and reports each use of a local that a move may have left without a value |
+| `Sources/RayoOwnership` | The move checker, which follows what each local holds through Rayo IR's control flow, and reports the first use of a local that the same moves may have left without a value |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
