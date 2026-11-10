@@ -56,7 +56,10 @@ struct InitializationTests {
 
     @Test("a declaration's bindings are declared in order, so a later one may take an earlier one's value")
     func severalBindings() {
+        // A binding may use the one before it.
         #expect(output("let a = 1, b = copy a + 1, c: Int\nc = a + b\nprint(c)") == "3\n")
+
+        // A binding can't use the one after it, which isn't declared yet.
         #expect(errors("func main() {\nlet a = b, b = 1\n}") == [.notDeclared(name: "b")])
     }
 
@@ -165,6 +168,7 @@ struct InitializationTests {
 
     @Test("a local declared in a loop's body is a new local on each pass", arguments: [["--debug"], ["--release"]])
     func declaredInLoop(mode: [String]) {
+        // A `let` declared in the body takes a new value on each pass.
         let source = """
             func main() {
                 var i = 0
@@ -177,6 +181,8 @@ struct InitializationTests {
             }
             """
         #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "10\n20\n30\n", errors: ""))
+
+        // A `var` declared in the body holds no value at the start of a pass, whatever the last pass assigned it.
         #expect(errorLines(inMain: "var i = 0\nwhile i < 3 {\ni += 1\nvar x: Int\nprint(x)\nx = copy i\n}") == [
             "6:7: error[E0304]: 'x' isn't initialized",
         ])
@@ -218,7 +224,10 @@ struct InitializationTests {
 
     @Test("a 'var' is assigned any number of times, and after a move it can't be used until the next")
     func varAssignedOften() {
+        // A `var` takes a value again after a move.
         #expect(output("var x: Int\nx = 1\nlet y = x\nx = 2\nx = x + y\nprint(x)\nprint(y)") == "3\n1\n")
+
+        // Between the move and the next assignment, it holds no value.
         #expect(errorLines(inMain: "var x: Int\nx = 1\nlet y = x\nprint(x)") == ["5:7: error[E0302]: 'x' was moved"])
     }
 

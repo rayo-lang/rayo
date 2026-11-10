@@ -59,9 +59,12 @@ struct MoveTests {
 
     @Test("a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it")
     func loops() {
+        // A body that moves the local and doesn't assign it moves a value it may not hold.
         #expect(errorLines(inMain: "var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}") == [
             "6:9: error[E0303]: 'x' may have been moved",
         ])
+
+        // A body that assigns the local after the move gives the next pass a value.
         #expect(output("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\nprint(y)\nx = 2\n}") == "1\n2\n")
     }
 
@@ -77,6 +80,7 @@ struct MoveTests {
 
     @Test("a 'continue' after a move goes on to the next pass without the local's value")
     func continues() {
+        // A pass that moves the local and continues leaves the next pass without its value.
         let body = """
             var x = 1
             var i = 0
@@ -91,6 +95,8 @@ struct MoveTests {
             }
             """
         #expect(errorLines(inMain: body) == ["6:7: error[E0303]: 'x' may have been moved"])
+
+        // Without the `continue`, the pass goes on to assign the local, and the next pass has its value.
         #expect(output(body.replacingOccurrences(of: "continue\n", with: "")) == "1\n5\n5\n")
     }
 

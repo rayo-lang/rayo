@@ -72,6 +72,7 @@ struct FunctionTests {
 
     @Test("a function without '->' whose body is one expression returns that expression's type")
     func inferredResult() {
+        // A body of one expression gives the function that expression's type, Void included.
         let source = """
             func main() {
                 if positive() { print(seven()) }
@@ -82,7 +83,11 @@ struct FunctionTests {
             func say() { print(1) }
             """
         #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n1\n", errors: ""))
+
+        // A function whose one expression is Void returns Void, which a local can't hold.
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
+
+        // A body of more than one statement returns Void, whatever its last statement is.
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
             [.voidLocal, .unusedValue(type: "Int")])
     }
@@ -145,7 +150,16 @@ struct FunctionTests {
 
     @Test("a panic in a function names its place in that function")
     func panicInCallee() {
-        let source = "func main() {\n    print(1)\n    print(f())\n}\nfunc f() -> Int {\n    return 1 / zero()\n}\nfunc zero() { 0 }"
+        let source = """
+            func main() {
+                print(1)
+                print(f())
+            }
+            func f() -> Int {
+                return 1 / zero()
+            }
+            func zero() { 0 }
+            """
         #expect(run(source) == Driver.Result(exitCode: Driver.panicExitCode, output: "1\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }
@@ -173,7 +187,7 @@ struct FunctionTests {
     ])
     func voidReturns(declaration: String) {
         let source = declaration.hasPrefix("func main") ? declaration : "func main() { f() }\n" + declaration
-        #expect(run(source) == Driver.Result(exitCode: 0, output: declaration.contains("print") ? "1\n" : "",
-                                             errors: ""))
+        let printed = declaration.contains("print") ? "1\n" : ""
+        #expect(run(source) == Driver.Result(exitCode: 0, output: printed, errors: ""))
     }
 }

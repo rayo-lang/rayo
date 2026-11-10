@@ -16,7 +16,8 @@ struct ParameterTests {
         #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n20\n", errors: ""))
     }
 
-    @Test("functions recurse, directly and through each other, in debug and in release", arguments: [["--debug"], ["--release"]])
+    @Test("functions recurse, directly and through each other, in debug and in release",
+          arguments: [["--debug"], ["--release"]])
     func recursion(mode: [String]) {
         let source = """
             func main() {
@@ -38,7 +39,8 @@ struct ParameterTests {
                 return n + sum(to: n - 1)
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "6765\n0\n5000050000\n", errors: ""))
+        #expect(run(source, options: mode) ==
+            Driver.Result(exitCode: 0, output: "6765\n0\n5000050000\n", errors: ""))
     }
 
     @Test("arguments are evaluated left to right, before the call")
@@ -56,7 +58,15 @@ struct ParameterTests {
 
     @Test("a panic in a function names its place there, whatever its arguments")
     func panicInCallee() {
-        let source = "func main() {\n    print(ratio(6, 3))\n    print(ratio(1, 0))\n}\nfunc ratio(_ a: Int, _ b: Int) -> Int {\n    return a / b\n}"
+        let source = """
+            func main() {
+                print(ratio(6, 3))
+                print(ratio(1, 0))
+            }
+            func ratio(_ a: Int, _ b: Int) -> Int {
+                return a / b
+            }
+            """
         #expect(run(source) == Driver.Result(exitCode: Driver.panicExitCode, output: "2\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }
@@ -77,8 +87,11 @@ struct ParameterTests {
 
     @Test("a keyword can be an argument label")
     func keywordLabels() {
-        #expect(run("func main() { print(pick(if: true, else: 2)) }\nfunc pick(if c: Bool, else e: Int) -> Int { copy e }")
-            == Driver.Result(exitCode: 0, output: "2\n", errors: ""))
+        let source = """
+            func main() { print(pick(if: true, else: 2)) }
+            func pick(if c: Bool, else e: Int) -> Int { copy e }
+            """
+        #expect(run(source) == Driver.Result(exitCode: 0, output: "2\n", errors: ""))
     }
 
     @Test("a parameter is borrowed: it can't change, and an expression reads it", arguments: [
@@ -166,7 +179,8 @@ struct ParameterTests {
     }
 
     @Test("'owned' and 'mutable' parameters and default values aren't supported", arguments: [
-        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")], ["_ x: owned Int"]),
+        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")],
+         ["_ x: owned Int"]),
         ("func f(x: mutable Int) {}", [.unsupportedConvention(convention: "mutable")], ["x: mutable Int"]),
         ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
         ("func f(owned: Int) { print(owned) }", [], []),
