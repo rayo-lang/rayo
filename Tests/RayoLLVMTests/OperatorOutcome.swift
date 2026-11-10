@@ -1,0 +1,62 @@
+import CLLVM
+@testable import RayoLLVM
+import RayoSyntax
+
+/// What an operator came to when its emitted code ran: the value it gave, or the message of the panic it reported.
+enum OperatorOutcome: Equatable {
+    case int(Int64)
+    case bool(Bool)
+    case panic(String)
+
+    /// The panic that an operator at `operatorRange` reports for `reason`.
+    static func panics(_ reason: String) -> OperatorOutcome {
+        .panic("main.rayo:3:7: panic: \(reason)\n")
+    }
+}
+
+/// What `left op right` comes to on two Ints, emitted as `build` does, and run in this process.
+func outcome(of op: BinaryOperator, _ left: Int64, _ right: Int64,
+             in build: OperatorModule.Build) throws -> OperatorOutcome {
+    try outcome(left, right, on: .ints, in: build) { emit, a, b in emit(op, a, b) }
+}
+
+/// What `left op right` comes to on two Bools, run in this process.
+func outcome(of op: BinaryOperator, _ left: Bool, _ right: Bool) throws -> OperatorOutcome {
+    try outcome(left ? 1 : 0, right ? 1 : 0, on: .bools, in: .debug) { emit, a, b in emit(op, a, b) }
+}
+
+/// What `op operand` comes to on an Int, emitted as `build` does, and run in this process.
+func outcome(of op: UnaryOperator, _ operand: Int64, in build: OperatorModule.Build) throws -> OperatorOutcome {
+    try outcome(operand, 0, on: .ints, in: build) { emit, a, _ in emit(op, a) }
+}
+
+/// What `op operand` comes to on a Bool, run in this process.
+func outcome(of op: UnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
+    try outcome(operand ? 1 : 0, 0, on: .bools, in: .debug) { emit, a, _ in emit(op, a) }
+}
+
+/// What `expression` comes to on an Int in a release build: emitted where overflow isn't checked, optimised as a
+/// release build is, and run on `operand` in this process.
+func releaseOutcome(of operand: Int64,
+                    _ expression: (ExpressionEmitter, LLVMValueRef) -> LLVMValueRef) throws -> OperatorOutcome {
+    try outcome(operand, 0, on: .ints, in: .release) { emit, a, _ in expression(emit, a) }
+}
+
+/// Emits a function of two operands, as `build` does, whose result is the value `expression` makes of them, and
+/// runs it on `left` and `right` in this process.
+private func outcome(_ left: Int64, _ right: Int64, on operands: OperatorModule.Operands,
+                     in build: OperatorModule.Build,
+                     _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef) throws
+    -> OperatorOutcome {
+    // Emit `f`, and finish the module as the build does.
+    let module = try OperatorModule(for: build)
+    let (_, givesBool) = module.define("f", on: operands, expression)
+    try module.finish(exporting: ["f"])
+
+    // Run `f` in this process, and read what it came to as the type it gave.
+    let jit = try InProcessJIT(llvmIR: module.llvmIR)
+    switch try jit.call("f", left, right) {
+    case .returned(let value): return givesBool ? .bool(value != 0) : .int(value)
+    case .panicked(let message): return .panic(message)
+    }
+}

@@ -44,15 +44,25 @@ final class TargetMachine {
         LLVMDisposeTargetData(layout)
     }
 
-    /// Optimises `module` if this optimises, and returns its object code.
-    func objectCode(of module: ModuleBuilder) throws(LLVMError) -> [UInt8] {
+    /// Readies `module` to compile as this machine's build: hides every definition but the functions `exported`
+    /// names from code outside the module, checks the module is well formed, and optimises it if this optimises.
+    func ready(_ module: ModuleBuilder, exporting exported: Set<String>) throws(LLVMError) {
+        module.hideDefinitions(except: exported)
+        try module.verify()
         if optimizes { try optimize(module) }
+    }
+
+    /// The object code of `module`, once it is ready.
+    func objectCode(of module: ModuleBuilder) throws(LLVMError) -> [UInt8] {
+        // Have LLVM write the object code into a buffer of its own, and fail with its report where it can't.
         var buffer: LLVMMemoryBufferRef?
         var error: UnsafeMutablePointer<CChar>?
         guard LLVMTargetMachineEmitToMemoryBuffer(machine, module.module, LLVMObjectFile, &error, &buffer) == 0,
               let buffer else {
             throw module.error("LLVM couldn't write object code:", detail: takeMessage(error))
         }
+
+        // Copy the object code out of LLVM's buffer, which goes once it is copied.
         defer { LLVMDisposeMemoryBuffer(buffer) }
         let bytes = UnsafeRawBufferPointer(start: LLVMGetBufferStart(buffer), count: LLVMGetBufferSize(buffer))
         return Array(bytes)

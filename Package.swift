@@ -128,15 +128,18 @@ let package = Package(
         .testTarget(name: "RayoOwnershipTests", dependencies: [
             "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),
+        .systemLibrary(name: "CLLVMJIT", path: "Tests/CLLVMJIT"),
+        .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),
         .testTarget(name: "RayoLLVMTests", dependencies: [
-            "RayoIR", "RayoLLVM", "RayoSema", "RayoSource", "RayoSyntax",
+            "CLLVM", "CLLVMJIT", "RayoIR", "RayoLLVM", "RayoLLVMTestSupport", "RayoSema", "RayoSource", "RayoSyntax",
         ]),
     ]
 )
 
 // A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
-// directories of the tools that link a program, which CLLVM's header holds.
-for target in package.targets where dependsOnCLLVM(target, among: package.targets) {
+// directories of the tools that link a program, which CLLVM's header holds. A target that imports CLLVMJIT reads
+// LLVM's headers as well.
+for target in package.targets where readsLLVMHeaders(target, among: package.targets) {
     target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
         "-Xcc", "-I\(llvmPrefix)/include",
         "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(checkedForDefine(llvmPrefix + "/bin"))\"",
@@ -144,15 +147,17 @@ for target in package.targets where dependsOnCLLVM(target, among: package.target
     ])]
 }
 
-/// Whether `target` depends on CLLVM, directly or through others of `targets`.
-func dependsOnCLLVM(_ target: Target, among targets: [Target]) -> Bool {
+/// Whether `target` reads LLVM's headers, directly or through others of `targets`.
+func readsLLVMHeaders(_ target: Target, among targets: [Target]) -> Bool {
     target.dependencies.contains { dependency in
         switch dependency {
-        // A dependency reaches CLLVM when it is CLLVM, or one of `targets` that depends on it.
+        // A dependency reaches LLVM's headers when it is CLLVM or CLLVMJIT, or one of `targets` that depends on
+        // either.
         case .targetItem(let name, _), .byNameItem(let name, _):
-            return name == "CLLVM" || targets.contains { $0.name == name && dependsOnCLLVM($0, among: targets) }
+            return ["CLLVM", "CLLVMJIT"].contains(name)
+                || targets.contains { $0.name == name && readsLLVMHeaders($0, among: targets) }
 
-        // A product of another package isn't CLLVM.
+        // A product of another package is neither.
         default:
             return false
         }

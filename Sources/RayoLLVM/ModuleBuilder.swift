@@ -88,14 +88,16 @@ final class ModuleBuilder {
         if LLVMLinkModules2(module, other) != 0 { throw error("LLVM couldn't link the runtime:") }
     }
 
-    /// Gives every function and global the module defines, but `entryPoint` and LLVM's own globals, a linkage that
-    /// keeps it out of the executable's symbols.
-    func hideDefinitions(except entryPoint: String) {
+    /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
+    /// globals, a linkage that keeps it out of the executable's symbols.
+    func hideDefinitions(except exported: Set<String>) {
         // Functions become internal, so that optimisation can drop those nothing calls.
         var function = LLVMGetFirstFunction(module)
         while let current = function {
-            // Each function the module defines, but the entry point, which the executable starts at, becomes internal.
-            if isHideable(current) && name(of: current) != entryPoint { LLVMSetLinkage(current, LLVMInternalLinkage) }
+            // Each function the module defines but doesn't export, as it exports the entry point, becomes internal.
+            if isHideable(current) && !exported.contains(name(of: current)) {
+                LLVMSetLinkage(current, LLVMInternalLinkage)
+            }
             function = LLVMGetNextFunction(current)
         }
 
