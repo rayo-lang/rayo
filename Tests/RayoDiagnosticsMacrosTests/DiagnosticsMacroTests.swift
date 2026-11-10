@@ -73,7 +73,7 @@ struct DiagnosticsMacroTests {
             """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21), error(.unusedValue("name"), 4, 22)])
     }
 
-    @Test("every case has one code, and every value a label its message names, before placeholders are checked")
+    @Test("every case has one code, and each value a label the message can name it by, before placeholders are checked")
     func caseShape() {
         expect("""
             @Diagnostics
@@ -108,7 +108,7 @@ struct DiagnosticsMacroTests {
             ])
     }
 
-    @Test("a code's number is a positive integer literal, and its message a one-line literal without interpolation")
+    @Test("a code's number is a positive integer literal, and its message a one-line string without interpolation")
     func literals() {
         expect(#"""
             @Diagnostics

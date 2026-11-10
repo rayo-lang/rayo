@@ -33,6 +33,7 @@ struct CodeEntry {
         // A case without values is matched by its name alone.
         guard !labels.isEmpty else { return ".\(name)" }
 
+        // Bind the values in order, each to `v` and its index.
         let bindings = labels.indices.map { "let v\($0)" }.joined(separator: ", ")
         return ".\(name)(\(bindings))"
     }
@@ -52,6 +53,7 @@ struct CodeEntry {
             errors.append(Diagnostic(node: caseDecl.caseKeyword, message: CodeTableError.oneCasePerCode))
             return nil
         }
+
         return caseDecl.elements.first
     }
 
@@ -67,6 +69,7 @@ struct CodeEntry {
             return nil
         }
 
+        // Report each `@Code` after the first, and read the first.
         errors += codes.dropFirst().map { Diagnostic(node: $0, message: CodeTableError.oneCodePerCase) }
         return code
     }
@@ -105,8 +108,8 @@ struct CodeEntry {
         return nil
     }
 
-    /// Whether `message` names each of `values` and nothing else. Reports each placeholder that names no value at
-    /// `expression`, and each value that no placeholder names at the value.
+    /// Whether `message` names each of `values` and nothing else. Reports an error at `expression` for each
+    /// placeholder that names no value, and an error at each value that no placeholder names.
     private static func placeholdersMatch(_ message: MessageTemplate, writtenAt expression: ExprSyntax,
                                           values: [LabeledValue], reporting errors: inout [Diagnostic]) -> Bool {
         // Find the placeholders that name no value, and the values that no placeholder names.
@@ -125,6 +128,7 @@ struct CodeEntry {
     private static func isCode(_ attribute: AttributeSyntax) -> Bool {
         // `@Code` written alone.
         if let name = attribute.attributeName.as(IdentifierTypeSyntax.self) { return name.name.text == "Code" }
+        // `@Code` after its module's name, as in `@RayoDiagnostics.Code`; any other attribute is no `@Code`.
         return attribute.attributeName.as(MemberTypeSyntax.self)?.name.text == "Code"
     }
 }
@@ -139,7 +143,7 @@ private struct LabeledValue {
         // A value without a label is one no message can name.
         guard let label = parameter.firstName, label.tokenKind != .wildcard else { return nil }
 
-        // A label written in backticks is named without them, and a keyword such as `in` by its text.
+        // Name the value by its label, without the backticks it may have, and a keyword such as `in` by its text.
         self.label = label.identifier?.name ?? label.text
         self.parameter = parameter
     }
@@ -156,6 +160,7 @@ private struct CodeArguments {
         guard case .argumentList(let arguments) = code.arguments, arguments.count == 2,
               let number = arguments.first, let message = arguments.last else { return nil }
 
+        // Keep the expressions that the two arguments write.
         self.number = number.expression
         self.message = message.expression
     }

@@ -25,7 +25,7 @@ public struct DiagnosticsMacro: MemberMacro {
         }
     }
 
-    /// The members the macro generates, each a `switch` over the enum's cases.
+    /// The members the macro generates: `number` and `message`.
     private static var members: [Member] {
         [
             Member(name: "number", type: "Int", fallbackBody: "0") { entries in
@@ -93,6 +93,7 @@ public struct DiagnosticsMacro: MemberMacro {
 
     /// An error at each entry whose number an earlier entry has, with a note at that earlier one.
     private static func duplicateNumbers(in entries: [CodeEntry]) -> [Diagnostic] {
+        // Go through the entries in order, keeping where each number is first used.
         var firstUses: [Int: ExprSyntax] = [:]
         return entries.compactMap { entry in
             // The first entry with a number uses it.

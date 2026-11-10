@@ -22,6 +22,7 @@ struct MessageTemplate {
 
     /// The labels the placeholders name, each once, in the order they first appear.
     var placeholderLabels: [String] {
+        // Keep each label the first time a placeholder names it.
         var labels: [String] = []
         for case .value(let label) in parts where !labels.contains(label) {
             labels.append(label)
@@ -58,6 +59,7 @@ struct MessageTemplate {
 
     /// Splits `scalars` into text and placeholders.
     private static func parts(of scalars: [Unicode.Scalar]) -> [Part] {
+        // Read the scalars in order, collecting text up to each placeholder, and the text after the last.
         var parts: [Part] = []
         var text = String.UnicodeScalarView()
         var index = 0
@@ -83,6 +85,7 @@ struct MessageTemplate {
               let labelEnd = identifierEnd(in: scalars, from: start + 1), labelEnd < scalars.count,
               scalars[labelEnd] == "}" else { return nil }
 
+        // The label is the identifier between the braces, and the placeholder ends past the closing one.
         let label = String(String.UnicodeScalarView(scalars[(start + 1)..<labelEnd]))
         return (label, labelEnd + 1)
     }

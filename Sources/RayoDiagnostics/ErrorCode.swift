@@ -215,6 +215,7 @@ public enum ErrorCode: Sendable, Hashable {
 extension ErrorCode {
     /// The number as an error message shows it, such as `E0113`.
     public var identifier: String {
+        // Pad the number with zeros to four digits; a longer one keeps all of its digits.
         let digits = String(number)
         return "E" + String(repeating: "0", count: max(0, 4 - digits.count)) + digits
     }

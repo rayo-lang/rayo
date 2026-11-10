@@ -30,6 +30,7 @@ public struct CodeMacro: PeerMacro {
     private static func isDiagnostics(_ name: TypeSyntax) -> Bool {
         // `@Diagnostics` written alone.
         if let identifier = name.as(IdentifierTypeSyntax.self) { return identifier.name.text == "Diagnostics" }
+        // `@Diagnostics` after its module's name, as in `@RayoDiagnostics.Diagnostics`; any other name isn't it.
         return name.as(MemberTypeSyntax.self)?.name.text == "Diagnostics"
     }
 }
