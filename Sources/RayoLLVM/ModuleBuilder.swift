@@ -94,7 +94,7 @@ final class ModuleBuilder {
         // Functions become internal, so that optimisation can drop those nothing calls.
         var function = LLVMGetFirstFunction(module)
         while let current = function {
-            // Each function the module defines but doesn't export, as it exports the entry point, becomes internal.
+            // Each function the module defines but doesn't export becomes internal.
             if isHideable(current) && !exported.contains(name(of: current)) {
                 LLVMSetLinkage(current, LLVMInternalLinkage)
             }

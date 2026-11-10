@@ -52,7 +52,7 @@ final class TargetMachine {
         if optimizes { try optimize(module) }
     }
 
-    /// The object code of `module`, once it is ready.
+    /// Writes the object code of `module`, once it is ready, and returns it.
     func objectCode(of module: ModuleBuilder) throws(LLVMError) -> [UInt8] {
         // Have LLVM write the object code into a buffer of its own, and fail with its report where it can't.
         var buffer: LLVMMemoryBufferRef?
