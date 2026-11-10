@@ -11,6 +11,7 @@ swift run rayoc run program.rayo
 `rayoc build` and `rayoc run` compile a program to object code themselves, and link it with the clang and LLD of the LLVM they were built against.
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
+- **macOS 27 or later**, whose standard library has the spans and the unique-ownership types the code-style rules call for. Linux needs no particular release.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
 - **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.

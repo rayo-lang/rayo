@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 import CompilerPluginSupport
 import Foundation
 import PackageDescription
@@ -72,6 +72,7 @@ func llvmMajorVersion(at prefix: String) -> Int? {
 
 let package = Package(
     name: "Rayo",
+    platforms: [.macOS(.v27)],
     products: [
         .executable(name: "rayoc", targets: ["rayoc"]),
     ],
