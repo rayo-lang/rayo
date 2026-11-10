@@ -24,6 +24,7 @@ struct FunctionEmitter {
 
     private var module: ModuleBuilder { program.module }
     private var builder: LLVMBuilderRef { module.builder }
+    private var types: LLVMTypes { program.types }
 
     mutating func emit() {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
@@ -58,7 +59,7 @@ struct FunctionEmitter {
     private func slotType(of local: LocalID) -> LLVMTypeRef {
         let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
-        return program.llvmType(type)
+        return types.llvmType(type)
     }
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
