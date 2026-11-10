@@ -65,7 +65,53 @@ A tidy function also has:
 
 **A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A leaf's block of more than one line opens with a one-line comment that says what the block achieves**, in the terms of the function's job, so a reader skims the steps without rebuilding each from its lines. It describes the block whole, never one line of it: "Push the loop, lower the body, then pop the loop" reads the lines back, where "Lower the body with this loop innermost" says the step. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no comment of its own.
+**A leaf's block of more than one line opens with a one-line comment that says what the block achieves**, in the terms of the function's job, so a reader skims the steps without rebuilding each from its lines. It describes the block whole, never one line of it: "Push the loop, lower the body, then pop the loop" reads the lines back, where "Lower the body with this loop innermost" says the step. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
+
+**A leaf explains its algorithm in its body, case by case.** Its doc comment says only what it does, as a black box (the `code-comments` skill), so the body is where a reader learns how. Each case the body tells apart opens with a one-line comment that says which case it is and what the function does with it, in the terms of the function's job:
+
+- each case of a `switch`;
+- each branch of an `if`/`else` chain;
+- each test that leaves early: a `guard`, a `continue`, a `break`, or an early `return`.
+
+This holds in a body of one block as much as in one of several. The one exception is a `switch` that only maps each case to a value, one line per case: it is a data table, and its patterns say it all.
+
+This leaf drops the newlines that only break a line. Its doc comment says that much, and each case and each test of a newline says which rule it applies:
+
+```swift
+/// Keeps the newlines that end a statement, and drops those that only break a line.
+static func significantNewlines(_ raw: [Token]) -> [Token] {
+    var result: [Token] = []
+    var brackets: [Punct] = []
+    for (index, token) in raw.enumerated() {
+        switch token.kind {
+        // An opening bracket: a newline's meaning depends on the innermost bracket around it.
+        case .punct(.lparen), .punct(.lbrace):
+            if case .punct(let bracket) = token.kind { brackets.append(bracket) }
+
+        // A closing bracket ends the innermost one.
+        case .punct(.rparen), .punct(.rbrace):
+            if !brackets.isEmpty { brackets.removeLast() }
+
+        // A newline ends a statement, unless something around it shows the statement goes on.
+        case .newline:
+            // Inside parentheses, a call's arguments and a grouped expression run across lines.
+            if brackets.last == .lparen { continue }
+            // A line that ends in an operator, `->` or an opening bracket goes on onto the next.
+            if let previous = result.last, continuesLine(previous) { continue }
+            // A line that starts with an operator other than `-`, with `->`, `{` or `else`, joins the line above.
+            if index + 1 < raw.count, joinsLine(raw[index + 1]) { continue }
+            // A blank line, or a newline before the first statement, ends nothing.
+            if result.isEmpty || result.last?.kind == .newline { continue }
+
+        // Every other token is kept as it is.
+        default:
+            break
+        }
+        result.append(token)
+    }
+    return result
+}
+```
 
 This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
@@ -129,7 +175,9 @@ Audit every file, type and function you add or change against this list, and fix
 - **Every file** holds one primary type and its parts and is named after it (a test file is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job, and is within the limits.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
+- **Every doc comment** describes its declaration as a black box, with nothing of how the body works.
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
+- **Every case** a leaf tells apart — a `switch` case, an `if`/`else` branch, a test that leaves early — opens with its comment, unless the `switch` is a data table.
 - **Every line** does one thing and fits in 120 columns.
 
 **Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and stack your change on it: open your change with the refactor's branch as its base. A reviewer audits the same list, one file, type and function at a time.

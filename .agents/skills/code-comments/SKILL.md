@@ -14,13 +14,15 @@ are keeping, so judge it the same way.
 
 ## The two rules
 
-**Above a property, a type, or a function.** The comment is a description of that declaration — what it is, or what
-it does. It earns its place only by saying something the signature does not already say. When the signature says it
-all, write nothing.
+**Above a property, a type, or a function.** The comment describes that declaration as a black box, the way its user
+sees it: what it is, or what it does. It never says how — no steps, no cases the body tells apart, no state or helper
+the body uses. Those are explained in the body, on the code they belong to. The comment earns its place only by saying
+something the signature does not already say. When the signature says it all, write nothing.
 
-**Inside a body.** A comment goes in two places. One opens a block, and the `code-style` skill says when it is called
-for and what it says. The other sits on a line that is not obvious, or where something happens the line does not show:
-a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
+**Inside a body.** A comment goes in three places. One opens a block, and one opens each case the body tells apart; the
+`code-style` skill says when each is called for and what it says. The third sits on a line that is not obvious, or
+where something happens the line does not show: a side effect, an ordering that matters, a trap. Never a translation
+of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -35,11 +37,28 @@ What fills the gap depends on what is being declared:
 - **A property** — what it carries, when the name and the type do not already say it.
 - **A method** — what it does, and what it returns when that is not obvious from the doing.
 
-Once the description earns its place, it may carry one more thing: a fact about **this** declaration that the code
-cannot show — a constraint that decides its shape, an alternative that was rejected and why, a precondition the caller
-must hold. One or two sentences. Never at length.
+Once the description earns its place, it may carry one more thing the caller needs and the signature cannot show: a
+precondition the caller must hold, or an effect beyond what it returns. One or two sentences. Never at length. Why the
+body is built the way it is — a constraint that shaped it, an alternative that was rejected — is the body's to say, on
+the code it shaped.
 
-Five ways this goes wrong. All five produce comments that are true, and none of them belong:
+Six ways this goes wrong. All six produce comments that are true, and none of them belong:
+
+**It opens the box.** The rules the body applies, the cases it tells apart, the order it works in: a caller needs none
+of them to use the function, and each is stated where no one reading the code that applies it will look.
+
+```swift
+// Before — the doc is the algorithm, and the body below it has not one comment.
+/// Drops the newlines that don't end a statement: inside `(`, after a token that continues the line, and before a
+/// token that joins the line above.
+static func significantNewlines(_ raw: [Token]) -> [Token]
+```
+
+```swift
+// After — what the function does. Each rule moves into the body, onto the test that applies it.
+/// Keeps the newlines that end a statement, and drops those that only break a line.
+static func significantNewlines(_ raw: [Token]) -> [Token]
+```
 
 **It describes something other than the declaration.** What the caller does with the answer. What a later pass does
 with the value. What a sibling field means. The concept the file header already states.
@@ -85,19 +104,17 @@ function does too much, and the fix is in the function.
 A method leads with what it does. A type or a property leads with what it is or what it carries. Then stop.
 
 ```swift
-/// Lowers `param` to the RIL type it occupies: for a parameter crossing a `@import(c)` boundary, the C primitive
-/// behind its wrapper type; otherwise the ordinary lowering of the declared type.
+/// Lowers `param` to the RIL type a call passes it as.
 private func parameterType(of param: SignatureParameter, isCABI: Bool) -> RILType
 ```
 
 ```swift
-/// Classifies which borrow, if any, `source` is held under. A member projected out of a lent parameter carries the
-/// same lent mode without being one, so the mode alone does not decide it.
-func borrowSource(of source: RILValueId) -> BorrowSource
+/// Writes `bytes` to the file at `path`, replacing what it held. Every directory on the path must already exist.
+func write(_ bytes: [UInt8], to path: String) throws
 ```
 
-The second sentence there is the earned fact: it says why the body tests membership in a set rather than reading a
-mode, which nothing in the three lines below could tell you.
+The second sentence there is the earned fact: a precondition the caller must keep, which the signature cannot show.
+How the write replaces the file — a temporary file renamed over it, say — is the body's to say, where it does it.
 
 ## Inside a body
 
