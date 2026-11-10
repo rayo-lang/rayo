@@ -4,8 +4,6 @@ import RayoDiagnostics
 struct StatementParser {
     let tokens: TokenStream
 
-    private var expressions: ExpressionParser { ExpressionParser(tokens: tokens) }
-
     func parseBlock() throws(ParseFailure) -> Block {
         try tokens.expect(.lbrace, else: ErrorCode.missingBlock)
         let statements = parseStatements()
@@ -14,24 +12,26 @@ struct StatementParser {
     }
 
     private func parseStatements() -> [Stmt] {
-        tokens.parseSequence(ifUnended: ErrorCode.unendedStatement) { () throws(ParseFailure) in try parseStatement() }
+        SequenceParser(tokens: tokens).parseSequence(ifUnended: ErrorCode.unendedStatement) {
+            () throws(ParseFailure) in try parseStatement()
+        }
     }
 
     private func parseStatement() throws(ParseFailure) -> Stmt {
         let start = tokens.current.range
         let kind: StmtKind
-        // A `let` declares locals that never change.
+        // A `let` declares the bindings after it, which never change.
         if tokens.consume(.let) {
             kind = .declaration(.let, try parseBindings())
         } else if tokens.consume(.var) {
-            // A `var` declares locals that can.
+            // A `var` declares the bindings after it, which can.
             kind = .declaration(.var, try parseBindings())
         } else if tokens.consume(.if) {
             // An `if` takes a condition, a block, and maybe an `else`.
             kind = try parseIf()
         } else if tokens.consume(.while) {
             // A `while` takes a condition and the loop's body.
-            let condition = try expressions.parseExpression()
+            let condition = try ExpressionParser(tokens: tokens).parseExpression()
             kind = .whileStmt(condition: condition, body: try parseBlock())
         } else if tokens.consume(.break) {
             // A `break` is the whole statement.
@@ -41,10 +41,10 @@ struct StatementParser {
             kind = .continueStmt
         } else if tokens.consume(.return) {
             // A `return` takes a value, unless its statement ends right after it.
-            kind = .returnStmt(tokens.atStatementEnd ? nil : try expressions.parseExpression())
+            kind = .returnStmt(tokens.atStatementEnd ? nil : try ExpressionParser(tokens: tokens).parseExpression())
         } else if consumeDrop() {
             // `_ =` drops the value after it.
-            kind = .drop(try expressions.parseExpression())
+            kind = .drop(try ExpressionParser(tokens: tokens).parseExpression())
         } else {
             // A statement that starts with none of these is an expression, or an assignment to one.
             kind = try parseExpressionStatement()
@@ -54,7 +54,7 @@ struct StatementParser {
 
     /// Consumes `_ =`, which starts a statement that drops a value, when it comes next.
     private func consumeDrop() -> Bool {
-        // A `_` that no `=` follows starts some other statement.
+        // Anything but `_ =` starts some other statement.
         guard tokens.current.kind == .identifier("_"), tokens.peek().isPunct(.assign) else { return false }
         tokens.advance()
         tokens.advance()
@@ -63,18 +63,18 @@ struct StatementParser {
 
     /// An expression, or an assignment to one.
     private func parseExpressionStatement() throws(ParseFailure) -> StmtKind {
-        let target = try expressions.parseExpression()
+        let target = try ExpressionParser(tokens: tokens).parseExpression()
         // An expression that no assignment operator follows is the whole statement.
         guard case .punct(let punct) = tokens.current.kind, let op = punct.assignOperator else {
             return .expression(target)
         }
         tokens.advance()
-        return .assign(target: target, op: op, value: try expressions.parseExpression())
+        return .assign(target: target, op: op, value: try ExpressionParser(tokens: tokens).parseExpression())
     }
 
     /// After the `if`: the condition, the block, and the `else` part, when there is one.
     private func parseIf() throws(ParseFailure) -> StmtKind {
-        let condition = try expressions.parseExpression()
+        let condition = try ExpressionParser(tokens: tokens).parseExpression()
         let then = try parseBlock()
         let otherwise = tokens.consume(.else) ? try parseElse() : nil
         return .ifStmt(condition: condition, then: then, otherwise: otherwise)
@@ -101,7 +101,7 @@ struct StatementParser {
     private func parseBinding() throws(ParseFailure) -> Binding {
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingBindingName)
         let type = tokens.consume(.colon) ? try TypeParser(tokens: tokens).parseType() : nil
-        let value = tokens.consume(.assign) ? try expressions.parseExpression() : nil
+        let value = tokens.consume(.assign) ? try ExpressionParser(tokens: tokens).parseExpression() : nil
         return Binding(name: name, nameRange: nameRange, type: type, value: value)
     }
 }

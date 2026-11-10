@@ -7,8 +7,9 @@ struct DeclarationParser {
     func parseFile() -> SourceFile {
         var functions: [FuncDecl] = []
         while true {
-            functions += tokens.parseSequence(ifUnended: ErrorCode.unendedDeclaration) { () throws(ParseFailure) in
-                try parseFunction()
+            // Parse declarations up to the end of the file or a `}` that closes no block.
+            functions += SequenceParser(tokens: tokens).parseSequence(ifUnended: ErrorCode.unendedDeclaration) {
+                () throws(ParseFailure) in try parseFunction()
             }
             // The declarations run to the end of the file.
             if tokens.atEnd { return SourceFile(functions: functions) }
@@ -25,8 +26,8 @@ struct DeclarationParser {
         guard tokens.consume(.func) else { throw tokens.fail(ErrorCode.missingFunc) }
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingFunctionName)
         try tokens.expect(.lparen, else: ErrorCode.missingParameterList)
-        let parameters = try tokens.parseList(ifUnclosed: ErrorCode.unclosedParameters) { () throws(ParseFailure) in
-            try parseParameter()
+        let parameters = try SequenceParser(tokens: tokens).parseList(ifUnclosed: ErrorCode.unclosedParameters) {
+            () throws(ParseFailure) in try parseParameter()
         }
         let result = tokens.consume(.arrow) ? try TypeParser(tokens: tokens).parseType() : nil
         let body = try StatementParser(tokens: tokens).parseBlock()
@@ -36,7 +37,7 @@ struct DeclarationParser {
     /// `(label | '_')? identifier ':' ('mutable' | 'owned')? type ('=' expression)?`, where a label may be a
     /// keyword.
     private func parseParameter() throws(ParseFailure) -> Param {
-        // Read the parameter's parts in the order the declaration writes them.
+        // Only the name and the type are required; the label, convention and default value may be left out.
         let start = tokens.current.range
         let writtenLabel = parseWrittenLabel()
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingParameterName)
@@ -44,9 +45,9 @@ struct DeclarationParser {
         guard tokens.consume(.colon) else { throw tokens.fail(ErrorCode.missingParameterType) }
         let convention = parseConvention()
         let type = try TypeParser(tokens: tokens).parseType()
-        let defaultValue = try parseDefaultValue()
+        let defaultValue = tokens.consume(.assign) ? try ExpressionParser(tokens: tokens).parseExpression() : nil
 
-        // Without a written label, the name is the label; `_` in either place leaves the parameter unlabeled.
+        // Without a written label, the name is the label, and a label of `_` leaves the parameter unlabeled.
         let labelSpelling = writtenLabel ?? name
         let label = labelSpelling == "_" ? nil : labelSpelling
         return Param(label: label, name: name, nameRange: nameRange, convention: convention,
@@ -61,16 +62,9 @@ struct DeclarationParser {
         return spelling
     }
 
-    /// `('=' expression)?`, after a parameter's type.
-    private func parseDefaultValue() throws(ParseFailure) -> Expr? {
-        // A parameter without an `=` has no default.
-        guard tokens.consume(.assign) else { return nil }
-        return try ExpressionParser(tokens: tokens).parseExpression()
-    }
-
     /// `mutable` or `owned`, which are names everywhere but before a parameter's type.
     private func parseConvention() -> ParamConvention? {
-        // Any other word is the type.
+        // Any other token starts the type.
         guard case .identifier(let word) = tokens.current.kind, let convention = ParamConvention(rawValue: word) else {
             return nil
         }

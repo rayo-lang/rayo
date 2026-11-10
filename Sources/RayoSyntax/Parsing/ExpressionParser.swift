@@ -1,7 +1,7 @@
 import RayoDiagnostics
 import RayoSource
 
-/// Parses expressions, operators by how tightly they bind.
+/// Parses expressions, grouping operators by how tightly they bind.
 struct ExpressionParser {
     let tokens: TokenStream
 
@@ -80,8 +80,8 @@ struct ExpressionParser {
 
     /// After the `(` that follows a name: the arguments and the `)`.
     private func parseCall(to name: String, at nameRange: SourceRange) throws(ParseFailure) -> Expr {
-        let arguments = try tokens.parseList(ifUnclosed: ErrorCode.unclosedArguments) { () throws(ParseFailure) in
-            try parseArgument()
+        let arguments = try SequenceParser(tokens: tokens).parseList(ifUnclosed: ErrorCode.unclosedArguments) {
+            () throws(ParseFailure) in try parseArgument()
         }
         let kind = ExprKind.call(name: name, nameRange: nameRange, arguments: arguments)
         return Expr(kind: kind, range: tokens.range(from: nameRange))
@@ -113,14 +113,14 @@ struct ExpressionParser {
 }
 
 private extension BinaryOperator {
-    /// How tightly the operator binds, from 1 for the loosest. Operators of one level group from the left.
+    /// How tightly the operator binds, from 1 for the loosest.
     var level: Int {
         switch self {
-        case .or: return 1
-        case .and: return 2
-        case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual: return 3
-        case .add, .subtract: return 4
-        case .multiply, .divide, .remainder: return 5
+        case .or: 1
+        case .and: 2
+        case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual: 3
+        case .add, .subtract: 4
+        case .multiply, .divide, .remainder: 5
         }
     }
 }

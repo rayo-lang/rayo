@@ -13,6 +13,8 @@ struct TypeParser {
             try tokens.expect(.rparen, else: ErrorCode.unclosedEmptyParentheses)
             return .void(range: tokens.range(from: start))
         }
+
+        // Any other type is named.
         let (name, _) = try tokens.expectIdentifier(else: ErrorCode.missingType)
         return .named(name, range: tokens.range(from: start))
     }
