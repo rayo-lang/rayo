@@ -54,7 +54,8 @@ struct OperatorModule {
 
         // Return the result, widened to an Int where it is a Bool.
         let givesBool = LLVMTypeOf(value) == module.bool
-        LLVMBuildRet(module.builder, givesBool ? LLVMBuildZExt(module.builder, value, module.int64, "") : value)
+        let result = givesBool ? LLVMBuildZExt(module.builder, value, module.int64, "")! : value
+        LLVMBuildRet(module.builder, result)
         return (function, givesBool)
     }
 
@@ -68,7 +69,7 @@ struct OperatorModule {
 
     /// Readies the module to run as the compiler readies a program's for the build, exporting the functions
     /// `exported` names where the compiler would export only the program's entry point.
-    func finish(exporting exported: Set<String>) throws {
+    func ready(exporting exported: Set<String>) throws {
         try target.ready(module, exporting: exported)
     }
 }

@@ -4,6 +4,9 @@ import Testing
 /// The builds `rayoc` makes: a debug build, where overflow panics, and a release build, where it wraps.
 private let builds: [OperatorModule.Build] = [.debug, .release]
 
+/// `OperatorEmitter` emits each operator here as a unit, on the parameters of a function of its own, which the test
+/// calls in its own process. A whole program would pass its operators literals from its entry point, which a
+/// release build's optimiser folds before the emitted instructions run.
 @Suite("Operators on Int and Bool values")
 struct OperatorTests {
     @Test("'+', '-' and '*' compute what they name, in every build", arguments: [

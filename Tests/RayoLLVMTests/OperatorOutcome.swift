@@ -8,7 +8,8 @@ enum OperatorOutcome: Equatable {
     case bool(Bool)
     case panic(String)
 
-    /// The panic that an operator at `operatorRange` reports for `reason`.
+    /// The panic that an operator at line 3, column 7 of main.rayo, where `operatorRange` starts, reports for
+    /// `reason`.
     static func panics(_ reason: String) -> OperatorOutcome {
         .panic("main.rayo:3:7: panic: \(reason)\n")
     }
@@ -48,10 +49,10 @@ private func outcome(_ left: Int64, _ right: Int64, on operands: OperatorModule.
                      in build: OperatorModule.Build,
                      _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef) throws
     -> OperatorOutcome {
-    // Emit `f`, and finish the module as the build does.
+    // Emit `f`, and ready the module as the build does.
     let module = try OperatorModule(for: build)
     let (_, givesBool) = module.define("f", on: operands, expression)
-    try module.finish(exporting: ["f"])
+    try module.ready(exporting: ["f"])
 
     // Run `f` in this process, and read what it came to as the type it gave.
     let jit = try InProcessJIT(llvmIR: module.llvmIR)

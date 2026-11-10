@@ -18,7 +18,7 @@ func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Fol
     let caller = module.defineCall("f", of: operation, left, right)
     // `g` is exported too, since a hidden `g` would let the optimiser specialise it on one constant first, and
     // rewrite an operation LLVM leaves undefined before it sees the other.
-    try module.finish(exporting: ["f", "g"])
+    try module.ready(exporting: ["f", "g"])
 
     // Where the optimiser left `f` no `ret`, every path through it reaches behaviour LLVM leaves undefined.
     guard let returned = returnedValue(of: caller.value) else { return .undefined }
