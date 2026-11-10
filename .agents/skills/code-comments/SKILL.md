@@ -14,13 +14,16 @@ are keeping, so judge it the same way.
 
 ## The two rules
 
-**Above a property, a type, or a function.** The comment is a description of that declaration — what it is, or what
-it does. It earns its place only by saying something the signature does not already say. When the signature says it
-all, write nothing.
+**Above a property, a type, or a function.** The comment describes that declaration as a black box, the way its user
+sees it: what it is, or what it does. What it returns or throws, and for which inputs, is that behaviour, and belongs
+here. How it gets there never does — no steps, no tests the body makes to tell its inputs apart, no state or helper
+the body uses. Those are explained in the body, on the code they belong to. The comment earns its place only by saying
+something the signature does not already say. When the signature says it all, write nothing.
 
-**Inside a body.** A comment goes in two places. One opens a block, and the `code-style` skill says when it is called
-for and what it says. The other sits on a line that is not obvious, or where something happens the line does not show:
-a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
+**Inside a body.** A comment goes in three places. One opens a block, and one opens each case a leaf tells apart; the
+`code-style` skill says when each is called for and what it says. The third sits on a line that is not obvious, or
+where something happens the line does not show: a side effect, an ordering that matters, a trap. Never a translation
+of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -35,11 +38,30 @@ What fills the gap depends on what is being declared:
 - **A property** — what it carries, when the name and the type do not already say it.
 - **A method** — what it does, and what it returns when that is not obvious from the doing.
 
-Once the description earns its place, it may carry one more thing: a fact about **this** declaration that the code
-cannot show — a constraint that decides its shape, an alternative that was rejected and why, a precondition the caller
-must hold. One or two sentences. Never at length.
+Once the description earns its place, it may carry one more thing the caller needs and the signature cannot show: a
+precondition the caller must hold, or an effect beyond what it returns. One or two sentences. Never at length. Why the
+body is built the way it is — a constraint that shaped it, an alternative that was rejected — is the body's to say, on
+the code it shaped.
 
-Five ways this goes wrong. All five produce comments that are true, and none of them belong:
+Six ways this goes wrong. All six produce comments that are true, and none of them belong:
+
+**It opens the box.** The rules the body applies, the tests it makes to tell its inputs apart, the order it works in:
+a caller needs none of them to use the function, and each is stated where no one reading the code that applies it
+will look.
+
+```swift
+// Before — the doc is the algorithm, and the body below it has not one comment.
+/// Drops the newlines that don't end a statement: inside `(`, after a token that continues the line, and before a
+/// token that joins the line above.
+static func significantNewlines(_ raw: [Token]) -> [Token]
+```
+
+```swift
+// After — what the function does. Each rule moves into the body, onto the test that applies it, as the
+// `code-style` skill shows.
+/// Keeps the newlines that end a statement, and drops those that only break a line.
+static func significantNewlines(_ raw: [Token]) -> [Token]
+```
 
 **It describes something other than the declaration.** What the caller does with the answer. What a later pass does
 with the value. What a sibling field means. The concept the file header already states.
@@ -85,25 +107,24 @@ function does too much, and the fix is in the function.
 A method leads with what it does. A type or a property leads with what it is or what it carries. Then stop.
 
 ```swift
-/// Lowers `param` to the RIL type it occupies: for a parameter crossing a `@import(c)` boundary, the C primitive
-/// behind its wrapper type; otherwise the ordinary lowering of the declared type.
+/// Lowers `param` to the RIL type that a call passes it in.
 private func parameterType(of param: SignatureParameter, isCABI: Bool) -> RILType
 ```
 
 ```swift
-/// Classifies which borrow, if any, `source` is held under. A member projected out of a lent parameter carries the
-/// same lent mode without being one, so the mode alone does not decide it.
-func borrowSource(of source: RILValueId) -> BorrowSource
+/// Writes `bytes` to the file at `path`, replacing what it held. Every directory on the path must already exist.
+func write(_ bytes: [UInt8], to path: String) throws
 ```
 
-The second sentence there is the earned fact: it says why the body tests membership in a set rather than reading a
-mode, which nothing in the three lines below could tell you.
+The second sentence there is the earned fact: a precondition the caller must keep, which the signature cannot show.
+How the write replaces the file — a temporary file renamed over it, say — is the body's to say, where it does it.
 
 ## Inside a body
 
-The test is whether a reader stumbles. Two comments on the same guard; only one is worth keeping.
+Every case a leaf tells apart takes an opening comment, as the `code-style` skill says. What the comment says is
+decided by whether a reader would stumble without it. Two comments on the same guard; only one does its job.
 
-**A second copy of the code — delete it.** `case .paid` already says "paid". The comment is the guard translated back
+**A second copy of the code — rewrite it.** `case .paid` already says "paid". The comment is the guard translated back
 into English, and it drifts.
 
 ```swift
@@ -111,15 +132,16 @@ into English, and it drifts.
 guard case .paid = account.plan else { return nil }
 ```
 
-**An explanation — keep it.** The guard shows *which* accounts are skipped, not what becomes of them, and that is
-where a reader stumbles.
+**An explanation — write this one.** The guard shows *which* accounts are skipped, not what becomes of them, and that
+is where a reader stumbles.
 
 ```swift
-// A trial account is skipped rather than billed: the job that expires trials
-// charges the card itself on the last day, and billing here as well would
-// take the money twice.
+// A trial account is skipped: the job that expires trials charges it on the last day, so billing it here charges twice.
 guard case .paid = account.plan else { return nil }
 ```
+
+The same test applies to a line that is not a case: a comment that only translates it is deleted, and one that explains
+it is kept.
 
 Put it on the line it explains. A comment describing the branch below the one it sits above is a comment in the wrong
 place.
@@ -128,7 +150,7 @@ place.
 
 Where a reader would stop to work out what a line is for, reach in this order: a better name, a smaller function, a
 type that makes the illegal state unrepresentable. The comment is the last resort. That order is for a line that
-puzzles; a block's opening comment is called for by the `code-style` skill, not reached for.
+puzzles; a block's or a case's opening comment is called for by the `code-style` skill, not reached for.
 
 Two shapes are always a refactor, never a comment:
 
