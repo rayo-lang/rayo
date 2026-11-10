@@ -9,7 +9,7 @@ struct ExpressionParser {
         try parseBinary(minimumLevel: 1)
     }
 
-    /// Parses an expression whose binary operators all bind at `minimumLevel` or tighter.
+    /// Parses an expression whose binary operators outside parentheses all bind at `minimumLevel` or tighter.
     private func parseBinary(minimumLevel: Int) throws(ParseFailure) -> Expr {
         var left = try parseUnary()
         // An operator takes the tighter ones after it as its right operand, so one level groups from the left.

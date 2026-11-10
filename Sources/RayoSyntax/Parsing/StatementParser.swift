@@ -12,7 +12,7 @@ struct StatementParser {
     }
 
     private func parseStatements() -> [Stmt] {
-        SequenceParser(tokens: tokens).parseSequence(ifUnended: ErrorCode.unendedStatement) {
+        SequenceParser(tokens: tokens).parseLines(ifUnended: ErrorCode.unendedStatement) {
             () throws(ParseFailure) in try parseStatement()
         }
     }

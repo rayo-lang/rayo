@@ -1,14 +1,13 @@
 import RayoDiagnostics
 
-/// Parses the grammar's runs of items: statements and declarations, one to a line or `;`, and the arguments and
-/// parameters a `(` opens, separated by commas. An item that fails in a run of statements or declarations is
-/// skipped, so the run goes on to report the errors after it.
+/// Parses the grammar's sequences of items: statements and declarations, one to a line or `;`, and the
+/// arguments and parameters a `(` opens, separated by commas.
 struct SequenceParser {
     let tokens: TokenStream
 
-    /// Parses items separated by newlines or `;`, up to the `}` that closes their block or the end of the file,
-    /// which it leaves for the caller. An item that fails is skipped, and its error stays reported.
-    func parseSequence<T>(ifUnended unended: TokenStream.ErrorCase, _ item: () throws(ParseFailure) -> T) -> [T] {
+    /// Parses items separated by newlines or `;`, up to a `}` or the end of the file, which it leaves for the
+    /// caller. An item that fails is skipped, and its error stays reported.
+    func parseLines<T>(ifUnended unended: TokenStream.ErrorCase, _ item: () throws(ParseFailure) -> T) -> [T] {
         var items: [T] = []
         skipSeparators()
         while !tokens.current.isPunct(.rbrace) && !tokens.atEnd {
@@ -42,8 +41,8 @@ struct SequenceParser {
         while tokens.current.kind == .newline || tokens.current.isPunct(.semicolon) { tokens.advance() }
     }
 
-    /// Skips the rest of an item that failed, up to the newline or `;` that ends it or the `}` that closes
-    /// its block.
+    /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, or the end
+    /// of the file.
     private func recover() {
         var depth = 0
         loop: while !tokens.atEnd {

@@ -8,7 +8,7 @@ struct DeclarationParser {
         var functions: [FuncDecl] = []
         while true {
             // Parse declarations up to the end of the file or a `}` that closes no block.
-            functions += SequenceParser(tokens: tokens).parseSequence(ifUnended: ErrorCode.unendedDeclaration) {
+            functions += SequenceParser(tokens: tokens).parseLines(ifUnended: ErrorCode.unendedDeclaration) {
                 () throws(ParseFailure) in try parseFunction()
             }
             // The declarations run to the end of the file.
@@ -37,7 +37,7 @@ struct DeclarationParser {
     /// `(label | '_')? identifier ':' ('mutable' | 'owned')? type ('=' expression)?`, where a label may be a
     /// keyword.
     private func parseParameter() throws(ParseFailure) -> Param {
-        // Only the name and the type are required; the label, convention and default value may be left out.
+        // Read the parameter's parts in order; a label, convention or default value left out reads as nil.
         let start = tokens.current.range
         let writtenLabel = parseWrittenLabel()
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingParameterName)
@@ -56,7 +56,7 @@ struct DeclarationParser {
 
     /// Parses the label written before a parameter's name, `_` included, when one is.
     private func parseWrittenLabel() -> String? {
-        // A word that no name follows is the name itself.
+        // Anything but a word with a name after it is no label.
         guard let spelling = tokens.current.labelSpelling, case .identifier = tokens.peek().kind else { return nil }
         tokens.advance()
         return spelling

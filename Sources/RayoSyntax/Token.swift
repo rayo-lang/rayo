@@ -65,9 +65,9 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
     /// How the token is spelled as an argument label, when it can be one: any identifier or keyword is one.
     var labelSpelling: String? {
         switch kind {
-        case .identifier(let name): return name
-        case .keyword(let keyword): return keyword.rawValue
-        default: return nil
+        case .identifier(let name): name
+        case .keyword(let keyword): keyword.rawValue
+        default: nil
         }
     }
 }
