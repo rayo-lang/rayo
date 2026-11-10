@@ -207,9 +207,9 @@ guard let reply else { return }                // the Message, to the end of the
 
 **`if let x` means `if let x = x`, and `if var x` means `if var x = &x`.** Each binds a new local `x` to the payload of the optional that `x` names, so the payload keeps the name the code already uses for it. `guard` and `while` take the short form as `if` does, and so does each condition in a list. The new `x` is in scope as any condition's names are ([Names in scope](#names-in-scope)), and shadows what `x` named there.
 
-**The long form is a compile error wherever the short form means the same**, since it repeats a name the short form writes once. That is a `let` or `var` condition of an `if`, a `guard` or a `while` whose pattern is a bare name and whose value is the same bare name, behind `&` for a `var`. It is an error whatever `x` names: a local, a parameter, a property of `self`, a global or a thread-local. The error points to `if let x` or `if var x`.
+**The long form is a compile error wherever the short form means the same**, since it repeats a name the short form writes once. That is a `let` or `var` condition of an `if`, a `guard` or a `while` whose pattern is a bare name and whose value is the same bare name, behind `&` for a `var`. It is an error whatever `x` names: a local, a parameter, a property of `self`, a global or a thread-local. The error points to `if let x` or `if var x`, except where `while let x` is an error itself (below). There the long form gets that error instead, which points to `while x != nil` for a local or a parameter.
 
-**A `case` condition that means the same is the long form too**, by the same reason, so the error points to the short form there as well:
+**A `case` condition that means the same is the long form too**, for the same reason, so the error points to the short form there as well:
 
 ```swift
 if case .some(let reply) = reply { … }         // error: write 'if let reply'
@@ -247,9 +247,14 @@ if owned let m = reply { send(m) }             // moves the Message out: 'reply'
 **`while let x` and `while var x` are compile errors wherever no code can change `x` while the loop runs**, since such a loop could end only through `break`, `return` or `throw`. Its binding holds the optional still while it is live, so nothing can make it `nil` then. In these places, nothing can change `x` between the binding's uses either:
 
 - **A local or a parameter.** The binding shadows the optional's name through the body, and nothing else reaches it. The error points to `while x != nil`, whose narrowing lets the body assign the place, and ends when it does.
-- **A place nothing ever changes.** That is a global `let`, a static stored `let` or a `const`, or a property of `self` in a plain method, whose `self` is borrowed shared for the whole call.
+- **A place nothing ever changes.** That is a global `let`, a static stored `let` or a `const`.
+- **`self`'s own storage in a plain method**, whose `self` is borrowed shared for the whole call. That is a stored field of `self`, or a place property that hands out part of `self` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
-**Elsewhere a call can change the place between passes**, so the loop is allowed: on a `@threadlocal var`, for one, or on a changeable property of `self` in a `mutating` method.
+**Elsewhere each pass can find a different optional**, so the loop is allowed:
+
+- a value property, whose `get` makes a new optional each pass;
+- a place reached through an object, a weak pointer or a thread-local, which a call can change between passes;
+- a changeable property of `self` in a `mutating` method, which the body can assign through `self`.
 
 ```swift
 var next: Job? = queue.pop()

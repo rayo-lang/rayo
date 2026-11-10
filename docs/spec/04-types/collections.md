@@ -388,7 +388,7 @@ So the `pool.entries` loop above binds `e` in place, where it can change it, and
 
 **A `where c` after the sequence runs the body as `if c { body }`**, with the pattern bound, as in the `enemies` loop above.
 
-**`while` takes conditions as `if` does** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)), and narrows as `if` does ([Narrowing](enums.md#narrowing)). `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
+**`while` takes conditions as `if` does** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)), and narrows as `if` does ([Narrowing](enums.md#narrowing)). The exception is the short form `while let x`, allowed only on a place that other code can change while the loop runs ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x)). `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
 
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
