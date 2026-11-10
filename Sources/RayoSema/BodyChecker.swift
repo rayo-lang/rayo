@@ -4,7 +4,7 @@ import RayoSyntax
 
 /// Checks a function body: its statements, its locals and the names they declare, and its expressions.
 struct BodyChecker {
-    /// What a name that a block declares stands for.
+    /// What a name that a block or the parameter list declares stands for.
     enum ScopeEntry {
         case local(LocalID)
         /// A name whose declaration failed, which was reported there, so its uses report nothing more.
@@ -13,9 +13,8 @@ struct BodyChecker {
 
     /// What an unqualified name stands for where the body uses it.
     enum NameMatch {
-        case local(LocalID)
-        /// A local whose declaration failed, which was reported there, so its uses report nothing more.
-        case failed
+        /// A local or a parameter.
+        case inScope(ScopeEntry)
         /// The module's functions of that name, the prelude's among them.
         case functions([Signature])
     }
@@ -64,20 +63,12 @@ struct BodyChecker {
     }
 
     /// Looks `name` up in the body's locals and parameters, innermost block first, then among the module's
-    /// functions, and gives the nearest match. A call skips a local, since no local's type can be called, and gives
-    /// it only when no function has the name.
+    /// functions, and gives the nearest match. A call skips the locals and parameters, since none has a type that can
+    /// be called, not even one whose declaration failed, and gives the local only when no function has the name.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         let functions = declarations.functions(named: name)
-        switch scopeEntry(for: name) {
-        case .local? where use == .call && !functions.isEmpty:
-            return .functions(functions)
-        case .local(let local)?:
-            return .local(local)
-        case .failed?:
-            return .failed
-        case nil:
-            return functions.isEmpty ? nil : .functions(functions)
-        }
+        if let entry = scopeEntry(for: name), use == .ordinary || functions.isEmpty { return .inScope(entry) }
+        return functions.isEmpty ? nil : .functions(functions)
     }
 
     private func scopeEntry(for name: String) -> ScopeEntry? {
@@ -215,9 +206,9 @@ struct BodyChecker {
         switch target.kind {
         case .name(let name) where name != "_":
             switch lookUp(name, for: .ordinary) {
-            case .local(let local):
+            case .inScope(.local(let local)):
                 return local
-            case .failed:
+            case .inScope(.failed):
                 break
             case .functions:
                 errors.report(.assignToFunction(name: name), at: target.range)

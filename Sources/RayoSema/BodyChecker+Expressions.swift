@@ -51,9 +51,9 @@ extension BodyChecker {
             return nil
         }
         switch lookUp(name, for: .ordinary) {
-        case .local(let local):
+        case .inScope(.local(let local)):
             return CheckedExpr(kind: .local(local), type: locals[local.index].type, range: range)
-        case .failed:
+        case .inScope(.failed):
             return nil
         case .functions:
             errors.report(.functionAsValue(name: name), at: range)

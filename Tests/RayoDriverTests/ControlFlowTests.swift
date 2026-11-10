@@ -85,6 +85,22 @@ struct LocalTests {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
+    @Test("a call skips a local or a parameter whose declaration failed, and reaches the functions of its name",
+          arguments: [
+        ("func main() {\n    let sum = nope\n    let y: Bool = sum(3)\n    sum(true)\n}\nfunc sum(_ x: Int) -> Int { copy x }",
+         [ErrorCode.notDeclared(name: "nope"), .typeMismatch(expected: "Bool", found: "Int"),
+          .typeMismatch(expected: "Int", found: "Bool")], ["nope", "sum(3)", "true"]),
+        ("func main() {}\nfunc f(print: Int8) { print(1, 2) }",
+         [.notAType(name: "Int8"), .argumentCount(name: "print", takes: 1, passes: 2)], ["Int8", "print(1, 2)"]),
+        ("func main() {\n    let x = 1\n    let x = 2\n    x(1)\n    x(true)\n}\nfunc x(_ a: Int) {}",
+         [.alreadyDeclared(name: "x"), .typeMismatch(expected: "Int", found: "Bool")], ["x", "true"]),
+    ])
+    func callSkipsFailedLocal(source: String, expected: [ErrorCode], covered: [String]) {
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == expected)
+        #expect(coveredText(reported, in: source) == covered)
+    }
+
     @Test("an assignment's target and value are checked even when the other fails", arguments: [
         ("nope = 1 + true", [ErrorCode.notDeclared(name: "nope"), intAndBool]),
         ("let x = 1\nx = undefined", [.assignToLet(name: "x"), .notDeclared(name: "undefined")]),

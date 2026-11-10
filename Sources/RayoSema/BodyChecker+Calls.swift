@@ -22,14 +22,15 @@ extension BodyChecker {
                            range: range)
     }
 
-    /// The functions a call of `name` reaches, reporting it when it reaches none.
+    /// The functions a call of `name` reaches, reporting it when it reaches none, unless a declaration of the name
+    /// failed.
     private mutating func functions(named name: String, at range: SourceRange) -> [Signature] {
         switch lookUp(name, for: .call) {
         case .functions(let functions):
             return functions
-        case .local:
+        case .inScope(.local):
             errors.report(.notAFunction(name: name), at: range)
-        case .failed:
+        case .inScope(.failed):
             break
         case nil:
             errors.report(.notDeclared(name: name), at: range)
