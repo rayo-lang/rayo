@@ -122,17 +122,18 @@ private struct FunctionBuilder {
         let bodyBlock = newBlock()
         let exit = newBlock()
         end(with: .goto(header), continuingIn: header)
-        end(with: test(condition, enteringBody: bodyBlock, orExit: exit), continuingIn: bodyBlock)
+        end(with: headerTerminator(testing: condition, body: bodyBlock, exit: exit), continuingIn: bodyBlock)
         loops.append(Loop(header: header, exit: exit))
         lower(body)
         loops.removeLast()
         end(with: .goto(header), continuingIn: exit)
     }
 
-    /// Ends a loop's header by going on to the loop's body while `condition` holds, and to its exit once it
-    /// doesn't. A `while true` leaves only by a `break`, so its header goes on to the body alone.
-    private mutating func test(_ condition: CheckedExpr, enteringBody body: BlockID,
-                               orExit exit: BlockID) -> Terminator {
+    /// Lowers `condition` into the current block, and returns the terminator that goes on from a loop's header to
+    /// `body` when the condition holds and to `exit` when it doesn't. Only a `break` reaches the exit of a
+    /// `while true`, so its header goes on to `body` alone.
+    private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID,
+                                           exit: BlockID) -> Terminator {
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
         return .branch(operand(of: condition), then: body, otherwise: exit)
     }
