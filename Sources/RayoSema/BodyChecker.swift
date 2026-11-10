@@ -80,9 +80,11 @@ struct BodyChecker {
     private mutating func check(_ statement: Stmt) -> CheckedStmt? {
         switch statement.kind {
         case .expression(let expr):
-            return check(expr).map { .expression($0) }
+            return checkUnused(expr).map { .expression($0) }
         case .binding(let binding):
             return check(binding)
+        case .drop(let value):
+            return checkTaken(value).map { .expression($0) }
         case .assign(let target, let op, let value):
             return assign(value, op: op, to: target, in: statement.range)
         case .ifStmt(let condition, let then, let otherwise):
@@ -116,29 +118,42 @@ struct BodyChecker {
         return expect(value, result) ? value : nil
     }
 
-    private mutating func check(_ binding: Binding) -> CheckedStmt? {
-        let declared = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
-        let value = checkTaken(binding.value)
-        if binding.name == "_" {
-            errors.report(.underscoreDeclared, at: binding.nameRange)
+    /// Checks `expr` as a statement, whose value no code uses, so it must be Void.
+    private mutating func checkUnused(_ expr: Expr) -> CheckedExpr? {
+        guard let value = check(expr) else { return nil }
+        guard value.type == .void else {
+            errors.report(.unusedValue(type: "\(value.type)"), at: value.range)
             return nil
         }
-        guard let value, binding.type == nil || declared != nil else {
-            return declareFailed(binding.name, at: binding.nameRange)
-        }
-        let type = declared ?? value.type
-        guard expect(value, type) else { return declareFailed(binding.name, at: binding.nameRange) }
-        if type == .void {
+        return value
+    }
+
+    /// Checks `binding`, which declares a local, or drops its value when its name is `_`.
+    private mutating func check(_ binding: Binding) -> CheckedStmt? {
+        let value = value(of: binding)
+        guard binding.name != "_" else { return value.map { .expression($0) } }
+        guard let value else { return declareFailed(binding.name, at: binding.nameRange) }
+        if value.type == .void {
             errors.report(.voidLocal, at: value.range)
             return declareFailed(binding.name, at: binding.nameRange)
         }
         let kind: LocalKind = binding.kind == .var ? .var : .let
-        guard let local = declare(binding.name, type: type, kind: kind, at: binding.nameRange) else { return nil }
+        guard let local = declare(binding.name, type: value.type, kind: kind, at: binding.nameRange) else {
+            return nil
+        }
         return .binding(local, value)
     }
 
-    /// Checks `expr` as the value a declaration, an assignment or a `return` takes, which takes a local's value
-    /// only with `copy`.
+    /// Checks the value `binding` gives, against its type annotation when it has one.
+    private mutating func value(of binding: Binding) -> CheckedExpr? {
+        let declared = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
+        let value = checkTaken(binding.value)
+        guard let value, binding.type == nil || declared != nil else { return nil }
+        return expect(value, declared ?? value.type) ? value : nil
+    }
+
+    /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which takes a local's
+    /// value only with `copy`.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
         if case .name(let name) = expr.kind, case .local = value.kind {
