@@ -1,0 +1,29 @@
+name: Test with SwiftPM
+description: Restores the build main last saved, runs swift test, and saves the build on a push to main.
+
+inputs:
+  platform:
+    description: The platform the build is for, which names its cache.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # A pull request starts from the build main last saved, so it compiles only what it changed. Only a push to
+    # main saves a build, which keeps the cache to one build per platform.
+    - name: Restore the build
+      id: build
+      uses: actions/cache/restore@v6
+      with:
+        path: .build
+        key: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
+        restore-keys: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-
+    - name: Test
+      shell: bash
+      run: swift test
+    - name: Save the build
+      if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .build
+        key: ${{ steps.build.outputs.cache-primary-key }}

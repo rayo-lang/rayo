@@ -46,51 +46,45 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD)
 
           # The compiler's build reads only its sources, its tests and the package manifest; the docs check reads
-          # every Markdown file and its own scripts. Both read this workflow.
-          code='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/workflows/ci\.yml$'
+          # every Markdown file and its own scripts. Both read this workflow, and the tests read its actions.
+          code='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
           docs='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
           echo "code=$(grep -q -E "$code" <<< "$changed" && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "docs=$(grep -q -E "$docs" <<< "$changed" && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-  test:
-    name: Test on ${{ matrix.name }}
+  linux:
+    name: Test on Linux
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux
-            runner: ubuntu-latest
-            container: swift:6.4-noble
-          # Swift 6.4 comes with Xcode 27, which GitHub installs only on its image of that name.
-          - name: macOS
-            runner: xcode-27
-    runs-on: ${{ matrix.runner }}
-    container: ${{ matrix.container }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container: swift:6.4-noble
     env:
       # The fingerprint apt.llvm.org publishes for the key that signs its packages.
       LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
-      # Where the LLVM packages for Linux are kept between runs. Raising the revision fetches apt.llvm.org's newest
-      # build of the release, since the cache otherwise keeps the build it first fetched.
+      # Where the LLVM packages are kept between runs. Raising the revision fetches apt.llvm.org's newest build of
+      # the release, since the cache otherwise keeps the build it first fetched.
       LLVM_PACKAGES: /var/cache/rayo-llvm
       LLVM_PACKAGES_REVISION: 1
-      HOMEBREW_NO_AUTO_UPDATE: 1
-      HOMEBREW_NO_INSTALL_CLEANUP: 1
-      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
     steps:
       - uses: actions/checkout@v7
 
       - name: Restore the LLVM packages
-        if: runner.os == 'Linux'
         id: llvm-packages
         uses: actions/cache@v6
         with:
           path: ${{ env.LLVM_PACKAGES }}
           key: llvm-${{ env.LLVM_MAJOR_VERSION }}-noble-r${{ env.LLVM_PACKAGES_REVISION }}
       - name: Fetch the LLVM packages
-        if: runner.os == 'Linux' && steps.llvm-packages.outputs.cache-hit != 'true'
+        if: steps.llvm-packages.outputs.cache-hit != 'true'
         run: |
+          # The container fetches Ubuntu's packages from Azure's mirror of the archive, which serves GitHub's own
+          # runners from their region. A server that stalls fails the step within minutes rather than holding the
+          # job until it times out.
+          sed -i -E 's#https?://(archive|security)\.ubuntu\.com#http://azure.archive.ubuntu.com#' \
+            /etc/apt/sources.list.d/ubuntu.sources
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            > /etc/apt/apt.conf.d/80-rayo-ci
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl gnupg
 
@@ -118,12 +112,28 @@ jobs:
             "lld-$LLVM_MAJOR_VERSION=$version"
           rm -rf "$LLVM_PACKAGES/partial" "$LLVM_PACKAGES/lock"
       - name: Install LLVM
-        if: runner.os == 'Linux'
         # The packages and their dependencies install together, so dpkg needs no package index and no network.
         run: dpkg -i "$LLVM_PACKAGES"/*.deb
 
+      - uses: ./.github/actions/swift-test
+        with:
+          platform: linux
+
+  macos:
+    name: Test on macOS
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Swift 6.4 comes with Xcode 27, which GitHub installs only on its image of that name.
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+    steps:
+      - uses: actions/checkout@v7
+
       - name: Select the Xcode that holds Swift ${{ env.SWIFT_VERSION }}
-        if: runner.os == 'macOS'
         run: |
           for xcode in /Applications/Xcode*.app; do
             developer="$xcode/Contents/Developer"
@@ -134,42 +144,26 @@ jobs:
           done
           echo "::error::no Xcode on this runner holds Swift $SWIFT_VERSION"
           exit 1
+
       # Homebrew keeps each bottle it downloads, so a cache keyed on the versions it would install holds those
       # bottles, and a new version gets a cache of its own.
       - name: Find the LLVM and LLD versions Homebrew installs
-        if: runner.os == 'macOS'
         id: brew
         run: |
           versions=$(brew info --json=v2 "llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION" \
             | jq -r '[.formulae[] | .name + "-" + .versions.stable] | join("-")')
           echo "versions=$versions" >> "$GITHUB_OUTPUT"
       - name: Restore Homebrew's downloads
-        if: runner.os == 'macOS'
         uses: actions/cache@v6
         with:
           path: ~/Library/Caches/Homebrew/downloads
           key: brew-${{ steps.brew.outputs.versions }}-${{ runner.arch }}
       - name: Install LLVM
-        if: runner.os == 'macOS'
         run: brew install "llvm@$LLVM_MAJOR_VERSION" "lld@$LLVM_MAJOR_VERSION"
 
-      # A pull request starts from the build main last saved, so it compiles only what it changed. Only a push to
-      # main saves a build, which keeps the cache to one build per platform.
-      - name: Restore the build
-        id: build
-        uses: actions/cache/restore@v6
+      - uses: ./.github/actions/swift-test
         with:
-          path: .build
-          key: build-${{ matrix.name }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
-          restore-keys: build-${{ matrix.name }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-
-      - name: Test
-        run: swift test
-      - name: Save the build
-        if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: .build
-          key: ${{ steps.build.outputs.cache-primary-key }}
+          platform: macos
 
   docs:
     name: Check docs
@@ -187,7 +181,7 @@ jobs:
   # here, so a change runs only the jobs it needs and still reports one result.
   ci:
     name: CI
-    needs: [changes, test, docs]
+    needs: [changes, linux, macos, docs]
     if: always()
     runs-on: ubuntu-latest
     steps:
