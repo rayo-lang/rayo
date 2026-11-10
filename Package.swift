@@ -90,7 +90,7 @@ let package = Package(
         .target(name: "RayoSyntax", dependencies: ["RayoDiagnostics", "RayoSource"]),
         .target(name: "RayoSema", dependencies: ["RayoDiagnostics", "RayoSource", "RayoSyntax"]),
         .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSource", "RayoSyntax"]),
-        .target(name: "RayoOwnership", dependencies: ["RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource"]),
+        .target(name: "RayoOwnership", dependencies: ["RayoDiagnostics", "RayoIR"]),
         .systemLibrary(name: "CLLVM"),
         .target(name: "RayoRuntime", resources: [
             .embedInCode("entry.ll"),

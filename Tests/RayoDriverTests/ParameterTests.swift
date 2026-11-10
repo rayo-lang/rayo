@@ -81,11 +81,9 @@ struct ParameterTests {
             == Driver.Result(exitCode: 0, output: "2\n", errors: ""))
     }
 
-    @Test("a parameter is borrowed: it can't change, and its value is taken with 'copy'", arguments: [
+    @Test("a parameter is borrowed: it can't change, and an expression reads it", arguments: [
         ("func f(x: Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
         ("func f(x: Int) { x += 1 }", [.assignToParameter(name: "x")]),
-        ("func f(x: Int) -> Int { x }", [.takenWithoutCopy(name: "x")]),
-        ("func f(x: Int) { let y = x }", [.takenWithoutCopy(name: "x")]),
         ("func f(x: Int) { x(1) }", [.notAFunction(name: "x")]),
         ("func f(x: Int) -> Int { copy x + x }", []),
     ])

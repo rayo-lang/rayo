@@ -140,8 +140,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(219, error: "a local can't have type Void")
     case voidLocal
 
-    @Code(220, error: "the value of '{name}' is taken with 'copy {name}'")
-    case takenWithoutCopy(name: String)
+    // 220 is unused, and stays so.
 
     @Code(221, error: "'{name}' is a 'let', so it can't change")
     case assignToLet(name: String)

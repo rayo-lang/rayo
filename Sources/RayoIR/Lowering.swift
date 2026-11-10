@@ -122,18 +122,26 @@ private struct FunctionBuilder {
         let bodyBlock = newBlock()
         let exit = newBlock()
         end(with: .goto(header), continuingIn: header)
-        end(with: .branch(operand(of: condition), then: bodyBlock, otherwise: exit), continuingIn: bodyBlock)
+        end(with: test(condition, enteringBody: bodyBlock, orExit: exit), continuingIn: bodyBlock)
         loops.append(Loop(header: header, exit: exit))
         lower(body)
         loops.removeLast()
         end(with: .goto(header), continuingIn: exit)
     }
 
+    /// Ends a loop's header by going on to the loop's body while `condition` holds, and to its exit once it
+    /// doesn't. A `while true` leaves only by a `break`, so its header goes on to the body alone.
+    private mutating func test(_ condition: CheckedExpr, enteringBody body: BlockID,
+                               orExit exit: BlockID) -> Terminator {
+        if case .boolLiteral(true) = condition.kind { return .goto(body) }
+        return .branch(operand(of: condition), then: body, otherwise: exit)
+    }
+
     // MARK: Expressions
 
     private mutating func rvalue(of expr: CheckedExpr) -> Rvalue {
         switch expr.kind {
-        case .intLiteral, .boolLiteral, .local, .binary(.and, _, _), .binary(.or, _, _):
+        case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
             return .use(operand(of: expr))
         case .unary(let op, let operand):
             return .unary(op, self.operand(of: operand))
@@ -154,6 +162,8 @@ private struct FunctionBuilder {
             return .constant(.bool(value))
         case .local(let local):
             return .read(Place(local: local, range: expr.range))
+        case .move(let local):
+            return .move(Place(local: local, range: expr.range))
         case .binary(.and, let left, let right):
             return shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
         case .binary(.or, let left, let right):

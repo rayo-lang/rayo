@@ -1,5 +1,4 @@
 import RayoIR
-import RayoSema
 
 /// Whether a local holds a value at a point of a function, over all the paths that reach the point.
 enum Initialization: Equatable {
@@ -69,7 +68,9 @@ struct InitializationAnalysis {
             var state = entryStates[block.index]!
             let basicBlock = function.blocks[block.index]
             state.apply(basicBlock) { _, _ in }
-            pending += basicBlock.terminator.successors.filter { join(state, intoEntryOf: $0) }
+            for successor in basicBlock.terminator.successors {
+                if join(state, intoEntryOf: successor) { pending.append(successor) }
+            }
         }
     }
 

@@ -46,16 +46,13 @@ struct LocalTests {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
-    @Test("a declaration or an assignment takes a local's value only with 'copy'", arguments: [
-        ("var a = 1\nlet b = a", ErrorCode.takenWithoutCopy(name: "a")),
-        ("var a = 1\nlet b = (a)", .takenWithoutCopy(name: "a")),
-        ("var a = 1\nvar b = 0\nb = a", .takenWithoutCopy(name: "a")),
-        ("let b = copy 1", .missingCopiedName(found: .token("1"))),
+    @Test("'copy' copies a local that it names", arguments: [
+        ("let b = copy 1", ErrorCode.missingCopiedName(found: .token("1"))),
         ("let b = copy print", .functionAsValue(name: "print")),
         ("let b = copy nope", .notDeclared(name: "nope")),
         ("let b = copy _", .underscoreValue),
     ])
-    func moves(body: String, expected: ErrorCode) {
+    func copiedName(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 
