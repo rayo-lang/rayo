@@ -1,6 +1,6 @@
 import RayoSema
 
-public struct IRFunction: Sendable {
+public struct IRFunction: Equatable, Sendable {
     /// The function's name and parameters, such as `f()`, which no other function of the program has.
     public var name: String
     /// How many parameters the function takes, which are its first locals, in order.

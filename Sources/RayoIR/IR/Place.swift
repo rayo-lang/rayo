@@ -3,7 +3,7 @@ import RayoSource
 
 /// A local that an operand or a statement's destination names, and where the source names it, which is where an
 /// error about it points.
-public struct Place: Sendable {
+public struct Place: Equatable, Sendable {
     public var local: LocalID
     public var range: SourceRange
 

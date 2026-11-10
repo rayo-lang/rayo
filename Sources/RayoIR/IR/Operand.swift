@@ -1,6 +1,6 @@
 import RayoSema
 
-public enum Operand: Sendable {
+public enum Operand: Equatable, Sendable {
     case constant(Constant)
     /// Reads the local's value, which the local keeps.
     case read(Place)
@@ -8,7 +8,7 @@ public enum Operand: Sendable {
     case move(Place)
 }
 
-public enum Constant: Sendable {
+public enum Constant: Equatable, Sendable {
     case int(Int64)
     case bool(Bool)
 
