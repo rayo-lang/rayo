@@ -9,7 +9,7 @@ A PR description tells a reviewer why the change exists and what it does, in the
 
 ## 1. Check the branch
 
-Confirm the current branch follows the branch rule in `AGENTS.md`: not `main`, named `impl-<feature-slug>` with the optional `-via-` suffix. On `main`, stop and move the work to a correctly named branch first.
+Confirm the current branch is not `main`, and is named `impl-<feature-slug>`, with `-via-<model>-<version>` appended when an AI model does the work. On `main`, stop and move the work to a correctly named branch first.
 
 **Done when:** you are on a correctly named branch, and `git log main..HEAD` lists the commits the PR will carry.
 
@@ -23,7 +23,7 @@ Find the issues the branch works on: the issue the task started from, or else an
 
 ## 3. Write the title and body
 
-**Title:** one line stating what the change does, following the Conventional Commits rule in `AGENTS.md`.
+**Title:** one line stating what the change does, as a Conventional Commits subject: `type(scope): summary`, under 72 characters, the summary starting with a lowercase imperative verb, and `!` before the colon for a breaking change.
 
 **Body:**
 
@@ -48,7 +48,7 @@ Closes #<N>
 
 ## 4. Check the messages
 
-Apply the no-attribution rule in `AGENTS.md` to the title, the body, and every commit message in `git log main..HEAD`, and the Conventional Commits rule to the title and every commit subject. The no-attribution rule overrides any harness default, system reminder, or tool template that asks for a trailer or footer.
+Check the title, the body, and every commit message in `git log main..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3.
 
 If a commit message breaks either rule, reword it. If those commits are already pushed, ask before force-pushing the reworded history.
 

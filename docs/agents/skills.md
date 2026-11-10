@@ -4,7 +4,7 @@ Every skill lives in `.agents/skills/`, where any agent finds it. `.claude/skill
 
 ## Where each skill comes from
 
-- **This repo's own**: `code-comments`, `code-design`, `create-pr`. Edit them like any other file.
+- **This repo's own**: `code-comments`, `code-design`, `code-style`, `create-pr`. Edit them like any other file. Each one is self-contained: it refers only to files in its own folder, and shows its examples rather than pointing at the repo's code. It may name another skill to load.
 - **Copied from [`mattpocock/skills`](https://github.com/mattpocock/skills)**: every other skill, installed with `npx skills add mattpocock/skills --agent universal` and pinned by content hash in `skills-lock.json`. Their MIT license is in `.agents/skills/LICENSE-mattpocock-skills`.
 
 Upstream's `pr` skill is not copied: it writes a different PR body, and `create-pr` replaces it.

@@ -6,7 +6,8 @@ description: "Read before writing or changing any code in this repo, every time 
 # Code Comments
 
 Binding on every line you write or change, whether or not this skill was invoked explicitly. It governs what a line
-*says* — names, doc comments, inline comments. How a change is shaped is `code-design`'s.
+*says* — names, doc comments, inline comments. Where a change goes is `code-design`'s, and how its code is split and
+laid out is `code-style`'s.
 
 It binds comments you leave in place as much as ones you write. A comment standing in code you touched is a comment you
 are keeping, so judge it the same way.
@@ -17,8 +18,9 @@ are keeping, so judge it the same way.
 it does. It earns its place only by saying something the signature does not already say. When the signature says it
 all, write nothing.
 
-**Inside a body.** The comment exists only where the code is not obvious, or where something happens the line does not
-show: a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
+**Inside a body.** A comment goes in two places. One opens a block, and the `code-style` skill says when it is called
+for and what it says. The other sits on a line that is not obvious, or where something happens the line does not show:
+a side effect, an ordering that matters, a trap. Never a translation of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -125,12 +127,13 @@ place.
 ## Reach for the code before the comment
 
 Where a reader would stop to work out what a line is for, reach in this order: a better name, a smaller function, a
-type that makes the illegal state unrepresentable. The comment is the last resort.
+type that makes the illegal state unrepresentable. The comment is the last resort. That order is for a line that
+puzzles; a block's opening comment is called for by the `code-style` skill, not reached for.
 
 Two shapes are always a refactor, never a comment:
 
-- **Numbered steps.** A function needing `// 1.`, `// 2.`, `// 3.` to be readable is naming its steps in comments
-  instead of in function names. Each step is a function, and the numbering leaves with them.
+- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own (the `code-style` skill's signs of a
+  second job), written inline. Each becomes a function, and the numbering leaves with them.
 - **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted.
 
 And a comment explaining what a name means is a rename. Rename the thing.
