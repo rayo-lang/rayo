@@ -101,6 +101,33 @@ when &shape {
 
 **`for` patterns bind elements in place, changeable when the loop lends its sequence with `&`**, and own what the iterator hands out as a value of its own, such as a `Range`'s `Int`. So a `for` pattern writes no `let`, and writes `var` only on a part that owns its value ([04](../04-types/collections.md#iteration)).
 
+## Bindings with no name
+
+**Every binding that a `let` or `var` makes binds at least one name, or it is a compile error.** The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. Each of these is one binding:
+
+- **Each binding of a declaration**, so `let lo = 0, _ = f()` is an error, though `lo` is bound.
+- **The pattern after `let` or `var` in a condition.**
+- **Each `let` or `var` part of a pattern**, so `.pair(let a, let _)` is an error, though `a` is bound. A type pattern under `let` is such a part, so `let _ as E` is an error.
+
+A `_` is fine inside a pattern whose `let` or `var` binds another name, as in `let (a, _) = pair`.
+
+```swift
+let (a, _) = pair                         // fine: binds 'a'
+let _ = save(level)                       // error: binds no name
+let lo = 0, _ = f()                       // error: the second binding binds no name
+let (_, _) = pair                         // error: binds no name
+if let _ = target { ... }                 // error: binds no name
+if case .pair(let a, _) = p { ... }       // fine: the 'let' binds 'a'
+if case .pair(let a, let _) = p { ... }   // error: the second 'let' binds no name
+```
+
+**Code that binds nothing has a form without `let` or `var`:**
+
+- `_ = x` drops a value on purpose ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
+- `x != nil` tests whether an optional holds a value ([04](../04-types/enums.md#optionals));
+- `is E` matches a value of type `E` without binding it ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
+- a `_` on its own matches any part of a pattern without binding it, as in `.pair(let a, _)` ([12](../12-grammar/constructs.md#patterns)).
+
 ## `if` and `when` as values
 
 **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, lends it for change, moves it or returns it. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](../10-errors-and-safety/unsafe-code.md#unsafe-code)).

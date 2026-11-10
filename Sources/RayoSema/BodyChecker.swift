@@ -129,11 +129,12 @@ struct BodyChecker {
         return value
     }
 
-    /// Checks `binding`, which declares a local, or drops its value when its name is `_`.
+    /// Checks `binding`, which declares a local.
     private mutating func check(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
         guard let valueExpr = binding.value else { return checkUnassigned(binding, declaredWith: kind) }
+        // Checked before the name, so a declaration of `_` still reports its value's errors.
         let value = value(valueExpr, givenBy: binding)
-        guard binding.name != "_" else { return value.map { .expression($0) } }
+        guard bindsName(binding) else { return nil }
         guard let value else { return declareFailed(binding.name, at: binding.nameRange) }
         return declare(binding, declaredWith: kind, type: value.type, typeGivenAt: value.range).map {
             .binding($0, value)
@@ -142,18 +143,22 @@ struct BodyChecker {
 
     /// Checks `binding`, which declares a local without a value, so its type annotation gives the local's type.
     private mutating func checkUnassigned(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
-        guard binding.name != "_" else {
-            errors.report(.underscoreDeclared, at: binding.nameRange)
-            return nil
-        }
+        // Resolved before the name, so a declaration of `_` still reports its type's errors.
+        let type = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
+        guard bindsName(binding) else { return nil }
         guard let annotation = binding.type else {
             errors.report(.missingLocalType(name: binding.name), at: binding.nameRange)
             return declareFailed(binding.name, at: binding.nameRange)
         }
-        guard let type = declarations.resolve(annotation, reporting: errors) else {
-            return declareFailed(binding.name, at: binding.nameRange)
-        }
+        guard let type else { return declareFailed(binding.name, at: binding.nameRange) }
         return declare(binding, declaredWith: kind, type: type, typeGivenAt: annotation.range).map { .binding($0, nil) }
+    }
+
+    /// Whether `binding` binds a name, reporting it when it binds `_`.
+    private mutating func bindsName(_ binding: Binding) -> Bool {
+        guard binding.name == "_" else { return true }
+        errors.report(.underscoreDeclared, at: binding.nameRange)
+        return false
     }
 
     /// Checks `expr`, the value `binding` gives, against the binding's type annotation when it has one.
