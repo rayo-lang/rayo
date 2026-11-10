@@ -45,8 +45,9 @@ the code it shaped.
 
 Six ways this goes wrong. All six produce comments that are true, and none of them belong:
 
-**It opens the box.** The rules the body applies, the cases it tells apart, the order it works in: a caller needs none
-of them to use the function, and each is stated where no one reading the code that applies it will look.
+**It opens the box.** The rules the body applies, the tests it makes to tell its inputs apart, the order it works in:
+a caller needs none of them to use the function, and each is stated where no one reading the code that applies it
+will look.
 
 ```swift
 // Before — the doc is the algorithm, and the body below it has not one comment.
@@ -135,11 +136,11 @@ guard case .paid = account.plan else { return nil }
 is where a reader stumbles.
 
 ```swift
-// A trial account is skipped rather than billed, since the job that expires trials charges it on the last day.
+// A trial account is skipped: the job that expires trials charges it on the last day, so billing it here charges twice.
 guard case .paid = account.plan else { return nil }
 ```
 
-The same test applies to a line that is no case: a comment that only translates it is deleted, and one that explains
+The same test applies to a line that is not a case: a comment that only translates it is deleted, and one that explains
 it is kept.
 
 Put it on the line it explains. A comment describing the branch below the one it sits above is a comment in the wrong
