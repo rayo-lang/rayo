@@ -6,6 +6,7 @@ extension BodyChecker {
     /// Checks `name(arguments)`. Every argument is checked, whether or not the call matches a function.
     mutating func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
                        in range: SourceRange) -> CheckedExpr? {
+        // Find the functions the call can reach, and the one its arguments fit.
         let candidates = functions(named: name, at: nameRange)
         let checked: (signature: Signature, arguments: [CheckedExpr])?
         switch candidates.count {
@@ -22,6 +23,7 @@ extension BodyChecker {
         default:
             checked = pick(among: candidates, for: arguments, in: range)
         }
+
         // A call whose arguments fit no function, or whose result type isn't known, was reported.
         guard let checked, let result = file.result(of: checked.signature, calledAt: range) else { return nil }
         return CheckedExpr(kind: .call(checked.signature.callee, arguments: checked.arguments), type: result,
@@ -71,9 +73,8 @@ extension BodyChecker {
 
     /// Checks `argument`'s label and value against `parameter`.
     private mutating func check(_ argument: Argument, against parameter: Parameter) -> CheckedExpr? {
-        let isLabeledRight = argument.label == parameter.label
         // A label other than the parameter's is reported, and the value is still checked.
-        if !isLabeledRight {
+        if argument.label != parameter.label {
             let expected = ArgumentLabel(parameter.label)
             errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
         }
@@ -84,7 +85,7 @@ extension BodyChecker {
             return nil
         }
         let value = check(argument.value, expecting: type)
-        return isLabeledRight ? value : nil
+        return argument.label == parameter.label ? value : nil
     }
 
     /// The one of `candidates` whose labels and parameter types `arguments` fit, with the checked arguments.
@@ -99,11 +100,11 @@ extension BodyChecker {
         // Pick the one candidate that takes the arguments' labels and types.
         let typed = zip(arguments, values).map { (label: $0.label, type: $1.type) }
         let fitting = candidates.filter { $0.takes(typed) }
-        // No candidate fits.
+        // No candidate fits, which is reported with the arguments' types.
         if fitting.isEmpty {
             errors.report(.noMatchingFunction(name: candidates[0].name, arguments: spelling(of: typed)), at: range)
         }
-        // Two candidates fit only when one names a type that isn't one, which was reported there.
+        // None fit, which was reported; two fit only when one names a type that isn't one, which was reported there.
         guard fitting.count == 1 else { return nil }
         return (fitting[0], values)
     }

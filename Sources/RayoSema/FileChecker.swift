@@ -48,7 +48,8 @@ final class FileChecker {
         case .type(let type):
             return type
 
-        // A declared type that names no type was reported where it is written.
+        // A written result type that failed, naming no type or one `main` can't return, was reported where it is
+        // written.
         case .failed:
             return nil
 
@@ -79,7 +80,8 @@ final class FileChecker {
             let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
                                       result: declaredResult(of: function, id))
             signatures.append(signature)
-            // A function that takes the same arguments as one before it is reported, since no call could reach it.
+            // A function with the name, labels and parameter types of one before it is reported, since no call could
+            // reach it.
             if !declarations.declare(signature) {
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
             } else if function.name == "main" {
@@ -90,6 +92,7 @@ final class FileChecker {
             }
         }
 
+        // Declare the prelude's functions that the file's own leave free.
         declarations.declarePrelude()
         return main
     }
@@ -104,6 +107,7 @@ final class FileChecker {
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
 
+        // Resolve the written type, which a parameter of type Void doesn't keep.
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
@@ -156,37 +160,39 @@ final class FileChecker {
 
     /// Checks the body of the function `id`, with its parameters as its first locals.
     private func checkBody(of id: FunctionID) -> CheckedBody {
-        // Check the body in names of its own, which start with the parameters.
+        // Give the body a checker of its own, whose first locals are the parameters.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
         var body = BodyChecker(file: self, result: signature.result.type)
         body.declare(function.parameters, types: signature.parameters.map(\.type))
 
-        // A function with a result whose body is a single expression returns the expression's value.
+        // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
             let returned = body.returned(value)
-            return CheckedBody(result: result(of: signature, returning: returned), locals: body.locals,
-                               statements: returned.map { [.returnStmt($0)] } ?? [])
+            let statements: [CheckedStmt] = returned.map { [.returnStmt($0)] } ?? []
+            return CheckedBody(result: bodyResult(of: signature, returning: returned), locals: body.locals,
+                               statements: statements)
         }
 
-        // Any other body runs its statements, which return the result, if there is one, on every path.
+        // Any other body runs its statements, and a missing `return` on a path to its end is reported.
         let statements = body.check(function.body)
         reportMissingReturn(from: function, as: signature)
         return CheckedBody(result: signature.result.type, locals: body.locals, statements: statements)
     }
 
     /// The result type of the function `signature` declares, whose body is a single expression that checks to
-    /// `returned`: the declared type, or, when the declaration gives none, the expression's.
-    private func result(of signature: Signature, returning returned: CheckedExpr?) -> RayoType? {
+    /// `returned`: the declared type, or the expression's when no type is written.
+    private func bodyResult(of signature: Signature, returning returned: CheckedExpr?) -> RayoType? {
         // A declared result type is the function's, whatever the expression's type.
         guard case .givenByBody = signature.result else { return signature.result.type }
         return returned?.type
     }
 
-    /// Reports it when a run can reach the end of `function`'s body, which isn't a single expression, though the
-    /// function returns a value.
+    /// Reports a missing `return` when a run can reach the end of `function`'s body, which isn't a single
+    /// expression, though the function returns a value.
     private func reportMissingReturn(from function: FuncDecl, as signature: Signature) {
-        // A function that returns no value, or whose body can't run to its end, returns on every path.
+        // A function that returns Void, or whose result type failed and was reported, needs no `return`; nor does a
+        // body that can't run to its end.
         guard let result = signature.result.type, result != .void, function.body.canComplete else { return }
         errors.report(.missingReturn(signature: "\(signature)"), at: function.body.closingBrace)
     }

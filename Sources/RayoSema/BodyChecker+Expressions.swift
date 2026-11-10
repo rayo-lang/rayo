@@ -98,22 +98,25 @@ extension BodyChecker {
         switch op {
         // Arithmetic takes two Ints, and gives an Int.
         case .add, .subtract, .multiply, .divide, .remainder:
+            // Operands of another type were reported.
             guard operands(of: spelled, left, right, are: .int, in: range) else { return nil }
             result = .int
 
         // An ordering takes two Ints, and gives a Bool.
         case .less, .lessEqual, .greater, .greaterEqual:
+            // Operands of another type were reported.
             guard operands(of: spelled, left, right, are: .int, in: range) else { return nil }
             result = .bool
 
         // `&&` and `||` take two Bools, and give a Bool.
         case .and, .or:
+            // Operands of another type were reported.
             guard operands(of: spelled, left, right, are: .bool, in: range) else { return nil }
             result = .bool
 
         // `==` and `!=` take two values of one type, and give a Bool.
         case .equal, .notEqual:
-            // Values of two types are never equal.
+            // Comparing values of two types is reported.
             guard left.type == right.type else {
                 errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil

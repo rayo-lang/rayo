@@ -1,8 +1,8 @@
 import RayoDiagnostics
 import RayoSyntax
 
-/// The names a function body sees beyond its own locals: the file's own functions, and the prelude's that none
-/// of them shadows.
+/// The names a function body sees beyond its own locals: the file's own functions, the prelude's that none
+/// of them shadows, and the prelude's types.
 struct Declarations {
     private var functions: [String: [Signature]] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
@@ -11,7 +11,7 @@ struct Declarations {
     /// returns whether it did.
     mutating func declare(_ signature: Signature) -> Bool {
         let others = functions[signature.name, default: []]
-        // No call could tell the two apart.
+        // A function that no call could tell apart from one declared already isn't declared.
         guard !others.contains(where: { $0.takesArguments(like: signature) }) else { return false }
         functions[signature.name] = others + [signature]
         return true
