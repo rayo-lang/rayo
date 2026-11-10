@@ -1,8 +1,7 @@
 import RayoSema
 import RayoSource
 
-/// Builds one IR function: the blocks of its control-flow graph, the block that lowering adds statements to, and
-/// the temporaries it adds to the function's locals.
+/// Builds one IR function's blocks and locals.
 struct FunctionBuilder: ~Copyable {
     /// A block as lowering builds it, which has no terminator until lowering leaves it.
     private struct PendingBlock {
@@ -55,8 +54,7 @@ struct FunctionBuilder: ~Copyable {
         blocks[current.index].statements.append(statement)
     }
 
-    /// Adds a temporary of `type` to the function, and returns its place, whose range is that of the expression it
-    /// holds.
+    /// Adds a temporary of `type` to the function, and returns its place at `range`.
     mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
         locals.append(.temporary(type))
         return Place(local: LocalID(index: locals.count - 1), range: range)

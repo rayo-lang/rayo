@@ -4,32 +4,24 @@ import RayoSource
 /// Lowers expressions into the current block of the function a builder builds, as the operations that compute them
 /// and the operands that hold their values.
 enum ExpressionLowering {
-    /// Lowers `expr` to the operation that computes its value, computing its operands into `builder` first.
-    static func rvalue(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Rvalue {
-        switch expr.kind {
-        // A constant or a local is an operand as it is, and so is `&&` or `||`, which lowers to branches.
-        case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
-            .use(operand(of: expr, in: &builder))
-        // A unary operation applies to its operand, computed first.
-        case .unary(let op, let operand):
-            .unary(op, self.operand(of: operand, in: &builder))
-        // The left operand is computed before the right one, in the order the source reads.
-        case .binary(let op, let left, let right):
-            .binary(op, operand(of: left, in: &builder), operand(of: right, in: &builder))
-        // So are the arguments of a call, from first to last.
-        case .call(let callee, let arguments):
-            .call(callee, arguments: arguments.map { operand(of: $0, in: &builder) })
-        }
+    /// Lowers `expr` into `builder`, as the computation of its value into `destination`, or, where `destination` is
+    /// nil, of a value that is dropped.
+    static func compute(_ expr: CheckedExpr, into destination: Place?, in builder: inout FunctionBuilder) {
+        let value = rvalue(of: expr, in: &builder)
+        builder.emit(value, into: destination, range: expr.range)
     }
 
     /// Lowers `expr` to an operand that holds its value, computing it into a new temporary of `builder` unless it is
     /// a constant or a local.
     static func operand(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Operand {
         switch expr.kind {
-        // A constant is its own operand, and a local is read or moved as the checker decided.
+        // An integer is a constant operand.
         case .intLiteral(let value): .constant(.int(value))
+        // So is a Bool.
         case .boolLiteral(let value): .constant(.bool(value))
+        // A local that the checker reads is read, keeping its value.
         case .local(let local): .read(Place(local: local, range: expr.range))
+        // A local that the checker moves gives its value up.
         case .move(let local): .move(Place(local: local, range: expr.range))
         // `&&` evaluates its right operand only when its left one is true.
         case .binary(.and, let left, let right):
@@ -43,11 +35,28 @@ enum ExpressionLowering {
         }
     }
 
+    /// Lowers `expr` to the operation that computes its value, computing its operands into `builder` first.
+    private static func rvalue(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Rvalue {
+        switch expr.kind {
+        // A constant or a local is an operand as it is, and so is `&&` or `||`, which lowers to branches.
+        case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
+            .use(operand(of: expr, in: &builder))
+        // A unary operation applies to its operand, computed first.
+        case .unary(let op, let value):
+            .unary(op, operand(of: value, in: &builder))
+        // The left operand is computed before the right one, in the order the source reads.
+        case .binary(let op, let left, let right):
+            .binary(op, operand(of: left, in: &builder), operand(of: right, in: &builder))
+        // So are the arguments of a call, from first to last.
+        case .call(let callee, let arguments):
+            .call(callee, arguments: arguments.map { operand(of: $0, in: &builder) })
+        }
+    }
+
     /// Computes `expr` into a new temporary of `builder`, and returns an operand that reads it.
     private static func lowerIntoTemporary(_ expr: CheckedExpr, in builder: inout FunctionBuilder) -> Operand {
         let temporary = builder.newTemporary(expr.type, at: expr.range)
-        let value = rvalue(of: expr, in: &builder)
-        builder.emit(value, into: temporary, range: expr.range)
+        compute(expr, into: temporary, in: &builder)
         return .read(temporary)
     }
 

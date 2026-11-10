@@ -21,7 +21,7 @@ struct StatementLowering: ~Copyable {
         for statement in statements { lower(statement) }
     }
 
-    /// The IR function of `checked`, whose body is the statements lowered so far.
+    /// Ends the last block, and makes the IR function of `checked`, whose body is the statements lowered so far.
     consuming func function(lowering checked: CheckedFunction) -> IRFunction {
         // End the last block, which a run reaches only in a Void function: the checker makes others return first.
         builder.end(with: checked.result == .void ? .return(nil) : .unreachable)
@@ -32,8 +32,7 @@ struct StatementLowering: ~Copyable {
         switch statement {
         // An expression statement computes its value and drops it.
         case .expression(let expr):
-            let value = rvalue(of: expr)
-            builder.emit(value, into: nil, range: expr.range)
+            ExpressionLowering.compute(expr, into: nil, in: &builder)
 
         // A declaration starts its local's life.
         case .binding(let place, let value):
@@ -41,8 +40,7 @@ struct StatementLowering: ~Copyable {
 
         // An assignment computes its value into the local.
         case .assign(let place, let value):
-            let rvalue = rvalue(of: value)
-            builder.emit(rvalue, into: Place(place), range: value.range)
+            ExpressionLowering.compute(value, into: Place(place), in: &builder)
 
         // A compound assignment applies its operator to the local and the value.
         case .compoundAssign(let place, let op, let value):
@@ -58,11 +56,11 @@ struct StatementLowering: ~Copyable {
 
         // A `break` goes to the innermost loop's exit.
         case .breakStmt:
-            endJumping(with: .goto(innermostLoop.exit))
+            jump(with: .goto(innermostLoop.exit))
 
         // A `continue` goes back to the innermost loop's header.
         case .continueStmt:
-            endJumping(with: .goto(innermostLoop.header))
+            jump(with: .goto(innermostLoop.header))
 
         // A `return` leaves the function.
         case .returnStmt(let value):
@@ -72,28 +70,28 @@ struct StatementLowering: ~Copyable {
 
     /// Lowers `place op= value` as `place = place op value`.
     private mutating func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
-        let value = operand(of: value)
+        let value = ExpressionLowering.operand(of: value, in: &builder)
         builder.emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
     }
 
     /// Starts the life of `place`'s local, and stores `value` in it when there is one.
     private mutating func lowerDeclaration(of place: CheckedPlace, givenBy value: CheckedExpr?) {
         builder.emit(.declare(place.local))
+
         // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        let rvalue = rvalue(of: value)
-        builder.emit(rvalue, into: Place(place), range: value.range)
+        ExpressionLowering.compute(value, into: Place(place), in: &builder)
     }
 
     /// Leaves the function with `value`.
     private mutating func lowerReturn(_ value: CheckedExpr?) {
         let result = value.flatMap { returnedOperand(of: $0) }
-        endJumping(with: .return(result))
+        jump(with: .return(result))
     }
 
     /// Ends the current block with `terminator`, which jumps away from it, and goes on in a block of its own that no
     /// path reaches, where the code after the jump is lowered.
-    private mutating func endJumping(with terminator: Terminator) {
+    private mutating func jump(with terminator: Terminator) {
         let unreached = builder.newBlock()
         builder.end(with: terminator, continuingIn: unreached)
     }
@@ -107,15 +105,14 @@ struct StatementLowering: ~Copyable {
     /// and returns nil.
     private mutating func returnedOperand(of value: CheckedExpr) -> Operand? {
         // A value of any other type is the result.
-        guard value.type == .void else { return operand(of: value) }
-        let rvalue = rvalue(of: value)
-        builder.emit(rvalue, into: nil, range: value.range)
+        guard value.type == .void else { return ExpressionLowering.operand(of: value, in: &builder) }
+        ExpressionLowering.compute(value, into: nil, in: &builder)
         return nil
     }
 
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: [CheckedStmt], _ otherwise: [CheckedStmt]) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
-        let condition = operand(of: condition)
+        let condition = ExpressionLowering.operand(of: condition, in: &builder)
         let thenBlock = builder.newBlock()
         let elseBlock = builder.newBlock()
         let join = builder.newBlock()
@@ -153,17 +150,7 @@ struct StatementLowering: ~Copyable {
     private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
         // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
-        return .branch(operand(of: condition), then: body, otherwise: exit)
-    }
-
-    /// Lowers `expr` to the operation that computes its value, into the function this lowering builds.
-    private mutating func rvalue(of expr: CheckedExpr) -> Rvalue {
-        ExpressionLowering.rvalue(of: expr, in: &builder)
-    }
-
-    /// Lowers `expr` to an operand that holds its value, into the function this lowering builds.
-    private mutating func operand(of expr: CheckedExpr) -> Operand {
-        ExpressionLowering.operand(of: expr, in: &builder)
+        return .branch(ExpressionLowering.operand(of: condition, in: &builder), then: body, otherwise: exit)
     }
 }
 
