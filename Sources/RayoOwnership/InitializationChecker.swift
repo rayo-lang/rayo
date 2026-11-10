@@ -9,7 +9,11 @@ public enum InitializationChecker {
     /// Reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in source order.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
-        program.functions.flatMap(check).sorted { $0.range.start < $1.range.start }
+        // A use and a store share a place in a compound assignment, which uses the local before it stores to it,
+        // so errors at one place keep the order each function gives them.
+        let found = program.functions.flatMap(check).enumerated()
+        return found.sorted { ($0.element.range.start, $0.offset) < ($1.element.range.start, $1.offset) }
+            .map(\.element)
     }
 
     private static func check(_ function: IRFunction) -> [Diagnostic] {
@@ -41,6 +45,7 @@ private struct FunctionErrors {
         self.function = function
     }
 
+    /// The errors at uses, then those at stores.
     var diagnostics: [Diagnostic] {
         Array(firstUses.values) + stores
     }
