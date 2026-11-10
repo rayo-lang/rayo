@@ -69,7 +69,7 @@ struct BodyChecker {
     mutating func check(_ block: Block) -> [CheckedStmt] {
         scopes.append([:])
         defer { scopes.removeLast() }
-        return block.statements.flatMap { check($0) }
+        return block.statements.flatMap { check($0) }.compactMap { $0 }
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
@@ -98,37 +98,30 @@ struct BodyChecker {
 
     // MARK: Statements
 
-    /// Checks `statement`. A declaration gives a checked statement for each of its bindings.
-    private mutating func check(_ statement: Stmt) -> [CheckedStmt] {
-        guard case .declaration(let kind, let bindings) = statement.kind else {
-            return checkSingle(statement).map { [$0] } ?? []
-        }
-        return bindings.compactMap { check($0, declaredWith: kind) }
-    }
-
-    /// Checks `statement`, which isn't a declaration.
-    private mutating func checkSingle(_ statement: Stmt) -> CheckedStmt? {
+    /// Checks `statement`, which gives a checked statement for each binding of a declaration and one for any other
+    /// statement, each nil when it fails.
+    private mutating func check(_ statement: Stmt) -> [CheckedStmt?] {
         switch statement.kind {
-        case .declaration:
-            preconditionFailure("a declaration gives a checked statement for each of its bindings")
+        case .declaration(let kind, let bindings):
+            return bindings.map { check($0, declaredWith: kind) }
         case .expression(let expr):
-            return checkUnused(expr).map { .expression($0) }
+            return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
-            return checkTaken(value).map { .expression($0) }
+            return [checkTaken(value).map { .expression($0) }]
         case .assign(let target, let op, let value):
-            return assign(value, op: op, to: target, in: statement.range)
+            return [assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let condition, let then, let otherwise):
-            return checkIf(condition, then: then, otherwise: otherwise)
+            return [checkIf(condition, then: then, otherwise: otherwise)]
         case .whileStmt(let condition, let body):
-            return checkWhile(condition, body: body)
+            return [checkWhile(condition, body: body)]
         case .breakStmt:
-            return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
+            return [isInsideLoop("break", at: statement.range) ? .breakStmt : nil]
         case .continueStmt:
-            return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
+            return [isInsideLoop("continue", at: statement.range) ? .continueStmt : nil]
         case .returnStmt(let value?):
-            return returned(value).map { .returnStmt($0) }
+            return [returned(value).map { .returnStmt($0) }]
         case .returnStmt(nil):
-            return checkEmptyReturn(at: statement.range)
+            return [checkEmptyReturn(at: statement.range)]
         }
     }
 
