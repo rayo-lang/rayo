@@ -9,9 +9,9 @@ These rules decide how the repo's code and tests are split into files, types and
 
 ## Files
 
-**A file holds one primary type and is named after it.** `Parser.swift` holds `Parser`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` holds `Stmt` and `StmtKind`, even though the parser builds both.
+**A file holds one primary type and is named after it.** `Parser.swift` would hold `Parser`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` would hold `Stmt` and its `StmtKind`, even though a parser builds both.
 
-**A type that stands on its own gets a file of its own**, even when it is small. A type is a part when it is the primary type's kind enum, the payload of one of its cases, or a private helper, and nothing but the primary type and its other parts stores it in a property or a case payload, however much other code builds or reads it. Every other type stands on its own: one that more than one type stores, as a `BinaryOperator` that the syntax tree's expressions, the checked expressions and the IR's values all store, and one that is thrown, returned or passed but stored by none, such as an error type that a function only throws. A family of such types, such as the syntax tree's, gathers its files in a directory named for the family, such as `AST/`.
+**A type that stands on its own gets a file of its own**, even when it is small. A type is a part when it is the primary type's kind enum, the payload of one of its cases, or a private helper, and nothing but the primary type and its other parts stores it in a property or a case payload, however much other code builds or reads it. Every other type stands on its own: one that more than one type stores, such as a `BinaryOperator` that a syntax tree's expressions, a checked tree's expressions and an IR's values would all store, and one that is thrown, returned or passed but stored by none, such as an error type that a function only throws. A family of such types, such as the syntax tree's, gathers its files in a directory named for the family, such as `AST/`.
 
 **A file over the limit is split** along the line where its contents stop sharing a reason to change ([Limits](#limits)).
 
@@ -132,4 +132,4 @@ Audit every file, type and function you add or change against this list, and fix
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
 - **Every line** does one thing and fits in 120 columns.
 
-**Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and open your change on top of it, with the refactor's branch as its base. A reviewer audits the same list, one file, type and function at a time.
+**Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and stack your change on it: open your change with the refactor's branch as its base. A reviewer audits the same list, one file, type and function at a time.

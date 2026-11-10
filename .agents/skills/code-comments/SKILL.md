@@ -131,8 +131,8 @@ puzzles; a block's opening comment is called for by the `code-style` skill, not 
 
 Two shapes are always a refactor, never a comment:
 
-- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own, written inline. Each becomes a
-  function, and the numbering leaves with them.
+- **Numbered steps.** `// 1.`, `// 2.`, `// 3.` mark steps that are jobs of their own (the `code-style` skill's signs of a
+  second job), written inline. Each becomes a function, and the numbering leaves with them.
 - **A section heading.** A `// --- parse ---` inside a body marks a function waiting to be extracted.
 
 And a comment explaining what a name means is a rename. Rename the thing.
