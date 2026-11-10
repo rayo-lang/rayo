@@ -4,15 +4,23 @@ import RayoSyntax
 
 /// Checks a function body's statements, block by block, and the loops and returns among them.
 struct BodyChecker {
-    let expressions: ExpressionChecker
+    private let expressions: ExpressionChecker
     /// The function's result type, or nil when it isn't known.
     let result: RayoType?
     private var loopDepth = 0
 
-    init(expressions: ExpressionChecker, result: RayoType?) {
-        self.expressions = expressions
+    /// A checker of the body of a function whose result type is `result`, with `parameters` of `types` as its
+    /// first locals.
+    init(file: FileChecker, parameters: [Param], types: [RayoType?], result: RayoType?) {
+        expressions = ExpressionChecker(file: file, names: NameScopes(file: file))
         self.result = result
+
+        // Declare the parameters in the scope around the body's blocks.
+        bindings.declare(parameters, types: types)
     }
+
+    /// The body's locals, indexed by `LocalID`, its parameters first.
+    var locals: [CheckedLocal] { expressions.names.locals }
 
     private var errors: ErrorList { expressions.file.errors }
     private var bindings: BindingChecker { BindingChecker(expressions: expressions) }
@@ -28,7 +36,8 @@ struct BodyChecker {
     func returned(_ expr: Expr) -> CheckedExpr? {
         // A value that failed was reported.
         guard let value = expressions.checkTaken(expr) else { return nil }
-        // A function whose result type isn't known returns any value, since its declaration's error was reported.
+        // A function whose result type isn't known takes any value: its body gives the type, or its written type
+        // failed and was reported.
         guard let result else { return value }
         return expressions.expect(value, result) ? value : nil
     }
@@ -83,7 +92,7 @@ struct BodyChecker {
     /// Checks a `return` without a value, which a function may have only when its result type is Void or isn't
     /// known.
     private func checkEmptyReturn(at range: SourceRange) -> CheckedStmt? {
-        // A function of any other result type returns a value.
+        // A Void function, or one whose result type isn't known, may return without a value.
         guard let result, result != .void else { return .returnStmt(nil) }
         errors.report(.missingReturnValue(type: "\(result)"), at: range)
         return nil

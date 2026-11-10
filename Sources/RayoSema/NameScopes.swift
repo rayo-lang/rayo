@@ -3,16 +3,14 @@ import RayoSource
 
 /// The names a function body sees: its locals and parameters, block by block, and the module's functions.
 final class NameScopes {
-    private let declarations: Declarations
-    private let errors: ErrorList
+    private let file: FileChecker
     /// The body's locals, indexed by `LocalID`.
     private(set) var locals: [CheckedLocal] = []
     /// The names each enclosing block declares, innermost last, inside the scope of the function's parameters.
     private var blocks: [[String: ScopeEntry]] = [[:]]
 
-    init(declarations: Declarations, errors: ErrorList) {
-        self.declarations = declarations
-        self.errors = errors
+    init(file: FileChecker) {
+        self.file = file
     }
 
     subscript(local: LocalID) -> CheckedLocal {
@@ -29,7 +27,7 @@ final class NameScopes {
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
-    /// functions. A call prefers the functions; any other use prefers the locals and parameters.
+    /// functions, as `use` decides between them.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
         let functions = functionMatch(for: name)
@@ -71,7 +69,7 @@ final class NameScopes {
 
     /// The module's functions called `name`, unless it has none.
     private func functionMatch(for name: String) -> NameMatch? {
-        let functions = declarations.functions(named: name)
+        let functions = file.declarations.functions(named: name)
         return functions.isEmpty ? nil : .functions(functions)
     }
 
@@ -80,11 +78,12 @@ final class NameScopes {
         blocks[blocks.count - 1][name] = .failed
     }
 
-    /// Whether `name` already names a local or a parameter, reporting it when it does.
+    /// Whether `name` already names a local or a parameter, even one whose declaration failed, reporting it when it
+    /// does.
     private func isDeclared(_ name: String, reportingRedeclarationAt range: SourceRange) -> Bool {
         // A name in no enclosing block is free, even where a function has it.
         guard scopeEntry(for: name) != nil else { return false }
-        errors.report(.alreadyDeclared(name: name), at: range)
+        file.errors.report(.alreadyDeclared(name: name), at: range)
         return true
     }
 }

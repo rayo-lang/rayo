@@ -53,13 +53,14 @@ struct AssignmentChecker {
 
     /// Whether `local` may be assigned, reporting it when it can't.
     private func isAssignable(_ local: LocalID, at range: SourceRange) -> Bool {
-        // Any local but a borrowed parameter may be; a `let` only once on each path, which the flow check enforces.
+        // Any local but a borrowed parameter may be; a `let` only once on each path, which the initialization check
+        // enforces.
         guard names[local].kind == .parameter else { return true }
         errors.report(.assignToParameter(name: names[local].name), at: range)
         return false
     }
 
-    /// The local that `target` names, reporting it when it names none.
+    /// The local that `target` names, reporting it when it names none, unless its declaration failed.
     private func assignedLocal(_ target: Expr) -> LocalID? {
         // Only a local's name can be assigned, and `_` names none.
         guard case .name(let name) = target.kind, name != "_" else {
@@ -69,7 +70,8 @@ struct AssignmentChecker {
         return local(named: name, at: target.range)
     }
 
-    /// The local called `name`, which an assignment's target names at `range`, reporting it when there is none.
+    /// The local called `name`, which an assignment's target names at `range`, reporting it when there is none,
+    /// unless its declaration failed.
     private func local(named name: String, at range: SourceRange) -> LocalID? {
         switch names.lookUp(name, for: .ordinary) {
         // A local is the assignment's.

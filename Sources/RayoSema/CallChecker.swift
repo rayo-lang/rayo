@@ -21,7 +21,7 @@ struct CallChecker {
         let candidates = functions(named: name, at: nameRange)
         // A call that reaches no function, or whose arguments fit none, was reported.
         guard let match = match(arguments, among: candidates, in: range) else { return nil }
-        // A result type that isn't known was reported where it is declared, or as a cycle.
+        // A result type that isn't known was reported in the function that gives it, or here as a cycle.
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
         let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
         return CheckedExpr(kind: kind, type: result, range: range)
@@ -50,8 +50,7 @@ struct CallChecker {
         return []
     }
 
-    /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters, or nil when
-    /// none fits, which is reported unless there are no candidates.
+    /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters.
     private func match(_ arguments: [Argument], among candidates: [Signature], in range: SourceRange) -> Match? {
         switch candidates.count {
         // Without a candidate, the arguments are checked for their own errors.
