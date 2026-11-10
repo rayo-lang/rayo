@@ -215,7 +215,12 @@ if let t = window.value.target { … }           // a place reached through an o
 if owned let m = reply { send(m) }             // moves the Message out: 'reply' holds no value after this
 ```
 
-**`while let x` and `while var x` are compile errors where `x` is a local or a parameter**, since such a loop could end only through `break`, `return` or `throw`. Its binding holds the optional still while it is live, and shadows the optional's name through the body, so nothing in the body can make it `nil`. The error points to `while x != nil`, whose narrowing lets the body assign the place, and ends when it does. Anywhere else, other code reaches the place, through `self` or through a call, so the loop is allowed:
+**`while let x` and `while var x` are compile errors wherever no code can change `x` while the loop runs**, since such a loop could end only through `break`, `return` or `throw`. Its binding holds the optional still while it is live, so nothing can make it `nil` then. In these places, nothing can change `x` between the binding's uses either:
+
+- **A local or a parameter.** The binding shadows the optional's name through the body, and nothing else reaches it. The error points to `while x != nil`, whose narrowing lets the body assign the place, and ends when it does.
+- **A place nothing ever changes.** That is a global `let`, a static stored `let` or a `const`, or a property of `self` in a plain method, whose `self` is borrowed shared for the whole call.
+
+**Elsewhere a call can change the place between passes**, so the loop is allowed: on a `@threadlocal var`, for one, or on a changeable property of `self` in a `mutating` method.
 
 ```swift
 var next: Job? = queue.pop()
