@@ -16,8 +16,7 @@ struct FunctionLoweringTests {
         #expect(program.functions[program.main.index] == expected)
     }
 
-    @Test("a function's parameters are its first locals, and the end of a function with a result is unreachable")
-    func parametersAndResult() throws(RejectedSource) {
+    @Test func `a function's parameters are its first locals, ahead of its temporaries`() throws(RejectedSource) {
         let double = try lowered("func main() {}\nfunc double(_ n: Int) -> Int { n * 2 }").functions[1]
         let expected = IRFunction(
             name: "double(_: Int)", parameterCount: 1, result: .int,

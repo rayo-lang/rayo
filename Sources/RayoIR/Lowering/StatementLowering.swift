@@ -21,7 +21,7 @@ struct StatementLowering: ~Copyable {
         for statement in statements { lower(statement) }
     }
 
-    /// Ends the last block, and makes the IR function of `checked`, whose body is the statements lowered so far.
+    /// Makes the IR function of `checked`, whose body is the statements lowered so far.
     consuming func function(of checked: CheckedFunction) -> IRFunction {
         // End the last block, which a run reaches only in a Void function: the checker makes others return first.
         builder.end(with: checked.result == .void ? .return(nil) : .unreachable)
@@ -85,7 +85,7 @@ struct StatementLowering: ~Copyable {
 
     /// Leaves the function with `value`.
     private mutating func lowerReturn(_ value: CheckedExpr?) {
-        let result = value.flatMap { returnedOperand(of: $0) }
+        let result = if let value { returnedOperand(of: value) } else { nil as Operand? }
         jump(with: .return(result))
     }
 
