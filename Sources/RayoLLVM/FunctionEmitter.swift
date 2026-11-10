@@ -43,7 +43,7 @@ struct FunctionEmitter {
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
     private func allocateSlots() -> [LLVMValueRef] {
-        function.locals.map { LLVMBuildAlloca(builder, llvmType($0.type), "") }
+        function.locals.indices.map { LLVMBuildAlloca(builder, slotType(of: LocalID(index: $0)), "") }
     }
 
     /// Stores each argument in its parameter's slot.
@@ -54,15 +54,16 @@ struct FunctionEmitter {
         }
     }
 
-    /// Lowers a local's `type` to the LLVM type of its stack slot.
-    private func llvmType(_ type: RayoType) -> LLVMTypeRef {
+    /// The LLVM type of `local`'s stack slot.
+    private func slotType(of local: LocalID) -> LLVMTypeRef {
+        let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
         return program.llvmType(type)
     }
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
     private func load(_ local: LocalID) -> LLVMValueRef {
-        LLVMBuildLoad2(builder, llvmType(function.locals[local.index].type), slots[local.index], "")
+        LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], "")
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
