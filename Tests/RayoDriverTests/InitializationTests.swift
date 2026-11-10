@@ -52,6 +52,19 @@ struct InitializationTests {
         #expect(coveredText(reported, in: source) == covered)
     }
 
+    @Test("each binding of a declaration binds a name, and the type of one that binds '_' is still checked",
+          arguments: [
+        ("let a = 1, _ = 2", [ErrorCode.underscoreDeclared], ["_"]),
+        ("var _: Int, b: Int", [.underscoreDeclared], ["_"]),
+        ("let _: Int8", [.underscoreDeclared, .notAType(name: "Int8")], ["_", "Int8"]),
+    ])
+    func underscoreBinding(body: String, expected: [ErrorCode], covered: [String]) {
+        let source = "func main() {\n\(body)\n}"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == expected)
+        #expect(coveredText(reported, in: source) == covered)
+    }
+
     @Test("a declaration's bindings are declared in order, so a later one may take an earlier one's value")
     func severalBindings() {
         #expect(output("let a = 1, b = copy a + 1, c: Int\nc = a + b\nprint(c)") == "3\n")
@@ -167,6 +180,19 @@ struct InitializationTests {
     ])
     func letAssignedOnce(body: String, expected: [String]) {
         #expect(reported(body) == expected)
+    }
+
+    @Test("a compound assignment's use comes before its store, so an error about each at one place comes in that order")
+    func useBeforeStore() {
+        #expect(reported("let x: Int\nif true { x = 1 }\nx += 1") == [
+            "4:1: error[E0305]: 'x' isn't initialized on every path",
+            "4:1: error[E0307]: 'x' is a 'let', and may have been assigned already",
+        ])
+    }
+
+    @Test("code that no path reaches may assign a 'let' twice and use a local that holds no value, since no run does")
+    func unreachableCode() {
+        #expect(errors("func main() {\nlet x: Int\nlet y: Int\nreturn\nx = 1\nx = 2\nprint(y)\n}") == [])
     }
 
     @Test("a 'let' that a move left without a value was still assigned, so it can't be assigned again")

@@ -77,7 +77,7 @@ struct BodyChecker {
 
     // MARK: Statements
 
-    /// Checks `statement`, which gives a checked statement for each binding when it is a declaration.
+    /// Checks `statement`. A declaration gives a checked statement for each of its bindings.
     private mutating func check(_ statement: Stmt) -> [CheckedStmt] {
         switch statement.kind {
         case .expression(let expr):
