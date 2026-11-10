@@ -3,7 +3,7 @@ import RayoDiagnostics
 import RayoDriver
 
 /// Runs the driver over files held in memory.
-private func run(_ arguments: [String], files: [String: String] = [:]) -> Driver.Result {
+private func run(_ arguments: [String], files: [String: String] = [:]) -> RunResult {
     Driver.run(arguments) { files[$0].map { Array($0.utf8) } }
 }
 
@@ -26,7 +26,7 @@ struct CommandLineTests {
     @Test("a file that can't be read fails the run")
     func unreadable() {
         #expect(run(["check", "missing.rayo"]) ==
-            Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't read 'missing.rayo'\n"))
+            RunResult(exitCode: 1, output: "", errors: "rayoc: can't read 'missing.rayo'\n"))
     }
 
     @Test("a file that isn't UTF-8 is an error")
@@ -57,6 +57,6 @@ struct CommandLineTests {
     func unknownLinker(name: String) {
         let errors = "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
         #expect(run(["build", "--linker=\(name)", "a.rayo"], files: ["a.rayo": ""])
-            == Driver.Result(exitCode: 2, output: "", errors: errors))
+            == RunResult(exitCode: 2, output: "", errors: errors))
     }
 }

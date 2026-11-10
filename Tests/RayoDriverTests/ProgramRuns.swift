@@ -2,7 +2,7 @@ import Testing
 import RayoDriver
 
 /// Compiles `source` as `main.rayo` in the build mode `options` name, and runs it.
-func run(_ source: String, options: [String] = []) -> Driver.Result {
+func run(_ source: String, options: [String] = []) -> RunResult {
     Driver.run(["run"] + options + ["main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
 }
 
@@ -22,7 +22,7 @@ struct Panic: Equatable {
 
 /// The panic `result` reports in `path`, at any line and column; nil unless the error stream is exactly that one
 /// panic's line and the exit code is a panic's.
-func panic(in result: Driver.Result, file path: String = "main.rayo") -> Panic? {
+func panic(in result: RunResult, file path: String = "main.rayo") -> Panic? {
     // A run that exits otherwise, or writes no line about `path`, didn't panic there.
     guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix(path + ":"), result.errors.hasSuffix("\n")
     else { return nil }

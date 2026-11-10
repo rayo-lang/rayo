@@ -118,7 +118,7 @@ struct LocalTests {
 
     @Test("a compound assignment that divides by zero panics at the assignment")
     func compoundPanic() {
-        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == Driver.Result(
+        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == RunResult(
             exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:4:5: panic: division by zero\n"))
     }
 }

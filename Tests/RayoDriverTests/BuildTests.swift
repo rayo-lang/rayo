@@ -11,7 +11,7 @@ private func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
 }
 
 /// Runs an empty `main`, linked with `linkTools` in the way `options` name.
-private func runEmptyMain(options: [String] = [], linkTools: Driver.LinkTools) -> Driver.Result {
+private func runEmptyMain(options: [String] = [], linkTools: LinkTools) -> RunResult {
     Driver.run(["run"] + options + ["main.rayo"], linkTools: linkTools) { _ in Array("func main() {}".utf8) }
 }
 
@@ -42,7 +42,7 @@ struct BuildTests {
             // Build the source in the directory.
             let source = directory.appendingPathComponent("answer.rayo").path
             let result = Driver.run(["build", source]) { $0 == source ? Array("func main() { print(42) }".utf8) : nil }
-            #expect(result == Driver.Result(exitCode: 0, output: "", errors: ""))
+            #expect(result == RunResult(exitCode: 0, output: "", errors: ""))
 
             // Run the executable it wrote.
             let output = try runExecutable(directory.appendingPathComponent("answer"))
@@ -59,7 +59,7 @@ struct BuildTests {
     func nameRequired(path: String, message: String) {
         // The file can't be read, so a check that lets the path through fails without writing anything.
         #expect(Driver.run(["build", path]) { _ in nil } ==
-            Driver.Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n"))
+            RunResult(exitCode: 1, output: "", errors: "rayoc: \(message)\n"))
     }
 
     @Test("build and run need the clang of the LLVM install, and a directory named clang isn't one")
@@ -71,9 +71,9 @@ struct BuildTests {
 
             // Neither that directory nor a path with nothing at it links the program.
             for clang in [directory.appendingPathComponent("nonexistent"), decoy] {
-                let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+                let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
                 #expect(runEmptyMain(linkTools: tools) ==
-                    Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't find clang at '\(clang.path)'\n"))
+                    RunResult(exitCode: 1, output: "", errors: "rayoc: can't find clang at '\(clang.path)'\n"))
             }
         }
     }
@@ -84,9 +84,9 @@ struct BuildTests {
             // Link with a clang that writes an error and exits with 1.
             let failing = "echo 'clang: something broke' >&2\nexit 1"
             let clang = try script(failing, at: directory.appendingPathComponent("clang"))
-            let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+            let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             #expect(runEmptyMain(linkTools: tools) ==
-                Driver.Result(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
+                RunResult(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
         }
     }
 
@@ -100,15 +100,15 @@ struct BuildTests {
                         *.ll|*.bc|*.c|*.s) echo "clang: asked to compile $argument" >&2; exit 1 ;;
                     esac
                 done
-                exec '\(Driver.LinkTools.installed.clang.path)' "$@"
+                exec '\(LinkTools.installed.clang.path)' "$@"
                 """, at: directory.appendingPathComponent("clang"))
-            let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
+            let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
 
             // The program runs, which it can't if clang was asked to compile anything.
             let result = Driver.run(["run", "main.rayo"], linkTools: tools) { _ in
                 Array("func main() { print(42) }".utf8)
             }
-            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            #expect(result == RunResult(exitCode: 0, output: "42\n", errors: ""))
         }
     }
 
@@ -117,20 +117,20 @@ struct BuildTests {
     func linkers(options: [String], linksWithLLD: Bool) throws {
         try withTemporaryDirectory { directory in
             // Make an LLD that records it ran, and hands what it is given to the installed LLD.
-            let installed = Driver.LinkTools.installed
+            let installed = LinkTools.installed
             let ran = directory.appendingPathComponent("lld-ran")
             let lld = try script("touch '\(ran.path)'\nexec '\(installed.lld.path)' \"$@\"",
                                  at: directory.appendingPathComponent(installed.lld.lastPathComponent))
 
             // Build with that LLD, and with the linker that `options` name.
             let source = directory.appendingPathComponent("answer.rayo").path
-            let tools = Driver.LinkTools(clang: installed.clang, lld: lld)
+            let tools = LinkTools(clang: installed.clang, lld: lld)
             let result = Driver.run(["build"] + options + [source], linkTools: tools) {
                 $0 == source ? Array("func main() { print(42) }".utf8) : nil
             }
 
             // The executable runs, whichever linker linked it, and the LLD ran only where it is the linker.
-            #expect(result == Driver.Result(exitCode: 0, output: "", errors: ""))
+            #expect(result == RunResult(exitCode: 0, output: "", errors: ""))
             #expect(try runExecutable(directory.appendingPathComponent("answer")) == "42\n")
             #expect(FileManager.default.fileExists(atPath: ran.path) == linksWithLLD)
         }
@@ -140,10 +140,10 @@ struct BuildTests {
     func lldMissing() throws {
         // Take the installed clang, and an LLD that isn't there.
         let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
-        let tools = Driver.LinkTools(clang: Driver.LinkTools.installed.clang, lld: lld)
+        let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
 
         // A link with LLD fails, and says how to get it or do without it.
-        #expect(runEmptyMain(linkTools: tools) == Driver.Result(exitCode: 1, output: "", errors: """
+        #expect(runEmptyMain(linkTools: tools) == RunResult(exitCode: 1, output: "", errors: """
             rayoc: can't find LLD at '/nonexistent/ld.lld': install LLD 23, run 'swift package purge-cache' and \
             build rayoc again, or link with --linker=platform
 
@@ -151,7 +151,7 @@ struct BuildTests {
 
         // A link with the platform's linker needs no LLD.
         #expect(runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
-            Driver.Result(exitCode: 0, output: "", errors: ""))
+            RunResult(exitCode: 0, output: "", errors: ""))
     }
 
     @Test("the platform's linker is the platform's, not an ld first on the search path")
@@ -169,7 +169,7 @@ struct BuildTests {
             }
 
             // The program ran, linked by a linker other than that `ld`.
-            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            #expect(result == RunResult(exitCode: 0, output: "42\n", errors: ""))
             #expect(!FileManager.default.fileExists(atPath: ran.path))
         }
     }
@@ -180,11 +180,11 @@ struct BuildTests {
             // Build an empty program.
             let source = directory.appendingPathComponent("empty.rayo").path
             #expect(Driver.run(["build", source]) { _ in Array("func main() {}".utf8) } ==
-                Driver.Result(exitCode: 0, output: "", errors: ""))
+                RunResult(exitCode: 0, output: "", errors: ""))
 
             // List the symbols the executable defines and exports.
             let nm = Process()
-            nm.executableURL = Driver.LinkTools.installed.clang.deletingLastPathComponent()
+            nm.executableURL = LinkTools.installed.clang.deletingLastPathComponent()
                 .appendingPathComponent("llvm-nm")
             nm.arguments = ["--extern-only", "--defined-only", directory.appendingPathComponent("empty").path]
             let listing = Pipe()
@@ -208,7 +208,7 @@ struct BuildTests {
             let source = directory.appendingPathComponent("overflow.rayo").path
             let program = "func main() { print(9223372036854775807 + 1) }"
             #expect(Driver.run(["build", "--debug", source]) { _ in Array(program.utf8) } ==
-                Driver.Result(exitCode: 0, output: "", errors: ""))
+                RunResult(exitCode: 0, output: "", errors: ""))
 
             // Run the executable, and read what it reports.
             let executable = Process()
@@ -220,7 +220,7 @@ struct BuildTests {
             let reported = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
 
             // The overflow panics, as it does in a debug build.
-            let result = Driver.Result(exitCode: executable.terminationStatus, output: "", errors: reported)
+            let result = RunResult(exitCode: executable.terminationStatus, output: "", errors: reported)
             #expect(panic(in: result, file: source) == Panic(reason: "integer overflow"))
         }
     }
@@ -230,6 +230,6 @@ struct BuildTests {
         let result = Driver.run(["run", "main.rayo"], programOutput: .inherited) { _ in
             Array("func main() { print(1 / 0) }".utf8)
         }
-        #expect(result == Driver.Result(exitCode: Driver.panicExitCode, output: "", errors: ""))
+        #expect(result == RunResult(exitCode: Driver.panicExitCode, output: "", errors: ""))
     }
 }

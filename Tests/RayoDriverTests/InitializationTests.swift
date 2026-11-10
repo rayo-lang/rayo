@@ -29,7 +29,7 @@ struct InitializationTests {
                 return picked
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "34\n1\n2\n", errors: ""))
+        #expect(run(source, options: mode) == RunResult(exitCode: 0, output: "34\n1\n2\n", errors: ""))
     }
 
     @Test("a local declared without a value needs a type, and the error covers its name", arguments: [
@@ -124,7 +124,7 @@ struct InitializationTests {
                 return x
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "5\n0\n", errors: ""))
+        #expect(run(source) == RunResult(exitCode: 0, output: "5\n0\n", errors: ""))
     }
 
     @Test("a loop may run no pass, so a local it assigns isn't initialized on every path after it", arguments: [
@@ -180,7 +180,7 @@ struct InitializationTests {
                 }
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "10\n20\n30\n", errors: ""))
+        #expect(run(source, options: mode) == RunResult(exitCode: 0, output: "10\n20\n30\n", errors: ""))
 
         // A `var` declared in the body holds no value at the start of a pass, whatever the last pass assigned it.
         #expect(errorLines(inMain: "var i = 0\nwhile i < 3 {\ni += 1\nvar x: Int\nprint(x)\nx = copy i\n}") == [

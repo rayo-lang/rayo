@@ -4,7 +4,7 @@ import RayoDriver
 struct IntegerTests {
     @Test("main prints the value of an integer expression")
     func printsArithmetic() {
-        #expect(run("func main() { print(1 + 2 * 3) }") == Driver.Result(exitCode: 0, output: "7\n", errors: ""))
+        #expect(run("func main() { print(1 + 2 * 3) }") == RunResult(exitCode: 0, output: "7\n", errors: ""))
     }
 
     @Test("'/' rounds toward zero, '%' takes the dividend's sign, and Int.min % -1 is 0", arguments: [
@@ -18,7 +18,7 @@ struct IntegerTests {
     func division(expression: String, value: String) {
         for mode in [["--debug"], ["--release"]] {
             #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                Driver.Result(exitCode: 0, output: value + "\n", errors: ""))
+                RunResult(exitCode: 0, output: value + "\n", errors: ""))
         }
     }
 
@@ -53,7 +53,7 @@ struct IntegerTests {
     func overflowWraps(expression: String, value: String) {
         for mode in [[], ["--release"]] {
             #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                Driver.Result(exitCode: 0, output: value + "\n", errors: ""))
+                RunResult(exitCode: 0, output: value + "\n", errors: ""))
         }
     }
 
@@ -73,12 +73,12 @@ struct IntegerTests {
             }
             """
         #expect(run(source, options: ["--release"]) ==
-            Driver.Result(exitCode: 0, output: "-9141782528521893711\n", errors: ""))
+            RunResult(exitCode: 0, output: "-9141782528521893711\n", errors: ""))
     }
 
     @Test("a panic names the operation that fails, not the expression around it")
     func nestedPanic() {
-        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == Driver.Result(
+        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == RunResult(
             exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:1:25: panic: integer overflow\n"))
     }
 }

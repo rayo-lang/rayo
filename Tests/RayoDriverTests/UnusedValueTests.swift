@@ -41,7 +41,7 @@ struct UnusedValueTests {
                 return copy x
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n", errors: ""))
+        #expect(run(source) == RunResult(exitCode: 0, output: "1\n2\n", errors: ""))
     }
 
     @Test("a declaration that binds no name is an error, which covers the '_'", arguments: [
