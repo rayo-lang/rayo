@@ -101,15 +101,23 @@ jobs:
       - name: Fetch the LLVM packages
         if: steps.llvm-packages.outputs.cache-hit != 'true'
         run: |
-          # Fetch Ubuntu's packages from Azure's mirror of the archive rather than archive.ubuntu.com, which has
-          # stalled for minutes at a time from GitHub's runners. A server that stalls fails the step within
-          # minutes rather than holding the job until it times out.
-          sed -i -E 's#https?://(archive|security)\.ubuntu\.com#http://azure.archive.ubuntu.com#' \
+          # Ubuntu's archive and each of its mirrors have each gone unreachable from GitHub's runners for minutes at
+          # a time, so apt takes Ubuntu's packages from a list of mirrors and moves to the next when one fails. A
+          # server that stalls fails over within a minute rather than holding the job until it times out.
+          printf '%s\n' http://azure.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu \
+            https://mirrors.edge.kernel.org/ubuntu > /etc/apt/ubuntu-mirrors.txt
+          sed -i -E 's#^URIs: .*ubuntu\.com.*#URIs: mirror+file:/etc/apt/ubuntu-mirrors.txt#' \
             /etc/apt/sources.list.d/ubuntu.sources
           printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
             > /etc/apt/apt.conf.d/80-rayo-ci
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl gnupg
+
+          # Fetching apt.llvm.org's key takes curl, gpg and the CA certificates; install only what the image lacks.
+          tools=""
+          command -v curl > /dev/null || tools="$tools curl"
+          command -v gpg > /dev/null || tools="$tools gnupg"
+          [ -s /etc/ssl/certs/ca-certificates.crt ] || tools="$tools ca-certificates"
+          if [ -n "$tools" ]; then apt-get install -y --no-install-recommends $tools; fi
 
           # apt trusts every key in the keyring, so it gets the one key with the published fingerprint and no other
           # key the download might hold.
