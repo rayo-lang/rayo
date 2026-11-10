@@ -48,6 +48,11 @@ public struct IRLocal: Sendable {
         self.name = name
         self.isLet = isLet
     }
+
+    /// A temporary of `type`, which lowering adds to hold a value it computes.
+    public static func temporary(_ type: RayoType) -> IRLocal {
+        IRLocal(type: type, name: nil, isLet: false)
+    }
 }
 
 public struct BlockID: Hashable, Sendable {

@@ -7,9 +7,7 @@ public enum Lowering {
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
-        var builder = FunctionBuilder(locals: function.locals.map {
-            IRLocal(type: $0.type, name: $0.name, isLet: $0.kind == .let)
-        })
+        var builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
         builder.lower(function.body)
         // The checker has made every path of a function with a result end in a 'return'.
         builder.end(with: function.result == .void ? .return(nil) : .unreachable)
@@ -80,8 +78,7 @@ private struct FunctionBuilder {
         case .expression(let expr):
             emit(rvalue(of: expr), into: nil, range: expr.range)
         case .binding(let place, let value):
-            emit(.declare(place.local))
-            if let value { emit(rvalue(of: value), into: Place(place), range: value.range) }
+            lowerDeclaration(of: place, givenBy: value)
         case .assign(let place, let value):
             emit(rvalue(of: value), into: Place(place), range: value.range)
         case .compoundAssign(let place, let op, let value):
@@ -98,6 +95,13 @@ private struct FunctionBuilder {
         case .returnStmt(let value):
             lowerReturn(value)
         }
+    }
+
+    /// Starts the life of `place`'s local, and stores `value` in it when there is one.
+    private mutating func lowerDeclaration(of place: CheckedPlace, givenBy value: CheckedExpr?) {
+        emit(.declare(place.local))
+        guard let value else { return }
+        emit(rvalue(of: value), into: Place(place), range: value.range)
     }
 
     /// Leaves the function with `value`. A Void value is computed for what it does, and leaves with no result.
@@ -202,7 +206,7 @@ private struct FunctionBuilder {
 
     /// A new temporary of `type`, which holds the value of the expression at `range`.
     private mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
-        locals.append(IRLocal(type: type, name: nil, isLet: false))
+        locals.append(.temporary(type))
         return Place(local: LocalID(index: locals.count - 1), range: range)
     }
 }
@@ -210,5 +214,11 @@ private struct FunctionBuilder {
 private extension Place {
     init(_ place: CheckedPlace) {
         self.init(local: place.local, range: place.range)
+    }
+}
+
+private extension IRLocal {
+    init(_ local: CheckedLocal) {
+        self.init(type: local.type, name: local.name, isLet: local.kind == .let)
     }
 }
