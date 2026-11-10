@@ -112,8 +112,10 @@ jobs:
             "lld-$LLVM_MAJOR_VERSION=$version"
           rm -rf "$LLVM_PACKAGES/partial" "$LLVM_PACKAGES/lock"
       - name: Install LLVM
-        # The packages and their dependencies install together, so dpkg needs no package index and no network.
-        run: dpkg -i "$LLVM_PACKAGES"/*.deb
+        # The cache holds each package LLVM needs that the container lacks, so apt installs them from their files
+        # alone, with no package index and no network. apt rather than dpkg, since only apt orders the packages so
+        # that each one's pre-dependencies are configured before it is unpacked.
+        run: apt-get install -y --no-install-recommends --no-download "$LLVM_PACKAGES"/*.deb
 
       - uses: ./.github/actions/swift-test
         with:
