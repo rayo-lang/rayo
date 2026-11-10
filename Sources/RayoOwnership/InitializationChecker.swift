@@ -50,9 +50,9 @@ private struct FunctionErrors {
 
     mutating func use(_ place: Place, holding state: LocalState) {
         guard !state.isInitialized else { return }
-        // Lowering writes a temporary before it reads it and never moves one, so no temporary is used without a
-        // value.
-        guard case .source(let name, _, _) = function.locals[place.local.index] else { return }
+        guard case .source(let name, _, _) = function.locals[place.local.index] else {
+            preconditionFailure("lowering writes a temporary before it reads it, and never moves one")
+        }
         let code = useError(naming: name, holding: state)
         keep(Diagnostic(code, at: place.range), for: Cause(local: place.local, moves: state.moves))
     }
