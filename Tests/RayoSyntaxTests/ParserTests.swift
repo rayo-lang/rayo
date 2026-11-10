@@ -68,10 +68,26 @@ struct ParserErrorTests {
         #expect(errors("func f(a b c: Int) {}") == [.missingParameterType(found: .token("c"))])
     }
 
+    @Test("a declaration binds one name or several, separated by commas, each with or without a type and a value",
+          arguments: [
+        "let x", "var x: Int", "let x = 1", "let lo: Int, hi: Int", "var a = 1, b: Bool, c: Int = 2, d",
+    ])
+    func declarations(declaration: String) {
+        #expect(errors("func f() {\n    \(declaration)\n    \(declaration); print(1)\n}") == [])
+    }
+
+    @Test("a declaration's bindings are each checked for a name", arguments: [
+        ("func f() { let x, }", ErrorCode.missingBindingName(found: .token("}"))),
+        ("func f() { var x = 1, = 2 }", .missingBindingName(found: .token("="))),
+        ("func f() { let x = }", .missingExpression(found: .token("}"))),
+    ])
+    func malformedBindings(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
     @Test("malformed declarations and statements", arguments: [
         ("let x = 1", ErrorCode.missingFunc(found: .token("let"))),
         ("func f() -> Int", .missingBlock(found: .endOfFile)),
-        ("func f() { let x }", .missingBindingValue(found: .token("}"))),
         ("func f() { copy }", .missingCopiedName(found: .token("}"))),
         ("func f() { _ = = 1 }", .missingExpression(found: .token("="))),
     ])

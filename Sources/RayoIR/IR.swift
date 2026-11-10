@@ -40,10 +40,13 @@ public struct IRLocal: Sendable {
     public var type: RayoType
     /// The name the source declares the local with, or nil for a temporary that lowering adds.
     public var name: String?
+    /// Whether the source declares the local with `let`, which assigns it at most once on each path.
+    public var isLet: Bool
 
-    public init(type: RayoType, name: String?) {
+    public init(type: RayoType, name: String?, isLet: Bool) {
         self.type = type
         self.name = name
+        self.isLet = isLet
     }
 }
 
@@ -65,18 +68,13 @@ public struct BasicBlock: Sendable {
     }
 }
 
-/// Computes `value`, and stores it in `destination` when there is one.
-public struct Statement: Sendable {
-    public var destination: LocalID?
-    public var value: Rvalue
-    /// The source of the operation, where it reports a panic.
-    public var range: SourceRange
-
-    public init(destination: LocalID?, value: Rvalue, range: SourceRange) {
-        self.destination = destination
-        self.value = value
-        self.range = range
-    }
+public enum Statement: Sendable {
+    /// Computes `value`, and stores it in `destination` when there is one. `range` is the source of the
+    /// operation, where it reports a panic.
+    case compute(destination: Place?, value: Rvalue, range: SourceRange)
+    /// Starts the life of a local where the source declares it. The local holds no value until a statement
+    /// stores one, whatever an earlier pass of a loop stored in it.
+    case declare(LocalID)
 }
 
 public enum Constant: Sendable {
@@ -99,7 +97,8 @@ public enum Operand: Sendable {
     case move(Place)
 }
 
-/// A local that an operand names, and where the source names it, which is where an error about the use points.
+/// A local that an operand or a statement's destination names, and where the source names it, which is where an
+/// error about it points.
 public struct Place: Sendable {
     public var local: LocalID
     public var range: SourceRange

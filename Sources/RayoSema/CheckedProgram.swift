@@ -60,8 +60,9 @@ public struct CheckedLocal: Sendable {
 
 /// What declares a local, which decides whether it may change.
 public enum LocalKind: Sendable {
+    /// A local assigned at most once on each path, its declaration's value included.
     case `let`
-    /// The one kind of local that may be assigned after its declaration.
+    /// A local assigned any number of times.
     case `var`
     /// A borrowed parameter, which holds the caller's argument.
     case parameter
@@ -76,8 +77,8 @@ public struct CheckedPlace: Sendable {
 public enum CheckedStmt: Sendable {
     /// Computes the value and drops it.
     case expression(CheckedExpr)
-    /// A declaration, which gives the new local its first value.
-    case binding(LocalID, CheckedExpr)
+    /// A declaration, which gives the new local its first value, or leaves it without one until it is assigned.
+    case binding(CheckedPlace, CheckedExpr?)
     case assign(CheckedPlace, CheckedExpr)
     case compoundAssign(CheckedPlace, BinaryOperator, CheckedExpr)
     case ifStmt(condition: CheckedExpr, then: [CheckedStmt], otherwise: [CheckedStmt])

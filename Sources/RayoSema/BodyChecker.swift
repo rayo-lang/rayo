@@ -59,7 +59,7 @@ struct BodyChecker {
     mutating func check(_ block: Block) -> [CheckedStmt] {
         scopes.append([:])
         defer { scopes.removeLast() }
-        return block.statements.compactMap { check($0) }
+        return block.statements.flatMap { check($0) }
     }
 
     /// Looks `name` up in the body's locals and parameters, innermost block first, then among the module's
@@ -77,37 +77,38 @@ struct BodyChecker {
 
     // MARK: Statements
 
-    private mutating func check(_ statement: Stmt) -> CheckedStmt? {
+    /// Checks `statement`. A declaration gives a checked statement for each of its bindings.
+    private mutating func check(_ statement: Stmt) -> [CheckedStmt] {
         switch statement.kind {
         case .expression(let expr):
-            return checkUnused(expr).map { .expression($0) }
-        case .binding(let binding):
-            return check(binding)
+            return checkUnused(expr).map { [.expression($0)] } ?? []
+        case .declaration(let kind, let bindings):
+            return bindings.compactMap { check($0, declaredWith: kind) }
         case .drop(let value):
-            return checkTaken(value).map { .expression($0) }
+            return checkTaken(value).map { [.expression($0)] } ?? []
         case .assign(let target, let op, let value):
-            return assign(value, op: op, to: target, in: statement.range)
+            return assign(value, op: op, to: target, in: statement.range).map { [$0] } ?? []
         case .ifStmt(let condition, let then, let otherwise):
             let condition = check(condition, expecting: .bool)
             let then = check(then)
             let otherwise = otherwise.map { check($0) } ?? []
-            return condition.map { .ifStmt(condition: $0, then: then, otherwise: otherwise) }
+            return condition.map { [.ifStmt(condition: $0, then: then, otherwise: otherwise)] } ?? []
         case .whileStmt(let condition, let body):
             let condition = check(condition, expecting: .bool)
             loopDepth += 1
             let body = check(body)
             loopDepth -= 1
-            return condition.map { .whileStmt(condition: $0, body: body) }
+            return condition.map { [.whileStmt(condition: $0, body: body)] } ?? []
         case .breakStmt:
-            return isInsideLoop("break", at: statement.range) ? .breakStmt : nil
+            return isInsideLoop("break", at: statement.range) ? [.breakStmt] : []
         case .continueStmt:
-            return isInsideLoop("continue", at: statement.range) ? .continueStmt : nil
+            return isInsideLoop("continue", at: statement.range) ? [.continueStmt] : []
         case .returnStmt(let value?):
-            return returned(value).map { .returnStmt($0) }
+            return returned(value).map { [.returnStmt($0)] } ?? []
         case .returnStmt(nil):
-            guard let result, result != .void else { return .returnStmt(nil) }
+            guard let result, result != .void else { return [.returnStmt(nil)] }
             errors.report(.missingReturnValue(type: "\(result)"), at: statement.range)
-            return nil
+            return []
         }
     }
 
@@ -129,31 +130,58 @@ struct BodyChecker {
     }
 
     /// Checks `binding`, which declares a local.
-    private mutating func check(_ binding: Binding) -> CheckedStmt? {
+    private mutating func check(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
+        guard let valueExpr = binding.value else { return checkUnassigned(binding, declaredWith: kind) }
         // Checked before the name, so a declaration of `_` still reports its value's errors.
-        let value = value(of: binding)
-        guard binding.name != "_" else {
-            errors.report(.underscoreDeclared, at: binding.nameRange)
-            return nil
-        }
+        let value = value(valueExpr, givenBy: binding)
+        guard bindsName(binding) else { return nil }
         guard let value else { return declareFailed(binding.name, at: binding.nameRange) }
-        if value.type == .void {
-            errors.report(.voidLocal, at: value.range)
-            return declareFailed(binding.name, at: binding.nameRange)
+        return declare(binding, declaredWith: kind, type: value.type, typeGivenAt: value.range).map {
+            .binding($0, value)
         }
-        let kind: LocalKind = binding.kind == .var ? .var : .let
-        guard let local = declare(binding.name, type: value.type, kind: kind, at: binding.nameRange) else {
-            return nil
-        }
-        return .binding(local, value)
     }
 
-    /// Checks the value `binding` gives, against its type annotation when it has one.
-    private mutating func value(of binding: Binding) -> CheckedExpr? {
+    /// Checks `binding`, which declares a local without a value, so its type annotation gives the local's type.
+    private mutating func checkUnassigned(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
+        // Resolved before the name, so a declaration of `_` still reports its type's errors.
+        let type = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
+        guard bindsName(binding) else { return nil }
+        guard let annotation = binding.type else {
+            errors.report(.missingLocalType(name: binding.name), at: binding.nameRange)
+            return declareFailed(binding.name, at: binding.nameRange)
+        }
+        guard let type else { return declareFailed(binding.name, at: binding.nameRange) }
+        return declare(binding, declaredWith: kind, type: type, typeGivenAt: annotation.range).map { .binding($0, nil) }
+    }
+
+    /// Whether `binding` binds a name, reporting it when it binds `_`.
+    private mutating func bindsName(_ binding: Binding) -> Bool {
+        guard binding.name == "_" else { return true }
+        errors.report(.underscoreDeclared, at: binding.nameRange)
+        return false
+    }
+
+    /// Checks `expr`, the value `binding` gives, against the binding's type annotation when it has one.
+    private mutating func value(_ expr: Expr, givenBy binding: Binding) -> CheckedExpr? {
         let declared = binding.type.flatMap { declarations.resolve($0, reporting: errors) }
-        let value = checkTaken(binding.value)
+        let value = checkTaken(expr)
         guard let value, binding.type == nil || declared != nil else { return nil }
         return expect(value, declared ?? value.type) ? value : nil
+    }
+
+    /// Declares the local that `binding` names, of `type`, which the source gives at `typeRange`. A local can't
+    /// have type Void.
+    private mutating func declare(_ binding: Binding, declaredWith kind: BindingKind, type: RayoType,
+                                  typeGivenAt typeRange: SourceRange) -> CheckedPlace? {
+        guard type != .void else {
+            errors.report(.voidLocal, at: typeRange)
+            _ = declareFailed(binding.name, at: binding.nameRange)
+            return nil
+        }
+        let localKind: LocalKind = kind == .var ? .var : .let
+        return declare(binding.name, type: type, kind: localKind, at: binding.nameRange).map {
+            CheckedPlace(local: $0, range: binding.nameRange)
+        }
     }
 
     /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
@@ -196,7 +224,7 @@ struct BodyChecker {
     private mutating func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr,
                                  in range: SourceRange) -> CheckedStmt? {
         let local = assignedLocal(target)
-        let canChange = local.map { isVar($0, at: target.range) } ?? false
+        let canChange = local.map { isAssignable($0, at: target.range) } ?? false
         let value = op.binary == nil ? checkTaken(valueExpr) : check(valueExpr)
         guard let local, canChange, let value else { return nil }
         let place = CheckedPlace(local: local, range: target.range)
@@ -207,17 +235,11 @@ struct BodyChecker {
         return .compoundAssign(place, binaryOp, value)
     }
 
-    /// Whether `local` is a `var`, reporting it when it isn't.
-    private mutating func isVar(_ local: LocalID, at range: SourceRange) -> Bool {
-        let name = locals[local.index].name
-        switch locals[local.index].kind {
-        case .var:
-            return true
-        case .let:
-            errors.report(.assignToLet(name: name), at: range)
-        case .parameter:
-            errors.report(.assignToParameter(name: name), at: range)
-        }
+    /// Whether `local` may be assigned, reporting it when it can't. A `let` may be, though only once on each path,
+    /// which control flow decides.
+    private mutating func isAssignable(_ local: LocalID, at range: SourceRange) -> Bool {
+        guard locals[local.index].kind == .parameter else { return true }
+        errors.report(.assignToParameter(name: locals[local.index].name), at: range)
         return false
     }
 

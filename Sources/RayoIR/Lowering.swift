@@ -7,7 +7,9 @@ public enum Lowering {
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
-        var builder = FunctionBuilder(locals: function.locals.map { IRLocal(type: $0.type, name: $0.name) })
+        var builder = FunctionBuilder(locals: function.locals.map {
+            IRLocal(type: $0.type, name: $0.name, isLet: $0.kind == .let)
+        })
         builder.lower(function.body)
         // The checker has made every path of a function with a result end in a 'return'.
         builder.end(with: function.result == .void ? .return(nil) : .unreachable)
@@ -59,8 +61,12 @@ private struct FunctionBuilder {
         current = next
     }
 
-    private mutating func emit(_ value: Rvalue, into destination: LocalID?, range: SourceRange) {
-        blocks[current.index].statements.append(Statement(destination: destination, value: value, range: range))
+    private mutating func emit(_ value: Rvalue, into destination: Place?, range: SourceRange) {
+        emit(.compute(destination: destination, value: value, range: range))
+    }
+
+    private mutating func emit(_ statement: Statement) {
+        blocks[current.index].statements.append(statement)
     }
 
     // MARK: Statements
@@ -73,14 +79,14 @@ private struct FunctionBuilder {
         switch statement {
         case .expression(let expr):
             emit(rvalue(of: expr), into: nil, range: expr.range)
-        case .binding(let local, let value):
-            emit(rvalue(of: value), into: local, range: value.range)
+        case .binding(let place, let value):
+            emit(.declare(place.local))
+            if let value { emit(rvalue(of: value), into: Place(place), range: value.range) }
         case .assign(let place, let value):
-            emit(rvalue(of: value), into: place.local, range: value.range)
+            emit(rvalue(of: value), into: Place(place), range: value.range)
         case .compoundAssign(let place, let op, let value):
             let value = operand(of: value)
-            let current = Operand.read(Place(local: place.local, range: place.range))
-            emit(.binary(op, current, value), into: place.local, range: place.range)
+            emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
         case .ifStmt(let condition, let then, let otherwise):
             lowerIf(condition, then, otherwise)
         case .whileStmt(let condition, let body):
@@ -170,9 +176,9 @@ private struct FunctionBuilder {
         case .binary(.or, let left, let right):
             return shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
         default:
-            let temporary = newTemporary(expr.type)
+            let temporary = newTemporary(expr.type, at: expr.range)
             emit(rvalue(of: expr), into: temporary, range: expr.range)
-            return .read(Place(local: temporary, range: expr.range))
+            return .read(temporary)
         }
     }
 
@@ -180,8 +186,8 @@ private struct FunctionBuilder {
     /// `right` is evaluated only otherwise.
     private mutating func shortCircuit(_ left: CheckedExpr, _ right: CheckedExpr, decidedWhenLeftIs decidingValue: Bool,
                                        range: SourceRange) -> Operand {
-        let result = newTemporary(.bool)
-        let resultValue = Operand.read(Place(local: result, range: range))
+        let result = newTemporary(.bool, at: range)
+        let resultValue = Operand.read(result)
         emit(.use(operand(of: left)), into: result, range: range)
         let evaluateRight = newBlock()
         let join = newBlock()
@@ -194,8 +200,15 @@ private struct FunctionBuilder {
         return resultValue
     }
 
-    private mutating func newTemporary(_ type: RayoType) -> LocalID {
-        locals.append(IRLocal(type: type, name: nil))
-        return LocalID(index: locals.count - 1)
+    /// A new temporary of `type`, which holds the value of the expression at `range`.
+    private mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
+        locals.append(IRLocal(type: type, name: nil, isLet: false))
+        return Place(local: LocalID(index: locals.count - 1), range: range)
+    }
+}
+
+private extension Place {
+    init(_ place: CheckedPlace) {
+        self.init(local: place.local, range: place.range)
     }
 }

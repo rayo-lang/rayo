@@ -59,8 +59,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(113, error: "expected a name to bind, found {found}")
     case missingBindingName(found: FoundToken)
 
-    @Code(114, error: "expected '=' and a value, found {found}")
-    case missingBindingValue(found: FoundToken)
+    // 114 is unused, and stays so.
 
     @Code(115, error: "expected an expression, found {found}")
     case missingExpression(found: FoundToken)
@@ -142,8 +141,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 220 is unused, and stays so.
 
-    @Code(221, error: "'{name}' is a 'let', so it can't change")
-    case assignToLet(name: String)
+    // 221 is unused, and stays so.
 
     @Code(222, error: "'{name}' is a function, so it can't change")
     case assignToFunction(name: String)
@@ -187,6 +185,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(235, error: "the {type} value isn't used")
     case unusedValue(type: String)
 
+    @Code(236, error: "'{name}' needs a type or a value")
+    case missingLocalType(name: String)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
@@ -197,6 +198,18 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(303, error: "'{name}' may have been moved")
     case usedAfterMaybeMove(name: String)
+
+    @Code(304, error: "'{name}' isn't initialized")
+    case usedUninitialized(name: String)
+
+    @Code(305, error: "'{name}' isn't initialized on every path")
+    case usedMaybeUninitialized(name: String)
+
+    @Code(306, error: "'{name}' is a 'let', so it can't be assigned again")
+    case letAssignedTwice(name: String)
+
+    @Code(307, error: "'{name}' is a 'let', and may have been assigned already")
+    case letMaybeAssignedTwice(name: String)
 }
 
 extension ErrorCode {

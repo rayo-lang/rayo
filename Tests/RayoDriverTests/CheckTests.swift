@@ -88,7 +88,6 @@ struct ProgramTests {
           arguments: [
         ("{ print(1) }", ErrorCode.missingExpression(found: .token("{"))),
         ("else { }", .missingExpression(found: .token("else"))),
-        ("let a = 1, b = 2", .unendedStatement(found: .token(","))),
         ("if let x = y {}", .missingExpression(found: .token("let"))),
         ("if true, false {}", .missingBlock(found: .token(","))),
     ])
