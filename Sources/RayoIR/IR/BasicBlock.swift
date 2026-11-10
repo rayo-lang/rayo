@@ -1,4 +1,4 @@
-public struct BasicBlock: Sendable {
+public struct BasicBlock: Equatable, Sendable {
     public var statements: [Statement]
     public var terminator: Terminator
 

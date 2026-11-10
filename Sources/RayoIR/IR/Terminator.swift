@@ -1,4 +1,4 @@
-public enum Terminator: Sendable {
+public enum Terminator: Equatable, Sendable {
     case goto(BlockID)
     /// Continues in `then` when the Bool `condition` is true, and in `otherwise` when it is false.
     case branch(Operand, then: BlockID, otherwise: BlockID)
