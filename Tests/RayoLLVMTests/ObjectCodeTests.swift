@@ -45,12 +45,21 @@ struct ObjectCodeTests {
                 BasicBlock(statements: [
                     statement(storingIn: 0, .use(.constant(.int(42)))),
                     statement(storingIn: 1, .use(taken)),
-                    Statement(destination: nil, value: .call(.printInt, arguments: [read(1)]), range: nowhere),
+                    .compute(destination: nil, value: .call(.printInt, arguments: [read(1)]), range: nowhere),
                 ], terminator: .return(nil)),
             ])
         }
         #expect(try compile(handingOn(move(0)), debug: debug) ==
             compile(handingOn(read(0)), debug: debug))
+    }
+
+    @Test("a declaration compiles to no code, in debug and in release", arguments: [true, false])
+    func declarationIsNoCode(debug: Bool) throws {
+        let declared = function(locals: [.int], [
+            BasicBlock(statements: [.declare(LocalID(index: 0))], terminator: .return(nil)),
+        ])
+        let empty = function(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
+        #expect(try compile(declared, debug: debug) == compile(empty, debug: debug))
     }
 
     @Test("a debug build checks integer arithmetic for overflow, and a release build emits no check")

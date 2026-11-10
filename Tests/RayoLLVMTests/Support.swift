@@ -13,7 +13,7 @@ func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
 /// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
 func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
     let main = IRFunction(name: "main()", parameterCount: 0, result: .void,
-                          locals: locals.map { IRLocal(type: $0, name: nil) }, blocks: blocks)
+                          locals: locals.map { IRLocal(type: $0, name: nil, isLet: false) }, blocks: blocks)
     return IRProgram(functions: [main], main: FunctionID(index: 0))
 }
 
@@ -32,13 +32,13 @@ func printing(_ value: Rvalue) -> IRProgram {
     function(locals: [.int], [
         BasicBlock(statements: [
             statement(storingIn: 0, value),
-            Statement(destination: nil, value: .call(.printInt, arguments: [read(0)]), range: nowhere),
+            .compute(destination: nil, value: .call(.printInt, arguments: [read(0)]), range: nowhere),
         ], terminator: .return(nil)),
     ])
 }
 
 func statement(storingIn local: Int, _ value: Rvalue) -> Statement {
-    Statement(destination: LocalID(index: local), value: value, range: nowhere)
+    .compute(destination: Place(local: LocalID(index: local), range: nowhere), value: value, range: nowhere)
 }
 
 /// The range of an operation no source file wrote.

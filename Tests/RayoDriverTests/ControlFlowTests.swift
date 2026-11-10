@@ -23,15 +23,14 @@ struct LocalTests {
     }
 
     @Test("locals are checked", arguments: [
-        ("let x = 1\nx = 2", ErrorCode.assignToLet(name: "x")),
-        ("let x = 1\nx += 2", .assignToLet(name: "x")),
+        ("let x = 1\nx = 2", ErrorCode.letAssignedTwice(name: "x")),
+        ("let x = 1\nx += 2", .letAssignedTwice(name: "x")),
         ("let x: Bool = 1", .typeMismatch(expected: "Bool", found: "Int")),
         ("var x = 1\nx = true", .typeMismatch(expected: "Int", found: "Bool")),
         ("var x = true\nx += 1", .operandTypes(op: "+=", needs: "Int", left: "Bool", right: "Int")),
         ("1 = 2", .assignToNonLocal),
         ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
         ("let x = print(1)", .voidLocal),
-        ("let x: Int", .missingBindingValue(found: .newline)),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
@@ -98,8 +97,8 @@ struct LocalTests {
 
     @Test("an assignment's target and value are checked even when the other fails", arguments: [
         ("nope = 1 + true", [ErrorCode.notDeclared(name: "nope"), intAndBool]),
-        ("let x = 1\nx = undefined", [.assignToLet(name: "x"), .notDeclared(name: "undefined")]),
-        ("let x = 1\nx += 1 + true", [.assignToLet(name: "x"), intAndBool]),
+        ("main = undefined", [.assignToFunction(name: "main"), .notDeclared(name: "undefined")]),
+        ("print += 1 + true", [.assignToFunction(name: "print"), intAndBool]),
         ("let k = 1\nk(1 + true)", [.notAFunction(name: "k"), intAndBool]),
         ("nope(2 + false)", [.notDeclared(name: "nope"), intAndBool]),
         ("let w: Int8 = 1 + true", [.notAType(name: "Int8"), intAndBool]),

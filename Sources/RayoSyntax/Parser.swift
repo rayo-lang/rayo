@@ -266,9 +266,9 @@ public struct Parser {
         let start = current.range
         let kind: StmtKind
         if consume(.let) {
-            kind = .binding(try parseBinding(.let))
+            kind = .declaration(.let, try parseBindings())
         } else if consume(.var) {
-            kind = .binding(try parseBinding(.var))
+            kind = .declaration(.var, try parseBindings())
         } else if consume(.if) {
             kind = try parseIf()
         } else if consume(.while) {
@@ -317,13 +317,19 @@ public struct Parser {
         return .ifStmt(condition: condition, then: then, otherwise: otherwise)
     }
 
-    /// After the `let` or `var`: `identifier (':' type)? '=' expression`.
-    private mutating func parseBinding(_ kind: BindingKind) throws(Failure) -> Binding {
+    /// After the `let` or `var`: `binding (',' binding)*`.
+    private mutating func parseBindings() throws(Failure) -> [Binding] {
+        var bindings = [try parseBinding()]
+        while consume(.comma) { bindings.append(try parseBinding()) }
+        return bindings
+    }
+
+    /// `identifier (':' type)? ('=' expression)?`.
+    private mutating func parseBinding() throws(Failure) -> Binding {
         let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingBindingName)
-        var type: TypeExpr?
-        if consume(.colon) { type = try parseType() }
-        guard consume(.assign) else { throw fail(ErrorCode.missingBindingValue) }
-        return Binding(kind: kind, name: name, nameRange: nameRange, type: type, value: try parseExpression())
+        let type = consume(.colon) ? try parseType() : nil
+        let value = consume(.assign) ? try parseExpression() : nil
+        return Binding(name: name, nameRange: nameRange, type: type, value: value)
     }
 
     // MARK: Expressions

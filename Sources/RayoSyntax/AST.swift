@@ -72,12 +72,13 @@ public enum BindingKind: Sendable, Hashable {
     case `var`
 }
 
+/// `name: Type = value`, where the type and the value are optional.
 public struct Binding: Sendable {
-    public var kind: BindingKind
     public var name: String
     public var nameRange: SourceRange
     public var type: TypeExpr?
-    public var value: Expr
+    /// The local's first value, or nil when the local holds none until it is assigned.
+    public var value: Expr?
 }
 
 public enum AssignOperator: String, Sendable, Hashable {
@@ -107,7 +108,8 @@ public struct Stmt: Sendable {
 }
 
 public indirect enum StmtKind: Sendable {
-    case binding(Binding)
+    /// `let` or `var` and its bindings, separated by commas.
+    case declaration(BindingKind, [Binding])
     case assign(target: Expr, op: AssignOperator, value: Expr)
     /// `_ = value`, which drops a value on purpose.
     case drop(Expr)
