@@ -29,7 +29,7 @@ struct FunctionEmitter {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
         LLVMPositionBuilderAtEnd(builder, appendBlock(named: "entry"))
         slots = allocateSlots()
-        storeArguments(in: slots)
+        storeArguments()
 
         // Make an LLVM block for each IR block, and go on from the entry block to the first.
         blocks = function.blocks.indices.map { appendBlock(named: "bb\($0)") }
@@ -43,21 +43,32 @@ struct FunctionEmitter {
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
     private func allocateSlots() -> [LLVMValueRef] {
-        function.locals.map { LLVMBuildAlloca(builder, llvmType($0.type), "") }
+        function.locals.indices.map { LLVMBuildAlloca(builder, slotType(of: LocalID(index: $0)), "") }
     }
 
-    /// Stores each argument in its parameter's slot among `slots`.
-    private func storeArguments(in slots: [LLVMValueRef]) {
+    /// Stores each argument in its parameter's slot.
+    private func storeArguments() {
         // The parameters are the first locals, in order.
         for index in 0..<function.parameterCount {
-            LLVMBuildStore(builder, LLVMGetParam(llvmFunction, UInt32(index)), slots[index])
+            store(LLVMGetParam(llvmFunction, UInt32(index)), in: LocalID(index: index))
         }
     }
 
-    /// Lowers a local's `type` to the LLVM type of its stack slot.
-    private func llvmType(_ type: RayoType) -> LLVMTypeRef {
+    /// Lowers `local`'s type to the LLVM type of its stack slot.
+    private func slotType(of local: LocalID) -> LLVMTypeRef {
+        let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
         return program.llvmType(type)
+    }
+
+    /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
+    private func load(_ local: LocalID) -> LLVMValueRef {
+        LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], "")
+    }
+
+    /// Emits the instruction that stores `value` in `local`'s slot.
+    private func store(_ value: LLVMValueRef, in local: LocalID) {
+        LLVMBuildStore(builder, value, slots[local.index])
     }
 
     private func appendBlock(named name: String) -> LLVMBasicBlockRef {
@@ -92,7 +103,7 @@ struct FunctionEmitter {
         guard let destination else { return }
         // Only a call that returns nothing gives no value.
         guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
-        LLVMBuildStore(builder, value, slots[destination.local.index])
+        store(value, in: destination.local)
     }
 
     private func emit(_ terminator: Terminator) {
@@ -131,8 +142,7 @@ struct FunctionEmitter {
 
         // A read or a move loads the local from its slot; a move leaves the slot as it is, unread until assigned again.
         case .read(let place), .move(let place):
-            let local = place.local.index
-            return LLVMBuildLoad2(builder, llvmType(function.locals[local].type), slots[local], "")
+            return load(place.local)
         }
     }
 
