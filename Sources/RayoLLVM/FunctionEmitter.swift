@@ -22,6 +22,7 @@ struct FunctionEmitter {
 
     private var module: ModuleBuilder { program.module }
     private var builder: LLVMBuilderRef { program.module.builder }
+    private var types: LLVMTypes { program.types }
     private var operators: OperatorEmitter { OperatorEmitter(program: program, llvmFunction: llvmFunction) }
 
     mutating func emit() {
@@ -50,7 +51,7 @@ struct FunctionEmitter {
     /// The type of a local's stack slot.
     private func llvmType(_ type: RayoType) -> LLVMTypeRef {
         precondition(type != .void, "lowering makes no local of type Void")
-        return program.llvmType(type)
+        return types.llvmType(type)
     }
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
