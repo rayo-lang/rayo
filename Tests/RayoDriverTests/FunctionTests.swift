@@ -32,14 +32,13 @@ struct FunctionTests {
         #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n42\n", errors: ""))
     }
 
-    @Test("what a function returns has its result type, and a local's value is returned with 'copy'", arguments: [
+    @Test("what a function returns has its result type", arguments: [
         ("func f() -> Int { return true }", [ErrorCode.typeMismatch(expected: "Int", found: "Bool")]),
         ("func f() -> Bool { 1 }", [.typeMismatch(expected: "Bool", found: "Int")]),
         ("func f() -> Int { print(1) }", [.typeMismatch(expected: "Int", found: "Void")]),
         ("func f() -> Int { return }", [.missingReturnValue(type: "Int")]),
         ("func f() { return 1 }", [.typeMismatch(expected: "Void", found: "Int")]),
         ("func f() -> Void { return 1 }", [.typeMismatch(expected: "Void", found: "Int")]),
-        ("func f() -> Int {\n    let x = 1\n    return x\n}", [.takenWithoutCopy(name: "x")]),
         ("func f() -> Int8 { return true }", [.notAType(name: "Int8")]),
         ("func main() -> Int { return 1 }", [.mainReturnsNonVoid]),
     ])

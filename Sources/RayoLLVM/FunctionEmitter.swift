@@ -27,7 +27,7 @@ struct FunctionEmitter {
 
     mutating func emit() {
         LLVMPositionBuilderAtEnd(builder, appendBlock(named: "entry"))
-        slots = function.locals.map { LLVMBuildAlloca(builder, llvmType($0), "") }
+        slots = function.locals.map { LLVMBuildAlloca(builder, llvmType($0.type), "") }
         for index in 0..<function.parameterCount {
             LLVMBuildStore(builder, LLVMGetParam(llvmFunction, UInt32(index)), slots[index])
         }
@@ -78,8 +78,10 @@ struct FunctionEmitter {
             return module.constant(value)
         case .constant(.bool(let value)):
             return module.constant(value)
-        case .local(let local):
-            return LLVMBuildLoad2(builder, llvmType(function.locals[local.index]), slots[local.index], "")
+        // A move leaves the slot as it was: the program reads it again only once it is assigned again.
+        case .read(let place), .move(let place):
+            let local = place.local.index
+            return LLVMBuildLoad2(builder, llvmType(function.locals[local].type), slots[local], "")
         }
     }
 

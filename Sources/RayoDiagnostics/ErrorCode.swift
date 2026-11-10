@@ -140,8 +140,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(219, error: "a local can't have type Void")
     case voidLocal
 
-    @Code(220, error: "the value of '{name}' is taken with 'copy {name}'")
-    case takenWithoutCopy(name: String)
+    // 220 is unused, and stays so.
 
     @Code(221, error: "'{name}' is a 'let', so it can't change")
     case assignToLet(name: String)
@@ -187,6 +186,17 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(235, error: "the {type} value isn't used")
     case unusedValue(type: String)
+
+    // MARK: Ownership
+
+    @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
+    case moveFromParameter(name: String)
+
+    @Code(302, error: "'{name}' was moved")
+    case usedAfterMove(name: String)
+
+    @Code(303, error: "'{name}' may have been moved")
+    case usedAfterMaybeMove(name: String)
 }
 
 extension ErrorCode {

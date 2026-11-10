@@ -10,10 +10,21 @@ func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
     try LLVMEmitter.objectCode(for: program, sourcePath: "main.rayo", checksOverflow: debug, optimizes: !debug)
 }
 
-/// A program whose `main` holds `locals` and is made of `blocks`.
+/// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
 func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
-    let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals, blocks: blocks)
+    let main = IRFunction(name: "main()", parameterCount: 0, result: .void,
+                          locals: locals.map { IRLocal(type: $0, name: nil) }, blocks: blocks)
     return IRProgram(functions: [main], main: FunctionID(index: 0))
+}
+
+/// An operand that reads the local `index`.
+func read(_ index: Int) -> Operand {
+    .read(Place(local: LocalID(index: index), range: nowhere))
+}
+
+/// An operand that moves the local `index`'s value out of it.
+func move(_ index: Int) -> Operand {
+    .move(Place(local: LocalID(index: index), range: nowhere))
 }
 
 /// A program that prints what `value` computes.
@@ -21,7 +32,7 @@ func printing(_ value: Rvalue) -> IRProgram {
     function(locals: [.int], [
         BasicBlock(statements: [
             statement(storingIn: 0, value),
-            Statement(destination: nil, value: .call(.printInt, arguments: [.local(LocalID(index: 0))]), range: nowhere),
+            Statement(destination: nil, value: .call(.printInt, arguments: [read(0)]), range: nowhere),
         ], terminator: .return(nil)),
     ])
 }

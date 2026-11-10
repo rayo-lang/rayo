@@ -55,9 +55,9 @@ struct UnusedValueTests {
         #expect(panic(in: run("func main() {\n\(body)\n}", options: mode)) == Panic(reason: reason))
     }
 
-    @Test("a dropped value is checked, a local's value is taken with 'copy', and '_' declares nothing", arguments: [
-        ("let x = 1\n_ = x", [ErrorCode.takenWithoutCopy(name: "x")]),
-        ("let x = 1\nlet _ = x", [.takenWithoutCopy(name: "x")]),
+    @Test("a dropped value is checked, a local's value is moved, and '_' declares nothing", arguments: [
+        ("let x = 1\n_ = x", [ErrorCode]()),
+        ("let x = 1\nlet _ = x", []),
         ("let _: Bool = 1", [.typeMismatch(expected: "Bool", found: "Int")]),
         ("let _: Int8 = 1", [.notAType(name: "Int8")]),
         ("_ = nope", [.notDeclared(name: "nope")]),

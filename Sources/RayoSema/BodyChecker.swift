@@ -152,15 +152,16 @@ struct BodyChecker {
         return expect(value, declared ?? value.type) ? value : nil
     }
 
-    /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which takes a local's
-    /// value only with `copy`.
+    /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
+    /// value out of it. A borrowed parameter can't be moved from, since its caller still owns the value.
     private mutating func checkTaken(_ expr: Expr) -> CheckedExpr? {
         guard let value = check(expr) else { return nil }
-        if case .name(let name) = expr.kind, case .local = value.kind {
-            errors.report(.takenWithoutCopy(name: name), at: expr.range)
+        guard case .name(let name) = expr.kind, case .local(let local) = value.kind else { return value }
+        if locals[local.index].kind == .parameter {
+            errors.report(.moveFromParameter(name: name), at: expr.range)
             return nil
         }
-        return value
+        return CheckedExpr(kind: .move(local), type: value.type, range: value.range)
     }
 
     private mutating func declare(_ name: String, type: RayoType, kind: LocalKind, at range: SourceRange) -> LocalID? {

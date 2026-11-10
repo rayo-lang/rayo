@@ -2,6 +2,7 @@ import Foundation
 import RayoDiagnostics
 import RayoIR
 import RayoLLVM
+import RayoOwnership
 import RayoRuntime
 import RayoSema
 import RayoSyntax
@@ -141,9 +142,12 @@ public enum Driver {
 
             let checked = Checker.check(file)
             guard let program = checked.program else { return failure(checked.diagnostics, in: path) }
+            let lowered = Lowering.lower(program)
+            let moveErrors = MoveChecker.check(lowered)
+            if !moveErrors.isEmpty { return failure(moveErrors, in: path) }
             if command == .check { return Result(exitCode: 0, output: "", errors: "") }
 
-            let objectCode = try LLVMEmitter.objectCode(for: Lowering.lower(program), sourcePath: path,
+            let objectCode = try LLVMEmitter.objectCode(for: lowered, sourcePath: path,
                                                         checksOverflow: invocation.mode == .debug,
                                                         optimizes: invocation.mode == .release)
             let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
