@@ -30,10 +30,7 @@ public struct Parser {
     public static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
         var parser = Parser(bytes)
         let file = parser.parseFile()
-        let ordered = parser.diagnostics.enumerated().sorted { a, b in
-            (a.element.range.start.offset, a.offset) < (b.element.range.start.offset, b.offset)
-        }
-        return (file, ordered.map(\.element))
+        return (file, parser.diagnostics.inSourceOrder)
     }
 
     // MARK: Tokens
@@ -280,14 +277,20 @@ public struct Parser {
             kind = .continueStmt
         } else if consume(.return) {
             kind = .returnStmt(atStatementEnd ? nil : try parseExpression())
-        } else if current.kind == .identifier("_"), peek().isPunct(.assign) {
-            advance()
-            advance()
+        } else if consumeDrop() {
             kind = .drop(try parseExpression())
         } else {
             kind = try parseExpressionStatement()
         }
         return Stmt(kind: kind, range: range(from: start))
+    }
+
+    /// Consumes `_ =`, which starts a statement that drops a value, when it comes next.
+    private mutating func consumeDrop() -> Bool {
+        guard current.kind == .identifier("_"), peek().isPunct(.assign) else { return false }
+        advance()
+        advance()
+        return true
     }
 
     /// An expression, or an assignment to one.

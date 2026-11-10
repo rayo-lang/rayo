@@ -137,17 +137,11 @@ public enum Driver {
             let executable = command == .build ? try executable(building: path) : nil
             guard let source = readFile(path) else { throw Failure("can't read '\(path)'") }
 
-            let (file, diagnostics) = Parser.parse(source)
-            if !diagnostics.isEmpty { return failure(diagnostics, in: path) }
-
-            let checked = Checker.check(file)
-            guard let program = checked.program else { return failure(checked.diagnostics, in: path) }
-            let lowered = Lowering.lower(program)
-            let ownershipErrors = InitializationChecker.check(lowered)
-            if !ownershipErrors.isEmpty { return failure(ownershipErrors, in: path) }
+            let (program, diagnostics) = checkAndLower(source)
+            guard let program else { return failure(diagnostics, in: path) }
             if command == .check { return Result(exitCode: 0, output: "", errors: "") }
 
-            let objectCode = try LLVMEmitter.objectCode(for: lowered, sourcePath: path,
+            let objectCode = try LLVMEmitter.objectCode(for: program, sourcePath: path,
                                                         checksOverflow: invocation.mode == .debug,
                                                         optimizes: invocation.mode == .release)
             let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
@@ -163,6 +157,20 @@ public enum Driver {
         } catch {
             return failure(error.localizedDescription)
         }
+    }
+
+    /// Parses and checks `source`, lowers it, and checks the lowered program's ownership. Returns the program, or
+    /// nil with the diagnostics of the first of those steps that rejects it.
+    private static func checkAndLower(_ source: [UInt8]) -> (program: IRProgram?, diagnostics: [Diagnostic]) {
+        let (file, diagnostics) = Parser.parse(source)
+        guard diagnostics.isEmpty else { return (nil, diagnostics) }
+
+        let checked = Checker.check(file)
+        guard let program = checked.program else { return (nil, checked.diagnostics) }
+
+        let lowered = Lowering.lower(program)
+        let ownershipErrors = InitializationChecker.check(lowered)
+        return ownershipErrors.isEmpty ? (lowered, []) : (nil, ownershipErrors)
     }
 
     /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.

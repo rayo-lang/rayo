@@ -8,7 +8,7 @@ public enum Checker {
     public static func check(_ file: SourceFile) -> (program: CheckedProgram?, diagnostics: [Diagnostic]) {
         let checker = FileChecker(file)
         let program = checker.check()
-        return (checker.errors.list.isEmpty ? program : nil, checker.errors.inSourceOrder)
+        return (checker.errors.list.isEmpty ? program : nil, checker.errors.list.inSourceOrder)
     }
 }
 

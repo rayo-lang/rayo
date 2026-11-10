@@ -36,17 +36,17 @@ public struct IRFunction: Sendable {
     }
 }
 
-public struct IRLocal: Sendable {
-    public var type: RayoType
-    /// The name the source declares the local with, or nil for a temporary that lowering adds.
-    public var name: String?
-    /// Whether the source declares the local with `let`, which assigns it at most once on each path.
-    public var isLet: Bool
+public enum IRLocal: Sendable {
+    /// A local or a parameter that the source declares, with the name and the kind it declares it with.
+    case source(name: String, kind: LocalKind, type: RayoType)
+    /// A temporary that lowering adds to hold a value it computes.
+    case temporary(RayoType)
 
-    public init(type: RayoType, name: String?, isLet: Bool) {
-        self.type = type
-        self.name = name
-        self.isLet = isLet
+    public var type: RayoType {
+        switch self {
+        case .source(_, _, let type), .temporary(let type):
+            return type
+        }
     }
 }
 

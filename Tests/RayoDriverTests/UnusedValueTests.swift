@@ -48,10 +48,7 @@ struct UnusedValueTests {
         "let _ = 1", "var _ = 1", "let _: Int = 1", "var _: Int = 1",
     ])
     func declaredUnderscore(body: String) {
-        let source = "func main() {\n\(body)\n}"
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.underscoreDeclared])
-        #expect(coveredText(reported, in: source) == ["_"])
+        #expect(codesAndCoverage(inMain: body) == ([.underscoreDeclared], ["_"]))
     }
 
     @Test("the value of a declaration that binds no name is still checked, and '_' declares nothing", arguments: [

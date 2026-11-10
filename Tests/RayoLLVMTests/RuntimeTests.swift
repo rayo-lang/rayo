@@ -24,11 +24,10 @@ struct RuntimeTests {
         let answer = IRFunction(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
             BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
         ])
-        let main = IRFunction(name: "main()", parameterCount: 0, result: .void,
-                              locals: [IRLocal(type: .int, name: nil, isLet: false)], blocks: [
+        let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: [.temporary(.int)], blocks: [
             BasicBlock(statements: [
                 statement(storingIn: 0, .call(.function(FunctionID(index: 1)), arguments: [])),
-                .compute(destination: nil, value: .call(.printInt, arguments: [read(0)]), range: nowhere),
+                statement(printing: read(0)),
             ], terminator: .return(nil)),
         ])
         let objectCode = try compile(IRProgram(functions: [main, answer], main: FunctionID(index: 0)), debug: true)

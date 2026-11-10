@@ -106,8 +106,7 @@ struct InitializationCheckerTests {
 
     @Test("the uses that the same moves reach are reported once, at the first of them in the source")
     func sameMovesReportedOnce() {
-        let readsTwice = Statement.compute(destination: Place(local: LocalID(index: y), range: at(0)),
-                                           value: .binary(.add, read(x, at: 3), read(x, at: 2)), range: at(0))
+        let readsTwice = store(.binary(.add, read(x, at: 3), read(x, at: 2)), in: y)
         let blocks = [
             BasicBlock(statements: [
                 store(1, in: x), store(move(x, at: 1), in: y), readsTwice, printing(read(x, at: 4)),
@@ -238,19 +237,18 @@ struct InitializationCheckerTests {
     }
 }
 
-/// The errors the checker reports in a function made of `blocks`, whose locals are `x`, `y` and `k`, the first
-/// `parameterCount` of them its parameters.
+/// The errors the checker reports in the function that `function(_:parameterCount:)` makes of `blocks`.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
-    InitializationChecker.check(IRProgram(functions: [function(blocks, parameterCount: parameterCount)],
-                                          main: FunctionID(index: 0)))
+    let program = IRProgram(functions: [function(blocks, parameterCount: parameterCount)], main: FunctionID(index: 0))
+    return InitializationChecker.check(program)
 }
 
 /// A function made of `blocks`, whose locals are `x`, `y` and `k`, the first `parameterCount` of them its
 /// parameters.
 private func function(_ blocks: [BasicBlock], parameterCount: Int = 0) -> IRFunction {
     let locals = [
-        IRLocal(type: .int, name: "x", isLet: false), IRLocal(type: .int, name: "y", isLet: false),
-        IRLocal(type: .int, name: "k", isLet: true),
+        IRLocal.source(name: "x", kind: .var, type: .int), .source(name: "y", kind: .var, type: .int),
+        .source(name: "k", kind: .let, type: .int),
     ]
     return IRFunction(name: "f()", parameterCount: parameterCount, result: .void, locals: locals, blocks: blocks)
 }
@@ -279,9 +277,13 @@ private func move(_ local: Int, at offset: Int) -> Operand {
     .move(Place(local: LocalID(index: local), range: at(offset)))
 }
 
-/// Stores `operand` in `local`, which the source names at `offset`.
+/// Stores what `value` computes in `local`, which the source names at `offset`.
+private func store(_ value: Rvalue, in local: Int, at offset: Int = 0) -> Statement {
+    .compute(destination: Place(local: LocalID(index: local), range: at(offset)), value: value, range: at(0))
+}
+
 private func store(_ operand: Operand, in local: Int, at offset: Int = 0) -> Statement {
-    .compute(destination: Place(local: LocalID(index: local), range: at(offset)), value: .use(operand), range: at(0))
+    store(.use(operand), in: local, at: offset)
 }
 
 private func store(_ value: Int64, in local: Int, at offset: Int = 0) -> Statement {

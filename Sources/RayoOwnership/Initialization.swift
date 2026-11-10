@@ -39,6 +39,9 @@ struct LocalState: Equatable {
 
 /// What each local of a function holds at a point.
 struct InitializationState: Equatable {
+    /// Called with a place that a block uses or stores to, and its local's state just before the block does.
+    typealias PlaceVisitor = (Place, LocalState) -> Void
+
     /// Indexed by `LocalID`.
     private var locals: [LocalState]
 
@@ -55,25 +58,33 @@ struct InitializationState: Equatable {
     }
 
     /// Applies what `block` does to the locals. It hands `use` each operand that names a local, and `store` each
-    /// statement's destination, with that local's state just before the block evaluates the operand or stores
-    /// the value.
-    mutating func apply(_ block: BasicBlock, use: (Place, LocalState) -> Void = { _, _ in },
-                        store: (Place, LocalState) -> Void = { _, _ in }) {
+    /// statement's destination.
+    mutating func apply(_ block: BasicBlock, use: PlaceVisitor = { _, _ in }, store: PlaceVisitor = { _, _ in }) {
         for statement in block.statements {
-            switch statement {
-            case .compute(let destination, let value, _):
-                value.operands.forEach { apply($0, use: use) }
-                guard let destination else { continue }
-                store(destination, locals[destination.local.index])
-                locals[destination.local.index] = .initialized
-            case .declare(let local):
-                locals[local.index] = .declared
-            }
+            apply(statement, use: use, store: store)
         }
-        block.terminator.operand.map { apply($0, use: use) }
+        if let operand = block.terminator.operand {
+            apply(operand, use: use)
+        }
     }
 
-    private mutating func apply(_ operand: Operand, use: (Place, LocalState) -> Void) {
+    private mutating func apply(_ statement: Statement, use: PlaceVisitor, store: PlaceVisitor) {
+        switch statement {
+        case .compute(let destination, let value, _):
+            value.operands.forEach { apply($0, use: use) }
+            if let destination { assign(destination, store: store) }
+        case .declare(let local):
+            locals[local.index] = .declared
+        }
+    }
+
+    /// Hands `store` the state of `destination`'s local, then gives the local a value.
+    private mutating func assign(_ destination: Place, store: PlaceVisitor) {
+        store(destination, locals[destination.local.index])
+        locals[destination.local.index] = .initialized
+    }
+
+    private mutating func apply(_ operand: Operand, use: PlaceVisitor) {
         switch operand {
         case .constant:
             break
@@ -92,26 +103,33 @@ struct InitializationAnalysis {
     /// entry reaches.
     private(set) var entryStates: [InitializationState?]
 
+    /// A state that reaches the entry of `block`, from the function's entry or along an edge.
+    private typealias Arrival = (block: BlockID, state: InitializationState)
+
     init(_ function: IRFunction) {
         entryStates = Array(repeating: nil, count: function.blocks.count)
-        entryStates[0] = InitializationState(enteringFunction: function)
-        var pending = [BlockID(index: 0)]
-        while let block = pending.popLast() {
-            // A block is pending only once a state has been joined into its entry.
-            var state = entryStates[block.index]!
-            let basicBlock = function.blocks[block.index]
-            state.apply(basicBlock)
-            for successor in basicBlock.terminator.successors {
-                if join(state, intoEntryOf: successor) { pending.append(successor) }
-            }
+        var pending: [Arrival] = [(BlockID(index: 0), InitializationState(enteringFunction: function))]
+        while let arrival = pending.popLast() {
+            pending += flow(arrival, through: function)
         }
     }
 
-    /// Joins `state` into the state on entry to `block`, and returns whether that changed it.
-    private mutating func join(_ state: InitializationState, intoEntryOf block: BlockID) -> Bool {
+    /// Joins `arrival`'s state into the state on entry to its block. When that changes it, returns what the block
+    /// hands each of its successors; otherwise none.
+    private mutating func flow(_ arrival: Arrival, through function: IRFunction) -> [Arrival] {
+        guard let entryState = join(arrival.state, intoEntryOf: arrival.block) else { return [] }
+        let block = function.blocks[arrival.block.index]
+        var exitState = entryState
+        exitState.apply(block)
+        return block.terminator.successors.map { ($0, exitState) }
+    }
+
+    /// Joins `state` into the state on entry to `block`, and returns the joined state, or nil when that changed
+    /// nothing.
+    private mutating func join(_ state: InitializationState, intoEntryOf block: BlockID) -> InitializationState? {
         let joined = entryStates[block.index].map { $0.joined(with: state) } ?? state
-        guard joined != entryStates[block.index] else { return false }
+        guard joined != entryStates[block.index] else { return nil }
         entryStates[block.index] = joined
-        return true
+        return joined
     }
 }

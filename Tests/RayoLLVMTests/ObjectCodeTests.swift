@@ -45,7 +45,7 @@ struct ObjectCodeTests {
                 BasicBlock(statements: [
                     statement(storingIn: 0, .use(.constant(.int(42)))),
                     statement(storingIn: 1, .use(taken)),
-                    .compute(destination: nil, value: .call(.printInt, arguments: [read(1)]), range: nowhere),
+                    statement(printing: read(1)),
                 ], terminator: .return(nil)),
             ])
         }

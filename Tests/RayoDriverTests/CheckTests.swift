@@ -21,6 +21,18 @@ func diagnostics(_ source: String) -> [Diagnostic] {
     return result.diagnostics
 }
 
+/// The errors that `body`, as `main`'s body, reports, each as its position, code and message.
+func errorLines(inMain body: String) -> [String] {
+    diagnostics("func main() {\n\(body)\n}").map(\.description)
+}
+
+/// The codes of the errors that `body`, as `main`'s body, reports, and the text of `main.rayo` each covers.
+func codesAndCoverage(inMain body: String) -> (codes: [ErrorCode], covered: [String]) {
+    let source = "func main() {\n\(body)\n}"
+    let reported = diagnostics(source)
+    return (reported.map(\.code), coveredText(reported, in: source))
+}
+
 struct ProgramTests {
     @Test("a program that checks reports nothing", arguments: [
         "func main() { print(-9223372036854775808) }",
