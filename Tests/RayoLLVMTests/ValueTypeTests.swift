@@ -1,0 +1,25 @@
+import CLLVM
+@testable import RayoLLVM
+import RayoSema
+import Testing
+
+@Suite("The LLVM types of values")
+struct ValueTypeTests {
+    @Test(arguments: [(RayoType.int, UInt32(64)), (RayoType.bool, UInt32(1))])
+    func `an Int is held in a 64-bit integer, and a Bool in a 1-bit one`(
+        type: RayoType, width: UInt32,
+    ) throws(LLVMError) {
+        let llvmType = try types().llvmType(type)
+        #expect(LLVMGetTypeKind(llvmType) == LLVMIntegerTypeKind)
+        #expect(LLVMGetIntTypeWidth(llvmType) == width)
+    }
+
+    @Test func `a function that returns nothing returns void`() throws(LLVMError) {
+        #expect(LLVMGetTypeKind(try types().llvmType(.void)) == LLVMVoidTypeKind)
+    }
+
+    /// The LLVM types of a new module's values.
+    private func types() throws(LLVMError) -> LLVMTypes {
+        LLVMTypes(in: ModuleBuilder(named: "types", for: try TargetMachine(optimizes: false)))
+    }
+}

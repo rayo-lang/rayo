@@ -26,8 +26,8 @@ struct OperatorModule {
     init(for build: Build) throws {
         target = try TargetMachine(optimizes: build == .release)
         module = ModuleBuilder(named: "main.rayo", for: target)
-        program = ProgramEmitter(module: module, runtime: try Runtime(in: module), types: LLVMTypes(in: module),
-                                 sourcePath: "main.rayo", checksOverflow: build == .debug)
+        program = ProgramEmitter(module: module, runtime: try Runtime(in: module), sourcePath: "main.rayo",
+                                 checksOverflow: build == .debug)
     }
 
     /// The text of the module's IR.

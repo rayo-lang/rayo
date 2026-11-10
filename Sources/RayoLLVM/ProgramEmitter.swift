@@ -6,10 +6,17 @@ import RayoSema
 struct ProgramEmitter {
     let module: ModuleBuilder
     let runtime: Runtime
-    /// The LLVM types of the program's values.
     let types: LLVMTypes
     let sourcePath: String
     let checksOverflow: Bool
+
+    init(module: ModuleBuilder, runtime: Runtime, sourcePath: String, checksOverflow: Bool) {
+        self.module = module
+        self.runtime = runtime
+        types = LLVMTypes(in: module)
+        self.sourcePath = sourcePath
+        self.checksOverflow = checksOverflow
+    }
 
     /// Defines the program's functions in the module.
     func emit(_ program: IRProgram) {
