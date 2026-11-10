@@ -57,7 +57,7 @@ rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebin
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
 condition     = expression
-              | 'owned'? ('let' | 'var') pattern '=' expression        (* its names are new, and 'let x = x' is an error: write 'let x' (01) *)
+              | 'owned'? ('let' | 'var') pattern '=' expression        (* the pattern binds a new name; 'let x = x' is an error: write 'let x' (01) *)
               | ('let' | 'var') identifier                             (* no '=': 'if let x' is 'if let x = x', 'if var x' is 'if var x = &x' (01) *)
               | 'case' pattern '=' expression ;
 when-expr     = 'when' expression? '{' when-arm+ '}' ;
@@ -133,7 +133,7 @@ trailing-closure = closure ;
 
 ```ebnf
 pattern       = '_' | identifier | tuple-pattern | enum-pattern | expression-pattern
-              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p) *)
+              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); each 'let' or 'var' binds a name, so 'let _' and 'let _ as E' are errors (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
 enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identifier ':')? pattern)* ','? ')')? ;
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)
