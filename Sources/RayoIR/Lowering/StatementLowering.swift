@@ -1,32 +1,39 @@
 import RayoSema
 import RayoSyntax
 
-/// Lowers a function's statements into its control-flow graph, the branches and loops among them included.
-struct StatementLowering {
+/// Lowers a function's statements into its control-flow graph, the branches and loops among them included, and
+/// makes the IR function of them.
+struct StatementLowering: ~Copyable {
     /// The blocks that a `continue` and a `break` in a loop's body go to.
     private struct Loop {
         var header: BlockID
         var exit: BlockID
     }
 
-    private let builder: FunctionBuilder
-    private let expressions: ExpressionLowering
+    private var builder: FunctionBuilder
     private var loops: [Loop] = []
 
-    init(builder: FunctionBuilder) {
+    init(builder: consuming FunctionBuilder) {
         self.builder = builder
-        expressions = ExpressionLowering(builder: builder)
     }
 
     mutating func lower(_ statements: [CheckedStmt]) {
         for statement in statements { lower(statement) }
     }
 
+    /// The IR function of `checked`, whose body is the statements lowered so far.
+    consuming func function(lowering checked: CheckedFunction) -> IRFunction {
+        // End the last block, which a run reaches only in a Void function: the checker makes others return first.
+        builder.end(with: checked.result == .void ? .return(nil) : .unreachable)
+        return builder.function(lowering: checked)
+    }
+
     private mutating func lower(_ statement: CheckedStmt) {
         switch statement {
         // An expression statement computes its value and drops it.
         case .expression(let expr):
-            builder.emit(expressions.rvalue(of: expr), into: nil, range: expr.range)
+            let value = rvalue(of: expr)
+            builder.emit(value, into: nil, range: expr.range)
 
         // A declaration starts its local's life.
         case .binding(let place, let value):
@@ -34,7 +41,8 @@ struct StatementLowering {
 
         // An assignment computes its value into the local.
         case .assign(let place, let value):
-            builder.emit(expressions.rvalue(of: value), into: Place(place), range: value.range)
+            let rvalue = rvalue(of: value)
+            builder.emit(rvalue, into: Place(place), range: value.range)
 
         // A compound assignment applies its operator to the local and the value.
         case .compoundAssign(let place, let op, let value):
@@ -63,29 +71,31 @@ struct StatementLowering {
     }
 
     /// Lowers `place op= value` as `place = place op value`.
-    private func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
-        let value = expressions.operand(of: value)
+    private mutating func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
+        let value = operand(of: value)
         builder.emit(.binary(op, .read(Place(place)), value), into: Place(place), range: place.range)
     }
 
     /// Starts the life of `place`'s local, and stores `value` in it when there is one.
-    private func lowerDeclaration(of place: CheckedPlace, givenBy value: CheckedExpr?) {
+    private mutating func lowerDeclaration(of place: CheckedPlace, givenBy value: CheckedExpr?) {
         builder.emit(.declare(place.local))
         // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        builder.emit(expressions.rvalue(of: value), into: Place(place), range: value.range)
+        let rvalue = rvalue(of: value)
+        builder.emit(rvalue, into: Place(place), range: value.range)
     }
 
     /// Leaves the function with `value`.
-    private func lowerReturn(_ value: CheckedExpr?) {
+    private mutating func lowerReturn(_ value: CheckedExpr?) {
         let result = value.flatMap { returnedOperand(of: $0) }
         endJumping(with: .return(result))
     }
 
     /// Ends the current block with `terminator`, which jumps away from it, and goes on in a block of its own that no
     /// path reaches, where the code after the jump is lowered.
-    private func endJumping(with terminator: Terminator) {
-        builder.end(with: terminator, continuingIn: builder.newBlock())
+    private mutating func endJumping(with terminator: Terminator) {
+        let unreached = builder.newBlock()
+        builder.end(with: terminator, continuingIn: unreached)
     }
 
     /// The loop that a `break` or a `continue` belongs to, which the checker allows only inside one.
@@ -95,16 +105,17 @@ struct StatementLowering {
 
     /// Lowers `value` to the operand a `return` leaves with, or, for a Void value, computes it for what it does
     /// and returns nil.
-    private func returnedOperand(of value: CheckedExpr) -> Operand? {
+    private mutating func returnedOperand(of value: CheckedExpr) -> Operand? {
         // A value of any other type is the result.
-        guard value.type == .void else { return expressions.operand(of: value) }
-        builder.emit(expressions.rvalue(of: value), into: nil, range: value.range)
+        guard value.type == .void else { return operand(of: value) }
+        let rvalue = rvalue(of: value)
+        builder.emit(rvalue, into: nil, range: value.range)
         return nil
     }
 
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: [CheckedStmt], _ otherwise: [CheckedStmt]) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
-        let condition = expressions.operand(of: condition)
+        let condition = operand(of: condition)
         let thenBlock = builder.newBlock()
         let elseBlock = builder.newBlock()
         let join = builder.newBlock()
@@ -125,7 +136,8 @@ struct StatementLowering {
 
         // Enter the loop at its header, which tests the condition and goes on to the body or the exit.
         builder.end(with: .goto(header), continuingIn: header)
-        builder.end(with: headerTerminator(testing: condition, body: bodyBlock, exit: exit), continuingIn: bodyBlock)
+        let test = headerTerminator(testing: condition, body: bodyBlock, exit: exit)
+        builder.end(with: test, continuingIn: bodyBlock)
 
         // Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
         loops.append(Loop(header: header, exit: exit))
@@ -138,10 +150,20 @@ struct StatementLowering {
 
     /// Lowers `condition` into the current block, and returns the terminator that goes on from a loop's header to
     /// `body` when the condition holds and to `exit` when it doesn't.
-    private func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
+    private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
         // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
-        return .branch(expressions.operand(of: condition), then: body, otherwise: exit)
+        return .branch(operand(of: condition), then: body, otherwise: exit)
+    }
+
+    /// Lowers `expr` to the operation that computes its value, into the function this lowering builds.
+    private mutating func rvalue(of expr: CheckedExpr) -> Rvalue {
+        ExpressionLowering.rvalue(of: expr, in: &builder)
+    }
+
+    /// Lowers `expr` to an operand that holds its value, into the function this lowering builds.
+    private mutating func operand(of expr: CheckedExpr) -> Operand {
+        ExpressionLowering.operand(of: expr, in: &builder)
     }
 }
 
