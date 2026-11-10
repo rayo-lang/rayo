@@ -12,7 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SWIFT_VERSION: "6.4"
+  # The Swift release every platform tests with. The Linux job's container names it too, since a container's image
+  # can't be read from the environment.
+  SWIFT_RELEASE: "6.4"
   LLVM_MAJOR_VERSION: 23
 
 jobs:
@@ -115,7 +117,9 @@ jobs:
         # The cache holds each package LLVM needs that the container lacks, so apt installs them from their files
         # alone, with no package index and no network. apt rather than dpkg, since only apt orders the packages so
         # that each one's pre-dependencies are configured before it is unpacked.
-        run: apt-get install -y --no-install-recommends --no-download "$LLVM_PACKAGES"/*.deb
+        run: |
+          apt-get install -y --no-install-recommends --no-download -o Dir::Cache::Archives="$LLVM_PACKAGES" \
+            "$LLVM_PACKAGES"/*.deb
 
       - uses: ./.github/actions/swift-test
         with:
@@ -135,16 +139,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Select the Xcode that holds Swift ${{ env.SWIFT_VERSION }}
+      - name: Select the Xcode that holds Swift ${{ env.SWIFT_RELEASE }}
         run: |
           for xcode in /Applications/Xcode*.app; do
             developer="$xcode/Contents/Developer"
-            if DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null | grep -q "Swift version $SWIFT_VERSION"; then
+            if DEVELOPER_DIR="$developer" xcrun swift --version 2>/dev/null | grep -q "Swift version $SWIFT_RELEASE"; then
               echo "DEVELOPER_DIR=$developer" >> "$GITHUB_ENV"
               exit 0
             fi
           done
-          echo "::error::no Xcode on this runner holds Swift $SWIFT_VERSION"
+          echo "::error::no Xcode on this runner holds Swift $SWIFT_RELEASE"
           exit 1
 
       # Homebrew keeps each bottle it downloads, so a cache keyed on the versions it would install holds those

@@ -16,8 +16,8 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: .build
-        key: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
-        restore-keys: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-
+        key: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_RELEASE }}-${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
+        restore-keys: build-${{ inputs.platform }}-${{ runner.arch }}-swift-${{ env.SWIFT_RELEASE }}-
     - name: Test
       shell: bash
       run: swift test
