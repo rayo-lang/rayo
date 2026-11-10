@@ -35,7 +35,7 @@ struct MoveTests {
         ("let x = 1\nlet y = x\nprint(copy x + 1)", "4:7: error[E0302]: 'x' was moved"),
     ])
     func useAfterMove(body: String, expected: String) {
-        #expect(reported(body) == [expected])
+        #expect(errorLines(inMain: body) == [expected])
     }
 
     @Test("a 'return' moves its local, and a use after it on no path is no error", arguments: [
@@ -59,7 +59,7 @@ struct MoveTests {
 
     @Test("a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it")
     func loops() {
-        #expect(reported("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}") == [
+        #expect(errorLines(inMain: "var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\n}") == [
             "6:9: error[E0303]: 'x' may have been moved",
         ])
         #expect(output("var i = 0\nvar x = 1\nwhile i < 2 {\ni += 1\nlet y = x\nprint(y)\nx = 2\n}") == "1\n2\n")
@@ -90,7 +90,7 @@ struct MoveTests {
             x = 5
             }
             """
-        #expect(reported(body) == ["6:7: error[E0303]: 'x' may have been moved"])
+        #expect(errorLines(inMain: body) == ["6:7: error[E0303]: 'x' may have been moved"])
         #expect(output(body.replacingOccurrences(of: "continue\n", with: "")) == "1\n5\n5\n")
     }
 
@@ -100,12 +100,12 @@ struct MoveTests {
         ("var x = 1\nif true { let y = x }\nprint(x)\nlet z = x", "4:7: error[E0303]: 'x' may have been moved"),
     ])
     func reportedOnce(body: String, expected: String) {
-        #expect(reported(body) == [expected])
+        #expect(errorLines(inMain: body) == [expected])
     }
 
     @Test("a use that other moves reach is another error")
     func reportedAgain() {
-        #expect(reported("var x = 1\nlet y = x\nprint(x)\nx = 2\nlet z = x\nprint(x)") == [
+        #expect(errorLines(inMain: "var x = 1\nlet y = x\nprint(x)\nx = 2\nlet z = x\nprint(x)") == [
             "4:7: error[E0302]: 'x' was moved", "7:7: error[E0302]: 'x' was moved",
         ])
     }
