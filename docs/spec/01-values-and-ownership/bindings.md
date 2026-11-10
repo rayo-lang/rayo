@@ -103,11 +103,11 @@ when &shape {
 
 ## Bindings with no name
 
-**Every `let` and every `var` binds at least one name, or it is a compile error.** The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. The rule counts the names that each one covers:
+**Every binding that a `let` or `var` makes binds at least one name, or it is a compile error.** The keyword says how its names hold what they bind: whether they may change it, and in a condition or a pattern whether they look at it or change it in place ([above](#conditions-and-patterns)). With no name, it says nothing. Each of these is one binding:
 
-- **In a declaration, each binding binds a name**, so `let lo = 0, _ = f()` is an error, though `lo` is bound.
-- **In a condition, the pattern after `let` or `var` binds a name.**
-- **In a pattern, each `let` or `var` part binds a name**, so `.pair(let a, let _)` is an error, though `a` is bound. A type pattern binds a name too, so `let _ as E` is an error.
+- **Each binding of a declaration**, so `let lo = 0, _ = f()` is an error, though `lo` is bound.
+- **The pattern after `let` or `var` in a condition.**
+- **Each `let` or `var` part of a pattern**, so `.pair(let a, let _)` is an error, though `a` is bound. A type pattern under `let` is such a part, so `let _ as E` is an error.
 
 A `_` is fine inside a pattern whose `let` or `var` binds another name, as in `let (a, _) = pair`.
 
