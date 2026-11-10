@@ -250,6 +250,8 @@ if owned let m = reply { send(m) }             // moves the Message out: 'reply'
 - **A place nothing ever changes.** That is a global `let`, a static stored `let` or a `const`.
 - **`self`'s own storage in a plain method**, whose `self` is borrowed shared for the whole call. That is a stored field of `self`, or a place property that hands out part of `self` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
+In the last two cases the optional can't change between passes, so the loop means an `if let x` around a `while true`. The error points to `if let x`, with `while true` inside it where the body repeats.
+
 **Elsewhere each pass can find a different optional**, so the loop is allowed:
 
 - a value property, whose `get` makes a new optional each pass;
