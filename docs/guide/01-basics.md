@@ -32,7 +32,14 @@ let speed: Float = 4            // the 4 becomes a Float to match
 var level: UInt8 = 1            // and this 1 a UInt8
 ```
 
-A name stays with one variable, too. While `hp` is in scope, declaring another `hp` doesn't compile, even inside a nested block such as an `if`'s. In Rust, the second `let` would start a new variable that hides the first, and Swift allows the same inside a nested block. In Rayo, a name you read always means the variable you saw declared. Give the new value a name of its own, such as `maxHp`.
+A name stays with one variable, too. While `hp` is in scope, declaring another `hp` doesn't compile, even inside a nested block such as the body of an `if`:
+
+```swift
+let hp = hp + 10                // error: 'hp' is already declared
+let boosted = hp + 10           // fine: the new value has a name of its own
+```
+
+In Rust, the second `let` would start a new variable that shadows the first, and Swift allows the same inside a nested block. In Rayo, a name you read always means the variable you saw declared ([01](../spec/01-values-and-ownership/bindings.md#names-in-scope)).
 
 ## Numbers
 

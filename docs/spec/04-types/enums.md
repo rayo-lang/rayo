@@ -94,7 +94,7 @@ let hp = borrow enemies[h]?.hp ?? 0  // looks at the element's hp in place, or a
 **`T?` offers these operations:**
 
 - narrowing a place by checking it against `nil` ([below](#narrowing));
-- binding what an optional holds to a name, with `if let` and `guard let`, or to the optional's own name, with `if let x` ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns));
+- binding what an optional holds to a name, with `if let` and `guard let`, or to the optional's own name, with `if let x` ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x));
 - a default, with `x ?? d` (below);
 - chaining, with `a?.b?.c`;
 - forcing, with `x!`;
