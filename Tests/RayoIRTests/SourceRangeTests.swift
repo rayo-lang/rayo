@@ -75,6 +75,7 @@ struct SourceRangeTests {
         let source = "func main() {\n    let a = 1\n    if a == 0 {}\n}"
         let main = try loweredWithRanges(source).functions[0]
 
+        // The `==` is computed into a temporary, which the first block branches on.
         guard case .branch(.read(let condition), _, _) = main.blocks[0].terminator else {
             Issue.record("the first block of \(main) doesn't branch on a temporary")
             return
@@ -86,6 +87,7 @@ struct SourceRangeTests {
         let source = "func main() {}\nfunc twice(_ n: Int) -> Int {\n    return n * 2\n}"
         let twice = try loweredWithRanges(source).functions[1]
 
+        // The `*` is computed into a temporary, which the first block returns.
         guard case .return(.read(let result)?) = twice.blocks[0].terminator else {
             Issue.record("the first block of \(twice) doesn't return a temporary")
             return

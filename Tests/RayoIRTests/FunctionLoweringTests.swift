@@ -13,8 +13,7 @@ struct FunctionLoweringTests {
                 then: .return(nil),
             ),
         )
-        #expect(program.main == FunctionID(index: 0))
-        #expect(program.functions[0] == expected)
+        #expect(program.functions[program.main.index] == expected)
     }
 
     @Test("a function's parameters are its first locals, and the end of a function with a result is unreachable")
