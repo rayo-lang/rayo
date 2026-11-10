@@ -6,7 +6,7 @@ These rules decide how the code in `Sources/` and `Tests/` is split into files, 
 
 **A file holds one primary type and is named after it.** `Lowering.swift` holds `Lowering`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` holds `Stmt` and `StmtKind`, even though the parser builds both.
 
-**A type that stands on its own gets a file of its own**, even when it is small. A type stands on its own when more than one type stores it, as `ExprKind`, `CheckedExprKind` and `Rvalue` all store `BinaryOperator`. A type that only the primary type and its parts store is a part, however much other code builds or reads it. A family of such types, such as the AST's, gathers its files in a directory named for the family (`Sources/RayoSyntax/AST/`).
+**A type that stands on its own gets a file of its own**, even when it is small. A type is a part when it is the primary type's kind enum, the payload of one of its cases, or a private helper, and nothing but the primary type and its other parts stores it in a property or a case payload, however much other code builds or reads it. Every other type stands on its own: one that more than one type stores, as `ExprKind`, `CheckedExprKind` and `Rvalue` all store `BinaryOperator`, and one that is thrown, returned or passed but stored by none, such as `Driver`'s `Failure`. A family of such types, such as the AST's, gathers its files in a directory named for the family (`Sources/RayoSyntax/AST/`).
 
 **A file over the limit is split** along the line where its contents stop sharing a reason to change ([Limits](#limits)).
 
@@ -26,8 +26,8 @@ These rules cover every body: functions, initializers, accessors, subscripts and
 
 **A function does one job, as one of two kinds:**
 
-- **An orchestrator** calls a function for each step of its job. Each line calls a step, binds a step's result, tests that result in a `guard`, `if` or `switch`, or returns it, as `Driver.checkAndLower` does.
-- **A leaf** does its job with mechanics. It reads and writes its own state and arguments, and calls primitives: standard-library operations, and members of its own type that only read or write its stored state, such as `advance()`, `newBlock()` or `end(with:)`. A leaf may also call its helpers and recurse on part of its input, as `lowerWhile` calls `headerTerminator` and `lower(body)`. A body with any line of mechanics is a leaf, and it may run in several blocks.
+- **An orchestrator** calls a function for each step of its job. Each line calls a step, binds a step's result, tests a step's result or one of its own arguments in a `guard`, `if` or `switch`, or returns. Passing a value to a step, or reading a field of a step's result, is part of calling or testing it, as in `Driver.checkAndLower` and `BodyChecker.assign`.
+- **A leaf** does its job with mechanics. It reads and writes its own state and arguments, and calls primitives: standard-library operations, and members of its own type that only read or write its stored state, such as `advance()`, `newBlock()` or `end(with:)`. A leaf may also call its helpers and recurse on part of its input, as `lowerWhile` calls `headerTerminator` and `lower(body)`. Building a value with an initializer or a literal is mechanics, unless the initializer does a step of the job. A body with any line of mechanics is a leaf, and it may run in several blocks.
 
 **A body that takes on a second job gets a function extracted.** These show it:
 
@@ -97,7 +97,7 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 
 **A file holds at most 400 lines, a type at most 250, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. A type counts its nested types and every extension of it in the module. The numbers are SwiftLint's `file_length`, `type_body_length` and `function_body_length` defaults, with two changes: blank and comment lines never count, and a type counts its extensions, so moving code into an extension file doesn't hide its size.
 
-**A data table is exempt from the limits.** A data table is a type whose body is one declaration per case with no logic between them, such as `ErrorCode`, whose lines don't count toward its file or its type, or a test's `arguments:` table, whose lines don't count toward its file or its suite. Every other rule still applies to it.
+**A data table is exempt from the limits.** A data table is a type whose body is one declaration per case with no logic between them, such as `ErrorCode`, or a test's `arguments:` table. Its lines count toward no file, type, suite or test. Every other rule still applies to it.
 
 ## Tests
 
