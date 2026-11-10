@@ -73,6 +73,7 @@ struct ParserErrorTests {
         ("func f() -> Int", .missingBlock(found: .endOfFile)),
         ("func f() { let x }", .missingBindingValue(found: .token("}"))),
         ("func f() { copy }", .missingCopiedName(found: .token("}"))),
+        ("func f() { _ = = 1 }", .missingExpression(found: .token("="))),
     ])
     func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])

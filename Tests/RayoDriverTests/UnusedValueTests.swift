@@ -46,6 +46,15 @@ struct UnusedValueTests {
         #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n3\n4\n", errors: ""))
     }
 
+    @Test("computing a dropped value still panics", arguments: [
+        ("let z = 0\n_ = 1 / z", ["--release"], "division by zero"),
+        ("let z = 0\nlet _ = 1 % z", ["--release"], "remainder by zero"),
+        ("let big = 9223372036854775807\n_ = big + 1", ["--debug"], "integer overflow"),
+    ])
+    func droppedPanics(body: String, mode: [String], reason: String) {
+        #expect(panic(in: run("func main() {\n\(body)\n}", options: mode)) == Panic(reason: reason))
+    }
+
     @Test("a dropped value is checked, a local's value is taken with 'copy', and '_' declares nothing", arguments: [
         ("let x = 1\n_ = x", [ErrorCode.takenWithoutCopy(name: "x")]),
         ("let x = 1\nlet _ = x", [.takenWithoutCopy(name: "x")]),
@@ -53,6 +62,7 @@ struct UnusedValueTests {
         ("let _: Int8 = 1", [.notAType(name: "Int8")]),
         ("_ = nope", [.notDeclared(name: "nope")]),
         ("_ = _", [.underscoreValue]),
+        ("_ == 1", [.underscoreValue]),
         ("(_) = 1", [.assignToNonLocal]),
         ("let _ = 1\nprint(_)", [.underscoreValue]),
         ("let _ = 1\nlet _ = nope\nvar _ = 2", [.notDeclared(name: "nope")]),
