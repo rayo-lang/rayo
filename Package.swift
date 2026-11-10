@@ -122,6 +122,7 @@ let package = Package(
             .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
+        .testTarget(name: "RayoSemaTests", dependencies: ["RayoSema", "RayoSyntax"]),
         .testTarget(name: "RayoDriverTests", dependencies: ["RayoDiagnostics", "RayoDriver"]),
         .testTarget(name: "RayoOwnershipTests", dependencies: [
             "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",

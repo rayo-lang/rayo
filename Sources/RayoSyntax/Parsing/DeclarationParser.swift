@@ -1,17 +1,17 @@
 import RayoDiagnostics
 
-/// Parses a file's declarations, and the parameters of its functions.
+/// Parses a file's declarations: its functions with their parameters, and its structs with their fields.
 struct DeclarationParser {
     let tokens: TokenStream
 
     func parseFile() -> SourceFile {
-        var functions: [FuncDecl] = []
+        var declarations: [Declaration] = []
         while true {
-            functions += tokens.parseSequence(ifUnended: ErrorCode.unendedDeclaration) { () throws(ParseFailure) in
-                try parseFunction()
+            declarations += tokens.parseSequence(ifUnended: ErrorCode.unendedDeclaration) { () throws(ParseFailure) in
+                try parseDeclaration()
             }
             // The declarations run to the end of the file.
-            if tokens.atEnd { return SourceFile(functions: functions) }
+            if tokens.atEnd { return SourceFile(declarations) }
 
             // A `}` that closes no block ends the sequence early; it is reported, and the declarations go on after it.
             tokens.report(.unmatchedBrace)
@@ -19,10 +19,18 @@ struct DeclarationParser {
         }
     }
 
-    /// `'func' identifier '(' parameters ')' ('->' type)? block`.
+    /// `'func' …` or `'struct' …`.
+    private func parseDeclaration() throws(ParseFailure) -> Declaration {
+        // A `func` begins a function,
+        if tokens.consume(.func) { return .function(try parseFunction()) }
+        // and a `struct` a struct.
+        if tokens.consume(.struct) { return .structure(try parseStruct()) }
+        // Any other token begins no declaration.
+        throw tokens.fail(ErrorCode.missingDeclaration)
+    }
+
+    /// After the `func`: `identifier '(' parameters ')' ('->' type)? block`.
     private func parseFunction() throws(ParseFailure) -> FuncDecl {
-        // Every declaration starts with `func`.
-        guard tokens.consume(.func) else { throw tokens.fail(ErrorCode.missingFunc) }
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingFunctionName)
         try tokens.expect(.lparen, else: ErrorCode.missingParameterList)
         let parameters = try tokens.parseList(ifUnclosed: ErrorCode.unclosedParameters) { () throws(ParseFailure) in
@@ -84,5 +92,70 @@ struct DeclarationParser {
         default:
             return nil
         }
+    }
+
+    /// After the `struct`: `identifier ('(' fields ')')? ('{' '}')?`.
+    private func parseStruct() throws(ParseFailure) -> StructDecl {
+        let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingStructName)
+        let fields = tokens.consume(.lparen) ? try parseFields() : []
+        // A struct may leave its body out.
+        if tokens.consume(.lbrace) { try parseEmptyBody() }
+        return StructDecl(name: name, nameRange: nameRange, fields: fields)
+    }
+
+    /// After the `{` of a struct's body: the `}` that closes it. Each item in the body, which holds nothing, is
+    /// reported.
+    private func parseEmptyBody() throws(ParseFailure) {
+        // Each item fails, so the sequence reports it and skips it up to the next.
+        let _: [Never] = tokens.parseSequence(ifUnended: ErrorCode.unclosedStructBody) { () throws(ParseFailure) in
+            throw tokens.fail(ErrorCode.unclosedStructBody)
+        }
+        try tokens.expect(.rbrace, else: ErrorCode.unclosedStructBody)
+    }
+
+    /// After the `(` of a struct's header: its fields and the `)`.
+    private func parseFields() throws(ParseFailure) -> [FieldDecl] {
+        try tokens.parseList(ifUnclosed: ErrorCode.unclosedFields) { () throws(ParseFailure) in
+            try parseField()
+        }
+    }
+
+    /// `('var' | 'let') identifier (':' type)?`.
+    private func parseField() throws(ParseFailure) -> FieldDecl {
+        let kind = try parseFieldKind()
+        let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingFieldName)
+        let type = tokens.consume(.colon) ? try TypeParser(tokens: tokens).parseType() : nil
+        return FieldDecl(kind: kind, name: name, nameRange: nameRange, type: type)
+    }
+
+    /// `'var'` or `'let'`, which begins a field.
+    private func parseFieldKind() throws(ParseFailure) -> BindingKind {
+        // A `var` field can change,
+        if tokens.consume(.var) { return .var }
+        // and a `let` one can't.
+        if tokens.consume(.let) { return .let }
+        // Any other token begins no field.
+        throw tokens.fail(ErrorCode.missingFieldKind)
+    }
+}
+
+/// A declaration at a file's top level.
+private enum Declaration {
+    case function(FuncDecl)
+    case structure(StructDecl)
+}
+
+private extension SourceFile {
+    /// The file that `declarations` make, each kind in source order.
+    init(_ declarations: [Declaration]) {
+        var functions: [FuncDecl] = []
+        var structs: [StructDecl] = []
+        for declaration in declarations {
+            switch declaration {
+            case .function(let function): functions.append(function)
+            case .structure(let structure): structs.append(structure)
+            }
+        }
+        self.init(functions: functions, structs: structs)
     }
 }

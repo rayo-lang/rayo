@@ -54,8 +54,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(103, error: "unmatched '}'")
     case unmatchedBrace
 
-    @Code(104, error: "expected 'func' to begin a declaration, found {found}")
-    case missingFunc(found: FoundToken)
+    @Code(104, error: "expected 'func' or 'struct' to begin a declaration, found {found}")
+    case missingDeclaration(found: FoundToken)
 
     @Code(105, error: "expected a newline or ';' after the declaration, found {found}")
     case unendedDeclaration(found: FoundToken)
@@ -107,6 +107,21 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(121, error: "expected ':' and the parameter's type, found {found}")
     case missingParameterType(found: FoundToken)
 
+    @Code(122, error: "expected the struct's name, found {found}")
+    case missingStructName(found: FoundToken)
+
+    @Code(123, error: "expected 'var' or 'let' to begin a field, found {found}")
+    case missingFieldKind(found: FoundToken)
+
+    @Code(124, error: "expected the field's name, found {found}")
+    case missingFieldName(found: FoundToken)
+
+    @Code(125, error: "expected ')' to close the fields, found {found}")
+    case unclosedFields(found: FoundToken)
+
+    @Code(126, error: "expected '}' to close the struct's body, found {found}")
+    case unclosedStructBody(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the program has no 'main' function")
@@ -152,8 +167,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(215, error: "'{op}' needs {needs} operands, found {left} and {right}")
     case operandTypes(op: String, needs: String, left: String, right: String)
 
-    @Code(216, error: "'{op}' can't compare Void values")
-    case voidComparison(op: String)
+    @Code(216, error: "'{op}' can't compare {type} values")
+    case incomparable(op: String, type: String)
 
     @Code(217, error: "the literal doesn't fit in an Int")
     case literalExceedsInt
@@ -212,6 +227,15 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(236, error: "'{name}' needs a type or a value")
     case missingLocalType(name: String)
+
+    @Code(237, error: "'{name}' needs a type")
+    case missingFieldType(name: String)
+
+    @Code(238, error: "a field can't have type Void")
+    case voidField
+
+    @Code(239, error: "'{name}' contains itself")
+    case containsItself(name: String)
 
     // MARK: Ownership
 

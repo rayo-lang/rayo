@@ -61,8 +61,3 @@ public enum AssignOperator: String, Sendable, Hashable {
         }
     }
 }
-
-public enum BindingKind: Sendable, Hashable {
-    case `let`
-    case `var`
-}

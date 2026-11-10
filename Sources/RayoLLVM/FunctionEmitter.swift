@@ -36,9 +36,11 @@ struct FunctionEmitter {
         for (block, llvmBlock) in zip(function.blocks, blocks) { emit(block, into: llvmBlock) }
     }
 
-    /// Allocates a stack slot for a local of `type`.
+    /// Allocates a stack slot for a local of `type`, aligned as the type is.
     private func allocateSlot(holding type: RayoType) -> LLVMValueRef {
-        LLVMBuildAlloca(builder, llvmType(type), "")
+        let slot = LLVMBuildAlloca(builder, llvmType(type), "")!
+        LLVMSetAlignment(slot, types.alignment(of: type))
+        return slot
     }
 
     /// Stores each parameter's argument in its slot.
@@ -56,12 +58,16 @@ struct FunctionEmitter {
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
     private func load(_ local: LocalID) -> LLVMValueRef {
-        LLVMBuildLoad2(builder, llvmType(function.locals[local.index].type), slots[local.index], "")
+        let type = function.locals[local.index].type
+        let value = LLVMBuildLoad2(builder, llvmType(type), slots[local.index], "")!
+        LLVMSetAlignment(value, types.alignment(of: type))
+        return value
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
     private func store(_ value: LLVMValueRef, in local: LocalID) {
-        LLVMBuildStore(builder, value, slots[local.index])
+        let store = LLVMBuildStore(builder, value, slots[local.index])
+        LLVMSetAlignment(store, types.alignment(of: function.locals[local.index].type))
     }
 
     private func appendBlock(named name: String) -> LLVMBasicBlockRef {

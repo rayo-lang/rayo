@@ -63,7 +63,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoDiagnostics` | Diagnostics, and the `@Diagnostics` and `@Code` macros, which give each diagnostic code a number and a message |
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
 | `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
-| `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program |
+| `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program, and the type table, which says how a value of each type lies in memory |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
 | `Sources/RayoOwnership` | The initialization checker, which follows what each local holds through Rayo IR's control flow, and reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been assigned |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
@@ -74,6 +74,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
+| `Tests/RayoSemaTests` | The tests of the type table's layouts, over parsed files |
 | `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools |

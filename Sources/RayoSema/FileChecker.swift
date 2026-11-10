@@ -2,8 +2,8 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks a file's functions, each once. A function whose body gives its result type is checked when a call
-/// first needs that type, so a call may come before the function it calls.
+/// Checks a file's structs, then its functions, each once. A function whose body gives its result type is checked
+/// when a call first needs that type, so a call may come before the function it calls.
 final class FileChecker {
     let errors = ErrorList()
     private(set) var declarations = Declarations()
@@ -26,7 +26,8 @@ final class FileChecker {
     }
 
     func check() -> CheckedProgram? {
-        // Check every function, so that each one's errors are reported, whether or not the file has a `main`.
+        // Check every struct and function, so each one's errors are reported, whether or not the file has a `main`.
+        let types = StructChecker(errors: errors).declare(file.structs, besides: file.functions, in: &declarations)
         let main = declareFunctions()
         let functions = signatures.indices.map { function(FunctionID(index: $0)) }
         // A file without a `main` has nowhere to start.
@@ -35,9 +36,10 @@ final class FileChecker {
             return nil
         }
 
-        // The program is checked only when each of its functions is.
+        // The program is checked only when its structs can be laid out and each of its functions is checked.
         let checked = functions.compactMap { $0 }
-        return checked.count == functions.count ? CheckedProgram(functions: checked, main: main) : nil
+        guard let types, checked.count == functions.count else { return nil }
+        return CheckedProgram(types: types, functions: checked, main: main)
     }
 
     /// The result type of a call to `signature` at `range`, or nil when it isn't known. A result type that depends
@@ -69,7 +71,8 @@ final class FileChecker {
         errors.report(.noMain, at: SourceRange(start, start))
     }
 
-    /// Declares the file's functions, then the prelude's functions they leave free, and returns the first `main`.
+    /// Declares the file's functions, then the prelude's functions they and the structs leave free, and returns the
+    /// first `main`. A function can't take the name of a struct that comes before it.
     private func declareFunctions() -> FunctionID? {
         // Declare each function, and note the first `main`.
         var main: FunctionID?
@@ -79,8 +82,11 @@ final class FileChecker {
             let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
                                       result: declaredResult(of: function, id))
             signatures.append(signature)
-            // A function that takes the same arguments as one before it is reported, since no call could reach it.
-            if !declarations.declare(signature) {
+            // A function named like a struct before it is reported, since a name names one struct or functions.
+            if declarations.structure(named: function.name) != nil {
+                errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)
+            } else if !declarations.declare(signature) {
+                // A function that takes the same arguments as one before it is reported, since no call could reach it.
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
             } else if function.name == "main" {
                 // The first `main` is where the program starts.

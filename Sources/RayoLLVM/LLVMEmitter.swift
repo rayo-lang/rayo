@@ -13,7 +13,8 @@ public enum LLVMEmitter {
         let module = ModuleBuilder(named: sourcePath, for: target)
         let runtime = try Runtime(in: module)
 
-        ProgramEmitter(module: module, runtime: runtime, types: LLVMTypes(in: module), sourcePath: sourcePath,
+        let types = LLVMTypes(program.types, in: module)
+        ProgramEmitter(module: module, runtime: runtime, types: types, sourcePath: sourcePath,
                        checksOverflow: checksOverflow).emit(program)
         try runtime.link(into: module)
         module.hideDefinitions(except: Runtime.entryPoint)

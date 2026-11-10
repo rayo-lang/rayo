@@ -9,6 +9,7 @@ final class ModuleBuilder {
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
+    let int8: LLVMTypeRef
     let int32: LLVMTypeRef
     let int64: LLVMTypeRef
 
@@ -19,6 +20,7 @@ final class ModuleBuilder {
         builder = LLVMCreateBuilderInContext(context)
         void = LLVMVoidTypeInContext(context)
         bool = LLVMInt1TypeInContext(context)
+        int8 = LLVMInt8TypeInContext(context)
         int32 = LLVMInt32TypeInContext(context)
         int64 = LLVMInt64TypeInContext(context)
 

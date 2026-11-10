@@ -88,12 +88,44 @@ struct ParserErrorTests {
     }
 
     @Test("malformed declarations and statements", arguments: [
-        ("let x = 1", ErrorCode.missingFunc(found: .token("let"))),
+        ("let x = 1", ErrorCode.missingDeclaration(found: .token("let"))),
         ("func f() -> Int", .missingBlock(found: .endOfFile)),
         ("func f() { copy }", .missingCopiedName(found: .token("}"))),
         ("func f() { _ = = 1 }", .missingExpression(found: .token("="))),
     ])
     func malformed(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
+    }
+
+    @Test("a struct is a name, an optional header of fields with optional types, and an optional empty body",
+          arguments: [
+        "struct S", "struct S()", "struct S {}", "struct S(var a: Int, let b: Bool,)", "struct S(var a)",
+        "struct S(\n    var a: Int,\n    let b: Bool\n) {\n}", "func f() {}\nstruct S(let a: S)\nfunc g() {}",
+    ])
+    func structs(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test("malformed struct declarations", arguments: [
+        ("struct 1", ErrorCode.missingStructName(found: .token("1"))),
+        ("struct S(a: Int)", .missingFieldKind(found: .token("a"))),
+        ("struct S(var 1: Int)", .missingFieldName(found: .token("1"))),
+        ("struct S(var a: Int b: Int)", .unclosedFields(found: .token("b"))),
+        ("struct S(var a: Int,, var b: Int)", .missingFieldKind(found: .token(","))),
+        ("struct S(var a:)", .missingType(found: .token(")"))),
+        ("struct S { func f() {} }", .unclosedStructBody(found: .token("func"))),
+        ("struct S {}\nlet x = 1", .missingDeclaration(found: .token("let"))),
+    ])
+    func malformedStructs(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
+    @Test("each item in a struct's body is reported, and the parser goes on after the body")
+    func structBodyRecovery() {
+        #expect(errors("struct S {\n    func f() {}\n    let x = 1\n}\nfunc g() { copy }") == [
+            .unclosedStructBody(found: .token("func")), .unclosedStructBody(found: .token("let")),
+            .missingCopiedName(found: .token("}")),
+        ])
+        #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
     }
 }

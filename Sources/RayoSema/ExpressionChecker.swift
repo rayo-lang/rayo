@@ -145,14 +145,22 @@ struct ExpressionChecker {
                 errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil
             }
-            // Void values have nothing to compare.
-            guard left.type != .void else {
-                errors.report(.voidComparison(op: spelled), at: range)
+            // Values of a type that `==` can't compare are reported.
+            guard isComparable(left.type) else {
+                errors.report(.incomparable(op: spelled, type: "\(left.type)"), at: range)
                 return nil
             }
             result = .bool
         }
         return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
+    }
+
+    /// Whether `==` and `!=` compare values of `type`.
+    private func isComparable(_ type: RayoType) -> Bool {
+        switch type {
+        case .int, .bool: return true
+        case .void, .structure: return false
+        }
     }
 
     /// Whether `left` and `right` both have `type`, reporting it when they don't.
