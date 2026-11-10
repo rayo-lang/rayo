@@ -9,7 +9,7 @@ struct RejectedSource: Error {
     let diagnostics: [Diagnostic]
 }
 
-/// The IR that lowering makes of `source`, which the parser and the checker accept.
+/// The IR that lowering makes of `source`. Throws a `RejectedSource` where the parser or the checker rejects it.
 func loweredWithRanges(_ source: String) throws -> IRProgram {
     let (file, syntaxErrors) = Parser.parse(Array(source.utf8))
     guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
@@ -21,12 +21,14 @@ func loweredWithRanges(_ source: String) throws -> IRProgram {
 }
 
 /// The IR that lowering makes of `source`, with every source range in it `nowhere`, as the expected IR has them.
+/// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func lowered(_ source: String) throws -> IRProgram {
     let program = try loweredWithRanges(source)
     return IRProgram(functions: program.functions.map(\.erasingRanges), main: program.main)
 }
 
 /// The IR that lowering makes of `main`, given `body` as its body, with every source range in it `nowhere`.
+/// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func loweredMain(_ body: String) throws -> IRFunction {
     let program = try lowered("func main() {\n\(body)\n}")
     return program.functions[program.main.index]
@@ -45,8 +47,8 @@ private extension Statement {
     var erasingRanges: Statement {
         switch self {
         case .compute(let destination, let value, _):
-            return .compute(destination: destination?.erasingRange, value: value.erasingRanges, range: nowhere)
-        case .declare: return self
+            .compute(destination: destination?.erasingRange, value: value.erasingRanges, range: nowhere)
+        case .declare: self
         }
     }
 }
@@ -54,10 +56,10 @@ private extension Statement {
 private extension Rvalue {
     var erasingRanges: Rvalue {
         switch self {
-        case .use(let operand): return .use(operand.erasingRange)
-        case .unary(let op, let operand): return .unary(op, operand.erasingRange)
-        case .binary(let op, let left, let right): return .binary(op, left.erasingRange, right.erasingRange)
-        case .call(let callee, let arguments): return .call(callee, arguments: arguments.map(\.erasingRange))
+        case .use(let operand): .use(operand.erasingRange)
+        case .unary(let op, let operand): .unary(op, operand.erasingRange)
+        case .binary(let op, let left, let right): .binary(op, left.erasingRange, right.erasingRange)
+        case .call(let callee, let arguments): .call(callee, arguments: arguments.map(\.erasingRange))
         }
     }
 }
@@ -66,9 +68,9 @@ private extension Terminator {
     var erasingRanges: Terminator {
         switch self {
         case .branch(let condition, let then, let otherwise):
-            return .branch(condition.erasingRange, then: then, otherwise: otherwise)
-        case .return(let result): return .return(result?.erasingRange)
-        case .goto, .unreachable: return self
+            .branch(condition.erasingRange, then: then, otherwise: otherwise)
+        case .return(let result): .return(result?.erasingRange)
+        case .goto, .unreachable: self
         }
     }
 }
@@ -76,9 +78,9 @@ private extension Terminator {
 private extension Operand {
     var erasingRange: Operand {
         switch self {
-        case .read(let place): return .read(place.erasingRange)
-        case .move(let place): return .move(place.erasingRange)
-        case .constant: return self
+        case .read(let place): .read(place.erasingRange)
+        case .move(let place): .move(place.erasingRange)
+        case .constant: self
         }
     }
 }
