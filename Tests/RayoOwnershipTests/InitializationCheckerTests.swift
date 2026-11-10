@@ -224,6 +224,7 @@ struct InitializationCheckerTests {
 
     @Test("the errors come in source order across the program's functions")
     func sourceOrder() {
+        // The first function's error comes after the second's in the source.
         let usesLate = function([
             BasicBlock(statements: [store(1, in: x), store(move(x, at: 1), in: y), printing(read(x, at: 6))],
                        terminator: .return(nil)),
@@ -232,15 +233,21 @@ struct InitializationCheckerTests {
             BasicBlock(statements: [store(1, in: x), store(move(x, at: 2), in: y), printing(read(x, at: 5))],
                        terminator: .return(nil)),
         ])
-        let program = IRProgram(functions: [usesLate, usesEarly], main: FunctionID(index: 0))
-        #expect(InitializationChecker.check(program).map(\.range.start.offset) == [5, 6])
+
+        let reported = InitializationChecker.check(program(of: [usesLate, usesEarly]))
+        #expect(reported.map(\.range.start.offset) == [5, 6])
     }
 }
 
-/// The errors the checker reports in the function that `function(_:parameterCount:)` makes of `blocks`.
+/// The errors the checker reports in a program whose one function is made of `blocks`, the first `parameterCount`
+/// of its locals its parameters.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
-    let program = IRProgram(functions: [function(blocks, parameterCount: parameterCount)], main: FunctionID(index: 0))
-    return InitializationChecker.check(program)
+    InitializationChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
+}
+
+/// A program of `functions`, the first of them its `main`.
+private func program(of functions: [IRFunction]) -> IRProgram {
+    IRProgram(functions: functions, main: FunctionID(index: 0))
 }
 
 /// A function made of `blocks`, whose locals are `x`, `y` and `k`, the first `parameterCount` of them its

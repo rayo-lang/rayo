@@ -16,6 +16,7 @@ struct ObjectCodeTests {
 
     @Test(.enabled(if: !llvmAssertsOnInvalidIR), arguments: Build.allCases)
     func `IR that LLVM rejects is an internal error, not a crash`(build: Build) {
+        // Programs that the checker would never pass: one adds a Bool to an Int, and one branches on an Int.
         let addsBoolToInt = function(locals: [.bool, .int, .int], [
             BasicBlock(
                 statements: [statement(storingIn: 2, .binary(.add, read(0), read(1)))],
@@ -29,7 +30,9 @@ struct ObjectCodeTests {
             ),
             BasicBlock(statements: [], terminator: .return(nil)),
         ])
+
         for program in [addsBoolToInt, branchesOnInt] {
+            // LLVM's verifier rejects the module, and the emitter throws what it says.
             let error = #expect(throws: LLVMError.self) { try compile(program, for: build) }
             #expect(error?.message.hasPrefix("LLVM rejected the module it was given:\n") == true)
         }
@@ -49,6 +52,7 @@ struct ObjectCodeTests {
                 ], terminator: .return(nil)),
             ])
         }
+
         #expect(try compile(handingOn(move(0)), for: build) == compile(handingOn(read(0)), for: build))
     }
 

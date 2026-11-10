@@ -37,7 +37,7 @@ struct EmittedTypeTests {
     /// A program of `functions`, after a `main` that takes nothing, returns nothing and does nothing.
     private func program(with functions: [IRFunction]) -> IRProgram {
         let main = mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
-        return IRProgram(functions: [main] + functions, main: FunctionID(index: 0))
+        return program(of: [main] + functions)
     }
 
     /// A function that takes an Int and a Bool, holds `temporaries` besides them, and returns the parameter of type

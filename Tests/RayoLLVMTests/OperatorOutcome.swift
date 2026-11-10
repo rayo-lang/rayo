@@ -8,8 +8,8 @@ enum OperatorOutcome: Equatable {
     case bool(Bool)
     case panic(String)
 
-    /// The panic that an operator at line 3, column 7 of main.rayo, where `operatorRange` starts, reports for
-    /// `reason`.
+    /// The panic that an operator at line 3, column 7 of main.rayo, where `ExpressionEmitter.range` starts,
+    /// reports for `reason`.
     static func panics(_ reason: String) -> OperatorOutcome {
         .panic("main.rayo:3:7: panic: \(reason)\n")
     }
