@@ -13,7 +13,7 @@ final class ModuleBuilder {
     let int64: LLVMTypeRef
 
     init(named name: String, for target: TargetMachine) {
-        // Make the module, its builder and the types of the program's values, in a context of their own.
+        // Make the module, its builder and the types it builds with, in a context of their own.
         context = LLVMContextCreate()
         module = LLVMModuleCreateWithNameInContext(name, context)
         builder = LLVMCreateBuilderInContext(context)
@@ -94,7 +94,7 @@ final class ModuleBuilder {
         // Functions become internal, so that optimisation can drop those nothing calls.
         var function = LLVMGetFirstFunction(module)
         while let current = function {
-            // The entry point stays visible, so the executable can start at it.
+            // Each function the module defines, but the entry point, which the executable starts at, becomes internal.
             if isHideable(current) && name(of: current) != entryPoint { LLVMSetLinkage(current, LLVMInternalLinkage) }
             function = LLVMGetNextFunction(current)
         }
@@ -102,7 +102,7 @@ final class ModuleBuilder {
         // Globals become private, so that optimisation can drop those nothing reads.
         var global = LLVMGetFirstGlobal(module)
         while let current = global {
-            // Every global the module defines, but LLVM's own.
+            // Each global the module defines, but LLVM's own, becomes private.
             if isHideable(current) { LLVMSetLinkage(current, LLVMPrivateLinkage) }
             global = LLVMGetNextGlobal(current)
         }

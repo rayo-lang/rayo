@@ -9,7 +9,7 @@ struct ProgramEmitter {
     let sourcePath: String
     let checksOverflow: Bool
 
-    /// Defines the program's functions, each before any body calls it.
+    /// Defines the program's functions in the module.
     func emit(_ program: IRProgram) {
         let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: program) }
 

@@ -1,5 +1,4 @@
 import RayoIR
-import RayoSema
 
 /// What each local of a function holds at a point.
 struct InitializationState: Equatable {
@@ -38,6 +37,7 @@ struct InitializationState: Equatable {
         // A computation uses its operands, in order, before it stores to its destination.
         case .compute(let destination, let value, _):
             value.operands.forEach { apply($0, use: use) }
+            // A computation with a destination gives its local a value.
             if let destination { assign(destination, store: store) }
 
         // A declaration leaves the local without a value, even one an earlier pass of a loop gave it.

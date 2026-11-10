@@ -9,6 +9,7 @@ let llvmMajorVersion = 23
 /// The directory LLVM `llvmMajorVersion` is installed under: `LLVM_PREFIX` when it's set, and otherwise the first
 /// of the places a package manager installs it that holds that release.
 let llvmPrefix: String = {
+    // Read the release installed under each candidate.
     let candidates = Context.environment["LLVM_PREFIX"].map { [$0] } ?? [
         "/usr/lib/llvm-\(llvmMajorVersion)",
         "/opt/homebrew/opt/llvm@\(llvmMajorVersion)",
@@ -17,6 +18,7 @@ let llvmPrefix: String = {
         "/usr/local/opt/llvm",
     ]
     let installs = candidates.compactMap { candidate in llvmMajorVersion(at: candidate).map { (candidate, $0) } }
+
     // The first install of the release is the one to build against.
     if let match = installs.first(where: { $0.1 == llvmMajorVersion }) { return match.0 }
 
@@ -62,7 +64,7 @@ func lldMajorVersion(at prefix: String) -> Int? {
     return major ?? llvmMajorVersion(at: prefix)
 }
 
-/// `path`, which the manifest writes into C string literals, so it can't hold a quote or a backslash.
+/// `path`, which the manifest writes into C string literals, stopping the build when it holds a quote or a backslash.
 func checkedForDefine(_ path: String) -> String {
     // A quote or a backslash would end or escape the literal early.
     if path.contains("\"") || path.contains("\\") {
@@ -146,7 +148,7 @@ for target in package.targets where dependsOnCLLVM(target, among: package.target
 func dependsOnCLLVM(_ target: Target, among targets: [Target]) -> Bool {
     target.dependencies.contains { dependency in
         switch dependency {
-        // A target names CLLVM, or one of `targets` that depends on it.
+        // A dependency reaches CLLVM when it is CLLVM, or one of `targets` that depends on it.
         case .targetItem(let name, _), .byNameItem(let name, _):
             return name == "CLLVM" || targets.contains { $0.name == name && dependsOnCLLVM($0, among: targets) }
 

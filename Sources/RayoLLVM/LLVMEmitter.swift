@@ -1,6 +1,4 @@
-internal import CLLVM
 import RayoIR
-import RayoSema
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
 public enum LLVMEmitter {

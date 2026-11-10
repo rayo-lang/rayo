@@ -32,7 +32,7 @@ struct InitializationAnalysis {
     /// nothing.
     private mutating func join(_ state: InitializationState, intoEntryOf block: BlockID) -> InitializationState? {
         let joined = entryStates[block.index].map { $0.joined(with: state) } ?? state
-        // The state on entry is unchanged.
+        // A state the block was already entered with gives its successors nothing new.
         guard joined != entryStates[block.index] else { return nil }
         entryStates[block.index] = joined
         return joined
