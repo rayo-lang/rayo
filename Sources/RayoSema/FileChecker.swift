@@ -163,8 +163,8 @@ final class FileChecker {
         // Give the body a checker of its own.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
-        var body = BodyChecker(file: self, result: signature.result.type)
-        body.declare(function.parameters, types: signature.parameters.map(\.type))
+        var body = BodyChecker(file: self, parameters: function.parameters, types: signature.parameters.map(\.type),
+                               result: signature.result.type)
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {

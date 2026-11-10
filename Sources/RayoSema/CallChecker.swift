@@ -2,38 +2,37 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-extension BodyChecker {
+/// Checks a call of a function by name: which function it reaches, and its arguments against that function's
+/// parameters.
+struct CallChecker {
+    /// A function that a call reaches, and the call's arguments, checked against its parameters.
+    private typealias Match = (signature: Signature, arguments: [CheckedExpr])
+
+    /// An argument's label and the type of its value, which choose among overloads.
+    private typealias TypedArgument = (label: String?, type: RayoType)
+
+    let expressions: ExpressionChecker
+
+    private var errors: ErrorList { expressions.file.errors }
+
     /// Checks `name(arguments)`. Every argument is checked, whether or not the call matches a function.
-    mutating func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
-                       in range: SourceRange) -> CheckedExpr? {
-        // Find the functions the call can reach, and the one its arguments fit.
+    func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
+              in range: SourceRange) -> CheckedExpr? {
+        // Find the function the call reaches, with its arguments checked against it.
         let candidates = functions(named: name, at: nameRange)
-        let checked: (signature: Signature, arguments: [CheckedExpr])?
-        switch candidates.count {
-        // Without a candidate, the arguments are checked for their own errors.
-        case 0:
-            arguments.forEach { _ = check($0.value) }
-            return nil
+        // A call that reaches no function, or whose arguments fit none, was reported.
+        guard let match = match(arguments, among: candidates, in: range) else { return nil }
 
-        // One candidate is the call's, if the arguments fit its parameters.
-        case 1:
-            checked = check(arguments, against: candidates[0], in: range).map { (candidates[0], $0) }
-
-        // Among overloads, the arguments' labels and types pick one.
-        default:
-            checked = pick(among: candidates, for: arguments, in: range)
-        }
-
-        // A call whose arguments fit no function, or whose result type isn't known, was reported.
-        guard let checked, let result = file.result(of: checked.signature, calledAt: range) else { return nil }
-        return CheckedExpr(kind: .call(checked.signature.callee, arguments: checked.arguments), type: result,
-                           range: range)
+        // A result type that isn't known was reported in the function that gives it, or here as a cycle.
+        guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
+        let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
+        return CheckedExpr(kind: kind, type: result, range: range)
     }
 
     /// The functions a call of `name` reaches, reporting it when it reaches none, unless a declaration of the name
     /// failed.
-    private mutating func functions(named name: String, at range: SourceRange) -> [Signature] {
-        switch lookUp(name, for: .call) {
+    private func functions(named name: String, at range: SourceRange) -> [Signature] {
+        switch expressions.names.lookUp(name, for: .call) {
         // The name's functions are the call's candidates.
         case .functions(let functions):
             return functions
@@ -53,15 +52,33 @@ extension BodyChecker {
         return []
     }
 
+    /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters.
+    private func match(_ arguments: [Argument], among candidates: [Signature], in range: SourceRange) -> Match? {
+        switch candidates.count {
+        // Without a candidate, the arguments are checked for their own errors.
+        case 0:
+            checkValues(of: arguments)
+            return nil
+
+        // One candidate is the call's, if the arguments fit its parameters.
+        case 1:
+            return check(arguments, against: candidates[0], in: range).map { (candidates[0], $0) }
+
+        // Among overloads, the arguments' labels and types pick one.
+        default:
+            return pick(among: candidates, for: arguments, in: range)
+        }
+    }
+
     /// Checks `arguments` against `signature`'s parameters, in order, reporting each mismatch.
-    private mutating func check(_ arguments: [Argument], against signature: Signature,
-                                in range: SourceRange) -> [CheckedExpr]? {
+    private func check(_ arguments: [Argument], against signature: Signature,
+                       in range: SourceRange) -> [CheckedExpr]? {
         // A call that passes too few or too many arguments fails, though each argument's own errors are reported.
         let parameters = signature.parameters
         guard arguments.count == parameters.count else {
             let takes = ArgumentCount(parameters.count)
             errors.report(.argumentCount(name: signature.name, takes: takes, passes: arguments.count), at: range)
-            arguments.forEach { _ = check($0.value) }
+            checkValues(of: arguments)
             return nil
         }
 
@@ -72,7 +89,7 @@ extension BodyChecker {
     }
 
     /// Checks `argument`'s label and value against `parameter`.
-    private mutating func check(_ argument: Argument, against parameter: Parameter) -> CheckedExpr? {
+    private func check(_ argument: Argument, against parameter: Parameter) -> CheckedExpr? {
         // A label other than the parameter's is reported, and fails the argument once its value is checked.
         let isLabeledRight = argument.label == parameter.label
         if !isLabeledRight {
@@ -82,19 +99,18 @@ extension BodyChecker {
 
         // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
         guard let type = parameter.type else {
-            _ = check(argument.value)
+            _ = expressions.check(argument.value)
             return nil
         }
-        let value = check(argument.value, expecting: type)
+        let value = expressions.check(argument.value, expecting: type)
         return isLabeledRight ? value : nil
     }
 
     /// The one of `candidates` whose labels and parameter types `arguments` fit, with the checked arguments.
-    private mutating func pick(among candidates: [Signature], for arguments: [Argument],
-                               in range: SourceRange) -> (signature: Signature, arguments: [CheckedExpr])? {
+    private func pick(among candidates: [Signature], for arguments: [Argument], in range: SourceRange) -> Match? {
         // Check the arguments on their own, since the candidate that takes them isn't known yet; an Int or a Bool
         // needs nothing from the parameter it is passed to.
-        let values = arguments.compactMap { check($0.value) }
+        let values = arguments.compactMap { expressions.check($0.value) }
         // An argument that failed was reported, and without its type no candidate can be picked.
         guard values.count == arguments.count else { return nil }
 
@@ -110,8 +126,15 @@ extension BodyChecker {
         return (fitting[0], values)
     }
 
+    /// Checks the values of `arguments` for their own errors, where no function's parameters take them.
+    private func checkValues(of arguments: [Argument]) {
+        for argument in arguments {
+            _ = expressions.check(argument.value)
+        }
+    }
+
     /// The arguments as an error writes them, such as `Int, by: Bool`.
-    private func spelling(of arguments: [(label: String?, type: RayoType)]) -> String {
+    private func spelling(of arguments: [TypedArgument]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""
             return label + "\(argument.type)"
