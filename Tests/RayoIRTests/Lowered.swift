@@ -9,7 +9,7 @@ struct RejectedSource: Error {
     let diagnostics: [Diagnostic]
 }
 
-/// The IR that lowering makes of `source`. Throws a `RejectedSource` where the parser or the checker rejects it.
+/// Parses, checks and lowers `source`, throwing a `RejectedSource` where the parser or the checker rejects it.
 func loweredWithRanges(_ source: String) throws(RejectedSource) -> IRProgram {
     let (file, syntaxErrors) = Parser.parse(Array(source.utf8))
     guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
@@ -20,14 +20,14 @@ func loweredWithRanges(_ source: String) throws(RejectedSource) -> IRProgram {
     return Lowering.lower(program)
 }
 
-/// The IR that lowering makes of `source`, with every source range in it `nowhere`, as the expected IR has them.
+/// Parses, checks and lowers `source`, and sets every source range in the IR to `nowhere`, as the expected IR has them.
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
     let program = try loweredWithRanges(source)
     return IRProgram(functions: program.functions.map(\.erasingRanges), main: program.main)
 }
 
-/// The IR that lowering makes of `main`, given `body` as its body, with every source range in it `nowhere`.
+/// Parses, checks and lowers a `main` whose body is `body`, and gives its IR with every source range in it `nowhere`.
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func loweredMain(_ body: String) throws(RejectedSource) -> IRFunction {
     let program = try lowered("func main() {\n\(body)\n}")

@@ -5,7 +5,7 @@ import Testing
 @Suite("Lowering keeps source ranges")
 struct SourceRangeTests {
     @Test("an operation and its temporary keep the range of the expression, and an operand the range of its local")
-    func operation() throws(RejectedSource) {
+    func operationRanges() throws(RejectedSource) {
         let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
         let main = try loweredWithRanges(source).functions[0]
 
@@ -71,28 +71,42 @@ struct SourceRangeTests {
         #expect(text(of: rightRange, in: source) == "a && false")
     }
 
-    @Test func `a branch tests an operand with the range of its condition`() throws(RejectedSource) {
-        let source = "func main() {\n    let a = 1\n    if a == 0 {}\n}"
+    @Test(
+        "a branch tests an operand with the range of its condition, whether a temporary or a local holds it",
+        arguments: [
+            (body: "let a = 1\n    if a == 0 {}", condition: "a == 0"),
+            (body: "let c = true\n    if c {}", condition: "c"),
+        ],
+    )
+    func branchConditionRange(body: String, condition: String) throws(RejectedSource) {
+        let source = "func main() {\n    \(body)\n}"
         let main = try loweredWithRanges(source).functions[0]
 
-        // The `==` is computed into a temporary, which the first block branches on.
-        guard case .branch(.read(let condition), _, _) = main.blocks[0].terminator else {
-            Issue.record("the first block of \(main) doesn't branch on a temporary")
+        // The first block branches on the condition, which it reads from a temporary or from the local itself.
+        guard case .branch(.read(let place), _, _) = main.blocks[0].terminator else {
+            Issue.record("the first block of \(main) doesn't branch on a local")
             return
         }
-        #expect(text(of: condition.range, in: source) == "a == 0")
+        #expect(text(of: place.range, in: source) == condition)
     }
 
-    @Test func `a 'return' leaves with an operand with the range of its value`() throws(RejectedSource) {
-        let source = "func main() {}\nfunc twice(_ n: Int) -> Int {\n    return n * 2\n}"
-        let twice = try loweredWithRanges(source).functions[1]
+    @Test(
+        "a 'return' leaves with an operand with the range of its value, whether a temporary or a local holds it",
+        arguments: [
+            (body: "return n * 2", value: "n * 2"),
+            (body: "let x = copy n\n    return x", value: "x"),
+        ],
+    )
+    func returnedValueRange(body: String, value: String) throws(RejectedSource) {
+        let source = "func main() {}\nfunc result(_ n: Int) -> Int {\n    \(body)\n}"
+        let result = try loweredWithRanges(source).functions[1]
 
-        // The `*` is computed into a temporary, which the first block returns.
-        guard case .return(.read(let result)?) = twice.blocks[0].terminator else {
-            Issue.record("the first block of \(twice) doesn't return a temporary")
+        // The first block returns the value, which it reads from a temporary or moves out of the local.
+        guard case .return(let operand?) = result.blocks[0].terminator, let place = operand.place else {
+            Issue.record("the first block of \(result) doesn't return a local")
             return
         }
-        #expect(text(of: result.range, in: source) == "n * 2")
+        #expect(text(of: place.range, in: source) == value)
     }
 }
 
@@ -100,4 +114,14 @@ struct SourceRangeTests {
 private func text(of range: SourceRange, in source: String) -> String {
     let bytes = Array(source.utf8)[range.start.offset..<range.end.offset]
     return String(decoding: bytes, as: UTF8.self)
+}
+
+private extension Operand {
+    /// The place of the local the operand reads or moves, or nil for a constant.
+    var place: Place? {
+        switch self {
+        case .read(let place), .move(let place): place
+        case .constant: nil
+        }
+    }
 }
