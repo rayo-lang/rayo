@@ -57,7 +57,8 @@ rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebin
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
 condition     = expression
-              | 'owned'? ('let' | 'var') pattern '=' expression        (* a place already named narrows instead (04) *)
+              | 'owned'? ('let' | 'var') pattern '=' expression        (* its names are new: none may be a local's or a parameter's in scope (01) *)
+              | ('let' | 'var') identifier                             (* no '=': 'if let x' is 'if let x = x', 'if var x' is 'if var x = &x' (01) *)
               | 'case' pattern '=' expression ;
 when-expr     = 'when' expression? '{' when-arm+ '}' ;
 when-arm      = (pattern (',' pattern)* ('where' expression)? | 'else') block ;

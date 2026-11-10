@@ -94,7 +94,7 @@ let hp = borrow enemies[h]?.hp ?? 0  // looks at the element's hp in place, or a
 **`T?` offers these operations:**
 
 - narrowing a place by checking it against `nil` ([below](#narrowing));
-- binding what an optional holds to a new name, with `if let` and `guard let` ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns));
+- binding what an optional holds to a name, with `if let` and `guard let`, or to the optional's own name, with `if let x` ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns));
 - a default, with `x ?? d` (below);
 - chaining, with `a?.b?.c`;
 - forcing, with `x!`;
@@ -148,7 +148,7 @@ chase(e.target)                    // a Handle<Player> to the end of the scope
 - an element, and a subscript's or a computed property's result, since each use runs the accessor again;
 - a global, and a place reached through an object, a weak pointer or a thread-local, since other code reaches them ([01](../01-values-and-ownership/bindings.md#how-long-a-borrow-lasts)).
 
-`if let` binds what such a place holds to a new name instead ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+`if let` binds what such a place holds to a name instead ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). Where the place has a bare name, as a global or a thread-local does, `if let x` binds its payload under that name. A place that narrows can be unwrapped either way, and each way fits different code ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x)).
 
 **The narrowed place is its payload, as a place.** Reading it reads the payload in place, and `&` lends the payload, which can't become `nil`, to a `mutable T`.
 

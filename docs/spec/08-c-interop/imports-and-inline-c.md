@@ -137,7 +137,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     //    size_t platform_queued(void);
     unsafe { platform_upload(samples.baseAddress, CSize(samples.count)) }   // checks that the count fits a size_t
     let n: Int = platform_queued()                                          // error on a 64-bit target: a UInt64 never converts implicitly to Int
-    let n = Int(platform_queued())                                          // fine on every target
+    let queued = Int(platform_queued())                                     // fine on every target
     ```
 - **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. Its `unsafe` static function `trailing(at:count:)`, called with a `p: *S` and a count `n`, gives a `MutableSpan<T>` at the member's offset from `p`, without lending the struct:
 

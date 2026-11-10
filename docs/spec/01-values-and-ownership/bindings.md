@@ -66,6 +66,40 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 
 **A borrowing binding of a dynamic place holds its access until its last use.** A dynamic place is one reached through a thread-bound object's owner or weak pointer, or a thread-local, and the binding holds that dynamic access (rule 6 in [02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So a call in between that changes the object panics. When a panic unwinds through the binding's scope, the access is released once the unwind has destroyed the last value that depends on it ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)).
 
+## Names in scope
+
+**A local or a parameter can't take a name that a local or a parameter in scope already has**, whether that one was declared in the same block or in an enclosing one. The compiler rejects the second declaration, so each name stands for one binding wherever the body uses it. A reader never has to work out which of two declarations a use reaches, and what the compiler says about a name, that it was moved, is borrowed or is narrowed, is about the one binding declared with it.
+
+```swift
+func heal(_ e: mutable Enemy, by amount: Float, overcharge: Bool) {
+    let amount = amount * 2              // error: 'amount' is already declared, as a parameter
+    let cap: Float = 100
+    if overcharge {
+        let cap = cap * 1.5              // error: 'cap' is already declared, in the enclosing block
+        let extra = amount / 2
+        e.hp += extra
+    }
+    let extra: Float = 0                 // fine: the 'extra' above went out of scope with its block
+    e.hp = min(e.hp + amount + extra, cap)
+}
+```
+
+**A local is in scope from its declaration to the end of the block that declares it, and a parameter through the whole body of the function or closure that takes it.** A `let`, `var` or `const` in a body declares a local, and so does each name these constructs bind, in scope where the construct uses it:
+
+- a condition's names, in the block of its `if` or `while` and in each condition after it, and, after a `guard`, to the end of the enclosing block;
+- a `when` arm's names, in its `where` guard and its block;
+- a `for` or `static for` pattern's names, in its `where` clause and its block;
+- a closure literal's parameters, in its body.
+
+**The rule holds wherever a body sees a name:**
+
+- **One declaration.** Two names of one parameter list, one pattern or one list of conditions can't be the same either, as in `func f(a: Int, a: Bool)` or `let (a, a) = pair`. The patterns that share a `when` arm bind one set of names, so a name they repeat is one binding, not a reuse ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- **Closure literals.** A closure's body sees the enclosing body's locals, and captures those it names ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)), so its parameters and locals can't take their names. A capture list names a local already declared, and declares nothing new.
+- **Nested functions and local types.** Their bodies see none of the enclosing body's locals or parameters ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)), so they may reuse those names, since nothing they would hide is in scope there.
+- **Names declared outside the body.** The rule covers only locals and parameters. A local may share the name of a function, a field or a global, and lookup decides which one each use reaches ([05](../05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)).
+
+**`if let x` is the one binding that takes a name already in scope**: it unwraps the optional `x` under its own name ([below](#unwrapping-under-the-same-name-if-let-x)). Where `x` is a local or a parameter, the long form `if let x = x` reuses the name as any other declaration would. So it is a compile error that points to the short form.
+
 ## Conditions and patterns
 
 **A condition or a pattern borrows a place it binds, unless it says `owned`.** It looks inside a value, at an optional's payload or an enum case's, so where a declaration's default is to take, its default is to look. `guard` and `while` work the same way as `if`:
@@ -80,7 +114,7 @@ if let v = pool.take(h) { ... }            // owns the value that take moved out
 - **`owned` takes the value out of a place the code owns**, as a declaration does ([above](#bindings)).
 - **A value, such as a call's result, is owned by the binding**, as in a declaration.
 
-**Narrowing unwraps a local, a parameter or a stored field of one in place** ([04](../04-types/enums.md#narrowing)), so a condition always names what it binds, with no short form.
+**A condition may also unwrap an optional under the name it already has**, as `if let x` does ([below](#unwrapping-under-the-same-name-if-let-x)), and narrowing unwraps a local, a parameter or a stored field of one in place, with no binding at all ([04](../04-types/enums.md#narrowing)).
 
 **In a `when`, each part of a pattern binds as a condition does:**
 
@@ -100,6 +134,44 @@ when &shape {
 **`if case`, `guard case` and `while case` bind the same way**, with the value after `=` as the subject. A `guard`'s hidden local lives to the end of the enclosing scope, as the names it binds do.
 
 **`for` patterns bind elements in place, changeable when the loop lends its sequence with `&`**, and own what the iterator hands out as a value of its own, such as a `Range`'s `Int`. So a `for` pattern writes no `let`, and writes `var` only on a part that owns its value ([04](../04-types/collections.md#iteration)).
+
+## Unwrapping under the same name: `if let x`
+
+```swift
+var spare: Enemy? = pool.take(h)
+if let spare { log("hp \(spare.hp)") }     // the Enemy inside 'spare', looked at in place
+if var spare { spare.hp = 100 }            // changes the Enemy inside 'spare' in place
+if let spare = spare { ... }               // error: 'spare' is already declared; write 'if let spare'
+guard let spare else { return }            // the Enemy, to the end of the scope
+```
+
+**`if let x` means `if let x = x`, and `if var x` means `if var x = &x`.** Each binds a new local `x` to the payload of the optional that `x` names, so the payload keeps the name the code already uses for it. `guard` and `while` take the short form as `if` does, and so does each condition in a list. The new `x` is in scope as any condition's names are ([Names in scope](#names-in-scope)), and hides what `x` named there.
+
+**The short form binds what the long form would** ([above](#conditions-and-patterns)):
+
+- **A `let` looks at the payload in place**, when `x` names a place.
+- **A `var` changes the payload in place**, so `x` names a [changeable place](#changeable-places). The short form writes no place for `&` to mark, so its `var` marks the lend.
+- **A value is owned by the binding**, as when `x` names a value property of `self`, whose `get` returns a new optional at each use.
+
+**`x` is a bare name, which lookup resolves as it resolves any use** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)): a local, a parameter, a property of `self` in an instance body, a global or a thread-local. A path such as `e.target` has no short form, since the new local would take a name the code never wrote. A stored field of a local or a parameter narrows instead (below). Any other path binds to a name of its own with the long form, as in `if let t = window.value.target`.
+
+**The short form takes no `owned`.** Its new `x` is the old one's payload, in place, so the name still stands for one value. `owned` would move the payload out, and leave the place behind the name holding no value. The one name would then stand for two bindings in different states, as a reused name does. Code that takes the payload moves it out of the narrowed place, or binds it to a name of its own, as in `if owned let e = spare`.
+
+**For a place that narrows, `if x != nil` and `if let x` give the block the same payload under the same name.** A local, a parameter or a stored field of one narrows ([04](../04-types/enums.md#narrowing)), and a block that only reads the payload, or changes it in place, does the same with either. They differ in what the block may do to the optional itself:
+
+- **Narrowing keeps the place an optional.** The block may assign it, `nil` included, move its payload out, call `take()` on it or pass it whole to a `T?` parameter, and each event that could make it `nil` ends the narrowing.
+- **`if let x` binds a borrowing binding of the payload**, which holds the optional still while it is live. So nothing can make it `nil` there, and the binding can't be consumed.
+
+So narrowing fits code that goes on treating the place as an optional, such as code that clears it once done with it. `if let x` fits code that needs only the payload. For a place that doesn't narrow, such as a global or a thread-local, a binding is the only way to use the payload unwrapped, and `if let x` gives it the place's own name. The binding holds the place's borrow until its last use, and a thread-local's access with it ([How long a borrow lasts](#how-long-a-borrow-lasts)):
+
+```swift
+@threadlocal var session: Session? = nil
+
+func report() {
+    guard let session else { return }       // looks at this thread's session in place, holding its access
+    log(session.name)
+}
+```
 
 ## `if` and `when` as values
 
@@ -190,7 +262,7 @@ var t = if left { &a } else { &b }                       // the arm's place is l
 var v: mutable any Damageable = &boss                    // a mutable any P made from 'boss'
 ```
 
-**What follows `&` is a changeable place, or a member of one that has a mutable form.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change.
+**What follows `&` is a changeable place, or a member of one that has a mutable form.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change. The short form `if var x` writes no place for `&` to mark, so its `var` marks the lend ([above](#unwrapping-under-the-same-name-if-let-x)).
 
 - **`&` picks a mutable form.** Where a method or property has a shared and a mutable form of one name, the operand of `&` picks the mutable one ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). So a binding of `&particles.life` binds an [`SoA`](../04-types/data-layout.md#struct-of-arrays-soat) column as a `MutableSpan<Float>` that it owns, where a binding of `particles.life` gets a `Span<Float>`, as in the example below.
 - **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an **owned exclusive view**: a move-only scoped value ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
