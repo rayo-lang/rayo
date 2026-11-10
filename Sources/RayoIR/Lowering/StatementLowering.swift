@@ -77,7 +77,7 @@ struct StatementLowering {
         builder.emit(expressions.rvalue(of: value), into: Place(place), range: value.range)
     }
 
-    /// Leaves the function with `value`. A Void value is computed for what it does, and leaves with no result.
+    /// Leaves the function with `value`.
     private func lowerReturn(_ value: CheckedExpr?) {
         let result = value.flatMap { returnedOperand(of: $0) }
         // The code after the `return` goes in a block that no path reaches.

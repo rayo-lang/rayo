@@ -6,14 +6,20 @@ import RayoSource
 struct ExpressionLowering {
     let builder: FunctionBuilder
 
+    /// Lowers `expr` to the operation that computes its value, computing its operands first.
     func rvalue(of expr: CheckedExpr) -> Rvalue {
         switch expr.kind {
         // A constant or a local is an operand as it is, and so is `&&` or `||`, which lowers to branches.
         case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
-            return .use(operand(of: expr))
-        case .unary(let op, let operand): return .unary(op, self.operand(of: operand))
-        case .binary(let op, let left, let right): return .binary(op, operand(of: left), operand(of: right))
-        case .call(let callee, let arguments): return .call(callee, arguments: arguments.map { operand(of: $0) })
+            .use(operand(of: expr))
+        case .unary(let op, let operand):
+            .unary(op, self.operand(of: operand))
+        // The left operand is computed before the right one, in the order the source reads.
+        case .binary(let op, let left, let right):
+            .binary(op, operand(of: left), operand(of: right))
+        // So are the arguments of a call, from first to last.
+        case .call(let callee, let arguments):
+            .call(callee, arguments: arguments.map { operand(of: $0) })
         }
     }
 
@@ -21,18 +27,19 @@ struct ExpressionLowering {
     /// or a local.
     func operand(of expr: CheckedExpr) -> Operand {
         switch expr.kind {
-        case .intLiteral(let value): return .constant(.int(value))
-        case .boolLiteral(let value): return .constant(.bool(value))
-        case .local(let local): return .read(Place(local: local, range: expr.range))
-        case .move(let local): return .move(Place(local: local, range: expr.range))
-        // `&&` evaluates its right operand only when its left one is true,
+        case .intLiteral(let value): .constant(.int(value))
+        case .boolLiteral(let value): .constant(.bool(value))
+        case .local(let local): .read(Place(local: local, range: expr.range))
+        case .move(let local): .move(Place(local: local, range: expr.range))
+        // `&&` evaluates its right operand only when its left one is true.
         case .binary(.and, let left, let right):
-            return shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
-        // and `||` only when its left one is false.
+            shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
+        // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
-            return shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
+            shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
         // Any other expression is computed into a temporary.
-        default: return lowerIntoTemporary(expr)
+        default:
+            lowerIntoTemporary(expr)
         }
     }
 
@@ -52,13 +59,15 @@ struct ExpressionLowering {
         let resultValue = Operand.read(result)
         builder.emit(.use(operand(of: left)), into: result, range: range)
 
-        // `right` is evaluated in a block of its own, which only a `left` that doesn't decide reaches.
+        // A `left` that decides goes on to the join, and any other to a block of its own that evaluates `right`.
         let evaluateRight = builder.newBlock()
         let join = builder.newBlock()
         let branch: Terminator = decidingValue
             ? .branch(resultValue, then: join, otherwise: evaluateRight)
             : .branch(resultValue, then: evaluateRight, otherwise: join)
         builder.end(with: branch, continuingIn: evaluateRight)
+
+        // There `right`'s value becomes the result, and both paths meet at the join, where lowering goes on.
         builder.emit(.use(operand(of: right)), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
