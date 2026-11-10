@@ -54,7 +54,7 @@ struct FunctionEmitter {
         }
     }
 
-    /// The LLVM type of `local`'s stack slot.
+    /// Lowers `local`'s type to the LLVM type of its stack slot.
     private func slotType(of local: LocalID) -> LLVMTypeRef {
         let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
