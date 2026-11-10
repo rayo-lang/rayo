@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import RayoDriver
 
-/// A new, empty directory, which `body` may fill and which is removed after it.
+/// Runs `body` with a new, empty directory, and removes the directory once `body` returns or throws.
 private func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rayo-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -22,7 +22,7 @@ private func script(_ body: String, at url: URL) throws -> URL {
     return url
 }
 
-/// What `executable` writes to its standard output, once it exits with 0.
+/// Runs `executable`, expects it to exit with 0, and returns what it wrote to its standard output.
 private func runExecutable(_ executable: URL) throws -> String {
     let process = Process()
     process.executableURL = executable
@@ -69,6 +69,7 @@ struct BuildTests {
             let decoy = directory.appendingPathComponent("clang")
             try FileManager.default.createDirectory(at: decoy, withIntermediateDirectories: true)
 
+            // Neither that directory nor a path with nothing at it links the program.
             for clang in [directory.appendingPathComponent("nonexistent"), decoy] {
                 let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
                 #expect(runEmptyMain(linkTools: tools) ==
@@ -80,6 +81,7 @@ struct BuildTests {
     @Test("a clang that fails has its errors reported")
     func clangFails() throws {
         try withTemporaryDirectory { directory in
+            // Link with a clang that writes an error and exits with 1.
             let failing = "echo 'clang: something broke' >&2\nexit 1"
             let clang = try script(failing, at: directory.appendingPathComponent("clang"))
             let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
@@ -102,6 +104,7 @@ struct BuildTests {
                 """, at: directory.appendingPathComponent("clang"))
             let tools = Driver.LinkTools(clang: clang, lld: Driver.LinkTools.installed.lld)
 
+            // The program runs, which it can't if clang was asked to compile anything.
             let result = Driver.run(["run", "main.rayo"], linkTools: tools) { _ in
                 Array("func main() { print(42) }".utf8)
             }
@@ -135,6 +138,7 @@ struct BuildTests {
 
     @Test("linking with LLD needs the LLD of the LLVM install, and the platform's linker doesn't")
     func lldMissing() throws {
+        // Take the installed clang, and an LLD that isn't there.
         let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
         let tools = Driver.LinkTools(clang: Driver.LinkTools.installed.clang, lld: lld)
 
