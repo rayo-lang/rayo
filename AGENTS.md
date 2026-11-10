@@ -2,7 +2,7 @@
 
 - **Code is its own source of truth.** Comments, names and tests stand alone: state the reason itself, in place. Never reference artifacts from code — issues, PRs, specs, ADRs, plans, review findings.
 - **Test-driven.** Every behaviour change runs red-green-refactor: write the test first and watch it go red for the right reason, write the least code that turns it green, then refactor while it stays green. Load the `tdd` skill before writing code.
-- **Code design and comments.** Two skills are the authority: `code-design` before you implement, `code-comments` as you write each line.
+- **Writing code.** `docs/agents/code-style.md` decides how every file, type and function is split and laid out: read it before you write or review code, and audit your change against its list before you open a pull request. Two skills apply with it: `code-design` before you implement, `code-comments` as you write each line.
 - **Branch per change.** Commit on a branch named `impl-<feature-slug>`; when an AI model does the work, append `-via-<model>-<version>`, slugged the same way (`impl-arena-reset`, `impl-arena-reset-via-opus-5-5`). Never commit to `main`.
 - **Conventional Commits.** Every commit you write and every PR title has the subject `type(scope): summary`, under 72 characters, the summary starting with a lowercase imperative verb (`feat(sema): check calls to user functions`).
   - **Type:** `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `build`, `ci`, `chore` or `revert`.

@@ -5,7 +5,7 @@ description: Use before implementing a feature, fix, or refactor to place the ch
 
 # Code Design
 
-Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each function tidy.
+Aim for the smallest change in the right system: reuse existing concepts, keep seams narrow, and keep each file, type and function tidy.
 
 Apply the first three gates before editing. Apply the fourth while coding. Apply the last two after the behavior works. `code-comments` governs documentation and naming.
 
@@ -53,27 +53,11 @@ When the evidence is genuinely inconclusive and the choice changes a public seam
 
 **Done when:** you have named the closest existing concept and decided reuse or separation from its reasons to change.
 
-## 4. Tidy functions
+## 4. Tidy files, types and functions
 
-A function is **tidy** when a reader sees what it does at a glance. It does one job, as one of two kinds:
+Write to `docs/agents/code-style.md`: each file one primary type, each type one job, each function a tidy orchestrator or leaf, and each body in logical blocks that say their steps.
 
-- **An orchestrator.** Its body is a few blocks separated by blank lines, and every line of a block is a call or binding to a named step, with no mechanics inline.
-- **A leaf.** It performs one step, however long its mechanics run.
-
-Extract a function or value type when a body takes on a second job, however small, or mixes the two kinds, as shown by:
-
-- numbered or section-heading comments;
-- setup followed by dispatch or detailed mechanics; or
-- parallel locals assigned through the same branches.
-
-A tidy function also has:
-
-- **Inputs from its caller.** A step takes the values its caller already holds as arguments.
-- **Results ready to use.** A helper returns what its caller needs in the shape the caller uses it.
-- **Failure in its result.** A step that can fail says so in what it returns or throws, and its caller tests that result.
-- **One concern per line.** Related unwraps may share a guard; unrelated checks each take a line, or become a step.
-
-**Done when:** every changed function is an orchestrator or a leaf as defined above, and has each property listed.
+**Done when:** every file, type and function you added or changed passes the audit list at the end of `docs/agents/code-style.md`.
 
 ## 5. Repetition created by the change
 
@@ -95,4 +79,4 @@ Trace every changed line back to the root problem. Remove surface area the chang
 
 Remove only excess created by this change. Adjacent cleanup is separate work.
 
-**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the tidiness of a function.
+**Done when:** deleting any remaining changed line would break the required behavior, the chosen seam, or the tidiness of a file, type or function.
