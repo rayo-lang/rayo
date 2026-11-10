@@ -9,7 +9,7 @@ struct StatementLowering {
         var exit: BlockID
     }
 
-    let builder: FunctionBuilder
+    private let builder: FunctionBuilder
     private let expressions: ExpressionLowering
     private var loops: [Loop] = []
 
@@ -48,14 +48,13 @@ struct StatementLowering {
         case .whileStmt(let condition, let body):
             lowerWhile(condition, body)
 
-        // A `break` goes to the innermost loop's exit, and the code after it to a block that no path reaches.
+        // A `break` goes to the innermost loop's exit.
         case .breakStmt:
-            builder.end(with: .goto(loops[loops.count - 1].exit), continuingIn: builder.newBlock())
+            endJumping(with: .goto(innermostLoop.exit))
 
-        // A `continue` goes back to the innermost loop's header, and the code after it to a block that no path
-        // reaches.
+        // A `continue` goes back to the innermost loop's header.
         case .continueStmt:
-            builder.end(with: .goto(loops[loops.count - 1].header), continuingIn: builder.newBlock())
+            endJumping(with: .goto(innermostLoop.header))
 
         // A `return` leaves the function.
         case .returnStmt(let value):
@@ -80,8 +79,18 @@ struct StatementLowering {
     /// Leaves the function with `value`.
     private func lowerReturn(_ value: CheckedExpr?) {
         let result = value.flatMap { returnedOperand(of: $0) }
-        // The code after the `return` goes in a block that no path reaches.
-        builder.end(with: .return(result), continuingIn: builder.newBlock())
+        endJumping(with: .return(result))
+    }
+
+    /// Ends the current block with `terminator`, which jumps away from it, and goes on in a block of its own that no
+    /// path reaches, where the code after the jump is lowered.
+    private func endJumping(with terminator: Terminator) {
+        builder.end(with: terminator, continuingIn: builder.newBlock())
+    }
+
+    /// The loop that a `break` or a `continue` belongs to, which the checker allows only inside one.
+    private var innermostLoop: Loop {
+        loops[loops.count - 1]
     }
 
     /// Lowers `value` to the operand a `return` leaves with, or, for a Void value, computes it for what it does

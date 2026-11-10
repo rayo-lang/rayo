@@ -4,9 +4,14 @@ import RayoSource
 /// Builds one IR function: the blocks of its control-flow graph, the block that lowering adds statements to, and
 /// the temporaries it adds to the function's locals.
 final class FunctionBuilder {
+    /// A block as lowering builds it, which has no terminator until lowering leaves it.
+    private struct PendingBlock {
+        var statements: [Statement] = []
+        var terminator: Terminator?
+    }
+
     private var locals: [IRLocal]
-    /// The blocks so far; a block has no terminator until lowering leaves it.
-    private var blocks: [(statements: [Statement], terminator: Terminator?)] = [([], nil)]
+    private var blocks = [PendingBlock()]
     private var current = BlockID(index: 0)
 
     init(locals: [IRLocal]) {
@@ -25,7 +30,7 @@ final class FunctionBuilder {
     }
 
     func newBlock() -> BlockID {
-        blocks.append(([], nil))
+        blocks.append(PendingBlock())
         return BlockID(index: blocks.count - 1)
     }
 

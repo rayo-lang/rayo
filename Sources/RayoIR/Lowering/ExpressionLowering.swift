@@ -4,7 +4,11 @@ import RayoSource
 /// Lowers expressions into the current block of a function's control-flow graph, as the operations that compute
 /// them and the operands that hold their values.
 struct ExpressionLowering {
-    let builder: FunctionBuilder
+    private let builder: FunctionBuilder
+
+    init(builder: FunctionBuilder) {
+        self.builder = builder
+    }
 
     /// Lowers `expr` to the operation that computes its value, computing its operands first.
     func rvalue(of expr: CheckedExpr) -> Rvalue {
@@ -12,6 +16,7 @@ struct ExpressionLowering {
         // A constant or a local is an operand as it is, and so is `&&` or `||`, which lowers to branches.
         case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
             .use(operand(of: expr))
+        // A unary operation applies to its operand, computed first.
         case .unary(let op, let operand):
             .unary(op, self.operand(of: operand))
         // The left operand is computed before the right one, in the order the source reads.
@@ -27,6 +32,7 @@ struct ExpressionLowering {
     /// or a local.
     func operand(of expr: CheckedExpr) -> Operand {
         switch expr.kind {
+        // A constant is its own operand, and a local is read or moved as the checker decided.
         case .intLiteral(let value): .constant(.int(value))
         case .boolLiteral(let value): .constant(.bool(value))
         case .local(let local): .read(Place(local: local, range: expr.range))
