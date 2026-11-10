@@ -11,17 +11,15 @@ public enum InitializationChecker {
     public static func check(_ program: IRProgram) -> [Diagnostic] {
         // A use and a store share a place in a compound assignment, which uses the local before it stores to it,
         // so errors at one place keep the order each function gives them.
-        let found = program.functions.flatMap(check).enumerated()
-        return found.sorted { ($0.element.range.start, $0.offset) < ($1.element.range.start, $1.offset) }
-            .map(\.element)
+        program.functions.flatMap(check).inSourceOrder
     }
 
     private static func check(_ function: IRFunction) -> [Diagnostic] {
         var errors = FunctionErrors(function: function)
         let analysis = InitializationAnalysis(function)
-        for (block, entryState) in zip(function.blocks, analysis.entryStates) {
-            guard var state = entryState else { continue }
-            state.apply(block, use: { errors.use($0, holding: $1) }, store: { errors.store(to: $0, holding: $1) })
+        for case (let block, var state?) in zip(function.blocks, analysis.entryStates) {
+            state.apply(block, use: { errors.use($0, holding: $1) },
+                        store: { errors.store(to: $0, holding: $1) })
         }
         return errors.diagnostics
     }
@@ -51,25 +49,34 @@ private struct FunctionErrors {
     }
 
     mutating func use(_ place: Place, holding state: LocalState) {
-        guard let code = useError(place, holding: state) else { return }
-        let diagnostic = Diagnostic(code, at: place.range)
-        let cause = Cause(local: place.local, moves: state.moves)
-        if firstUses[cause].map({ diagnostic.range.start < $0.range.start }) ?? true {
-            firstUses[cause] = diagnostic
-        }
+        guard !state.isInitialized else { return }
+        let code = useError(naming: name(of: place.local), holding: state)
+        keep(Diagnostic(code, at: place.range), for: Cause(local: place.local, moves: state.moves))
     }
 
     mutating func store(to place: Place, holding state: LocalState) {
-        guard let code = storeError(place, holding: state) else { return }
+        guard function.locals[place.local.index].isLet else { return }
+        guard state.isAssignedOnSomePath else { return }
+        let code = storeError(naming: name(of: place.local), holding: state)
         stores.append(Diagnostic(code, at: place.range))
     }
 
-    /// The error for a use of `place` where its local holds `state`, or nil when it holds a value.
-    private func useError(_ place: Place, holding state: LocalState) -> ErrorCode? {
-        guard !state.isInitialized else { return nil }
-        guard let name = function.locals[place.local.index].name else {
-            preconditionFailure("lowering moves no temporary, and reads one only once it has written it")
+    /// Keeps `diagnostic` as the error of `cause`, unless the one kept for it starts no later in the source.
+    private mutating func keep(_ diagnostic: Diagnostic, for cause: Cause) {
+        if let kept = firstUses[cause], kept.range.start <= diagnostic.range.start { return }
+        firstUses[cause] = diagnostic
+    }
+
+    /// The name the source declares `local` with.
+    private func name(of local: LocalID) -> String {
+        guard let name = function.locals[local.index].name else {
+            preconditionFailure("lowering never moves a temporary, reads one before writing it, or makes one a 'let'")
         }
+        return name
+    }
+
+    /// The error for a use of the local `name` where it holds `state`, which leaves it without a value on some path.
+    private func useError(naming name: String, holding state: LocalState) -> ErrorCode {
         if state.moves.isEmpty {
             return state.holdsValueOnSomePath ? .usedMaybeUninitialized(name: name) : .usedUninitialized(name: name)
         }
@@ -77,10 +84,8 @@ private struct FunctionErrors {
         return isMovedOnEveryPath ? .usedAfterMove(name: name) : .usedAfterMaybeMove(name: name)
     }
 
-    /// The error for a store to `place` where its local holds `state`, or nil when the local may be assigned.
-    private func storeError(_ place: Place, holding state: LocalState) -> ErrorCode? {
-        let local = function.locals[place.local.index]
-        guard local.isLet, state.isAssignedOnSomePath, let name = local.name else { return nil }
-        return state.isUnassignedOnSomePath ? .letMaybeAssignedTwice(name: name) : .letAssignedTwice(name: name)
+    /// The error for a store to the `let` called `name` where it holds `state`, which has it assigned on some path.
+    private func storeError(naming name: String, holding state: LocalState) -> ErrorCode {
+        state.isUnassignedOnSomePath ? .letMaybeAssignedTwice(name: name) : .letAssignedTwice(name: name)
     }
 }
