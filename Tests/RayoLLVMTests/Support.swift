@@ -22,6 +22,11 @@ func read(_ index: Int) -> Operand {
     .read(Place(local: LocalID(index: index), range: nowhere))
 }
 
+/// An operand that moves the local `index`'s value out of it.
+func move(_ index: Int) -> Operand {
+    .move(Place(local: LocalID(index: index), range: nowhere))
+}
+
 /// A program that prints what `value` computes.
 func printing(_ value: Rvalue) -> IRProgram {
     function(locals: [.int], [

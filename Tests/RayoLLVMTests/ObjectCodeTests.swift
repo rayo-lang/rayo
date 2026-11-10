@@ -36,6 +36,23 @@ struct ObjectCodeTests {
         }
     }
 
+    @Test("a move of a local compiles to the code that a read of it does, in debug and in release",
+          arguments: [true, false])
+    func moveIsRead(debug: Bool) throws {
+        /// A program that stores 42 in one local, then `taken` in another, and prints that one.
+        func handingOn(_ taken: Operand) -> IRProgram {
+            function(locals: [.int, .int], [
+                BasicBlock(statements: [
+                    statement(storingIn: 0, .use(.constant(.int(42)))),
+                    statement(storingIn: 1, .use(taken)),
+                    Statement(destination: nil, value: .call(.printInt, arguments: [read(1)]), range: nowhere),
+                ], terminator: .return(nil)),
+            ])
+        }
+        #expect(try compile(handingOn(move(0)), debug: debug) ==
+            compile(handingOn(read(0)), debug: debug))
+    }
+
     @Test("a debug build checks integer arithmetic for overflow, and a release build emits no check")
     func overflowChecks() throws {
         let overflows = printing(.binary(.add, .constant(.int(.max)), .constant(.int(1))))
