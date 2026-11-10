@@ -63,8 +63,9 @@ jobs:
           - name: Linux
             runner: ubuntu-latest
             container: swift:6.4-noble
+          # Swift 6.4 comes with Xcode 27, which GitHub installs only on its image of that name.
           - name: macOS
-            runner: macos-26
+            runner: xcode-27
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
     env:
