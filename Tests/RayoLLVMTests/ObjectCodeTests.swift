@@ -8,8 +8,8 @@ import RayoSyntax
 struct ObjectCodeTests {
     @Test("a program compiles to an object file for the host, in debug and in release", arguments: [true, false])
     func hostObject(debug: Bool) throws {
-        let headers = try llvmTool("llvm-readobj", ["--file-headers"], on: compile(printing(.use(.constant(.int(42)))),
-                                                                                    debug: debug))
+        let objectCode = try compile(printing(.use(.constant(.int(42)))), debug: debug)
+        let headers = try llvmTool("llvm-readobj", ["--file-headers"], on: objectCode)
         #expect(headers.contains("Format: \(hostFormat)"))
         #expect(headers.contains("Arch: \(hostArchitecture)\n"))
     }
@@ -17,6 +17,7 @@ struct ObjectCodeTests {
     @Test("IR that LLVM rejects is an internal error, not a crash", .enabled(if: !llvmAssertsOnInvalidIR),
           arguments: [true, false])
     func rejectedIR(debug: Bool) throws {
+        // Programs that the checker would never pass: one adds a Bool to an Int, and one branches on an Int.
         let addsBoolToInt = function(locals: [.bool, .int, .int], [
             BasicBlock(statements: [statement(storingIn: 2, .binary(.add, read(0), read(1)))],
                        terminator: .return(nil)),
@@ -26,11 +27,13 @@ struct ObjectCodeTests {
                                                            otherwise: BlockID(index: 1))),
             BasicBlock(statements: [], terminator: .return(nil)),
         ])
+
         for program in [addsBoolToInt, branchesOnInt] {
             do {
                 _ = try compile(program, debug: debug)
                 Issue.record("LLVM compiled IR it should have rejected")
             } catch {
+                // LLVM's verifier rejects the module, and the emitter throws what it says.
                 #expect(error.message.hasPrefix("LLVM rejected the module it was given:\n"))
             }
         }
@@ -49,6 +52,7 @@ struct ObjectCodeTests {
                 ], terminator: .return(nil)),
             ])
         }
+
         #expect(try compile(handingOn(move(0)), debug: debug) ==
             compile(handingOn(read(0)), debug: debug))
     }

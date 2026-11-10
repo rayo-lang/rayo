@@ -1,8 +1,6 @@
 import Foundation
 import RayoIR
 import RayoLLVM
-import RayoSema
-import RayoSource
 import Testing
 
 /// Compiles `program` the way a debug or a release build does.
@@ -10,64 +8,30 @@ func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
     try LLVMEmitter.objectCode(for: program, sourcePath: "main.rayo", checksOverflow: debug, optimizes: !debug)
 }
 
-/// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
-func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
-    let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary),
-                          blocks: blocks)
-    return IRProgram(functions: [main], main: FunctionID(index: 0))
-}
-
-/// An operand that reads the local `index`.
-func read(_ index: Int) -> Operand {
-    .read(Place(local: LocalID(index: index), range: nowhere))
-}
-
-/// An operand that moves the local `index`'s value out of it.
-func move(_ index: Int) -> Operand {
-    .move(Place(local: LocalID(index: index), range: nowhere))
-}
-
-/// A program that prints what `value` computes.
-func printing(_ value: Rvalue) -> IRProgram {
-    function(locals: [.int], [
-        BasicBlock(statements: [
-            statement(storingIn: 0, value),
-            statement(printing: read(0)),
-        ], terminator: .return(nil)),
-    ])
-}
-
-func statement(storingIn local: Int, _ value: Rvalue) -> Statement {
-    .compute(destination: Place(local: LocalID(index: local), range: nowhere), value: value, range: nowhere)
-}
-
-/// A statement that prints the Int `operand` holds.
-func statement(printing operand: Operand) -> Statement {
-    .compute(destination: nil, value: .call(.printInt, arguments: [operand]), range: nowhere)
-}
-
-/// The range of an operation no source file wrote.
-let nowhere = SourceRange(SourceLocation(line: 1, column: 1, offset: 0), SourceLocation(line: 1, column: 1, offset: 0))
-
 /// What `tool`, from the LLVM install `rayoc` builds against, writes to its standard output when it reads
 /// `objectCode` from a file named after `arguments`.
 func llvmTool(_ tool: String, _ arguments: [String], on objectCode: [UInt8]) throws -> String {
+    // Write the object code to a file in a directory of its own, which goes once the tool has read it.
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rayo-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let object = directory.appendingPathComponent("main.o")
     try Data(objectCode).write(to: object)
+
     return try llvmTool(tool, arguments + [object.path])
 }
 
 /// What `tool`, from the LLVM install `rayoc` builds against, writes to its standard output given `arguments`.
 func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
+    // Run the tool with its standard output on a pipe.
     let process = Process()
     process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(tool)
     process.arguments = arguments
     let output = Pipe()
     process.standardOutput = output
     try process.run()
+
+    // Read all it writes before waiting for it to exit, so that a full pipe can't stall it.
     let written = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     process.waitUntilExit()
     #expect(process.terminationStatus == 0, "\(tool) \(arguments.joined(separator: " ")) failed")

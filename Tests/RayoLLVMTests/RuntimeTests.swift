@@ -21,6 +21,7 @@ struct RuntimeTests {
 
     @Test("a program's own functions are defined in its object, and none is exported")
     func programFunctionsHidden() throws {
+        // `main` prints what `answer()` returns, so the object needs `answer()`.
         let answer = IRFunction(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
             BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
         ])
@@ -30,7 +31,8 @@ struct RuntimeTests {
                 statement(printing: read(0)),
             ], terminator: .return(nil)),
         ])
-        let objectCode = try compile(IRProgram(functions: [main, answer], main: FunctionID(index: 0)), debug: true)
+
+        let objectCode = try compile(program(of: [main, answer]), debug: true)
         #expect(try symbols(["--defined-only"], in: objectCode).contains { $0.hasSuffix("answer()") })
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
