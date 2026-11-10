@@ -23,7 +23,7 @@ struct BindingChecker {
         }
 
         var value: CheckedExpr? {
-            // A binding that gives no type gives no value either.
+            // Only a typed binding gives its local a first value.
             guard case .typed(_, _, let value) = self else { return nil }
             return value
         }
@@ -82,8 +82,8 @@ struct BindingChecker {
         return .resolved(type, range: annotation.range)
     }
 
-    /// What a binding of `value` with `annotation` gives its local, reporting a value of a type other than the
-    /// annotation's.
+    /// Checks `value` against `annotation`, reporting a value of another type, and gives what the binding gives its
+    /// local.
     private func checkValue(_ value: CheckedExpr, against annotation: Annotation) -> Declared {
         switch annotation {
         // The value must have the annotated type.

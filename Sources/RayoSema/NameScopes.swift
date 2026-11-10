@@ -27,16 +27,18 @@ final class NameScopes {
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
-    /// functions, as `use` decides between them.
+    /// functions. A call gets the functions where there are any; any other use gets the local or parameter where
+    /// there is one.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
+        // Find the name in scope and among the functions; the use picks between them.
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
         let functions = functionMatch(for: name)
         switch use {
-        // A call prefers the functions, even over a local whose declaration failed, since no local can be called.
+        // No local can be called, so a function wins even over a local whose declaration failed.
         case .call:
             return functions ?? inScope
 
-        // Any other use prefers the locals and parameters, which shadow the functions.
+        // A local or parameter shadows the module's functions.
         case .ordinary:
             return inScope ?? functions
         }
@@ -50,7 +52,7 @@ final class NameScopes {
             declareFailed(name)
             return nil
         }
-        // So does a declaration whose type isn't known, which was reported.
+        // A declaration whose type isn't known fails too; what left it without one was reported.
         guard let type else {
             declareFailed(name)
             return nil

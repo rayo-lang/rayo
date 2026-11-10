@@ -18,9 +18,11 @@ struct CallChecker {
     /// Checks `name(arguments)`. Every argument is checked, whether or not the call matches a function.
     func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
               in range: SourceRange) -> CheckedExpr? {
+        // Find the function the call reaches, with its arguments checked against it.
         let candidates = functions(named: name, at: nameRange)
         // A call that reaches no function, or whose arguments fit none, was reported.
         guard let match = match(arguments, among: candidates, in: range) else { return nil }
+
         // A result type that isn't known was reported in the function that gives it, or here as a cycle.
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
         let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)

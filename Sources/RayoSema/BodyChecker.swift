@@ -9,22 +9,23 @@ struct BodyChecker {
     let result: RayoType?
     private var loopDepth = 0
 
-    /// A checker of the body of a function whose result type is `result`, with `parameters` of `types` as its
-    /// first locals.
+    /// A checker of the body of a function whose result type is `result`, with `parameters`, whose types are
+    /// `types`, as its first locals, reporting what in them can't be declared.
     init(file: FileChecker, parameters: [Param], types: [RayoType?], result: RayoType?) {
+        // Give the body names of its own, which every checker it builds shares.
         expressions = ExpressionChecker(file: file, names: NameScopes(file: file))
         self.result = result
 
         // Declare the parameters in the scope around the body's blocks.
-        bindings.declare(parameters, types: types)
+        bindingChecker.declare(parameters, types: types)
     }
 
     /// The body's locals, indexed by `LocalID`, its parameters first.
     var locals: [CheckedLocal] { expressions.names.locals }
 
     private var errors: ErrorList { expressions.file.errors }
-    private var bindings: BindingChecker { BindingChecker(expressions: expressions) }
-    private var assignments: AssignmentChecker { AssignmentChecker(expressions: expressions) }
+    private var bindingChecker: BindingChecker { BindingChecker(expressions: expressions) }
+    private var assignmentChecker: AssignmentChecker { AssignmentChecker(expressions: expressions) }
 
     mutating func check(_ block: Block) -> [CheckedStmt] {
         expressions.names.enterBlock()
@@ -46,14 +47,14 @@ struct BodyChecker {
     /// and for any other statement.
     private mutating func check(_ statement: Stmt) -> [CheckedStmt?] {
         switch statement.kind {
-        case .declaration(let kind, let declared):
-            return declared.map { bindings.check($0, declaredWith: kind) }
+        case .declaration(let kind, let bindings):
+            return bindings.map { bindingChecker.check($0, declaredWith: kind) }
         case .expression(let expr):
             return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
             return [expressions.checkTaken(value).map { .expression($0) }]
         case .assign(let target, let op, let value):
-            return [assignments.assign(value, op: op, to: target, in: statement.range)]
+            return [assignmentChecker.assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let condition, let then, let otherwise):
             return [checkIf(condition, then: then, otherwise: otherwise)]
         case .whileStmt(let condition, let body):
@@ -89,8 +90,7 @@ struct BodyChecker {
         return check(body)
     }
 
-    /// Checks a `return` without a value, which a function may have only when its result type is Void or isn't
-    /// known.
+    /// Checks a `return` without a value, reporting it in a function that returns a value.
     private func checkEmptyReturn(at range: SourceRange) -> CheckedStmt? {
         // A Void function, or one whose result type isn't known, may return without a value.
         guard let result, result != .void else { return .returnStmt(nil) }

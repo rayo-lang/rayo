@@ -14,6 +14,7 @@ struct AssignmentChecker {
         let place = assignedPlace(target)
         let value = checkAssigned(valueExpr, by: op)
         guard let place, let value else { return nil }
+
         switch op.binary {
         case nil:
             return assign(value, to: place)
@@ -38,6 +39,7 @@ struct AssignmentChecker {
     /// Checks `place op= value`, whose operator the source spells `spelled`, as `place op value`.
     private func compoundAssign(_ value: CheckedExpr, _ op: BinaryOperator, spelled: String,
                                 to place: CheckedPlace, in range: SourceRange) -> CheckedStmt? {
+        // The local's current value is the operator's left operand.
         let current = CheckedExpr(kind: .local(place.local), type: names[place.local].type, range: place.range)
         // Operands the operator doesn't take were reported.
         guard expressions.binary(op, current, value, spelled: spelled, in: range) != nil else { return nil }
