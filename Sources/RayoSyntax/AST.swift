@@ -110,7 +110,7 @@ public indirect enum StmtKind: Sendable {
     case binding(Binding)
     case assign(target: Expr, op: AssignOperator, value: Expr)
     /// `_ = value`, which drops a value on purpose.
-    case discard(Expr)
+    case drop(Expr)
     case expression(Expr)
     case ifStmt(condition: Expr, then: Block, otherwise: Block?)
     case whileStmt(condition: Expr, body: Block)

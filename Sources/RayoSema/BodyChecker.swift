@@ -59,7 +59,7 @@ struct BodyChecker {
             return checkUnused(expr).map { .expression($0) }
         case .binding(let binding):
             return check(binding)
-        case .discard(let value):
+        case .drop(let value):
             return checkTaken(value).map { .expression($0) }
         case .assign(let target, let op, let value):
             return assign(value, op: op, to: target, in: statement.range)

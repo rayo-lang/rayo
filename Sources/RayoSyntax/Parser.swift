@@ -283,7 +283,7 @@ public struct Parser {
         } else if current.kind == .identifier("_"), peek().isPunct(.assign) {
             advance()
             advance()
-            kind = .discard(try parseExpression())
+            kind = .drop(try parseExpression())
         } else {
             kind = try parseExpressionStatement()
         }
