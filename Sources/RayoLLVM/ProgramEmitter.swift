@@ -10,10 +10,12 @@ struct ProgramEmitter {
     let sourcePath: String
     let checksOverflow: Bool
 
-    init(module: ModuleBuilder, runtime: Runtime, sourcePath: String, checksOverflow: Bool) {
+    init(
+        module: ModuleBuilder, runtime: Runtime, types table: TypeTable, sourcePath: String, checksOverflow: Bool,
+    ) {
         self.module = module
         self.runtime = runtime
-        types = LLVMTypes(in: module)
+        types = LLVMTypes(table, in: module)
         self.sourcePath = sourcePath
         self.checksOverflow = checksOverflow
     }

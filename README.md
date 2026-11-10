@@ -5,7 +5,7 @@ Rayo is a general-purpose systems programming language. It gives the same contro
 Game development is one of Rayo's priorities: engines and gameplay code, of the kind written in C++ today and shipped on consoles.
 
 > [!NOTE]
-> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The reference compiler, `rayoc`, parses a first subset of the language, and checks and runs programs of functions that take borrowed parameters, which compute with `Int` and `Bool` locals, branches and loops, and print integers. It moves a local's value where a declaration, an assignment, a `return` or `_ =` takes it. It checks that a local declared without a value, or moved, isn't used until it is assigned, and that a `let` is assigned at most once on each path. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
+> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The reference compiler, `rayoc`, parses a first subset of the language, and checks and runs programs of structs and of functions that take borrowed parameters, which compute with `Int` and `Bool` locals, branches and loops, and print integers. It moves a local's value where a declaration, an assignment, a `return` or `_ =` takes it. It checks that a local declared without a value, or moved, isn't used until it is assigned, and that a `let` is assigned at most once on each path. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
 
 Source files use the `.rayo` extension.
 

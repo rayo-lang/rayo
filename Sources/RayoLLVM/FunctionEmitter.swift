@@ -44,7 +44,14 @@ struct FunctionEmitter {
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
     private func allocateSlots() -> [LLVMValueRef] {
-        function.locals.indices.map { LLVMBuildAlloca(builder, slotType(of: LocalID(index: $0)), "") }
+        function.locals.indices.map { allocateSlot(of: LocalID(index: $0)) }
+    }
+
+    /// Allocates a stack slot for `local`, aligned as its type is.
+    private func allocateSlot(of local: LocalID) -> LLVMValueRef {
+        let slot: LLVMValueRef = LLVMBuildAlloca(builder, slotType(of: local), "")
+        LLVMSetAlignment(slot, alignment(of: local))
+        return slot
     }
 
     /// Stores each argument in its parameter's slot.
@@ -64,12 +71,20 @@ struct FunctionEmitter {
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
     private func load(_ local: LocalID) -> LLVMValueRef {
-        LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], "")
+        let value: LLVMValueRef = LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], "")
+        LLVMSetAlignment(value, alignment(of: local))
+        return value
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
     private func store(_ value: LLVMValueRef, in local: LocalID) {
-        LLVMBuildStore(builder, value, slots[local.index])
+        let store: LLVMValueRef = LLVMBuildStore(builder, value, slots[local.index])
+        LLVMSetAlignment(store, alignment(of: local))
+    }
+
+    /// The alignment, in bytes, of `local`'s slot, and of each load from it and store to it.
+    private func alignment(of local: LocalID) -> UInt32 {
+        types.alignment(of: function.locals[local.index].type)
     }
 
     private func appendBlock(named name: String) -> LLVMBasicBlockRef {

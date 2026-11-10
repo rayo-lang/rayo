@@ -11,8 +11,11 @@ public enum LLVMEmitter {
         let module = ModuleBuilder(named: sourcePath, for: target)
         let runtime = try Runtime(in: module)
 
-        ProgramEmitter(module: module, runtime: runtime, sourcePath: sourcePath, checksOverflow: checksOverflow)
-            .emit(program)
+        let emitter = ProgramEmitter(
+            module: module, runtime: runtime, types: program.types, sourcePath: sourcePath,
+            checksOverflow: checksOverflow,
+        )
+        emitter.emit(program)
         try runtime.link(into: module)
         try target.ready(module, exporting: [Runtime.entryPoint])
         let objectCode = try target.objectCode(of: module)

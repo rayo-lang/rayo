@@ -21,8 +21,9 @@ struct ProgramTests {
         #expect(errors(source) == [expected])
     }
 
-    @Test("a program is functions, each a name, parameters, an optional result type and a body", arguments: [
-        ("struct S {}", ErrorCode.missingFunc(found: .token("struct"))),
+    @Test("a program is structs and functions, each function a name, parameters, a result type and a body",
+          arguments: [
+        ("enum E {}", ErrorCode.missingDeclaration(found: .token("enum"))),
         ("func 1() {}", .missingFunctionName(found: .token("1"))),
         ("func main(x) {}", .missingParameterType(found: .token(")"))),
         ("func f(1: Int) {}", .missingParameterName(found: .token("1"))),
@@ -88,13 +89,14 @@ struct ProgramTests {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
-    @Test("a type is Int, Bool, Void or '()'", arguments: [
+    @Test("a type is Int, Bool, Void, '()' or a struct", arguments: [
         ("let x: Int = 1; let y: Bool = true; print(x)", []),
         ("let x: Int8 = 1", [ErrorCode.notAType(name: "Int8")]),
-        ("let x: List = 1", [.notAType(name: "List")]),
+        ("let x: Vec = 1", [.notAType(name: "Vec")]),
+        ("var x: List", []),
     ])
     func types(body: String, expected: [ErrorCode]) {
-        #expect(errors("func main() { \(body) }") == expected)
+        #expect(errors("func main() { \(body) }\nstruct List") == expected)
     }
 
     @Test("both operands of an operator are checked, and errors are listed in source order")

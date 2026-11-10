@@ -34,9 +34,42 @@ struct EmittedTypeTests {
         // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let llvmFunction = try function(named: irFunction.name, in: module)
-            #expect(slotTypes(of: llvmFunction) == ["i64", "i1", "i1", "i64"])
+            let slotTypes = instructions(LLVMAlloca, in: llvmFunction).map { text(of: LLVMGetAllocatedType($0)) }
+            #expect(slotTypes == ["i64", "i1", "i1", "i64"])
         }
     }
+
+    @Test func `each local's slot is aligned as its type is, a struct's as its most-aligned field`() throws {
+        let main = mainFunction(locals: [.bool, pairType, .int], [BasicBlock(statements: [], terminator: .return(nil))])
+
+        // The emitted `main` aligns the Bool's slot to 1, and the Pair's and the Int's to 8.
+        try withEmitted(program(of: [main], types: pairTable)) { module in
+            let slots = instructions(LLVMAlloca, in: try function(named: "rayo.main", in: module))
+            #expect(slots.map(LLVMGetAlignment) == [1, 8, 8])
+        }
+    }
+
+    @Test func `a load and a store of a struct are aligned as the struct is`() throws {
+        // `main` copies one Pair into another, so it loads the first and stores the second.
+        let main = mainFunction(locals: [pairType, pairType], [
+            BasicBlock(statements: [statement(storingIn: 1, .use(read(0)))], terminator: .return(nil)),
+        ])
+
+        // The emitted copy reads and writes 8-byte-aligned memory.
+        try withEmitted(program(of: [main], types: pairTable)) { module in
+            let llvmMain = try function(named: "rayo.main", in: module)
+            #expect(instructions(LLVMLoad, in: llvmMain).map(LLVMGetAlignment) == [8])
+            #expect(instructions(LLVMStore, in: llvmMain).map(LLVMGetAlignment) == [8])
+        }
+    }
+
+    /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding.
+    private let pairTable = TypeTable(structs: [
+        StructType(name: "Pair", fields: [Field(name: "flag", type: .bool), Field(name: "count", type: .int)]),
+    ])
+
+    /// The type of the struct `pairTable` holds.
+    private let pairType = RayoType.structure(StructID(index: 0, name: "Pair"))
 
     /// A `main` that takes nothing, returns nothing and does nothing.
     private var emptyMain: IRFunction {
@@ -58,7 +91,7 @@ struct EmittedTypeTests {
 
     /// Emits `program` into a new module for the host, as a debug build does, and runs `checks` on the module.
     private func withEmitted(_ program: IRProgram, _ checks: (ModuleBuilder) throws -> Void) throws {
-        try withProgramModule(for: .debug) { programModule in
+        try withProgramModule(for: .debug, types: program.types) { programModule in
             programModule.emitter.emit(program)
             try checks(programModule.module)
         }
@@ -81,20 +114,19 @@ struct EmittedTypeTests {
         return try parameters.map { text(of: try #require($0)) }
     }
 
-    /// The types of the stack slots that `function`'s entry block allocates, in order, as LLVM writes them.
-    private func slotTypes(of function: LLVMValueRef) -> [String] {
-        var types: [String] = []
-        var instruction = LLVMGetFirstInstruction(LLVMGetEntryBasicBlock(function))
-        while let current = instruction {
-            // Only an alloca makes a slot; the entry block also stores the arguments and branches to the first block.
-            if LLVMGetInstructionOpcode(current) == LLVMAlloca { types.append(text(of: LLVMGetAllocatedType(current))) }
-            instruction = LLVMGetNextInstruction(current)
+    /// The instructions of `function` that `opcode` names, in the order its blocks hold them.
+    private func instructions(_ opcode: LLVMOpcode, in function: LLVMValueRef) -> [LLVMValueRef] {
+        var found: [LLVMValueRef] = []
+        var block = LLVMGetFirstBasicBlock(function)
+        while let currentBlock = block {
+            // Walk the block's instructions, keeping each of the opcode.
+            var instruction = LLVMGetFirstInstruction(currentBlock)
+            while let current = instruction {
+                if LLVMGetInstructionOpcode(current) == opcode { found.append(current) }
+                instruction = LLVMGetNextInstruction(current)
+            }
+            block = LLVMGetNextBasicBlock(currentBlock)
         }
-        return types
-    }
-
-    /// `type` as LLVM writes it, such as `i64`.
-    private func text(of type: LLVMTypeRef) -> String {
-        takeMessage(LLVMPrintTypeToString(type))
+        return found
     }
 }

@@ -23,8 +23,9 @@ func loweredWithRanges(_ source: String) throws(RejectedSource) -> IRProgram {
 /// Parses, checks and lowers `source`, and sets every source range in the IR to `nowhere`, as the expected IR has them.
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
-    let program = try loweredWithRanges(source)
-    return IRProgram(functions: program.functions.map(\.erasingRanges), main: program.main)
+    var program = try loweredWithRanges(source)
+    program.functions = program.functions.map(\.erasingRanges)
+    return program
 }
 
 /// Parses, checks and lowers a `main` whose body is `body`, and gives its IR with every source range in it `nowhere`.

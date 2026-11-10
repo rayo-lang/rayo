@@ -23,8 +23,8 @@ struct TokenTests {
 
     @Test("keywords and identifiers")
     func names() {
-        let (lexed, _) = Lexer.tokenize("let keep copy")
-        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .eof])
+        let (lexed, _) = Lexer.tokenize("let keep copy struct")
+        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
     }
 
     @Test("comments nest")
