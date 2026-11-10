@@ -11,7 +11,7 @@ struct Declarations {
     /// returns whether it did.
     mutating func declare(_ signature: Signature) -> Bool {
         let others = functions[signature.name, default: []]
-        // A function that no call could tell apart from one declared already isn't declared.
+        // A function whose labels and parameter types match one declared already isn't declared.
         guard !others.contains(where: { $0.takesArguments(like: signature) }) else { return false }
         functions[signature.name] = others + [signature]
         return true

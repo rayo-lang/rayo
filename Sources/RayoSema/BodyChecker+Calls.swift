@@ -73,8 +73,9 @@ extension BodyChecker {
 
     /// Checks `argument`'s label and value against `parameter`.
     private mutating func check(_ argument: Argument, against parameter: Parameter) -> CheckedExpr? {
-        // A label other than the parameter's is reported, and the value is still checked.
-        if argument.label != parameter.label {
+        // A label other than the parameter's is reported, and fails the argument once its value is checked.
+        let isLabeledRight = argument.label == parameter.label
+        if !isLabeledRight {
             let expected = ArgumentLabel(parameter.label)
             errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
         }
@@ -85,7 +86,7 @@ extension BodyChecker {
             return nil
         }
         let value = check(argument.value, expecting: type)
-        return argument.label == parameter.label ? value : nil
+        return isLabeledRight ? value : nil
     }
 
     /// The one of `candidates` whose labels and parameter types `arguments` fit, with the checked arguments.
@@ -109,7 +110,7 @@ extension BodyChecker {
         return (fitting[0], values)
     }
 
-    /// The arguments as an error writes them, such as `1, by: true` as `Int, by: Bool`.
+    /// The arguments as an error writes them, such as `Int, by: Bool`.
     private func spelling(of arguments: [(label: String?, type: RayoType)]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""

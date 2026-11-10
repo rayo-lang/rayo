@@ -107,7 +107,7 @@ final class FileChecker {
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
 
-        // Resolve the written type, which a parameter of type Void doesn't keep.
+        // Resolve the type the parameter is written with.
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
@@ -127,7 +127,7 @@ final class FileChecker {
         }
         // A written type that names no type was reported where it is written.
         guard let type = declarations.resolve(written, reporting: errors) else { return .failed }
-        // `main` returns nothing.
+        // A `main` that returns a value is reported.
         if isMain && type != .void {
             errors.report(.mainReturnsNonVoid, at: written.range)
             return .failed
@@ -160,7 +160,7 @@ final class FileChecker {
 
     /// Checks the body of the function `id`, with its parameters as its first locals.
     private func checkBody(of id: FunctionID) -> CheckedBody {
-        // Give the body a checker of its own, whose first locals are the parameters.
+        // Give the body a checker of its own.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
         var body = BodyChecker(file: self, result: signature.result.type)
@@ -174,13 +174,13 @@ final class FileChecker {
                                statements: statements)
         }
 
-        // Any other body runs its statements, and a missing `return` on a path to its end is reported.
+        // Any other body is checked statement by statement, and a missing `return` on a path to its end is reported.
         let statements = body.check(function.body)
         reportMissingReturn(from: function, as: signature)
         return CheckedBody(result: signature.result.type, locals: body.locals, statements: statements)
     }
 
-    /// The result type of the function `signature` declares, whose body is a single expression that checks to
+    /// The result type of the function that `signature` declares, whose body is a single expression that checks to
     /// `returned`: the declared type, or the expression's when no type is written.
     private func bodyResult(of signature: Signature, returning returned: CheckedExpr?) -> RayoType? {
         // A declared result type is the function's, whatever the expression's type.
@@ -188,8 +188,8 @@ final class FileChecker {
         return returned?.type
     }
 
-    /// Reports a missing `return` when a run can reach the end of `function`'s body, which isn't a single
-    /// expression, though the function returns a value.
+    /// Reports a missing `return` when a run can reach the end of `function`'s body, though the function returns a
+    /// value.
     private func reportMissingReturn(from function: FuncDecl, as signature: Signature) {
         // A function that returns Void, or whose result type failed and was reported, needs no `return`; nor does a
         // body that can't run to its end.
