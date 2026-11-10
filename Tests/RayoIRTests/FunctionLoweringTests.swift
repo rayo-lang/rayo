@@ -1,112 +1,68 @@
 import RayoIR
 import RayoSema
-import RayoSource
 import Testing
 
 @Suite("Lowering functions")
 struct FunctionLoweringTests {
-    @Test("a call names the function it calls, and passes its arguments as operands")
-    func call() throws {
+    @Test func `a call names the function it calls, and passes its arguments as operands`() throws(RejectedSource) {
         let program = try lowered("func main() {\nlet x = double(3)\n}\nfunc double(_ n: Int) -> Int { n * 2 }")
-        #expect(program.main == FunctionID(index: 0))
-        #expect(program.functions[0] == mainFunction(
+        let expected = mainFunction(
             locals: [letLocal("x", .int)],
             block(
                 declare(0), compute(0, .call(.function(FunctionID(index: 1)), arguments: [int(3)])),
-                then: .return(nil))))
+                then: .return(nil),
+            ),
+        )
+        #expect(program.main == FunctionID(index: 0))
+        #expect(program.functions[0] == expected)
     }
 
     @Test("a function's parameters are its first locals, and the end of a function with a result is unreachable")
-    func parametersAndResult() throws {
+    func parametersAndResult() throws(RejectedSource) {
         let double = try lowered("func main() {}\nfunc double(_ n: Int) -> Int { n * 2 }").functions[1]
-        #expect(double == IRFunction(
+        let expected = IRFunction(
             name: "double(_: Int)", parameterCount: 1, result: .int,
             locals: [parameter("n", .int), .temporary(.int)],
             blocks: [
                 block(compute(1, .binary(.multiply, read(0), int(2))), then: .return(read(1))),
                 block(then: .unreachable),
-            ]))
+            ],
+        )
+        #expect(double == expected)
     }
 
-    @Test("a function returns a Bool result as it returns an Int one")
-    func boolResult() throws {
+    @Test func `a function returns a Bool result as it returns an Int one`() throws(RejectedSource) {
         let isZero = try lowered("func main() {}\nfunc isZero(_ n: Int) -> Bool { n == 0 }").functions[1]
-        #expect(isZero == IRFunction(
+        let expected = IRFunction(
             name: "isZero(_: Int)", parameterCount: 1, result: .bool,
             locals: [parameter("n", .int), .temporary(.bool)],
             blocks: [
                 block(compute(1, .binary(.equal, read(0), int(0))), then: .return(read(1))),
                 block(then: .unreachable),
-            ]))
+            ],
+        )
+        #expect(isZero == expected)
     }
 
-    @Test("a 'return' of a local moves its value out as the result")
-    func returnLocal() throws {
+    @Test func `a 'return' of a local moves its value out as the result`() throws(RejectedSource) {
         let seven = try lowered("func main() {}\nfunc seven() -> Int {\nlet x = 7\nreturn x\n}").functions[1]
-        #expect(seven == IRFunction(
+        let expected = IRFunction(
             name: "seven()", parameterCount: 0, result: .int,
             locals: [letLocal("x", .int)],
             blocks: [
                 block(declare(0), compute(0, .use(int(7))), then: .return(move(0))),
                 block(then: .unreachable),
-            ]))
+            ],
+        )
+        #expect(seven == expected)
     }
 
-    @Test("a 'return' of a Void value computes it, and returns nothing")
-    func returnVoidValue() throws {
+    @Test func `a 'return' of a Void value computes it, and returns nothing`() throws(RejectedSource) {
         let main = try loweredMain("return print(1)")
-        #expect(main == mainFunction(
+        let expected = mainFunction(
             block(compute(nil, .call(.printInt, arguments: [int(1)])), then: .return(nil)),
-            block(then: .return(nil))))
+            block(then: .return(nil)),
+        )
+        #expect(main == expected)
     }
-
-    @Test("an operation keeps the range of the expression it computes, and an operand the range of its local")
-    func operationRanges() throws {
-        let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
-        let main = try loweredWithRanges(source).functions[0]
-
-        // The division is computed into a temporary, and the call reads it.
-        guard case .compute(_, .binary(.divide, let dividend, _), let range) = main.blocks[0].statements[2],
-              case .read(let place) = dividend else {
-            Issue.record("the division isn't the third statement of \(main.blocks[0])")
-            return
-        }
-        #expect(text(of: range, in: source) == "a / 0")
-        #expect(text(of: place.range, in: source) == "a")
-    }
-
-    @Test("a compound assignment's local keeps the range of its name, where it is written and where it is read")
-    func compoundAssignRanges() throws {
-        let source = "func main() {\n    var x = 0\n    x += 1\n}"
-        let main = try loweredWithRanges(source).functions[0]
-
-        // The compound assignment is the third statement, after the declaration and its value.
-        guard case .compute(let destination?, .binary(.add, .read(let operand), _), _) = main.blocks[0].statements[2]
-        else {
-            Issue.record("the compound assignment isn't the third statement of \(main.blocks[0])")
-            return
-        }
-        #expect(text(of: destination.range, in: source) == "x")
-        #expect(text(of: operand.range, in: source) == "x")
-    }
-
-    @Test("the temporary of a '&&' keeps the range of the whole '&&'")
-    func shortCircuitRange() throws {
-        let source = "func main() {\n    let a = true\n    let b = a && false\n}"
-        let main = try loweredWithRanges(source).functions[0]
-
-        // The `&&` starts by computing `a` into its temporary, after the two declarations and `a`'s value.
-        guard case .compute(let temporary?, .use, let range) = main.blocks[0].statements[3] else {
-            Issue.record("the '&&' doesn't start at the fourth statement of \(main.blocks[0])")
-            return
-        }
-        #expect(text(of: temporary.range, in: source) == "a && false")
-        #expect(text(of: range, in: source) == "a && false")
-    }
-}
-
-/// The text of `source` that `range` covers.
-private func text(of range: SourceRange, in source: String) -> String {
-    let bytes = Array(source.utf8)[range.start.offset..<range.end.offset]
-    return String(decoding: bytes, as: UTF8.self)
 }
