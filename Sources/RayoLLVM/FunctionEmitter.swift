@@ -122,9 +122,17 @@ struct FunctionEmitter {
 
         // A value that no local takes is dropped.
         guard let destination else { return }
-        // Only a call that returns nothing gives no value.
-        guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
+        // A call that returns nothing gives no value to store, and lowering stores none, so its store fails here.
+        guard let value else { throw storeOfNothing(from: rvalue, in: destination.local) }
         try store(value, in: destination.local, with: program.builder)
+    }
+
+    /// The error that says the IR stores the result of `rvalue`, a call that returns nothing, in `local`.
+    private func storeOfNothing(from rvalue: Rvalue, in local: LocalID) -> LLVMError {
+        // Only a call gives no value.
+        guard case .call(let callee, _) = rvalue else { preconditionFailure("only a call gives no value") }
+        let result = "the result of '\(calledFunction(callee).name)', which returns nothing,"
+        return LLVMError(message: "the IR stores \(result) in a local of type \(slotType(of: local).text)")
     }
 
     private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
@@ -157,9 +165,9 @@ struct FunctionEmitter {
     private func emitReturn(_ result: Operand?, in program: borrowing ProgramEmitter) throws(LLVMError) {
         let resultType = types.llvmType(function.result)
 
-        // A function that returns nothing ends in `ret void`. One that returns a value, which the checker makes end
-        // in a `return` of it, fails here.
+        // A `return` without an operand ends a function that returns nothing in `ret void`.
         guard let result else {
+            // A function that returns a value, which the checker makes end in a `return` of it, fails here.
             guard function.result == .void else {
                 throw LLVMError(message: "the IR returns nothing from a function that returns \(resultType.text)")
             }
@@ -218,23 +226,28 @@ struct FunctionEmitter {
     private func call(
         _ callee: Callee, passing arguments: [AnyValue], with builder: borrowing Builder,
     ) throws(LLVMError) -> AnyValue? {
-        // Call the LLVM function that `callee` names: the prelude's `print` is the runtime's.
-        let function = switch callee {
-        case .printInt: runtime.printInt
-        case .function(let id): functions[id.index]
-        }
+        let function = calledFunction(callee)
         try check(arguments, of: function)
         return builder.call(function, arguments)
     }
 
-    /// Throws where `arguments` aren't as many as `function` takes, or of the types it takes them as. LLVM would
-    /// stop the process on such a call, where it checks its own invariants, so the call fails here.
+    /// The LLVM function that `callee` names: the prelude's `print` is the runtime's.
+    private func calledFunction(_ callee: Callee) -> Function {
+        switch callee {
+        case .printInt: runtime.printInt
+        case .function(let id): functions[id.index]
+        }
+    }
+
+    /// Throws where `arguments` aren't as many as `function` takes, or of the types it takes them as.
     private func check(_ arguments: [AnyValue], of function: Function) throws(LLVMError) {
-        // A call passes as many arguments as the function has parameters.
+        // LLVM stops the process on a call that doesn't match its function's type, where it checks its own
+        // invariants, so a call the checker passes no IR with fails here.
         let parameters = function.type.parameters
+        // A call passes as many arguments as the function has parameters.
         guard arguments.count == parameters.count else {
-            let counts = "\(arguments.count) arguments, where it takes \(parameters.count)"
-            throw LLVMError(message: "the IR passes '\(function.name)' \(counts)")
+            let counts = "\(arguments.count) \(arguments.count == 1 ? "argument" : "arguments")"
+            throw LLVMError(message: "the IR passes '\(function.name)' \(counts), where it takes \(parameters.count)")
         }
 
         // Each argument is of its parameter's type.

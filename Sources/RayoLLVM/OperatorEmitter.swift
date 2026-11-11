@@ -120,10 +120,11 @@ struct OperatorEmitter {
     /// Emits the comparison of `left` and `right`, two Bools or two Ints, for `op`.
     private func compare(_ predicate: IntegerPredicate, _ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue,
                          with builder: borrowing Builder) throws(LLVMError) -> IntValue<I1> {
-        // Bools compare as `i1`s, and Ints as `i64`s.
+        // A Bool compares as an `i1` with another Bool.
         if let left = IntValue<I1>(left) { return builder.compare(predicate, left, try bool(right, op)) }
+        // An Int compares as an `i64` with another Int.
         if let left = IntValue<I64>(left) { return builder.compare(predicate, left, try int(right, op)) }
-        // A value of any other type is neither.
+        // A value of any other type is neither, and compares with nothing.
         throw mismatch(op, given: left, takes: "i1 or i64")
     }
 
@@ -167,8 +168,9 @@ struct OperatorEmitter {
 
     /// The error that says the IR gives `op` the operand `value`, where it takes a value of the type `expected`
     /// names.
-    private func mismatch(_ op: some RawRepresentable<String>, given value: AnyValue, takes expected: String)
-        -> LLVMError {
+    private func mismatch(
+        _ op: some RawRepresentable<String>, given value: AnyValue, takes expected: String,
+    ) -> LLVMError {
         let given = "an operand of type \(value.type.text)"
         return LLVMError(message: "the IR gives '\(op.rawValue)' \(given), where it takes \(expected)")
     }

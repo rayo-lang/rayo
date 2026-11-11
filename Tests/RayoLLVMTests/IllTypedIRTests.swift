@@ -100,6 +100,31 @@ private let illTypedIR = [
         error: "the IR passes 'rayo.print_int' 0 arguments, where it takes 1",
     ),
     IllTypedIR(
+        testDescription: "a call given too many arguments",
+        executable: program(locals: [], [
+            BasicBlock(
+                statements: [
+                    .compute(
+                        destination: nil, value: .call(.printInt, arguments: [.constant(.int(1)), .constant(.int(2))]),
+                        range: nowhere,
+                    ),
+                ],
+                terminator: .return(nil),
+            ),
+        ]),
+        error: "the IR passes 'rayo.print_int' 2 arguments, where it takes 1",
+    ),
+    IllTypedIR(
+        testDescription: "a call given one argument too few",
+        executable: calling("f(_:_:)", taking: 2, with: [.constant(.int(1))]),
+        error: "the IR passes 'f(_:_:)' 1 argument, where it takes 2",
+    ),
+    IllTypedIR(
+        testDescription: "a store of what a call that returns nothing gives",
+        executable: calling("f()", taking: 0, with: [], storingIn: .int),
+        error: "the IR stores the result of 'f()', which returns nothing, in a local of type i64",
+    ),
+    IllTypedIR(
         testDescription: "a return of a Bool from a function that returns an Int",
         executable: returning(.return(read(0)), of: .bool, from: .int),
         error: "the IR returns a value of type i1 from a function that returns i64",
@@ -108,6 +133,11 @@ private let illTypedIR = [
         testDescription: "a return of nothing from a function that returns an Int",
         executable: returning(.return(nil), of: .bool, from: .int),
         error: "the IR returns nothing from a function that returns i64",
+    ),
+    IllTypedIR(
+        testDescription: "a return of a value from a function that returns Void",
+        executable: returning(.return(read(0)), of: .bool, from: .void),
+        error: "the IR returns a value of type i1 from a function that returns void",
     ),
 ]
 
@@ -126,6 +156,31 @@ private func returning(_ terminator: Terminator, of local: RayoType, from result
     let function = IRFunction(
         name: "f()", parameterCount: 0, result: result, locals: [.temporary(local)],
         blocks: [BasicBlock(statements: [], terminator: terminator)],
+    )
+    return program(of: [main, function])
+}
+
+/// A program whose `main` calls `name`, which takes Ints for `parameterCount` parameters and returns nothing, with
+/// `arguments`, and stores what the call gives in a temporary of `local`'s type, or drops it where there is no `local`.
+private func calling(
+    _ name: String, taking parameterCount: Int, with arguments: [Operand], storingIn local: RayoType? = nil,
+) -> IRExecutable {
+    // `main` calls the function, storing what it gives in its one temporary where it has one.
+    let call = Rvalue.call(.function(FunctionID(index: 1)), arguments: arguments)
+    let callStatement = if local == nil {
+        Statement.compute(destination: nil, value: call, range: nowhere)
+    } else {
+        statement(storingIn: 0, call)
+    }
+    let main = mainFunction(locals: local.map { [$0] } ?? [], [
+        BasicBlock(statements: [callStatement], terminator: .return(nil)),
+    ])
+
+    // The function returns as soon as it is called.
+    let function = IRFunction(
+        name: name, parameterCount: parameterCount, result: .void,
+        locals: Array(repeating: .temporary(.int), count: parameterCount),
+        blocks: [BasicBlock(statements: [], terminator: .return(nil))],
     )
     return program(of: [main, function])
 }
