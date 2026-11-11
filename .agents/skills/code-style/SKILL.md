@@ -66,7 +66,7 @@ A tidy function also has:
 
 **A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A leaf's block of more than one line opens with a one-line comment that says what the block achieves**, in the terms of the function's job, so a reader skims the steps without rebuilding each from its lines. It describes the block whole, never one line of it: "Push the loop, lower the body, then pop the loop" reads the lines back, where "Lower the body with this loop innermost" says the step. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
+**A leaf's block of more than one line opens with a comment**, worded as the `code-comments` skill says, so a reader skims the steps without rebuilding each from its lines. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
 
 This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
@@ -107,7 +107,7 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 }
 ```
 
-**A leaf explains its algorithm in its body, case by case.** Its doc comment says only what it does, as a black box (the `code-comments` skill), so the body is where a reader learns how. Each case the body tells apart opens with a comment, one line where one will do, that says which case it is and what the function does with it, in the terms of the function's job:
+**A leaf explains its algorithm in its body, case by case**, since the `code-comments` skill keeps its doc comment to what it does, not how. Each case the body tells apart opens with a comment, worded as the `code-comments` skill says:
 
 - each case of a `switch`;
 - each `if`, and each of its `else` branches;
@@ -250,10 +250,10 @@ Audit every file, type and function you add or change against this list, and fix
 - **Every file** holds one primary type and its parts and is named after it (an extension file holds one area of its type's job and is named `Type+Area.swift`, with the type's stored properties in `Type.swift`; a test file is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
-- **Every doc comment** describes its declaration as a black box: it names no step, test, state or helper of the body.
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
 - **Every case** a leaf tells apart — a `switch` case, an `if` or `else` branch, a test that leaves early — opens with its comment, unless it is a `switch` or `if` that only maps each case to a value, one line per case.
 - **Every line** does one thing and fits in 120 columns.
 - **Every construct** is the form a rule under [Swift](#swift) names, in place of the one it replaces, and no target enables a language feature (`enableExperimentalFeature`, `enableUpcomingFeature`).
+- **Every comment and name** passes the `code-comments` skill's audit.
 
 **Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and stack your change on it: open your change with the refactor's branch as its base. A reviewer audits the same list, one file, type and function at a time.
