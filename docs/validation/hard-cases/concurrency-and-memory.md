@@ -57,7 +57,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C6 · Allocation inside lent work
 
-**Each call of a parallel loop's body appends to a `List` it owns locally, and to a `List` owned by the element it was given.** Either append may grow its list, through the allocator the list was built with, on whichever thread runs the call ([06](../../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
+**Each call of a parallel loop's body appends to a `List` it owns locally, and to a `List` owned by the element it was given.** Either append may grow its list, through the allocator the list was built with, on whichever thread runs the call ([06](../../spec/06-memory-and-allocators/allocator-basics.md#growth)).
 
 - **Must accept** with defined thread-safety for the allocators involved. A scratch arena that gives each thread its own block to allocate from, used from many threads, must be well-defined.
 - **Must accept** the lending thread using and freeing, after the join, what lent work allocated through an allocator that keeps state per thread.
@@ -82,7 +82,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 **A team writes its own job system in Rayo**: worker threads, `join`, and a parallel loop over a collection type it can split into disjoint parts. The language builds in none of these: threads, locks and job systems are libraries, which the language gives its checking rules ([07](../../spec/07-concurrency.md)).
 
-The team writes its workers twice, once over `Runtime.startThread` and once over the platform's thread API through `import c`, with a `@c func` start routine. Workers run bodies of type `Closure<consuming @sendable () -> Void>` from a list, and one worker parks on a queue it owns between jobs. The list, the queue and the bodies' captures were created while an arena was the current allocator, and the arena is reset while the workers are parked.
+The team writes its workers twice, once over `Runtime.startThread` and once over the platform's thread API through `import c`, with a `@c func` start routine. Workers run bodies of type `Closure<consuming @sendable () -> Void>` from a list, and one worker parks on a queue it owns between jobs. The list, the queue and the bodies' captures came from an arena: the list and the queue through `alloc`, and the captures through each body's conversion to a `Closure` in a method of a value allocated there. The arena is reset while the workers are parked.
 
 - **Must accept** the job system with its unverified part as small as possible, and state what it promises. The workers over `Runtime.startThread` need no `unsafe`, and those over the C API no `unsafe` beyond the C thread call.
 - **Must accept** the parked workers. **Must hold:** the reset never frees memory a parked worker still uses; state what it does instead, and what each worker sees when it next uses what the arena held.
@@ -125,7 +125,7 @@ The criteria below use these statements, the first five in the tasks that handle
 let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
 await sleep(for: .milliseconds(200))                               // a retry's backoff, on MonotonicClock
 let digest = await hashed                                          // a Future<Digest> that a worker thread fulfills: nil if its Promise is gone
-using allocator = lease.arena { … }                                // lease: the handler's own value naming its request's arena; a block with an await inside
+var body = lease.arena.alloc List<UInt8>()                         // lease: the handler's own value naming its request's arena; 'body' lives across awaits
 let host = req.host.view; try await write(sock, page); log(host)   // error: the view 'host' is live across the await
 
 guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
@@ -158,12 +158,12 @@ let db = try block(on: connect(dbAddress))                         // in main, b
 **Code builds a `List` in a scratch arena that is reset regularly, such as once per request or once per frame, and keeps what it needs past the reset in a long-lived struct.** A reset makes every value allocated from the arena before it stale ([06](../../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)), so what is kept must be copied out first. Here `scratch` is a `List<String>` built in the arena:
 
 ```swift
-using allocator = .system { world.results = scratch.clone() }   // clones the list while .system is the current allocator
-frameArena.reset()                                              // resets the arena that built 'scratch'
-world.results.append(r)                                         // grows the kept list after the reset
+world.results = alloc scratch.clone()   // clones the list into .heap, the ambient allocator here
+frameArena.reset()                      // resets the arena that built 'scratch'
+world.results.append(r)                 // grows the kept list after the reset
 ```
 
-- **Must accept** the code above: the clone's buffers, its elements' included, come from `.system`.
+- **Must accept** the code above: the clone's buffers, its elements' included, come from `.heap`.
 
 ### M2 · Freeing a large set of objects at once
 

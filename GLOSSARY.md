@@ -24,7 +24,7 @@ A place that may be changed or lent with `&`, such as a `var` that owns its valu
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
 
 **Copy**:
-A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
+A second value with the same contents: `copy x` duplicates a copyable value's bytes, and `alloc x.clone()` a move-only value's storage ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)).
 
 **Copyable**:
 A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
@@ -264,30 +264,42 @@ The member, or for an associated type the type, that meets one requirement of a 
 
 ### Memory and allocators
 
+**`alloc`**:
+The keyword that marks every construction giving a value heap storage, with an allocator it names, as in `a.alloc`, or the ambient one ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
+
+**`alloc func`**:
+A function that makes a new `Allocating` value, and receives that value's allocator from the `alloc` at its call, as `clone()` does ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
+
+**Allocating**:
+A type whose values allocate: the compiler gives it an allocator of its own, and making one says `alloc` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)).
+
 **Allocator**:
-A copyable id that names a registered allocator implementation ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
+Where storage comes from: `.heap`, or a registered value of a type conforming to the `Allocator` protocol, which an `AllocatorId` names ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
+
+**Allocator id**:
+A copyable `AllocatorId` that names a registered allocator ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: allocator handle, allocator reference
 
 **Allocator word**:
 The 8 bytes in which an owning value records the allocator its storage came from, dated against that allocator's resets ([06](docs/spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
+**Ambient allocator**:
+The allocator a bare `alloc` takes: the one an `alloc func` or an initializer received, the instance's inside an `Allocating` type's other methods, and `.heap` everywhere else ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
+_Avoid_: current allocator, default allocator, context allocator
+
 **Arena**:
-An allocator that frees nothing individually, and frees everything it handed out at once when it is reset ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
+An allocator, of a type conforming to `Arena`, that frees nothing individually, and frees everything it handed out at once when it is reset ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: region, zone, bump allocator
 
 **Backing**:
 The allocator another allocator draws its memory from, such as the one a wrapper wraps ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: parent allocator, upstream
 
-**Current allocator**:
-The allocator, kept per thread, that constructors record when they aren't given one, and that `using allocator` sets for a block ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
-_Avoid_: default allocator, context allocator
-
 **Frozen**:
 A type with no interior mutability: nothing writes its values, or what they own, through a shared borrow ([06](docs/spec/06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
 
 **Heap**:
-An allocator that frees each allocation individually, such as `.system` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
+An allocator that frees each allocation individually, such as `.heap` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 
 **Open**:
 An access that reaches the storage an owning value owns, which checks that the storage isn't stale ([06](docs/spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
@@ -323,7 +335,7 @@ _Avoid_: static data
 A type whose destruction does nothing but free memory ([06](docs/spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)).
 
 **Unregistering**:
-Ending an allocator with `Allocator.unregister`: its values go stale, its objects are destroyed, and then its implementation is ([06](docs/spec/06-memory-and-allocators/arena-safety.md#unregistering-an-allocator)).
+Ending an allocator with `AllocatorId.unregister`: its values go stale, its objects are destroyed, and then its implementation is ([06](docs/spec/06-memory-and-allocators/arena-safety.md#unregistering-an-allocator)).
 
 **Weak link**:
 A copyable `WeakShared<T>`, which names a reference-counted value without keeping it alive ([06](docs/spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).

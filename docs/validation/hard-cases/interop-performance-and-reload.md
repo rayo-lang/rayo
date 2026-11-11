@@ -11,7 +11,7 @@
 **A C library stores a `void* user` per registered item, and calls a callback on its own threads with two of those pointers**, as a physics library's contact callback does. Some items are elements of a `StablePool`, which the program later replaces whole by assigning it a new one, and some are objects allocated in an arena that is later reset. Separately, a global `let` `StablePool` has one of its elements pinned for C. That pool is initialized at startup, never placed in read-only data, since its pin counts are written at run time ([09](../../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 ```swift
-pool = StablePool()      // assigns a new pool: the old one is destroyed while C may still hold its elements' addresses
+pool = alloc StablePool()   // assigns a new pool: the old one is destroyed while C may still hold its elements' addresses
 ```
 
 - **Must accept** an idiom whose `unsafe` part is only the C calls. State what the Rayo side must provide: stable addresses of whatever `user` points to, and thread safety.
