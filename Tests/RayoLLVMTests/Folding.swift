@@ -24,7 +24,7 @@ func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Fol
     return withExtendedLifetime(module) { folding(returnedBy: caller.value) }
 }
 
-/// What the optimiser folded the result `function` returns to.
+/// What the optimiser folds `function`'s result to.
 private func folding(returnedBy function: LLVMValueRef) -> Folding {
     // Where the optimiser left `function` no `ret`, every path through it reaches behaviour LLVM leaves undefined.
     guard let returned = returnedValue(of: function) else { return .undefined }

@@ -10,9 +10,9 @@ struct EmittedTypeTests {
     func `a function's signature holds its parameters and result in their types`(
         result: RayoType, resultText: String,
     ) throws {
-        let pick = try pick(returning: result, [])
-        try withEmitted(program(with: [pick])) { module in
-            let signature = try signature(of: pick.name, in: module)
+        let irFunction = try pick(returning: result, [])
+        try withEmitted(program(with: [irFunction])) { module in
+            let signature = try signature(of: irFunction.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
             #expect(text(of: LLVMGetReturnType(signature)) == resultText)
         }
@@ -27,10 +27,10 @@ struct EmittedTypeTests {
     }
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
-        let pick = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
-        try withEmitted(program(with: [pick])) { module in
-            let emittedPick = try function(named: pick.name, in: module)
-            #expect(slotTypes(of: emittedPick) == ["i64", "i1", "i1", "i64"])
+        let irFunction = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
+        try withEmitted(program(with: [irFunction])) { module in
+            let llvmFunction = try function(named: irFunction.name, in: module)
+            #expect(slotTypes(of: llvmFunction) == ["i64", "i1", "i1", "i64"])
         }
     }
 

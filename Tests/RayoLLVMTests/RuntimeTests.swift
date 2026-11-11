@@ -4,8 +4,8 @@ import RayoLLVM
 import RayoSema
 
 struct RuntimeTests {
-    @Test("a program that panics defines the runtime's panic once and leaves no runtime symbol undefined")
-    func panicLinked() throws {
+    @Test
+    func `a program that panics defines the runtime's panic once and leaves no runtime symbol undefined`() throws {
         let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), for: .debug)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
         // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
