@@ -41,11 +41,10 @@ A file without a `main` function is a library. `rayo check` checks it as it chec
 swift test
 ```
 
-Only the modules that `check-llvm-imports` lists may import LLVM's C modules, `CLLVM` and `CLLVMJIT`, and no module may re-export them. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. `check-llvm-imports` reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from the package's root:
+Only the directories that `scripts/check_llvm_imports.py` lists may import LLVM's C modules, `CLLVM` and `CLLVMJIT`, and no file may re-export them. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. The script reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from anywhere:
 
 ```sh
-swift package dump-package > "${TMPDIR:-/tmp}/package.json"
-swift run check-llvm-imports "${TMPDIR:-/tmp}/package.json"
+python3 scripts/check_llvm_imports.py
 ```
 
 ## How rayo and rayoc work together
@@ -169,13 +168,6 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
-| `Tests/PackageGraph` | The package's targets as the manifest describes them: which target holds a path, and which test targets depend on a target |
-| `Tests/TestSelection` | Which test targets a change reaches, through the manifest's dependencies |
-| `Tests/select-tests` | The executable that CI runs to choose the tests a pull request needs |
-| `Tests/TestSelectionTests` | The tests of the choice of test targets |
-| `Tests/LLVMImportCheck` | The check that only the modules it allows import LLVM's C modules, and that none re-exports them |
-| `Tests/check-llvm-imports` | The executable that runs that check on the package's Swift files, with the modules it allows |
-| `Tests/LLVMImportCheckTests` | The check's tests |
 | `Tests/LLVMTests` | The binding's tests, which build small functions with it and check what LLVM prints and reports |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |

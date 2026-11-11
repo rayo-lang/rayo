@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.paths.outputs.code }}
-      code-paths: ${{ steps.paths.outputs.code-paths }}
+      test-paths: ${{ steps.paths.outputs.test-paths }}
       docs: ${{ steps.paths.outputs.docs }}
       swift-release: ${{ env.SWIFT_RELEASE }}
     steps:
@@ -60,20 +60,24 @@ jobs:
           deleted=$(git diff --name-only --no-renames --diff-filter=D "$base" HEAD)
 
           # The compiler's build reads only its sources, its tests and the package manifest, and the tests run
-          # through this workflow and its actions. The docs check reads every Markdown file, its own scripts and
-          # every file a link names, so a deleted file of any kind can break a link.
-          code_paths='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
+          # through this workflow and its actions, so a change to any of them can change what a test does. The code
+          # jobs also run the scripts that pick the tests and check the imports, which no test reads. The docs
+          # check reads every Markdown file, its own scripts and every file a link names, so a deleted file of any
+          # kind can break a link.
+          test_paths='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
+          code_paths="$test_paths|^scripts/(select_tests|check_llvm_imports)\.py$"
           docs_paths='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
           if grep -q -E "$code_paths" <<< "$changed"; then code=true; else code=false; fi
           if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
 
-          # A pull request runs only the tests that its code paths reach, which each test job finds from them. A
-          # push to main runs every test, since its build is the one pull requests start from.
+          # A pull request runs only the tests that its test paths reach, which each test job finds from them, and
+          # without any, as when it changes only the code jobs' scripts, the jobs only build. A push to main runs
+          # every test, since its build is the one pull requests start from.
           if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$code" = true ]; then
-            paths=$(grep -E "$code_paths" <<< "$changed")
-            echo "code-paths=$(jq -R . <<< "$paths" | jq -s -c .)" >> "$GITHUB_OUTPUT"
+            paths=$(jq -R -s -c --arg paths "$test_paths" 'split("\n") | map(select(test($paths)))' <<< "$changed")
+            echo "test-paths=$paths" >> "$GITHUB_OUTPUT"
           fi
 
   linux:
@@ -164,15 +168,13 @@ jobs:
         with:
           platform: linux
           llvm-version: ${{ steps.llvm.outputs.version }}
-          changed-paths: ${{ needs.changes.outputs.code-paths }}
+          changed-paths: ${{ needs.changes.outputs.test-paths }}
       # A target can import LLVM's C modules through a dependency it doesn't name, so the check reads the imports
       # themselves. They are the same on every platform, so it runs here alone, whether or not the tests passed.
-      # It needs LLVM installed, since the manifest looks for LLVM before it describes the package.
+      # It runs once LLVM is installed, since LLVM's packages bring the `python3` it runs with.
       - name: Check the imports of LLVM's C modules
         if: ${{ !cancelled() && steps.llvm.outcome == 'success' }}
-        run: |
-          swift package dump-package > "$RUNNER_TEMP/package.json"
-          swift run -q check-llvm-imports "$RUNNER_TEMP/package.json"
+        run: python3 scripts/check_llvm_imports.py
 
   macos:
     name: Test on macOS
@@ -240,7 +242,7 @@ jobs:
         with:
           platform: macos
           llvm-version: ${{ steps.brew.outputs.llvm }}
-          changed-paths: ${{ needs.changes.outputs.code-paths }}
+          changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   windows:
     name: Test on Windows
@@ -317,7 +319,7 @@ jobs:
         with:
           platform: windows
           llvm-version: ${{ env.LLVM_BUILD }}
-          changed-paths: ${{ needs.changes.outputs.code-paths }}
+          changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   docs:
     name: Check docs

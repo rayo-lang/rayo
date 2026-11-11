@@ -177,19 +177,6 @@ let package = Package(
         .testTarget(name: "RayoCompilerTests", dependencies: ["RayoCompiler", "RayoDiagnostics", "RayoSource"]),
         .target(name: "ToolStandIn", path: "Tests/ToolStandIn"),
         .executableTarget(name: "tool-stand-in", dependencies: ["ToolStandIn"], path: "Tests/tool-stand-in"),
-        .target(name: "PackageGraph", path: "Tests/PackageGraph"),
-        .target(name: "TestSelection", dependencies: ["PackageGraph"], path: "Tests/TestSelection"),
-        .executableTarget(name: "select-tests", dependencies: ["PackageGraph", "TestSelection"],
-                          path: "Tests/select-tests"),
-        .testTarget(name: "TestSelectionTests", dependencies: ["PackageGraph", "TestSelection"]),
-        .target(name: "LLVMImportCheck", dependencies: [
-            "PackageGraph",
-            .product(name: "SwiftParser", package: "swift-syntax"),
-            .product(name: "SwiftSyntax", package: "swift-syntax"),
-        ], path: "Tests/LLVMImportCheck"),
-        .executableTarget(name: "check-llvm-imports", dependencies: ["LLVMImportCheck", "PackageGraph"],
-                          path: "Tests/check-llvm-imports"),
-        .testTarget(name: "LLVMImportCheckTests", dependencies: ["LLVMImportCheck", "PackageGraph"]),
         // The driver's tests run the built `rayo`, `rayoc` and `tool-stand-in`, so they depend on all three.
         .testTarget(name: "RayoDriverTests", dependencies: [
             "rayo", "rayoc", "tool-stand-in", "RayoDriver", "RayoLLVMInstall", "RayoRuntime", "ToolStandIn",
