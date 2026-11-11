@@ -135,6 +135,18 @@ struct StructDeclarationTests {
         #expect(errors(source) == [.alreadyDeclared(name: name)])
     }
 
+    @Test(arguments: [
+        ("struct A\nfunc A() {}", "let q = A", ErrorCode.typeAsValue(name: "A")),
+        ("struct A\nfunc A() {}", "A = 3", .assignToType(name: "A")),
+        ("func A() {}\nstruct A", "let q = A", .functionAsValue(name: "A")),
+        ("func A() {}\nstruct A", "A = 3", .assignToFunction(name: "A")),
+    ])
+    func `a body's use of a taken name, other than a call, finds the kind that declares the name first`(
+        declarations: String, body: String, expected: ErrorCode,
+    ) {
+        #expect(errors("func main() {\n\(body)\n}\n" + declarations) == [expected, .alreadyDeclared(name: "A")])
+    }
+
     @Test func `each function after a struct of its name is an error, though it overloads another`() {
         let reported = diagnostics("func main() {}\nstruct f\nfunc f() {}\nfunc f(_ x: Int) {}")
         #expect(reported.map(\.code) == [.alreadyDeclared(name: "f"), .alreadyDeclared(name: "f")])

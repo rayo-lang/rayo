@@ -33,7 +33,7 @@ final class NameScopes {
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         // Find the name in scope and in the module; the use picks between them.
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
-        let module = moduleMatch(for: name)
+        let module = moduleMatch(for: name, use: use)
         return switch use {
         // No local can be called, so a function or a struct wins even over a local whose declaration failed.
         case .call: module ?? inScope
@@ -67,16 +67,17 @@ final class NameScopes {
         blocks.reversed().lazy.compactMap { $0[name] }.first
     }
 
-    /// The module's functions called `name`, or else its struct of that name, nil when it has neither.
-    private func moduleMatch(for name: String) -> NameMatch? {
+    /// The module's functions or struct called `name` that `use` finds, nil when it has neither. Where both have the
+    /// name, a call finds the functions, and any other use the kind the name belongs to.
+    private func moduleMatch(for name: String, use: NameUse) -> NameMatch? {
         let functions = file.declarations.functions(named: name)
-        return if !functions.isEmpty {
-            // A name the functions have is theirs, even where a struct also has it, which was reported.
-            .functions(functions)
-        } else {
-            // Any other name is the struct's, if one has it.
-            file.declarations.structure(named: name).map { .structure($0) }
-        }
+        let functionMatch = functions.isEmpty ? nil : NameMatch.functions(functions)
+        let structMatch = file.declarations.structure(named: name).map { NameMatch.structure($0) }
+
+        // A call finds the functions, so a function whose name a struct took still answers its calls; any other use
+        // finds the struct first where the struct declares the name first.
+        let findsStructFirst = use == .ordinary && file.names.kind(of: name) == .structure
+        return findsStructFirst ? structMatch ?? functionMatch : functionMatch ?? structMatch
     }
 
     /// Declares `name` in the innermost block as a failed declaration, whose uses report nothing more.

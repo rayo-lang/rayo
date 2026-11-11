@@ -9,7 +9,7 @@ final class FileChecker {
     private(set) var declarations = Declarations()
     private let file: SourceFile
     /// Which kind of declaration each of the file's top-level names belongs to.
-    private let names: TopLevelNames
+    let names: TopLevelNames
     /// The signature of each of the file's functions, indexed by `FunctionID`.
     private var signatures: [Signature] = []
     private var bodies: [FunctionID: CheckedBody] = [:]

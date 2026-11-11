@@ -30,7 +30,7 @@ struct TopLevelNames {
         }
     }
 
-    /// Maps each name to where its first declaration in `declarations`, each given by its name and start, starts.
+    /// Maps each name in `declarations`, which give names and starts, to the start of its first declaration.
     private static func firstStarts(of declarations: [(String, SourceLocation)]) -> [String: SourceLocation] {
         Dictionary(declarations, uniquingKeysWith: { first, _ in first })
     }

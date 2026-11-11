@@ -93,8 +93,7 @@ struct StructChecker {
             let fieldTypes = checkFields(of: declaration, in: declarations)
             // A struct with no ID has its fields checked, and is declared no further.
             guard let id else { continue }
-            // IDs number the structs that have them in order, so each lies at its ID's index, as the search for
-            // structs that contain themselves needs.
+            // IDs number the structs that have them in order, so each struct lies at its ID's index.
             precondition(id.index == declared.count, "a declared struct lies at its ID's index")
             declared.append(DeclaredStruct(id: id, declaration: declaration, fieldTypes: fieldTypes))
         }
@@ -115,7 +114,7 @@ struct StructChecker {
 
     /// Reports `field`'s default value, if it has one, since rayoc doesn't support a field's default.
     private func reportDefault(of field: FieldDecl) {
-        // A field without a default has nothing to report.
+        // A field's default is reported where it is written.
         if let defaultValue = field.defaultValue { errors.report(.fieldDefault, at: defaultValue.range) }
     }
 
