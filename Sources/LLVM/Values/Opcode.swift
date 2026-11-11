@@ -2,10 +2,10 @@ package import CLLVM
 
 /// What an instruction does, such as allocate a stack slot or return.
 public struct Opcode: Equatable, Sendable {
-    private let rawValue: UInt32
+    private let opcode: LLVMOpcode
 
     package init(_ opcode: LLVMOpcode) {
-        rawValue = opcode.rawValue
+        self.opcode = opcode
     }
 
     /// `alloca`.
