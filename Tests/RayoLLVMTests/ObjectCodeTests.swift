@@ -17,13 +17,13 @@ struct ObjectCodeTests {
     @Test(.enabled(if: !llvmAssertsOnInvalidIR), arguments: Build.allCases)
     func `IR that LLVM rejects is an internal error, not a crash`(build: Build) {
         // Programs that the checker would never pass: one adds a Bool to an Int, and one branches on an Int.
-        let addsBoolToInt = function(locals: [.bool, .int, .int], [
+        let addsBoolToInt = program(locals: [.bool, .int, .int], [
             BasicBlock(
                 statements: [statement(storingIn: 2, .binary(.add, read(0), read(1)))],
                 terminator: .return(nil),
             ),
         ])
-        let branchesOnInt = function(locals: [.int], [
+        let branchesOnInt = program(locals: [.int], [
             BasicBlock(
                 statements: [],
                 terminator: .branch(read(0), then: BlockID(index: 1), otherwise: BlockID(index: 1)),
@@ -44,7 +44,7 @@ struct ObjectCodeTests {
     ) throws {
         /// A program that stores 42 in one local, then `taken` in another, and prints that one.
         func handingOn(_ taken: Operand) -> IRProgram {
-            function(locals: [.int, .int], [
+            program(locals: [.int, .int], [
                 BasicBlock(statements: [
                     statement(storingIn: 0, .use(.constant(.int(42)))),
                     statement(storingIn: 1, .use(taken)),
@@ -58,10 +58,10 @@ struct ObjectCodeTests {
 
     @Test(arguments: Build.allCases)
     func `a declaration compiles to no code, in debug and in release`(build: Build) throws {
-        let declared = function(locals: [.int], [
+        let declared = program(locals: [.int], [
             BasicBlock(statements: [.declare(LocalID(index: 0))], terminator: .return(nil)),
         ])
-        let empty = function(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
+        let empty = program(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
         #expect(try compile(declared, for: build) == compile(empty, for: build))
     }
 

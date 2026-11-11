@@ -37,7 +37,7 @@ struct RuntimeTests {
     }
 
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
-        let empty = function(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
+        let empty = program(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
         #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix("rayo.panic") })
         #expect(try symbols([], in: compile(empty, for: .release)).filter { $0.contains("rayo.") } == [])
     }

@@ -3,7 +3,7 @@ import RayoSema
 import RayoSource
 
 /// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
-func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
+func program(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
     program(of: [mainFunction(locals: locals, blocks)])
 }
 
@@ -31,7 +31,7 @@ func move(_ index: Int) -> Operand {
 
 /// A program that prints what `value` computes.
 func printing(_ value: Rvalue) -> IRProgram {
-    function(locals: [.int], [
+    program(locals: [.int], [
         BasicBlock(statements: [
             statement(storingIn: 0, value),
             statement(printing: read(0)),
