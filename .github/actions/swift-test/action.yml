@@ -12,6 +12,10 @@ inputs:
     description: What swift test takes besides, such as the tests a platform can't run.
     required: false
     default: ""
+  changed-paths:
+    description: The paths a pull request changes that the build reads, as a JSON array; without them, every test runs.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -49,12 +53,36 @@ runs:
         path: .build
         key: ${{ steps.name.outputs.key }}
         restore-keys: ${{ steps.name.outputs.prefix }}
+    # The test targets the changed paths reach, by the manifest's dependencies, are the ones a run needs.
+    - name: Select the tests
+      id: tests
+      shell: bash
+      env:
+        CHANGED_PATHS: ${{ inputs.changed-paths }}
+      run: |
+        # Without changed paths, as on a push to main, every test runs.
+        if [ -z "$CHANGED_PATHS" ]; then
+          selection=all
+        else
+          swift package dump-package > "$RUNNER_TEMP/package.json"
+          printf '%s' "$CHANGED_PATHS" > "$RUNNER_TEMP/changed-paths.json"
+          selection=$(swift run -q select-tests "$RUNNER_TEMP/package.json" "$RUNNER_TEMP/changed-paths.json")
+        fi
+        echo "Selected tests: $selection"
+        echo "selection=$selection" >> "$GITHUB_OUTPUT"
     - name: Test
       shell: bash
       env:
         ARGUMENTS: ${{ inputs.arguments }}
+        SELECTION: ${{ steps.tests.outputs.selection }}
       # The arguments are words, split where they have spaces.
-      run: swift test $ARGUMENTS
+      run: |
+        case "$SELECTION" in
+          all) swift test $ARGUMENTS ;;
+          # A change no test target reaches still has to build.
+          none) swift build --build-tests ;;
+          *) swift test $ARGUMENTS --filter "$SELECTION" ;;
+        esac
     - name: Save the build
       if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
