@@ -147,14 +147,18 @@ let package = Package(
             .embedInCode("host-windows.ll"),
         ]),
         .target(
-            name: "RayoLLVM",
-            dependencies: ["CLLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"],
+            name: "LLVM",
+            dependencies: ["CLLVM"],
             // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
             linkerSettings: [
                 .unsafeFlags(["-L\(llvmPrefix)/lib"]),
                 .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
                 .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
             ]
+        ),
+        .target(
+            name: "RayoLLVM",
+            dependencies: ["CLLVM", "LLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"]
         ),
         .target(name: "RayoCompiler", dependencies: [
             "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM", "RayoSource",
@@ -196,6 +200,7 @@ let package = Package(
         .testTarget(name: "RayoOwnershipTests", dependencies: [
             "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),
+        .testTarget(name: "LLVMTests", dependencies: ["LLVM"]),
         .systemLibrary(name: "CLLVMJIT", path: "Tests/CLLVMJIT"),
         .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),
         .testTarget(name: "RayoLLVMTests", dependencies: [

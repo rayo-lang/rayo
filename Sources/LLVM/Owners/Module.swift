@@ -1,0 +1,114 @@
+package import CLLVM
+
+/// An LLVM module: the functions and globals that compile to one object file.
+public struct Module: ~Copyable {
+    package let ref: LLVMModuleRef
+    private let context: ContextHandle
+    /// Whether this disposes of the module, which it doesn't once another module has taken it in a link.
+    private var owns = true
+
+    init(_ ref: LLVMModuleRef, in context: ContextHandle) {
+        self.ref = ref
+        self.context = context
+    }
+
+    deinit {
+        if owns { LLVMDisposeModule(ref) }
+    }
+
+    public var name: String {
+        var length = 0
+        let name = LLVMGetModuleIdentifier(ref, &length)!
+        return String(decoding: UnsafeRawBufferPointer(start: name, count: length), as: UTF8.self)
+    }
+
+    /// The triple of the target the module compiles for.
+    public var target: String {
+        get { String(cString: LLVMGetTarget(ref)) }
+        nonmutating set { LLVMSetTarget(ref, newValue) }
+    }
+
+    /// How the target lays out values in memory, as LLVM IR writes it.
+    public var dataLayout: String {
+        get { String(cString: LLVMGetDataLayoutStr(ref)) }
+        nonmutating set { LLVMSetDataLayout(ref, newValue) }
+    }
+
+    /// The module as LLVM IR writes it.
+    public var text: String { takeMessage(LLVMPrintModuleToString(ref)) }
+
+    /// Throws what LLVM finds wrong with the module, which is a fault in the code that built it.
+    public func verify() throws(LLVMError) {
+        var message: UnsafeMutablePointer<CChar>?
+        let broken = LLVMVerifyModule(ref, LLVMReturnStatusAction, &message) != 0
+        let report = takeMessage(message)
+        // A broken module's report says what LLVM found wrong with it.
+        if broken { throw LLVMError(message: "LLVM rejected the module it was given:\n\(report)") }
+    }
+
+    /// Links `other` into this module, which takes its functions and globals in.
+    public func link(_ other: consuming Module) throws(LLVMError) {
+        // LLVM disposes of `other` whether or not the link succeeds.
+        let otherName = other.name
+        let failed = LLVMLinkModules2(ref, other.ref) != 0
+        other.owns = false
+
+        // A module that won't link fails with the errors LLVM reported about it.
+        guard failed else { return }
+        let reasons = context.errors.joined(separator: "\n")
+        throw LLVMError(message: "LLVM couldn't link \(otherName) into \(name):\n\(reasons)")
+    }
+
+    // MARK: Functions and globals
+
+    /// Declares a function named `name` of `type`, which a block appended to it defines.
+    public func addFunction(named name: String, type: FunctionType) -> Function {
+        Function(LLVMAddFunction(ref, name, type.ref), type: type)
+    }
+
+    /// The function named `name` that the module declares or defines, or nil where it has none.
+    public func function(named name: String) -> Function? {
+        LLVMGetNamedFunction(ref, name).map(Self.function)
+    }
+
+    /// The functions the module declares or defines, in order.
+    public var functions: [Function] {
+        var functions: [Function] = []
+        var next = LLVMGetFirstFunction(ref)
+        while let function = next {
+            functions.append(Self.function(function))
+            next = LLVMGetNextFunction(function)
+        }
+        return functions
+    }
+
+    /// The global variables the module declares or defines, in order.
+    public var globals: [GlobalVariable] {
+        var globals: [GlobalVariable] = []
+        var next = LLVMGetFirstGlobal(ref)
+        while let global = next {
+            globals.append(GlobalVariable(global))
+            next = LLVMGetNextGlobal(global)
+        }
+        return globals
+    }
+
+    /// Adds a global variable named `name`, which holds `initializer` when a run starts.
+    public func addGlobal(named name: String, initializer: some ValueHandle) -> GlobalVariable {
+        let global = LLVMAddGlobal(ref, LLVMTypeOf(initializer.anyValue.ref), name)!
+        LLVMSetInitializer(global, initializer.anyValue.ref)
+        return GlobalVariable(global)
+    }
+
+    /// The declaration of LLVM's intrinsic `name` that takes and returns values of `type`.
+    public func intrinsic(named name: String, overloadedOn type: some TypeHandle) -> Function {
+        let id = LLVMLookupIntrinsicID(name, name.utf8.count)
+        var types: [LLVMTypeRef?] = [type.anyType.ref]
+        return Self.function(LLVMGetIntrinsicDeclaration(ref, id, &types, 1))
+    }
+
+    /// `function`, a function of some module, with the type it is declared with.
+    private static func function(_ function: LLVMValueRef) -> Function {
+        Function(function, type: FunctionType(LLVMGlobalGetValueType(function)))
+    }
+}
