@@ -10,15 +10,14 @@ struct OperatorModule {
         case bools
     }
 
-    private let module: ModuleBuilder
-    private let program: ProgramEmitter
-    private let target: TargetMachine
+    private let programModule: ProgramModule
 
     init(for build: Build) throws(LLVMError) {
-        let programModule = try ProgramModule(for: build)
-        target = programModule.target
-        module = programModule.module
-        program = programModule.emitter
+        programModule = try ProgramModule(for: build)
+    }
+
+    private var module: ModuleBuilder {
+        borrow { programModule.module }
     }
 
     /// The text of the module's IR.
@@ -28,9 +27,10 @@ struct OperatorModule {
 
     /// Defines `name(i64, i64) -> i64`, which takes its parameters as the type `operands` names and returns what
     /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool.
-    func define(_ name: String, on operands: Operands,
-                _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef)
-        -> (function: FunctionValue, givesBool: Bool) {
+    func define(
+        _ name: String, on operands: Operands,
+        _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef,
+    ) -> (function: FunctionValue, givesBool: Bool) {
         // Make the function, and build from its entry block.
         let function = module.addFunction(name, taking: [module.int64, module.int64], returning: module.int64)
         LLVMPositionBuilderAtEnd(module.builder, module.appendBlock(to: function.value, named: "entry"))
@@ -40,7 +40,7 @@ struct OperatorModule {
             let parameter = LLVMGetParam(function.value, UInt32(index))!
             return operands == .bools ? LLVMBuildTrunc(module.builder, parameter, module.bool, "")! : parameter
         }
-        let operators = OperatorEmitter(program: program, into: function.value)
+        let operators = OperatorEmitter(program: programModule.emitter, into: function.value)
         let value = expression(ExpressionEmitter(operators: operators), parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
@@ -62,6 +62,6 @@ struct OperatorModule {
     /// `exported` names where the compiler would export only the program's entry point. The runtime is left out, so
     /// that the stand-in for its panic catches a panic.
     func ready(exporting exported: Set<String>) throws {
-        try target.ready(module, exporting: exported)
+        try programModule.target.ready(module, exporting: exported)
     }
 }

@@ -1,9 +1,6 @@
 import RayoSyntax
 import Testing
 
-/// The builds `rayoc` makes: a debug build, where overflow panics, and a release build, where it wraps.
-private let builds: [Build] = [.debug, .release]
-
 /// `OperatorEmitter` emits each operator here as a unit, on the parameters of a function of its own, which the test
 /// calls in its own process. A whole program would pass its operators literals from its entry point, which a
 /// release build's optimiser folds before the emitted instructions run.
@@ -11,7 +8,7 @@ private let builds: [Build] = [.debug, .release]
 struct OperatorTests {
     @Test(arguments: [
         (.add, 7, -5, 2), (.subtract, 7, -5, 12), (.multiply, 7, -5, -35),
-    ] as [(BinaryOperator, Int64, Int64, Int64)], builds)
+    ] as [(BinaryOperator, Int64, Int64, Int64)], Build.allCases)
     func `'+', '-' and '*' compute what they name, in every build`(
         operation: (BinaryOperator, Int64, Int64, Int64), build: Build,
     ) throws {
@@ -31,7 +28,7 @@ struct OperatorTests {
         #expect(try outcome(of: op, left, right, in: .release) == .int(wrapped))
     }
 
-    @Test(arguments: builds)
+    @Test(arguments: Build.allCases)
     func `'-' negates an Int, in every build`(build: Build) throws {
         #expect(try outcome(of: .negate, 5, in: build) == .int(-5))
     }
@@ -44,7 +41,7 @@ struct OperatorTests {
     @Test(arguments: [
         (7, 2, 3), (-7, 2, -3), (7, -2, -3), (-7, -2, 3), (5, -1, -5), (.max, -1, -.max),
         (.min, 2, -4_611_686_018_427_387_904),
-    ] as [(Int64, Int64, Int64)], builds)
+    ] as [(Int64, Int64, Int64)], Build.allCases)
     func `'/' rounds toward zero, in every build`(operands: (Int64, Int64, Int64), build: Build) throws {
         let (left, right, quotient) = operands
         #expect(try outcome(of: .divide, left, right, in: build) == .int(quotient))
@@ -57,7 +54,7 @@ struct OperatorTests {
 
     @Test(arguments: [
         (7, 3, 1), (-7, 3, -1), (7, -3, 1), (-7, -3, -1), (7, -1, 0), (.min, -1, 0), (.min, 3, -2),
-    ] as [(Int64, Int64, Int64)], builds)
+    ] as [(Int64, Int64, Int64)], Build.allCases)
     func `'%' takes the dividend's sign, and a remainder by -1 is 0, Int.min's too, in every build`(
         operands: (Int64, Int64, Int64), build: Build,
     ) throws {
@@ -67,7 +64,7 @@ struct OperatorTests {
 
     @Test(arguments: [
         (.divide, "division by zero"), (.remainder, "remainder by zero"),
-    ] as [(BinaryOperator, String)], builds)
+    ] as [(BinaryOperator, String)], Build.allCases)
     func `'/' and '%' by zero panic in every build`(operation: (BinaryOperator, String), build: Build) throws {
         let (op, reason) = operation
         #expect(try outcome(of: op, 7, 0, in: build) == .panics(reason))

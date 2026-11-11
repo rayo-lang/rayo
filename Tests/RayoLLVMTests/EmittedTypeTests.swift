@@ -11,7 +11,7 @@ struct EmittedTypeTests {
         result: RayoType, resultText: String,
     ) throws {
         let pick = try pick(returning: result, [])
-        try withEmitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+        try withEmitted(program(with: [pick])) { module in
             let signature = try signature(of: pick.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
             #expect(text(of: LLVMGetReturnType(signature)) == resultText)
@@ -19,7 +19,7 @@ struct EmittedTypeTests {
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
-        try withEmitted(IRProgram(functions: [voidMain], main: FunctionID(index: 0))) { module in
+        try withEmitted(program(with: [])) { module in
             let signature = try signature(of: "rayo.main", in: module)
             #expect(try parameterTypes(of: signature) == [])
             #expect(text(of: LLVMGetReturnType(signature)) == "void")
@@ -28,15 +28,16 @@ struct EmittedTypeTests {
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
         let pick = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
-        try withEmitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+        try withEmitted(program(with: [pick])) { module in
             let emittedPick = try function(named: pick.name, in: module)
             #expect(slotTypes(of: emittedPick) == ["i64", "i1", "i1", "i64"])
         }
     }
 
-    /// A `main` that takes nothing, returns nothing and does nothing.
-    private var voidMain: IRFunction {
-        mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
+    /// A program of `functions`, after a `main` that takes nothing, returns nothing and does nothing.
+    private func program(with functions: [IRFunction]) -> IRProgram {
+        let main = mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
+        return IRProgram(functions: [main] + functions, main: FunctionID(index: 0))
     }
 
     /// A function that takes an Int and a Bool, holds `temporaries` besides them, and returns the parameter of type
