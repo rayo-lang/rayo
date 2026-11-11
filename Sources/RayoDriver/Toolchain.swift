@@ -260,7 +260,7 @@ struct Toolchain {
         // Foundation reports an exception's code without its two highest bits, so the code is read from Windows,
         // through the handle Foundation keeps for as long as the process object lives.
         var code: DWORD = 0
-        guard GetExitCodeProcess(process.processHandle, &code).boolValue else {
+        guard GetExitCodeProcess(process.processHandle, &code) else {
             // Without the code from Windows, Foundation's report of it is all there is.
             return .exited(process.terminationStatus)
         }

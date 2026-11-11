@@ -296,6 +296,34 @@ struct BuildTests {
             #expect(result == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "", errors: ""))
         }
     }
+
+    // Windows ends a process by an exception, not a signal.
+    #if os(Windows)
+    @Test("a run that an exception ends ends with the exception's code")
+    func exception() {
+        // A recursion with no end overflows the stack, which Windows reports as the exception 0xC00000FD.
+        let source = """
+            func main() { print(deeper(0)) }
+            func deeper(_ n: Int) -> Int { deeper(n + 1) + 1 }
+            """
+        #expect(run(source, options: ["--debug"]).exitCode == Int32(bitPattern: 0xC000_00FD))
+    }
+    #endif
+
+    @Test("build and run take a source whose path has spaces, and build writes the executable beside it")
+    func pathWithSpaces() throws {
+        try withTemporaryDirectory { directory in
+            let folder = directory.appendingPathComponent("a folder", isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            _ = try save("func main() { print(42) }", as: "the answer.rayo", in: folder)
+            #expect(rayo(["run", "a folder/the answer.rayo"], in: directory) ==
+                CommandResult(exitCode: 0, output: "42\n", errors: ""))
+
+            #expect(rayo(["build", "a folder/the answer.rayo"], in: directory) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+            #expect(try runExecutable(folder.appendingPathComponent(Executable.fileName("the answer"))) == "42\n")
+        }
+    }
 }
 
 struct IntegerTests {
