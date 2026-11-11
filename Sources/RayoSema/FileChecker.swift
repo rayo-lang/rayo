@@ -105,7 +105,7 @@ final class FileChecker {
 
         // Declare the function, reporting a name it can't take.
         let isDeclared = declarations.declare(signature)
-        if names.holder(of: function.name) == .structure {
+        if names.kind(of: function.name) == .structure {
             // A function whose name belongs to a struct is reported, and still declared: a call looks up functions
             // alone, so it still finds the function, and raises no error of its own.
             errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)

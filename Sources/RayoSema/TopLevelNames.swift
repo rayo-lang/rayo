@@ -5,7 +5,7 @@ import RayoSyntax
 /// belongs to the kind that declares it first, and a declaration of the other kind with that name is an error.
 struct TopLevelNames {
     /// The kind of declaration a name belongs to.
-    enum Holder: Equatable {
+    enum Kind: Equatable {
         case structure
         case functions
     }
@@ -21,7 +21,7 @@ struct TopLevelNames {
     }
 
     /// The kind `name` belongs to, nil when no struct or function has it.
-    func holder(of name: String) -> Holder? {
+    func kind(of name: String) -> Kind? {
         switch (firstStructs[name], firstFunctions[name]) {
         case (nil, nil): nil
         case (.some, nil): .structure

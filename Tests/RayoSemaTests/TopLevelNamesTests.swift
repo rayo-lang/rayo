@@ -4,7 +4,7 @@ import Testing
 
 struct TopLevelNamesTests {
     @Test(arguments: [
-        ("struct S", TopLevelNames.Holder.structure),
+        ("struct S", TopLevelNames.Kind.structure),
         ("func S() {}", .functions),
         ("struct S\nfunc S() {}", .structure),
         ("func S() {}\nstruct S", .functions),
@@ -12,12 +12,12 @@ struct TopLevelNamesTests {
         ("struct S\nfunc S() {}\nstruct S", .structure),
     ])
     func `a name belongs to the kind, struct or function, that declares it first`(
-        source: String, holder: TopLevelNames.Holder,
+        source: String, kind: TopLevelNames.Kind,
     ) {
-        #expect(TopLevelNames(of: Parser.parse(source).file).holder(of: "S") == holder)
+        #expect(TopLevelNames(of: Parser.parse(source).file).kind(of: "S") == kind)
     }
 
     @Test func `a name that no struct or function declares belongs to neither`() {
-        #expect(TopLevelNames(of: Parser.parse("func f() {}\nstruct T").file).holder(of: "S") == nil)
+        #expect(TopLevelNames(of: Parser.parse("func f() {}\nstruct T").file).kind(of: "S") == nil)
     }
 }

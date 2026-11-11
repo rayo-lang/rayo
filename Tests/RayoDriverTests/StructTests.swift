@@ -61,8 +61,24 @@ struct StructTests {
     }
 
     @Test(arguments: [
+        ("S()", ErrorCode.structInitializer),
+        ("let s = S", .typeAsValue(name: "S")),
+        ("S = 1", .assignToType(name: "S")),
+    ])
+    func `a struct's name used as a call, a value or an assignment's target is reported as a struct's`(
+        body: String, expected: ErrorCode,
+    ) {
+        let source = "func main() {\n\(body)\n}\nstruct S(var a: Int)"
+
+        // The one error covers the struct's name.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == ["S"])
+    }
+
+    @Test(arguments: [
         ("let x: Int = 1", "struct Int(var big: Bool)", [ErrorCode.typeMismatch(expected: "Int", found: "Int")]),
-        ("print(1)", "struct print", [.notDeclared(name: "print")]),
+        ("print(1)", "struct print", [.structInitializer]),
     ])
     func `a struct's name shadows the prelude's type or function of that name`(
         body: String, declaration: String, expected: [ErrorCode],

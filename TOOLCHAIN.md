@@ -74,7 +74,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
-| `Tests/RayoSemaTests` | The tests of the type table's layouts, over parsed files |
+| `Tests/RayoSemaTests` | The tests of the type table's layouts, and of which kind of declaration each top-level name belongs to, over parsed files |
 | `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |

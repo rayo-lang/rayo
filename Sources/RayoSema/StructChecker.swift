@@ -79,7 +79,7 @@ struct StructChecker {
     /// Reports `declaration`, the first struct of its name, when `names` gives the name to functions.
     private func reportNameOfFunctions(_ declaration: StructDecl, among names: TopLevelNames) {
         // A function before it holds the name already.
-        if names.holder(of: declaration.name) == .functions {
+        if names.kind(of: declaration.name) == .functions {
             errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
         }
     }
@@ -104,9 +104,16 @@ struct StructChecker {
         var types: [RayoType?] = []
         for field in declaration.fields {
             checkName(of: field, besides: &names)
+            reportDefault(of: field)
             types.append(checkType(of: field, in: declarations))
         }
         return types
+    }
+
+    /// Reports `field`'s default value, if it has one, since rayoc doesn't support a field's default.
+    private func reportDefault(of field: FieldDecl) {
+        // A field without a default has nothing to report.
+        if let defaultValue = field.defaultValue { errors.report(.fieldDefault, at: defaultValue.range) }
     }
 
     /// Checks that `field`'s name is neither `_` nor one of `names`, the names of the fields before it, reporting
@@ -120,16 +127,13 @@ struct StructChecker {
         }
     }
 
-    /// Checks `field`'s type and default value, and returns the type, nil where it isn't known. Reports a field with
-    /// no type, one whose type holds no value, and a default value, which rayoc doesn't support.
+    /// Checks `field`'s type, and returns it, nil where it isn't known. Reports a field with neither a type nor a
+    /// default value, and one whose type holds no value.
     private func checkType(of field: FieldDecl, in declarations: Declarations) -> RayoType? {
-        // A default value is reported, and the field is checked as though it had none.
-        if let defaultValue = field.defaultValue { errors.report(.fieldDefault, at: defaultValue.range) }
-
         // A field that writes no type has none to check.
         guard let written = field.type else {
-            // A field with no default value needs its type written; one with a default, reported above, would take
-            // its type from the default.
+            // A field with no default value needs its type written; one with a default, which is reported apart,
+            // would take its type from the default.
             if field.defaultValue == nil {
                 errors.report(.missingFieldType(name: field.name), at: field.nameRange)
             }
