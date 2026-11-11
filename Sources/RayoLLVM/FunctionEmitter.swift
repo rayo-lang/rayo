@@ -34,7 +34,7 @@ struct FunctionEmitter {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
         program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: llvmFunction))
         slots = allocateSlots(with: program.builder)
-        storeArguments(with: program.builder)
+        try storeArguments(with: program.builder)
 
         // Make an LLVM block for each IR block, and go on from the entry block to the first.
         blocks = function.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
@@ -55,10 +55,10 @@ struct FunctionEmitter {
     }
 
     /// Stores each argument in its parameter's slot.
-    private func storeArguments(with builder: borrowing Builder) {
+    private func storeArguments(with builder: borrowing Builder) throws(LLVMError) {
         // The parameters are the first locals, in order.
         for index in 0..<function.parameterCount {
-            store(llvmFunction.parameter(at: index), in: LocalID(index: index), with: builder)
+            try store(llvmFunction.parameter(at: index), in: LocalID(index: index), with: builder)
         }
     }
 
@@ -79,8 +79,16 @@ struct FunctionEmitter {
         builder.load(slotType(of: local), from: slots[local.index], alignment: alignment(of: local))
     }
 
-    /// Emits the instruction that stores `value` in `local`'s slot.
-    private func store(_ value: AnyValue, in local: LocalID, with builder: borrowing Builder) {
+    /// Emits the instruction that stores `value` in `local`'s slot. Throws where `value` is of another type than
+    /// `local`'s.
+    private func store(_ value: AnyValue, in local: LocalID, with builder: borrowing Builder) throws(LLVMError) {
+        // A value of another type, which the checker passes no IR with, would pass LLVM's verifier, since a slot is
+        // a pointer of no type, and run as bits of the wrong type, so it fails here.
+        let slotType = slotType(of: local)
+        guard value.type == slotType else {
+            let stored = "a value of type \(value.type.text)"
+            throw LLVMError(message: "the IR stores \(stored) in a local of type \(slotType.text)")
+        }
         builder.store(value, to: slots[local.index], alignment: alignment(of: local))
     }
 
@@ -116,7 +124,7 @@ struct FunctionEmitter {
         guard let destination else { return }
         // Only a call that returns nothing gives no value.
         guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
-        store(value, in: destination.local, with: program.builder)
+        try store(value, in: destination.local, with: program.builder)
     }
 
     private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
@@ -134,18 +142,37 @@ struct FunctionEmitter {
             }
             program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
-        // A `return` with an operand returns its value.
-        case .return(let result?):
-            program.builder.return(read(result, in: program))
-
-        // A `return` without an operand, from a function that returns Void, returns nothing.
-        case .return(nil):
-            program.builder.returnVoid()
+        // A `return` returns its operand's value, or nothing where it has none.
+        case .return(let result):
+            try emitReturn(result, in: program)
 
         // A block that no path reaches ends in LLVM's `unreachable`.
         case .unreachable:
             program.builder.unreachable()
         }
+    }
+
+    /// Emits the return of `result`'s value, or of nothing where there is no `result`. Throws where that isn't of
+    /// the type the function returns.
+    private func emitReturn(_ result: Operand?, in program: borrowing ProgramEmitter) throws(LLVMError) {
+        let resultType = types.llvmType(function.result)
+
+        // A function that returns nothing ends in `ret void`. One that returns a value, which the checker makes end
+        // in a `return` of it, fails here.
+        guard let result else {
+            guard function.result == .void else {
+                throw LLVMError(message: "the IR returns nothing from a function that returns \(resultType.text)")
+            }
+            return program.builder.returnVoid()
+        }
+
+        // A value of another type than the function's result, which the checker passes no IR with, fails here.
+        let value = read(result, in: program)
+        guard value.type == resultType else {
+            let returned = "a value of type \(value.type.text)"
+            throw LLVMError(message: "the IR returns \(returned) from a function that returns \(resultType.text)")
+        }
+        program.builder.return(value)
     }
 
     private func read(_ operand: Operand, in program: borrowing ProgramEmitter) -> AnyValue {
@@ -182,17 +209,38 @@ struct FunctionEmitter {
 
         // A call passes its arguments' values.
         case .call(let callee, let arguments):
-            call(callee, passing: arguments.map { read($0, in: program) }, with: program.builder)
+            try call(callee, passing: arguments.map { read($0, in: program) }, with: program.builder)
         }
     }
 
-    /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing.
-    private func call(_ callee: Callee, passing arguments: [AnyValue], with builder: borrowing Builder) -> AnyValue? {
+    /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing. Throws where
+    /// `arguments` aren't of the types `callee` takes.
+    private func call(
+        _ callee: Callee, passing arguments: [AnyValue], with builder: borrowing Builder,
+    ) throws(LLVMError) -> AnyValue? {
         // Call the LLVM function that `callee` names: the prelude's `print` is the runtime's.
         let function = switch callee {
         case .printInt: runtime.printInt
         case .function(let id): functions[id.index]
         }
+        try check(arguments, of: function)
         return builder.call(function, arguments)
+    }
+
+    /// Throws where `arguments` aren't as many as `function` takes, or of the types it takes them as. LLVM would
+    /// stop the process on such a call, where it checks its own invariants, so the call fails here.
+    private func check(_ arguments: [AnyValue], of function: Function) throws(LLVMError) {
+        // A call passes as many arguments as the function has parameters.
+        let parameters = function.type.parameters
+        guard arguments.count == parameters.count else {
+            let counts = "\(arguments.count) arguments, where it takes \(parameters.count)"
+            throw LLVMError(message: "the IR passes '\(function.name)' \(counts)")
+        }
+
+        // Each argument is of its parameter's type.
+        for (argument, parameter) in zip(arguments, parameters) where argument.type != parameter {
+            let types = "an argument of type \(argument.type.text), where it takes \(parameter.text)"
+            throw LLVMError(message: "the IR passes '\(function.name)' \(types)")
+        }
     }
 }

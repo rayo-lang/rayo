@@ -14,7 +14,7 @@ enum Folding: Equatable {
 func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Folding {
     // Have the optimiser compute the operator, emitted in `g` on parameters, once it inlines `f`'s call of `g`.
     var module = try OperatorModule(for: .release)
-    let (operation, _) = module.define("g", on: .ints) { emit, a, b in emit(op, a, b) }
+    let (operation, _) = try module.define("g", on: .ints) { emit, a, b in try emit(op, a, b) }
     let caller = module.defineCall("f", of: operation, left, right)
     // `g` is exported too, since a hidden `g` would let the optimiser specialise it on one constant first, and
     // rewrite an operation LLVM leaves undefined before it sees the other.

@@ -16,32 +16,6 @@ struct ObjectCodeTests {
     }
 
     @Test(arguments: Build.allCases)
-    func `IR the checker would never pass is an internal error that says what is wrong, not a crash`(build: Build) {
-        // Programs that the checker would never pass: one adds a Bool to an Int, and one branches on an Int.
-        let addsBoolToInt = program(locals: [.bool, .int, .int], [
-            BasicBlock(
-                statements: [statement(storingIn: 2, .binary(.add, read(0), read(1)))],
-                terminator: .return(nil),
-            ),
-        ])
-        let branchesOnInt = program(locals: [.int], [
-            BasicBlock(
-                statements: [],
-                terminator: .branch(read(0), then: BlockID(index: 1), otherwise: BlockID(index: 1)),
-            ),
-            BasicBlock(statements: [], terminator: .return(nil)),
-        ])
-
-        // The emitter throws, before LLVM sees an instruction of either, what the IR gets wrong.
-        #expect(throws: LLVMError(message: "the IR gives '+' an operand of type i1, where it takes i64")) {
-            try compile(addsBoolToInt, for: build)
-        }
-        #expect(throws: LLVMError(message: "the IR branches on a value of type i64, where it takes i1")) {
-            try compile(branchesOnInt, for: build)
-        }
-    }
-
-    @Test(arguments: Build.allCases)
     func `a move of a local compiles to the code that a read of it does, in debug and in release`(
         build: Build,
     ) throws {

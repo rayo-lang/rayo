@@ -29,7 +29,8 @@ struct OperatorEmitter {
 
         // `!` flips a Bool's one bit.
         case .not:
-            return program.builder.xor(try bool(operand, op), types.bool.constant(1)).anyValue
+            let flipped = try bool(operand, op)
+            return program.builder.xor(flipped, types.bool.constant(1)).anyValue
         }
     }
 
@@ -119,10 +120,11 @@ struct OperatorEmitter {
     /// Emits the comparison of `left` and `right`, two Bools or two Ints, for `op`.
     private func compare(_ predicate: IntegerPredicate, _ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue,
                          with builder: borrowing Builder) throws(LLVMError) -> IntValue<I1> {
-        // Bools compare as `i1`s.
+        // Bools compare as `i1`s, and Ints as `i64`s.
         if let left = IntValue<I1>(left) { return builder.compare(predicate, left, try bool(right, op)) }
-        // Everything else compares as `i64`s.
-        return builder.compare(predicate, try int(left, op), try int(right, op))
+        if let left = IntValue<I64>(left) { return builder.compare(predicate, left, try int(right, op)) }
+        // A value of any other type is neither.
+        throw mismatch(op, given: left, takes: "i1 or i64")
     }
 
     private func panic(ifZero value: IntValue<I64>, _ reason: PanicReason, at range: SourceRange,
@@ -158,10 +160,17 @@ struct OperatorEmitter {
     ) throws(LLVMError) -> IntValue<Width> {
         // An operand of another type would reach LLVM only to be rejected, so it fails here, saying what it is.
         guard let operand = IntValue<Width>(value) else {
-            let types = "an operand of type \(value.type.text), where it takes i\(Width.bitWidth)"
-            throw LLVMError(message: "the IR gives '\(op.rawValue)' \(types)")
+            throw mismatch(op, given: value, takes: "i\(Width.bitWidth)")
         }
         return operand
+    }
+
+    /// The error that says the IR gives `op` the operand `value`, where it takes a value of the type `expected`
+    /// names.
+    private func mismatch(_ op: some RawRepresentable<String>, given value: AnyValue, takes expected: String)
+        -> LLVMError {
+        let given = "an operand of type \(value.type.text)"
+        return LLVMError(message: "the IR gives '\(op.rawValue)' \(given), where it takes \(expected)")
     }
 
     private func int(_ value: AnyValue, _ op: some RawRepresentable<String>) throws(LLVMError) -> IntValue<I64> {
