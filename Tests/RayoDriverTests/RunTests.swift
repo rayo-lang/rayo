@@ -248,6 +248,27 @@ struct BuildTests {
         }
     }
 
+    #if os(Windows)
+    @Test("on Windows each linker links an executable whose main thread reserves a stack of 16 MiB",
+          arguments: [["--linker=lld"], ["--linker=platform"]])
+    func stackReserve(options: [String]) throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func main() {}", as: "empty.rayo", in: directory)
+            #expect(rayo(["build"] + options + ["empty.rayo"], in: directory) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+
+            // The file headers give the stack the executable reserves on a line of its own.
+            let executable = directory.appendingPathComponent(Executable.fileName("empty"))
+            let headers = try runExecutable(llvmTool("llvm-readobj"), arguments: ["--file-headers", executable.path])
+            let reserves = headers.split(whereSeparator: \.isNewline).compactMap { line in
+                let field = line.drop { $0 == " " }
+                return field.hasPrefix("SizeOfStackReserve: ") ? field.dropFirst("SizeOfStackReserve: ".count) : nil
+            }
+            #expect(reserves == ["16777216"])
+        }
+    }
+    #endif
+
     @Test("build builds in the mode it names")
     func buildMode() throws {
         try withTemporaryDirectory { directory in
