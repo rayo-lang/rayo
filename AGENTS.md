@@ -3,7 +3,7 @@
 - **Code is its own source of truth.** Comments, names and tests stand alone: state the reason itself, in place. Never reference artifacts from code — issues, PRs, specs, ADRs, plans, review findings.
 - **Test-driven.** Every behaviour change runs red-green-refactor: write the test first and watch it go red for the right reason, write the least code that turns it green, then refactor while it stays green. Load the `tdd` skill before writing code.
 - **Writing or reviewing code.** Load the `code-style` skill first: it says how files, types and functions are split and laid out. `code-design` applies before you implement, `code-comments` as you write each line.
-- **Branches, commits and pull requests.** Before you create a branch, commit, or open, review or merge a pull request, read `docs/agents/pull-requests.md`. It holds the rules for each: branch names, Conventional Commits subjects, the limit on open pull requests, stacks, how a fresh agent reviews each pull request, and how it merges.
+- **Branches, commits and pull requests.** Before you create a branch, commit, or open, stack, review or merge a pull request, read `docs/agents/pull-requests.md`.
 - **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, skill, or tool template that adds one. The only exception is a branch name's `-via-` suffix.
 
 ## Agent skills

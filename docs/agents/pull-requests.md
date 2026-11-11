@@ -18,7 +18,7 @@ How a change reaches `main` on `rayo-lang/rayo`: the branch it is made on, its c
 
 **At most three pull requests are open on `rayo-lang/rayo` at a time**, whoever opened them, drafts included and counting each pull request in a stack; `gh pr list -R rayo-lang/rayo --state open` counts them. Open the next only when one has merged or closed; work past the limit waits on its branch.
 
-**A pull request's title and body follow the `create-pr` skill.**
+**Pull requests follow the `create-pr` skill.**
 
 ## Stacked pull requests
 
@@ -52,6 +52,6 @@ gh pr merge <N> -R rayo-lang/rayo --auto --squash --match-head-commit <approved 
 
 - **The message file** is a plain paragraph, wrapped at 72 columns, that says what the change does, written from the diff as the pull request body is, with no section headings and no attribution.
 - **If GitHub refuses auto-merge because the pull request can already merge**, run the same command without `--auto`: it merges at once.
-- **Before you push to a pull request whose auto-merge is on**, turn it off with `gh pr merge <N> -R rayo-lang/rayo --disable-auto`, so the new head can't merge unreviewed. Turn it on again for the head the next round approves.
+- **Before you push to a pull request whose auto-merge is on, or edit its title or body**, turn it off with `gh pr merge <N> -R rayo-lang/rayo --disable-auto`, so nothing the next round hasn't approved can merge, whether a new head or the old subject and message. Turn it on again, with the subject and message that round's head and title call for, once that round approves.
 - **A stacked pull request's auto-merge goes on only once its base is `main`**, after the pull request below it has merged and `gh stack sync` has rebased it, and the rebase round has approved. Turned on earlier, it would merge into the branch below it.
 - **A pull request whose CI fails doesn't merge.** Fix the failure in a new commit, and send it to the reviewer as a round.
