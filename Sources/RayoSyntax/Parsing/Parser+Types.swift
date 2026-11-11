@@ -16,4 +16,12 @@ extension Parser {
         let (name, _) = try expectIdentifier(else: ErrorCode.missingType)
         return .named(name, range: range(from: start))
     }
+
+    /// Whether a type can start with `token`.
+    func startsType(_ token: Token) -> Bool {
+        switch token.kind {
+        case .identifier, .punct(.lparen): true
+        default: false
+        }
+    }
 }

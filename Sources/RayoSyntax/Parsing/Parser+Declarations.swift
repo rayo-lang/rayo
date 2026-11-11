@@ -81,7 +81,7 @@ extension Parser {
             return nil
         }
         // Without a type after it, the word is the type's name.
-        guard peek().startsType else { return nil }
+        guard startsType(peek()) else { return nil }
 
         // A type after the word makes the word the parameter's convention.
         advance()
@@ -160,15 +160,5 @@ private extension SourceFile {
     /// The file that `declarations` make, each kind in source order.
     init(_ declarations: [Declaration]) {
         self.init(functions: declarations.compactMap(\.function), structs: declarations.compactMap(\.structure))
-    }
-}
-
-private extension Token {
-    /// Whether a type can start with the token.
-    var startsType: Bool {
-        switch kind {
-        case .identifier, .punct(.lparen): true
-        default: false
-        }
     }
 }
