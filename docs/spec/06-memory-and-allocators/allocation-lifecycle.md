@@ -58,9 +58,9 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 ## Releasing a value without destroying it: `TrivialFree`
 
 ```swift
-alloc func loadLevel(_ n: Int) -> Level!(IoError | ParseError) { … }  // builds the level with the allocator its caller's alloc gives
+alloc func buildLevel(_ n: Int) -> Level!(IoError | ParseError) { … } // builds the level with the allocator its caller's alloc gives
 
-world.level = try levelArena.alloc loadLevel(3)                       // in a function that can fail: the level's lists and strings come from the arena
+world.level = try levelArena.alloc buildLevel(3)                      // in a function that can fail: the level's lists and strings come from the arena
 
 levelArena.release(replace(&world.level, with: alloc Level()))        // requires Level: TrivialFree; forgets the old level instead of destroying it
 levelArena.reset()                                                    // what the arena holds goes stale, and its memory is freed
