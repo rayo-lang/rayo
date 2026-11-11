@@ -3,15 +3,6 @@ import CLLVM
 
 /// A module for the host, into which a debug or a release build's operators are emitted in functions of their own.
 struct OperatorModule {
-    /// How a build emits its operators, and whether it optimises them.
-    enum Build: Equatable {
-        /// A debug build's: overflow panics, and the module isn't optimised.
-        case debug
-        /// A release build's: overflow wraps, and the module is optimised as the compiler optimises a program's.
-        /// Only the runtime is left out, so that the stand-in for its panic catches a panic.
-        case release
-    }
-
     /// The type of the operands of a function's operators.
     enum Operands: Equatable {
         case ints
@@ -23,8 +14,8 @@ struct OperatorModule {
     private let program: ProgramEmitter
     private let target: TargetMachine
 
-    init(for build: Build) throws {
-        let emitting = try ProgramModule(optimizes: build == .release)
+    init(for build: Build) throws(LLVMError) {
+        let emitting = try ProgramModule(for: build)
         target = emitting.target
         module = emitting.module
         program = emitting.emitter

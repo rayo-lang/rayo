@@ -6,11 +6,14 @@ struct ProgramModule {
     let module: ModuleBuilder
     let emitter: ProgramEmitter
 
-    /// Makes them as a release build does where `optimizes`, and as a debug build does otherwise.
-    init(optimizes: Bool) throws(LLVMError) {
-        target = try TargetMachine(optimizes: optimizes)
+    init(for build: Build) throws(LLVMError) {
+        target = try TargetMachine(optimizes: build == .release)
         module = ModuleBuilder(named: "main.rayo", for: target)
-        emitter = ProgramEmitter(module: module, runtime: try Runtime(in: module), sourcePath: "main.rayo",
-                                 checksOverflow: !optimizes)
+        emitter = ProgramEmitter(
+            module: module,
+            runtime: try Runtime(in: module),
+            sourcePath: "main.rayo",
+            checksOverflow: build == .debug,
+        )
     }
 }

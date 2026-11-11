@@ -9,17 +9,20 @@ struct ValueTypeTests {
     func `an Int is held in a 64-bit integer, and a Bool in a 1-bit one`(
         type: RayoType, width: UInt32,
     ) throws(LLVMError) {
-        let llvmType = try types().llvmType(type)
-        #expect(LLVMGetTypeKind(llvmType) == LLVMIntegerTypeKind)
-        #expect(LLVMGetIntTypeWidth(llvmType) == width)
+        let emitting = try ProgramModule(for: .debug)
+        // The module owns its LLVM types, so it lives until the checks have read them.
+        withExtendedLifetime(emitting) {
+            let llvmType = emitting.emitter.types.llvmType(type)
+            #expect(LLVMGetTypeKind(llvmType) == LLVMIntegerTypeKind)
+            #expect(LLVMGetIntTypeWidth(llvmType) == width)
+        }
     }
 
-    @Test func `Void is LLVM's void type`() throws(LLVMError) {
-        #expect(LLVMGetTypeKind(try types().llvmType(.void)) == LLVMVoidTypeKind)
-    }
-
-    /// The LLVM types of the values of a program emitted into a new module.
-    private func types() throws(LLVMError) -> LLVMTypes {
-        try ProgramModule(optimizes: false).emitter.types
+    @Test func `a function that returns nothing returns LLVM's void`() throws(LLVMError) {
+        let emitting = try ProgramModule(for: .debug)
+        // The module owns its LLVM types, so it lives until the check has read them.
+        withExtendedLifetime(emitting) {
+            #expect(LLVMGetTypeKind(emitting.emitter.types.llvmType(.void)) == LLVMVoidTypeKind)
+        }
     }
 }

@@ -17,8 +17,9 @@ func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
 
 /// A `main` that holds temporaries of `locals`' types and is made of `blocks`.
 func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> IRFunction {
-    IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary),
-               blocks: blocks)
+    IRFunction(
+        name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary), blocks: blocks,
+    )
 }
 
 /// An operand that reads the local `index`.

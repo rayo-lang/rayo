@@ -12,9 +12,9 @@ struct LLVMTypes {
     /// The LLVM type that holds a value of `type`, or that a function returns when it returns nothing.
     func llvmType(_ type: RayoType) -> LLVMTypeRef {
         switch type {
-        case .int: return module.int64
-        case .bool: return module.bool
-        case .void: return module.void
+        case .int: module.int64
+        case .bool: module.bool
+        case .void: module.void
         }
     }
 }
