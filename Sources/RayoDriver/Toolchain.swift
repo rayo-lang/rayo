@@ -8,95 +8,75 @@ import Darwin
 import Foundation
 import RayoLLVM
 
-extension Driver {
-    /// The clang that drives the link of a program, and the LLD it links with unless the platform's linker is asked
-    /// for.
-    public struct LinkTools: Sendable {
-        public var clang: URL
-        /// The LLD for the host's object file format: `ld64.lld` for Mach-O, and `ld.lld` for ELF.
-        public var lld: URL
-
-        public init(clang: URL, lld: URL) {
-            self.clang = clang
-            self.lld = lld
-        }
-
-        /// The clang and LLD of the LLVM install that `rayoc` was built against.
-        public static let installed = LinkTools(
-            clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent("clang"),
-            lld: URL(fileURLWithPath: LLVMInstall.lldDirectory).appendingPathComponent(hostLLD))
-
-        #if canImport(Darwin)
-        private static let hostLLD = "ld64.lld"
-        #elseif os(Linux)
-        private static let hostLLD = "ld.lld"
-        #else
-        #error("rayoc links with LLD only on macOS and Linux")
-        #endif
-    }
-}
-
-/// The linker that clang links a program with.
-enum Linker: String {
-    /// LLD, which links the same way on every platform.
-    case lld
-    /// The platform's own: Apple's `ld` on macOS, and the system `ld` on Linux.
-    case platform
-}
-
 /// The host tools that link object code into an executable and run it.
 struct Toolchain {
-    var tools: Driver.LinkTools
+    var tools: LinkTools
     var linker: Linker
     /// The environment that clang and a program run in.
     var environment: [String: String]
 
     /// Links `objectCode` with the C library into an executable at `output`.
-    func link(_ objectCode: [UInt8], to output: URL) throws {
-        guard Self.isExecutableFile(tools.clang) else { throw Failure("can't find clang at '\(tools.clang.path)'") }
+    func link(_ objectCode: [UInt8], to output: URL) throws(CompilationError) {
+        // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
+        // the linker asked for.
+        guard Self.isExecutableFile(tools.clang) else {
+            throw .failed("can't find clang at '\(tools.clang.path)'")
+        }
         let linkerArguments = try linkerArguments()
-        let directory = try Self.temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let object = directory.appendingPathComponent("program.o")
-        try Data(objectCode).write(to: object)
-        let result = try runCapturingOutput(tools.clang, arguments: linkerArguments + [object.path, "-o", output.path])
+
+        // Write the object code to a file of its own, and have clang link that file into the executable.
+        let result = try Self.withTemporaryDirectory { directory throws(CompilationError) in
+            let object = directory.appendingPathComponent("program.o")
+            try runOnHost { try Data(objectCode).write(to: object) }
+            return try runCapturingOutput(tools.clang, arguments: linkerArguments + [object.path, "-o", output.path])
+        }
+
+        // A link that clang fails reports what clang wrote, without its last newline.
         if result.exitCode != 0 {
-            throw Failure("clang failed:\n\(result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors)")
+            let errors = result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors
+            throw .failed("clang failed:\n\(errors)")
         }
     }
 
     /// Links `objectCode` into a temporary executable, runs it, and removes it.
-    func linkAndRun(_ objectCode: [UInt8], output: Driver.ProgramOutput) throws -> Driver.Result {
-        let directory = try Self.temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let executable = directory.appendingPathComponent("program")
-        try link(objectCode, to: executable)
-        switch output {
-        case .captured: return try runCapturingOutput(executable)
-        case .inherited: return Driver.Result(exitCode: try runAttached(executable), output: "", errors: "")
+    func linkAndRun(_ objectCode: [UInt8], output: ProgramOutput) throws(CompilationError) -> Driver.Result {
+        try Self.withTemporaryDirectory { directory throws(CompilationError) in
+            // Link the executable inside the directory, so it goes with the directory once the run ends.
+            let executable = directory.appendingPathComponent("program")
+            try link(objectCode, to: executable)
+
+            // Run it, with what it writes captured or sent on as `output` asks.
+            return switch output {
+            case .captured: try runCapturingOutput(executable)
+            case .inherited: Driver.Result(exitCode: try runAttached(executable), output: "", errors: "")
+            }
         }
     }
 
-    /// The arguments that have clang link with `linker`.
-    private func linkerArguments() throws(Failure) -> [String] {
+    /// Finds `linker`, and returns the arguments that have clang link with it.
+    private func linkerArguments() throws(CompilationError) -> [String] {
         switch linker {
+        // LLD is the one from the LLVM that rayoc was built with.
         case .lld:
+            // A missing LLD is reported with the ways to install it or to link without it.
             guard Self.isExecutableFile(tools.lld) else {
-                throw Failure("""
+                throw .failed("""
                     can't find LLD at '\(tools.lld.path)': install LLD \(LLVMInstall.majorVersion), run \
                     'swift package purge-cache' and build rayoc again, or link with --linker=platform
                     """)
             }
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
             return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
+        // The platform's linker is found where the platform keeps it.
         case .platform:
             return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
         }
     }
 
-    /// The platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld` where
-    /// it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
-    private func platformLinker() throws(Failure) -> URL {
+    /// Finds the platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld`
+    /// where it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
+    private func platformLinker() throws(CompilationError) -> URL {
+        // Find where the platform keeps its linker.
         #if canImport(Darwin)
         let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
         let path = found.flatMap { $0.exitCode == 0 ? $0.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
@@ -104,39 +84,47 @@ struct Toolchain {
         #else
         let linker = URL(fileURLWithPath: "/usr/bin/ld")
         #endif
-        guard Self.isExecutableFile(linker) else { throw Failure("can't find the platform's linker at '\(linker.path)'") }
+
+        // A linker that isn't there, or can't be run, links nothing.
+        guard Self.isExecutableFile(linker) else {
+            throw .failed("can't find the platform's linker at '\(linker.path)'")
+        }
         return linker
     }
 
+    /// Whether `url` names a file, not a directory, that can be run.
     private static func isExecutableFile(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue
             && FileManager.default.isExecutableFile(atPath: url.path)
     }
 
-    /// Runs `executable` to completion, and returns its exit code and what it wrote. Its output streams go
-    /// to temporary files, so that neither can fill up and stall it while the other is read.
-    private func runCapturingOutput(_ executable: URL, arguments: [String] = []) throws -> Driver.Result {
-        let directory = try Self.temporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let outputFile = directory.appendingPathComponent("stdout")
-        let errorFile = directory.appendingPathComponent("stderr")
-        FileManager.default.createFile(atPath: outputFile.path, contents: nil)
-        FileManager.default.createFile(atPath: errorFile.path, contents: nil)
+    /// Runs `executable` to completion, and returns its exit code and what it wrote.
+    private func runCapturingOutput(
+        _ executable: URL, arguments: [String] = [],
+    ) throws(CompilationError) -> Driver.Result {
+        try Self.withTemporaryDirectory { directory throws(CompilationError) in
+            // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
+            let outputFile = directory.appendingPathComponent("stdout")
+            let errorFile = directory.appendingPathComponent("stderr")
+            FileManager.default.createFile(atPath: outputFile.path, contents: nil)
+            FileManager.default.createFile(atPath: errorFile.path, contents: nil)
 
-        let process = newProcess(executable, arguments: arguments)
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = try FileHandle(forWritingTo: outputFile)
-        process.standardError = try FileHandle(forWritingTo: errorFile)
-        let exitCode = try runToCompletion(process)
-        return Driver.Result(exitCode: exitCode,
-                             output: try String(contentsOf: outputFile, encoding: .utf8),
-                             errors: try String(contentsOf: errorFile, encoding: .utf8))
+            // Run the process on those files, with nothing to read, and give what it wrote.
+            let process = newProcess(executable, arguments: arguments)
+            process.standardInput = FileHandle.nullDevice
+            process.standardOutput = try runOnHost { try FileHandle(forWritingTo: outputFile) }
+            process.standardError = try runOnHost { try FileHandle(forWritingTo: errorFile) }
+            let exitCode = try runToCompletion(process)
+            return Driver.Result(exitCode: exitCode,
+                                 output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
+                                 errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
+        }
     }
 
     /// Runs `executable` to completion on `rayoc`'s own standard input, output and error, and returns its
     /// exit code.
-    private func runAttached(_ executable: URL) throws -> Int32 {
+    private func runAttached(_ executable: URL) throws(CompilationError) -> Int32 {
         // An interrupt from the terminal reaches the program and `rayoc` alike. `rayoc` outlives it, so that
         // it still removes the executable; a handled signal, unlike an ignored one, is reset in the program.
         let interrupt = signal(SIGINT) { _ in }
@@ -148,6 +136,7 @@ struct Toolchain {
         return try runToCompletion(newProcess(executable))
     }
 
+    /// Makes a process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
     private func newProcess(_ executable: URL, arguments: [String] = []) -> Process {
         let process = Process()
         process.executableURL = executable
@@ -156,18 +145,39 @@ struct Toolchain {
         return process
     }
 
-    /// The exit code of `process`, or 128 plus the signal that ended it.
-    private func runToCompletion(_ process: Process) throws -> Int32 {
-        try process.run()
+    /// Runs `process` to its end, and returns its exit code, or 128 plus the signal that ended it.
+    private func runToCompletion(_ process: Process) throws(CompilationError) -> Int32 {
+        // `run` returns once the process starts, so wait for it to end.
+        try runOnHost { try process.run() }
         process.waitUntilExit()
-        return process.terminationReason == .uncaughtSignal ? 128 + process.terminationStatus : process.terminationStatus
+
+        // A process that a signal ended exits with 128 plus the signal, as a shell reports it.
+        let status = process.terminationStatus
+        return process.terminationReason == .uncaughtSignal ? 128 + status : status
     }
 
-    /// Creates a new, empty directory, which the caller removes.
-    private static func temporaryDirectory() throws -> URL {
+    /// Runs `body` on a new, empty directory, and removes the directory once `body` ends.
+    private static func withTemporaryDirectory<Value>(
+        _ body: (URL) throws(CompilationError) -> Value,
+    ) throws(CompilationError) -> Value {
+        // Make the directory, under a name no other run of rayoc takes.
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("rayoc-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory
+        try runOnHost { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+
+        // Run the body on it, and remove it whether the body returns or throws.
+        defer { try? FileManager.default.removeItem(at: directory) }
+        return try body(directory)
+    }
+}
+
+/// Runs `operation`, a call into the host's files or processes, and gives what it gives, or fails with the
+/// description of the error it throws.
+private func runOnHost<Value>(_ operation: () throws -> Value) throws(CompilationError) -> Value {
+    do {
+        return try operation()
+    } catch {
+        // The host's error stops the compile, with the host's words for what went wrong.
+        throw .failed(error.localizedDescription)
     }
 }

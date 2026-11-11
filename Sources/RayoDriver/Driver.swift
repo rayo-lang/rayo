@@ -1,11 +1,7 @@
 import Foundation
 import RayoDiagnostics
 import RayoIR
-import RayoLLVM
-import RayoOwnership
 import RayoRuntime
-import RayoSema
-import RayoSyntax
 
 public enum Driver {
     public struct Result: Equatable, Sendable {
@@ -48,13 +44,6 @@ public enum Driver {
 
     private enum Command: String {
         case check, build, run
-    }
-
-    /// A build's mode, which turns the diagnostic checks on and optimisation off in a debug build, and the other way
-    /// round in a release one.
-    private enum BuildMode: String {
-        case debug = "--debug"
-        case release = "--release"
     }
 
     /// What the arguments ask `rayoc` to do.
@@ -105,18 +94,10 @@ public enum Driver {
 
         var errors: String {
             switch self {
-            case .usage: return Driver.usage
-            case .unknownLinker(let name): return "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
+            case .usage: Driver.usage
+            case .unknownLinker(let name): "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
             }
         }
-    }
-
-    /// Where `rayoc run` sends what the program writes.
-    public enum ProgramOutput: Sendable {
-        /// Into the result, once the program ends.
-        case captured
-        /// To `rayoc`'s own standard output and error, as the program writes it.
-        case inherited
     }
 
     /// Runs `rayoc` with `arguments`, which exclude the program's name, reading source files through
@@ -124,80 +105,115 @@ public enum Driver {
     /// `environment` is the environment that clang and a program run in.
     public static func run(_ arguments: [String], programOutput: ProgramOutput = .captured,
                            environment: [String: String] = ProcessInfo.processInfo.environment,
-                           linkTools: LinkTools = .installed, readFile: (String) -> [UInt8]?) -> Result {
+                           linkTools: LinkTools = .installed, readFile: @escaping (String) -> [UInt8]?) -> Result {
+        // Read what the arguments ask for.
         let invocation: Invocation
         do {
             invocation = try Invocation(arguments)
         } catch {
+            // Arguments that ask for nothing `rayoc` does are reported with how to use it.
             return Result(exitCode: 2, output: "", errors: error.errors)
         }
-        let command = invocation.command
-        let path = invocation.path
+
+        // Run the command the arguments ask for, with the host's tools.
+        let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
+        let command = CommandRun(invocation: invocation, readFile: readFile, toolchain: toolchain,
+                                 programOutput: programOutput)
         do {
-            let executable = command == .build ? try executable(building: path) : nil
-            guard let source = readFile(path) else { throw Failure("can't read '\(path)'") }
-
-            let (program, diagnostics) = checkAndLower(source)
-            guard let program else { return failure(diagnostics, in: path) }
-            if command == .check { return Result(exitCode: 0, output: "", errors: "") }
-
-            let objectCode = try LLVMEmitter.objectCode(for: program, sourcePath: path,
-                                                        checksOverflow: invocation.mode == .debug,
-                                                        optimizes: invocation.mode == .release)
-            let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
-            if let executable {
-                try toolchain.link(objectCode, to: executable)
-                return Result(exitCode: 0, output: "", errors: "")
-            }
-            return try toolchain.linkAndRun(objectCode, output: programOutput)
-        } catch let failure as Failure {
-            return Self.failure(failure.message)
-        } catch let error as LLVMError {
-            return failure("internal error: \(error.message)")
+            return try command.result()
         } catch {
-            return failure(error.localizedDescription)
+            // A command that stops is reported with why.
+            return result(of: error, in: invocation.path)
         }
     }
 
-    /// Parses and checks `source`, lowers it, and checks the lowered program's ownership. Returns the program, or
-    /// nil with the diagnostics of the first of those steps that rejects it.
-    private static func checkAndLower(_ source: [UInt8]) -> (program: IRProgram?, diagnostics: [Diagnostic]) {
-        let (file, diagnostics) = Parser.parse(source)
-        guard diagnostics.isEmpty else { return (nil, diagnostics) }
+    /// The command an invocation asks for, run on the file it names, with the host's files and tools.
+    private struct CommandRun {
+        var invocation: Invocation
+        var readFile: (String) -> [UInt8]?
+        var toolchain: Toolchain
+        var programOutput: ProgramOutput
 
-        let checked = Checker.check(file)
-        guard let program = checked.program else { return (nil, checked.diagnostics) }
-
-        let lowered = Lowering.lower(program)
-        let ownershipErrors = InitializationChecker.check(lowered)
-        return ownershipErrors.isEmpty ? (lowered, []) : (nil, ownershipErrors)
-    }
-
-    /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.
-    private static func executable(building path: String) throws(Failure) -> URL {
-        guard path.hasSuffix(".rayo") else { throw Failure("'\(path)' doesn't end in '.rayo'") }
-        let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
-        // An empty name, '.' or '..' would name the source's own directory.
-        guard !name.isEmpty && name != "." && name != ".." else {
-            throw Failure("'\(path)' has no name before '.rayo'")
+        func result() throws(CompilationError) -> Result {
+            switch invocation.command {
+            case .check: try check()
+            case .build: try build()
+            case .run: try runProgram()
+            }
         }
-        return URL(fileURLWithPath: String(path.dropLast(".rayo".count)))
+
+        /// Checks the file, and writes nothing.
+        private func check() throws(CompilationError) -> Result {
+            _ = try compile.run(invocation.path)
+
+            return Result(exitCode: 0, output: "", errors: "")
+        }
+
+        /// Compiles the file to an executable beside it, and writes nothing else.
+        private func build() throws(CompilationError) -> Result {
+            // A path that names no executable stops `build` before it reads the file.
+            let executable = try executable(building: invocation.path)
+
+            // Compile the file, and link it into the executable.
+            try pipeline {
+                objectCode
+                Link(toolchain: toolchain, executable: executable)
+            }.run(invocation.path)
+
+            return Result(exitCode: 0, output: "", errors: "")
+        }
+
+        /// Compiles the file and runs it, and gives what the run gave.
+        private func runProgram() throws(CompilationError) -> Result {
+            try pipeline {
+                objectCode
+                LinkAndRun(toolchain: toolchain, output: programOutput)
+            }.run(invocation.path)
+        }
+
+        /// Compiles the source file at a path to Rayo IR.
+        private var compile: some CompilationStep<String, IRProgram> {
+            pipeline {
+                ReadSource(readFile: readFile)
+                Parse()
+                Check()
+                Lower()
+                CheckOwnership()
+            }
+        }
+
+        /// Compiles the source file at a path to object code, as a build in the invocation's mode.
+        private var objectCode: some CompilationStep<String, [UInt8]> {
+            pipeline {
+                compile
+                Emit(mode: invocation.mode, sourcePath: invocation.path)
+            }
+        }
+
+        /// Returns the executable for the source at `path`, which is the same path without `.rayo`, or fails when
+        /// that names no file apart from the source.
+        private func executable(building path: String) throws(CompilationError) -> URL {
+            // A path that doesn't end in '.rayo' would name the source itself.
+            guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
+            let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
+            // An empty name, '.' or '..' would name the source's own directory.
+            guard !name.isEmpty && name != "." && name != ".." else {
+                throw .failed("'\(path)' has no name before '.rayo'")
+            }
+            return URL(fileURLWithPath: String(path.dropLast(".rayo".count)))
+        }
     }
 
-    private static func failure(_ message: String) -> Result {
-        Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n")
-    }
-
-    private static func failure(_ diagnostics: [Diagnostic], in path: String) -> Result {
-        Result(exitCode: 1, output: "", errors: diagnostics.map { "\(path):\($0)\n" }.joined(), diagnostics: diagnostics)
-    }
-}
-
-/// A reason `rayoc` stops, which it reports as an error of its own.
-struct Failure: Error {
-    var message: String
-
-    init(_ message: String) {
-        self.message = message
+    /// Returns what `rayoc` gives when a command on the file at `path` stops with `error`.
+    private static func result(of error: CompilationError, in path: String) -> Result {
+        switch error {
+        // Each of the program's errors is shown at its place in the file.
+        case .rejected(let diagnostics):
+            Result(exitCode: 1, output: "", errors: diagnostics.map { "\(path):\($0)\n" }.joined(),
+                   diagnostics: diagnostics)
+        // A reason of rayoc's own is shown as its message.
+        case .failed(let message):
+            Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n")
+        }
     }
 }
