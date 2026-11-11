@@ -66,8 +66,8 @@ const enemyPresets: List<Preset> = alloc makePresets()   // built in the compile
 
 alloc func makePresets() -> List<Preset> {
     var a = alloc List<Preset>()
-    a.append(Preset(name: alloc String("grunt"), hp: 50))
-    a.append(Preset(name: alloc String("brute"), hp: 400))
+    a.append(Preset(name: alloc "grunt", hp: 50))
+    a.append(Preset(name: alloc "brute", hp: 400))
     return a
 }
 
@@ -78,8 +78,8 @@ struct World(var presets: static Span<Preset>, …)
 func setUp(_ world: mutable World) {
     world.presets = enemyPresets.span                  // a static view by itself, so a field can keep it
     var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
-    edited.append(Preset(name: alloc String("boss"), hp: 900))
-    enemyPresets.append(Preset(name: alloc String("boss"), hp: 900))   // error: a const is never mutated
+    edited.append(Preset(name: alloc "boss", hp: 900))
+    enemyPresets.append(Preset(name: alloc "boss", hp: 900))   // error: a const is never mutated
 }
 ```
 

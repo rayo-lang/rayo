@@ -7,7 +7,7 @@ The [README](../README.md) introduces Rayo. This page makes the case for it: the
 Six principles decide Rayo's trade-offs.
 
 1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)), with two exceptions:
-    - a `String` made from a literal, as in `alloc String("jump")`, copies the literal's bytes at its first write or growth ([04](spec/04-types/collections.md#strings));
+    - a `String` made from a literal, as in `alloc "jump"`, copies the literal's bytes at its first write or growth ([04](spec/04-types/collections.md#strings));
     - a closure moved into a `Closure` may put the captures its capture list shows in an allocated context, which the `Closure` type shows and no `alloc` marks ([05](spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
    Where the compiler stages a place through a temporary, a declaration announces it:

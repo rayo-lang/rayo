@@ -96,7 +96,7 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 ```ebnf
 expression    = operand (binary-op operand | cast-op type)* ;
 operand       = prefix-op* allocation? postfix-expr ;
-allocation    = (postfix-expr '.')? 'alloc' ;                     (* alloc List<Int>(), level.alloc Box(v), try alloc x.clone(), alloc [1, 2]:
+allocation    = (postfix-expr '.')? 'alloc' ;                     (* alloc List<Int>(), level.alloc Box(v), try alloc x.clone(), alloc [1, 2], alloc "hp \(hp)":
                                                                      the allocator, then what is allocated with it (06) *)
 binary-op     = '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '..<' | '...'
               | '+' | '-' | '&+' | '&-' | '+|' | '-|' | '|' | '^' | '*' | '/' | '%' | '&*' | '*|' | '&' | '<<' | '>>' | '&<<' | '&>>' ;   (* levels in the table above *)

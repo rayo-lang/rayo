@@ -90,6 +90,8 @@ struct Banner(var text: static StringView)                  // fine: a static vi
 
 **A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected, but never the other way, since a plain view may borrow memory that can be freed. Only the compiler and the runtime make static views, as the compiler makes one for each literal, and `static Span<T>` is the same thing for elements ([09](../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 
+**A literal under `alloc` is a `String` instead.** `alloc "grunt"` makes a `String` that owns its text, and `alloc "wave \(n)"` formats into a new one, so owned text shows its allocation as a `List` does ([04](../spec/04-types/collections.md#strings)).
+
 **A generic type is scoped when what it holds is.** `List<StringView>` and `List<Token>` own their buffers, but the views inside them borrow, so each list must stay within the scope too.
 
 **A scoped type says only that its values must stay in their scope, not what they borrow.** The compiler works that out for each value.
@@ -172,12 +174,12 @@ use(tokens)
 
 ```swift
 func defaultName() -> StringView {
-    let s = alloc String("grunt")
+    let s = alloc "grunt"
     return s.view                         // error: the result borrows local 's', which is destroyed on return
 }
 
 func addDefault(into out: mutable List<StringView>) {
-    let s = alloc String("grunt")
+    let s = alloc "grunt"
     out.append(s.view)                    // error: 'out' would borrow local 's', which is destroyed on return
     out.append("grunt")                   // fine: a literal is a static view, which borrows nothing
 }
@@ -291,7 +293,7 @@ use(names)                                                     // fine: the loop
 
 - **A handle.** An element of a pool is named by a `Handle<T>`: a small copyable index, checked at each use, which reads `nil` once the element is removed ([Handles and objects](05-handles-and-objects.md)).
 - **A `Slice<T>`.** A range of a buffer held by a `Shared` is named by a `Slice<T>`: a checked view that can be stored anywhere, and reads `nil` once the buffer is gone ([Memory and allocators](06-memory-and-allocators.md)).
-- **An owning copy.** Small data can be copied. `alloc String("\(word)")` builds a `String` that owns its text, so it isn't scoped and can go anywhere.
+- **An owning copy.** Small data can be copied. `alloc String(word)` builds a `String` that owns a copy of the text `word` views, so it isn't scoped and can go anywhere.
 
 **Each of these costs something, and the code shows it.** A handle or a slice costs a check at each use, and a copy allocates once.
 

@@ -89,7 +89,7 @@ put(&out)                               // 'out' now depends on 'src'
 
 ```swift
 func name() -> StringView {
-    let s = alloc String("temp")
+    let s = alloc "temp"
     return s.view                      // error: returned view depends on local 's', which is destroyed on return
 }
 ```

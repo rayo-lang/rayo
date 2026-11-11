@@ -38,8 +38,8 @@ Written `[_ of T]`, an array type takes its count from the initializer.
 
 ```swift
 var names = alloc List<String>()          // owns its buffer: move-only, allocated through an allocator
-names.append(alloc String("grunt"))       // a String owns its text, so it is made with 'alloc' too
-names.append(alloc String("brute"))
+names.append(alloc "grunt")               // a String owns its text, so it is made with 'alloc' too
+names.append(alloc "brute")
 let all: Span<String> = names.span        // a view: borrows the list's elements
 let firstTwo = names[0..<2]               // also a Span
 ```
@@ -77,7 +77,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 
 ```swift
 let jump: Name = "jump"                     // a literal: interned by the build, so no code runs
-assert(Name(alloc String("jump")) == jump)  // interned at run time: finds the literal's entry
+assert(Name(alloc "jump") == jump)          // interned at run time: finds the literal's entry
 if action == jump { player.jump() }         // compares one pointer-sized value, never the text
 log("pressed \(jump.text)")                 // the text, as a static StringView
 ```
@@ -189,7 +189,7 @@ A program may declare its own, such as one that holds a secret seed it read at s
 log("hp \(hp)")                           // written into the log's sink: no allocation
 "pos \(p.x), \(p.y)".format(into: &buf)   // written into 'buf': no allocation
 let title = "Rayo"                        // a static StringView: the literal's own bytes
-let label = alloc String("hp \(hp)")      // builds a new String: allocates, visibly
+let label = alloc "hp \(hp)"              // formats into a new String: allocates, visibly
 let bad: String = "hp \(hp)"              // error: an interpolated literal is never a String
 for g in label.graphemes { … }            // user-perceived characters, through an explicit view
 ```
@@ -210,17 +210,21 @@ greet(player.name)                        // a String field: lent as a view of i
 greet("stranger")                         // a literal: a static StringView, which converts too
 ```
 
-**A string literal is never a `String`, and `String` takes none**, so every `String` shows where its storage comes from:
+**A string literal is a `String` only under `alloc`**, so every `String` shows where its storage comes from:
 
 ```swift
-let name = alloc String("grunt")          // owns its text: allocates when it is first written
-let owned: String = "grunt"               // error: a literal is a static StringView, never a String
+let name = alloc "grunt"                  // owns its text: allocates when it is first written
+let wave = level.alloc "Wave \(n) cleared"   // formats into a new String in 'level'
+let kept = alloc String(who)              // owns a copy of the StringView 'who' it was lent
+let owned: String = "grunt"               // error: without 'alloc', a literal is a static StringView
 let bare = String("grunt")                // error: making a 'String' needs 'alloc'
 ```
 
-**`alloc String(…)`, given a `static StringView` such as a literal, copies its bytes only when it must.** The `String` records the allocator `alloc` gives it, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the view's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
+**`alloc "…"` always makes a `String`**, from the allocator `alloc` takes ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)), with no type expected, since no `Allocating` type takes a string literal ([Literals](#literals)). An interpolated literal formats its text into the new `String`. Without `alloc`, an interpolated literal is never a `String`, and a plain literal is a `static StringView`. `alloc String(…)` makes a `String` from text that a literal can't spell out, such as a `StringView` the code was lent.
 
-**A bare `String("…")` is a compile error**, as every `Allocating` initializer without `alloc` is ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Its diagnostic points to the literal itself, which needs no `String`, and to std's `FixedString`, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
+**A `String` made from a plain literal or a `static StringView` copies its bytes only when it must**, whether by `alloc "…"` or by `alloc String(…)`. The `String` records the allocator `alloc` gives it, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the view's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
+
+**A bare `String("…")` is a compile error**, as every `Allocating` initializer without `alloc` is ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Its diagnostic points to the literal itself, which needs no `String`, to `alloc "…"`, and to std's `FixedString`, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
 
 **Strings are indexed by byte offset.** Unicode scalars and graphemes are explicit views, `s.scalars` and `s.graphemes`. A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics, so every string holds whole UTF-8 sequences ([10](../10-errors-and-safety/panics.md#what-panics)).
 
@@ -235,7 +239,7 @@ protocol Formattable { func format(into sink: mutable some TextSink) where sink 
 
 **A sink keeps only copies of the text it is given** ([02](../02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)). So a format may write a view of its own stack buffer, and a sink takes on no borrow of the temporaries an interpolated literal formats.
 
-**Interpolation itself allocates nothing.** A function that takes a `Formattable`, as `log` does, writes the text where it is going, and `alloc String(…)` allocates visibly. An interpolated literal has the type the compiler builds for it whatever its context, since no literal protocol takes interpolation. So assigning one to a `String` is an error, and `alloc String("hp \(hp)")` builds the `String`.
+**Interpolation itself allocates nothing.** A function that takes a `Formattable`, as `log` does, writes the text where it is going, and `alloc "…"` allocates visibly. Without `alloc`, an interpolated literal has the type the compiler builds for it whatever its context, since no literal protocol takes interpolation. So assigning one to a `String` is an error, and `alloc "hp \(hp)"` builds the `String`.
 
 ### Literals
 
@@ -250,6 +254,7 @@ let title: StringView = "Rayo"            // a static StringView, converted to t
 let xs = [3, 4, 5]                        // no context: a [3 of Int], stored inline
 let ys: Set<_> = alloc [3, 4, 5]          // a Set<Int>, from the annotation
 let zs = alloc [3, 4, 5]                  // a List<Int>: what 'alloc' makes when nothing asks for another type
+let msg = alloc "wave \(n)"               // a String: what 'alloc' always makes of a string literal
 spawnAll(alloc [a, b])                    // spawnAll takes a List: the same as spawnAll(alloc List([a, b]))
 let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 elements
 let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
@@ -266,11 +271,13 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
-**A type that conforms to `Allocating` can't conform to `ExpressibleByStringLiteral`**, since a string literal can't carry an `alloc` (below).
+**A type that conforms to `Allocating` can't conform to `ExpressibleByStringLiteral`**, since a string literal under `alloc` always makes a `String` (below).
 
 **A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll(alloc [a, b])` passes the `List` that `alloc [a, b]` builds, as `spawnAll(alloc List([a, b]))` would. In an annotation or after `as`, `_` stands for what the literal fills in, as in `Set<_>`. Where a `StringView` is expected, a string literal is a `static StringView`, which converts to it ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
-**A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error. A string literal is a `static StringView`, and owned text made from one says `alloc`, as `alloc String("grunt")` does ([above](#strings)).
+**A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error.
+
+**A string literal under `alloc` makes a `String`**, as an array literal under `alloc` makes a `List`, but whatever its position expects, so `msg` above is a `String`. An interpolated one formats its text into the new `String`. Without `alloc`, a string literal is a `static StringView` ([above](#strings)).
 
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 

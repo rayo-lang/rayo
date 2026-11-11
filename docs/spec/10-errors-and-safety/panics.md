@@ -223,7 +223,7 @@ let frame = catchPanic {
 catchPanic {
     views.append(name.view)          // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
-    name = alloc String("b")         // error: 'views' depends on 'name', and is used below
+    name = alloc "b"                 // error: 'views' depends on 'name', and is used below
 }
 print(views[0])
 ```
