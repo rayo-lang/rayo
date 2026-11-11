@@ -6,17 +6,37 @@ import PackageDescription
 /// The major release of LLVM whose C API `rayoc` compiles programs with.
 let llvmMajorVersion = 23
 
+// The manifest runs from top to bottom, so these lists come before `llvmPrefix` and `lldDirectory`, which read them
+// as they are made.
+#if os(Windows)
+/// The places a package manager installs LLVM `llvmMajorVersion`, and LLD with it, with its headers: none, on Windows.
+let packageManagerLLVMPrefixes: [String] = []
+let packageManagerLLDPrefixes: [String] = []
+#else
+/// The places a package manager installs LLVM `llvmMajorVersion` with its headers.
+let packageManagerLLVMPrefixes = [
+    "/usr/lib/llvm-\(llvmMajorVersion)",
+    "/opt/homebrew/opt/llvm@\(llvmMajorVersion)",
+    "/opt/homebrew/opt/llvm",
+    "/usr/local/opt/llvm@\(llvmMajorVersion)",
+    "/usr/local/opt/llvm",
+]
+
+/// The places a package manager installs LLD `llvmMajorVersion`, some of them apart from LLVM.
+let packageManagerLLDPrefixes = [
+    "/usr/lib/llvm-\(llvmMajorVersion)",
+    "/opt/homebrew/opt/lld@\(llvmMajorVersion)",
+    "/opt/homebrew/opt/lld",
+    "/usr/local/opt/lld@\(llvmMajorVersion)",
+    "/usr/local/opt/lld",
+]
+#endif
+
 /// The directory LLVM `llvmMajorVersion` is installed under: `LLVM_PREFIX` when it's set, and otherwise the first
 /// of the places a package manager installs it that holds that release.
 let llvmPrefix: String = {
     // Read the release installed under each candidate.
-    let candidates = Context.environment["LLVM_PREFIX"].map { [$0] } ?? [
-        "/usr/lib/llvm-\(llvmMajorVersion)",
-        "/opt/homebrew/opt/llvm@\(llvmMajorVersion)",
-        "/opt/homebrew/opt/llvm",
-        "/usr/local/opt/llvm@\(llvmMajorVersion)",
-        "/usr/local/opt/llvm",
-    ]
+    let candidates = Context.environment["LLVM_PREFIX"].map { [manifestPath($0)] } ?? packageManagerLLVMPrefixes
     let installs = candidates.compactMap { candidate in llvmMajorVersion(at: candidate).map { (candidate, $0) } }
 
     // The first install of the release is the one to build against.
@@ -36,30 +56,43 @@ let llvmPrefix: String = {
 /// it is LLVM's own `bin`, so that `rayo` reports LLD missing from there.
 let lldDirectory: String = {
     // `LLD_PREFIX` names the install to use.
-    if let prefix = Context.environment["LLD_PREFIX"] { return prefix + "/bin" }
+    if let prefix = Context.environment["LLD_PREFIX"] { return manifestPath(prefix) + "/bin" }
 
     // Otherwise the first prefix that holds the release is the one, and LLVM's is where none does.
-    let candidates = [
-        llvmPrefix,
-        "/usr/lib/llvm-\(llvmMajorVersion)",
-        "/opt/homebrew/opt/lld@\(llvmMajorVersion)",
-        "/opt/homebrew/opt/lld",
-        "/usr/local/opt/lld@\(llvmMajorVersion)",
-        "/usr/local/opt/lld",
-    ]
+    let candidates = [llvmPrefix] + packageManagerLLDPrefixes
     let prefix = candidates.first { lldMajorVersion(at: $0) == llvmMajorVersion } ?? llvmPrefix
     return prefix + "/bin"
 }()
 
+/// `path`, from the environment, as the manifest writes paths: on Windows with each backslash a forward slash,
+/// which Windows takes alike and a C string literal holds as it is.
+func manifestPath(_ path: String) -> String {
+    #if os(Windows)
+    path.replacingOccurrences(of: "\\", with: "/")
+    #else
+    path
+    #endif
+}
+
+/// The file name of the executable `name`: on Windows with `.exe`, and elsewhere `name` itself.
+func executableName(_ name: String) -> String {
+    #if os(Windows)
+    name + ".exe"
+    #else
+    name
+    #endif
+}
+
 /// The major release of the LLD installed under `prefix`, or nil when none is.
 func lldMajorVersion(at prefix: String) -> Int? {
     // A prefix without the `lld` tool holds no LLD.
-    guard FileManager.default.fileExists(atPath: prefix + "/bin/lld") else { return nil }
+    guard FileManager.default.fileExists(atPath: prefix + "/bin/" + executableName("lld")) else { return nil }
 
     // LLD's version file says its release; without one, an LLVM installed with it under the same prefix does.
     let definition = "set(PACKAGE_VERSION \""
     let config = try? String(contentsOfFile: prefix + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
-    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    // A file written on Windows may end its lines in "\r\n", which Swift reads as one newline character.
+    let line = config?.split(whereSeparator: \.isNewline).first { $0.hasPrefix(definition) }
     let major = line.flatMap { Int($0.dropFirst(definition.count).prefix { $0.isNumber }) }
     return major ?? llvmMajorVersion(at: prefix)
 }
@@ -77,7 +110,8 @@ func checkedForDefine(_ path: String) -> String {
 func llvmMajorVersion(at prefix: String) -> Int? {
     let definition = "#define LLVM_VERSION_MAJOR "
     let config = try? String(contentsOfFile: prefix + "/include/llvm/Config/llvm-config.h", encoding: .utf8)
-    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    // A file written on Windows may end its lines in "\r\n", which Swift reads as one newline character.
+    let line = config?.split(whereSeparator: \.isNewline).first { $0.hasPrefix(definition) }
     return line.flatMap { Int($0.dropFirst(definition.count)) }
 }
 
@@ -113,7 +147,12 @@ let package = Package(
         .target(
             name: "RayoLLVM",
             dependencies: ["CLLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"],
-            linkerSettings: [.unsafeFlags(["-L\(llvmPrefix)/lib"]), .linkedLibrary("LLVM-\(llvmMajorVersion)")]
+            // MSVC can't build LLVM as one shared library, so Windows links the one that holds LLVM's C API.
+            linkerSettings: [
+                .unsafeFlags(["-L\(llvmPrefix)/lib"]),
+                .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
+                .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
+            ]
         ),
         .target(name: "RayoCompiler", dependencies: [
             "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM",

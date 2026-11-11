@@ -8,6 +8,10 @@ inputs:
   llvm-version:
     description: The exact build of LLVM the compiler links, which a cached build depends on.
     required: true
+  arguments:
+    description: What swift test takes besides, such as the tests a platform can't run.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -47,7 +51,10 @@ runs:
         restore-keys: ${{ steps.name.outputs.prefix }}
     - name: Test
       shell: bash
-      run: swift test
+      env:
+        ARGUMENTS: ${{ inputs.arguments }}
+      # The arguments are words, split where they have spaces.
+      run: swift test $ARGUMENTS
     - name: Save the build
       if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6

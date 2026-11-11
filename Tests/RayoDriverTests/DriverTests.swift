@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RayoDriver
+import RayoLLVMInstall
 import ToolStandIn
 
 /// A `rayoc` that no file is: the commands that stop before they compile never run it, and the others fail without it.
@@ -112,7 +113,9 @@ struct DriverTests {
     }
 
     @Test(arguments: [
-        ([:], "/tools/bin/rayoc"), (["RAYOC": ""], "/tools/bin/rayoc"), (["RAYOC": "/other/rayoc"], "/other/rayoc"),
+        ([:], "/tools/bin/" + Executable.fileName("rayoc")),
+        (["RAYOC": ""], "/tools/bin/" + Executable.fileName("rayoc")),
+        (["RAYOC": "/other/rayoc"], "/other/rayoc"),
     ])
     func `rayo compiles with the rayoc that RAYOC names, or else the one beside it`(
         environment: [String: String], expected: String,

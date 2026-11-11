@@ -28,7 +28,8 @@ func llvmTool(_ tool: String, _ arguments: [String], on objectCode: [UInt8]) thr
 func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     // Run the tool with its standard output on a pipe.
     let process = Process()
-    process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(tool)
+    process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory)
+        .appendingPathComponent(Executable.fileName(tool))
     process.arguments = arguments
     let output = Pipe()
     process.standardOutput = output
@@ -48,6 +49,8 @@ let llvmAssertsOnInvalidIR = (try? llvmTool("llvm-config", ["--assertion-mode"])
 let hostFormat = "Mach-O"
 #elseif os(Linux)
 let hostFormat = "elf64-"
+#elseif os(Windows)
+let hostFormat = "COFF-"
 #endif
 
 #if arch(arm64)
