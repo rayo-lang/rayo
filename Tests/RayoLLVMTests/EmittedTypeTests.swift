@@ -116,7 +116,6 @@ struct EmittedTypeTests {
 
     /// The function named `name` in `module`.
     private func function(named name: String, in module: borrowing Module) throws -> Function {
-        // `#require` can't take a call on the module, which isn't copyable, so it takes the call's result.
         let found = module.function(named: name)
         return try #require(found)
     }

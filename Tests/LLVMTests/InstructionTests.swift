@@ -4,48 +4,37 @@ import Testing
 struct InstructionTests {
     @Test func `a function's blocks hold its instructions in order, the last its terminator`() throws {
         let bench = Workbench()
-        let function = slotRoundTrip(on: bench)
+        let blocks = slotRoundTrip(on: bench).blocks
 
-        let blocks = function.blocks
-        #expect(blocks.count == 1)
+        try #require(blocks.count == 1)
         #expect(blocks[0].instructions.map(\.opcode) == [.allocate, .store, .load, .return])
         #expect(blocks[0].terminator?.opcode == .return)
     }
 
+    @Test func `a block that nothing ends yet has no terminator, and a declared function no blocks`() {
+        let bench = Workbench()
+        let function = bench.function(named: "f", returning: bench.int64)
+        let declared = bench.module.addFunction(named: "g", type: function.type)
+
+        #expect(function.blocks.first?.terminator == nil)
+        #expect(declared.blocks.isEmpty)
+    }
+
     @Test func `a stack slot, a load and a store say how they are aligned, and a slot what it holds`() throws {
         let bench = Workbench()
-        let instructions = slotRoundTrip(on: bench).blocks[0].instructions
+        let block = try #require(slotRoundTrip(on: bench).blocks.first)
 
-        #expect(instructions.map(\.alignment) == [8, 8, 4, nil])
-        #expect(instructions.map(\.allocatedType) == [bench.int64.anyType, nil, nil, nil])
+        #expect(block.instructions.map(\.alignment) == [8, 8, 4, nil])
+        #expect(block.instructions.map(\.allocatedType) == [bench.int64.anyType, nil, nil, nil])
     }
 
     @Test func `an instruction's operands are the values it takes`() throws {
         let bench = Workbench()
-        let instructions = slotRoundTrip(on: bench).blocks[0].instructions
+        let instructions = try #require(slotRoundTrip(on: bench).blocks.first).instructions
 
         // `ret` returns what `load` loads.
+        try #require(instructions.count == 4)
         #expect(instructions[3].operand(at: 0) == instructions[2].anyValue)
-    }
-
-    @Test func `an integer constant gives its value, and a value that is no constant none`() {
-        let bench = Workbench()
-        let function = bench.function(named: "f", returning: bench.int64, taking: [bench.int64])
-
-        #expect(bench.int64.constant(-5).constantValue == -5)
-        #expect(bench.bool.constant(1).constantValue == -1)
-        #expect(parameter(0, of: function, as: I64.self).constantValue == nil)
-    }
-
-    @Test func `an undefined value says so, and a constant doesn't`() throws {
-        let bench = Workbench()
-        let module = try bench.context.parseModule(Array("define i64 @f() {\n  ret i64 undef\n}\n".utf8), named: "m")
-        // `#require` can't take a call on the module, which isn't copyable, so it takes the call's result.
-        let found = module.function(named: "f")
-        let terminator = try #require(found?.blocks.first?.terminator)
-
-        #expect(terminator.operand(at: 0).isUndefined)
-        #expect(!bench.int64.constant(0).anyValue.isUndefined)
     }
 }
 

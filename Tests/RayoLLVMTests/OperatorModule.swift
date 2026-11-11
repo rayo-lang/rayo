@@ -50,15 +50,17 @@ struct OperatorModule: ~Copyable {
         let function = beginFunction(name, taking: [types.int64, types.int64])
         operators = OperatorEmitter(into: function, types: types, panic: programModule.runtime.panic)
 
-        // Emit the operators on the parameters, narrowed to Bools where the operands are.
-        let parameters = (0..<2).map { narrowed(function.parameter(at: $0), to: operands) }
+        // Emit the operators on the parameters, narrowed to Bools where the operands are. The function takes Ints, so
+        // each parameter is one.
+        let ints = (0..<2).map { IntValue<I64>(function.parameter(at: $0))! }
+        let parameters = ints.map { narrowed($0, to: operands) }
         let value = try expression(self, parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
-        let bool = IntValue<I1>(value)
-        let result = if let bool { widened(bool) } else { value }
+        let boolResult = IntValue<I1>(value)
+        let result = if let boolResult { widened(boolResult) } else { value }
         program.builder.return(result)
-        return (function, bool != nil)
+        return (function, boolResult != nil)
     }
 
     /// Defines `name() -> i64` to return what `function` returns on `left` and `right`.
@@ -101,10 +103,10 @@ struct OperatorModule: ~Copyable {
     }
 
     /// `parameter`, an Int, as the type `operands` names.
-    private func narrowed(_ parameter: AnyValue, to operands: Operands) -> AnyValue {
-        // A Bool is the Int's low bit. Every function `define` makes takes Ints, so the parameter is one.
-        guard operands == .bools else { return parameter }
-        return program.builder.truncate(IntValue<I64>(parameter)!, to: types.bool).anyValue
+    private func narrowed(_ parameter: IntValue<I64>, to operands: Operands) -> AnyValue {
+        // A Bool is the Int's low bit.
+        guard operands == .bools else { return parameter.anyValue }
+        return program.builder.truncate(parameter, to: types.bool).anyValue
     }
 
     /// `value`, a Bool, as the Int 0 or 1.

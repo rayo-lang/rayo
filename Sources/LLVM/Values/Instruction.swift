@@ -1,7 +1,6 @@
 package import CLLVM
 
-/// An instruction of a basic block. It is valid while its function's module lives, and not once the module is linked
-/// into another or handed to a JIT.
+/// An instruction of a basic block.
 public struct Instruction: ValueHandle, Equatable {
     package let ref: LLVMValueRef
 

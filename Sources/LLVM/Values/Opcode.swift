@@ -8,7 +8,7 @@ public struct Opcode: Equatable, Sendable {
         rawValue = opcode.rawValue
     }
 
-    /// `alloca`, which allocates a stack slot.
+    /// `alloca`.
     public static let allocate = Opcode(LLVMAlloca)
     public static let load = Opcode(LLVMLoad)
     public static let store = Opcode(LLVMStore)

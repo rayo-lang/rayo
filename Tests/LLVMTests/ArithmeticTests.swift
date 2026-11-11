@@ -80,6 +80,15 @@ struct ArithmeticTests {
         #expect(function.text.contains("ret i64 9223372036854775806"))
     }
 
+    @Test func `an integer constant gives its value, sign-extended, and a value that is no constant none`() {
+        let bench = Workbench()
+        let function = bench.function(named: "f", returning: bench.int64, taking: [bench.int64])
+
+        #expect(bench.int64.constant(-5).constantValue == -5)
+        #expect(bench.bool.constant(1).constantValue == -1)
+        #expect(parameter(0, of: function, as: I64.self).constantValue == nil)
+    }
+
     @Test func `an integer truncates to a narrower width, and zero-extends to a wider one`() throws {
         let bench = Workbench()
         let function = bench.function(named: "f", returning: bench.int64, taking: [bench.int64])
