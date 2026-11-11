@@ -2,6 +2,9 @@ import Foundation
 import Testing
 import RayoDriver
 import RayoLLVMInstall
+#if os(Windows)
+import WinSDK
+#endif
 
 /// Marks the bundle these tests build into, so that its place on disk can be found.
 private final class TestBundle {}
@@ -19,10 +22,12 @@ func builtProduct(_ name: String) -> URL {
 func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
     do {
         // Give each output stream a file, so that neither fills up and stalls the run while the other is read.
+        // `FileManager.createFile` renames a temporary file into place, and returns false unreported where Windows
+        // refuses the rename, so each file is written in place.
         let outputFile = directory.appendingPathComponent(".rayo-stdout")
         let errorFile = directory.appendingPathComponent(".rayo-stderr")
-        FileManager.default.createFile(atPath: outputFile.path, contents: nil)
-        FileManager.default.createFile(atPath: errorFile.path, contents: nil)
+        try Data().write(to: outputFile)
+        try Data().write(to: errorFile)
 
         // Run `rayo` there, and give what it wrote.
         let process = Process()
@@ -47,3 +52,47 @@ func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
         return CommandResult(exitCode: -1, output: "", errors: "")
     }
 }
+
+#if os(Windows)
+/// Runs the built `rayo` with `arguments` in `directory` and `environment`, on a console of its own with no window,
+/// so that a console event raised there reaches no process of these tests, and gives the code it exits with.
+/// `arguments` must need no quotes.
+func rayoOnConsoleOfItsOwn(_ arguments: [String], in directory: URL, environment: [String: String]) throws -> DWORD {
+    // Windows takes the command line as one string, and the environment as one block of `name=value` strings, each
+    // ended by a 0, then a 0 that ends the block, sorted by name in any case.
+    var commandLine = Array((["\"\(builtProduct("rayo").path)\""] + arguments).joined(separator: " ").utf16) + [0]
+    let block = environment.sorted { $0.key.uppercased() < $1.key.uppercased() }
+        .map { "\($0.key)=\($0.value)\0" }.joined() + "\0"
+
+    // Start `rayo` on a new console, inheriting no handle of these tests.
+    var startup = STARTUPINFOW()
+    startup.cb = DWORD(MemoryLayout<STARTUPINFOW>.size)
+    var started = PROCESS_INFORMATION()
+    let didStart = block.withCString(encodedAs: UTF16.self) { block in
+        directory.path.withCString(encodedAs: UTF16.self) { directory in
+            CreateProcessW(nil, &commandLine, nil, nil, false, DWORD(CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT),
+                           UnsafeMutableRawPointer(mutating: block), directory, &startup, &started)
+        }
+    }
+    try #require(didStart, "rayo didn't start: Windows error \(GetLastError())")
+    defer {
+        CloseHandle(started.hThread)
+        CloseHandle(started.hProcess)
+    }
+
+    // Wait for `rayo` to end, and give its exit code.
+    WaitForSingleObject(started.hProcess, INFINITE)
+    var code: DWORD = 0
+    try #require(GetExitCodeProcess(started.hProcess, &code), "no exit code: Windows error \(GetLastError())")
+    return code
+}
+
+extension [String: String] {
+    /// This environment, with the variable `name`, in whatever case its name is written, set to `value`.
+    func setting(_ name: String, to value: String) -> [String: String] {
+        var environment = filter { $0.key.uppercased() != name.uppercased() }
+        environment[name] = value
+        return environment
+    }
+}
+#endif

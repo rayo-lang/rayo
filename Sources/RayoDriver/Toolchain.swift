@@ -4,6 +4,8 @@ import Glibc
 import Musl
 #elseif canImport(Darwin)
 import Darwin
+#elseif canImport(WinSDK)
+import WinSDK
 #endif
 import Foundation
 import RayoLLVMInstall
@@ -93,10 +95,10 @@ struct Toolchain {
         // A file that `rayoc` doesn't compile ends the command as `rayoc` ended.
         case .exited(let exitCode):
             throw .compileFailed(exitCode: exitCode, errors: run.errors)
-        // A `rayoc` that a signal ended couldn't say so, so `rayo` does.
-        case .signaled(let signal):
+        // A `rayoc` that a signal or an exception ended couldn't say so, so `rayo` says how it ended.
+        case .signaled, .raisedException:
             throw .compileFailed(exitCode: run.termination.exitCode,
-                                 errors: run.errors + "rayo: rayoc was ended by signal \(signal)\n")
+                                 errors: run.errors + "rayo: rayoc \(run.termination)\n")
         }
     }
 
@@ -188,15 +190,17 @@ struct Toolchain {
             // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
             let outputFile = directory.appendingPathComponent("stdout")
             let errorFile = directory.appendingPathComponent("stderr")
-            FileManager.default.createFile(atPath: outputFile.path, contents: nil)
-            FileManager.default.createFile(atPath: errorFile.path, contents: nil)
+            // `FileManager.createFile` renames a temporary file into place, and returns false unreported where
+            // Windows refuses the rename, so each file is written in place.
+            try runOnHost { try Data().write(to: outputFile) }
+            try runOnHost { try Data().write(to: errorFile) }
 
             // Run the process on those files, with nothing to read, and give what it wrote.
-            let process = newProcess(executable, arguments: arguments)
+            var process = childProcess(executable, arguments: arguments)
             process.standardInput = FileHandle.nullDevice
             process.standardOutput = try runOnHost { try FileHandle(forWritingTo: outputFile) }
             process.standardError = try runOnHost { try FileHandle(forWritingTo: errorFile) }
-            let termination = try runToCompletion(process)
+            let termination = try runOnHost { try process.run() }
             return ProcessRun(termination: termination,
                               output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
                               errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
@@ -205,9 +209,12 @@ struct Toolchain {
 
     /// Runs `executable` to completion on `rayo`'s own standard input, output and error, and returns how it ended.
     private func runAttached(_ executable: URL, arguments: [String]) throws(CommandError) -> Termination {
-        // Windows tells a console's processes of Ctrl-C through console control handlers, not these signals, so
-        // `rayo` doesn't outlive an interrupt there.
-        #if !os(Windows)
+        #if os(Windows)
+        // Ctrl-C and Ctrl-Break reach every process of the console, `rayo` too. `rayo` outlives them, so that it
+        // still removes its temporary files; the process inherits no handler, so it still ends by them.
+        SetConsoleCtrlHandler(ignoringInterrupts, true)
+        defer { SetConsoleCtrlHandler(ignoringInterrupts, false) }
+        #else
         // An interrupt from the terminal reaches the process and `rayo` alike. `rayo` outlives it, so that
         // it still removes its temporary files; a handled signal, unlike an ignored one, is reset in the process.
         let interrupt = signal(SIGINT) { _ in }
@@ -217,27 +224,14 @@ struct Toolchain {
             signal(SIGQUIT, quit)
         }
         #endif
-        return try runToCompletion(newProcess(executable, arguments: arguments))
+        let process = childProcess(executable, arguments: arguments)
+        return try runOnHost { try process.run() }
     }
 
-    /// Makes a process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
-    private func newProcess(_ executable: URL, arguments: [String] = []) -> Process {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = environment
-        return process
-    }
-
-    /// Runs `process` to its end, and returns how it ended.
-    private func runToCompletion(_ process: Process) throws(CommandError) -> Termination {
-        // `run` returns once the process starts, so wait for it to end.
-        try runOnHost { try process.run() }
-        process.waitUntilExit()
-
-        // A process that a signal ended has the signal for its status.
-        let status = process.terminationStatus
-        return process.terminationReason == .uncaughtSignal ? .signaled(status) : .exited(status)
+    /// The process that runs `executable` with `arguments` in the toolchain's environment, on `rayo`'s own standard
+    /// input, output and error.
+    private func childProcess(_ executable: URL, arguments: [String]) -> ChildProcess {
+        ChildProcess(executable: executable, arguments: arguments, environment: environment)
     }
 
     /// Runs `body` on a new, empty directory, and removes the directory once `body` ends.
@@ -262,19 +256,12 @@ private struct ProcessRun {
     var errors: String
 }
 
-/// How a process ended: with an exit code of its own, or by a signal.
-private enum Termination: Equatable {
-    case exited(Int32)
-    case signaled(Int32)
-
-    /// The exit code a shell reports for the process: its own, or 128 plus the signal that ended it.
-    var exitCode: Int32 {
-        switch self {
-        case .exited(let exitCode): exitCode
-        case .signaled(let signal): 128 + signal
-        }
-    }
+#if os(Windows)
+/// Handles Ctrl-C and Ctrl-Break so they don't end `rayo`, and passes every other console event on.
+private let ignoringInterrupts: PHANDLER_ROUTINE = { event in
+    WindowsBool(event == DWORD(CTRL_C_EVENT) || event == DWORD(CTRL_BREAK_EVENT))
 }
+#endif
 
 /// Runs `operation`, a call into the host's files or processes, and gives what it gives, or fails with the
 /// description of the error it throws.

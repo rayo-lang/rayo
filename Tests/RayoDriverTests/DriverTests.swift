@@ -85,7 +85,69 @@ struct DriverTests {
     }
 
     // Windows ends a process by an exception, not a signal.
-    #if !os(Windows)
+    #if os(Windows)
+    @Test(arguments: ["check", "build", "run"])
+    func `a rayoc that an exception ends fails the command with the exception's code, and says which it was`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            // A stand-in can't raise an access violation, but exiting with its code, 0xC0000005, ends it the same
+            // way as Windows reports it.
+            let accessViolation = Int32(bitPattern: 0xC000_0005)
+            let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(accessViolation)),
+                                       as: "rayoc", in: directory)
+            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+                exitCode: accessViolation, output: "",
+                errors: "rayoc: started\nrayo: rayoc crashed with exception 0xC0000005\n"))
+        }
+    }
+
+    @Test(arguments: ["check", "build", "run"])
+    func `a rayoc that exits with a negative code fails the command with that code, as an exit and not a crash`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(-1)),
+                                       as: "rayoc", in: directory)
+            #expect(Driver.run([command, source], compiler: compiler) ==
+                CommandResult(exitCode: -1, output: "", errors: "rayoc: started\n"))
+        }
+    }
+
+    @Test(arguments: ["check", "build", "run"])
+    func `a rayoc that Ctrl-C ends fails the command with Ctrl-C's code, and says it was interrupted`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            // Windows ends a process by Ctrl-C with the exit code 0xC000013A, which exiting with it gives as well.
+            let interrupted = Int32(bitPattern: 0xC000_013A)
+            let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(interrupted)),
+                                       as: "rayoc", in: directory)
+            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+                exitCode: interrupted, output: "", errors: "rayoc: started\nrayo: rayoc was interrupted\n"))
+        }
+    }
+
+    @Test func `Ctrl-C ends the rayoc that rayo runs and not rayo, which removes its temporary files`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try install(ToolStandIn([], then: .interruptConsole), as: "rayoc", in: directory)
+            let temporary = directory.appendingPathComponent("temporary", isDirectory: true)
+            try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+
+            // `rayo` keeps its temporary files where TMP names, and compiles with the `rayoc` that RAYOC names.
+            let environment = ProcessInfo.processInfo.environment
+                .setting("TMP", to: temporary.path).setting("TEMP", to: temporary.path)
+                .setting("RAYOC", to: compiler.path)
+            let exitCode = try rayoOnConsoleOfItsOwn(["run", "main.rayo"], in: directory, environment: environment)
+            #expect(exitCode == 0xC000_013A)
+            #expect(try FileManager.default.contentsOfDirectory(atPath: temporary.path) == [])
+        }
+    }
+    #else
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
         command: String,

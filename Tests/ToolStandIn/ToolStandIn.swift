@@ -1,4 +1,7 @@
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 /// What the `tool-stand-in` executable does when a test has it stand in for a tool `rayo` runs, such as clang, a
 /// linker or `rayoc`: a few steps, then an end.
@@ -21,6 +24,10 @@ public struct ToolStandIn: Codable {
         case handOff(toToolAt: URL)
         /// Ends by the signal.
         case signal(Int32)
+        #if os(Windows)
+        /// Raises Ctrl-C on its console, which ends it, and every other process there that doesn't handle Ctrl-C.
+        case interruptConsole
+        #endif
     }
 
     public let steps: [Step]
@@ -60,9 +67,16 @@ public struct ToolStandIn: Codable {
             // The text goes out at once, before anything that follows it.
             case .write(let text):
                 FileHandle.standardError.write(Data(text.utf8))
-            // The file shows that the stand-in ran.
+            // The file shows that the stand-in ran, so a stand-in that can't write it fails the run, and says why.
+            // `FileManager.createFile` renames a temporary file into place, and returns false unreported where
+            // Windows refuses the rename, so the file is written in place.
             case .touch(let url):
-                FileManager.default.createFile(atPath: url.path, contents: nil)
+                do {
+                    try Data().write(to: url)
+                } catch {
+                    FileHandle.standardError.write(Data("\(path): can't write '\(url.path)': \(error)\n".utf8))
+                    Foundation.exit(1)
+                }
             // An argument the tool wasn't meant to be given fails the run, and says which.
             case .refuseArguments(let suffixes):
                 if let refused = Self.firstArgument(of: arguments, endingIn: suffixes) {
@@ -100,6 +114,15 @@ public struct ToolStandIn: Codable {
         // The signal is the stand-in's own.
         case .signal(let signal):
             Self.end(by: signal)
+        #if os(Windows)
+        // Ctrl-C ends the stand-in on a thread of its own, even where the process that started it ignored Ctrl-C and
+        // so had it ignore Ctrl-C too. A stand-in that Ctrl-C hasn't ended within a minute fails the run.
+        case .interruptConsole:
+            SetConsoleCtrlHandler(nil, false)
+            GenerateConsoleCtrlEvent(DWORD(CTRL_C_EVENT), 0)
+            Sleep(60_000)
+            Foundation.exit(1)
+        #endif
         }
     }
 
