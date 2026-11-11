@@ -5,3 +5,7 @@
 !.claude/skills
 !.claude/settings.json
 __pycache__/
+# On Windows, SwiftPM's swiftbuild build system copies RayoRuntime's .ll resources and its bundle's Info.plist into
+# the package root, where none of them belongs.
+/*.ll
+/Info.plist
