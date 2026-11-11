@@ -64,7 +64,7 @@ swift test
 
 On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against Visual Studio's C runtime, and `--linker=platform` runs its `link.exe`.
 
-LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. Its installer doesn't put 7-Zip on the search path, so the commands run it from where it installs. Install 7-Zip, unpack the archive, and move its directory to where LLVM is to stay, such as `C:\llvm`:
+LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. The 7-Zip installer doesn't put it on the search path, so the commands run it from where it installs. Install 7-Zip, unpack the archive in a directory with a few gigabytes free, and move its directory to where LLVM is to stay, such as `C:\llvm`:
 
 ```powershell
 winget install 7zip.7zip
@@ -88,6 +88,13 @@ And these set them for every shell you open after. `$env:Path` holds the machine
 [Environment]::SetEnvironmentVariable("LLVM_PREFIX", "C:\llvm", "User")
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "C:\llvm\bin;$userPath", "User")
+```
+
+A new shell's search path puts the machine's ahead of your own. So where the machine's holds another LLVM's `bin`, such as the `C:\Program Files\LLVM\bin` that LLVM's installer adds, `rayoc` loads that LLVM's `LLVM-C.dll`, and fails to start or crashes. Remove that LLVM from the machine's search path, or put `C:\llvm\bin` at its front, from a shell run as administrator:
+
+```powershell
+$machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+[Environment]::SetEnvironmentVariable("Path", "C:\llvm\bin;$machinePath", "Machine")
 ```
 
 On macOS and Linux, `Package.swift` looks for LLVM 23 where apt and Homebrew install it: under `/usr/lib/llvm-23`, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
