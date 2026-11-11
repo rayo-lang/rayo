@@ -190,8 +190,8 @@ struct Toolchain {
             // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
             let outputFile = directory.appendingPathComponent("stdout")
             let errorFile = directory.appendingPathComponent("stderr")
-            // Each is written in place, where creating a file renames one into place, which Windows may refuse
-            // unreported.
+            // `FileManager.createFile` renames a temporary file into place, and returns false unreported where
+            // Windows refuses the rename, so each file is written in place.
             try runOnHost { try Data().write(to: outputFile) }
             try runOnHost { try Data().write(to: errorFile) }
 

@@ -10,8 +10,8 @@ enum Termination: Equatable, CustomStringConvertible {
     /// How a process ended that Windows reports ended with `code`.
     init(windowsExitCode code: UInt32) {
         switch code >> 28 {
-        // A code whose top four bits mark an error or a warning, as an exception's code has them, is the code of the
-        // exception that ended the process.
+        // A code whose top four bits are an HRESULT failure's (0x8) or an NTSTATUS error's (0xC, 0xE) is the code of
+        // the exception that ended the process.
         case 0x8, 0xC, 0xE:
             self = .raisedException(code)
         // Any other code is the process's own, negative where its top bit is set.
@@ -30,7 +30,7 @@ enum Termination: Equatable, CustomStringConvertible {
         }
     }
 
-    /// How the process ended, said of it, as in "was ended by signal 9".
+    /// How the process ended, as a phrase that follows its name, such as "was ended by signal 9".
     var description: String {
         switch self {
         case .exited(let exitCode): "exited with \(exitCode)"

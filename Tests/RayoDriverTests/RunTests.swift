@@ -309,8 +309,8 @@ struct BuildTests {
                 """, as: "main.rayo", in: directory)
             // Foundation, which runs the built `rayo`, reports an exception's code without its two highest bits, so
             // the command runs in this process.
-            let result = Driver.run(["run", "--debug", source], compiler: compiler, processOutput: .inherited)
-            #expect(result.exitCode == Int32(bitPattern: 0xC000_00FD))
+            #expect(Driver.run(["run", "--debug", source], compiler: compiler) ==
+                CommandResult(exitCode: Int32(bitPattern: 0xC000_00FD), output: "", errors: ""))
         }
     }
     #endif

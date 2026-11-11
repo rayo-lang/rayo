@@ -58,21 +58,22 @@ extension ChildProcess {
         let process = try start()
         defer { CloseHandle(process) }
 
-        // Wait for the process to end, and read how it ended.
-        WaitForSingleObject(process, INFINITE)
+        // Wait for the process to end, and read how it ended; a wait that fails would read a code the process
+        // hasn't ended with.
+        guard WaitForSingleObject(process, INFINITE) != WAIT_FAILED else { throw Self.windowsError(GetLastError()) }
         var code: DWORD = 0
-        guard GetExitCodeProcess(process, &code) else { throw Self.lastWindowsError() }
+        guard GetExitCodeProcess(process, &code) else { throw Self.windowsError(GetLastError()) }
         return Termination(windowsExitCode: code)
     }
 
     /// Starts the process, and returns its handle.
     private func start() throws -> HANDLE {
         // Give the process copies of its standard handles that it can inherit, and close them once it has its own.
-        let nullDevice = FileHandle(forUpdatingAtPath: "NUL")
+        var nullDevice: FileHandle?
         let standardHandles = try [
             (standardInput, STD_INPUT_HANDLE), (standardOutput, STD_OUTPUT_HANDLE), (standardError, STD_ERROR_HANDLE),
         ].map { file, own in
-            try Self.inheritableCopy(of: Self.handle(of: file, nullDevice: nullDevice) ?? GetStdHandle(own))
+            try Self.inheritableCopy(of: Self.handle(of: file, own: own, nullDevice: &nullDevice))
         }
         defer { standardHandles.forEach { if let handle = $0 { CloseHandle(handle) } } }
 
@@ -82,24 +83,37 @@ extension ChildProcess {
         let flags = DWORD(EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT)
         let inheritsHandles = standardHandles.contains { $0 != nil }
         var started = PROCESS_INFORMATION()
-        let didStart = try Self.withStartupInfo(standardHandles: standardHandles) { startup in
+        // A start that fails gives Windows's error at once, before freeing the memory it was given changes it.
+        let failure = try Self.withStartupInfo(standardHandles: standardHandles) { startup in
             path.withCString(encodedAs: UTF16.self) { path in
                 Self.environmentBlock(environment).withCString(encodedAs: UTF16.self) { environment in
                     CreateProcessW(path, &commandLine, nil, nil, inheritsHandles, flags,
                                    UnsafeMutableRawPointer(mutating: environment), nil, startup, &started)
+                        ? nil : GetLastError()
                 }
             }
         }
-        guard didStart else { throw Self.lastWindowsError() }
+        if let failure { throw Self.windowsError(failure) }
         CloseHandle(started.hThread)
         return started.hProcess
     }
 
-    /// The Windows handle of `file`: the null device's for `FileHandle.nullDevice`, which holds none of its own, and
-    /// nil for no file.
-    private static func handle(of file: FileHandle?, nullDevice: FileHandle?) -> HANDLE? {
-        guard let file else { return nil }
-        return file === FileHandle.nullDevice ? nullDevice?._handle : file._handle
+    /// The Windows handle that a process gets from `file` for one of its standard streams, or from `rayo`'s own
+    /// standard handle `own` where `file` is nil. `nullDevice` holds the null device once a stream needs it.
+    private static func handle(of file: FileHandle?, own: DWORD, nullDevice: inout FileHandle?) throws -> HANDLE? {
+        switch file {
+        // No file gives the process `rayo`'s own handle.
+        case nil:
+            return GetStdHandle(own)
+        // `FileHandle.nullDevice` holds no handle, so the null device is opened, once for every stream that needs it.
+        case let file? where file === FileHandle.nullDevice:
+            let opened = try nullDevice ?? FileHandle(forUpdating: URL(fileURLWithPath: "NUL", isDirectory: false))
+            nullDevice = opened
+            return opened._handle
+        // Any other file gives its own handle.
+        case let file?:
+            return file._handle
+        }
     }
 
     /// A copy of `handle` that a process can inherit, or nil where `handle` is none, as for a standard handle that
@@ -109,7 +123,7 @@ extension ChildProcess {
         var copy: HANDLE?
         let process = GetCurrentProcess()
         guard DuplicateHandle(process, handle, process, &copy, 0, true, DWORD(DUPLICATE_SAME_ACCESS)) else {
-            throw lastWindowsError()
+            throw windowsError(GetLastError())
         }
         return copy
     }
@@ -143,11 +157,13 @@ extension ChildProcess {
         return try inherited.withUnsafeMutableBufferPointer { inherited in
             try withUnsafeTemporaryAllocation(byteCount: Int(size), alignment: 16) { memory in
                 let list = LPPROC_THREAD_ATTRIBUTE_LIST(memory.baseAddress!)
-                guard InitializeProcThreadAttributeList(list, 1, 0, &size) else { throw lastWindowsError() }
+                guard InitializeProcThreadAttributeList(list, 1, 0, &size) else {
+                    throw windowsError(GetLastError())
+                }
                 defer { DeleteProcThreadAttributeList(list) }
                 let byteCount = SIZE_T(inherited.count * MemoryLayout<HANDLE>.stride)
                 guard UpdateProcThreadAttribute(list, 0, inheritedHandlesAttribute, inherited.baseAddress, byteCount,
-                                                nil, nil) else { throw lastWindowsError() }
+                                                nil, nil) else { throw windowsError(GetLastError()) }
                 startup.lpAttributeList = list
                 return try withStartup()
             }
@@ -190,9 +206,8 @@ extension ChildProcess {
         return sorted.map { "\($0.key)=\($0.value)\0" }.joined() + "\0"
     }
 
-    /// The error that the last Windows call to fail on this thread gave, in Windows's words.
-    private static func lastWindowsError() -> NSError {
-        let code = GetLastError()
+    /// The Windows error `code`, in Windows's words.
+    private static func windowsError(_ code: DWORD) -> NSError {
         var buffer = [WCHAR](repeating: 0, count: 512)
         let flags = DWORD(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS)
         let length = Int(FormatMessageW(flags, nil, code, 0, &buffer, DWORD(buffer.count), nil))

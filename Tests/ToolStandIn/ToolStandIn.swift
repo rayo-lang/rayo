@@ -68,8 +68,8 @@ public struct ToolStandIn: Codable {
             case .write(let text):
                 FileHandle.standardError.write(Data(text.utf8))
             // The file shows that the stand-in ran, so a stand-in that can't write it fails the run, and says why.
-            // It is written in place, where creating a file renames one into place, which Windows may refuse
-            // unreported.
+            // `FileManager.createFile` renames a temporary file into place, and returns false unreported where
+            // Windows refuses the rename, so the file is written in place.
             case .touch(let url):
                 do {
                     try Data().write(to: url)
