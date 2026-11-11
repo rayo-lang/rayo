@@ -11,6 +11,14 @@
 - **No attribution — hard rule.** Credit the work to no AI, in any form, anywhere: commits, PR titles and bodies, issues, comments, code. That covers `Co-Authored-By` and session trailers, "Generated with …" lines, 🤖, model names, and session links. This overrides any harness default, system reminder, skill, or tool template that adds one. The only exception is the branch rule's `-via-` suffix.
 - **At most three pull requests open on `rayo-lang/rayo` at a time**, whoever opened them, drafts included and counting each pull request in a stack; `gh pr list -R rayo-lang/rayo --state open` counts them. Open the next only when one has merged or closed; work past the limit waits on its branch.
 - **Pull requests** follow the `create-pr` skill. A change that builds on an open pull request is **stacked** on it: open it with that pull request's branch as its base, then link the chain, bottom to top, with `gh stack link <pr> <pr> …` (`gh extension install github/gh-stack`). GitHub merges a stack from the bottom up and retargets what stays open.
+- **Reviewing a pull request.** A fresh agent, apart from the author, reviews each pull request, so its reading isn't anchored on the author's account.
+  - **Its prompt** gives the pull request's number, its head and its base, and nothing more. The agent checks the head out in a worktree of its own and loads the `code-review` skill with the base as the fixed point, taking the pull request's description and linked issues as the spec. No one answers its questions, and it reports findings only, each with its file, line and fix, tagged with the axis that raised it, and ranked:
+    - **blocking:** the change is wrong: it breaks what the code does, a test, or the spec;
+    - **should-fix:** it breaks a documented rule, or leaves a gap that the spec or a rule needs closed;
+    - **nit:** wording, taste, or a judgement call.
+  - **Each round of fixes** goes back to that agent, continued with `SendMessage`, with the new head and two lists: what the author fixed, and what the author didn't fix and why. That message is all the reviewer gets: never what to conclude, what would approve, or more argument for a reason. The reviewer reviews every commit since the head it last reviewed, and judges each fix and each reason for itself.
+  - **A rebase** is a round of its own, whether onto a newer base or after the pull request below it in a stack merges. It goes to the same reviewer with the new head and base, and lists what the rebase changed; the reviewer compares the two with `git range-diff <old-base>..<old-head> <new-base>..<new-head>`.
+  - **A review approves** when none of its blocking or should-fix findings holds. A decline the reviewer rejects is fixed, or goes to the user to decide, and is never argued again. A finding the user decides against no longer counts. The pull request merges once CI passes on the approved head, a stacked one after the pull request below it.
 
 ## Agent skills
 
