@@ -115,7 +115,7 @@ func drawMarkers(_ enemies: mutable List<Enemy>, _ hud: Hud) {
 ### Locks: `Mutex` and `RwLock`
 
 ```swift
-let deaths = Mutex(List<Vec3>())
+let deaths = Mutex(alloc List<Vec3>())
 enemies.forEachInParallel { e in
     if e.hp <= 0 {
         deaths.lock { list in list.append(copy e.pos) }   // fine: one thread at a time holds the list
@@ -227,7 +227,7 @@ let crc = hashing.join()                                      // waits, then ret
 **To hand a thread data that other threads also use, give it a weak link to a `Shared` value** ([03](../spec/03-handles-and-objects.md#sharing-across-threads)). A `WeakShared` is copyable, and `Sendable` when the value is. The thread upgrades it each time it needs the value:
 
 ```swift
-let mixer = Shared(Mutex(AudioMixer()))
+let mixer = alloc Shared(Mutex(AudioMixer()))
 let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
 _ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
     if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
@@ -240,7 +240,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 
 ```swift
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
-    let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
+    let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
         for snapshot in &rx { draw(snapshot) }                               // waits for each snapshot in turn
     }
@@ -258,10 +258,10 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 let (render, var tx) = startRenderer()
 while running {
     step(&world)
-    _ = tx.send(Shared(world.snapshot()))     // '_ =': if the render thread is gone, the snapshot is dropped
+    _ = tx.send(alloc Shared(world.snapshot()))  // '_ =': if the render thread is gone, the snapshot is dropped
 }
-_ = tx                                        // drops the sender: the render loop ends
-render.join()                                 // waits for the last frame
+_ = tx                                           // drops the sender: the render loop ends
+render.join()                                    // waits for the last frame
 ```
 
 **The channel holds at most three snapshots, its capacity.** When the simulation runs ahead and three are already waiting, `send` parks it until the render thread takes one.
@@ -283,15 +283,15 @@ render.join()                                 // waits for the last frame
 ## Global state
 
 ```swift
-let config = Published(GameConfig())     // any thread reads it, and publish swaps in a new one
+let config = alloc Published(GameConfig())    // any thread reads it, and publish swaps in a new one
 let spawned = Atomic(0)
-@threadlocal var scratch = List<Int>()   // each thread has its own copy
-var frames = 0                           // a bare global 'var'
+@threadlocal var scratch = alloc List<Int>()  // each thread has its own copy
+var frames = 0                                // a bare global 'var'
 
 func tick() {
-    spawned.add(1, .relaxed)             // fine: changes through its own synchronization
-    scratch.append(0)                    // fine: changes this thread's copy
-    frames += 1                          // error: accessing a bare global 'var' needs 'unsafe'
+    spawned.add(1, .relaxed)                  // fine: changes through its own synchronization
+    scratch.append(0)                         // fine: changes this thread's copy
+    frames += 1                               // error: accessing a bare global 'var' needs 'unsafe'
 }
 ```
 

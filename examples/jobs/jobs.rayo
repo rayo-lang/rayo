@@ -20,9 +20,9 @@ struct ClothVertex(
 )
 
 struct Sim(
-    var particles = SoA<Particle>(capacity: 200_000),
-    var cloth = List<ClothVertex>(),
-    var clothConstraints = List<(a: Int32, b: Int32, rest: Float)>(),
+    var particles = alloc SoA<Particle>(capacity: 200_000),
+    var cloth = alloc List<ClothVertex>(),
+    var clothConstraints = alloc List<(a: Int32, b: Int32, rest: Float)>(),
     var wind: Vec3 = [2, 0, 0.5],
     var stats = SimStats(),
 )
@@ -103,11 +103,9 @@ let frameArena = Allocator.register(Arena(size: 64.mb))
 
 // Scratch memory for a debug overlay, released for free at the next reset.
 func debugDraw(_ sim: Sim, _ draw: mutable DebugDraw) {
-    using allocator = frameArena {
-        var lines = List<(Vec3, Vec3)>(reservingCapacity: sim.clothConstraints.count)
-        for c in sim.clothConstraints {                 // 'sim' is borrowed, so the positions are copied
-            lines.append((copy sim.cloth[Int(c.a)].pos, copy sim.cloth[Int(c.b)].pos))
-        }
-        draw.lines(lines.span, color: .yellow)
+    var lines = frameArena.alloc List<(Vec3, Vec3)>(reservingCapacity: sim.clothConstraints.count)
+    for c in sim.clothConstraints {                     // 'sim' is borrowed, so the positions are copied
+        lines.append((copy sim.cloth[Int(c.a)].pos, copy sim.cloth[Int(c.b)].pos))
     }
+    draw.lines(lines.span, color: .yellow)
 }

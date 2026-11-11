@@ -20,7 +20,7 @@ each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutatin
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
-3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, a call whose type a default type argument would complete, as `Map()`'s would ([Operators](operators.md#operators)), or a bare name whose match is a generic or overloaded function. The expected type resolves such a name as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
+3. Each argument that needs context takes each remaining candidate's parameter type, and a candidate it doesn't fit drops out. Such an argument is a literal, a closure literal, a `.member`, a call whose type a default type argument would complete, as `alloc Map()`'s would ([Operators](operators.md#operators)), or a bare name whose match is a generic or overloaded function. The expected type resolves such a name as it resolves any overloaded name ([Function-typed values](#function-typed-values)).
 4. If exactly one candidate needs no conversion, it wins. Among several candidates that need no conversion, the one that alone declares no type parameters of its own wins, as below. Otherwise exactly one candidate must remain, or the call is ambiguous.
 
 ```swift
@@ -150,11 +150,11 @@ func use(_ f: (Float, Float) -> Float) { … }
 ```swift
 enemies.popLast()                 // error: the popped enemy is never used
 _ = enemies.popLast()             // fine: dropped on purpose
-scores.sorted()                   // error: a sorted copy, never used; 'scores.sort()' sorts in place
+alloc scores.sorted()             // error: a sorted copy, never used; 'scores.sort()' sorts in place
 let saved = save(level)           // error if no code reads 'saved': its error would be lost
 ```
 
-**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
+**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `alloc x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
 
 **A value is unused when it is:**
 
@@ -282,7 +282,7 @@ A closure can't keep what it is lent for one call, such as the data behind a loc
 ```swift
 m.lock { d in kept = d.items.span }               // error: 'd' is lent only for the call
 forEachLine(src.view) { lines.append(copy $0) }   // fine: forEachLine's closure takes a 'keep' parameter
-let names = entries.map { $0.name.view }          // fine: the closure returns a view of its parameter, and keeps none
+let names = alloc entries.map { $0.name.view }    // fine: the closure returns a view of its parameter, and keeps none
 ```
 
 **Closure parameters are call-scoped.** Nothing that depends on one may be stored into the closure's captures, by rule 5 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)) for a closure body. A call absorbs nothing into the captures, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result and `mutable` arguments still depend on what the closure captures, since the closure is the call's `self`.
@@ -311,7 +311,7 @@ struct Hotkey(var action: Closure<() -> Void>)
 
 let id = 7
 var ping = Hotkey(action: { [copy id] in log("pressed \(id)") })   // 'id' is copied in, and stays usable here
-var level = Box(Level())
+var level = alloc Box(alloc Level())
 var load = Hotkey(action: { [move level] in start(level.value) })  // 'level' is moved in: it can't be used after this
 var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id' isn't listed
 ```
@@ -319,12 +319,8 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 **`Closure<F>`**, such as `Closure<mutating (Int) -> Int>`, is an unscoped, move-only value that owns every capture. It is `Sendable` only when its function type is `@sendable`, such as `Closure<mutating @sendable (Int) -> Int>` ([below](#function-typed-values)).
 
 - **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](../07-concurrency/global-state.md#global-state)).
-- **Size.** A `Closure` is 32 bytes, and holds up to 24 bytes of captures inline. The captures are laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). They are inline when all of these hold:
-    - the captures' struct is at most 24 bytes;
-    - its alignment is at most 8;
-    - no capture has a layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one ([11](../11-compilation-model.md#what-the-language-leaves-open)).
-
-  Otherwise the captures go in an out-of-line context that the closure owns, from the current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)). The capture list shows at the literal what moves in, and so whether it fits. In `@noalloc` code, a conversion into a `Closure` that allocates is an error.
+- **Size.** A `Closure` holds small captures inline, laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). How much it holds inline, and so its own size, is a layout choice that may change, so the language leaves it open, and code never depends on it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A capture whose layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one, is never inline.
+- **Allocation.** Captures that aren't inline go in an out-of-line context that the closure owns. So converting a closure to a `Closure` may allocate, as `append` may, and takes no `alloc`: the `Closure` type shows that it may. The context's allocator follows the rule for allocations with no construction ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). In `@noalloc` code, every conversion into a `Closure` is an error, whether or not that one would allocate.
 - **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a borrowed `Closure` is always the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)), and a `@packed` struct can't hold one.
 - **An out-of-line context is checked like any owning storage** ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, as when an arena was reset since the closure was made, panics. Destroying such a `Closure` skips its captures' `deinit`s and the free, as for a stale `Box`.
 - **Calling.** A stored `Closure<mutating …>` needs `mutable` access to be called, and calling a `Closure<consuming …>` consumes it.

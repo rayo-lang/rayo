@@ -8,7 +8,7 @@ An arena can free many allocations at once, even when values made from them rema
 
 ```swift
 let levelArena = Allocator.register(Arena(size: 256.mb))
-var spawns = List<Vec3>(allocator: levelArena)
+var spawns = levelArena.alloc List<Vec3>()
 spawns.append(.zero)
 
 let pts = spawns.span         // a view into the arena's memory, which the arena counts as a use
@@ -35,7 +35,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 - **Another reset or unregistration that reaches the same memory is still running**, on any thread ([Allocators over other allocators](allocator-implementations.md#allocators-over-other-allocators)). So a reset that a `deinit` calls panics when the reset or unregistration running that `deinit` reaches the same memory.
 - **The id is unregistered** ([below](#unregistering-an-allocator)).
 - **The reset would exceed the arena's reset limit**, which keeps a word from being issued twice ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)).
-- **The allocator's kind isn't `.arena`**, `.system` included, since `reset()` and `release` ([Releasing a value without destroying it: `TrivialFree`](allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
+- **The registered implementation isn't an `ArenaImpl`**, `.heap` included, since `reset()` and `release` ([Releasing a value without destroying it: `TrivialFree`](allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
 
 **What a reset changes, and what it costs:**
 
@@ -45,7 +45,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 **The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a stamp. A **stamp** is an ordered token that the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. The runtime decides which values are stale by the stamps of the blocks their storage lies in. Registering an arena calls `attachFresh(stamp:)` with its first stamp.
 
-**A reset takes a new stamp `s`, later than every earlier one, and calls the `AllocatorImpl` hooks ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)) in this order:**
+**A reset takes a new stamp `s`, later than every earlier one, and calls the `ArenaImpl` and `WrapperImpl` hooks ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)) in this order:**
 
 1. `attachFresh(stamp: s)`: the arena serves new allocations from spare blocks, which it stamps `s`, or, with none, from new ones from its backing memory.
 2. `backingDidSwitch(stamp: s)` on every wrapper over the arena.
@@ -73,7 +73,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 **For as long as what it lends is live, an open also counts as a use of the allocator**, which a reset or an unregistration checks for. A reset can't find the views of its values either, so each open counts itself until the last use of what depends on it, as a dynamic access is held ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). The counting follows two rules:
 
-- **Counting uses.** An open of storage from any allocator but `.system`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends. That is the last use of everything that depends on what it lends ([02](../02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
+- **Counting uses.** An open of storage from any allocator but `.heap`, which is never reset or unregistered, counts as a use of that allocator until the borrow it begins ends. That is the last use of everything that depends on what it lends ([02](../02-views-and-dependencies.md#dependencies)). Each thread keeps its own counts, so an open writes nothing other threads write, and only a reset or an unregistration reads every thread's.
 - **Races are ordered.** An open fails when the reset or unregistration happens before it ([07](../07-concurrency/synchronization.md#atomics-and-locks)). A reset or an unregistration makes the storage stale before it reads the counts ([above](#what-a-reset-does), [below](#unregistering-an-allocator)). So an open and a reset or unregistration on two threads are ordered one way or the other:
   - the open comes first, and the reset or unregistration panics while what the open lends is live;
   - or the reset or unregistration comes first, and the open fails.
@@ -88,16 +88,15 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ```swift
 struct Door(var name: String) {
-    deinit { print(name) }                    // runs inside the reset that destroys this door
+    deinit { print(name) }                     // runs inside the reset that destroys this door
 }
 
-var doors = List<UniquePointer<Door>>()       // built outside the block: its buffer isn't in the arena
-using allocator = levelArena {
-    for i in 0..<4 {
-        doors.append(UniquePointer(Door(name: String("gate \(i)"))))   // the doors and their names come from the arena
-    }
+var doors = alloc List<UniquePointer<Door>>()  // from .heap: the list's buffer isn't in the arena
+for i in 0..<4 {
+    let name = levelArena.alloc String("gate \(i)")                  // the names and the doors come from the arena
+    doors.append(levelArena.alloc UniquePointer(Door(name: name)))
 }
-levelArena.reset()                            // destroys the doors; each deinit can still read its 'name'
+levelArena.reset()                             // destroys the doors; each deinit can still read its 'name'
 ```
 
 - **What it owns stays usable to it.** While such a `deinit` runs, the thread running it can open a value that this reset or unregistration made stale. That holds for a reset or unregistration of the object's allocator, or of one it is built over ([Allocators over other allocators](allocator-implementations.md#allocators-over-other-allocators)). Freeing such a value from that `deinit` releases it into the allocator it came from. A value an earlier reset made stale still fails, since its memory may already be reused.
@@ -108,7 +107,7 @@ levelArena.reset()                            // destroys the doors; each deinit
 
 ```swift
 let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))
-var props = List<Prop>(allocator: levelHeap)
+var props = levelHeap.alloc List<Prop>()
 // ... the level runs ...
 Allocator.unregister(levelHeap)     // every value still allocated from the heap goes stale
 props.append(p)                     // panics: 'props' came from an unregistered allocator

@@ -254,7 +254,7 @@ Plain assignment through `p.pointee` assumes initialized memory, and replaces th
 - **`@export` on a function** is a promise about its C name and callers ([08](../08-c-interop/calling-rayo-from-c.md#calling-rayo-from-c)).
 - **A conformance to an `unsafe protocol`** is a contract the compiler can't check ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)). An **unsafe protocol** is one declared with `unsafe protocol`. A conformance the compiler derives itself, such as `Frozen` for a type with no interior mutability, or `Sendable` for a type whose fields are all `Sendable`, is no promise. The language's own unsafe protocols are these:
     - `Sendable` and `Synchronized` ([07](../07-concurrency.md));
-    - `Frozen` and `AllocatorImpl` ([06](../06-memory-and-allocators.md));
+    - `Frozen`, `AllocatorImpl`, `ArenaImpl` and `WrapperImpl` ([06](../06-memory-and-allocators.md));
     - `PlainDeinit` ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)).
 - **A conformance written `: unsafe P` for one of these reasons** is a promise too, since generic code reaches a witness with no `unsafe` in sight ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#conformances)):
     - a witness is an `unsafe` field, or a union member that isn't safe to read;

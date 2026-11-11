@@ -7,7 +7,7 @@ Some relationships between values must last longer than a borrow: a squad keeps 
 A link to a value in a collection can be a **handle**: a small index into a pool, checked at each use, which can go stale but never dangle.
 
 ```swift
-var enemies = Pool<Enemy>(capacity: 4096)
+var enemies = alloc Pool<Enemy>(capacity: 4096)
 let h = enemies.insert(Enemy(pos: spawn, hp: 100))   // h: Handle<Enemy>, 8 bytes, copyable
 squad.members.append(copy h)                         // store copies anywhere
 
@@ -39,8 +39,8 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 A `UniquePointer` owns one value, its **object**, in memory from any allocator. Any number of `WeakPointer`s point at it, as a node points at its parent, and every use through either is checked:
 
 ```swift
-var renderer = UniquePointer(Renderer(device: dev))   // the one owner, move-only
-let r: WeakPointer<Renderer> = renderer.weak()        // copyable: store any number, cycles included
+var renderer = alloc UniquePointer(Renderer(device: dev))   // the one owner, move-only
+let r: WeakPointer<Renderer> = renderer.weak()              // copyable: store any number, cycles included
 
 struct Sprite(var mesh: MeshId, var renderer: WeakPointer<Renderer>)                     // a weak pointer as a field
 struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Node>>)     // tree with parent pointers
@@ -78,7 +78,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 **Objects stay on their home thread, so data that several threads use lives behind a reference-counted pointer instead.** That pointer is a `Shared<T>`, whose value is `Frozen` or `Synchronized`, such as a `Mutex`. So any number of threads may read the value at once, and it changes only through its own synchronization, if at all. A `WeakShared<T>` links to it without keeping it alive ([06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)):
 
 ```swift
-let mixer = Shared(Mutex(AudioMixer()))                    // AudioMixer must be Sendable
+let mixer = alloc Shared(Mutex(AudioMixer()))              // AudioMixer must be Sendable
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // copyable and Sendable: may go to any thread
 
 _ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the thread: nothing joins it
@@ -92,8 +92,8 @@ _ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the
 extension Node {
     mutating func prune() { parent!.value!.children.removeAll() }   // destroys this node too, with its siblings
 }
-var root = UniquePointer(Node(parent: nil, children: List()))
-root.value.children.append(UniquePointer(Node(parent: root.weak(), children: List())))
+var root = alloc UniquePointer(Node(parent: nil, children: alloc List()))
+root.value.children.append(alloc UniquePointer(Node(parent: root.weak(), children: alloc List())))
 let leaf = root.value.children[0].weak()
 
 leaf.value!.prune()                  // panics: the node is destroyed while 'prune' still accesses it
@@ -122,7 +122,7 @@ From then every weak pointer reads `nil` and no new access can begin.
 
 ### Objects in arenas and other allocators
 
-**`UniquePointer(value, allocator: a)` takes any allocator.** Objects in an arena die together when it is reset ([06](06-memory-and-allocators.md)), and objects in a heap when it is unregistered. Afterwards every weak pointer to them reads `nil`, and their owners are stale ([above](#destroying-an-object)).
+**`a.alloc UniquePointer(value)` takes any allocator.** Objects in an arena die together when it is reset ([06](06-memory-and-allocators.md)), and objects in a heap when it is unregistered. Afterwards every weak pointer to them reads `nil`, and their owners are stale ([above](#destroying-an-object)).
 
 **A reset or an unregistration destroys the objects in its memory itself:**
 

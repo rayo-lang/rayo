@@ -17,8 +17,8 @@
 ```swift
 let total = base +              // a line that ends in a binary operator continues
     bonus * 2
-let hps = enemies
-    .filter({ $0.hp > 0 })      // a line that starts with '.' joins the one above
+let hps = alloc enemies
+    .span                       // a line that starts with '.' joins the one above
     .map({ copy $0.hp })
 spawn(
     at: origin,                 // inside ( and [, newlines are whitespace

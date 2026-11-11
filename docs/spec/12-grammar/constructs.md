@@ -41,7 +41,7 @@ block         = '{' statement* '}' ;
 statement     = declaration | expression | assignment | guard-stmt
               | for-stmt | while-stmt | repeat-stmt | do-stmt                (* 'if' and 'when' are expressions *)
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
-              | 'defer' block | 'unsafe' block | 'unchecked' block | using-stmt
+              | 'defer' block | 'unsafe' block | 'unchecked' block
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
               | rebind-stmt | static-if-stmt | static-for-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
@@ -71,7 +71,6 @@ repeat-stmt   = 'repeat' block 'while' expression ;
 do-stmt       = 'do' block catch-clause* ;
 catch-clause  = 'catch' pattern? ('where' expression)? block ;
 
-using-stmt    = 'using' 'allocator' '=' expression block ;
 static-if-stmt  = 'static' 'if' expression block ('else' (static-if-stmt | block))? ;
 static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)? block ;
 ```
@@ -89,12 +88,14 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 | 5 | `..< ...` |
 | 6 | `+ - &+ &- +\| -\| \| ^` |
 | 7 | `* / % &* *\| & << >> &<< &>>` |
-| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy borrow unsafe` |
+| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy borrow unsafe`, then `alloc` and `a.alloc` |
 | 9 | postfix `?` `!` `...` `.member` `(args)` `[index]` `{trailing-closure}` |
 
 ```ebnf
 expression    = operand (binary-op operand | cast-op type)* ;
-operand       = prefix-op* postfix-expr ;
+operand       = prefix-op* allocation? postfix-expr ;
+allocation    = (postfix-expr '.')? 'alloc' ;                     (* alloc List<Int>(), level.alloc Box(v), try alloc x.clone(), alloc [1, 2]:
+                                                                     the allocator, then what is allocated with it (06) *)
 binary-op     = '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '..<' | '...'
               | '+' | '-' | '&+' | '&-' | '+|' | '-|' | '|' | '^' | '*' | '/' | '%' | '&*' | '*|' | '&' | '<<' | '>>' | '&<<' | '&>>' ;   (* levels in the table above *)
 cast-op       = 'as' ;                                             (* level 4; the right-hand side is a type, not an expression (05) *)
@@ -102,7 +103,7 @@ literal       = int-literal | float-literal | string-lit | 'true' | 'false' ;
 prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'borrow' | 'unsafe' ;
                                                                    (* 'borrow' only where a declaration borrows (01) *)
 postfix-expr  = primary postfix* ;
-postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords allowed after '.': T.self, .init(…); gameplay.Box<Int>(x) *)
+postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); alloc gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
 call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
 trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)

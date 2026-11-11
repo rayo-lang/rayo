@@ -253,8 +253,8 @@ struct Count(var value: Int)
 
 protocol Table { associatedtype Row }
 struct Columns<Row>(                                      // Row: a tuple of column types
-    var rows = SoA<Row>(),                                // current allocator, as for List
-): Table
+    var rows = alloc SoA<Row>(),                          // from the allocator the table is made with
+): Table, Allocating
 
 func calibrate<Row>(_ table: mutable Columns<Row>) {
     const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
@@ -265,9 +265,9 @@ func calibrate<Row>(_ table: mutable Columns<Row>) {
 }
 
 struct Telemetry(                                         // one table per kind of sensor
-    var thermometers = Columns<(Timestamp, Reading, Calibration, Calibrated)>(),
-    var flowMeters   = Columns<(Timestamp, Pipe, Reading, Calibration, Calibrated)>(),
-    var counters     = Columns<(Timestamp, Count)>(),
+    var thermometers = alloc Columns<(Timestamp, Reading, Calibration, Calibrated)>(),
+    var flowMeters   = alloc Columns<(Timestamp, Pipe, Reading, Calibration, Calibrated)>(),
+    var counters     = alloc Columns<(Timestamp, Count)>(),
 )
 
 func calibrateAll(_ t: mutable Telemetry) {               // every table with all three columns
@@ -283,9 +283,9 @@ An entity-component system (ECS) has the same shape. Each archetype is a table w
 
 ```swift
 struct Archetype<Row>(                                    // Row: a tuple of component types
-    var rows = SoA<Row>(),                                // current allocator, as for List
-    var entities = List<Entity>(),
-): Table
+    var rows = alloc SoA<Row>(),                          // from the allocator the archetype is made with
+    var entities = alloc List<Entity>(),
+): Table, Allocating
 
 func integrate<Row>(_ table: mutable Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent

@@ -90,7 +90,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 **`Mutex<T>` owns its data, and reaching it requires locking**, in closure form or as a guard:
 
 ```swift
-let log = Mutex(List<Message>())
+let log = Mutex(alloc List<Message>())
 log.lock { msgs in msgs.append(m) }      // closure form: lock takes 'consuming (mutable T) -> R', called once
 
 var g = log.lock()                       // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
@@ -139,7 +139,7 @@ The panic left the data as it found it, perhaps half-changed. Only the panicking
 **`Channel<T>` makes a channel, a queue that two kinds of owned ends share, `Sender<T>` and `Receiver<T>`:**
 
 ```swift
-let (tx, rx) = Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
+let (tx, rx) = alloc Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
 ```
 
 The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). A channel has one `Receiver`, and as many `Sender`s as `share()` makes. Like `Shared`'s `share()`, it adds an owner of the shared state visibly ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
@@ -351,7 +351,7 @@ g = cv.wait(consume g)       // unlocks, parks, relocks after it wakes, and retu
 - **has unscoped contents that are `Sendable` or raw pointers**, which it hands to other threads, and which absorption can't follow through a shared `self` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). So `Mutex<Span<T>>` and `Mutex<WeakPointer<T>>` are compile errors, and `Mutex<List<T>>` is fine when `T` is `Sendable`. So the type is itself `Sendable`. A raw pointer handed over this way, as by `Atomic<*T>` or an allocator's `Allocation`, is used only in `unsafe` code, which answers for what it points at ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds));
 - **takes elements in and hands them out as owned values**, each handed out after, in happens-before order, the call that took it in, and lends views of them only as the next bullets allow;
 - **grants a view only while no conflicting view of the same data is live, on any thread**: an exclusive guard or closure argument while no other view is live, and a shared one while no exclusive one is. Each view it grants happens after the end of every conflicting view it granted before. A request that would conflict with a view its own thread holds panics or blocks, and never succeeds, so a re-entrant lock can't satisfy the contract;
-- **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or `.system` heap state that the lock points to and keeps allocated while the guard lives. So each guard is released on the thread that took it ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
+- **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or state from `.heap` that the lock points to and keeps allocated while the guard lives. So each guard is released on the thread that took it ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
 - **lends a view of its interior only in one of two ways:**
     - under a lock, through a closure it runs or a `@guard` guard it returns, as `Mutex` and `RwLock` do;
     - as a read-only view of data that its non-`mutating` methods never write again, except through that data's own synchronization, and never free before the value itself is destroyed, as `Once.get()` lends.
@@ -372,7 +372,7 @@ struct Services(                                   // Synchronized, derived
     let config: Published<GameConfig>,
     let mixer: Shared<Mutex<AudioMixer>>
 )
-let services = Shared(Services(log: Mutex(…), registry: Mutex(…), config: Published(…), mixer: Shared(Mutex(AudioMixer()))))   // fine: a Shared of it
+let services = alloc Shared(Services(log: Mutex(…), registry: Mutex(…), config: alloc Published(…), mixer: alloc Shared(Mutex(AudioMixer()))))   // fine: a Shared of it
 ```
 
 **Declaring a conformance to `Synchronized` requires `unsafe`**, because the compiler can't verify the implementation ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)):

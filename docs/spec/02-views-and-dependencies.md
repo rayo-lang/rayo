@@ -11,8 +11,8 @@ For example, a function can fill a list with views into a string:
 ```swift
 func splitLines(_ text: StringView, into out: mutable List<StringView>) { ... }
 
-var source = String("first\nsecond")
-var lines = List<StringView>()
+var source = alloc String("first\nsecond")
+var lines = alloc List<StringView>()
 splitLines(source.view, into: &lines)
 source.append("x")                               // error: source is borrowed by 'lines' (used below)
 print(lines.count)

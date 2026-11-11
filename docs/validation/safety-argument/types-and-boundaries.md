@@ -62,7 +62,7 @@
 | `unsafe Synchronized` ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)) | [Threads](runtime-and-concurrency.md#threads), Exclusive |
 | `unsafe Frozen` ([06](../../spec/06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)) | `Shared`, `LocalShared`, freezing |
 | `PlainDeinit` ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)) | [Destruction as a use](dependencies.md#destruction-as-a-use) |
-| `AllocatorImpl` ([06](../../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)) | [Memory and allocators](runtime-and-concurrency.md#memory-and-allocators) |
+| `AllocatorImpl`, `ArenaImpl` and `WrapperImpl` ([06](../../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)) | [Memory and allocators](runtime-and-concurrency.md#memory-and-allocators) |
 | `@pod` ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)) | `Pod` |
 | The library's lending promise ([07](../../spec/07-concurrency/thread-work.md#the-librarys-promise)) | Borrows lent for a call ([Threads](runtime-and-concurrency.md#threads)) |
 | `Box.adopt` takes back a leaked `Box<T>` once ([06](../../spec/06-memory-and-allocators/owning-values.md#owning-boxes)) | Owned |

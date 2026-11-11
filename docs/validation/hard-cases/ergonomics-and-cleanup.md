@@ -32,24 +32,24 @@
 The criteria below use these statements, the last four in a handshake task:
 
 ```swift
-using allocator = frameArena { while running { work(); frameArena.reset() } }   // resets the arena the block allocates from
+while running { work(frameArena); frameArena.reset() }   // 'work' builds its scratch values with frameArena.alloc
 
 total += await next()                       // changes one of the task's own locals
 results[i] = await fetch(i)                 // assigns an element of one of the task's own locals
 let s = await peek(); print(s[0].hp)        // 'peek' returns a view of the resume parameter's data
-using allocator = a { … }                   // a block with an await inside
+var seen = a.alloc List<Int>()              // a value from the arena 'a', used after an await
 ```
 
 - **Must accept** per-request scratch memory, tasks stepped by the event loop, and a time-based wait, such as a handshake's timeout, that wakes its task when it is due without the worker spinning meanwhile.
 - Memory must stay bounded as long as each worker returns to its event loop between requests, whether that loop is a C library's that calls Rayo back, or Rayo code that idles in `epoll_wait` or on a futex.
 - **Must hold:** what a worker holds while it waits for its next request never makes its arena's next reset panic. That includes what its task runners hold, such as their wake targets, which another thread may reach through a `Waker` at any time.
 - State what the `unsafe` call to `epoll_wait` promises about the event buffer it hands the kernel, and show a buffer that keeps that promise simply.
-- **Must accept** the `frameArena` block above, and a wait inside a loop over a borrowed collection.
+- **Must accept** the `frameArena` loop above, and a wait inside a loop over a borrowed collection.
 - **Must accept** these in the handshake tasks:
     - the compound assignment to `total` and the assignment to `results[i]` above, on a task's own locals, with no `try` where `next` and `fetch` can't fail ([10](../../spec/10-errors-and-safety/typed-errors.md#what-a-failure-type-names));
     - the line with `peek` above, where `peek` returns a view of the resume parameter's data;
     - a `defer` live across an `await` that uses only the task's owned locals;
-    - an `await` inside a `using allocator` block, as above.
+    - a value made with `a.alloc` and used after an `await`, as `seen` above, since `a.alloc` holds no borrow of `a`.
 
 ### K3 · A real-time callback
 

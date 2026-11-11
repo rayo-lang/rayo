@@ -61,7 +61,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 **`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s**, as a network packet or a C API with a flexible array member wants.
 
 ```swift
-var msg = TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
+var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
 msg.header.kind = .snapshot
 msg.elements[0..<4].copy(from: payload[0..<4]) // MutableSpan<UInt8> over the trailing storage; lengths checked
 ```
@@ -88,7 +88,7 @@ It is move-only, and owns its allocation, whose element count is fixed when it i
 **`SoA<T>` stores each field of a struct `T`, or each element of a tuple `T`, in its own buffer**, so a loop reads only the fields it touches, still with field syntax:
 
 ```swift
-var particles = SoA<Particle>(capacity: 100_000)  // or SoA<Particle>(), as for List
+var particles = alloc SoA<Particle>(capacity: 100_000)  // or alloc SoA<Particle>(), as for List
 particles.append(Particle(pos: p, vel: v, life: 2))
 
 for p in &particles {                  // p is a row: one place per field

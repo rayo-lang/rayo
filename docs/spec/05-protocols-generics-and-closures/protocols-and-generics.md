@@ -190,9 +190,9 @@ Most maps hash the same way, so std's `Map` lets code leave its hashing type out
 ```swift
 struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
 
-let a: Map<Name, Int> = [:]                           // Map<Name, Int, SeededHashing>
-let b: Map<Name, Int, FixedHashing> = [:]             // the default replaced
-let c: Map<Name, Int, FixedHashing> = Map()           // H comes from the expected type
+let a: Map<Name, Int> = alloc [:]                     // Map<Name, Int, SeededHashing>
+let b: Map<Name, Int, FixedHashing> = alloc [:]       // the default replaced
+let c: Map<Name, Int, FixedHashing> = alloc Map()     // H comes from the expected type
 func report<K>(_ m: Map<K, Int>) { … }                // takes only maps with SeededHashing
 func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any hashing type
 ```
@@ -202,7 +202,7 @@ func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any 
 - **Trailing.** Every type parameter after one with a default has one too, so written arguments fill the parameters in order.
 - **Checked at the declaration.** The default meets the parameter's constraints, and names none of the type's own parameters.
 - **Taken where an argument is left out.** A type written with fewer arguments than it has parameters takes the default for each one left out. That holds wherever the type is written: in an annotation, a parameter's or field's type, after `as`, or in an extension's header, as `extension Map<Name, Int>` extends only `Map<Name, Int, SeededHashing>`.
-- **Taken where inference gives nothing.** Where a type's arguments come from a call, as for `Map()` above, the default is the last way a parameter binds, after the call's arguments and its expected type ([Operators](operators.md#operators)). So a `_` written for such a parameter, as in `Map<_, _, _>`, takes the default when the initializer leaves it unbound.
+- **Taken where inference gives nothing.** Where a type's arguments come from a call, as for `alloc Map()` above, the default is the last way a parameter binds, after the call's arguments and its expected type ([Operators](operators.md#operators)). So a `_` written for such a parameter, as in `Map<_, _, _>`, takes the default when the initializer leaves it unbound.
 
 **A type written with no arguments at all, in an extension's header, still covers every instance**, so `extension Map` extends maps with every hashing type ([04](../04-types/structs.md#initializers)). **Generic code that should take any hashing type declares a parameter for it**, as `reportAny` does, since `Map<K, V>` in a signature means `Map<K, V, SeededHashing>`.
 
@@ -249,8 +249,8 @@ func drawAll(_ items: Span<any Drawable>, _ ctx: mutable DrawContext) {
     for d in items { d.draw(&ctx) }                  // dynamic dispatch, visible in the signature
 }
 
-var widgets = List<Box<any Widget>>()
-widgets.append(Box(Button(label: "Play")))          // allocation, visible in source
+var widgets = alloc List<Box<any Widget>>()
+widgets.append(alloc Box(Button(label: "Play")))    // allocation, visible in source
 for w in &widgets { w.value.update(dt) }           // mutable any Widget: mutating requirement, dynamic dispatch
 ```
 

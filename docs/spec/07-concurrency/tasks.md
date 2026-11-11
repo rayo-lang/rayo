@@ -237,7 +237,7 @@ struct TaskSetFull<A>(let work: A): Error                  // start's failure: t
 
 **`start` fails once every slot is taken, and hands the task back**, as a failed `send` hands back its item ([Disconnected channels](synchronization.md#disconnected-channels)). So a full set never drops a task that its caller still wants.
 
-**A set's wake target comes from `.system`, made when the set is.** The wake target is the `Synchronized` value that the set's `Waker`s reach, and holds each slot's wake and deadline. A thread that wakes a task may hold an owner of it for a moment ([Waking a task](#waking-a-task)), so it never comes from the current allocator, which may be an arena that the program resets.
+**A set's wake target comes from `.heap`, made when the set is, with no `alloc`.** The wake target is the `Synchronized` value that the set's `Waker`s reach, and holds each slot's wake and deadline. A thread that wakes a task may hold an owner of it for a moment ([Waking a task](#waking-a-task)), so it never comes from an allocator the program chooses, which may be an arena that the program resets ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)).
 
 **A task is woken from the time `start` returns until its runner gives it a step.** Each `wake()` of one of its `Waker`s wakes it again, however many times it comes, so a task that is woken twice before a step gets one step. Each wake happens before the step it leads to, so what the waking thread did before its `wake()` is visible to the task.
 
@@ -325,7 +325,7 @@ let level = try block(on: loadLevel(id), with: &loader)   // parks while the loa
 
 - **What it takes.** It keeps the work in its own frame for the call, so it takes an awaitable of any result, scoped or not, where a `TaskSet` takes only unscoped tasks that return nothing.
 - **How it parks.** It polls the work, and parks as `run` does whenever the work is pending and no wake has come since the poll began, until a wake or the work's deadline.
-- **Its wake target.** Each thread has one for `block(on:)`, which its first call makes from `.system`, and which the thread's teardown destroys, as it destroys the thread's copy of a thread-local ([Thread teardown](global-state.md#thread-teardown)). So `block(on:)` allocates nothing after a thread's first call, and never from the current allocator.
+- **Its wake target.** Each thread has one for `block(on:)`, which its first call makes from `.heap`, and which the thread's teardown destroys, as it destroys the thread's copy of a thread-local ([Thread teardown](global-state.md#thread-teardown)). So `block(on:)` allocates nothing after a thread's first call, and never from an allocator the program chooses.
 - **Nested calls.** A `block(on:)` inside another on the same thread shares the thread's wake target. It leaves the target woken as it returns, so the outer call polls its work again, and loses no wake that the inner call took.
 - **Panics.** A panic in the work's poll finishes it, if it is a task ([Semantics](#semantics)), and unwinds out of `block(on:)` at once, which destroys the work with the call's frame.
 

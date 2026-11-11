@@ -74,7 +74,7 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 - a reset or a `release` through an allocator that isn't an arena, since both are arena operations ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));
 - a reset past the implementation's limit on resets, so that no allocator word is issued twice ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));
 - a reset or an unregistration while anything still uses the memory it would free, or while another that reaches that memory is running ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));
-- unregistering `.system`, so that its storage never goes stale ([06](../06-memory-and-allocators/allocator-basics.md#allocator-values));
+- unregistering `.heap`, so that its storage never goes stale ([06](../06-memory-and-allocators/allocator-basics.md#allocator-values));
 - registering an allocator whose backing is unregistered, or whose backing chain breaks a rule for backing chains ([06](../06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators));
 - registering an allocator past the implementation's limit, so that no allocator word is issued twice ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
@@ -174,7 +174,7 @@ f(&x)                  // fine: if f panics, its borrow of x has ended by the ti
 - **Running out of stack.** Unwinding runs `deinit`s and `defer` blocks, which need the stack that ran out. Each case is caught before anything is written past the stack's end. WebAssembly's own engine stack isn't checked: there the engine traps, which ends the program without the report ([11](../11-compilation-model.md#webassembly)). The cases are these:
     - a call, or the destruction of deeply nested values, that needs more of the stack it runs on than is left, a fiber's stack that C declared included;
     - a call into C made with less stack left than its target declares, or than `target.cStackReserve` when it declares nothing ([08](../08-c-interop/imports-and-inline-c.md#the-stack-a-c-call-needs)).
-- **An allocation that fails in a plain form**, such as `UniquePointer(v)` or a closure context past the inline budget. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+- **An allocation that fails in a plain form**, such as `alloc UniquePointer(v)`, a list's growth or a conversion to a `Closure` that allocates. Code that can recover uses a fallible form, which returns `nil` or fails with an error ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 - **A panic that would unwind out of code an unwind runs**, such as a `deinit` or a `defer` block ([above](#unwinding)). A recovery point catches one panic, and the thread would carry two.
 - **A panic that would unwind out of a thread's teardown**, such as one in a thread-local's `deinit`, since no frame is left to unwind to ([07](../07-concurrency/global-state.md#thread-teardown)).
 - **A panic that would unwind out of a thread-local's initializer on any thread outside startup**, since no joiner can learn of it ([07](../07-concurrency/global-state.md#thread-locals)). On a C thread that is attaching, it would unwind into C anyway, as the next item says.
@@ -201,7 +201,7 @@ let frame = catchPanic {
 } recover: { p in
     log("step failed: \(p.message)")
     world = loadWorld(level)                  // 'world' may be half-changed: this program rebuilds it
-    return lastGoodFrame.clone()
+    return alloc lastGoodFrame.clone()
 }
 ```
 
@@ -223,7 +223,7 @@ let frame = catchPanic {
 catchPanic {
     views.append(name.view)          // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
-    name = String("b")               // error: 'views' depends on 'name', and is used below
+    name = alloc String("b")         // error: 'views' depends on 'name', and is used below
 }
 print(views[0])
 ```

@@ -236,7 +236,7 @@ func loadOrDefault(_ path: StringView) -> Level!IoError {
     do {
         return try loadLevel(path)
     } catch is ParseError {                    // ParseError is handled here...
-        return Level()
+        return alloc Level()
     }                                          // ...and IoError propagates, as a 'try' would
 }
 ```

@@ -19,7 +19,7 @@ func total(list: List<Int>) -> Int {
     return sum
 }
 
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
 let damage = total(list: hits)          // 42
@@ -48,12 +48,12 @@ func longer(a: List<Int>, b: List<Int>) -> List<Int> {
 
 `longer`'s parameters have nothing written before their types, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
-To return a list, `longer` has to build one that it owns, with `clone()` ([Moves and copies](02-moves-and-copies.md#copies)):
+To return a list, `longer` has to build one that it owns, with `clone()` ([Moves and copies](02-moves-and-copies.md#copies)). That makes it an `alloc func`, as `newRound` is:
 
 ```swift
-func longer(a: List<Int>, b: List<Int>) -> List<Int> {
-    if a.count >= b.count { return a.clone() }
-    return b.clone()
+alloc func longer(a: List<Int>, b: List<Int>) -> List<Int> {
+    if a.count >= b.count { return alloc a.clone() }
+    return alloc b.clone()
 }
 ```
 
@@ -140,7 +140,7 @@ Whether through an `&` argument or the value before the dot, a call can change o
 ```swift
 let startHp = 100
 heal(hp: &startHp)              // error: 'startHp' is a 'let', so it can't change
-let done = List<Int>()
+let done = alloc List<Int>()
 done.append(7)                  // error: 'done' is a 'let', so it can't change
 ```
 
@@ -162,7 +162,7 @@ A declaration can borrow too. Declaring a variable from another one moves the va
 To borrow something to change it, write `&` before it, as in a call. Declare the name with `var`, since you'll change the value through it. Here `first` borrows `hits[0]`, which is the list's first element:
 
 ```swift
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
 var first = &hits[0]
@@ -187,8 +187,8 @@ let top = copy hits[0]
 In a list of lists, though, each element is a whole list. `copy` is an error there, since a list isn't copyable, and `clone()` would allocate a second list. A borrow reads the element where it sits, and gives it a short name:
 
 ```swift
-var rounds = List<List<Int>>()
-rounds.append(hits.clone())
+var rounds = alloc List<List<Int>>()
+rounds.append(alloc hits.clone())
 let latest = borrow rounds[rounds.count - 1]
 log("\(latest.count) hits, \(total(list: latest)) damage")
 ```
@@ -201,7 +201,7 @@ While `latest` borrows an element of `rounds`, `rounds` can't change:
 
 ```swift
 let latest = borrow rounds[rounds.count - 1]
-rounds.append(List<Int>())      // error: 'rounds' is borrowed by 'latest' (used below)
+rounds.append(alloc List<Int>())  // error: 'rounds' is borrowed by 'latest' (used below)
 log("\(latest.count) hits")
 ```
 
@@ -212,7 +212,7 @@ The compiler can't know whether an `append` will need a bigger block, and doesn'
 ```swift
 let latest = borrow rounds[rounds.count - 1]
 log("\(latest.count) hits")
-rounds.append(List<Int>())
+rounds.append(alloc List<Int>())
 ```
 
 Moving a list away counts as changing it too:
@@ -258,7 +258,7 @@ This is the same problem as with `latest`: `append` may transfer the values to a
 To add values that the loop finds, collect them in a list of their own. Then add them once the loop is done:
 
 ```swift
-var big = List<Int>()
+var big = alloc List<Int>()
 for h in hits {
     if h > 20 { big.append(copy h) }
 }
@@ -302,13 +302,13 @@ Here `i` is an index that the program works out while it runs, and `top` borrows
 
 ```swift
 var top = &rounds[0][0]
-rounds[i] = List<Int>()         // error: 'rounds' is mutably borrowed by 'top' (used below)
+rounds[i] = alloc List<Int>()   // error: 'rounds' is mutably borrowed by 'top' (used below)
 top += 5
 ```
 
 When `i` is 0, the assignment destroys the first round, and frees the block that holds its hits. Then `top += 5` would write to freed memory.
 
-The compiler doesn't compare indexes into a list, so even `rounds[1] = List<Int>()` is rejected here. `rounds[1]` isn't plain address arithmetic. It runs the list's own code to find the element, and that code could reach any part of the list. So a use of any element counts as a use of the whole list.
+The compiler doesn't compare indexes into a list, so even `rounds[1] = alloc List<Int>()` is rejected here. `rounds[1]` isn't plain address arithmetic. It runs the list's own code to find the element, and that code could reach any part of the list. So a use of any element counts as a use of the whole list.
 
 A read can clash with a mutable borrow too. One call can do it alone, when it gets the same list twice:
 
@@ -327,12 +327,12 @@ The compiler doesn't look inside `addAll` to find this. Its declaration alone sa
 The fix is to give `addAll` a second list to read. A clone is worth its cost here, since `addAll` needs the values as they were before it started appending:
 
 ```swift
-addAll(target: &hits, source: hits.clone())
+addAll(target: &hits, source: alloc hits.clone())
 ```
 
-A call works in two steps. First, it works out its arguments, left to right. Here, `hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `&hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
+A call works in two steps. First, it works out its arguments, left to right. Here, `alloc hits.clone()` reads `hits`, builds a new list, and is done with `hits`. Working out `&hits` only finds the place to lend. The lending starts when the call begins, after the clone is made ([01](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). The clone's read of `hits` ends before the call's change begins. During the call, `addAll` reads one list and changes another.
 
-A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless an `owned` parameter takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `addAll` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(hits.clone())`, `append` took its clone, and `rounds` owns it.
+A value that a call makes and nothing names, such as this clone, is a **temporary**. It lives only until the end of the statement that made it, unless an `owned` parameter takes it ([02](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)). `addAll` only borrows the clone, so the clone is destroyed at the end of this statement. In `rounds.append(alloc hits.clone())`, `append` took its clone, and `rounds` owns it.
 
 The compiler checks the law when it compiles, in every build. So for the values in this chapter, the check costs nothing while the program runs.
 

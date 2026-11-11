@@ -70,17 +70,17 @@ struct Chain(var next: Chain?)    // error: a Chain would hold a Chain inline, i
 
 ```swift
 struct Spawner(
-    var target: Handle<Enemy>?,     // a var of optional type: starts as nil, so it is defaulted
-    let owner: Handle<Player>?,     // a let of optional type: no default
+    var target: Handle<Enemy>?,          // a var of optional type: starts as nil, so it is defaulted
+    let owner: Handle<Player>?,          // a let of optional type: no default
     var cooldown: Float = 2,
-    var spawned = Pool<Enemy>(),    // the default gives the field its type
+    var spawned = alloc Pool<Enemy>(),   // the default gives the field its type
 )
-let s = Spawner(owner: nil)         // 'target', 'cooldown' and 'spawned' may be left out
+let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' may be left out
 ```
 
 **Every value of a struct is built by its primary initializer**, except a value that a `Pod` type takes from bytes ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). The primary initializer's parameters are the fields, in order and labeled by name:
 
-- **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let`, and takes no parameter convention. The value owns its fields, so the primary initializer takes every one `owned`: `Inventory(items: loot)` moves `loot` in, unless the call says `copy loot` or `loot.clone()` ([01](../01-values-and-ownership/parameters.md#parameters)).
+- **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let`, and takes no parameter convention. The value owns its fields, so the primary initializer takes every one `owned`: `Inventory(items: loot)` moves `loot` in, unless the call says `copy loot` or `alloc loot.clone()` ([01](../01-values-and-ownership/parameters.md#parameters)).
 - **Defaults.** A field's default makes its argument optional. A field with a default may leave its type to the default, as `spawned` does above.
 - **Optional `var`s.** A `var` declared with an optional type, `T?` written as such, with no default and not `unsafe`, starts as `nil`. It counts as defaulted, for the primary initializer and for reflection's `hasDefault` ([09](../09-compile-time/reflection.md#what-reflection-can-read)). A `let` of optional type does neither.
 - **`unsafe` fields.** An `unsafe` field, such as `Span`'s `baseAddress`, is given its argument only inside `unsafe`, just as naming it needs `unsafe`.

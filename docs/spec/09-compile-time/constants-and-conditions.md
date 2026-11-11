@@ -23,7 +23,7 @@ func makeSinTable() -> [1024 of Float] {
 **Any function can run at compile time if what it executes, on the input it gets:**
 
 - calls no C function, whether imported or declared `extern c`;
-- accesses no global other than a `const`, a `static const` included, and no thread-local other than the current allocator, which at compile time is a compile-time heap (below);
+- accesses no global other than a `const`, a `static const` included, and no thread-local;
 - starts, parks and wakes no thread: it reaches no blocking wait, `Runtime.park` or `Runtime.wake`;
 - makes no volatile access, and no access through a pointer made from an integer;
 - turns no pointer into an integer, since freezing moves what a pointer points at and the platform places the program anew in each run, so the integer would differ at run time;
@@ -39,7 +39,7 @@ func makeSinTable() -> [1024 of Float] {
 - **What runs is what counts.** A function with a branch that reads a global `let` still runs in the compiler on an input that never takes that branch.
 - **It computes what run time would.** Each scope keeps the diagnostic checks it has at run time, as `target.checks` reports them ([10](../10-errors-and-safety/checks-and-build-modes.md#check-levels)). So an overflow wraps where overflow checks are off. A panic is a compile error that reports it.
 - **`unsafe` and `unchecked` code run too, checked.** Every raw access is checked against what an access through a raw pointer must satisfy ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)), and every memory-safety check an `unchecked` block removes still runs. So an access outside its allocation, into freed memory, misaligned or of an invalid value is a compile error. `unsafe` code that breaks a promise evaluation can't check, such as respecting a live borrow, gets no promise about the `const`'s value, as it gets none at run time. A diagnostic check that an `unchecked` block removes stays off, as at run time ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
-- **Allocation works.** At compile time the current allocator is a compile-time heap, so containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. `.system` allocates from the compile-time heap too. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
+- **Allocation works.** At compile time `.heap` allocates from a compile-time heap, so `alloc`, containers, strings and allocators run as they do at run time, and `makePresets()` below can build a `List` with `append`. Running out of it exceeds the toolchain's limit (below), never an allocation failure that code observes, so no value depends on the building machine's memory.
 - **One thread.** Evaluation runs on one thread, so no `const`'s value depends on thread timing.
 - **Evaluation is bounded.** A `const`'s evaluation that runs past the toolchain's limit is a compile error, so a runaway loop fails the build instead of hanging it. A global `let`'s leaves the global to startup, which computes the same value ([07](../07-concurrency/global-state.md#initialization-at-startup)).
 - **No cycles.** A `const` whose evaluation reads itself, directly or through other `const`s, is a compile error.
@@ -59,13 +59,13 @@ Here `enemyPresets` reaches run time, since `presets()` names it, even if nothin
 
 ```swift
 struct Preset(var name: String, var hp: Float) {
-    func clone() -> Preset { Preset(name: name.clone(), hp: copy hp) }   // so a List<Preset> can be cloned
+    alloc func clone() -> Preset { Preset(name: alloc name.clone(), hp: copy hp) }   // so a List<Preset> can be cloned
 }
 
-const enemyPresets: List<Preset> = makePresets()       // built in the compiler, allocating as it goes
+const enemyPresets: List<Preset> = alloc makePresets()   // built in the compiler, allocating as it goes
 
-func makePresets() -> List<Preset> {
-    var a = List<Preset>()
+alloc func makePresets() -> List<Preset> {
+    var a = alloc List<Preset>()
     a.append(Preset(name: "grunt", hp: 50))
     a.append(Preset(name: "brute", hp: 400))
     return a
@@ -77,7 +77,7 @@ struct World(var presets: StaticSpan<Preset>, …)
 
 func setUp(_ world: mutable World) {
     world.presets = enemyPresets.staticSpan            // an unscoped view, so a field can keep it
-    var edited = enemyPresets.clone()                  // fine: a run-time copy, in the current allocator
+    var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
     edited.append(Preset(name: "boss", hp: 900))
     enemyPresets.append(Preset(name: "boss", hp: 900))   // error: a const is never mutated
 }
@@ -103,7 +103,7 @@ func setUp(_ world: mutable World) {
 - **Destroying it would only free memory.** It is `TrivialFree` ([06](../06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)). A frozen value is never destroyed, which skips only frees, and those free nothing under the static allocator. So a `Shared` or a `LocalShared` isn't freezable, although it may be `Frozen`: its count is written at run time, and its `deinit` isn't `PlainDeinit`.
 - **No pin counts.** It holds no `StablePool`, whose pin counts are written at run time, as `Shared`'s count is ([03](../03-handles-and-objects.md#pinning-for-c)).
 - **No weak pointers or weak links.** It holds none at any depth, since the objects and `Shared` values they name exist only at run time ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So a `Slice` or a `Waker`, which holds a weak link, isn't freezable either.
-- **No allocator ids but `.system`.** It holds no `Allocator` id but `.system`, since an allocator registered at compile time doesn't exist at run time. So a global `let` that registers one, such as `frameArena` below, is initialized at startup.
+- **No allocator ids but `.heap`.** It holds no `Allocator` id but `.heap`, since an allocator registered at compile time doesn't exist at run time. So a global `let` that registers one, such as `frameArena` below, is initialized at startup.
 - **No stale values.** It holds no stale owning value: every owning value in it would pass an open when evaluation ends ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 - **Pointers only into memory that lasts.** Through its raw pointers it reaches only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, what a `StaticSpan` or `StaticString` views, another `const`'s frozen data, type metadata and code. It reaches no freed memory. A pointer made from an integer, such as a device register's, is frozen as it is, since evaluation never got that integer from a pointer (above).
 - **Unscoped.** It is unscoped ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). Freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a `StaticSpan` or a `StaticString` (above).
@@ -114,10 +114,10 @@ func setUp(_ world: mutable World) {
 **The same test, with the rules above for what can run at compile time, decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So the first three below are initialized at startup, and only the last is frozen:
 
 ```swift
-let frameArena = Allocator.register(Arena(size: 64.mb))                // holds an allocator id other than .system
-let godMode = Atomic(false)                                            // Synchronized: kept in memory its methods can write
-let presetIds: Map<Name, Int> = ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
-let fixedIds: Map<Name, Int, FixedHashing> = ["grunt": 0, "brute": 1]  // fixed hashing: frozen into read-only data
+let frameArena = Allocator.register(Arena(size: 64.mb))                      // holds an allocator id other than .heap
+let godMode = Atomic(false)                                                  // Synchronized: kept in memory its methods can write
+let presetIds: Map<Name, Int> = alloc ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
+let fixedIds: Map<Name, Int, FixedHashing> = alloc ["grunt": 0, "brute": 1]  // fixed hashing: frozen into read-only data
 ```
 
 **A `const` that doesn't reach run time, such as a list iterated by `static for`, may hold anything.** An attribute made from one must still be freezable ([Attributes](attributes-and-runtime-data.md#attributes)).

@@ -3,16 +3,16 @@
 The game now needs memory at two speeds. Its meshes, the shapes it draws, live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
 
 ```swift
-let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))   // the level's data
-let frameArena = Allocator.register(Arena(size: 64.mb))      // scratch data, freed every frame
+let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))       // the level's data
+let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data, freed every frame
 
 while running {
-    using allocator = frameArena {                           // what this block builds comes from the arena
-        var visible = List<Handle<Mesh>>()
+    do {
+        var visible = frameArena.alloc List<Handle<Mesh>>()      // the list's storage comes from the arena
         cull(world, into: &visible)
         submit(visible.span)
-    }                                                        // 'visible' is destroyed: freeing into an arena does nothing
-    frameArena.reset()                                       // the frame's scratch memory is freed at once
+    }                                                            // 'visible' is destroyed: freeing into an arena does nothing
+    frameArena.reset()                                           // the frame's scratch memory is freed at once
 }
 ```
 
@@ -21,46 +21,66 @@ In C++, a pointer that survives into the next frame is a silent use-after-free: 
 ## Allocators are values
 
 ```swift
-var levelMeshes = List<Mesh>(allocator: levelHeap)   // grows and frees through levelHeap, for its whole life
-var editorMeshes = List<Mesh>(allocator: .system)    // the same type: List<Mesh>
-var names = List<String>()                           // no allocator given: the current one (below)
+var levelMeshes = levelHeap.alloc List<Mesh>()   // grows and frees through levelHeap, for its whole life
+var editorMeshes = alloc List<Mesh>()            // the same type, List<Mesh>, from the ambient allocator (below)
 ```
 
-Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. You pass that id when you want to choose where a value's storage lives. `.system` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
+Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. Every construction of a list, string or box says `alloc`, which marks a value that gets heap memory of its own ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 
 A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `List<Mesh>` accepts either.
 
 **Every registered allocator is one of three kinds:**
 
-- A **heap**, such as `.system` or a TLSF heap, frees each allocation on its own.
+- A **heap**, such as `.heap` or a TLSF heap, frees each allocation on its own.
 - An **arena** frees nothing on its own. Freeing into it does nothing, and a **reset** frees everything it handed out at once.
 - A **wrapper**, such as a memory budget, passes another allocator's allocations through and keeps accounts of them ([06](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators)).
 
-**You can write an allocator of your own.** Every allocator but `.system` is library code that implements the `AllocatorImpl` protocol ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)). Conforming is an `unsafe` promise to keep that protocol's contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
+**You can write an allocator of your own.** Every allocator but `.heap` is library code that implements the `AllocatorImpl` protocol, and an arena implements `ArenaImpl`, which refines it ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)). Conforming is an `unsafe` promise to keep the protocols' contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
 
 **Every registered allocator must be safe to call from any thread**, since any thread can allocate through an id it holds.
 
-## The current allocator
+## The ambient allocator
 
-Each thread starts with `.system` as its current allocator. `using allocator = a { … }` changes that choice for its block and restores the previous one when the block exits, even by an early return ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-current-allocator)). Code reads the current allocator when it builds new storage without naming another one. That includes:
-
-- a constructor that isn't given an allocator, such as `List<Enemy>()`, `String("wave \(n)")` or `Box(e)`;
-- a literal that builds a `List`;
-- `clone()`, which builds its copy there;
-- a closure stored as a `Closure` value, when what it captures doesn't fit inside it ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
-
-A list keeps the allocator it was built with, wherever it later grows. Entering a `using allocator` block does not change an existing list. It *does* affect a new string appended to that list:
+A bare `alloc` takes the **ambient allocator**. It depends only on where the code is written, never on a setting the program changes as it runs ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). In most code it is `.heap`. A type whose values allocate changes that inside its own methods:
 
 ```swift
-var names = List<String>()                       // built outside the block: its buffer is in .system
-using allocator = frameArena {
-    names.append(String("wave \(wave)"))         // the list grows in .system, but the new String is in the arena
+struct Level(var names: List<String> = alloc List<String>()): Allocating   // lets its caller choose where it's made
+
+extension Level {
+    mutating func addWave(_ wave: Int) {
+        names.append(alloc String("wave \(wave)"))     // from the level's own allocator
+    }
 }
-frameArena.reset()
-print(names[0])                                  // panics: the string came from 'frameArena' before its reset
+
+var level = levelHeap.alloc Level()                    // 'names' comes from levelHeap too
+level.addWave(3)                                       // and so does the new string
 ```
 
-The current allocator belongs to the running thread. Work lent to another thread uses that thread's choice, which may differ from yours ([07](../spec/07-concurrency/thread-work.md#thread-locals-in-lent-work)). Chapter 7 shows how to lend work ([Concurrency](07-concurrency.md)).
+**A type that conforms to `Allocating` gets an allocator of its own**, which `levelHeap.alloc Level()` gives it ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)). Inside its initializer, a bare `alloc` takes that allocator, so `names`, the field's default, comes from `levelHeap`. Inside its other methods, a bare `alloc` takes the allocator the value came from, so `addWave` puts each new string where the level lives. Everywhere else, in a free function too, a bare `alloc` takes `.heap`.
+
+So a value hands its allocator to what it allocates, and nothing else does. Code deep in a call tree allocates from an arena only when it holds a value from that arena, or when its caller's `alloc` named the arena.
+
+**A function that builds a new value for its caller is an `alloc func`**, as `clone()` is. The `alloc` before its call gives it the allocator its result goes in, and inside it a bare `alloc` takes that allocator ([06](../spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
+
+**`alloc` applies only to values that allocate.** There is no hidden boxing:
+
+```swift
+var boxed = alloc enemy          // error: 'Enemy' isn't Allocating
+var boss = alloc Box(enemy)      // a Box owns the enemy, in one allocation
+```
+
+`alloc` before a plain value is an error, and you box the value yourself, with `alloc Box(enemy)` ([below](#one-owned-value-box)).
+
+**Two kinds of allocation have no construction to mark.** A list grows through the allocator its `alloc` showed. A closure stored as a `Closure` value may allocate room for what it captures, and its type shows that it may ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)).
+
+A list keeps the allocator it was built with, wherever it later grows. A new string appended to it may come from somewhere else:
+
+```swift
+var names = alloc List<String>()                         // from .heap
+names.append(frameArena.alloc String("wave \(wave)"))    // the list grows in .heap, but the new String is in the arena
+frameArena.reset()
+print(names[0])                                          // panics: the string came from 'frameArena' before its reset
+```
 
 ## Arenas and resets
 
@@ -70,7 +90,7 @@ The current allocator belongs to the running thread. Work lent to another thread
 - **A reset panics while anything, on any thread, still uses the arena's memory.** It never waits.
 
 ```swift
-var positions = List<Vec3>(allocator: frameArena)
+var positions = frameArena.alloc List<Vec3>()
 positions.append(.zero)
 
 let pts = positions.span    // a view into the arena's memory: a use of the arena while 'pts' is live
@@ -101,13 +121,13 @@ Each open checks whether the allocator has reset since the value obtained its st
 
 **Destroying a stale value does nothing**, since its memory may already hold other values. It skips the free, and its elements' `deinit`s. So whatever those elements owned outside the arena leaks, and a value in an arena should own nothing outside it.
 
-**A reset destroys the objects in the arena.** An object made with `UniquePointer(value, allocator: frameArena)` dies in the reset, which runs its `deinit` on the resetting thread. Its weak pointers read `nil` from then on.
+**A reset destroys the objects in the arena.** An object made with `frameArena.alloc UniquePointer(value)` dies in the reset, which runs its `deinit` on the resetting thread. Its weak pointers read `nil` from then on.
 
 **Inside that `deinit`, the object can still read what it owns from the arena** ([06](../spec/06-memory-and-allocators/arena-safety.md#stale-values-and-the-deinits-a-reset-runs)). The reset frees the arena's memory only after every such `deinit` has returned.
 
 **A reset panics first if one of those objects is in use**: when an access to it is live, when it's pinned, or when its home thread is another thread ([03](../spec/03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 
-**Only an arena resets.** `reset()` on a heap, `.system` included, panics.
+**Only an arena resets.** `reset()` on a heap, `.heap` included, panics.
 
 **A heap ends with `Allocator.unregister`** ([06](../spec/06-memory-and-allocators/arena-safety.md#unregistering-an-allocator)). When the level unloads, `Allocator.unregister(levelHeap)` checks for uses as a reset does. Then every value still allocated from the heap goes stale, and its objects are destroyed.
 
@@ -116,24 +136,23 @@ Each open checks whether the allocator has reset since the value obtained its st
 ## Keeping results past a reset
 
 ```swift
-using allocator = frameArena {
-    var names = List<String>()
-    collectNames(world, into: &names)                             // the list and its strings come from the arena
-    using allocator = .system { world.results = names.clone() }   // the clone and its strings come from .system
+do {
+    let names = frameArena.alloc collectNames(world)   // an alloc func: the list and its strings come from the arena
+    world.results = alloc names.clone()                // the clone and its strings come from .heap
 }
 frameArena.reset()
-world.results.append(String("late"))                              // fine: nothing in it came from the arena
+world.results.append(alloc String("late"))             // fine: nothing in it came from the arena
 ```
 
-**To keep a value past a reset, build it in an allocator that outlives the reset.** `clone()` builds its copy in the current allocator, so a `using allocator = .system` block inside the arena's block copies a value out.
+**To keep a value past a reset, build it in an allocator that outlives the reset.** `clone()` builds its copy, and every string in it, in the allocator its `alloc` gives. So `alloc names.clone()` copies a value out of the arena into `.heap`.
 
 ## One owned value: `Box`
 
 The game gives its boss an allocation of its own:
 
 ```swift
-var boss = Box(Enemy(pos: [0, 0, 40], hp: 5000))   // one allocation, from the current allocator
-boss.value.hp -= 250                                 // changes the enemy in place
+var boss = alloc Box(Enemy(pos: [0, 0, 40], hp: 5000))   // one allocation, from the ambient allocator
+boss.value.hp -= 250                                       // changes the enemy in place
 ```
 
 **`Box<T>` owns one value in an allocation of its own** ([06](../spec/06-memory-and-allocators/owning-values.md#owning-boxes)). It's move-only, and destroying it destroys its value and frees its memory.
@@ -173,13 +192,13 @@ extension Crate: Damageable {
     mutating func takeDamage(_ amount: Float) { hp -= amount }
 }
 
-var targets = List<Box<any Damageable>>()
-targets.append(Box(Enemy(pos: [0, 0, 5])))        // a Box<Enemy> becomes a Box<any Damageable>, allocated once
-targets.append(Box(Crate(pos: [4, 0, 2])))
+var targets = alloc List<Box<any Damageable>>()
+targets.append(alloc Box(Enemy(pos: [0, 0, 5])))  // a Box<Enemy> becomes a Box<any Damageable>, allocated once
+targets.append(alloc Box(Crate(pos: [4, 0, 2])))
 for t in &targets { t.value.takeDamage(10) }       // dynamic dispatch, on each target in place
 ```
 
-**Both costs show in the type.** `any` marks the dynamic dispatch, and `Box` the allocation, since `any P` never allocates on its own.
+**Both costs show in the code.** `any` marks the dynamic dispatch, and `alloc Box` the allocation, since `any P` never allocates on its own.
 
 **A `Box<any P>` takes only an unscoped value.** The box isn't scoped, so it can go anywhere, and a value that borrows, such as a `Span`, could then outlive what it borrows ([Views](04-views.md)).
 
@@ -189,10 +208,10 @@ for t in &targets { t.value.takeDamage(10) }       // dynamic dispatch, on each 
 struct Texture(var pixels: List<UInt8>, var width: Int)              // Frozen: derived by the compiler
 struct Material(var albedo: Shared<Texture>, var roughness: Float)   // Frozen too, since Shared<Texture> is
 
-let rock = Shared(Texture(pixels: loadPixels("rock.tex"), width: 512))
-let wet = Shared(Material(albedo: rock.share(), roughness: 0.2))     // share() adds an owner, visibly
-let dry = Shared(Material(albedo: consume rock, roughness: 0.9))     // a move: the count stays at two
-print(wet.value.roughness)                                           // 'value' lends the material read-only
+let rock = alloc Shared(Texture(pixels: alloc loadPixels("rock.tex"), width: 512))
+let wet = alloc Shared(Material(albedo: rock.share(), roughness: 0.2))   // share() adds an owner, visibly
+let dry = alloc Shared(Material(albedo: consume rock, roughness: 0.9))   // a move: the count stays at two
+print(wet.value.roughness)                                               // 'value' lends the material read-only
 ```
 
 **`Shared<T>` lets several owners, on any threads, hold one value, and the last owner to let go destroys it** ([06](../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). This is **reference counting**, and the count is atomic.
@@ -213,7 +232,7 @@ print(wet.value.roughness)                                           // 'value' 
 ### Weak links and `LocalShared`
 
 ```swift
-let grass = Shared(Texture(pixels: loadPixels("grass.tex"), width: 256))
+let grass = alloc Shared(Texture(pixels: alloc loadPixels("grass.tex"), width: 256))
 let cached = grass.weak()                            // WeakShared<Texture>: owns nothing
 if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' lives, or nil if the texture is gone
 ```
@@ -231,7 +250,7 @@ if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' liv
 ```swift
 struct MeshComponent(var vertices: Slice<Vertex>)     // a stored view: a weak link to the buffer, and a range
 
-let package = Shared(try Blob.load("level3.pak"))     // the level's bytes, loaded once
+let package = alloc Shared(try alloc Blob.load("level3.pak"))   // the level's bytes, loaded once
 let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.vertexOffset, count: header.vertexCount))
 upload(m.vertices.read()!)                            // a Span<Vertex>: one check, then none per element
 ```
@@ -250,31 +269,31 @@ upload(m.vertices.read()!)                            // a Span<Vertex>: one che
 
 ## When allocation fails
 
-**An allocating operation ends the program when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). `Box(v)`, `Shared(v)` and `UniquePointer(v)` are among them, so no code goes on with memory it didn't get. This isn't a panic: nothing is cleaned up on the way out, and the program stops at once ([10](../spec/10-errors-and-safety/panics.md#what-ends-the-program)).
+**`alloc` ends the program when its allocator can't make the allocation** ([06](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). So does a list that can't grow, so no code goes on with memory it didn't get. This isn't a panic: nothing is cleaned up on the way out, and the program stops at once ([10](../spec/10-errors-and-safety/panics.md#what-ends-the-program)).
 
-**Each also has a fallible form, for code that can make room and try again.** `Box.tryNew(v)` returns a `Box<Enemy>!AllocError`: the new box, or an `AllocError`, the prelude's error for an allocation that failed. As with `readText` in [Views](04-views.md), the value comes before the `!` and the error after it:
+**`try alloc` is the fallible form, for code that can make room and try again.** Under `try`, an allocation that fails gives an `AllocError`, the prelude's error for an allocation that failed, and the function's result carries it. `spawnBoss` below returns a `Box<Enemy>!AllocError`: the new box, or that error. As with `readText` in [Views](04-views.md), the value comes before the `!` and the error after it:
 
 ```swift
 func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
     do {
-        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // fails with AllocError instead of ending the program
+        return try alloc Box(Enemy(pos: copy pos, hp: 5000))   // fails with AllocError instead of ending the program
     } catch {
-        evictUnusedAssets()                                      // make room, then try once more
-        return try Box.tryNew(Enemy(pos: copy pos, hp: 5000))   // 'pos' is borrowed, so each attempt copies it
+        evictUnusedAssets()                                     // make room, then try once more
+        return try alloc Box(Enemy(pos: copy pos, hp: 5000))   // 'pos' is borrowed, so each attempt copies it
     }
 }
 ```
 
 **The fallible forms include:**
 
-- `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
-- `try Closure.tryNew { … }`, for a closure whose captures don't fit inline;
-- the builtin `SoA`'s growing operations, such as `try rows.tryAppend(x)`;
+- `try alloc` before any construction, such as `try alloc Box(v)` or `try alloc Shared(v)`;
+- `try Closure.tryNew { … }`, for a closure stored as a `Closure`, which may allocate and has no `alloc` to mark;
+- growing operations, which have no `alloc` either, such as the builtin `SoA`'s `try rows.tryAppend(x)`;
 - `allocateRaw` and `reallocateRaw`, which return `nil`, for a collection of your own over raw memory ([10](../spec/10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
 So a collection that must back off under a hard memory limit, such as a streaming loader's, grows through one of these.
 
-**`@noalloc` rules allocation out.** In a function marked `@noalloc`, such as an audio callback, any call that may allocate is a compile error:
+**`@noalloc` rules allocation out.** In a function marked `@noalloc`, such as an audio callback, any `alloc`, any call that may allocate and any closure stored as a `Closure` is a compile error:
 
 ```swift
 @noalloc
@@ -286,11 +305,11 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 
 ## In the spec
 
-- [06 Memory and allocators](../spec/06-memory-and-allocators.md): allocator ids and kinds, the current allocator, and the static allocator of read-only data.
+- [06 Allocator values and `alloc`](../spec/06-memory-and-allocators/allocator-basics.md): allocator ids and kinds, `alloc`, `Allocating` and `alloc func`, the ambient allocator, and the static allocator of read-only data.
 - [06 What a reset does](../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does): every case in which a reset panics, how it orders with other threads, and the `deinit`s it runs.
 - [06 Opening an owning value](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it): what counts as an open, and how opens race with resets.
 - [06 Allocators over other allocators](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators): budgets and other wrappers, and allocators with a backing.
-- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl): `AllocatorImpl` and what conforming to it promises.
+- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl): `AllocatorImpl`, `ArenaImpl` and `WrapperImpl`, and what conforming to them promises.
 - [06 Owning boxes](../spec/06-memory-and-allocators/owning-values.md#owning-boxes): `Box`, `Shared`, `LocalShared` and weak links in full, `Frozen`, and handing an owner to C.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): slices of a locked `Blob` or `List`, and what making one checks.
 - [06 Allocation failure](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure): every fallible form, and what `@noalloc` rejects.

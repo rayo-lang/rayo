@@ -7,7 +7,7 @@ A generic type may need different fields or cases for different type arguments. 
 ```swift
 struct Columns<Row>(                                      // a struct of arrays: one list per field of Row
     static for f in Row.fields {
-        var \(f.name): List<f.type> = []
+        var \(f.name): List<f.type> = alloc []
     }
 )
 

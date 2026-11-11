@@ -111,7 +111,7 @@ extension Inventory {
     var all: List<Item> {
         borrow { items }
         mutate {
-            defer { items = List() }             // error: changes the place the body hands out
+            defer { items = alloc List() }       // error: changes the place the body hands out
             return &items
         }
     }
