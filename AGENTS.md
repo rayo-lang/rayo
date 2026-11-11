@@ -34,6 +34,10 @@
 
 GitHub Issues on `rayo-lang/rayo` (public); pass `-R rayo-lang/rayo` to `gh`. See `docs/agents/issue-tracker.md`.
 
+### Roadmap
+
+`ROADMAP.md` says which features each version adds, and which are done. Read it before you choose or scope work, and mark a feature done in the pull request that finishes it.
+
 ### Triage labels
 
 Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
