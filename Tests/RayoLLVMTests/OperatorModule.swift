@@ -1,4 +1,5 @@
 import CLLVM
+import LLVM
 @testable import RayoLLVM
 
 /// A module for the host, into which a debug or a release build's operators are emitted in functions of their own.
@@ -54,7 +55,8 @@ struct OperatorModule {
     func defineCall(_ name: String, of function: FunctionValue, _ left: Int64, _ right: Int64) -> FunctionValue {
         let caller = module.addFunction(name, taking: [], returning: module.int64)
         LLVMPositionBuilderAtEnd(module.builder, module.appendBlock(to: caller.value, named: "entry"))
-        LLVMBuildRet(module.builder, module.call(function, [module.constant(left), module.constant(right)]))
+        // Every operator gives a value, so the call does too.
+        LLVMBuildRet(module.builder, module.call(function, [module.constant(left), module.constant(right)])!)
         return caller
     }
 

@@ -1,3 +1,4 @@
+import LLVM
 @testable import RayoLLVM
 
 /// A module for the host, and the emitter of a program into it, made as a debug or a release build makes them.

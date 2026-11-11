@@ -53,7 +53,8 @@ struct OperatorEmitter {
         guard program.checksOverflow else { return emitWrapping(op, left, right) }
 
         // Where it is, the intrinsic flags an overflow beside the result, and an overflow panics.
-        let pair = module.call(module.intrinsic(op.intrinsicName, overloadedOn: module.int64), [left, right])
+        // The intrinsic returns a pair, so its call always gives a value.
+        let pair = module.call(module.intrinsic(op.intrinsicName, overloadedOn: module.int64), [left, right])!
         panic(if: LLVMBuildExtractValue(builder, pair, 1, ""), .overflow, at: range)
         return LLVMBuildExtractValue(builder, pair, 0, "")
     }

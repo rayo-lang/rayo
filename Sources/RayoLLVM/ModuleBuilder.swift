@@ -1,11 +1,13 @@
 internal import CLLVM
+import LLVM
 
 /// An LLVM module for the host, in a context of its own, and the IR builder that adds to it.
 final class ModuleBuilder {
-    let context: LLVMContextRef
-    let module: LLVMModuleRef
-    let builder: LLVMBuilderRef
-    private let diagnostics = DiagnosticLog()
+    private let llvmContext: Context
+    private let llvmModule: Module
+    private let llvmBuilder: Builder
+    /// The modules parsed from LLVM IR, linked together, until they are linked into this module.
+    private var parsed: Module?
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
@@ -15,201 +17,144 @@ final class ModuleBuilder {
 
     init(named name: String, for target: TargetMachine) {
         // Make the module, its builder and the types it builds with, in a context of their own.
-        context = LLVMContextCreate()
-        module = LLVMModuleCreateWithNameInContext(name, context)
-        builder = LLVMCreateBuilderInContext(context)
-        void = LLVMVoidTypeInContext(context)
-        bool = LLVMInt1TypeInContext(context)
-        int8 = LLVMInt8TypeInContext(context)
-        int32 = LLVMInt32TypeInContext(context)
-        int64 = LLVMInt64TypeInContext(context)
+        let context = Context()
+        llvmModule = context.makeModule(named: name)
+        llvmBuilder = context.makeBuilder()
+        void = context.voidType.ref
+        bool = context.integerType(I1.self).ref
+        int8 = context.integerType(I8.self).ref
+        int32 = context.integerType(I32.self).ref
+        int64 = context.integerType(I64.self).ref
+        llvmContext = context
 
-        target.configure(module)
-
-        // Without a handler, LLVM prints what it reports to rayoc's standard error, and exits on an error.
-        LLVMContextSetDiagnosticHandler(context, { info, log in
-            Unmanaged<DiagnosticLog>.fromOpaque(log!).takeUnretainedValue().record(info!)
-        }, Unmanaged.passUnretained(diagnostics).toOpaque())
+        target.configure(llvmModule.ref)
     }
 
-    deinit {
-        LLVMDisposeBuilder(builder)
-        LLVMDisposeModule(module)
-        LLVMContextDispose(context)
-    }
+    var context: LLVMContextRef { llvmContext.ref }
+    var module: LLVMModuleRef { llvmModule.ref }
+    var builder: LLVMBuilderRef { llvmBuilder.ref }
 
     /// Throws what LLVM finds wrong with the module, which is a fault in the code that built it.
     func verify() throws(LLVMError) {
-        var message: UnsafeMutablePointer<CChar>?
-        let broken = LLVMVerifyModule(module, LLVMReturnStatusAction, &message) != 0
-        let report = takeMessage(message)
-        // A broken module's report says what LLVM found wrong with it.
-        if broken { throw LLVMError(message: "LLVM rejected the module it was given:\n\(report)") }
+        try llvmModule.verify()
     }
 
     /// Throws the errors LLVM has reported in this module's context, if any.
     func checkReportedErrors() throws(LLVMError) {
         // Only an error fails the module; a warning fails nothing.
-        if !diagnostics.errors.isEmpty { throw error("LLVM reported errors:") }
+        if !llvmContext.reportedErrors.isEmpty { throw error("LLVM reported errors:") }
     }
 
     /// An error that says `summary`, then `detail` and the errors LLVM has reported in this module's context,
     /// whichever there are.
     func error(_ summary: String, detail: String = "") -> LLVMError {
-        let reasons = ([detail] + diagnostics.errors).filter { !$0.isEmpty }
+        let reasons = ([detail] + llvmContext.reportedErrors).filter { !$0.isEmpty }
         return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
 
-    /// Parses `llvmIR` into a module of this context, for the same target as this one.
-    func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) -> LLVMModuleRef {
-        // Copy the text into a buffer that ends in a NUL, which LLVM's lexer reads as the end of the text.
-        let buffer = llvmIR.withUnsafeBufferPointer { bytes in
-            bytes.withMemoryRebound(to: CChar.self) { text in
-                LLVMCreateMemoryBufferWithMemoryRangeCopy(text.baseAddress, text.count, name)
-            }
-        }
-        defer { LLVMDisposeMemoryBuffer(buffer) }
-
-        // Parse the buffer, or throw what LLVM reports.
-        var parsed: LLVMModuleRef?
-        var message: UnsafeMutablePointer<CChar>?
-        let failed = LLVMParseIRInContext2(context, buffer, &parsed, &message) != 0
-        let report = takeMessage(message)
-        // Text LLVM can't parse fails with LLVM's report of it.
-        guard !failed, let parsed else { throw LLVMError(message: "LLVM couldn't parse \(name):\n\(report)") }
-
+    /// Parses `llvmIR`, for the same target as this module, to link into it later with the other text parsed.
+    func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) {
         // The parsed module builds for this module's target, so the two link.
-        LLVMSetTarget(parsed, LLVMGetTarget(module))
-        LLVMSetDataLayout(parsed, LLVMGetDataLayoutStr(module))
-        return parsed
+        let module = try llvmContext.parseModule(llvmIR, named: name)
+        module.target = llvmModule.target
+        module.dataLayout = llvmModule.dataLayout
+
+        // The first text parsed takes in the rest.
+        if let earlier = parsed.take() {
+            try earlier.link(module)
+            parsed = Optional(earlier)
+        } else {
+            parsed = Optional(module)
+        }
     }
 
-    /// Links `other` into this module, which consumes it.
-    func link(_ other: LLVMModuleRef) throws(LLVMError) {
-        // A module that won't link fails with the errors LLVM reported about it.
-        if LLVMLinkModules2(module, other) != 0 { throw error("LLVM couldn't link the runtime:") }
+    /// Declares the function `name` that the text parsed defines, with the type it is defined with.
+    func declare(_ name: String) throws(LLVMError) -> FunctionValue {
+        // A function the text doesn't define is a fault in the runtime rayoc carries.
+        guard let definition = parsed?.function(named: name) else {
+            throw LLVMError(message: "the runtime defines no function '\(name)'")
+        }
+        return functionValue(llvmModule.addFunction(named: name, type: definition.type))
+    }
+
+    /// Links the text parsed into this module.
+    func linkParsed() throws(LLVMError) {
+        // Without text parsed, nothing is linked.
+        guard let parsed = parsed.take() else { return }
+        try llvmModule.link(parsed)
     }
 
     /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
     /// globals, a linkage that keeps it out of the executable's symbols.
     func hideDefinitions(except exported: Set<String>) {
         // Functions become internal, so that optimisation can drop those nothing calls.
-        var function = LLVMGetFirstFunction(module)
-        while let current = function {
-            // Each function the module defines but doesn't export becomes internal.
-            if isHideable(current) && !exported.contains(name(of: current)) {
-                LLVMSetLinkage(current, LLVMInternalLinkage)
-            }
-            function = LLVMGetNextFunction(current)
+        for function in llvmModule.functions where isHideable(function) && !exported.contains(function.name) {
+            function.setLinkage(.internal)
         }
 
         // Globals become private, so that optimisation can drop those nothing reads.
-        var global = LLVMGetFirstGlobal(module)
-        while let current = global {
-            // Each global the module defines, but LLVM's own, becomes private.
-            if isHideable(current) { LLVMSetLinkage(current, LLVMPrivateLinkage) }
-            global = LLVMGetNextGlobal(current)
+        for global in llvmModule.globals where isHideable(global) {
+            global.setLinkage(.private)
         }
     }
 
     /// Whether `value` is a definition, and not one of LLVM's own, such as `llvm.used` or `llvm.global_ctors`,
     /// whose linkage LLVM requires to stay as it is.
-    private func isHideable(_ value: LLVMValueRef) -> Bool {
-        LLVMIsDeclaration(value) == 0 && !name(of: value).hasPrefix("llvm.")
-    }
-
-    private func name(of value: LLVMValueRef) -> String {
-        var length = 0
-        let name = LLVMGetValueName2(value, &length)!
-        return String(decoding: UnsafeRawBufferPointer(start: name, count: length), as: UTF8.self)
-    }
-
-    /// Declares the function `name` that one of `modules` defines, with the type it is defined with.
-    func declare(_ name: String, definedIn modules: [LLVMModuleRef]) throws(LLVMError) -> FunctionValue {
-        // A function none of them defines is a fault in the runtime rayoc carries.
-        guard let definition = modules.lazy.compactMap({ LLVMGetNamedFunction($0, name) }).first else {
-            throw LLVMError(message: "the runtime defines no function '\(name)'")
-        }
-        let type = LLVMGlobalGetValueType(definition)!
-        return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
+    private func isHideable(_ value: some GlobalValue) -> Bool {
+        !value.isDeclaration && !value.name.hasPrefix("llvm.")
     }
 
     func addFunction(_ name: String, taking parameters: [LLVMTypeRef],
                      returning result: LLVMTypeRef) -> FunctionValue {
-        var parameters = parameters.map { Optional($0) }
-        let type = LLVMFunctionType(result, &parameters, UInt32(parameters.count), 0)!
-        return FunctionValue(value: LLVMAddFunction(module, name, type), type: type)
+        let type = llvmContext.functionType(returning: AnyType(result), taking: parameters.map(AnyType.init))
+        return functionValue(llvmModule.addFunction(named: name, type: type))
     }
 
     /// The declaration of the LLVM intrinsic `name`, for the overload on `type`.
     func intrinsic(_ name: String, overloadedOn type: LLVMTypeRef) -> FunctionValue {
-        let id = LLVMLookupIntrinsicID(name, name.utf8.count)
-        var types: [LLVMTypeRef?] = [type]
-        return FunctionValue(value: LLVMGetIntrinsicDeclaration(module, id, &types, 1),
-                             type: LLVMIntrinsicGetType(context, id, &types, 1))
+        functionValue(llvmModule.intrinsic(named: name, overloadedOn: AnyType(type)))
     }
 
     /// Adds a constant array holding `bytes`, and returns it.
     func addConstant(_ name: String, bytes: [UInt8]) -> LLVMValueRef {
-        let initializer: LLVMValueRef = bytes.withUnsafeBufferPointer { buffer in
-            buffer.withMemoryRebound(to: CChar.self) { text in
-                LLVMConstStringInContext2(context, text.baseAddress, text.count, 1)
-            }
-        }
-        let constant = addConstant(name, initializer)
-        LLVMSetUnnamedAddress(constant, LLVMGlobalUnnamedAddr)
-        return constant
+        let constant = addConstant(name, llvmContext.constant(bytes: bytes))
+        constant.hasUnnamedAddress = true
+        return constant.ref
     }
 
     /// Adds a constant `value` named `name`, for code linked into the module to read.
     func addConstant(_ name: String, int32 value: Int32) {
-        addConstant(name, LLVMConstInt(int32, UInt64(UInt32(bitPattern: value)), 1))
+        addConstant(name, llvmContext.integerType(I32.self).constant(Int64(value)))
     }
 
     @discardableResult
-    private func addConstant(_ name: String, _ initializer: LLVMValueRef) -> LLVMValueRef {
-        let constant = LLVMAddGlobal(module, LLVMTypeOf(initializer), name)!
-        LLVMSetInitializer(constant, initializer)
-        LLVMSetGlobalConstant(constant, 1)
+    private func addConstant(_ name: String, _ initializer: some ValueHandle) -> GlobalVariable {
+        let constant = llvmModule.addGlobal(named: name, initializer: initializer)
+        constant.isConstant = true
         return constant
     }
 
     func appendBlock(to function: LLVMValueRef, named name: String) -> LLVMBasicBlockRef {
-        LLVMAppendBasicBlockInContext(context, function, name)
+        llvmContext.appendBlock(named: name, to: Function(function)).ref
     }
 
+    /// Emits a call of `function` with `arguments`, and returns its result, or nil where it returns nothing.
     @discardableResult
-    func call(_ function: FunctionValue, _ arguments: [LLVMValueRef]) -> LLVMValueRef {
-        var arguments = arguments.map { Optional($0) }
-        return LLVMBuildCall2(builder, function.type, function.value, &arguments, UInt32(arguments.count), "")
+    func call(_ function: FunctionValue, _ arguments: [LLVMValueRef]) -> LLVMValueRef? {
+        let callee = Function(function.value, type: FunctionType(function.type))
+        return llvmBuilder.call(callee, arguments.map(AnyValue.init))?.ref
     }
 
     func constant(_ value: Int64) -> LLVMValueRef {
-        LLVMConstInt(int64, UInt64(bitPattern: value), 1)
+        llvmContext.integerType(I64.self).constant(value).ref
     }
 
     func constant(_ value: Bool) -> LLVMValueRef {
-        LLVMConstInt(bool, value ? 1 : 0, 0)
-    }
-}
-
-/// What LLVM reports through a context's diagnostic handler, with the severity of each report.
-private final class DiagnosticLog {
-    private var reports: [(severity: LLVMDiagnosticSeverity, message: String)] = []
-
-    var errors: [String] {
-        reports.filter { $0.severity == LLVMDSError }.map(\.message)
+        llvmContext.integerType(I1.self).constant(value ? 1 : 0).ref
     }
 
-    func record(_ info: LLVMDiagnosticInfoRef) {
-        reports.append((LLVMGetDiagInfoSeverity(info), takeMessage(LLVMGetDiagInfoDescription(info))))
+    /// `function` as the emitters call it: its value and its type.
+    private func functionValue(_ function: Function) -> FunctionValue {
+        FunctionValue(value: function.ref, type: function.type.ref)
     }
-}
-
-/// The text of an LLVM message, which this disposes of.
-func takeMessage(_ message: UnsafeMutablePointer<CChar>?) -> String {
-    // LLVM gives no message where it has nothing to say.
-    guard let message else { return "" }
-    defer { LLVMDisposeMessage(message) }
-    return String(cString: message)
 }

@@ -1,5 +1,5 @@
 import CLLVM
-@testable import RayoLLVM
+import LLVM
 
 /// `type` as LLVM writes it, such as `i64`.
 func text(of type: LLVMTypeRef) -> String {

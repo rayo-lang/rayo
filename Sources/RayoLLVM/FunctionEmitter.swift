@@ -182,9 +182,6 @@ struct FunctionEmitter {
         case .printInt: program.runtime.printInt
         case .function(let id): functions[id.index]
         }
-        let result = module.call(function, arguments)
-
-        // A call gives no value where its function returns nothing.
-        return LLVMTypeOf(result) == types.llvmType(.void) ? nil : result
+        return module.call(function, arguments)
     }
 }

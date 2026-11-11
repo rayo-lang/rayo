@@ -68,7 +68,7 @@ public struct Module: ~Copyable {
 
     /// The function named `name` that the module declares or defines, or nil where it has none.
     public func function(named name: String) -> Function? {
-        LLVMGetNamedFunction(ref, name).map(Self.function)
+        LLVMGetNamedFunction(ref, name).map(Function.init)
     }
 
     /// The functions the module declares or defines, in order.
@@ -76,7 +76,7 @@ public struct Module: ~Copyable {
         var functions: [Function] = []
         var next = LLVMGetFirstFunction(ref)
         while let function = next {
-            functions.append(Self.function(function))
+            functions.append(Function(function))
             next = LLVMGetNextFunction(function)
         }
         return functions
@@ -104,11 +104,6 @@ public struct Module: ~Copyable {
     public func intrinsic(named name: String, overloadedOn type: some TypeHandle) -> Function {
         let id = LLVMLookupIntrinsicID(name, name.utf8.count)
         var types: [LLVMTypeRef?] = [type.anyType.ref]
-        return Self.function(LLVMGetIntrinsicDeclaration(ref, id, &types, 1))
-    }
-
-    /// `function`, a function of some module, with the type it is declared with.
-    private static func function(_ function: LLVMValueRef) -> Function {
-        Function(function, type: FunctionType(LLVMGlobalGetValueType(function)))
+        return Function(LLVMGetIntrinsicDeclaration(ref, id, &types, 1))
     }
 }

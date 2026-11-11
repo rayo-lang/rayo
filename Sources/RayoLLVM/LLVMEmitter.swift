@@ -1,3 +1,4 @@
+import LLVM
 import RayoIR
 
 /// Compiles Rayo IR to object code for the host, through LLVM.

@@ -32,7 +32,7 @@ struct ModuleTests {
     @Test func `text that isn't LLVM IR throws LLVM's report of it, naming the text`() {
         let bench = Workbench()
         #expect {
-            try bench.context.parseModule(Array("define".utf8), named: "broken.ll")
+            _ = try bench.context.parseModule(Array("define".utf8), named: "broken.ll")
         } throws: { error in
             (error as? LLVMError)?.message.hasPrefix("LLVM couldn't parse broken.ll:\n") == true
         }
