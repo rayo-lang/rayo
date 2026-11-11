@@ -46,8 +46,8 @@ func pad(_ index: Int32) -> Pad? {
 enum LoadState { case pending, done(List<UInt8>), failed(Int32) }
 
 struct Loads(
-    var requests = Pool<LoadState>(capacity: 256),
-    var tickets = Map<UInt32, Handle<LoadState>>(),   // each load in flight, by the ticket C carries for it
+    var requests = alloc Pool<LoadState>(capacity: 256),
+    var tickets = alloc Map<UInt32, Handle<LoadState>>(),   // each load in flight, by the ticket C carries for it
     var nextTicket: UInt32 = 1,
 )
 
@@ -60,12 +60,12 @@ struct Loads(
     let ticket = UInt32(truncating: raw)                               // drops only zero bits, after the guard
     var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
     if error == 0 && data != nil {
-        result = .done(unsafe List(copying: data, count: Int(len)))    // copied with the current allocator
+        result = .done(unsafe alloc List(copying: data, count: Int(len)))   // copied into .heap
     }
     completedLoads.push((ticket, consume result))                      // Synchronized: safe from any thread
 }
 
-let completedLoads = MpscQueue<(UInt32, LoadState)>(capacity: 256)
+let completedLoads = alloc MpscQueue<(UInt32, LoadState)>(capacity: 256)
 
 func requestFile(_ path: StaticString, _ loads: mutable Loads) -> Handle<LoadState> {
     let h = loads.requests.insert(.pending)

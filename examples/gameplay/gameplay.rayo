@@ -29,7 +29,7 @@ struct Enemy(
     @Bounds(0, 500) @Tuning var hp: Float = 100,
     @Bounds(0, 20)  @Tuning var speed: Float = 4,
     var target: Handle<Player>?,                    // goes stale if the player is removed
-    @Transient var path: List<Vec3> = [],           // skipped by the save-game serializer
+    @Transient var path: List<Vec3> = alloc [],     // skipped by the save-game serializer
 )
 
 enum Command {
@@ -39,9 +39,9 @@ enum Command {
 }
 
 public struct World(
-    var players = Pool<Player>(capacity: 8),
-    var enemies = Pool<Enemy>(capacity: 4096),
-    var commands = List<Command>(),
+    var players = alloc Pool<Player>(capacity: 8),
+    var enemies = alloc Pool<Enemy>(capacity: 4096),
+    var commands = alloc List<Command>(),
     var clock = Instant<World>(nanoseconds: 0),
     var viewport: IVec2 = .zero,
 )
@@ -138,7 +138,7 @@ public func newGame(viewport: IVec2) -> UniquePointer<Game> {
     var game = Game()
     game.world.viewport = copy viewport               // 'viewport' is a borrowed parameter
     _ = game.scripts.start(waveSpawner(count: 10, every: .seconds(2), around: .zero))   // the first wave; tick steps it each frame
-    return UniquePointer(consume game)
+    return alloc UniquePointer(consume game)
 }
 
 public func tick(_ game: mutable Game, dt: Float) {
