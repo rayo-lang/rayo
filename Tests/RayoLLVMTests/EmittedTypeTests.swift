@@ -11,7 +11,9 @@ struct EmittedTypeTests {
         result: RayoType, resultText: String,
     ) throws {
         let irFunction = try pick(returning: result, [])
-        try withEmitted(program(with: [irFunction])) { module in
+
+        // The emitted signature takes an i64 and an i1, and returns the LLVM type of `result`.
+        try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let signature = try signature(of: irFunction.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
             #expect(text(of: LLVMGetReturnType(signature)) == resultText)
@@ -19,7 +21,7 @@ struct EmittedTypeTests {
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
-        try withEmitted(program(with: [])) { module in
+        try withEmitted(program(of: [emptyMain])) { module in
             let signature = try signature(of: "rayo.main", in: module)
             #expect(try parameterTypes(of: signature) == [])
             #expect(text(of: LLVMGetReturnType(signature)) == "void")
@@ -28,16 +30,17 @@ struct EmittedTypeTests {
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
         let irFunction = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
-        try withEmitted(program(with: [irFunction])) { module in
+
+        // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
+        try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let llvmFunction = try function(named: irFunction.name, in: module)
             #expect(slotTypes(of: llvmFunction) == ["i64", "i1", "i1", "i64"])
         }
     }
 
-    /// A program of `functions`, after a `main` that takes nothing, returns nothing and does nothing.
-    private func program(with functions: [IRFunction]) -> IRProgram {
-        let main = mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
-        return IRProgram(functions: [main] + functions, main: FunctionID(index: 0))
+    /// A `main` that takes nothing, returns nothing and does nothing.
+    private var emptyMain: IRFunction {
+        mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
     }
 
     /// A function that takes an Int and a Bool, holds `temporaries` besides them, and returns the parameter of type

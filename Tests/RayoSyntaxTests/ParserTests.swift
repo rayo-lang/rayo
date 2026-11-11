@@ -52,9 +52,19 @@ struct ParserErrorTests {
         #expect(errors("}\nfunc f() {}") == [.unmatchedBrace])
     }
 
-    @Test("'return' takes a value on its own line, and a 'return' that ends its line takes none")
-    func returns() {
-        #expect(errors("func f() -> Int { return 1 }\nfunc g() {\n    return\n    1\n}\nfunc h() { if true { return } }") == [])
+    @Test func `'return' takes a value on its own line, and a 'return' that ends its line takes none`() {
+        // A `return` with its value on its line, one that ends its line before a value, and one in an `if` parse.
+        let source = """
+            func f() -> Int { return 1 }
+            func g() {
+                return
+                1
+            }
+            func h() { if true { return } }
+            """
+        #expect(errors(source) == [])
+
+        // A value that doesn't end the statement, a missing value, and `return` as a name are each an error.
         #expect(errors("func f() { return 1 2 }") == [.unendedStatement(found: .token("2"))])
         #expect(errors("func f() { return ) }") == [.missingExpression(found: .token(")"))])
         #expect(errors("func f() { let return = 1 }") == [.missingBindingName(found: .token("return"))])

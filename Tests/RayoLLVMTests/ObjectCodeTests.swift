@@ -16,19 +16,22 @@ struct ObjectCodeTests {
 
     @Test(.enabled(if: !llvmAssertsOnInvalidIR), arguments: Build.allCases)
     func `IR that LLVM rejects is an internal error, not a crash`(build: Build) {
-        let addsBoolToInt = function(locals: [.bool, .int, .int], [
+        // Programs that the checker would never pass: one adds a Bool to an Int, and one branches on an Int.
+        let addsBoolToInt = program(locals: [.bool, .int, .int], [
             BasicBlock(
                 statements: [statement(storingIn: 2, .binary(.add, read(0), read(1)))],
                 terminator: .return(nil),
             ),
         ])
-        let branchesOnInt = function(locals: [.int], [
+        let branchesOnInt = program(locals: [.int], [
             BasicBlock(
                 statements: [],
                 terminator: .branch(read(0), then: BlockID(index: 1), otherwise: BlockID(index: 1)),
             ),
             BasicBlock(statements: [], terminator: .return(nil)),
         ])
+
+        // LLVM's verifier rejects each module, and the emitter throws what it says.
         for program in [addsBoolToInt, branchesOnInt] {
             let error = #expect(throws: LLVMError.self) { try compile(program, for: build) }
             #expect(error?.message.hasPrefix("LLVM rejected the module it was given:\n") == true)
@@ -41,7 +44,7 @@ struct ObjectCodeTests {
     ) throws {
         /// A program that stores 42 in one local, then `taken` in another, and prints that one.
         func handingOn(_ taken: Operand) -> IRProgram {
-            function(locals: [.int, .int], [
+            program(locals: [.int, .int], [
                 BasicBlock(statements: [
                     statement(storingIn: 0, .use(.constant(.int(42)))),
                     statement(storingIn: 1, .use(taken)),
@@ -49,15 +52,18 @@ struct ObjectCodeTests {
                 ], terminator: .return(nil)),
             ])
         }
+
         #expect(try compile(handingOn(move(0)), for: build) == compile(handingOn(read(0)), for: build))
     }
 
     @Test(arguments: Build.allCases)
     func `a declaration compiles to no code, in debug and in release`(build: Build) throws {
-        let declared = function(locals: [.int], [
+        // The same program of one local, with the local declared and without.
+        let declared = program(locals: [.int], [
             BasicBlock(statements: [.declare(LocalID(index: 0))], terminator: .return(nil)),
         ])
-        let empty = function(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
+        let empty = program(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
+
         #expect(try compile(declared, for: build) == compile(empty, for: build))
     }
 
