@@ -15,7 +15,7 @@ func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> IRFunction {
 }
 
 /// A program of `functions`, the first of them its `main`, whose structs `types` holds, none by default.
-func program(of functions: [IRFunction], types: TypeTable = TypeTable(structs: [])) -> IRProgram {
+func program(of functions: [IRFunction], types: TypeTable = .empty) -> IRProgram {
     IRProgram(types: types, functions: functions, main: FunctionID(index: 0))
 }
 

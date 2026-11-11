@@ -14,6 +14,9 @@ public struct TypeTable: Equatable, Sendable {
         layouts = structs.indices.map { Self.layout(ofStruct: $0, in: structs, laidOut: &laidOut) }
     }
 
+    /// The table of a program that declares no struct.
+    public static let empty = TypeTable(structs: [])
+
     /// The ID of each struct, in the order of `structs`.
     public var ids: [StructID] {
         structs.indices.map { StructID(index: $0, name: structs[$0].name) }
@@ -55,27 +58,5 @@ public struct TypeTable: Equatable, Sendable {
         let layout = StructLayout(fields: fields)
         laidOut[index] = layout
         return layout
-    }
-}
-
-/// A struct that a program declares: its name, and its stored fields in the order the declaration gives them.
-public struct StructType: Equatable, Sendable {
-    public var name: String
-    public var fields: [Field]
-
-    public init(name: String, fields: [Field]) {
-        self.name = name
-        self.fields = fields
-    }
-}
-
-/// A stored field of a struct.
-public struct Field: Equatable, Sendable {
-    public var name: String
-    public var type: RayoType
-
-    public init(name: String, type: RayoType) {
-        self.name = name
-        self.type = type
     }
 }

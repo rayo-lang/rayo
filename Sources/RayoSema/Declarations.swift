@@ -26,9 +26,8 @@ struct Declarations {
 
     /// Declares the prelude's functions whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
-        let name = Signature.print.name
         // A struct or a function of the file named `print` shadows the prelude's.
-        if functions[name] == nil && structs[name] == nil { _ = declare(.print) }
+        if functions[Signature.print.name] == nil && structs[Signature.print.name] == nil { _ = declare(.print) }
     }
 
     func functions(named name: String) -> [Signature] {

@@ -134,6 +134,9 @@ struct ParserErrorTests {
             .unclosedStructBody(found: .token("func")), .unclosedStructBody(found: .token("let")),
             .missingCopiedName(found: .token("}")),
         ])
+    }
+
+    @Test func `a struct's body that the file ends inside is reported at the file's end`() {
         #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
     }
 }
