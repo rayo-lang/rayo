@@ -114,4 +114,6 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |
 | `Tests/CLLVMJIT` | The module map that imports LLVM's JIT into the LLVM tests, and into nothing that ships |
+| `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
+| `Tests/tool-stand-in` | The executable that does what the stand-in installed as the file it was started as says |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |
