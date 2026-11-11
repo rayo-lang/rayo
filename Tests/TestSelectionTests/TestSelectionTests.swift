@@ -25,11 +25,15 @@ struct TestSelectionTests {
             .targets(["SyntaxTests"]))
     }
 
-    @Test("a change to a source target selects each test target that depends on it, directly or through others")
-    func sourceTarget() {
+    @Test("a change to a source target selects each test target that depends on it directly")
+    func directDependency() {
+        #expect(TestSelection(changedPaths: ["Sources/Sema/Checker.swift"], in: package) == .targets(["SemaTests"]))
+    }
+
+    @Test("a change to a source target selects each test target that depends on it through other targets")
+    func indirectDependency() {
         #expect(TestSelection(changedPaths: ["Sources/Source/File.swift"], in: package) ==
             .targets(["SemaTests", "SyntaxTests"]))
-        #expect(TestSelection(changedPaths: ["Sources/Sema/Checker.swift"], in: package) == .targets(["SemaTests"]))
     }
 
     @Test("a target at a path of its own is changed by a change under that path")
@@ -47,6 +51,22 @@ struct TestSelectionTests {
           arguments: ["Package.swift", ".github/workflows/ci.yml", "Tests/Shared.swift", "Sources/SyntaxExtra/A.swift"])
     func outsideTargets(path: String) {
         #expect(TestSelection(changedPaths: ["Sources/Sema/Checker.swift", path], in: package) == .all)
+    }
+
+    @Test("a dependency on a platform's condition, or on a product under module aliases, is a dependency all the same")
+    func conditionalDependencies() throws {
+        let package = try JSONDecoder().decode(PackageTargets.self, from: Data("""
+            {"targets": [
+                {"name": "Source", "type": "regular", "dependencies": []},
+                {"name": "Syntax", "type": "regular", "dependencies": [
+                    {"target": ["Source", {"platformNames": ["linux"]}]},
+                    {"product": ["Parser", "other-package", {"Parser": "OtherParser"}, {"platformNames": ["macos"]}]}
+                ]},
+                {"name": "SyntaxTests", "type": "test",
+                 "dependencies": [{"byName": ["Syntax", {"platformNames": ["windows"]}]}]}
+            ]}
+            """.utf8))
+        #expect(TestSelection(changedPaths: ["Sources/Source/File.swift"], in: package) == .targets(["SyntaxTests"]))
     }
 
     @Test("a change that no test target depends on selects none")

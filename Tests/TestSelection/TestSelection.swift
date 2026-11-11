@@ -8,18 +8,13 @@ public enum TestSelection: Equatable, Sendable {
     /// Selects the test targets that the change to `changedPaths`, paths relative to the package's root, reaches in
     /// `package`.
     public init(changedPaths: [String], in package: PackageTargets) {
-        // Find the target that each path belongs to.
-        var changed: Set<String> = []
-        for path in changedPaths {
-            // A path in no target's directory, such as the manifest or CI's, can change what any test target does.
-            guard let target = package.target(holding: path) else {
-                self = .all
-                return
-            }
-            changed.insert(target)
+        // A path in no target's directory, such as the manifest or CI's, can change what any test target does.
+        guard let changed = package.targets(holding: changedPaths) else {
+            self = .all
+            return
         }
 
-        // A test target is needed where it, or a target it depends on, changed.
+        // `.targets` holds at least one name, so a change that reaches no test target selects none.
         let selected = package.testTargets(reaching: changed)
         self = selected.isEmpty ? .none : .targets(selected)
     }

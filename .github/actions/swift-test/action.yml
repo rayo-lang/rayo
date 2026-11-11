@@ -60,6 +60,7 @@ runs:
       env:
         CHANGED_PATHS: ${{ inputs.changed-paths }}
       run: |
+        # Without changed paths, as on a push to main, every test runs.
         if [ -z "$CHANGED_PATHS" ]; then
           selection=all
         else

@@ -72,7 +72,8 @@ jobs:
           # A pull request runs only the tests that its code paths reach, which each test job finds from them. A
           # push to main runs every test, since its build is the one pull requests start from.
           if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$code" = true ]; then
-            echo "code-paths=$(grep -E "$code_paths" <<< "$changed" | jq -R . | jq -s -c .)" >> "$GITHUB_OUTPUT"
+            paths=$(grep -E "$code_paths" <<< "$changed")
+            echo "code-paths=$(jq -R . <<< "$paths" | jq -s -c .)" >> "$GITHUB_OUTPUT"
           fi
 
   linux:
