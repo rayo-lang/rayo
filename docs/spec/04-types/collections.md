@@ -38,8 +38,8 @@ Written `[_ of T]`, an array type takes its count from the initializer.
 
 ```swift
 var names = alloc List<String>()          // owns its buffer: move-only, allocated through an allocator
-names.append("grunt")
-names.append("brute")
+names.append(alloc String("grunt"))       // a String owns its text, so it is made with 'alloc' too
+names.append(alloc String("brute"))
 let all: Span<String> = names.span        // a view: borrows the list's elements
 let firstTwo = names[0..<2]               // also a Span
 ```
@@ -47,7 +47,7 @@ let firstTwo = names[0..<2]               // also a Span
 **The table below mixes language types and std's. These rows are language types:**
 
 - the scoped views `Span`, `MutableSpan` and `StringView`;
-- the immortal `StaticSpan` and `StaticString`;
+- the static views `static Span` and `static StringView`, which view immortal data;
 - the object pointers;
 - `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
@@ -57,9 +57,9 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 
 | Type | Owning? | Notes |
 | --- | --- | --- |
-| `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)) |
+| `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)); converts to a `Span<T>` by a shared borrow ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
-| `StaticSpan<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)) |
+| `static Span<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)) |
 | `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
@@ -68,9 +68,9 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `Shared<T>`, `LocalShared<T>`, `WeakShared<T>` | yes / yes / no | Reference-counted pointers to a value that many places hold, and checked weak links to a `Shared` one ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) |
 | `Slice<T>` | no | Checked long-lived view into a buffer behind a `Shared` ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)) |
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([Struct of arrays: `SoA<T>`](data-layout.md#struct-of-arrays-soat)) |
-| `String` | yes | UTF-8 bytes, allocator |
-| `StringView` | no (scoped) | ptr + byte count; one made from a string literal views its immortal bytes, so it borrows nothing |
-| `StaticString` | no (immortal) | Text in immortal data, with its length and a NUL after it, copyable and unscoped: a literal, text from the `Name` interner, or a `const` `String`'s `staticString` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
+| `String` | yes | UTF-8 bytes, allocator; made only with `alloc`, and converts to a `StringView` by a shared borrow ([below](#strings)) |
+| `StringView` | no (scoped) | ptr + byte count |
+| `static StringView` | no (immortal) | ptr + byte count into immortal data, copyable and unscoped: a literal, a `Name`'s text, or a `const` `String`'s `.view` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
 | `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by its entry or by a hash stored with it (below) |
 
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
@@ -79,7 +79,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 let jump: Name = "jump"                     // a literal: interned by the build, so no code runs
 assert(Name(alloc String("jump")) == jump)  // interned at run time: finds the literal's entry
 if action == jump { player.jump() }         // compares one pointer-sized value, never the text
-log("pressed \(jump.text)")                 // the text, as a StaticString
+log("pressed \(jump.text)")                 // the text, as a static StringView
 ```
 
 **A `Name`'s entry stores a hash of its text.** The build computes an entry's hash when it makes a literal's entry, and the interner computes it at run time. So the hash comes from one fixed function of the text alone, which the build and the interner share, and which gives one value for a given text at every stage of one build. Its algorithm is the library's choice, within two limits that keep anyone from finding many texts with one hash:
@@ -96,7 +96,7 @@ std's `Name` tells the two apart by `hasher.startsFromProcessSeed`, the one prop
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.heap` memory, whatever the ambient allocator is, and makes a new one. The interner's storage takes no `alloc`, since no value the code makes owns it ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
-**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `StaticString` ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
+**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `static StringView` ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
 
 **`Name(existing: s)` looks `s` up and never interns it.** It returns the `Name` that `s`'s text already has, or `nil` for text never interned. So a program matches outside text against the names it defines without growing the interner:
 
@@ -188,14 +188,43 @@ A program may declare its own, such as one that holds a secret seed it read at s
 ```swift
 log("hp \(hp)")                           // written into the log's sink: no allocation
 "pos \(p.x), \(p.y)".format(into: &buf)   // written into 'buf': no allocation
+let title = "Rayo"                        // a static StringView: the literal's own bytes
 let label = alloc String("hp \(hp)")      // builds a new String: allocates, visibly
 let bad: String = "hp \(hp)"              // error: an interpolated literal is never a String
 for g in label.graphemes { … }            // user-perceived characters, through an explicit view
 ```
 
+**Rayo has two text types: `String` owns text, and `StringView` borrows it.** Each kind of text has its own form, and only text that arrives at run time needs a `String`:
+
+- **Fixed text is a literal**, a `static StringView`, which views the literal's immortal bytes. It never allocates, can be stored anywhere, and goes wherever a `StringView` is expected ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+- **Formatted output goes straight to its destination**, as `log("hp \(hp)")` formats into the log's sink with no `String` in between (below).
+- **Text that is passed around is a `StringView`**, which borrows the text from whatever owns it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)).
+- **A `String` owns text that arrives at run time**, such as a name loaded from a file, a player's input or a message off the network. It allocates, so it is made with `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
+
+**A `String` converts to a `StringView` wherever one is expected**, by a shared borrow of the place that holds it, so it copies and allocates nothing ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a function that reads text takes a `StringView`, and its callers pass what they have with nothing written:
+
+```swift
+func greet(_ who: StringView) { log("hello, \(who)") }
+
+greet(player.name)                        // a String field: lent as a view of its text
+greet("stranger")                         // a literal: a static StringView, which converts too
+```
+
+**A string literal is never a `String`, and `String` takes none**, so every `String` shows where its storage comes from:
+
+```swift
+let name = alloc String("grunt")          // owns its text: allocates when it is first written
+let owned: String = "grunt"               // error: a literal is a static StringView, never a String
+let bare = String("grunt")                // error: making a 'String' needs 'alloc'
+```
+
+**`alloc String("…")`, given a literal, copies the literal's bytes only when it must.** The `String` records the allocator `alloc` gives it, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the literal's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
+
+**A bare `String("…")` is a compile error**, as every `Allocating` initializer without `alloc` is ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Its diagnostic points to the literal itself, which needs no `String`, and to std's `FixedString`, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
+
 **Strings are indexed by byte offset.** Unicode scalars and graphemes are explicit views, `s.scalars` and `s.graphemes`. A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics, so every string holds whole UTF-8 sequences ([10](../10-errors-and-safety/panics.md#what-panics)).
 
-**Every string literal is null-terminated**, so `"abc".cString` passes to C at no cost. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
+**Every string literal is null-terminated**, so `.cString` written on a literal itself, as in `"abc".cString`, passes it to C at no cost. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
 
 **Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments are evaluated ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), and borrows each. As the message of `fatalError`, `precondition` or `assert`, it is evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). Its value is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given. Every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
 
@@ -217,7 +246,7 @@ let v: Vec3 = [1, 2, 3]                   // a Vec3: exactly 3 elements
 let mask: LayerMask = [.player, .enemies] // a user type that conforms: any number of layers
 let jump: Name = "jump"                   // interned by the build: no cost at run time
 let lo: Int8 = -128                       // fits: the '-' is checked with the literal
-names.append("grunt")                     // a String that uses the literal's bytes: no allocation
+let title: StringView = "Rayo"            // a static StringView, converted to the plain view: no allocation
 let xs = [3, 4, 5]                        // no context: a [3 of Int], stored inline
 let ys: Set<_> = alloc [3, 4, 5]          // a Set<Int>, from the annotation
 let zs = alloc [3, 4, 5]                  // a List<Int>: what 'alloc' makes when nothing asks for another type
@@ -232,23 +261,21 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 | --- | --- | --- |
 | `ExpressibleByArrayLiteral` | `init<let N: Int>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
 | `ExpressibleByDictionaryLiteral` | `init<let N: Int>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
-| `ExpressibleByStringLiteral` | `init(stringLiteral text: StaticString)` | `StaticString`, `StringView`, `String` |
-| `ExpressibleByInternedLiteral` | `unsafe init(internedLiteral entry: StaticSpan<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
+| `ExpressibleByStringLiteral` | `init(stringLiteral text: static StringView)` | `static StringView` |
+| `ExpressibleByInternedLiteral` | `unsafe init(internedLiteral entry: static Span<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
-**A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll(alloc [a, b])` passes the `List` that `alloc [a, b]` builds, as `spawnAll(alloc List([a, b]))` would. In an annotation or after `as`, `_` stands for what the literal fills in, as in `Set<_>`.
+**A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll(alloc [a, b])` passes the `List` that `alloc [a, b]` builds, as `spawnAll(alloc List([a, b]))` would. In an annotation or after `as`, `_` stands for what the literal fills in, as in `Set<_>`. Where a `StringView` is expected, a string literal is a `static StringView`, which converts to it ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 **A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error. A string literal converts to a `String` with no `alloc`, as `ExpressibleByStringLiteral` says, and doesn't allocate (below).
 
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 
-- its initializer is `@noalloc`, as those of the number types, `Array`, `Simd`, `InlineList`, `StaticString`, `StringView`, `String` and `std.math`'s `Vec3` and matrices are;
+- its initializer is `@noalloc`, as those of the number types, `Array`, `Simd`, `InlineList`, `static StringView` and `std.math`'s `Vec3` and matrices are;
 - its literals convert at compile time (below), as `Name`'s do.
 
 So a `List`, `Set` or `Map` literal is an error there, as its `alloc` is.
-
-**std's `String` takes a literal without allocating.** It records the ambient allocator, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the literal's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
 
 **An array literal's elements arrive inline**, as an owned `[N of Element]` whose count is known at compile time, never as a heap buffer. So a type refuses a count it can't hold at compile time, through `static if` and `static error` ([09](../09-compile-time/constants-and-conditions.md#static-if-and-conditional-compilation)): `Simd<T, N>` takes exactly `N` elements, `Vec3` exactly 3 and `InlineList<T, 8>` at most 8. Passed where an `[N of T]` with an unbound `N` or `T` is expected, as for `alloc List([1, 2, 3])`, a literal binds `N` to its count and `T` as it does with no context.
 
@@ -257,14 +284,14 @@ So a `List`, `Set` or `Map` literal is an error there, as its `alloc` is.
 **With no context, a literal has a default type:**
 
 - an integer literal is an `Int`, and a floating-point literal a `Double`;
-- a string literal is a `StaticString`;
+- a string literal is a `static StringView`;
 - a dictionary literal is an `[N of (K, V)]`;
 - an array literal is an `[N of T]`, whose `T` is the type of its typed elements, which must agree.
 
 **When every element is a literal, the elements take one default together:**
 
 - for number literals, `Double` if any is a floating-point one, and `Int` if none is;
-- for literals of one other kind, that kind's default, so `["a", "b"]` is a `[2 of StaticString]`.
+- for literals of one other kind, that kind's default, so `["a", "b"]` is a `[2 of static StringView]`.
 
 Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` or `[:]` needs a context.
 
@@ -274,11 +301,11 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no object;
 - no `Synchronized` value;
 - no `Allocator` id but `.heap`;
-- no pointer but one into immortal data, as a `StaticString`, a `StaticSpan` or a `Name` holds.
+- no pointer but one into immortal data, as a static view or a `Name` holds.
 
 `Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
 
-**Any other literal runs its initializer on each evaluation**: a `List`'s allocates from the allocator its `alloc` gives, and a `String`'s only records the ambient allocator. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
+**Any other literal runs its initializer on each evaluation**, as a `List`'s allocates from the allocator its `alloc` gives. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 
 **A `Map` or `Set` literal with two equal keys breaks its initializer's precondition, so it panics at run time** ([10](../10-errors-and-safety/panics.md#assert-and-precondition)). Keys that are constants are checked before then, whatever the hashing type: the compiler compares them with `==` at compile time, wherever their `==` can run there, without building the map. So two equal constant keys are a compile error even in a literal of a `SeededHashing` map, whose initializer runs only at run time ([Hash maps and sets](#hash-maps-and-sets)).
 
@@ -290,18 +317,18 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 
 ```swift
 protocol ExpressibleByInternedLiteral {
-    associatedtype InternedEntry: Frozen & TrivialFree & Sendable         // one per distinct text
-    static func internedEntry(for text: StaticString) -> InternedEntry     // run by the compiler, once per distinct text
-    @noalloc unsafe init(internedLiteral entry: StaticSpan<InternedEntry>) // the entry the build bound for the literal
-    unsafe static func internLoaded(_ entries: StaticSpan<InternedEntry>,  // code loaded after startup (below)
-                                    binding bound: MutableSpan<StaticSpan<InternedEntry>>) -> Void!AllocError
+    associatedtype InternedEntry: Frozen & TrivialFree & Sendable              // one per distinct text
+    static func internedEntry(for text: static StringView) -> InternedEntry     // run by the compiler, once per distinct text
+    @noalloc unsafe init(internedLiteral entry: static Span<InternedEntry>)     // the entry the build bound for the literal
+    unsafe static func internLoaded(_ entries: static Span<InternedEntry>,      // code loaded after startup (below)
+                                    binding bound: MutableSpan<static Span<InternedEntry>>) -> Void!AllocError
 }
 ```
 
 - **One table per type.** The table holds an entry for each text the build converts to a `T` literal in checked code, anywhere in the program. The build runs `internedEntry(for:)` once per text and freezes the results into one table in read-only data, so equal texts in different modules share one entry.
 - **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree` and `Sendable`, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 - **A stray entry never becomes a value.** `internedEntry(for:)` is safe to call from anywhere, since it only builds an entry from a text and touches no interner. An entry built that way never becomes a value of the type, since only `unsafe` code calls `init(internedLiteral:)`, promising the entry is the one the build bound (below). std's `Name` also keeps its entry's fields private.
-- **The table exists only at run time.** `T.internedLiterals`, a `StaticSpan<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
+- **The table exists only at run time.** `T.internedLiterals`, a `static Span<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
 - **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).
 - **Its caller promises the entry.** `init(internedLiteral:)` is `unsafe`: its caller promises that the span is the entry the build bound for that literal, since an entry from anywhere else would give its text a second value. The call the build makes for a literal carries that promise itself, so a literal needs no `unsafe` in source, in a `@safe` module too ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe)).
 - **The table seeds the interner.** std's `Name` interner reads `Name.internedLiterals` in its own global's initializer. Interning reads that global, so the initialization checks keep any code from interning before the table is in it ([07](../07-concurrency/global-state.md#initialization-at-startup)).

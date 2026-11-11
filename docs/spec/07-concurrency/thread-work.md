@@ -186,7 +186,7 @@ func startRendererOnGlobal() -> Thread<Void> {
 
 ```swift
 struct Thread<R: Sendable & ~Scoped>(…): ~Copyable    // R: the body's result type
-static func start(name: StaticString = "", _ body: owned Closure<consuming @sendable () -> R>) -> Thread<R> { … }
+static func start(name: static StringView = "", _ body: owned Closure<consuming @sendable () -> R>) -> Thread<R> { … }
                                                       // Thread<R>'s: the body, handed over; a call infers R from it
 ```
 

@@ -6,10 +6,10 @@ A function that can fail in an expected way returns the failure to its caller as
 
 ```swift
 enum LoadError: Error {
-    case notFound(path: StaticString)
+    case notFound(path: static StringView)
     case corrupt(offset: Int)
-    case unknownCase(type: StaticString, offset: Int)   // reflective loaders (09)
-    case badValue(field: StaticString)
+    case unknownCase(type: static StringView, offset: Int)   // reflective loaders (09)
+    case badValue(field: static StringView)
     case outOfMemory
 }
 

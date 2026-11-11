@@ -244,7 +244,7 @@ struct Panic {                 // copyable and Sendable: up to 256 bytes of its 
     let sequence: UInt64       // its place in the runtime's report order
     …
 }
-struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
+struct SourceLocation(let file: static StringView, let line: Int, let column: Int)
 ```
 
 **A `Panic` keeps a copy of its message, since the unwind destroys what the message's segments borrowed:**

@@ -12,9 +12,9 @@ At a C boundary, Rayo can check only what the imported or exported types express
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
     - a non-null pointer isn't null, a span's pointer included when its count is 0, since null is a `Span<T>?`'s `nil`;
     - a raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
-    - a `String`, `StringView` or `StaticString` holds whole UTF-8 sequences ([04](../04-types/collections.md#strings));
+    - a `String`, or a `StringView`, `static` or not, holds whole UTF-8 sequences ([04](../04-types/collections.md#strings));
     - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;
-    - a `StaticSpan`, a `StaticString` or a `String` with `cap` 0 points at bytes that stay valid and unwritten for the rest of the run, a `StaticString`'s followed by a NUL.
+    - a static view, or a `String` with `cap` 0, points at bytes that stay valid and unwritten for the rest of the run.
 - **One owner per move-only value.** A move-only value's bytes are never copied to stand for a second value ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads)).
 - **Values that stay on one thread.** A value whose type isn't `Sendable` reaches Rayo, and is freed through the header, only on its own thread ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads)), unless nothing but the raw pointers it holds keeps its type from being `Sendable`. Its own thread is the one Rayo gave it out on, or, for a thread-bound `WeakPointer`, its object's home thread ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)).
 - **Spans and `mutable` parameters.** Spans, `mutable` parameters and the views C hands Rayo meet these ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)):

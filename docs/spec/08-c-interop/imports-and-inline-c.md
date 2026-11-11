@@ -162,7 +162,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - a pointer.
 
   The promotions would change a `Float` or a narrower integer, so the code converts one explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern c func` can't declare one.
-- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `StaticString`:
+- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `static StringView`:
 
     ```c
     #define MAX_PADS 16          // const MAX_PADS: CInt = 16
@@ -173,7 +173,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     #define SEP ','              // a CInt, the type C gives a character literal
     #define SCALE 0.1f           // a Float, its value rounded to float
     #define RATE 0.1             // a Double
-    #define TITLE "Rayo"         // a StaticString
+    #define TITLE "Rayo"         // a static StringView
     ```
 
 **A C type the table doesn't map isn't imported.** Such types include:

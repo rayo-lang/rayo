@@ -10,7 +10,7 @@ Reflection gives a field's name and type, but not that the field is a cache a se
 struct Bounds(let min: Float, let max: Float): Attribute {
     init(_ min: Float, _ max: Float) { self.init(min: copy min, max: copy max) }   // the parameters are borrowed
 }
-struct Tooltip(let text: StaticString): Attribute
+struct Tooltip(let text: static StringView): Attribute
 struct Transient: Attribute {}     // skipped by serializers
 struct Replicated(var reliable: Bool = false): Attribute
 
@@ -43,12 +43,12 @@ For code that walks types **at run time**, `typeInfo(T.self)` returns a `TypeInf
 ```swift
 public struct TypeInfo private init(    // Frozen, derived: every field is Frozen
     public let id: UInt64,
-    public let name: StaticString,
+    public let name: static StringView,
     public let size: Int,
     public let alignment: Int,
-    public let fields: StaticSpan<FieldInfo>,  // name, offset, type id, attributes
-    public let cases: StaticSpan<CaseInfo>,    // name, tag, payload fields, attributes
-    public let attributes: StaticSpan<AttributeInfo>,  // each: the attribute type's TypeInfo, and its value
+    public let fields: static Span<FieldInfo>,  // name, offset, type id, attributes
+    public let cases: static Span<CaseInfo>,    // name, tag, payload fields, attributes
+    public let attributes: static Span<AttributeInfo>,  // each: the attribute type's TypeInfo, and its value
 )
 
 let enemyInfo = typeInfo(Enemy.self)    // a global let: a TypeInfo can be kept anywhere
@@ -65,15 +65,28 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 
 **An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding, and padding bytes are uninitialized ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `a[as: Tooltip.self]` is an optional place property that hands out the `Tooltip` it holds, or `nil` for another attribute type ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
-### `StaticSpan`: views of immortal data
+### Static views: views of immortal data
 
-**`StaticSpan<T>` is a view of immortal data, so unlike `Span` it is unscoped.** **Immortal data** is memory that is never freed, and that nothing writes once a value names it: the program image, or runtime tables. A view needn't be scoped when nothing can free its memory while it reads it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)).
+**A view of immortal data needn't stay in a scope, so it can be stored anywhere.** **Immortal data** is memory that is never freed, and that nothing writes once a value names it: the program image, or runtime tables. A view needn't be scoped when nothing can free its memory while it reads it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). The qualifier `static` marks such a view in its type:
 
-These rules keep what a `StaticSpan` views immortal, or follow from it:
+```swift
+let title: static StringView = "Rayo"                        // a literal is a static view
+let modes: [2 of static StringView] = ["easy", "hard"]       // so an array of literals can be a global
+struct Hint(let text: static StringView, let delay: Float)   // and a plain struct can store one
 
-- **Its elements.** Its `T` is `~Scoped`, as an unscoped type's contents are ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)), and has only values that could be frozen ([Consts that reach run time](constants-and-conditions.md#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes what a `StaticSpan` views, as it could through an `Atomic`, a `Shared` count or a pin count.
-- **Who makes one.** Only the compiler and the runtime create `StaticSpan`s safely. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
-- **Its own conformance.** The data is never written either, so `StaticSpan` is `Frozen`, through the `unsafe Frozen` conformance the language declares for it ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
+func show(_ hint: Hint) {
+    let shown: StringView = hint.text                        // fine: it converts to the plain view
+    let kept: static StringView = shown                      // error: a plain view never converts to a static one
+}
+```
+
+**A static view is a `static StringView` or a `static Span<T>`, a shared view that views only immortal data, so unlike the plain view it is unscoped.** It is copyable, as the plain view is. Only these two views take `static`. It converts implicitly to the plain view, and no plain view converts to it ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A range of a static view, such as `title[0..<2]`, is a static view too, since it views the same immortal data.
+
+These rules keep a static view's data immortal, or follow from it:
+
+- **Its elements.** A `static Span<T>`'s `T` is `~Scoped`, as an unscoped type's contents are ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)), and has only values that could be frozen ([Consts that reach run time](constants-and-conditions.md#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes the data behind a static view, as it could through an `Atomic`, a `Shared` count or a pin count.
+- **Who makes one.** Only the compiler and the runtime create static views safely, such as a literal, a frozen `const`'s `.view` and `.span`, a `Name`'s text, and the names and lists that reflection and `typeInfo` give. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+- **Its own conformance.** The data is never written either, so a static view is `Frozen`, through the `unsafe Frozen` conformance the language declares for it ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
 
 ## What a build declares
 
@@ -85,6 +98,6 @@ These rules keep what a `StaticSpan` views immortal, or follow from it:
 - **Safety and checks.** For each module, whether it is `@safe` ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)), and its diagnostic check settings ([10](../10-errors-and-safety/checks-and-build-modes.md#choosing-checks-for-a-module-or-a-scope)).
 - **Mode and target.** The build mode and the target, which `target` exposes ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)).
 - **Panic strategy.** Whether a panic unwinds, the default, or aborts the program ([10](../10-errors-and-safety/panics.md#panic-strategy)).
-- **Flags.** The flags that `target.flag` reads, each a `const` `Bool`, `Int` or `StaticString`.
+- **Flags.** The flags that `target.flag` reads, each a `const` `Bool`, `Int` or `static StringView`.
 - **Seed bytes.** For a program on a platform with no source of randomness, the bytes startup takes as the process seed, without which the build fails ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 - **C headers.** For each `import c`, the header it reads and each header its config block names. For each `import c` and each `extern c` block, the preprocessor definitions its C is read with, so no other import's macros reach an `import c` ([08](../08-c-interop/imports-and-inline-c.md#importing-headers)).
