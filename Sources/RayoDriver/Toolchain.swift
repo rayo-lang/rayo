@@ -53,7 +53,9 @@ struct Toolchain {
 
     /// Links `objectCode` with the C library into an executable at `output`.
     func link(_ objectCode: [UInt8], to output: URL) throws {
-        guard Self.isExecutableFile(tools.clang) else { throw Failure("can't find clang at '\(tools.clang.path)'") }
+        guard Self.isExecutableFile(tools.clang) else {
+            throw CompilationError.failed("can't find clang at '\(tools.clang.path)'")
+        }
         let linkerArguments = try linkerArguments()
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -61,7 +63,8 @@ struct Toolchain {
         try Data(objectCode).write(to: object)
         let result = try runCapturingOutput(tools.clang, arguments: linkerArguments + [object.path, "-o", output.path])
         if result.exitCode != 0 {
-            throw Failure("clang failed:\n\(result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors)")
+            let errors = result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors
+            throw CompilationError.failed("clang failed:\n\(errors)")
         }
     }
 
@@ -78,11 +81,11 @@ struct Toolchain {
     }
 
     /// The arguments that have clang link with `linker`.
-    private func linkerArguments() throws(Failure) -> [String] {
+    private func linkerArguments() throws(CompilationError) -> [String] {
         switch linker {
         case .lld:
             guard Self.isExecutableFile(tools.lld) else {
-                throw Failure("""
+                throw .failed("""
                     can't find LLD at '\(tools.lld.path)': install LLD \(LLVMInstall.majorVersion), run \
                     'swift package purge-cache' and build rayoc again, or link with --linker=platform
                     """)
@@ -96,7 +99,7 @@ struct Toolchain {
 
     /// The platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld` where
     /// it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
-    private func platformLinker() throws(Failure) -> URL {
+    private func platformLinker() throws(CompilationError) -> URL {
         #if canImport(Darwin)
         let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
         let path = found.flatMap { $0.exitCode == 0 ? $0.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
@@ -104,7 +107,9 @@ struct Toolchain {
         #else
         let linker = URL(fileURLWithPath: "/usr/bin/ld")
         #endif
-        guard Self.isExecutableFile(linker) else { throw Failure("can't find the platform's linker at '\(linker.path)'") }
+        guard Self.isExecutableFile(linker) else {
+            throw .failed("can't find the platform's linker at '\(linker.path)'")
+        }
         return linker
     }
 
