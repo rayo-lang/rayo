@@ -62,6 +62,21 @@ struct DriverTests {
         }
     }
 
+    @Test(arguments: ["build", "run"])
+    func `what rayoc writes to its standard error comes before why the command stopped after it compiled`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try script("echo 'rayoc: a note' >&2\nexec '\(builtProduct("rayoc").path)' \"$@\"",
+                                      at: directory.appendingPathComponent("rayoc"))
+            let clang = directory.appendingPathComponent("nonexistent")
+            let linkTools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
+            #expect(Driver.run([command, source], compiler: compiler, linkTools: linkTools) == CommandResult(
+                exitCode: 1, output: "", errors: "rayoc: a note\nrayo: can't find clang at '\(clang.path)'\n"))
+        }
+    }
+
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
         command: String,

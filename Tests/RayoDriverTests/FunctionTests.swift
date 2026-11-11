@@ -72,7 +72,16 @@ struct FunctionTests {
 
     @Test("a panic in a function names its place in that function")
     func panicInCallee() {
-        let source = "func main() {\n    print(1)\n    print(f())\n}\nfunc f() -> Int {\n    return 1 / zero()\n}\nfunc zero() { 0 }"
+        let source = """
+            func main() {
+                print(1)
+                print(f())
+            }
+            func f() -> Int {
+                return 1 / zero()
+            }
+            func zero() { 0 }
+            """
         #expect(run(source) == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "1\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }

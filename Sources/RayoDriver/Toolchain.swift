@@ -36,7 +36,12 @@ struct Toolchain {
             let objectFile = directory.appendingPathComponent("program.o")
             let errors = try runCompiler([mode.rawValue, "-o", objectFile.path, "--", path])
 
-            return (try body(objectFile), errors)
+            // Run the body on the object file; what `rayoc` wrote comes before why the body stopped, if it did.
+            do throws(CommandError) {
+                return (try body(objectFile), errors)
+            } catch {
+                throw error.after(errors)
+            }
         }
     }
 

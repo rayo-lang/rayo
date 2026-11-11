@@ -118,7 +118,8 @@ struct BuildTests {
     @Test("a clang that fails has its errors reported")
     func clangFails() throws {
         try withTemporaryDirectory { directory in
-            let clang = try script("echo 'clang: something broke' >&2\nexit 1", at: directory.appendingPathComponent("clang"))
+            let clang = try script("echo 'clang: something broke' >&2\nexit 1",
+                                   at: directory.appendingPathComponent("clang"))
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             #expect(try runEmptyMain(linkTools: tools) ==
                 CommandResult(exitCode: 1, output: "", errors: "rayo: clang failed:\nclang: something broke\n"))
@@ -259,7 +260,8 @@ struct IntegerTests {
         }
     }
 
-    @Test("division and remainder by zero panic in every build", arguments: [("1 / 0", "division"), ("1 % 0", "remainder")])
+    @Test("division and remainder by zero panic in every build",
+          arguments: [("1 / 0", "division"), ("1 % 0", "remainder")])
     func byZero(expression: String, operation: String) {
         for mode in [["--debug"], ["--release"]] {
             #expect(panic(in: run("func main() { print(\(expression)) }", options: mode)) ==

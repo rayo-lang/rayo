@@ -4,7 +4,8 @@ import RayoDiagnostics
 struct PrecedenceTests {
     @Test("every comparison has one level, so '==' doesn't wait for a '<' on its right")
     func comparisonsShareALevel() {
-        #expect(errors("func main() { if true == 1 < 2 { } }") == [.operandsDiffer(op: "==", left: "Bool", right: "Int")])
+        #expect(errors("func main() { if true == 1 < 2 { } }") ==
+            [.operandsDiffer(op: "==", left: "Bool", right: "Int")])
     }
 }
 

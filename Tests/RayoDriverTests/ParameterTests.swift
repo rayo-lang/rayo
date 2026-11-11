@@ -16,7 +16,8 @@ struct ParameterTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: "7\n20\n", errors: ""))
     }
 
-    @Test("functions recurse, directly and through each other, in debug and in release", arguments: [["--debug"], ["--release"]])
+    @Test("functions recurse, directly and through each other, in debug and in release",
+          arguments: [["--debug"], ["--release"]])
     func recursion(mode: [String]) {
         let source = """
             func main() {
@@ -56,15 +57,26 @@ struct ParameterTests {
 
     @Test("a panic in a function names its place there, whatever its arguments")
     func panicInCallee() {
-        let source = "func main() {\n    print(ratio(6, 3))\n    print(ratio(1, 0))\n}\nfunc ratio(_ a: Int, _ b: Int) -> Int {\n    return a / b\n}"
+        let source = """
+            func main() {
+                print(ratio(6, 3))
+                print(ratio(1, 0))
+            }
+            func ratio(_ a: Int, _ b: Int) -> Int {
+                return a / b
+            }
+            """
         #expect(run(source) == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "2\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }
 
     @Test("a keyword can be an argument label")
     func keywordLabels() {
-        #expect(run("func main() { print(pick(if: true, else: 2)) }\nfunc pick(if c: Bool, else e: Int) -> Int { copy e }")
-            == CommandResult(exitCode: 0, output: "2\n", errors: ""))
+        let source = """
+            func main() { print(pick(if: true, else: 2)) }
+            func pick(if c: Bool, else e: Int) -> Int { copy e }
+            """
+        #expect(run(source) == CommandResult(exitCode: 0, output: "2\n", errors: ""))
     }
 
     @Test("a parameter may share a function's name, and a use of the name other than a call reaches the parameter")

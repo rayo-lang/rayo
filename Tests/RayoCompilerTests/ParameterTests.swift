@@ -59,7 +59,8 @@ struct ParameterTests {
     }
 
     @Test("'owned' and 'mutable' parameters and default values aren't supported", arguments: [
-        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")], ["_ x: owned Int"]),
+        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")],
+         ["_ x: owned Int"]),
         ("func f(x: mutable Int) {}", [.unsupportedConvention(convention: "mutable")], ["x: mutable Int"]),
         ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
         ("func f(owned: Int) { print(owned) }", [], []),
