@@ -106,19 +106,23 @@ public enum Driver {
     public static func run(_ arguments: [String], programOutput: ProgramOutput = .captured,
                            environment: [String: String] = ProcessInfo.processInfo.environment,
                            linkTools: LinkTools = .installed, readFile: @escaping (String) -> [UInt8]?) -> Result {
+        // Read what the arguments ask for.
         let invocation: Invocation
         do {
             invocation = try Invocation(arguments)
         } catch {
+            // Arguments that ask for nothing `rayoc` does are reported with how to use it.
             return Result(exitCode: 2, output: "", errors: error.errors)
         }
 
+        // Run the command the arguments ask for, with the host's tools.
         let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
         let command = CommandRun(invocation: invocation, readFile: readFile, toolchain: toolchain,
                                  programOutput: programOutput)
         do {
             return try command.result()
         } catch {
+            // A command that stops is reported with why.
             return result(of: error, in: invocation.path)
         }
     }
@@ -185,7 +189,7 @@ public enum Driver {
             }
         }
 
-        /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.
+        /// The executable for the source at `path`: the same path without `.rayo`.
         private func executable(building path: String) throws(CompilationError) -> URL {
             // A path that doesn't end in '.rayo' would name the source itself.
             guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }

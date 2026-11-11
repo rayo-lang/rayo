@@ -10,7 +10,7 @@ import RayoLLVM
 
 /// The host tools that link object code into an executable and run it.
 struct Toolchain {
-    var tools: Driver.LinkTools
+    var tools: LinkTools
     var linker: Linker
     /// The environment that clang and a program run in.
     var environment: [String: String]
@@ -39,7 +39,7 @@ struct Toolchain {
     }
 
     /// Links `objectCode` into a temporary executable, runs it, and removes it.
-    func linkAndRun(_ objectCode: [UInt8], output: Driver.ProgramOutput) throws(CompilationError) -> Driver.Result {
+    func linkAndRun(_ objectCode: [UInt8], output: ProgramOutput) throws(CompilationError) -> Driver.Result {
         // Link the executable in a directory that goes once the run ends.
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
