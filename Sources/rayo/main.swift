@@ -22,8 +22,9 @@ func writeAll(_ text: String, to descriptor: Int32) {
 // The `rayo` that runs is the file the system started, not a link to it, so `rayoc` is found beside that file.
 let executable = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
 let environment = ProcessInfo.processInfo.environment
-let result = Driver.run(Array(CommandLine.arguments.dropFirst()), programOutput: .inherited, environment: environment,
-                        compiler: Driver.compiler(in: environment, besides: executable))
+let result = Driver.run(Array(CommandLine.arguments.dropFirst()),
+                        compiler: Driver.compiler(in: environment, beside: executable), processOutput: .inherited,
+                        environment: environment)
 writeAll(result.output, to: STDOUT_FILENO)
 writeAll(result.errors, to: STDERR_FILENO)
 exit(result.exitCode)

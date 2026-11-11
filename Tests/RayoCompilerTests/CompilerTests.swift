@@ -62,6 +62,18 @@ struct CompilerTests {
         #expect(compiled.written.isEmpty)
     }
 
+    @Test(arguments: [
+        (["--check", "--", "-o"], [String]()), (["--check", "--", "--"], []), (["-o", "a.o", "--", "--check"], ["a.o"]),
+    ])
+    func `'--' ends the options, so the file after it may be named like one`(
+        arguments: [String], written: [String],
+    ) {
+        let source = "func main() {}"
+        let compiled = compile(arguments, files: ["-o": source, "--": source, "--check": source])
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: ""))
+        #expect(Array(compiled.written.keys) == written)
+    }
+
     @Test func `a file that isn't UTF-8 is an error`() {
         let source = String(decoding: Array("func main() {\n    print(1) // é".utf8) + [0xFF], as: UTF8.self)
         let result = Compiler.run(["--check", "a.rayo"], readFile: { _ in Array(source.utf8.dropLast(3)) + [0xFF] }) {
@@ -88,11 +100,13 @@ struct CompilerTests {
         ["-o", "a.o", "-o", "b.o", "a.rayo"], ["--check", "--debug", "a.rayo"], ["--release", "--check", "a.rayo"],
         ["--debug", "--release", "-o", "a.o", "a.rayo"], ["--fast", "-o", "a.o", "a.rayo"],
         ["-o", "--check", "a.rayo"], ["-o", "a.o", "--debug"], ["--check", "--debug"],
+        ["--check", "--"], ["--", "a.rayo"], ["--", "--check", "a.rayo"], ["--check", "--", "a.rayo", "b.rayo"],
+        ["-o", "--", "a.rayo"], ["--check", "--", "--", "a.rayo"],
     ])
     func `arguments that name no one compile print the usage, and write nothing`(arguments: [String]) {
         let compiled = compile(arguments, files: ["a.rayo": "func main() {}", "b.rayo": "func main() {}"])
         #expect(compiled.result.exitCode == 2)
-        #expect(compiled.result.errors.hasPrefix("usage: rayoc --check <file>\n"))
+        #expect(compiled.result.errors.hasPrefix("usage: rayoc --check [--] <file>\n"))
         #expect(compiled.written.isEmpty)
     }
 }

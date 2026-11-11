@@ -10,14 +10,14 @@ swift run rayo run program.rayo
 
 `rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with the clang and LLD of the LLVM they were built against. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
 
-`rayoc` takes one source file and writes nothing but its object code:
+`rayoc` takes one source file, and writes no file but its object code:
 
 | Command line | Does |
 | --- | --- |
-| `rayoc --check <file>` | Checks the file, and writes nothing |
-| `rayoc [--debug \| --release] -o <object file> <file>` | Compiles the file to object code for the host, in release mode where no mode is named, and writes it to the object file |
+| `rayoc --check [--] <file>` | Checks the file, and writes no file |
+| `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file to object code for the host, in release mode where no mode is named, and writes it to the object file |
 
-It exits with 0 when it checked or compiled the file, 1 when the program has errors or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes them on as they are.
+`--` ends the options, so the file after it may be named like one; `rayo` always passes it. `rayoc` exits with 0 when it checked or compiled the file, 1 when the program has errors or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.

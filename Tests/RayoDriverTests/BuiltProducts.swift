@@ -40,11 +40,3 @@ func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
         return CommandResult(exitCode: -1, output: "", errors: "")
     }
 }
-
-/// A new, empty directory, which `body` may fill and which is removed after it.
-func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rayo-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    return try body(directory)
-}

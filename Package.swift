@@ -33,7 +33,7 @@ let llvmPrefix: String = {
 
 /// The directory that holds LLD `llvmMajorVersion`: `LLD_PREFIX`'s `bin` when it's set, and otherwise that of the
 /// first of LLVM's prefix and the places a package manager installs LLD that holds that release. Where none does,
-/// it is LLVM's own `bin`, so that `rayoc` reports LLD missing from there.
+/// it is LLVM's own `bin`, so that `rayo` reports LLD missing from there.
 let lldDirectory: String = {
     // `LLD_PREFIX` names the install to use.
     if let prefix = Context.environment["LLD_PREFIX"] { return prefix + "/bin" }

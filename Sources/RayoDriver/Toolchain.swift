@@ -14,21 +14,34 @@ struct Toolchain {
     var compiler: URL
     var tools: LinkTools
     var linker: Linker
+    /// Where what `rayoc` and a program write goes.
+    var output: ProcessOutput
     /// The environment that `rayoc`, clang and a program run in.
     var environment: [String: String]
 
-    /// Runs `rayoc` with `arguments`, and fails with what it wrote when it doesn't compile the file.
-    func compile(_ arguments: [String]) throws(CommandError) {
-        // Without `rayoc` there is nothing to compile with.
-        guard Self.isExecutableFile(compiler) else { throw .failed("can't find rayoc at '\(compiler.path)'") }
-
-        let result = try runCapturingOutput(compiler, arguments: arguments)
-        // A file that `rayoc` doesn't compile ends the command as `rayoc` ended.
-        guard result.exitCode == 0 else { throw .compileFailed(exitCode: result.exitCode, errors: result.errors) }
+    /// Has `rayoc` check the source file at `path`, and returns what `rayoc` wrote to its standard error, where
+    /// `output` captures it.
+    func check(_ path: String) throws(CommandError) -> String {
+        try runCompiler(["--check", "--", path])
     }
 
-    /// Links the object file at `objectFile` with the C library into an executable at `output`.
-    func link(_ objectFile: URL, to output: URL) throws(CommandError) {
+    /// Has `rayoc` compile the source file at `path` to object code in `mode`, and runs `body` on the object file,
+    /// which is removed once `body` ends. Returns what `body` returns, and what `rayoc` wrote to its standard error,
+    /// where `output` captures it.
+    func compile<Value>(
+        _ path: String, mode: BuildMode, _ body: (URL) throws(CommandError) -> Value,
+    ) throws(CommandError) -> (value: Value, errors: String) {
+        try Self.withTemporaryDirectory { directory throws(CommandError) in
+            // Have `rayoc` write the object file inside the directory, so it goes with the directory.
+            let objectFile = directory.appendingPathComponent("program.o")
+            let errors = try runCompiler([mode.rawValue, "-o", objectFile.path, "--", path])
+
+            return (try body(objectFile), errors)
+        }
+    }
+
+    /// Links the object file at `objectFile` with the C library into an executable at `executable`.
+    func link(_ objectFile: URL, to executable: URL) throws(CommandError) {
         // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
         // the linker asked for.
         guard Self.isExecutableFile(tools.clang) else {
@@ -36,27 +49,48 @@ struct Toolchain {
         }
         let linkerArguments = try linkerArguments()
 
-        let arguments = linkerArguments + [objectFile.path, "-o", output.path]
-        let result = try runCapturingOutput(tools.clang, arguments: arguments)
+        // Have clang link the object file into the executable.
+        let arguments = linkerArguments + [objectFile.path, "-o", executable.path]
+        let run = try runCapturingOutput(tools.clang, arguments: arguments)
         // A link that clang fails reports what clang wrote, without its last newline.
-        if result.exitCode != 0 {
-            let errors = result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors
+        if run.termination.exitCode != 0 {
+            let errors = run.errors.hasSuffix("\n") ? String(run.errors.dropLast()) : run.errors
             throw .failed("clang failed:\n\(errors)")
         }
     }
 
     /// Links the object file at `objectFile` into a temporary executable, runs it, and removes it.
-    func linkAndRun(_ objectFile: URL, output: ProgramOutput) throws(CommandError) -> CommandResult {
+    func linkAndRun(_ objectFile: URL) throws(CommandError) -> CommandResult {
         try Self.withTemporaryDirectory { directory throws(CommandError) in
             // Link the executable inside the directory, so it goes with the directory once the run ends.
             let executable = directory.appendingPathComponent("program")
             try link(objectFile, to: executable)
 
-            // Run it, with what it writes captured or sent on as `output` asks.
-            return switch output {
-            case .captured: try runCapturingOutput(executable)
-            case .inherited: CommandResult(exitCode: try runAttached(executable), output: "", errors: "")
-            }
+            // Run it, and give how it ended and what of its output was captured.
+            let run = try runSendingOutput(executable)
+            return CommandResult(exitCode: run.termination.exitCode, output: run.output, errors: run.errors)
+        }
+    }
+
+    /// Runs `rayoc` with `arguments`, and returns what it wrote to its standard error, where `output` captures it,
+    /// or fails as `rayoc` ended when it doesn't compile the file.
+    private func runCompiler(_ arguments: [String]) throws(CommandError) -> String {
+        // Without `rayoc` there is nothing to compile with.
+        guard Self.isExecutableFile(compiler) else { throw .failed("can't find rayoc at '\(compiler.path)'") }
+
+        // Run `rayoc`, and go on or stop as it ended.
+        let run = try runSendingOutput(compiler, arguments: arguments)
+        switch run.termination {
+        // A `rayoc` that compiled the file leaves the command to go on.
+        case .exited(0):
+            return run.errors
+        // A file that `rayoc` doesn't compile ends the command as `rayoc` ended.
+        case .exited(let exitCode):
+            throw .compileFailed(exitCode: exitCode, errors: run.errors)
+        // A `rayoc` that a signal ended couldn't say so, so `rayo` does.
+        case .signaled(let signal):
+            throw .compileFailed(exitCode: run.termination.exitCode,
+                                 errors: run.errors + "rayo: rayoc was ended by signal \(signal)\n")
         }
     }
 
@@ -86,7 +120,9 @@ struct Toolchain {
         // Find where the platform keeps its linker.
         #if canImport(Darwin)
         let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
-        let path = found.flatMap { $0.exitCode == 0 ? $0.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
+        let path = found.flatMap { found in
+            found.termination == .exited(0) ? found.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        }
         let linker = URL(fileURLWithPath: path ?? "/usr/bin/ld")
         #else
         let linker = URL(fileURLWithPath: "/usr/bin/ld")
@@ -106,10 +142,19 @@ struct Toolchain {
             && FileManager.default.isExecutableFile(atPath: url.path)
     }
 
-    /// Runs `executable` to completion, and returns its exit code and what it wrote.
+    /// Runs `executable` to completion, with what it writes captured or sent on as `output` asks.
+    private func runSendingOutput(_ executable: URL, arguments: [String] = []) throws(CommandError) -> ProcessRun {
+        switch output {
+        case .captured: try runCapturingOutput(executable, arguments: arguments)
+        case .inherited:
+            ProcessRun(termination: try runAttached(executable, arguments: arguments), output: "", errors: "")
+        }
+    }
+
+    /// Runs `executable` to completion, and returns how it ended and what it wrote.
     private func runCapturingOutput(
         _ executable: URL, arguments: [String] = [],
-    ) throws(CommandError) -> CommandResult {
+    ) throws(CommandError) -> ProcessRun {
         try Self.withTemporaryDirectory { directory throws(CommandError) in
             // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
             let outputFile = directory.appendingPathComponent("stdout")
@@ -122,25 +167,24 @@ struct Toolchain {
             process.standardInput = FileHandle.nullDevice
             process.standardOutput = try runOnHost { try FileHandle(forWritingTo: outputFile) }
             process.standardError = try runOnHost { try FileHandle(forWritingTo: errorFile) }
-            let exitCode = try runToCompletion(process)
-            return CommandResult(exitCode: exitCode,
-                                 output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
-                                 errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
+            let termination = try runToCompletion(process)
+            return ProcessRun(termination: termination,
+                              output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
+                              errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
         }
     }
 
-    /// Runs `executable` to completion on `rayo`'s own standard input, output and error, and returns its
-    /// exit code.
-    private func runAttached(_ executable: URL) throws(CommandError) -> Int32 {
-        // An interrupt from the terminal reaches the program and `rayo` alike. `rayo` outlives it, so that
-        // it still removes the executable; a handled signal, unlike an ignored one, is reset in the program.
+    /// Runs `executable` to completion on `rayo`'s own standard input, output and error, and returns how it ended.
+    private func runAttached(_ executable: URL, arguments: [String]) throws(CommandError) -> Termination {
+        // An interrupt from the terminal reaches the process and `rayo` alike. `rayo` outlives it, so that
+        // it still removes its temporary files; a handled signal, unlike an ignored one, is reset in the process.
         let interrupt = signal(SIGINT) { _ in }
         let quit = signal(SIGQUIT) { _ in }
         defer {
             signal(SIGINT, interrupt)
             signal(SIGQUIT, quit)
         }
-        return try runToCompletion(newProcess(executable))
+        return try runToCompletion(newProcess(executable, arguments: arguments))
     }
 
     /// Makes a process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
@@ -152,19 +196,19 @@ struct Toolchain {
         return process
     }
 
-    /// Runs `process` to its end, and returns its exit code, or 128 plus the signal that ended it.
-    private func runToCompletion(_ process: Process) throws(CommandError) -> Int32 {
+    /// Runs `process` to its end, and returns how it ended.
+    private func runToCompletion(_ process: Process) throws(CommandError) -> Termination {
         // `run` returns once the process starts, so wait for it to end.
         try runOnHost { try process.run() }
         process.waitUntilExit()
 
-        // A process that a signal ended exits with 128 plus the signal, as a shell reports it.
+        // A process that a signal ended has the signal for its status.
         let status = process.terminationStatus
-        return process.terminationReason == .uncaughtSignal ? 128 + status : status
+        return process.terminationReason == .uncaughtSignal ? .signaled(status) : .exited(status)
     }
 
     /// Runs `body` on a new, empty directory, and removes the directory once `body` ends.
-    static func withTemporaryDirectory<Value>(
+    private static func withTemporaryDirectory<Value>(
         _ body: (URL) throws(CommandError) -> Value,
     ) throws(CommandError) -> Value {
         // Make the directory, under a name no other run of rayo takes.
@@ -175,6 +219,27 @@ struct Toolchain {
         // Run the body on it, and remove it whether the body returns or throws.
         defer { try? FileManager.default.removeItem(at: directory) }
         return try body(directory)
+    }
+}
+
+/// How a process that `Toolchain` ran ended, and what it wrote, where that was captured.
+private struct ProcessRun {
+    var termination: Termination
+    var output: String
+    var errors: String
+}
+
+/// How a process ended: with an exit code of its own, or by a signal.
+private enum Termination: Equatable {
+    case exited(Int32)
+    case signaled(Int32)
+
+    /// The exit code a shell reports for the process: its own, or 128 plus the signal that ended it.
+    var exitCode: Int32 {
+        switch self {
+        case .exited(let exitCode): exitCode
+        case .signaled(let signal): 128 + signal
+        }
     }
 }
 

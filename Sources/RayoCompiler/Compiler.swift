@@ -3,12 +3,13 @@ import RayoIR
 /// The compiler, `rayoc`, which checks a source file or compiles it to object code for the host.
 public enum Compiler {
     static let usage = """
-        usage: rayoc --check <file>
-               rayoc [--debug | --release] -o <object file> <file>
+        usage: rayoc --check [--] <file>
+               rayoc [--debug | --release] -o <object file> [--] <file>
 
         options:
           --check    check the file and report its errors, writing nothing
           -o         compile the file to object code for the host, and write it to the object file
+          --         end the options, so that the file may be named like one
 
         build modes, with -o:
           --debug    integer overflow panics, and the object code isn't optimised
@@ -38,9 +39,13 @@ public enum Compiler {
             var checks = false
             var objectFile: String?
             var mode: BuildMode?
+            var optionsEnded = false
             var operands = arguments[...]
-            while operands.count > 1, let option = operands.popFirst() {
-                if option == "--check", !checks {
+            while !optionsEnded, operands.count > 1, let option = operands.popFirst() {
+                if option == "--" {
+                    // `--` ends the options, so the operand after it is the file, whatever it is named.
+                    optionsEnded = true
+                } else if option == "--check", !checks {
                     // `--check` asks for the file to be checked only.
                     checks = true
                 } else if let newMode = BuildMode(rawValue: option), mode == nil {
@@ -57,21 +62,30 @@ public enum Compiler {
                 }
             }
 
-            // The one operand left is the source file.
-            guard operands.count == 1, let path = operands.first, !Self.isOption(path) else { throw UsageError() }
+            // The one operand left is the source file; before a `--`, an option there leaves the arguments
+            // without one.
+            guard operands.count == 1, let path = operands.first, optionsEnded || !Self.isOption(path) else {
+                throw UsageError()
+            }
             self.path = path
 
-            // A run either checks the file, in no build mode, or writes its object code.
+            // Decide what the run makes of the file.
             switch (checks, objectFile) {
-            case (true, nil) where mode == nil: output = .check
-            case (false, let objectFile?): output = .objectFile(path: objectFile, mode: mode ?? .release)
-            default: throw UsageError()
+            // `--check` alone checks the file; a build mode would change no check.
+            case (true, nil) where mode == nil:
+                output = .check
+            // `-o` alone writes the file's object code, in release mode unless a mode is named.
+            case (false, let objectFile?):
+                output = .objectFile(path: objectFile, mode: mode ?? .release)
+            // Both, or neither, or a mode with `--check`, ask for no one compile.
+            default:
+                throw UsageError()
             }
         }
 
         /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
-            operand == "--check" || operand == "-o" || BuildMode(rawValue: operand) != nil
+            operand == "--check" || operand == "-o" || operand == "--" || BuildMode(rawValue: operand) != nil
         }
     }
 
@@ -108,18 +122,18 @@ public enum Compiler {
     ) throws(CompilationError) {
         switch invocation.output {
         case .check:
-            _ = try checking(readFile: readFile).run(invocation.path)
+            _ = try frontEnd(readFile: readFile).run(invocation.path)
         case .objectFile(let path, let mode):
             try pipeline {
-                checking(readFile: readFile)
+                frontEnd(readFile: readFile)
                 Emit(mode: mode, sourcePath: invocation.path)
                 WriteObject(path: path, writeFile: writeFile)
             }.run(invocation.path)
         }
     }
 
-    /// Reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR.
-    private static func checking(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
+    /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR.
+    private static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
             ReadSource(readFile: readFile)
             Parse()

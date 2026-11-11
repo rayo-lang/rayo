@@ -34,21 +34,29 @@ public enum Driver {
         var path: String
 
         init(_ arguments: [String]) throws(CommandLineError) {
+            // Arguments that start with no command `rayo` knows ask for nothing it does.
             guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { throw .usage }
+
+            // Read each option of `build` and `run` before the file, each at most once; `check` takes none.
             var operands = arguments.dropFirst()
             var mode: BuildMode?
             var linker: Linker?
             while command != .check, operands.count > 1, let option = operands.first {
                 if let newMode = BuildMode(rawValue: option), mode == nil {
+                    // A build mode says how the program is built.
                     mode = newMode
                 } else if let name = Self.value(of: option, named: "--linker"), linker == nil {
+                    // `--linker=` names the linker, which has to be one `rayo` knows.
                     guard let newLinker = Linker(rawValue: name) else { throw .unknownLinker(name) }
                     linker = newLinker
                 } else {
+                    // An option `rayo` doesn't take, or one given twice, asks for nothing it does.
                     throw .usage
                 }
                 operands = operands.dropFirst()
             }
+
+            // The one operand left is the source file; an option there leaves the arguments without one.
             guard operands.count == 1, let path = operands.first, !Self.isOption(path) else { throw .usage }
             self.command = command
             self.mode = mode ?? .release
@@ -83,9 +91,8 @@ public enum Driver {
     /// Runs `rayo` with `arguments`, which exclude the program's name. It compiles with the `rayoc` at `compiler`,
     /// and `build` and `run` link with `linkTools`; `environment` is the environment those tools and a program run in.
     public static func run(
-        _ arguments: [String], programOutput: ProgramOutput = .captured,
-        environment: [String: String] = ProcessInfo.processInfo.environment, compiler: URL,
-        linkTools: LinkTools = .installed,
+        _ arguments: [String], compiler: URL, processOutput: ProcessOutput = .captured,
+        environment: [String: String] = ProcessInfo.processInfo.environment, linkTools: LinkTools = .installed,
     ) -> CommandResult {
         // Read what the arguments ask for.
         let invocation: Invocation
@@ -98,8 +105,8 @@ public enum Driver {
 
         // Run the command the arguments ask for, with the host's tools.
         let toolchain = Toolchain(compiler: compiler, tools: linkTools, linker: invocation.linker,
-                                  environment: environment)
-        let command = CommandRun(invocation: invocation, toolchain: toolchain, programOutput: programOutput)
+                                  output: processOutput, environment: environment)
+        let command = CommandRun(invocation: invocation, toolchain: toolchain)
         do {
             return try command.result()
         } catch {
@@ -110,7 +117,7 @@ public enum Driver {
 
     /// Returns the `rayoc` that `rayo` compiles with: the one `RAYOC` in `environment` names, or else the one
     /// beside `executable`, the `rayo` that runs.
-    public static func compiler(in environment: [String: String], besides executable: URL) -> URL {
+    public static func compiler(in environment: [String: String], beside executable: URL) -> URL {
         // `RAYOC` names the compiler to use.
         if let path = environment["RAYOC"], !path.isEmpty { return URL(fileURLWithPath: path) }
         return executable.deletingLastPathComponent().appendingPathComponent("rayoc")
@@ -120,7 +127,6 @@ public enum Driver {
     private struct CommandRun {
         var invocation: Invocation
         var toolchain: Toolchain
-        var programOutput: ProgramOutput
 
         func result() throws(CommandError) -> CommandResult {
             switch invocation.command {
@@ -130,41 +136,32 @@ public enum Driver {
             }
         }
 
-        /// Checks the file, and writes nothing.
+        /// Checks the file, and writes nothing but what `rayoc` wrote.
         private func check() throws(CommandError) -> CommandResult {
-            try toolchain.compile(["--check", invocation.path])
+            let errors = try toolchain.check(invocation.path)
 
-            return CommandResult(exitCode: 0, output: "", errors: "")
+            return CommandResult(exitCode: 0, output: "", errors: errors)
         }
 
-        /// Compiles the file to an executable beside it, and writes nothing else.
+        /// Compiles the file to an executable beside it, and writes nothing but what `rayoc` wrote.
         private func build() throws(CommandError) -> CommandResult {
-            // A path that names no executable stops `build` before it compiles the file.
             let executable = try executable(building: invocation.path)
 
-            // Compile the file to object code, and link that into the executable.
-            try Toolchain.withTemporaryDirectory { directory throws(CommandError) in
-                let objectFile = try compile(into: directory)
-                try toolchain.link(objectFile, to: executable)
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try toolchain.link(objectFile, to: executable)
             }
 
-            return CommandResult(exitCode: 0, output: "", errors: "")
+            return CommandResult(exitCode: 0, output: "", errors: compiled.errors)
         }
 
-        /// Compiles the file and runs it, and gives what the run gave.
+        /// Compiles the file and runs it, and gives what the run gave, after what `rayoc` wrote.
         private func runProgram() throws(CommandError) -> CommandResult {
-            try Toolchain.withTemporaryDirectory { directory throws(CommandError) in
-                let objectFile = try compile(into: directory)
-                return try toolchain.linkAndRun(objectFile, output: programOutput)
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try toolchain.linkAndRun(objectFile)
             }
-        }
 
-        /// Compiles the file to object code, in the invocation's build mode, and returns the object file, which it
-        /// writes in `directory`.
-        private func compile(into directory: URL) throws(CommandError) -> URL {
-            let objectFile = directory.appendingPathComponent("program.o")
-            try toolchain.compile([invocation.mode.rawValue, "-o", objectFile.path, invocation.path])
-            return objectFile
+            return CommandResult(exitCode: compiled.value.exitCode, output: compiled.value.output,
+                                 errors: compiled.errors + compiled.value.errors)
         }
 
         /// Returns the executable for the source at `path`, which is the same path without `.rayo`, or fails when

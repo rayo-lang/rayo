@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import RayoDriver
 
-/// A `rayoc` that no file is, for the commands that stop before they compile.
+/// A `rayoc` that no file is: the commands that stop before they compile never run it, and the others fail without it.
 private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
 
 struct DriverTests {
@@ -49,6 +49,40 @@ struct DriverTests {
         }
     }
 
+    @Test(arguments: [("check", ""), ("build", ""), ("run", "1\n")])
+    func `what rayoc writes to its standard error comes first in what the command writes, when rayoc compiles the file`(
+        command: String, output: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() { print(1) }", as: "main.rayo", in: directory)
+            let compiler = try script("echo 'rayoc: a note' >&2\nexec '\(builtProduct("rayoc").path)' \"$@\"",
+                                      at: directory.appendingPathComponent("rayoc"))
+            #expect(Driver.run([command, source], compiler: compiler) ==
+                CommandResult(exitCode: 0, output: output, errors: "rayoc: a note\n"))
+        }
+    }
+
+    @Test(arguments: ["check", "build", "run"])
+    func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let compiler = try script("echo 'rayoc: started' >&2\nkill -KILL $$",
+                                      at: directory.appendingPathComponent("rayoc"))
+            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+                exitCode: 128 + 9, output: "", errors: "rayoc: started\nrayo: rayoc was ended by signal 9\n"))
+        }
+    }
+
+    @Test(arguments: ["-o", "--check", "--"])
+    func `a file named like one of rayoc's options is the file the command compiles`(name: String) throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func main() { print(1) }", as: name, in: directory)
+            #expect(rayo(["run", name], in: directory) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
+        }
+    }
+
     @Test func `a file rayoc can't read fails the command with rayoc's error`() throws {
         try withTemporaryDirectory { directory in
             #expect(rayo(["run", "missing.rayo"], in: directory) ==
@@ -62,7 +96,7 @@ struct DriverTests {
     func `rayo compiles with the rayoc that RAYOC names, or else the one beside it`(
         environment: [String: String], expected: String,
     ) {
-        let compiler = Driver.compiler(in: environment, besides: URL(fileURLWithPath: "/tools/bin/rayo"))
+        let compiler = Driver.compiler(in: environment, beside: URL(fileURLWithPath: "/tools/bin/rayo"))
         #expect(compiler.path == expected)
     }
 }

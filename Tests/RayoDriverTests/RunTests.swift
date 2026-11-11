@@ -21,13 +21,6 @@ func run(_ source: String, options: [String] = []) -> CommandResult {
     }
 }
 
-/// Saves `source` as the file `name` in `directory`, and returns the file's path.
-private func save(_ source: String, as name: String, in directory: URL) throws -> String {
-    let file = directory.appendingPathComponent(name)
-    try Data(source.utf8).write(to: file)
-    return file.path
-}
-
 /// The output of running `body` as `main`'s body, which must not fail.
 func output(_ body: String) -> String {
     let result = run("func main() {\n\(body)\n}")
@@ -64,13 +57,6 @@ private func runEmptyMain(options: [String] = [], linkTools: LinkTools) throws -
         let source = try save("func main() {}", as: "main.rayo", in: directory)
         return Driver.run(["run"] + options + [source], compiler: compiler, linkTools: linkTools)
     }
-}
-
-/// Writes a shell script running `body` to `url`, makes it executable, and returns `url`.
-private func script(_ body: String, at url: URL) throws -> URL {
-    try Data("#!/bin/sh\n\(body)\n".utf8).write(to: url)
-    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
-    return url
 }
 
 /// What `executable` writes to its standard output, once it exits with 0.
@@ -195,8 +181,8 @@ struct BuildTests {
             _ = try script("touch '\(ran.path)'\nexit 1", at: directory.appendingPathComponent("ld"))
             let path = ProcessInfo.processInfo.environment["PATH", default: ""]
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", "--linker=platform", source],
-                                    environment: ["PATH": "\(directory.path):\(path)"], compiler: compiler)
+            let result = Driver.run(["run", "--linker=platform", source], compiler: compiler,
+                                    environment: ["PATH": "\(directory.path):\(path)"])
             #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
             #expect(!FileManager.default.fileExists(atPath: ran.path))
         }
@@ -246,7 +232,7 @@ struct BuildTests {
     func attached() throws {
         try withTemporaryDirectory { directory in
             let source = try save("func main() { print(1 / 0) }", as: "main.rayo", in: directory)
-            let result = Driver.run(["run", source], programOutput: .inherited, compiler: compiler)
+            let result = Driver.run(["run", source], compiler: compiler, processOutput: .inherited)
             #expect(result == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "", errors: ""))
         }
     }
