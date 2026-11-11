@@ -5,7 +5,7 @@ description: "Implement an issue, spec or set of tickets end to end: build it te
 
 Implement the work described by the spec, tickets or issue you were given. Branches, pull requests and reviews follow the repo's rules.
 
-Work on a branch of your own. Use /tdd where possible, at pre-agreed seams.
+Work on a branch of your own, from the newest main branch on the remote. Use /tdd where possible, at pre-agreed seams.
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 
