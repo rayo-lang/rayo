@@ -20,14 +20,25 @@ func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Fol
     // rewrite an operation LLVM leaves undefined before it sees the other.
     try module.ready(exporting: ["f", "g"])
 
-    // Where the optimiser left `f` no `ret`, every path through it reaches behaviour LLVM leaves undefined.
-    guard let returned = returnedValue(of: caller.value) else { return .undefined }
-    // An Int constant is the result the optimiser computed.
-    if LLVMIsAConstantInt(returned) != nil { return .defined(LLVMConstIntGetSExtValue(returned)) }
-    // LLVM counts poison as undef, and either is a result it leaves undefined.
-    if LLVMIsUndef(returned) != 0 { return .undefined }
-    // Anything else is a result the optimiser couldn't compute.
-    return .unfolded
+    // `f` and its instructions belong to the module, so it lives until they have been read.
+    return withExtendedLifetime(module) { folding(returnedBy: caller.value) }
+}
+
+/// What the optimiser folds `function`'s result to.
+private func folding(returnedBy function: LLVMValueRef) -> Folding {
+    // Where the optimiser left `function` no `ret`, every path through it reaches behaviour LLVM leaves undefined.
+    guard let returned = returnedValue(of: function) else { return .undefined }
+
+    return if LLVMIsAConstantInt(returned) != nil {
+        // An Int constant is the result the optimiser computed.
+        .defined(LLVMConstIntGetSExtValue(returned))
+    } else if LLVMIsUndef(returned) != 0 {
+        // LLVM counts poison as undef, and either is a result it leaves undefined.
+        .undefined
+    } else {
+        // Anything else is a result the optimiser couldn't compute.
+        .unfolded
+    }
 }
 
 /// The value the first `ret` among `function`'s blocks returns, or nil where none of its blocks returns.

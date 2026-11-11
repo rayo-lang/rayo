@@ -6,8 +6,17 @@ import RayoSema
 struct ProgramEmitter {
     let module: ModuleBuilder
     let runtime: Runtime
+    let types: LLVMTypes
     let sourcePath: String
     let checksOverflow: Bool
+
+    init(module: ModuleBuilder, runtime: Runtime, sourcePath: String, checksOverflow: Bool) {
+        self.module = module
+        self.runtime = runtime
+        types = LLVMTypes(in: module)
+        self.sourcePath = sourcePath
+        self.checksOverflow = checksOverflow
+    }
 
     /// Defines the program's functions in the module.
     func emit(_ program: IRProgram) {
@@ -27,16 +36,7 @@ struct ProgramEmitter {
         let function = program.functions[id.index]
         // A name with parentheses is none that the runtime or the C library defines or calls.
         let name = id == program.main ? "rayo.main" : function.name
-        let parameters = function.locals.prefix(function.parameterCount).map { llvmType($0.type) }
-        return module.addFunction(name, taking: parameters, returning: llvmType(function.result))
-    }
-
-    /// The LLVM type that holds a value of `type`.
-    func llvmType(_ type: RayoType) -> LLVMTypeRef {
-        switch type {
-        case .int: return module.int64
-        case .bool: return module.bool
-        case .void: return module.void
-        }
+        let parameters = function.locals.prefix(function.parameterCount).map { types.llvmType($0.type) }
+        return module.addFunction(name, taking: parameters, returning: types.llvmType(function.result))
     }
 }

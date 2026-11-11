@@ -5,16 +5,23 @@ import RayoSema
 import RayoSource
 import Testing
 
-/// Compiles `program` the way a debug or a release build does.
-func compile(_ program: IRProgram, debug: Bool) throws(LLVMError) -> [UInt8] {
-    try LLVMEmitter.objectCode(for: program, sourcePath: "main.rayo", checksOverflow: debug, optimizes: !debug)
+/// Compiles `program` the way `build` does.
+func compile(_ program: IRProgram, for build: Build) throws(LLVMError) -> [UInt8] {
+    try LLVMEmitter.objectCode(
+        for: program, sourcePath: "main.rayo", checksOverflow: build == .debug, optimizes: build == .release,
+    )
 }
 
 /// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
 func function(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
-    let main = IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary),
-                          blocks: blocks)
-    return IRProgram(functions: [main], main: FunctionID(index: 0))
+    IRProgram(functions: [mainFunction(locals: locals, blocks)], main: FunctionID(index: 0))
+}
+
+/// A `main` that holds temporaries of `locals`' types and is made of `blocks`.
+func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> IRFunction {
+    IRFunction(
+        name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary), blocks: blocks,
+    )
 }
 
 /// An operand that reads the local `index`.

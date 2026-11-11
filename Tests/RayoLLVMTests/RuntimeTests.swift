@@ -4,23 +4,22 @@ import RayoLLVM
 import RayoSema
 
 struct RuntimeTests {
-    @Test("a program that panics defines the runtime's panic once and leaves no runtime symbol undefined")
-    func panicLinked() throws {
-        let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), debug: true)
+    @Test
+    func `a program that panics defines the runtime's panic once and leaves no runtime symbol undefined`() throws {
+        let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), for: .debug)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
         // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
         // counted.
-        #expect(try symbols(["--defined-only"], in: dividesByZero).filter { $0.hasSuffix("rayo.panic") }.count == 1)
+        #expect(try symbols(["--defined-only"], in: dividesByZero).count(where: { $0.hasSuffix("rayo.panic") }) == 1)
     }
 
-    @Test("an object exports only the C entry point, in debug and in release", arguments: [true, false])
-    func exportsOnlyMain(debug: Bool) throws {
-        let objectCode = try compile(printing(.use(.constant(.int(42)))), debug: debug)
+    @Test(arguments: Build.allCases)
+    func `an object exports only the C entry point, in debug and in release`(build: Build) throws {
+        let objectCode = try compile(printing(.use(.constant(.int(42)))), for: build)
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
-    @Test("a program's own functions are defined in its object, and none is exported")
-    func programFunctionsHidden() throws {
+    @Test func `a program's own functions are defined in its object, and none is exported`() throws {
         let answer = IRFunction(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
             BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
         ])
@@ -30,16 +29,15 @@ struct RuntimeTests {
                 statement(printing: read(0)),
             ], terminator: .return(nil)),
         ])
-        let objectCode = try compile(IRProgram(functions: [main, answer], main: FunctionID(index: 0)), debug: true)
+        let objectCode = try compile(IRProgram(functions: [main, answer], main: FunctionID(index: 0)), for: .debug)
         #expect(try symbols(["--defined-only"], in: objectCode).contains { $0.hasSuffix("answer()") })
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
-    @Test("a release build drops the runtime code a program doesn't call, and a debug build keeps it")
-    func unusedRuntimeDropped() throws {
+    @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
         let empty = function(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
-        #expect(try symbols([], in: compile(empty, debug: true)).contains { $0.hasSuffix("rayo.panic") })
-        #expect(try symbols([], in: compile(empty, debug: false)).filter { $0.contains("rayo.") } == [])
+        #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix("rayo.panic") })
+        #expect(try symbols([], in: compile(empty, for: .release)).filter { $0.contains("rayo.") } == [])
     }
 }
 

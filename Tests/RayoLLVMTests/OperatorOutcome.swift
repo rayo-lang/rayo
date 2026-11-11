@@ -16,8 +16,7 @@ enum OperatorOutcome: Equatable {
 }
 
 /// What `left op right` comes to on two Ints, emitted as `build` does, and run in this process.
-func outcome(of op: BinaryOperator, _ left: Int64, _ right: Int64,
-             in build: OperatorModule.Build) throws -> OperatorOutcome {
+func outcome(of op: BinaryOperator, _ left: Int64, _ right: Int64, in build: Build) throws -> OperatorOutcome {
     try outcome(left, right, on: .ints, in: build) { emit, a, b in emit(op, a, b) }
 }
 
@@ -27,7 +26,7 @@ func outcome(of op: BinaryOperator, _ left: Bool, _ right: Bool) throws -> Opera
 }
 
 /// What `op operand` comes to on an Int, emitted as `build` does, and run in this process.
-func outcome(of op: UnaryOperator, _ operand: Int64, in build: OperatorModule.Build) throws -> OperatorOutcome {
+func outcome(of op: UnaryOperator, _ operand: Int64, in build: Build) throws -> OperatorOutcome {
     try outcome(operand, 0, on: .ints, in: build) { emit, a, _ in emit(op, a) }
 }
 
@@ -38,17 +37,19 @@ func outcome(of op: UnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
 
 /// What `expression` comes to on an Int in a release build: emitted where overflow isn't checked, optimised as a
 /// release build is, and run on `operand` in this process.
-func releaseOutcome(of operand: Int64,
-                    _ expression: (ExpressionEmitter, LLVMValueRef) -> LLVMValueRef) throws -> OperatorOutcome {
+func releaseOutcome(
+    of operand: Int64,
+    _ expression: (ExpressionEmitter, LLVMValueRef) -> LLVMValueRef,
+) throws -> OperatorOutcome {
     try outcome(operand, 0, on: .ints, in: .release) { emit, a, _ in expression(emit, a) }
 }
 
 /// Emits a function of two operands, as `build` does, whose result is the value `expression` makes of them, and
 /// runs it on `left` and `right` in this process.
-private func outcome(_ left: Int64, _ right: Int64, on operands: OperatorModule.Operands,
-                     in build: OperatorModule.Build,
-                     _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef) throws
-    -> OperatorOutcome {
+private func outcome(
+    _ left: Int64, _ right: Int64, on operands: OperatorModule.Operands, in build: Build,
+    _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef,
+) throws -> OperatorOutcome {
     // Emit `f`, and ready the module as the build does.
     let module = try OperatorModule(for: build)
     let (_, givesBool) = module.define("f", on: operands, expression)
@@ -56,8 +57,8 @@ private func outcome(_ left: Int64, _ right: Int64, on operands: OperatorModule.
 
     // Run `f` in this process, and read what it came to as the type it gave.
     let jit = try InProcessJIT(llvmIR: module.llvmIR)
-    switch try jit.call("f", left, right) {
-    case .returned(let value): return givesBool ? .bool(value != 0) : .int(value)
-    case .panicked(let message): return .panic(message)
+    return switch try jit.call("f", left, right) {
+    case .returned(let value): givesBool ? .bool(value != 0) : .int(value)
+    case .panicked(let message): .panic(message)
     }
 }

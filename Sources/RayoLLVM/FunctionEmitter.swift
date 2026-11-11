@@ -24,6 +24,7 @@ struct FunctionEmitter {
 
     private var module: ModuleBuilder { program.module }
     private var builder: LLVMBuilderRef { module.builder }
+    private var types: LLVMTypes { program.types }
 
     mutating func emit() {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
@@ -58,7 +59,7 @@ struct FunctionEmitter {
     private func slotType(of local: LocalID) -> LLVMTypeRef {
         let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
-        return program.llvmType(type)
+        return types.llvmType(type)
     }
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
@@ -134,15 +135,15 @@ struct FunctionEmitter {
         switch operand {
         // An Int constant needs no instruction: it is an `i64` holding the Int's bits.
         case .constant(.int(let value)):
-            return module.constant(value)
+            module.constant(value)
 
         // A Bool constant needs no instruction either: it is an `i1`, 1 for true and 0 for false.
         case .constant(.bool(let value)):
-            return module.constant(value)
+            module.constant(value)
 
         // A read or a move loads the local from its slot; a move leaves the slot as it is, unread until assigned again.
         case .read(let place), .move(let place):
-            return load(place.local)
+            load(place.local)
         }
     }
 
@@ -150,25 +151,23 @@ struct FunctionEmitter {
     /// when it has none.
     private func compute(_ rvalue: Rvalue, at range: SourceRange) -> LLVMValueRef? {
         switch rvalue {
-        case .use(let operand): return read(operand)
-        case .unary(let op, let operand): return operators.emit(op, on: read(operand), at: range)
-        case .binary(let op, let left, let right): return operators.emit(op, read(left), read(right), at: range)
-        case .call(let callee, let arguments): return call(callee, passing: arguments.map { read($0) })
+        case .use(let operand): read(operand)
+        case .unary(let op, let operand): operators.emit(op, on: read(operand), at: range)
+        case .binary(let op, let left, let right): operators.emit(op, read(left), read(right), at: range)
+        case .call(let callee, let arguments): call(callee, passing: arguments.map { read($0) })
         }
     }
 
     /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing.
     private func call(_ callee: Callee, passing arguments: [LLVMValueRef]) -> LLVMValueRef? {
-        switch callee {
-        // The prelude's `print` calls the runtime's, and returns nothing.
-        case .printInt:
-            module.call(program.runtime.printInt, [arguments[0]])
-            return nil
-
-        // A call of one of the program's functions returns what the function does, unless that is nothing.
-        case .function(let id):
-            let result = module.call(functions[id.index], arguments)
-            return LLVMTypeOf(result) == module.void ? nil : result
+        // Call the LLVM function that `callee` names: the prelude's `print` is the runtime's.
+        let function = switch callee {
+        case .printInt: program.runtime.printInt
+        case .function(let id): functions[id.index]
         }
+        let result = module.call(function, arguments)
+
+        // A call gives no value where its function returns nothing.
+        return LLVMTypeOf(result) == types.llvmType(.void) ? nil : result
     }
 }
