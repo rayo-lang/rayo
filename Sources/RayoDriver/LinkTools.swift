@@ -14,14 +14,16 @@ public struct LinkTools: Sendable {
 
     /// The clang and LLD of the LLVM install that `rayo` was built against.
     public static let installed = LinkTools(
-        clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent("clang"),
+        clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(executableName("clang")),
         lld: URL(fileURLWithPath: LLVMInstall.lldDirectory).appendingPathComponent(hostLLD))
 
     #if canImport(Darwin)
     private static let hostLLD = "ld64.lld"
     #elseif os(Linux)
     private static let hostLLD = "ld.lld"
+    #elseif os(Windows)
+    private static let hostLLD = "lld-link.exe"
     #else
-    #error("rayo links with LLD only on macOS and Linux")
+    #error("rayo links with LLD only on macOS, Linux and Windows")
     #endif
 }

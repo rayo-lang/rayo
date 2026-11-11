@@ -120,7 +120,7 @@ public enum Driver {
     public static func compiler(in environment: [String: String], beside executable: URL) -> URL {
         // `RAYOC` names the compiler to use.
         if let path = environment["RAYOC"], !path.isEmpty { return URL(fileURLWithPath: path) }
-        return executable.deletingLastPathComponent().appendingPathComponent("rayoc")
+        return executable.deletingLastPathComponent().appendingPathComponent(executableName("rayoc"))
     }
 
     /// The command an invocation asks for, run on the file it names, with the host's tools.

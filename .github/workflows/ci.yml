@@ -224,6 +224,66 @@ jobs:
           platform: macos
           llvm-version: ${{ steps.brew.outputs.llvm }}
 
+  windows:
+    name: Test on Windows
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    # Visual Studio 2022 is the release Swift's Windows install names, with its C runtime and Windows SDK.
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      # The exact Swift build to install, of SWIFT_RELEASE; Swift's Windows installer names one.
+      SWIFT_BUILD: 6.4.2
+      # The exact LLVM build to install, of LLVM_MAJOR_VERSION. Only the archive LLVM publishes for Windows holds
+      # the headers rayoc builds against: its installer and the package managers that use it hold none.
+      LLVM_BUILD: 23.1.5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: compnerd/gha-setup-swift@9ff1ee4c44888c5817fc14d1b257ac8cabb4935f # v0.5.1
+        with:
+          swift-version: swift-${{ env.SWIFT_BUILD }}-release
+          swift-build: ${{ env.SWIFT_BUILD }}-RELEASE
+
+      - name: Restore LLVM
+        id: llvm-archive
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/llvm
+          key: llvm-${{ env.LLVM_BUILD }}-windows-${{ runner.arch }}
+      - name: Fetch LLVM
+        if: steps.llvm-archive.outputs.cache-hit != 'true'
+        run: |
+          name="clang+llvm-$LLVM_BUILD-x86_64-pc-windows-msvc"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_BUILD/$name.tar.xz"
+          mkdir -p "$RUNNER_TEMP/llvm"
+          tar -xf "$RUNNER_TEMP/llvm.tar.xz" -C "$RUNNER_TEMP/llvm" --strip-components=1
+      # Only a push to main saves LLVM, as it does the build, so pull requests share main's one copy.
+      - name: Save LLVM
+        if: github.event_name == 'push' && steps.llvm-archive.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/llvm
+          key: ${{ steps.llvm-archive.outputs.cache-primary-key }}
+      # rayoc builds against the archive, and loads its LLVM-C.dll from the search path, ahead of the LLVM the
+      # runner's image installs.
+      - name: Use LLVM
+        run: |
+          llvm=$(cygpath -m "$RUNNER_TEMP/llvm")
+          echo "LLVM_PREFIX=$llvm" >> "$GITHUB_ENV"
+          cygpath -w "$llvm/bin" >> "$GITHUB_PATH"
+
+      - uses: ./.github/actions/swift-test
+        with:
+          platform: windows
+          llvm-version: ${{ env.LLVM_BUILD }}
+          # The driver's tests link and run programs, which the toolchain doesn't do on Windows yet.
+          arguments: --skip RayoDriverTests
+
   docs:
     name: Check docs
     needs: changes

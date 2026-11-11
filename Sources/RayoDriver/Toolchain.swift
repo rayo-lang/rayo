@@ -4,6 +4,8 @@ import Glibc
 import Musl
 #elseif canImport(Darwin)
 import Darwin
+#elseif canImport(CRT)
+import CRT
 #endif
 import Foundation
 import RayoLLVMInstall
@@ -182,6 +184,7 @@ struct Toolchain {
 
     /// Runs `executable` to completion on `rayo`'s own standard input, output and error, and returns how it ended.
     private func runAttached(_ executable: URL, arguments: [String]) throws(CommandError) -> Termination {
+        #if !os(Windows)
         // An interrupt from the terminal reaches the process and `rayo` alike. `rayo` outlives it, so that
         // it still removes its temporary files; a handled signal, unlike an ignored one, is reset in the process.
         let interrupt = signal(SIGINT) { _ in }
@@ -190,6 +193,7 @@ struct Toolchain {
             signal(SIGINT, interrupt)
             signal(SIGQUIT, quit)
         }
+        #endif
         return try runToCompletion(newProcess(executable, arguments: arguments))
     }
 
