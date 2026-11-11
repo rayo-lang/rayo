@@ -10,7 +10,7 @@
 
 ### Skill sources
 
-`code-comments`, `code-design`, `code-style` and `create-pr` are this repo's own. The rest are copied from `mattpocock/skills` and carry local edits: read `docs/agents/skills.md` before updating or editing them.
+`code-comments`, `code-design`, `code-style`, `create-pr` and `implement-epic` are this repo's own. The rest are copied from `mattpocock/skills` and carry local edits: read `docs/agents/skills.md` before updating or editing them.
 
 ### Issue tracker
 

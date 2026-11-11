@@ -1,0 +1,5 @@
+interface:
+  display_name: "Implement Epic"
+  short_description: "Implement an epic's sub-issues in parallel lanes"
+policy:
+  allow_implicit_invocation: false
