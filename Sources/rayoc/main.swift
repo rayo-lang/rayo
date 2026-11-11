@@ -11,7 +11,8 @@ import RayoCompiler
 
 /// The C library's descriptor for standard error.
 #if os(Windows)
-let standardError: Int32 = 2 // The Windows C runtime numbers its standard descriptors as POSIX does.
+// The Windows C runtime numbers its standard descriptors as POSIX does.
+let standardError: Int32 = 2
 #else
 let standardError = STDERR_FILENO
 #endif
@@ -40,9 +41,10 @@ func writeFile(_ path: String, _ bytes: [UInt8]) -> Bool {
 /// Opens the file at `path` as `fopen` does with `mode`, or returns nil where it can't.
 func openFile(_ path: String, mode: String) -> UnsafeMutablePointer<FILE>? {
     #if os(Windows)
-    // `fopen` reads a path in the system's code page, which can't hold every name; `_wfopen` reads UTF-16.
+    // `fopen` reads a path in the system's code page, which can't hold every name; `_wfsopen` reads UTF-16. It
+    // shares the file as `fopen` does, where `_wfopen_s` would keep every other process from opening it meanwhile.
     path.withCString(encodedAs: UTF16.self) { path in
-        mode.withCString(encodedAs: UTF16.self) { mode in _wfopen(path, mode) }
+        mode.withCString(encodedAs: UTF16.self) { mode in _wfsopen(path, mode, _SH_DENYNO) }
     }
     #else
     fopen(path, mode)
