@@ -1,2 +1,2 @@
-/// Thrown by a parser that met a syntax error, once the error is in the token stream's diagnostics.
+/// Thrown by the parser once it has reported the syntax error it met.
 struct ParseFailure: Error {}
