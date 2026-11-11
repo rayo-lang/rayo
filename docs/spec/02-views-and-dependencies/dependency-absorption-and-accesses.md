@@ -140,7 +140,7 @@ let f = { [move s] in s.view }     // error: the result views an owned capture
 **Parameters not declared `keep` are call-scoped**, lent only for one call, so a closure can return what depends on one, but can't store it:
 
 ```swift
-let names = entries.map { $0.name.view }   // the closure returns what depends on its parameter; storing it would be an error
+let names = alloc entries.map { $0.name.view }   // the closure returns what depends on its parameter; storing it would be an error
 log("\(names.count) names")
 ```
 

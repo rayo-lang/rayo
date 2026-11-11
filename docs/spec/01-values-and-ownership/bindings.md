@@ -114,14 +114,14 @@ func clamp(_ n: Int) -> Int {
 - **Names declared outside the body.** The rule covers only locals and parameters. A local may share the name of a function, a field or a global, and lookup decides which one each use reaches ([05](../05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members)).
 
 ```swift
-func pair(_ a: Int, _ a: Bool) { … }                  // error: 'a' is already declared, as a parameter
-let (lo, lo) = bounds                                 // error: 'lo' is already declared, in this pattern
+func pair(_ a: Int, _ a: Bool) { … }                              // error: 'a' is already declared, as a parameter
+let (lo, lo) = bounds                                             // error: 'lo' is already declared, in this pattern
 
-func names(_ entries: Span<Entry>) -> List<StringView> {
-    entries.map { entries in entries.name.view }      // error: 'entries' is already declared, as a parameter
+alloc func names(_ entries: Span<Entry>) -> List<StringView> {
+    alloc entries.map { entries in entries.name.view }            // error: 'entries' is already declared, as a parameter
 }
-let ready = groups.map { $0.items.filter { $0.ok } }  // error: '$0' is already declared, by the outer closure
-let kept = groups.map { g in g.items.filter { $0.ok } }   // fine: the outer closure names its parameter
+let ready = alloc groups.map { alloc $0.items.filter { $0.ok } }  // error: '$0' is already declared, by the outer closure
+let kept = alloc groups.map { g in alloc g.items.filter { $0.ok } }   // fine: the outer closure names its parameter
 
 func report(_ count: Int) {
     func double(_ count: Int) -> Int { count * 2 }    // fine: 'double' sees none of report's parameters

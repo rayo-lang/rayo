@@ -43,8 +43,8 @@ makeHandler { cfg } { event in log(event) }       // error: a trailing closure a
 **In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
 ```swift
-for x in items.filter { $0.alive } { use(x) }     // error: '{ $0.alive }' is read as the loop's body
-for x in items.filter({ $0.alive }) { use(x) }   // the closure is inside the call's parentheses
+for x in alloc items.filter { $0.alive } { use(x) }     // error: '{ $0.alive }' is read as the loop's body
+for x in alloc items.filter({ $0.alive }) { use(x) }   // the closure is inside the call's parentheses
 ```
 
 **These are the expressions that a block follows:**

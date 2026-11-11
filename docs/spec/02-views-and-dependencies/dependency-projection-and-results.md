@@ -64,8 +64,8 @@ Every other type is **unsealed**. Each item above is a closure or a function val
 **What the closure carries always flows.** So this compiles:
 
 ```swift
-func names(_ t: Span<Token>) -> List<StringView> {
-    t.map { copy $0.text }       // the list depends on what 't' views, not on the literal
+alloc func names(_ t: Span<Token>) -> List<StringView> {
+    alloc t.map { copy $0.text }   // the list depends on what 't' views, not on the literal
 }
 ```
 

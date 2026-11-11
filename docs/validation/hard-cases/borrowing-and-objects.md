@@ -34,8 +34,8 @@ work.append(&data[0..<n])                    // a quicksort's worklist: the firs
 while var s = work.popLast() { … }           // each pass pops the next pending range
 lexer.lex(into: &tokens)                     // appends tokens that view the lexer's source
 fill(&keys, &values)                         // fills two lists of views
-let texts = t.map { copy $0.text }           // 't' is a Span<Token>
-let labels = entries.map { $0.name.view }    // a view of each entry's name
+let texts = alloc t.map { copy $0.text }     // 't' is a Span<Token>
+let labels = alloc entries.map { $0.name.view }   // a view of each entry's name
 for row in rows { spans.append(row.span) }   // 'rows' is a List<[4 of Float]>
 copyAll(from: src, into: &dst)               // copies the views that 'src' holds into 'dst'
 ```

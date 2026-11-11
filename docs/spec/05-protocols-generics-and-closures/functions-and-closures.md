@@ -150,11 +150,11 @@ func use(_ f: (Float, Float) -> Float) { … }
 ```swift
 enemies.popLast()                 // error: the popped enemy is never used
 _ = enemies.popLast()             // fine: dropped on purpose
-scores.sorted()                   // error: a sorted copy, never used; 'scores.sort()' sorts in place
+alloc scores.sorted()             // error: a sorted copy, never used; 'scores.sort()' sorts in place
 let saved = save(level)           // error if no code reads 'saved': its error would be lost
 ```
 
-**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
+**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `alloc x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
 
 **A value is unused when it is:**
 
@@ -282,7 +282,7 @@ A closure can't keep what it is lent for one call, such as the data behind a loc
 ```swift
 m.lock { d in kept = d.items.span }               // error: 'd' is lent only for the call
 forEachLine(src.view) { lines.append(copy $0) }   // fine: forEachLine's closure takes a 'keep' parameter
-let names = entries.map { $0.name.view }          // fine: the closure returns a view of its parameter, and keeps none
+let names = alloc entries.map { $0.name.view }    // fine: the closure returns a view of its parameter, and keeps none
 ```
 
 **Closure parameters are call-scoped.** Nothing that depends on one may be stored into the closure's captures, by rule 5 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)) for a closure body. A call absorbs nothing into the captures, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A closure may still return what depends on a parameter, as the `map` above does. The call's result and `mutable` arguments still depend on what the closure captures, since the closure is the call's `self`.
