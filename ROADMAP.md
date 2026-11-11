@@ -6,7 +6,7 @@ Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` build
 
 **A version is done when every feature it lists runs end to end, and its proof program shows it.** The proof program is one Rayo program, `examples/v0.N/<name>.rayo`, with its expected output beside it in `<name>.out`. A driver test runs it, in debug and in release builds, on every platform CI tests: macOS arm64, Linux x64 and Windows x64. The driver tests check each feature in detail, so the proof program only puts the features to work together. The other programs in `examples/` show the whole language, which `rayoc` cannot compile yet, and no test runs them.
 
-**Each version lists the features still to do, and the ones that already run.** The pull request that finishes a feature moves it from the first list to the second.
+**Each version lists the features still to do, and the ones that already run.** The pull request that finishes a feature moves it from the first list to the second, and starts the second, headed as v0.1's is, when the version has none yet.
 
 **A half version, such as v0.1.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
 
@@ -71,6 +71,7 @@ These come after v0.3, in an order not yet decided:
 - views such as `Span`, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md);
 - heap storage: allocators, generics, and owning collections such as `List`;
 - text;
+- field defaults;
 - enums and optionals;
 - the other number types, and implicit widening between them;
 - the wrapping, saturating, bitwise and shift operators;
