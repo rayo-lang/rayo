@@ -47,7 +47,10 @@ struct FunctionEmitter {
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
     private func allocateSlots(with builder: borrowing Builder) -> [PointerValue] {
-        function.locals.indices.map { builder.allocate(slotType(of: LocalID(index: $0)), alignment: alignment(of: $0)) }
+        function.locals.indices.map { index in
+            let local = LocalID(index: index)
+            return builder.allocate(slotType(of: local), alignment: alignment(of: local))
+        }
     }
 
     /// Stores each argument in its parameter's slot.
@@ -65,19 +68,19 @@ struct FunctionEmitter {
         return types.llvmType(type)
     }
 
-    /// The alignment, in bytes, of the slot of the local at `index`, which is its type's.
-    private func alignment(of index: Int) -> Int {
-        types.alignment(of: function.locals[index].type)
+    /// The alignment, in bytes, of `local`'s slot, which is its type's.
+    private func alignment(of local: LocalID) -> Int {
+        types.alignment(of: function.locals[local.index].type)
     }
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
     private func load(_ local: LocalID, with builder: borrowing Builder) -> AnyValue {
-        builder.load(slotType(of: local), from: slots[local.index], alignment: alignment(of: local.index))
+        builder.load(slotType(of: local), from: slots[local.index], alignment: alignment(of: local))
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
     private func store(_ value: AnyValue, in local: LocalID, with builder: borrowing Builder) {
-        builder.store(value, to: slots[local.index], alignment: alignment(of: local.index))
+        builder.store(value, to: slots[local.index], alignment: alignment(of: local))
     }
 
     private func emit(
@@ -123,7 +126,7 @@ struct FunctionEmitter {
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let condition, let then, let otherwise):
-            // The checker makes every condition a Bool, and LLVM's verifier rejects a module where one isn't.
+            // The checker makes every condition a Bool.
             let condition = IntValue<I1>(unchecked: read(condition, in: program).ref)
             program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
@@ -161,12 +164,17 @@ struct FunctionEmitter {
     /// when it has none.
     private func compute(_ rvalue: Rvalue, at range: SourceRange, in program: borrowing ProgramEmitter) -> AnyValue? {
         switch rvalue {
+        // A use is its operand's value.
         case .use(let operand):
             read(operand, in: program)
+
+        // An operator computes on its operands' values.
         case .unary(let op, let operand):
             operators.emit(op, on: read(operand, in: program), at: range, in: program)
         case .binary(let op, let left, let right):
             operators.emit(op, read(left, in: program), read(right, in: program), at: range, in: program)
+
+        // A call passes its arguments' values.
         case .call(let callee, let arguments):
             call(callee, passing: arguments.map { read($0, in: program) }, with: program.builder)
         }

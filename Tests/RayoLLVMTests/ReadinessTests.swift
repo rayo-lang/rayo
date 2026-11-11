@@ -10,6 +10,8 @@ struct ReadinessTests {
             defineTwice(in: programModule.emitter)
             let ir = Array("define void @twice() {\n  ret void\n}\n".utf8)
             let other = try programModule.emitter.context.parseModule(ir, named: "other.ll")
+            other.target = programModule.emitter.module.target
+            other.dataLayout = programModule.emitter.module.dataLayout
             // The link consumes `other`, which a closure of `#expect(throws:)` can't.
             var linkFailed = false
             do { try programModule.emitter.module.link(other) } catch { linkFailed = true }

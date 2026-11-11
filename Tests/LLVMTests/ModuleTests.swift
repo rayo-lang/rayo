@@ -78,6 +78,48 @@ struct ModuleTests {
         #expect(function.text.hasPrefix("define internal void @helper() {"))
     }
 
+    @Test func `hiding a module's definitions keeps out of its symbols all but the exported functions`() throws {
+        let bench = Workbench()
+        for name in ["exported", "helper"] {
+            _ = bench.function(named: name, returning: bench.context.voidType)
+            bench.builder.returnVoid()
+        }
+        let declared = bench.module.addFunction(
+            named: "declared", type: bench.context.functionType(returning: bench.context.voidType, taking: []),
+        )
+        _ = bench.module.addGlobal(named: "message", initializer: bench.int64.constant(1))
+        _ = bench.module.addGlobal(named: "llvm.marker", initializer: bench.int64.constant(2))
+
+        // A function the module only declares, and a global of LLVM's own, keep their linkage.
+        bench.module.hideDefinitions(except: ["exported"])
+        let exported = bench.module.function(named: "exported")
+        let helper = bench.module.function(named: "helper")
+        #expect(try #require(exported).text.hasPrefix("define void @exported()"))
+        #expect(try #require(helper).text.hasPrefix("define internal void @helper()"))
+        #expect(declared.text.hasPrefix("declare void @declared()"))
+        #expect(bench.module.text.contains("@message = private global i64 1\n"))
+        #expect(bench.module.text.contains("@llvm.marker = global i64 2\n"))
+    }
+
+    @Test func `a module throws the errors LLVM reported in its context, and nothing where there are none`() throws {
+        let bench = Workbench()
+        try bench.module.checkReportedErrors()
+        _ = bench.function(named: "twice", returning: bench.context.voidType)
+        bench.builder.returnVoid()
+        let other = try bench.context.parseModule(Array("define void @twice() {\n  ret void\n}\n".utf8),
+                                                  named: "other.ll")
+        // The link consumes `other`, which a closure of `#expect(throws:)` can't.
+        do { try bench.module.link(other) } catch {}
+
+        // A closure of `#expect(throws:)` can't take the workbench, which isn't copyable.
+        var thrown: LLVMError?
+        do { try bench.module.checkReportedErrors() } catch { thrown = error }
+        #expect(thrown == LLVMError(message: """
+            LLVM reported errors:
+            Linking globals named 'twice': symbol multiply defined!
+            """))
+    }
+
     @Test func `a module's target and data layout are those it is given`() {
         let bench = Workbench()
         bench.module.target = "x86_64-unknown-linux-gnu"

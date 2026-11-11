@@ -56,8 +56,10 @@ struct OperatorEmitter {
         // Where it is, the intrinsic flags an overflow beside the result, and an overflow panics. The intrinsic
         // returns a pair of an Int and a Bool, so its call always gives one.
         let intrinsic = program.module.intrinsic(named: op.intrinsicName, overloadedOn: types.int64)
-        let pair = AggregateValue(program.builder.call(intrinsic, [left, right])!)!
-        panic(if: IntValue<I1>(program.builder.extractValue(from: pair, at: 1))!, .overflow, at: range, in: program)
+        let call = program.builder.call(intrinsic, [left, right])!
+        let pair = AggregateValue(call)!
+        let overflowed = IntValue<I1>(program.builder.extractValue(from: pair, at: 1))!
+        panic(if: overflowed, .overflow, at: range, in: program)
         return IntValue<I64>(program.builder.extractValue(from: pair, at: 0))!
     }
 
@@ -143,16 +145,18 @@ struct OperatorEmitter {
         program.builder.position(atEndOf: continues)
     }
 
-    /// `value` as an Int, which the checker makes every operand of an operator on Ints. LLVM's verifier rejects a
-    /// module where one isn't.
-    private func int(_ value: AnyValue) -> IntValue<I64> {
+    /// `value` as an integer of `Width`, which the checker makes every operand of an operator on Ints or on Bools.
+    /// LLVM's verifier rejects a module where one isn't.
+    private func operand<Width>(_ value: AnyValue, as width: Width.Type) -> IntValue<Width> {
         IntValue(unchecked: value.ref)
     }
 
-    /// `value` as a Bool, which the checker makes every operand of an operator on Bools. LLVM's verifier rejects a
-    /// module where one isn't.
+    private func int(_ value: AnyValue) -> IntValue<I64> {
+        operand(value, as: I64.self)
+    }
+
     private func bool(_ value: AnyValue) -> IntValue<I1> {
-        IntValue(unchecked: value.ref)
+        operand(value, as: I1.self)
     }
 }
 

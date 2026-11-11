@@ -11,16 +11,16 @@ struct Runtime: ~Copyable {
     /// The runtime's files, linked together.
     private let module: Module
 
-    /// Parses the runtime into `program`'s context, and declares in `program`'s module the functions the program
-    /// calls and the constant the runtime reads.
+    /// Parses the runtime into `program`'s context. Declares in `program`'s module the functions the program calls,
+    /// and defines there the constant the runtime reads.
     init(for program: borrowing ProgramEmitter) throws(LLVMError) {
         // Link the runtime's files together, in a module of their own for the program's target, so that it links
         // into the program's.
         let runtime = program.context.makeModule(named: "runtime")
-        Self.target(runtime, like: program.module)
+        Self.matchTarget(of: runtime, to: program.module)
         for file in ProgramRuntime.files {
             let parsed = try program.context.parseModule(file.llvmIR, named: file.name)
-            Self.target(parsed, like: program.module)
+            Self.matchTarget(of: parsed, to: program.module)
             try runtime.link(parsed)
         }
 
@@ -40,7 +40,7 @@ struct Runtime: ~Copyable {
     }
 
     /// Sets `module` to build for `program`'s target and data layout.
-    private static func target(_ module: borrowing Module, like program: borrowing Module) {
+    private static func matchTarget(of module: borrowing Module, to program: borrowing Module) {
         module.target = program.target
         module.dataLayout = program.dataLayout
     }

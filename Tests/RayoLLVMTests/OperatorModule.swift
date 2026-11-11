@@ -22,7 +22,8 @@ struct OperatorModule: ~Copyable {
 
     private let programModule: ProgramModule
     private let types: LLVMTypes
-    /// The operators of the function that `define` is defining.
+    /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
+    /// it has made them.
     private var operators: OperatorEmitter?
 
     init(for build: Build) throws(LLVMError) {
@@ -45,7 +46,7 @@ struct OperatorModule: ~Copyable {
         _ name: String, on operands: Operands, _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
     ) -> (function: Function, givesBool: Bool) {
         // Make the function, and its operators.
-        let function = addFunction(name, taking: [types.int64, types.int64])
+        let function = beginFunction(name, taking: [types.int64, types.int64])
         operators = OperatorEmitter(into: function, types: types, panic: programModule.runtime.panic)
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are.
@@ -54,14 +55,13 @@ struct OperatorModule: ~Copyable {
 
         // Return the result, widened to an Int where it is a Bool.
         let givesBool = IntValue<I1>(value) != nil
-        let result = givesBool ? AnyValue(LLVMBuildZExt(program.builder.ref, value.ref, types.int64.ref, "")!) : value
-        program.builder.return(result)
+        program.builder.return(givesBool ? widened(value) : value)
         return (function, givesBool)
     }
 
     /// Defines `name() -> i64` to return what `function` returns on `left` and `right`.
     func defineCall(_ name: String, of function: Function, _ left: Int64, _ right: Int64) -> Function {
-        let caller = addFunction(name, taking: [])
+        let caller = beginFunction(name, taking: [])
         // Every operator gives a value, so the call does too.
         let result = program.builder.call(function, [types.int64.constant(left), types.int64.constant(right)])!
         program.builder.return(result)
@@ -77,7 +77,6 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `left op right`.
     func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) -> AnyValue {
-        // Only `define` hands the module to an expression, once it has made the function's operators.
         operators!.emit(op, left, right, at: Self.range, in: program)
     }
 
@@ -88,12 +87,11 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `op operand`.
     func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) -> AnyValue {
-        // Only `define` hands the module to an expression, once it has made the function's operators.
         operators!.emit(op, on: operand, at: Self.range, in: program)
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.
-    private func addFunction(_ name: String, taking parameters: [any TypeHandle]) -> Function {
+    private func beginFunction(_ name: String, taking parameters: [any TypeHandle]) -> Function {
         let type = program.context.functionType(returning: types.int64, taking: parameters)
         let function = program.module.addFunction(named: name, type: type)
         program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: function))
@@ -105,5 +103,10 @@ struct OperatorModule: ~Copyable {
         // A Bool is the Int's low bit.
         guard operands == .bools else { return parameter }
         return AnyValue(LLVMBuildTrunc(program.builder.ref, parameter.ref, types.bool.ref, "")!)
+    }
+
+    /// `value`, a Bool, as the Int 0 or 1.
+    private func widened(_ value: AnyValue) -> AnyValue {
+        AnyValue(LLVMBuildZExt(program.builder.ref, value.ref, types.int64.ref, "")!)
     }
 }
