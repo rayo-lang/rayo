@@ -11,12 +11,13 @@ struct InstructionTests {
         #expect(blocks[0].terminator?.opcode == .return)
     }
 
-    @Test func `a block that nothing ends yet has no terminator, and a declared function no blocks`() {
+    @Test func `a block that nothing ends yet has no terminator, and a declared function no blocks`() throws {
         let bench = Workbench()
         let function = bench.function(named: "f", returning: bench.int64)
         let declared = bench.module.addFunction(named: "g", type: function.type)
 
-        #expect(function.blocks.first?.terminator == nil)
+        let entry = try #require(function.blocks.first)
+        #expect(entry.terminator == nil)
         #expect(declared.blocks.isEmpty)
     }
 
@@ -32,8 +33,8 @@ struct InstructionTests {
         let bench = Workbench()
         let instructions = try #require(slotRoundTrip(on: bench).blocks.first).instructions
 
-        // `ret` returns what `load` loads.
         try #require(instructions.count == 4)
+        // `ret` returns what `load` loads.
         #expect(instructions[3].operand(at: 0) == instructions[2].anyValue)
     }
 }
