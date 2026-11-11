@@ -183,10 +183,10 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 ### Strings
 
-**Every value has a size fixed when the program is built**, so it can live on the stack, in a field or in an array. So where text lives follows from when its length is known:
+**Every value has a size fixed when the program is built**, so it can live on the stack, in a field or in an array. So where text lives follows from where it comes from:
 
-- **Text whose length is fixed when the program is built**, such as a plain literal's, is a view of read-only data, a `static StringView` ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
-- **Text whose length is decided at run time needs storage sized at run time**, which lies outside any fixed-size value. A `String` owns that storage, so keeping such text takes `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
+- **Text written in the program**, such as a plain literal's, is a view of read-only data, a `static StringView`, and so is any range of one ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+- **Text made at run time lives in storage made at run time**, which lies outside any fixed-size value. A `String` owns that storage, so keeping such text takes `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)), unless the text is interned as a `Name`, whose interner keeps it for the rest of the run ([above](#collections-and-strings)).
 - **An interpolated literal is never text by itself**, since its length depends on the values it formats. It is a `Formattable` that writes its pieces into a sink, which needs no storage for the whole text (below), and keeping its text is `alloc "…"` ([below](#literals)). A buffer that bounds the length, such as std's `FixedString`, holds such text without the heap.
 
 **A string is UTF-8 bytes, and formatting writes straight to wherever the text is going:**
