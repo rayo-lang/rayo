@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RayoDriver
+import RayoLLVMInstall
 
 /// Marks the bundle these tests build into, so that its place on disk can be found.
 private final class TestBundle {}
@@ -10,7 +11,7 @@ func builtProduct(_ name: String) -> URL {
     let bundle = Bundle(for: TestBundle.self).bundleURL
     // On macOS the tests are an `.xctest` bundle beside the products; elsewhere they are an executable among them.
     let products = bundle.pathExtension == "xctest" ? bundle.deletingLastPathComponent() : bundle
-    return products.appendingPathComponent(name)
+    return products.appendingPathComponent(Executable.fileName(name))
 }
 
 /// Runs the built `rayo` with `arguments` in `directory`, as a user would there, and gives what it exits with and
@@ -28,10 +29,16 @@ func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
         process.executableURL = builtProduct("rayo")
         process.arguments = arguments
         process.currentDirectoryURL = directory
-        process.standardOutput = try FileHandle(forWritingTo: outputFile)
-        process.standardError = try FileHandle(forWritingTo: errorFile)
+        let output = try FileHandle(forWritingTo: outputFile)
+        let errors = try FileHandle(forWritingTo: errorFile)
+        process.standardOutput = output
+        process.standardError = errors
         try process.run()
         process.waitUntilExit()
+
+        // The files are read once this process holds them open no longer.
+        try output.close()
+        try errors.close()
         return CommandResult(exitCode: process.terminationStatus,
                              output: try String(contentsOf: outputFile, encoding: .utf8),
                              errors: try String(contentsOf: errorFile, encoding: .utf8))

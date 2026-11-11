@@ -143,6 +143,8 @@ let package = Package(
             .embedInCode("entry.ll"),
             .embedInCode("print.ll"),
             .embedInCode("panic.ll"),
+            .embedInCode("host-posix.ll"),
+            .embedInCode("host-windows.ll"),
         ]),
         .target(
             name: "RayoLLVM",

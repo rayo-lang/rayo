@@ -35,9 +35,15 @@ public struct ToolStandIn: Codable {
     public func install(at url: URL, running executable: URL) throws {
         try JSONEncoder().encode(self).write(to: Self.descriptionFile(of: url.path))
 
+        #if os(Windows)
+        // Windows makes links only for administrators and in developer mode. A copy is safe there: a process started
+        // meanwhile inherits only the handles marked for it, so none holds the copy open for writing.
+        try FileManager.default.copyItem(at: executable, to: url)
+        #else
         // A link, unlike a copy, is never a file open for writing that a process started meanwhile could hold
         // open, which would keep it from running.
         try FileManager.default.createSymbolicLink(at: url, withDestinationURL: executable)
+        #endif
     }
 
     /// Reads the stand-in installed at `path`.

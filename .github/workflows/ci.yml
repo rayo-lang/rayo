@@ -310,8 +310,6 @@ jobs:
           platform: windows
           llvm-version: ${{ env.LLVM_BUILD }}
           changed-paths: ${{ needs.changes.outputs.code-paths }}
-          # The driver's tests link and run programs, which the toolchain doesn't do on Windows.
-          arguments: --skip RayoDriverTests
 
   docs:
     name: Check docs

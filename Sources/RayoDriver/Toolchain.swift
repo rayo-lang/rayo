@@ -56,7 +56,7 @@ struct Toolchain {
         let linkerArguments = try linkerArguments()
 
         // Have clang link the object file into the executable.
-        let arguments = linkerArguments + [objectFile.path, "-o", executable.path]
+        let arguments = linkerArguments + Self.stackArguments + [objectFile.path, "-o", executable.path]
         let run = try runCapturingOutput(tools.clang, arguments: arguments)
         // A link that clang fails reports what clang wrote, without its last newline.
         if run.termination.exitCode != 0 {
@@ -69,7 +69,7 @@ struct Toolchain {
     func linkAndRun(_ objectFile: URL) throws(CommandError) -> CommandResult {
         try Self.withTemporaryDirectory { directory throws(CommandError) in
             // Link the executable inside the directory, so it goes with the directory once the run ends.
-            let executable = directory.appendingPathComponent("program")
+            let executable = directory.appendingPathComponent(Executable.fileName("program"))
             try link(objectFile, to: executable)
 
             // Run it, and give how it ended and what of its output was captured.
@@ -112,14 +112,27 @@ struct Toolchain {
                     'swift package purge-cache' and build rayo again, or link with --linker=platform
                     """)
             }
+            #if os(Windows)
+            // clang's driver for MSVC takes no --ld-path, and finds a linker that -fuse-ld names by its path under
+            // a name with the target's triple before it. It looks for `lld-link` first in the directories -B names.
+            return ["-fuse-ld=lld", "-B\(tools.lld.deletingLastPathComponent().path)"]
+            #else
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
             return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
+            #endif
         // The platform's linker is found where the platform keeps it.
         case .platform:
+            #if os(Windows)
+            // clang runs the `link.exe` of the Visual Studio whose libraries it links, not one on the search path.
+            return ["-fuse-ld=link"]
+            #else
+            // clang runs the `ld` that --ld-path names, which is where the platform keeps its linker.
             return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
+            #endif
         }
     }
 
+    #if !os(Windows)
     /// Finds the platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld`
     /// where it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
     private func platformLinker() throws(CommandError) -> URL {
@@ -140,6 +153,16 @@ struct Toolchain {
         }
         return linker
     }
+    #endif
+
+    // What every link gives the linker for the size of a program's main thread's stack.
+    #if os(Windows)
+    // Windows reserves 1 MiB where macOS and Linux give 8 MiB, and a debug build's frames are larger on x64 Windows,
+    // which has each call reserve 32 bytes for its callee. A stack of 16 MiB lets a program recurse at least as deep.
+    private static let stackArguments = ["-Wl,/STACK:16777216"]
+    #else
+    private static let stackArguments: [String] = []
+    #endif
 
     /// Whether `url` names a file, not a directory, that can be run.
     private static func isExecutableFile(_ url: URL) -> Bool {
