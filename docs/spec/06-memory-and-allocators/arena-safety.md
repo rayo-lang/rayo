@@ -7,7 +7,7 @@ An arena can free many allocations at once, even when values made from them rema
 ## Arena safety: checked values and checked resets
 
 ```swift
-let levelArena = AllocatorId.register(BlockArena(size: 256.mb))
+let levelArena = Allocator.register(Arena(size: 256.mb))
 var spawns = levelArena.alloc List<Vec3>()
 spawns.append(.zero)
 
@@ -35,7 +35,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 - **Another reset or unregistration that reaches the same memory is still running**, on any thread ([Allocators over other allocators](allocator-implementations.md#allocators-over-other-allocators)). So a reset that a `deinit` calls panics when the reset or unregistration running that `deinit` reaches the same memory.
 - **The id is unregistered** ([below](#unregistering-an-allocator)).
 - **The reset would exceed the arena's reset limit**, which keeps a word from being issued twice ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)).
-- **The registered implementation isn't an `Arena`**, `.heap` included, since `reset()` and `release` ([Releasing a value without destroying it: `TrivialFree`](allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
+- **The registered implementation isn't an `ArenaImpl`**, `.heap` included, since `reset()` and `release` ([Releasing a value without destroying it: `TrivialFree`](allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree)) are arena operations.
 
 **What a reset changes, and what it costs:**
 
@@ -45,7 +45,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 **The runtime carries out a reset, not the arena's implementation.** An arena hands out memory from blocks, each marked with a stamp. A **stamp** is an ordered token that the runtime issues, never the same one to two arenas, so a block's stamp also names its arena. The runtime decides which values are stale by the stamps of the blocks their storage lies in. Registering an arena calls `attachFresh(stamp:)` with its first stamp.
 
-**A reset takes a new stamp `s`, later than every earlier one, and calls the hooks of `Arena` and `Allocator` ([Writing an allocator: `Allocator` and `Arena`](allocator-implementations.md#writing-an-allocator-allocator-and-arena)) in this order:**
+**A reset takes a new stamp `s`, later than every earlier one, and calls the `ArenaImpl` and `WrapperImpl` hooks ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)) in this order:**
 
 1. `attachFresh(stamp: s)`: the arena serves new allocations from spare blocks, which it stamps `s`, or, with none, from new ones from its backing memory.
 2. `backingDidSwitch(stamp: s)` on every wrapper over the arena.
@@ -106,14 +106,14 @@ levelArena.reset()                             // destroys the doors; each deini
 ## Unregistering an allocator
 
 ```swift
-let levelHeap = AllocatorId.register(TlsfHeap(size: 64.mb))
+let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))
 var props = levelHeap.alloc List<Prop>()
 // ... the level runs ...
-AllocatorId.unregister(levelHeap)   // every value still allocated from the heap goes stale
+Allocator.unregister(levelHeap)   // every value still allocated from the heap goes stale
 props.append(p)                     // panics: 'props' came from an unregistered allocator
 ```
 
-**`AllocatorId.unregister(a)` ends an allocator**, of any kind. A heap can't be reset, so unregistering it is how every value it handed out goes stale at once, as `props` does above.
+**`Allocator.unregister(a)` ends an allocator**, of any kind. A heap can't be reset, so unregistering it is how every value it handed out goes stale at once, as `props` does above.
 
 - **It checks first, as a reset does** ([above](#what-a-reset-does)). Like a reset, it makes its values stale before it reads the counts of uses, so an open racing it either fails or is counted. It panics while any thread still uses its memory, or the memory of an allocator unregistered with it, through:
   - an open whose borrow is live;

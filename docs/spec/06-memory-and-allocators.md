@@ -3,8 +3,8 @@
 Values that own heap storage need somewhere to allocate it and a defined way to release it. In Rayo, an allocator names where the storage comes from, every construction that gives a value storage says `alloc`, and an owning value remembers its allocator as it grows and is destroyed. An arena can reclaim many allocations at once, so resetting one also has to account for values and views that may still reach its memory.
 
 ```swift
-let levelHeap = AllocatorId.register(TlsfHeap(size: 64.mb))   // a heap for level data
-let scratch = AllocatorId.register(BlockArena(size: 64.mb))   // an arena for short-lived work
+let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))   // a heap for level data
+let scratch = Allocator.register(Arena(size: 64.mb))   // an arena for short-lived work
 
 var props = levelHeap.alloc List<Prop>()          // an allocator named at the construction
 var names = alloc List<String>()                  // the ambient allocator: .heap here

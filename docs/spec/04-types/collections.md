@@ -273,7 +273,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no allocation;
 - no object;
 - no `Synchronized` value;
-- no `AllocatorId` but `.heap`;
+- no `Allocator` id but `.heap`;
 - no pointer but one into immortal data, as a `StaticString`, a `StaticSpan` or a `Name` holds.
 
 `Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.

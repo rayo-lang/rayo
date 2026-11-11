@@ -70,7 +70,7 @@ Running out of stack, and an allocation that fails in a plain form, end the prog
 
 **Misused allocators:**
 
-- any operation through an unregistered `AllocatorId`, apart from the frees and growths that 06 allows from the `deinit`s its unregistration runs ([06](../06-memory-and-allocators/arena-safety.md#unregistering-an-allocator));
+- any operation through an unregistered `Allocator` id, apart from the frees and growths that 06 allows from the `deinit`s its unregistration runs ([06](../06-memory-and-allocators/arena-safety.md#unregistering-an-allocator));
 - a reset or a `release` through an allocator that isn't an arena, since both are arena operations ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));
 - a reset past the implementation's limit on resets, so that no allocator word is issued twice ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));
 - a reset or an unregistration while anything still uses the memory it would free, or while another that reaches that memory is running ([06](../06-memory-and-allocators/arena-safety.md#what-a-reset-does));

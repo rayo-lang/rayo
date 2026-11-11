@@ -3,8 +3,8 @@
 The game now needs memory at two speeds. Its meshes, the shapes it draws, live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
 
 ```swift
-let levelHeap = AllocatorId.register(TlsfHeap(size: 256.mb))    // the level's data
-let frameArena = AllocatorId.register(BlockArena(size: 64.mb))   // scratch data, freed every frame
+let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))    // the level's data
+let frameArena = Allocator.register(Arena(size: 64.mb))   // scratch data, freed every frame
 
 while running {
     do {
@@ -25,7 +25,7 @@ var levelMeshes = levelHeap.alloc List<Mesh>()   // grows and frees through leve
 var editorMeshes = alloc List<Mesh>()            // the same type, List<Mesh>, from the ambient allocator (below)
 ```
 
-Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `AllocatorId.register` takes an implementation, such as a `BlockArena`, and returns a copyable `AllocatorId`. Since chapter 2, every list has been made with `alloc`, which marks a value that gets heap memory of its own. Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
+Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. Since chapter 2, every list has been made with `alloc`, which marks a value that gets heap memory of its own. Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 
 A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `List<Mesh>` accepts either.
 
@@ -35,7 +35,7 @@ A list, string or box that owns allocated storage is an **owning value**. It rec
 - An **arena** frees nothing on its own. Freeing into it does nothing, and a **reset** frees everything it handed out at once.
 - A **wrapper**, such as a memory budget, passes another allocator's allocations through and keeps accounts of them ([06](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators)).
 
-**You can write an allocator of your own.** Every allocator but `.heap` is library code that implements the `Allocator` protocol, and an arena implements `Arena` too ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)). Conforming is an `unsafe` promise to keep the protocols' contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
+**You can write an allocator of your own.** Every allocator but `.heap` is library code that implements the `AllocatorImpl` protocol, and an arena implements `ArenaImpl`, which refines it ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)). Conforming is an `unsafe` promise to keep the protocols' contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
 
 **Every registered allocator must be safe to call from any thread**, since any thread can allocate through an id it holds.
 
@@ -122,7 +122,7 @@ Each open checks whether the allocator has reset since the value obtained its st
 
 **Only an arena resets.** `reset()` on a heap, `.heap` included, panics.
 
-**A heap ends with `AllocatorId.unregister`** ([06](../spec/06-memory-and-allocators/arena-safety.md#unregistering-an-allocator)). When the level unloads, `AllocatorId.unregister(levelHeap)` checks for uses as a reset does. Then every value still allocated from the heap goes stale, and its objects are destroyed.
+**A heap ends with `Allocator.unregister`** ([06](../spec/06-memory-and-allocators/arena-safety.md#unregistering-an-allocator)). When the level unloads, `Allocator.unregister(levelHeap)` checks for uses as a reset does. Then every value still allocated from the heap goes stale, and its objects are destroyed.
 
 **An unregistered id stays invalid for good**, so nothing made from it ever passes its check again.
 
@@ -302,7 +302,7 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 - [06 What a reset does](../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does): every case in which a reset panics, how it orders with other threads, and the `deinit`s it runs.
 - [06 Opening an owning value](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it): what counts as an open, and how opens race with resets.
 - [06 Allocators over other allocators](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators): budgets and other wrappers, and allocators with a backing.
-- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena): the `Allocator` and `Arena` protocols, and what conforming to them promises.
+- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl): `AllocatorImpl`, `ArenaImpl` and `WrapperImpl`, and what conforming to them promises.
 - [06 Owning boxes](../spec/06-memory-and-allocators/owning-values.md#owning-boxes): `Box`, `Shared`, `LocalShared` and weak links in full, `Frozen`, and handing an owner to C.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): slices of a locked `Blob` or `List`, and what making one checks.
 - [06 Allocation failure](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure): every fallible form, and what `@noalloc` rejects.

@@ -6,17 +6,17 @@ An owning value remembers where its storage came from so it can grow and release
 
 ## Allocator values
 
-**An `AllocatorId` is a copyable id that names a registered allocator.** An owning value records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.heap` are the same type.
+**An `Allocator` is a copyable id that names a registered allocator.** An owning value records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.heap` are the same type.
 
 **Every registered allocator is either `.heap` or library code:**
 
-- **`.heap`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `AllocatorId.unregister(.heap)` panics. `AllocatorId.heap` is a `static const`, so code takes it with no `copy` ([01](../01-values-and-ownership/moving-values-out.md#constants)).
-- **Every other registered allocator is library code implementing the `Allocator` protocol** ([Writing an allocator: `Allocator` and `Arena`](allocator-implementations.md#writing-an-allocator-allocator-and-arena)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`.
+- **`.heap`, the platform's general-purpose heap, has a fixed id and is never unregistered**, so its storage never goes stale: `Allocator.unregister(.heap)` panics. `Allocator.heap` is a `static const`, so code takes it with no `copy` ([01](../01-values-and-ownership/moving-values-out.md#constants)).
+- **Every other registered allocator is library code implementing `AllocatorImpl`** ([Writing an allocator: `AllocatorImpl`](allocator-implementations.md#writing-an-allocator-allocatorimpl)). Examples are an arena, a heap or a budget wrapper, or one over a platform's memory APIs through `import c`.
 
 **Every registered allocator is of one of three kinds, which say how the memory it hands out goes back:**
 
 - A **heap**, such as `.heap` or a TLSF heap, frees each allocation individually.
-- An **arena**, whose type conforms to `Arena`, hands out memory from blocks and frees nothing individually. Freeing into it is a no-op, and a **reset** frees everything it handed out at once ([What a reset does](arena-safety.md#what-a-reset-does)).
+- An **arena**, whose type conforms to `ArenaImpl`, hands out memory from blocks and frees nothing individually. Freeing into it is a no-op, and a **reset** frees everything it handed out at once ([What a reset does](arena-safety.md#what-a-reset-does)).
 - A **wrapper**, such as a budget or a tracking allocator, passes another allocator's allocations through, so they go back as that allocator's do, and keeps accounts of them.
 
 An allocator may draw its memory from one other allocator, its **backing**, such as the allocator a wrapper wraps ([Allocators over other allocators](allocator-implementations.md#allocators-over-other-allocators)).
@@ -141,4 +141,4 @@ more.append(1009)                                          // and grows there, a
 
 ## Allocators and threads
 
-**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `AllocatorId`, including lent work ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)). So `Allocator` refines `Synchronized`, the contract under which threads share a value through shared borrows ([07](../07-concurrency/synchronization.md#the-synchronized-contract)). Its methods are non-`mutating`, and change its state only through its own synchronization: atomics, a lock, or state kept per thread inside the implementation.
+**Every registered allocator must be safe to call from any thread**, since any thread can allocate through a copyable `Allocator` id, including lent work ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)). So `AllocatorImpl` refines `Synchronized`, the contract under which threads share a value through shared borrows ([07](../07-concurrency/synchronization.md#the-synchronized-contract)). Its methods are non-`mutating`, and change its state only through its own synchronization: atomics, a lock, or state kept per thread inside the implementation.

@@ -23,8 +23,8 @@ An allocator has two sides: the values that use it must recognize whether their 
 ## Allocators over other allocators
 
 ```swift
-let levelArena = AllocatorId.register(BlockArena(size: 256.mb))
-let propBudget = AllocatorId.register(Budgeted(inner: copy levelArena, limit: 16.mb, name: "Props"))   // a wrapper over levelArena
+let levelArena = Allocator.register(Arena(size: 256.mb))
+let propBudget = Allocator.register(Budgeted(inner: copy levelArena, limit: 16.mb, name: "Props"))   // a wrapper over levelArena
 
 var props = propBudget.alloc List<Prop>()    // counted against the budget, stored in levelArena's blocks
 levelArena.reset()                           // 'props' goes stale with the arena memory under it
@@ -34,7 +34,7 @@ levelArena.reset()                           // 'props' goes stale with the aren
 
 - A **wrapper** passes its backing's `Allocation` through unchanged, block included. So an object's value or a `StablePool` page allocated through a wrapper over an arena is tied to its arena block like any other ([03](../03-handles-and-objects.md#objects-in-arenas-and-other-allocators)). Its allocations record the wrapper, so growth and frees go through its accounting.
 
-    It passes each call on through its backing id's forwarding methods ([below](#writing-an-allocator-allocator-and-arena)), which call the backing's implementation with the same arguments and return its result unchanged. They are `unsafe`, and their caller promises to be an implementation calling its own `backing`, since what they return carries no allocator word. They panic through an unregistered id as every allocator operation does, apart from the frees and growths that unregistering allows ([Unregistering an allocator](arena-safety.md#unregistering-an-allocator)).
+    It passes each call on through its backing id's forwarding methods ([below](#writing-an-allocator-allocatorimpl)), which call the backing's implementation with the same arguments and return its result unchanged. They are `unsafe`, and their caller promises to be an implementation calling its own `backing`, since what they return carries no allocator word. They panic through an unregistered id as every allocator operation does, apart from the frees and growths that unregistering allows ([Unregistering an allocator](arena-safety.md#unregistering-an-allocator)).
     - **Over an arena**, its allocations are valid until a reset frees the arena memory under them or the wrapper is unregistered. `backingDidSwitch` and `backingDidFree` tell it when memory stops existing, so it can keep its accounts per stamp.
     - **Over a heap**, its allocations go stale when it or the heap is unregistered.
 - An **arena or heap with a backing** draws from its backing and hands out memory of its own, as an arena over device memory or a TLSF heap carved out of a larger one does. Such an arena hands it out in its own blocks, which its own resets free. Such a heap's values go stale when it is unregistered. Either keeps what it drew as long as it likes, so its backing chain must not include an arena, whose reset would reuse that memory under it.
@@ -43,37 +43,44 @@ levelArena.reset()                           // 'props' goes stale with the aren
 **Chains are fixed and acyclic**, so a reset or an unregistration of an allocator reaches everything built on it:
 
 - `backing` names an allocator registered before it, which rules out a cycle, and never changes while it is registered ([below](#what-conforming-promises)).
-- Registering panics when the backing is already unregistered, or when an `Arena`'s backing chain includes an arena. A registration racing with its backing's unregistration is ordered before it, and unregistered with it, or after it, and panics.
-- A heap's backing chain includes no arena either. The runtime can't tell a heap from a wrapper, since both conform to `Allocator` alone, so conforming promises it ([below](#what-conforming-promises)).
+- Registering panics when the backing is already unregistered, or when a heap's or an arena's backing chain includes an arena. The runtime tells the kinds apart by the protocol the implementation conforms to ([below](#writing-an-allocator-allocatorimpl)). A registration racing with its backing's unregistration is ordered before it, and unregistered with it, or after it, and panics.
 
-## Writing an allocator: `Allocator` and `Arena`
+## Writing an allocator: `AllocatorImpl`
 
-**An implementation hands out memory and reports what it handed out.** The runtime decides when that memory stops being valid ([What a reset does](arena-safety.md#what-a-reset-does)). A library adds an allocator by registering a value of a type that conforms to `Allocator`, and gets back the `AllocatorId` that names it.
+**An implementation hands out memory and reports what it handed out.** The runtime decides when that memory stops being valid ([What a reset does](arena-safety.md#what-a-reset-does)). A library adds an allocator by registering a value of a type that conforms to `AllocatorImpl`, and gets back the `Allocator` id that names it.
 
-**The contract comes in two protocols.** Every allocator conforms to `Allocator`, which allocates, reallocates and frees. An arena conforms to `Arena`, which refines it with the arena's part in a reset and in releasing its old blocks. The runtime carries out every reset, so no implementation writes one ([What a reset does](arena-safety.md#what-a-reset-does)).
+**The protocol an implementation conforms to says its kind:**
+
+- a **heap** conforms to `AllocatorImpl` alone, which allocates, reallocates and frees;
+- an **arena** conforms to `ArenaImpl`, which refines it with the arena's part in a reset and in releasing its old blocks;
+- a **wrapper** conforms to `WrapperImpl`, which refines it for an allocator that passes its backing's allocations through.
+
+The runtime carries out every reset, so no implementation writes one ([What a reset does](arena-safety.md#what-a-reset-does)).
 
 ```swift
-unsafe protocol Allocator: Synchronized {              // must be callable from any thread
-    var backing: AllocatorId? { get }                  // the one allocator this draws its memory from, or nil
+unsafe protocol AllocatorImpl: Synchronized {          // must be callable from any thread
+    var backing: Allocator? { get }                    // the one allocator this draws its memory from, or nil
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?   // address, plus the arena block it lies in, if any
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func free(_ p: *Void, bytes: Int, align: Int)   // arenas: no-op
-    unsafe func backingDidSwitch(stamp: Stamp)         // over an arena: the backing arena now serves fresh blocks stamped `stamp`
-    unsafe func backingDidFree(stampedBefore: Stamp)   // over an arena: memory stamped before `stampedBefore` is gone; newer memory isn't
+    unsafe func backingDidSwitch(stamp: Stamp)         // wrappers: the backing arena now serves fresh blocks stamped `stamp`
+    unsafe func backingDidFree(stampedBefore: Stamp)   // wrappers: memory stamped before `stampedBefore` is gone; newer memory isn't
 }
 
-unsafe protocol Arena: Allocator {                     // frees nothing individually; the runtime resets it
+unsafe protocol ArenaImpl: AllocatorImpl {             // frees nothing individually; the runtime resets it
     unsafe func attachFresh(stamp: Stamp)              // from now on, serve from spare blocks stamped `stamp`
     unsafe func freeBlocks(stampedBefore: Stamp)       // every older block is free; keep it as a spare or give it back
 }
+
+unsafe protocol WrapperImpl: AllocatorImpl {}          // passes its backing's allocations through, and keeps accounts of them
 
 struct Allocation(
     let address: *Void,
     let block: *BlockHeader?,                          // the arena block, which records its stamp, and so its arena; else nil
 )
 
-struct AllocatorId(…): Copyable, Hashable              // an opaque id of a registered allocator; 8 bytes, 8-aligned
-extension AllocatorId {                                // forwarding: call the registered implementation's own methods
+struct Allocator(…): Copyable, Hashable                // an opaque id of a registered allocator; 8 bytes, 8-aligned
+extension Allocator {                                  // forwarding: call the registered implementation's own methods
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func free(_ p: *Void, bytes: Int, align: Int)
@@ -86,21 +93,21 @@ struct BlockHeader(…)                                  // runtime-defined; sta
                                                        //   An arena writes one with unsafe BlockHeader.initialize(at:stamp:)
 ```
 
-**`reset()` and `release` are operations of an `AllocatorId`, which the runtime carries out**, and which panic unless the registered implementation conforms to `Arena` ([What a reset does](arena-safety.md#what-a-reset-does)).
+**`reset()` and `release` are operations of an `Allocator` id, which the runtime carries out**, and which panic unless the registered implementation conforms to `ArenaImpl` ([What a reset does](arena-safety.md#what-a-reset-does)).
 
 **The members other than `backing` are `unsafe` to call, and code reaches them in three ways:**
 
-- containers reach `allocate`, `reallocate` and `free` through the `AllocatorId`'s `allocateRaw`, `reallocateRaw` and `freeRaw` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations));
+- containers reach `allocate`, `reallocate` and `free` through the `Allocator` id's `allocateRaw`, `reallocateRaw` and `freeRaw` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations));
 - an implementation reaches its backing's through the id's forwarding methods ([above](#allocators-over-other-allocators));
-- only the runtime calls the hooks a reset uses: an `Arena`'s `attachFresh` and `freeBlocks`, and the `backingDidSwitch` and `backingDidFree` of each allocator over it.
+- only the runtime calls the hooks a reset uses: an arena's `attachFresh` and `freeBlocks`, and the `backingDidSwitch` and `backingDidFree` of each wrapper over it.
 
 ### What conforming promises
 
-**Conforming to `Allocator` or `Arena` is an `unsafe` promise to follow this contract:**
+**Conforming to `AllocatorImpl`, `ArenaImpl` or `WrapperImpl` is an `unsafe` promise to follow this contract:**
 
 - **Allocating.** `allocate` returns at least `bytes` bytes aligned to `align`, disjoint from every other live allocation. `reallocate` returns the same for `new` bytes, keeps the first `min(old, new)` of them, and frees the old ones when it moves them. When it returns `nil`, the old allocation stays live and unchanged.
 - **Freeing and growing.** `free` and `reallocate` accept every allocation of its own that it handed out and that hasn't been freed. That includes one stamped before a reset in progress, which the `deinit`s that reset runs may still free or grow ([Stale values, and the `deinit`s a reset runs](arena-safety.md#stale-values-and-the-deinits-a-reset-runs)). It never grows such an allocation in place: it moves it.
 - **Reuse and reports.** It never reuses memory on its own after handing it over, and reports blocks truthfully, since the runtime decides by a block's stamp which values are stale ([What a reset does](arena-safety.md#what-a-reset-does)). An arena writes no block stamped before a reset until that reset calls `freeBlocks`, since the `deinit`s that reset runs may read those blocks until then.
 - **A fixed shape.** `backing` never changes while it is registered, which keeps its backing chain fixed ([above](#allocators-over-other-allocators)).
-- **Over an arena, a pass-through.** An `Allocator` that isn't an `Arena` and whose backing chain includes an arena is a wrapper: it passes its backing's allocations through, and keeps none of that memory as its own ([above](#allocators-over-other-allocators)).
+- **Its kind.** A heap or an arena hands out memory of its own, and a wrapper passes its backing's allocations through unchanged ([above](#allocators-over-other-allocators)).
 - **Where its memory comes from.** It draws memory only from its declared `backing`, or, with none, from `.heap` or platform memory it reserved itself. It never draws from another registered allocator, which could be reset or unregistered under it.

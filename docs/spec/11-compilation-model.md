@@ -59,7 +59,7 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 **The prelude must hold what the compiler itself relies on, since the language's syntax and rules mean its declarations:**
 
 - the language's own types, such as the numbers, `Never`, `Simd`, `Array`, `Span` and `UniquePointer`;
-- the std types the language names, such as `AllocatorId` and `Allocating` for `alloc`;
+- the std types the language names, such as `Allocator` and `Allocating` for `alloc`;
 - the literal protocols ([04](04-types/collections.md#literals));
 - the C type aliases ([08](08-c-interop.md));
 - the protocols the compiler derives or checks;
@@ -151,7 +151,7 @@ speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 **Contracts** are what a library implements for the language to call or to trust:
 
 - the protocols the language calls or derives, such as `Sequence`, the literal protocols, `Equatable`, `Awaitable` and `Attribute`;
-- every `unsafe protocol`, such as `Synchronized` and `Allocator`, whose conformances the compiler can't check ([10](10-errors-and-safety/unsafe-code.md#unverified-promises));
+- every `unsafe protocol`, such as `Synchronized` and `AllocatorImpl`, whose conformances the compiler can't check ([10](10-errors-and-safety/unsafe-code.md#unverified-promises));
 - the wake contract of `Poll` and `Waker`: an awaitable returns `.pending` only once it has arranged a wake of the `Waker` it was given ([07](07-concurrency/tasks.md#waking-a-task));
 - the promise of code that lends a scoped value to another thread ([07](07-concurrency/thread-work.md#the-librarys-promise)).
 
@@ -233,14 +233,14 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
     - the iteration views `Borrow<T>` and `MutableRef<T>` ([04](04-types/collections.md#iteration));
     - `Slice<T>` ([06](06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers));
     - the existential views `any P` and `mutable any P`, and function-typed values ([05](05-protocols-generics-and-closures.md));
-    - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)).
+    - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 - **A `Closure`'s layout**: its size, and how much of its captures it holds inline, so whether converting a closure to one allocates ([05](05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **What a library leaves open**, such as:
     - the last bits of a math function like `sin`;
     - `Hasher`'s algorithm, and so what a `Hasher` outputs from a given seed, such as `FixedHashing`'s, and any order that depends on it, though one build gives the same output at compile time and in every run ([04](04-types/collections.md#hash-maps-and-sets));
     - the layout of its types, such as std's `Pin<T>`, `LocalPin<T>` or `FieldInfo`;
     - the bits of handles ([03](03-handles-and-objects.md#pools-and-handles)).
-- **What a build reports**: the call sites it passes to allocators, or 0 ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)), and what a panic report contains ([10](10-errors-and-safety/panics.md#what-a-panic-does)).
+- **What a build reports**: the call sites it passes to allocators, or 0 ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)), and what a panic report contains ([10](10-errors-and-safety/panics.md#what-a-panic-does)).
 - **Resource limits**, and so where an allocation, a registration, an object's creation, a thread start, a deep recursion or a count fails ([10](10-errors-and-safety/panics.md#what-panics), [07](07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)):
     - how much memory an allocator can supply ([06](06-memory-and-allocators/allocation-lifecycle.md#allocation-failure));
     - how many allocators may be registered, at once and over the run, and how many times one may be reset ([06](06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator));
