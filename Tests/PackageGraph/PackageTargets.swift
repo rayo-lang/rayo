@@ -2,7 +2,7 @@
 public struct PackageTargets: Decodable, Sendable {
     let targets: [Target]
 
-    /// A target, as much of it as decides which targets a change reaches.
+    /// A target, as much of it as says where its sources are and what it depends on.
     struct Target: Decodable, Sendable {
         let name: String
         let type: String
@@ -39,21 +39,25 @@ public struct PackageTargets: Decodable, Sendable {
         }
     }
 
+    /// Returns the name of the target whose directory holds `path`, a path relative to the package's root, or nil
+    /// where none does.
+    public func target(holding path: String) -> String? {
+        targets.first { path.hasPrefix(Self.directory(of: $0) + "/") }?.name
+    }
+
     /// Returns the names of the targets whose directories hold `paths`, or nil where a path is in none.
-    func targets(holding paths: [String]) -> Set<String>? {
+    public func targets(holding paths: [String]) -> Set<String>? {
         var names: Set<String> = []
         for path in paths {
             // A path in no target's directory has no target to name.
-            guard let target = targets.first(where: { path.hasPrefix(Self.directory(of: $0) + "/") }) else {
-                return nil
-            }
-            names.insert(target.name)
+            guard let target = target(holding: path) else { return nil }
+            names.insert(target)
         }
         return names
     }
 
     /// Returns the names, in order of name, of the test targets that reach one of `changed`.
-    func testTargets(reaching changed: Set<String>) -> [String] {
+    public func testTargets(reaching changed: Set<String>) -> [String] {
         let targetsByName = Dictionary(uniqueKeysWithValues: targets.map { ($0.name, $0) })
         return targets.filter { $0.isTest && Self.reaches($0, changed, in: targetsByName) }.map(\.name).sorted()
     }

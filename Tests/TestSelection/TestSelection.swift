@@ -1,3 +1,5 @@
+import PackageGraph
+
 /// The test targets that a run after a change needs.
 public enum TestSelection: Equatable, Sendable {
     case all
