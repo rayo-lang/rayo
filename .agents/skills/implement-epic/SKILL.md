@@ -20,7 +20,7 @@ A new issue always gets a new implementer: continue one only about its own pull 
 
 ## 3. Merge
 
-An implementer hands back once its pull request's review approves. Merge it as the repo's rules say. When it can't merge, because CI fails or it conflicts with or falls behind the main branch, send it back to its implementer. When it hands back a decision for the user, such as a decline its reviewer rejected, ask the user and pass the answer on in their words.
+An implementer hands back once its pull request's review approves. Merge it as the repo's rules say. When it can't merge, because CI fails or it conflicts with or falls behind the main branch, send it back to its implementer. When it hands back a pull request that can't open yet, send it back once a slot is free. When it hands back a decision for the user, such as a decline its reviewer rejected, ask the user and pass the answer on in their words.
 
 Once it merges, check its sub-issue closed, remove the lane's worktree, and fill the lane again.
 
