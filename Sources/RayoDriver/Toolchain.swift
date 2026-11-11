@@ -17,7 +17,8 @@ struct Toolchain {
 
     /// Links `objectCode` with the C library into an executable at `output`.
     func link(_ objectCode: [UInt8], to output: URL) throws(CompilationError) {
-        // A link needs clang, which drives it, and the arguments that have clang run the linker asked for.
+        // A link needs clang, which drives it, so a missing clang stops it; then the arguments that have clang run
+        // the linker asked for.
         guard Self.isExecutableFile(tools.clang) else {
             throw .failed("can't find clang at '\(tools.clang.path)'")
         }
@@ -40,7 +41,6 @@ struct Toolchain {
     /// Links `objectCode` into a temporary executable, runs it, and removes it.
     func linkAndRun(_ objectCode: [UInt8], output: ProgramOutput) throws(CompilationError) -> Driver.Result {
         try Self.withTemporaryDirectory { directory throws(CompilationError) in
-            // Link the executable.
             let executable = directory.appendingPathComponent("program")
             try link(objectCode, to: executable)
 
@@ -52,7 +52,7 @@ struct Toolchain {
         }
     }
 
-    /// The arguments that have clang link with `linker`.
+    /// Finds `linker`, and returns the arguments that have clang link with it.
     private func linkerArguments() throws(CompilationError) -> [String] {
         switch linker {
         // LLD is the one from the LLVM that rayoc was built with.
@@ -72,8 +72,8 @@ struct Toolchain {
         }
     }
 
-    /// The platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld` where
-    /// it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
+    /// Finds the platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld`
+    /// where it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
     private func platformLinker() throws(CompilationError) -> URL {
         // Find where the platform keeps its linker.
         #if canImport(Darwin)
@@ -144,9 +144,9 @@ struct Toolchain {
         return process
     }
 
-    /// The exit code of `process`, or 128 plus the signal that ended it.
+    /// Runs `process` to its end, and returns its exit code, or 128 plus the signal that ended it.
     private func runToCompletion(_ process: Process) throws(CompilationError) -> Int32 {
-        // Run the process, and wait for it to end.
+        // `run` returns once the process starts, so wait for it to end.
         try runOnHost { try process.run() }
         process.waitUntilExit()
 

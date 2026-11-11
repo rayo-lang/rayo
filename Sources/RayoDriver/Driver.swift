@@ -138,13 +138,14 @@ public enum Driver {
             switch invocation.command {
             case .check: try check()
             case .build: try build()
-            case .run: try run()
+            case .run: try runProgram()
             }
         }
 
         /// Checks the file, and writes nothing.
         private func check() throws(CompilationError) -> Result {
             _ = try compile.run(invocation.path)
+
             return Result(exitCode: 0, output: "", errors: "")
         }
 
@@ -163,7 +164,7 @@ public enum Driver {
         }
 
         /// Compiles the file and runs it, and gives what the run gave.
-        private func run() throws(CompilationError) -> Result {
+        private func runProgram() throws(CompilationError) -> Result {
             try pipeline {
                 objectCode
                 LinkAndRun(toolchain: toolchain, output: programOutput)
@@ -189,7 +190,8 @@ public enum Driver {
             }
         }
 
-        /// The executable for the source at `path`: the same path without `.rayo`.
+        /// Returns the executable for the source at `path`, which is the same path without `.rayo`, or fails when
+        /// that names no file apart from the source.
         private func executable(building path: String) throws(CompilationError) -> URL {
             // A path that doesn't end in '.rayo' would name the source itself.
             guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }

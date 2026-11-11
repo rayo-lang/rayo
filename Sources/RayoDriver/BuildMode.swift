@@ -1,4 +1,3 @@
-/// Whether a build is a debug or a release build.
 enum BuildMode: String {
     case debug = "--debug"
     case release = "--release"
