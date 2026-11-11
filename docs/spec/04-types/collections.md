@@ -57,7 +57,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 
 | Type | Owning? | Notes |
 | --- | --- | --- |
-| `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)); converts to a `Span<T>` by a shared borrow ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) |
+| `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)); lent as a `Span<T>` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
 | `static Span<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)) |
 | `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
@@ -68,7 +68,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `Shared<T>`, `LocalShared<T>`, `WeakShared<T>` | yes / yes / no | Reference-counted pointers to a value that many places hold, and checked weak links to a `Shared` one ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) |
 | `Slice<T>` | no | Checked long-lived view into a buffer behind a `Shared` ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)) |
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([Struct of arrays: `SoA<T>`](data-layout.md#struct-of-arrays-soat)) |
-| `String` | yes | UTF-8 bytes, allocator; made only with `alloc`, and converts to a `StringView` by a shared borrow ([below](#strings)) |
+| `String` | yes | UTF-8 bytes, allocator; made only with `alloc`, and lent as a `StringView` ([below](#strings)) |
 | `StringView` | no (scoped) | ptr + byte count |
 | `static StringView` | no (immortal) | ptr + byte count into immortal data, copyable and unscoped: a literal, a `Name`'s text, or a `const` `String`'s `.view` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
 | `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by its entry or by a hash stored with it (below) |
@@ -201,7 +201,7 @@ for g in label.graphemes { … }            // user-perceived characters, throug
 - **Text that is passed around is a `StringView`**, which borrows the text from whatever owns it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)).
 - **A `String` owns text that arrives at run time**, such as a name loaded from a file, a player's input or a message off the network. It allocates, so it is made with `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 
-**A `String` converts to a `StringView` wherever one is expected**, by a shared borrow of the place that holds it, so it copies and allocates nothing ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So a function that reads text takes a `StringView`, and its callers pass what they have with nothing written:
+**A `String` converts to a `StringView` wherever one is expected** ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)), so a function that reads text takes a `StringView`, and its callers pass what they have with nothing written:
 
 ```swift
 func greet(_ who: StringView) { log("hello, \(who)") }
@@ -224,7 +224,7 @@ let bare = String("grunt")                // error: making a 'String' needs 'all
 
 **Strings are indexed by byte offset.** Unicode scalars and graphemes are explicit views, `s.scalars` and `s.graphemes`. A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics, so every string holds whole UTF-8 sequences ([10](../10-errors-and-safety/panics.md#what-panics)).
 
-**Every string literal is null-terminated**, so `.cString` written on a literal itself, as in `"abc".cString`, passes it to C at no cost. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
+**`.cString` is written on a string literal itself, as in `"abc".cString`, and is a `*CChar` to the literal's bytes, which end in a NUL.** So a literal passes to C as a C string at no cost. It is a form of the literal, not a member of `static StringView`, since a range of a static view has no NUL after it. So `title.cString` on a `static StringView` value, or on a `const` imported from a C `#define`, is a compile error. `s.cchars` views any string's bytes as a `Span<CChar>` without a terminator, for C functions that take a pointer and a length.
 
 **Interpolation writes into a sink.** An interpolated literal, such as `"hp \(hp)"`, evaluates its segments in order, as a call's arguments are evaluated ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), and borrows each. As the message of `fatalError`, `precondition` or `assert`, it is evaluated only when the call panics ([10](../10-errors-and-safety/panics.md#messages)). Its value is a scoped value of a type the compiler builds. That type is `Formattable`: it writes its text and each segment in turn into the sink it is given. Every segment's type must be `Formattable` too, as the number types, `Bool`, the string types and `Name` are:
 
@@ -266,9 +266,11 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
+**A type that conforms to `Allocating` can't conform to `ExpressibleByStringLiteral`**, since a string literal can't carry an `alloc` (below).
+
 **A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll(alloc [a, b])` passes the `List` that `alloc [a, b]` builds, as `spawnAll(alloc List([a, b]))` would. In an annotation or after `as`, `_` stands for what the literal fills in, as in `Set<_>`. Where a `StringView` is expected, a string literal is a `static StringView`, which converts to it ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
-**A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error. A string literal is a `static StringView`, and owned text made from one says `alloc`, as `alloc String("grunt")` does ([Strings](#strings)).
+**A literal never allocates by itself.** An array or dictionary literal becomes a type that conforms to `Allocating`, such as a `List`, `Set` or `Map`, only under `alloc`, which passes its initializer the allocator, as it does any `Allocating` initializer's ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). So `[3, 4, 5]` with no context is an inline array, and `alloc [3, 4, 5]` with no context is a `List`. A dictionary literal under `alloc` with no type expected is a compile error, so the code writes the type, as in `let ids: Map<Name, Int> = alloc ["jump": 0]`. An array or dictionary literal that would become an `Allocating` type without `alloc`, such as `ws` above, is a compile error. A string literal is a `static StringView`, and owned text made from one says `alloc`, as `alloc String("grunt")` does ([above](#strings)).
 
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 

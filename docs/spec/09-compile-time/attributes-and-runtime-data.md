@@ -80,7 +80,7 @@ func show(_ hint: Hint) {
 }
 ```
 
-**A static view is a `static StringView` or a `static Span<T>`, a shared view that views only immortal data, so unlike the plain view it is unscoped.** It is copyable, as the plain view is. Only these two views take `static`. It converts implicitly to the plain view, and no plain view converts to it ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A range of a static view, such as `title[0..<2]`, is a static view too, since it views the same immortal data.
+**A static view is a `static StringView` or a `static Span<T>`, a shared view that views only immortal data, so unlike the plain view it is unscoped.** It is copyable, as the plain view is. Only these two views take `static`. Its conversion to the plain view is one of the implicit conversions ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). It meets `where return borrows static`, since it depends on nothing, while a view of a global `let` borrows static storage but isn't a static view ([02](../02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)). A range of a static view, such as `title[0..<2]`, is a static view too, since it views the same immortal data.
 
 These rules keep a static view's data immortal, or follow from it:
 

@@ -307,12 +307,12 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 
 **A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)):
 
-- **A numeric widening, and a static view's conversion to the plain view, read the place** and make a new value, which the binding owns.
+- **A numeric widening, and a [static view](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)'s conversion to the plain view, read the place** and make a new value, which the binding owns.
 - **These conversions take the value**, so from a place, each moves it as a declaration does, unless the code writes a copy of a copyable value:
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
-- **Making an `any P` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. `&place` makes a `mutable any P` instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). Making a `StringView` from a `String`, or a `Span<T>` from a `List<T>`, borrows the place the same way.
+- **Making an `any P` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. `&place` makes a `mutable any P` instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). A `String` or a `List` made into its view borrows the place shared too ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 ```swift
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns

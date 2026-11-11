@@ -79,7 +79,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 - **Inline arrays.** An inline array's `.init(repeating:)` copies the value it repeats ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
 - **Allocations.** `a.alloc` reads the id in `a` once, and holds no borrow of `a`, and the value it makes keeps a copy of the id ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).
-- **Static views.** Converting a static view to the plain view reads its operand and makes a new view of the same data ([Conversions](bindings.md#conversions)).
+- **Static views.** Converting a [static view](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data) to the plain view reads its operand and makes a new view of the same data ([Conversions](bindings.md#conversions)).
 - **`as` patterns.** An `as` pattern on a place copies it, since the conversion makes a new value ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **`get` and `set`.** A change through a value property with a `get` and a `set` copies a copyable `owned` subscript argument for the `get`, since one value can't move into both calls ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
