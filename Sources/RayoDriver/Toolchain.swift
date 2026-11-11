@@ -95,15 +95,10 @@ struct Toolchain {
         // A file that `rayoc` doesn't compile ends the command as `rayoc` ended.
         case .exited(let exitCode):
             throw .compileFailed(exitCode: exitCode, errors: run.errors)
-        // A `rayoc` that a signal ended couldn't say so, so `rayo` does.
-        case .signaled(let signal):
+        // A `rayoc` that a signal or an exception ended couldn't say so, so `rayo` says how it ended.
+        case .signaled, .raisedException:
             throw .compileFailed(exitCode: run.termination.exitCode,
-                                 errors: run.errors + "rayo: rayoc was ended by signal \(signal)\n")
-        // A `rayoc` that an exception ended couldn't say so either, so `rayo` names the exception by its code.
-        case .raisedException(let code):
-            let name = "0x" + String(code, radix: 16, uppercase: true)
-            throw .compileFailed(exitCode: run.termination.exitCode,
-                                 errors: run.errors + "rayo: rayoc crashed with exception \(name)\n")
+                                 errors: run.errors + "rayo: rayoc \(run.termination)\n")
         }
     }
 
@@ -199,11 +194,11 @@ struct Toolchain {
             FileManager.default.createFile(atPath: errorFile.path, contents: nil)
 
             // Run the process on those files, with nothing to read, and give what it wrote.
-            let process = newProcess(executable, arguments: arguments)
+            var process = childProcess(executable, arguments: arguments)
             process.standardInput = FileHandle.nullDevice
             process.standardOutput = try runOnHost { try FileHandle(forWritingTo: outputFile) }
             process.standardError = try runOnHost { try FileHandle(forWritingTo: errorFile) }
-            let termination = try runToCompletion(process)
+            let termination = try runOnHost { try process.run() }
             return ProcessRun(termination: termination,
                               output: try runOnHost { try String(contentsOf: outputFile, encoding: .utf8) },
                               errors: try runOnHost { try String(contentsOf: errorFile, encoding: .utf8) })
@@ -227,48 +222,15 @@ struct Toolchain {
             signal(SIGQUIT, quit)
         }
         #endif
-        return try runToCompletion(newProcess(executable, arguments: arguments))
+        let process = childProcess(executable, arguments: arguments)
+        return try runOnHost { try process.run() }
     }
 
-    /// Makes a process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
-    private func newProcess(_ executable: URL, arguments: [String] = []) -> Process {
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = environment
-        return process
+    /// The process that runs `executable` with `arguments` in the toolchain's environment, on `rayo`'s own standard
+    /// input, output and error.
+    private func childProcess(_ executable: URL, arguments: [String]) -> ChildProcess {
+        ChildProcess(executable: executable, arguments: arguments, environment: environment)
     }
-
-    /// Runs `process` to its end, and returns how it ended.
-    private func runToCompletion(_ process: Process) throws(CommandError) -> Termination {
-        // `run` returns once the process starts, so wait for it to end.
-        try runOnHost { try process.run() }
-        process.waitUntilExit()
-
-        #if os(Windows)
-        return Self.termination(of: process)
-        #else
-        // A process that a signal ended has the signal for its status.
-        let status = process.terminationStatus
-        return process.terminationReason == .uncaughtSignal ? .signaled(status) : .exited(status)
-        #endif
-    }
-
-    #if os(Windows)
-    /// Returns how `process`, which has ended, ended, as Windows reports it.
-    private static func termination(of process: Process) -> Termination {
-        // Foundation reports an exception's code without its two highest bits, so the code is read from Windows,
-        // through the handle Foundation keeps for as long as the process object lives.
-        var code: DWORD = 0
-        guard GetExitCodeProcess(process.processHandle, &code) else {
-            // Without the code from Windows, Foundation's report of it is all there is.
-            return .exited(process.terminationStatus)
-        }
-
-        // A code whose severity bits mark a warning or an error is that of the exception that ended the process.
-        return code >= 0x8000_0000 ? .raisedException(code) : .exited(Int32(bitPattern: code))
-    }
-    #endif
 
     /// Runs `body` on a new, empty directory, and removes the directory once `body` ends.
     private static func withTemporaryDirectory<Value>(
@@ -292,25 +254,8 @@ private struct ProcessRun {
     var errors: String
 }
 
-/// How a process ended: with an exit code of its own, by a signal, or, on Windows, by an exception.
-private enum Termination: Equatable {
-    case exited(Int32)
-    case signaled(Int32)
-    case raisedException(UInt32)
-
-    /// The exit code a shell reports for the process: its own, 128 plus the signal that ended it, or the code of the
-    /// exception that ended it.
-    var exitCode: Int32 {
-        switch self {
-        case .exited(let exitCode): exitCode
-        case .signaled(let signal): 128 + signal
-        case .raisedException(let code): Int32(bitPattern: code)
-        }
-    }
-}
-
 #if os(Windows)
-/// Handles Ctrl-C and Ctrl-Break by doing nothing, so they end the console's other processes and not `rayo`.
+/// Handles Ctrl-C and Ctrl-Break so they don't end `rayo`, and passes every other console event on.
 private let ignoringInterrupts: PHANDLER_ROUTINE = { event in
     WindowsBool(event == DWORD(CTRL_C_EVENT) || event == DWORD(CTRL_BREAK_EVENT))
 }

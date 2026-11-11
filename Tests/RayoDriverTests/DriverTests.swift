@@ -142,8 +142,8 @@ struct DriverTests {
             let environment = ProcessInfo.processInfo.environment
                 .setting("TMP", to: temporary.path).setting("TEMP", to: temporary.path)
                 .setting("RAYOC", to: compiler.path)
-            #expect(try rayoOnConsoleOfItsOwn(["run", "main.rayo"], in: directory, environment: environment) ==
-                0xC000_013A)
+            let exitCode = try rayoOnConsoleOfItsOwn(["run", "main.rayo"], in: directory, environment: environment)
+            #expect(exitCode == 0xC000_013A)
             #expect(try FileManager.default.contentsOfDirectory(atPath: temporary.path) == [])
         }
     }
