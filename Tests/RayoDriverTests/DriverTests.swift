@@ -199,6 +199,7 @@ struct DriverTests {
             #expect(rayo(["run", "lib.rayo"], in: directory) == libraryRejected)
         }
     }
+
     @Test func `a file rayoc can't read fails the command with rayoc's error`() throws {
         try withTemporaryDirectory { directory in
             #expect(rayo(["run", "missing.rayo"], in: directory) ==
