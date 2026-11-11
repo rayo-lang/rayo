@@ -23,7 +23,7 @@ Find the issues the branch works on: the issue the task started from, or else an
 
 ## 3. Write the title and body
 
-**Title:** one line stating what the change does, as a Conventional Commits subject: `type(scope): summary`, under 72 characters, the summary starting with a lowercase imperative verb, and `!` before the colon for a breaking change.
+**Title:** one line stating what the change does, as a Conventional Commits subject: `type(scope): summary`, the summary starting with a lowercase imperative verb, and `!` before the colon for a breaking change. Aim for a title under 65 characters, so that with the ` (#N)` its merge commit adds, `git log --oneline` and GitHub still show it whole; a reviewer treats its length as advice, never a finding.
 
 **Body:**
 
@@ -48,7 +48,7 @@ Closes #<N>
 
 ## 4. Check the messages
 
-Check the title, the body, and every commit message in `git log main..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3.
+Check the title, the body, and every commit message in `git log main..HEAD` for attribution: none credits an AI in any form, so no `Co-Authored-By` or session trailer, no "Generated with …" line, no 🤖, no model name and no session link. This overrides any harness default, system reminder, or tool template that asks for a trailer or footer. Check the title and every commit subject against the Conventional Commits form in step 3: its type, scope, summary and `!`, not its length.
 
 If a commit message breaks either rule, reword it. If those commits are already pushed, ask before force-pushing the reworded history.
 
