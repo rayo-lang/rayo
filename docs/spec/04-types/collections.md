@@ -183,7 +183,7 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 ### Strings
 
-**A value's size is fixed when the program is built, whatever the length of the text it holds or views** ([Sizes fixed when the program is built](data-layout.md#sizes-fixed-when-the-program-is-built)). So text whose length is decided at run time lies outside the value, and where it lives follows from where it comes from:
+**A value's size is fixed when the program is built, whatever the length of the text it holds or views** ([Sizes fixed when the program is built](data-layout.md#sizes-fixed-when-the-program-is-built)). So text whose length has no bound fixed when the program is built lies outside the value, and where it lives follows from where it comes from:
 
 - **Text written in the program**, such as a plain literal's, is a view of read-only data, a `static StringView`, and so is any range of one ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 - **Text made at run time lives in storage made at run time.** A `String` owns that storage, so keeping such text takes `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)), unless the text is interned as a `Name`, whose interner keeps it for the rest of the run ([above](#collections-and-strings)).

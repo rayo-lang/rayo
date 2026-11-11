@@ -14,7 +14,9 @@ let first: StringView = names[0]             // a pointer and a length, whatever
 
 **Every type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live on the stack, in a field, in an array or in a register, and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
 
-**No value's size depends on what it holds.** A count fixed when the program is built is part of the type, as an array's `N` is ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)), and the elements lie inside the value. A count decided at run time puts the elements outside the value, which reaches them through a fixed-size part:
+**An `@opaque` type is the one exception.** It is a C type whose layout Rayo doesn't know, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)). So it has no values, and `T.size` and `T.alignment` on it are compile errors.
+
+**No value's size depends on what it holds.** A count whose bound is fixed when the program is built is part of the type, and the elements lie inside the value. That bound is an array's `N` ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)), or the capacity of an `InlineList` or of std's `FixedString`, which may hold fewer ([Collections and strings](collections.md#collections-and-strings)). A count with no such bound puts the elements outside the value, which reaches them through a fixed-size part:
 
 - **an owner**, such as a `List`, a `String` or a `TrailingArray`, holds them in storage it allocated ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc));
 - **a view**, such as a `Span` or a `StringView`, holds a pointer to them and their count, and lends them from wherever they lie ([02](../02-views-and-dependencies.md)).

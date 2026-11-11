@@ -135,7 +135,7 @@ mesh->verts = (Vertex*)(blob + (uintptr_t)mesh->verts);    // the fixup
 
 - *(inherently unsafe at the fixup step)*: the fixup must be a small `unsafe` core, and *using* the loaded data must be safe code.
 
-### I7 · Variable-sized struct
+### I7 · A header and trailing elements
 
 **A header followed by N trailing elements in one allocation (C flexible array member), created and accessed in Rayo.** Network packets and C APIs with a flexible array member want this layout ([04](../../spec/04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 
