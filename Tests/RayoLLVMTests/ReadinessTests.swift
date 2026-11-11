@@ -14,7 +14,9 @@ struct ReadinessTests {
             LLVMBuildRetVoid(module.builder)
             let other = try module.parse(Array("define void @twice() {\n  ret void\n}\n".utf8), named: "other.ll")
             // The link consumes `other`, which a closure of `#expect(throws:)` can't.
-            do { try module.link(other) } catch {}
+            var linkFailed = false
+            do { try module.link(other) } catch { linkFailed = true }
+            #expect(linkFailed)
 
             var thrown: LLVMError?
             do throws(LLVMError) {
