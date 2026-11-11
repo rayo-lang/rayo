@@ -204,7 +204,7 @@ public enum Driver {
         }
     }
 
-    /// What `rayoc` gives when a compile of the file at `path` stops with `error`.
+    /// Returns what `rayoc` gives when a command on the file at `path` stops with `error`.
     private static func result(of error: CompilationError, in path: String) -> Result {
         switch error {
         // Each of the program's errors is shown at its place in the file.

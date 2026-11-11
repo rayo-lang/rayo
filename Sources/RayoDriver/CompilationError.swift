@@ -1,6 +1,6 @@
 import RayoDiagnostics
 
-/// Why a compile stopped.
+/// Why a command stopped before it could finish.
 enum CompilationError: Error, Equatable {
     /// The program has errors.
     case rejected([Diagnostic])

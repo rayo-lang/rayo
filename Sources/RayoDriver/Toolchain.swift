@@ -41,6 +41,7 @@ struct Toolchain {
     /// Links `objectCode` into a temporary executable, runs it, and removes it.
     func linkAndRun(_ objectCode: [UInt8], output: ProgramOutput) throws(CompilationError) -> Driver.Result {
         try Self.withTemporaryDirectory { directory throws(CompilationError) in
+            // Link the executable inside the directory, so it goes with the directory once the run ends.
             let executable = directory.appendingPathComponent("program")
             try link(objectCode, to: executable)
 
@@ -135,7 +136,7 @@ struct Toolchain {
         return try runToCompletion(newProcess(executable))
     }
 
-    /// A process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
+    /// Makes a process, not yet run, that runs `executable` with `arguments` in the toolchain's environment.
     private func newProcess(_ executable: URL, arguments: [String] = []) -> Process {
         let process = Process()
         process.executableURL = executable
