@@ -2,8 +2,6 @@ internal import CLLVM
 import RayoSema
 
 /// The LLVM types of a program's values, and of a function's result, laid out as the program's type table says.
-/// LLVM aligns these structs to a byte, so each slot, load and store of one takes its alignment from
-/// `alignment(of:)`.
 struct LLVMTypes {
     private let table: TypeTable
     private let module: ModuleBuilder

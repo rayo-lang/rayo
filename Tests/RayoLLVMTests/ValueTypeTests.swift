@@ -64,5 +64,4 @@ struct ValueTypeTests {
             try body(LLVMTypes(TypeTable(structs: structs), in: programModule.module))
         }
     }
-
 }
