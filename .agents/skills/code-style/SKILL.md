@@ -1,6 +1,6 @@
 ---
 name: code-style
-description: Read before writing, changing or reviewing any code in this repo, every time. Says how code is split into files, types and functions, how a body is laid out in blocks, and the audit every pull request passes.
+description: Read before writing, changing or reviewing any code in this repo, every time. Says how code is split into files, types and functions, how a body is laid out in blocks, which forms of current Swift it uses, and the audit every pull request passes.
 ---
 
 # Code style
@@ -113,7 +113,7 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 - each `if`, and each of its `else` branches;
 - each test that leaves early: a `guard`, a `continue`, a `break` out of a loop, an early `return`, or a `throw`.
 
-This holds in a body of one block as much as in one of several. When a block opens with a case, the case's comment opens the block too. The one exception is a `switch` that only maps each case to a value, one line per case: its patterns and values say it all. An orchestrator's cases take no comment either, since the step each one calls names it.
+This holds in a body of one block as much as in one of several. When a block opens with a case, the case's comment opens the block too. The one exception is a `switch` or `if` that only maps each case to a value, one line per case: its patterns, conditions and values say it all. An orchestrator's cases take no comment either, since the step each one calls names it.
 
 This leaf drops the newlines that only break a line. Its doc comment says that much, and each case and each test of a newline says which rule it applies:
 
@@ -162,6 +162,77 @@ static func significantNewlines(_ raw: [Token]) -> [Token] {
 
 **A line fits in 120 columns.** A longer call breaks at its arguments.
 
+## Swift
+
+**Code is written in the newest Swift that Swift 6.4 compiles, in the Swift 6 language mode, for macOS 27 and later, Linux and Windows.** Each rule here names the current form and the older one it replaces, wherever the older one would go. Code uses only what plain `swift build` compiles: a form behind a compiler flag (`-enable-experimental-feature`, `-enable-upcoming-feature`) or an underscored name (`@_lifetime`, `_read`) is outside the language.
+
+**A value a `switch` or `if` picks is an expression**, in place of a `var` assigned in each branch or a `return` in each case. The `switch` or `if` is the body's one expression, follows `return`, or is bound with `let`, so `return` stands once, before it, and never inside one of its cases. A branch is one expression, a `throw`, or a call that never returns; a branch that needs statements is a step to extract. A body of one expression leaves out `return`.
+
+```swift
+/// What the parser found in `token`, as an error names it.
+private func found(_ token: Token) -> FoundToken {
+    switch token.kind {
+    case .newline: .newline
+    case .eof: .endOfFile
+    default: .token(token.description)
+    }
+}
+```
+
+**Ownership is in the types.**
+
+- **A `~Copyable` struct takes the place of a class wherever one owner holds the value at a time.** That covers a value whose identity matters, such as a cursor, a builder or a table that each step updates in turn, and one that must be released, such as an LLVM handle, whose `deinit` releases it. A step that updates such a value takes it `inout` for the length of the call, in place of holding a reference to a shared instance. A class stays only where a struct can't stand in for it: several holders keep one instance at once and each sees the others' changes, a type inherits, or a reference is `weak`.
+- **A `consuming` method that hands the value on ends it with `discard self`**, which a type allows only when its stored properties are all trivial, such as handles and integers: a `String`, array or class field rules it out.
+- **A function takes a noncopyable value `borrowing`** when it only reads it, and `consuming` when it keeps or ends it. A copyable parameter keeps the default convention: `borrowing` on one forbids even the copy a `for` loop over it makes.
+- **`consume x` marks the last use of a local that must not be used after it**, such as a noncopyable value or a buffer handed to its owner, so the compiler rejects any later use.
+- **A computed property that hands out a stored value reads it with a `borrow` accessor**, in place of `get`, and, when callers write it, writes it with a `mutate` accessor, in place of `set`. `borrow` pairs with `mutate` alone. The accessor returns a stored property of the struct or enum itself, a class's `let`, another property with such accessors, or a global `let`; a class's `var` keeps `get` and `set`.
+- **`MutableRef(&value)` holds one place for several updates**, such as `MutableRef(&counts[key, default: 0])`, in place of a lookup per update; `Ref(value)` reads one the same way.
+- **A noncopyable type can't be a tuple's element, an `Array`'s element or `CustomStringConvertible`.** A buffer of them is a `UniqueArray`, and `Optional.take()` moves one out of an optional. A recursive enum whose values are copied or stored in arrays, such as a syntax tree, stays `indirect` and copyable.
+
+```swift
+/// An LLVM module this compiler owns, disposed of when its owner is done with it.
+struct OwnedModule: ~Copyable {
+    private let ref: LLVMModuleRef
+
+    init(_ ref: LLVMModuleRef) { self.ref = ref }
+
+    deinit { LLVMDisposeModule(ref) }
+
+    /// Hands the module to an owner that disposes of it in its turn, such as an execution engine.
+    consuming func release() -> LLVMModuleRef {
+        let ref = self.ref
+        discard self
+        return ref
+    }
+}
+```
+
+**Memory goes through spans and the unique types.**
+
+- **Contiguous storage is read through a `Span`** (`array.span`, `string.utf8.span`, `string.utf8Span`), in place of `withUnsafeBufferPointer`, and written through a `MutableSpan` or an `OutputSpan` (`Array(capacity:initializingWith:)`, `withTemporaryAllocation`), in place of `Array(unsafeUninitializedCapacity:)` and unsafe scratch buffers.
+- **A span is bound where it is used**: a span to a `let` before a `for` loop runs over it, and a mutable span to a `var` before it is written through. A run of reads or writes that would otherwise go through an unsafe buffer goes through such a binding; a loop over an array's elements, and a single `xs[i]`, which already writes in place, stay as they are.
+- **A function takes a span as a parameter, and its caller makes it**, since returning one takes `@_lifetime`, which is outside the language.
+- **A heap value with one owner is a `UniqueBox`**, in place of a `final class` that boxes it, and a growable buffer with one owner a `UniqueArray`. A buffer of fixed size is an `InlineArray`, written `[N of T]`, in place of a tuple of one type.
+- **Unsafe pointers appear only in calls to LLVM's C API**: an out-parameter the call fills, or a buffer held inside the narrowest `withUnsafe…` closure.
+
+**Errors are typed.** A function that throws one kind of error names it, as in `throws(ParseFailure)`, in place of a bare `throws`, and a generic `throws(E)` takes the place of `rethrows`. A `do` whose block holds a `throw` statement is `do throws(E)`, so its `catch` gets `E` rather than `any Error`; a block that only `try`s calls that throw `E` gets `E` already. One `catch` that switches on the error takes the place of a `catch` per case, which the compiler doesn't check for exhaustiveness.
+
+**The smaller forms:**
+
+- `count(where:)` counts, in place of `filter { … }.count` or a loop.
+- `"\(value, default: "none")"` interpolates an optional, in place of `value.map { "\($0)" } ?? "none"`.
+- `Mutex` and `Atomic`, from `Synchronization`, guard state that threads share, in place of a lock.
+- A list that runs over several lines, of arguments, parameters or a literal's items, ends with a trailing comma, in place of a last item that ends without one.
+- An existential is spelled `any P`, in place of a bare `P`.
+- `package` marks a declaration that only this package's modules share, in place of `public`. `internal import` brings in a module that only the importing module's implementation uses, and `package import` one whose types its `package` declarations show.
+
+**Tests use Swift Testing's current forms.**
+
+- **A raw identifier names a test once**, as in ``@Test func `a stray brace is reported`()``, in place of a display string beside a camelCase name. A name that holds a backslash, or would push its `func` line past 120 columns, keeps the display string.
+- **`#require` unwraps**, in place of `!`.
+- **`#expect(throws:)` returns the error it caught**, for the test to check, in place of a `do`/`catch`. Its closure can't consume a noncopyable value it captures, so a test of a `consuming` call catches the error in a `do`.
+- **An exit test, `#expect(processExitsWith:)`, checks a trap in `rayoc` itself** without ending the run; a program a test compiles still runs as a process of its own.
+
 ## Limits
 
 **A file holds at most 1000 lines, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. The numbers are SwiftLint's `file_length` error threshold and `function_body_length` warning default. A type has no limit of its own: [Types](#types) bounds it by its one job.
@@ -181,7 +252,8 @@ Audit every file, type and function you add or change against this list, and fix
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
 - **Every doc comment** describes its declaration as a black box: it names no step, test, state or helper of the body.
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
-- **Every case** a leaf tells apart — a `switch` case, an `if` or `else` branch, a test that leaves early — opens with its comment, unless it is a `switch` that only maps each case to a value.
+- **Every case** a leaf tells apart — a `switch` case, an `if` or `else` branch, a test that leaves early — opens with its comment, unless it is a `switch` or `if` that only maps each case to a value, one line per case.
 - **Every line** does one thing and fits in 120 columns.
+- **Every construct** is the form a rule under [Swift](#swift) names, in place of the one it replaces, and no target enables a language feature (`enableExperimentalFeature`, `enableUpcomingFeature`).
 
 **Before you change a file, type or function that already breaks a rule, split or tidy it in a `refactor` pull request of its own**, and stack your change on it: open your change with the refactor's branch as its base. A reviewer audits the same list, one file, type and function at a time.
