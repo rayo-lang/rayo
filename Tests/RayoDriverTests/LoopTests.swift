@@ -61,9 +61,4 @@ struct LoopTests {
             }
             """) == "1\n2\n3\n")
     }
-
-    @Test("'break' and 'continue' need a loop", arguments: ["break", "continue"])
-    func outsideLoop(keyword: String) {
-        #expect(errors("func main() {\n\(keyword)\n}") == [.outsideLoop(keyword: keyword)])
-    }
 }

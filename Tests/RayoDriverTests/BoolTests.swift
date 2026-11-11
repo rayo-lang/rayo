@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 import RayoDriver
 
 struct BoolTests {
@@ -15,19 +14,5 @@ struct BoolTests {
     @Test("'&&' and '||' evaluate their right operand only when the left one doesn't decide")
     func shortCircuit() {
         #expect(output("if false && 1 / 0 == 0 { print(1) }\nif true || 1 / 0 == 0 { print(2) }") == "2\n")
-    }
-
-    @Test("operands and conditions are checked", arguments: [
-        ("if 1 { }", ErrorCode.typeMismatch(expected: "Bool", found: "Int")),
-        ("while 0 { }", .typeMismatch(expected: "Bool", found: "Int")),
-        ("let b = 1 == true", .operandsDiffer(op: "==", left: "Int", right: "Bool")),
-        ("let b = true < false", .operandTypes(op: "<", needs: "Int", left: "Bool", right: "Bool")),
-        ("let b = 1 && true", .operandTypes(op: "&&", needs: "Bool", left: "Int", right: "Bool")),
-        ("let b = !1", .typeMismatch(expected: "Bool", found: "Int")),
-        ("let b = -true", .typeMismatch(expected: "Int", found: "Bool")),
-        ("let b = print(1) == print(2)", .incomparable(op: "==", type: "Void")),
-    ])
-    func rejected(body: String, expected: ErrorCode) {
-        #expect(errors("func main() {\n\(body)\n}") == [expected])
     }
 }

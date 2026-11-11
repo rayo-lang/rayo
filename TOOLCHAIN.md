@@ -87,8 +87,8 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
 | `Tests/RayoSemaTests` | The tests of the type table's layouts, and of which kind of declaration each top-level name belongs to, over parsed files |
-| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line and of its pipeline's steps, over files held in memory |
-| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check a program's errors in memory |
+| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of its pipeline's steps, and of the errors it reports for each program, over files held in memory |
+| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |
