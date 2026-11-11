@@ -104,7 +104,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 - **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayo` and `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI tests on Linux, macOS and Windows with Swift 6.4, and a change must pass on all three. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 
-[AGENTS.md](AGENTS.md) has the full project rules.
+[AGENTS.md](AGENTS.md) has the project rules, or points to the [agent docs](docs/agents/) that hold them, such as [how a pull request is reviewed and merged](docs/agents/pull-requests.md).
 
 ## License
 

@@ -29,7 +29,7 @@ Edit a copied skill only to bring it in line with a project rule, and record the
 
 1. Run `npx skills update -p -y`.
 2. Re-apply every edit in the list above; `git diff .agents/skills` shows each one reverted.
-3. Check the new upstream text against the project rules in `AGENTS.md` — attribution, branch names, PR bodies — and add an edit to the list for each new conflict.
+3. Check the new upstream text against the project rules in `AGENTS.md` and `docs/agents/` — attribution, branch names, PR bodies — and add an edit to the list for each new conflict.
 4. To take a skill upstream added, run `npx skills add mattpocock/skills --agent universal -y -s <name>`, then repeat step 3 for it.
 
 **Done when:** `git diff .agents/skills` shows only upstream's changes, and every listed edit is in place.

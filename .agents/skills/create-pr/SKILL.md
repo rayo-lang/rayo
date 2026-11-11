@@ -63,7 +63,7 @@ gh pr create -R rayo-lang/rayo --base main --head <branch> --title "<title>" --b
 EOF
 ```
 
-A stacked PR, which `AGENTS.md`'s pull-request rule describes, is pushed with `gh stack push` in place of `git push`, opens with the branch below it as `--base`, and is then linked into its stack with `gh stack link`.
+A stacked PR is pushed with `gh stack push` in place of `git push`, opens with the branch below it as `--base`, and is then linked into its stack with `gh stack link`.
 
 To rewrite an existing PR, use `gh pr edit <number> -R rayo-lang/rayo --title "<title>" --body-file -` instead.
 
