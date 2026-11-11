@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 /// `var name: Type = value` or `let name: Type = value` in a struct's header, where the type and the default value
 /// are each optional.

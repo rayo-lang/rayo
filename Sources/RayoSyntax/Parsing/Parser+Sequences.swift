@@ -1,16 +1,19 @@
-import RayoDiagnostics
+internal import RayoDiagnostics
 
 /// Parses the grammar's sequences of items: statements and declarations, one to a line or `;`, and the
 /// arguments and parameters a `(` opens, separated by commas.
 extension Parser {
     /// Parses items separated by newlines or `;`, up to a `}` or the end of the file, which it leaves for the
     /// caller. An item that fails is skipped, and its error stays reported.
-    func parseLines<T>(ifUnended unended: ErrorCase, _ item: () throws(ParseFailure) -> T) -> [T] {
+    mutating func parseLines<T>(
+        ifUnended unended: ErrorCase,
+        _ item: (inout Parser) throws(ParseFailure) -> T,
+    ) -> [T] {
         var items: [T] = []
         skipSeparators()
         while !current.isPunct(.rbrace) && !atEnd {
-            do {
-                items.append(try item())
+            do throws(ParseFailure) {
+                items.append(try item(&self))
                 // An item that runs on past its end is reported, and the rest of it skipped.
                 if !atStatementEnd { throw fail(unended) }
             } catch {
@@ -23,11 +26,13 @@ extension Parser {
     }
 
     /// After a `(`: parses items separated by commas, with an optional trailing comma, and the `)`.
-    func parseList<T>(ifUnclosed unclosed: ErrorCase,
-                      _ item: () throws(ParseFailure) -> T) throws(ParseFailure) -> [T] {
+    mutating func parseList<T>(
+        ifUnclosed unclosed: ErrorCase,
+        _ item: (inout Parser) throws(ParseFailure) -> T,
+    ) throws(ParseFailure) -> [T] {
         var items: [T] = []
         while !current.isPunct(.rparen) {
-            items.append(try item())
+            items.append(try item(&self))
             // An item without a comma after it is the last.
             if !consume(.comma) { break }
         }
@@ -35,13 +40,13 @@ extension Parser {
         return items
     }
 
-    private func skipSeparators() {
+    private mutating func skipSeparators() {
         while current.kind == .newline || current.isPunct(.semicolon) { advance() }
     }
 
     /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, or the end
     /// of the file.
-    private func recover() {
+    private mutating func recover() {
         var depth = 0
         loop: while !atEnd {
             switch current.kind {

@@ -1,9 +1,9 @@
-import RayoDiagnostics
-import RayoSource
+package import RayoDiagnostics
+internal import RayoSource
 
 /// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, so one
 /// run lists every syntax error, after the lexer's.
-public final class Parser {
+package struct Parser: ~Copyable {
     /// The `ErrorCode` case of a syntax error, which takes what the parser found where it expected something
     /// else.
     typealias ErrorCase = (FoundToken) -> ErrorCode
@@ -19,13 +19,13 @@ public final class Parser {
         self.diagnostics = diagnostics
     }
 
-    public static func parse(_ source: String) -> (file: SourceFile, diagnostics: [Diagnostic]) {
+    package static func parse(_ source: String) -> (file: SourceFile, diagnostics: [Diagnostic]) {
         parse(Array(source.utf8))
     }
 
     /// Parses `bytes`, with the lexer's and the parser's diagnostics in source order.
-    public static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
-        let parser = Parser(bytes)
+    package static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
+        var parser = Parser(bytes)
         let file = parser.parseFile()
         return (file, parser.diagnostics.inSourceOrder)
     }
@@ -49,21 +49,21 @@ public final class Parser {
 
     /// Moves past the current token, unless it ends the file, and returns it.
     @discardableResult
-    func advance() -> Token {
+    mutating func advance() -> Token {
         let token = tokens[position]
         // The end of the file stays current, so every read after it finds `.eof`.
         if position < tokens.count - 1 { position += 1 }
         return token
     }
 
-    func consume(_ punct: Punct) -> Bool {
+    mutating func consume(_ punct: Punct) -> Bool {
         // Any other token stays current.
         guard current.isPunct(punct) else { return false }
         advance()
         return true
     }
 
-    func consume(_ keyword: Keyword) -> Bool {
+    mutating func consume(_ keyword: Keyword) -> Bool {
         // Any other token stays current.
         guard current.isKeyword(keyword) else { return false }
         advance()
@@ -71,13 +71,13 @@ public final class Parser {
     }
 
     @discardableResult
-    func expect(_ punct: Punct, else error: ErrorCase) throws(ParseFailure) -> Token {
+    mutating func expect(_ punct: Punct, else error: ErrorCase) throws(ParseFailure) -> Token {
         // Any other token is reported as `error`.
         guard current.isPunct(punct) else { throw fail(error) }
         return advance()
     }
 
-    func expectIdentifier(else error: ErrorCase) throws(ParseFailure) -> (String, SourceRange) {
+    mutating func expectIdentifier(else error: ErrorCase) throws(ParseFailure) -> (String, SourceRange) {
         // Any other token is reported as `error`.
         guard case .identifier(let name) = current.kind else { throw fail(error) }
         return (name, advance().range)
@@ -85,7 +85,7 @@ public final class Parser {
 
     /// Reports `error` at the current token, or the unexpected character the token is, and returns the failure to
     /// throw. A token the lexer reported already is reported no second time.
-    func fail(_ error: ErrorCase) -> ParseFailure {
+    mutating func fail(_ error: ErrorCase) -> ParseFailure {
         switch current.kind {
         // A malformed literal is the lexer's error, reported already, so nothing more is.
         case .invalid:
@@ -103,7 +103,7 @@ public final class Parser {
     }
 
     /// Reports `code` at the current token.
-    func report(_ code: ErrorCode) {
+    mutating func report(_ code: ErrorCode) {
         diagnostics.append(Diagnostic(code, at: current.range))
     }
 

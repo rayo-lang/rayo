@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 /// `label name: convention Type = default`, where all but the name and the type are optional.
 public struct Param: Sendable {

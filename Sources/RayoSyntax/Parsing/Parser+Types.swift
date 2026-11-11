@@ -1,9 +1,9 @@
-import RayoDiagnostics
+internal import RayoDiagnostics
 
 /// Parses a type, wherever a declaration or a statement writes one.
 extension Parser {
     /// `identifier` or `'(' ')'`.
-    func parseType() throws(ParseFailure) -> TypeExpr {
+    mutating func parseType() throws(ParseFailure) -> TypeExpr {
         let start = current.range
 
         // `()` is the Void type.

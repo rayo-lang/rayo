@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 public struct Block: Sendable {
     public var statements: [Stmt]
