@@ -85,7 +85,23 @@ struct DriverTests {
     }
 
     // Windows ends a process by an exception, not a signal.
-    #if !os(Windows)
+    #if os(Windows)
+    @Test(arguments: ["check", "build", "run"])
+    func `a rayoc that an exception ends fails the command with the exception's code, and says which it was`(
+        command: String,
+    ) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            // Windows reports an access violation as the exit code 0xC0000005, which an exit with it gives as well.
+            let accessViolation = Int32(bitPattern: 0xC000_0005)
+            let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .exit(accessViolation)),
+                                       as: "rayoc", in: directory)
+            #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
+                exitCode: accessViolation, output: "",
+                errors: "rayoc: started\nrayo: rayoc crashed with exception 0xC0000005\n"))
+        }
+    }
+    #else
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
         command: String,
