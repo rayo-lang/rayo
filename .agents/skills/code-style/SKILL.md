@@ -9,21 +9,22 @@ These rules decide how the repo's code and tests are split into files, types and
 
 ## Files
 
-**A file holds one primary type and is named after it.** `Parser.swift` would hold `Parser`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` would hold `Stmt` and its `StmtKind`, even though a parser builds both.
+**A file holds one primary type and is named after it, or extends it as one of the extension files below.** `Parser.swift` would hold `Parser`. The types that exist only as parts of the primary type stay with it: its kind enum, the payload of one of its cases, or a private helper. `Stmt.swift` would hold `Stmt` and its `StmtKind`, even though a parser builds both.
 
 **A type that stands on its own gets a file of its own**, even when it is small. A type is a part when it is the primary type's kind enum, the payload of one of its cases, or a private helper, and nothing but the primary type and its other parts stores it in a property or a case payload, however much other code builds or reads it. Every other type stands on its own: one that more than one type stores, such as a `BinaryOperator` that a syntax tree's expressions, a checked tree's expressions and an IR's values would all store, and one that is thrown, returned or passed but stored by none, such as an error type that a function only throws. A family of such types, such as the syntax tree's, gathers its files in a directory named for the family, such as `AST/`.
 
-**A file over the limit is split** along the line where its contents stop sharing a reason to change ([Limits](#limits)).
+**A type may spread over extension files, one area of its job to each.** Its stored properties live in `Type.swift`, and each extension file holds one area of the job and is named `Type+Area.swift` for it: a parser's `Parser+Expressions.swift`, or a protocol conformance's `Type+Protocol.swift`. A private extension of another type, inside the file that uses it, is fine.
+
+**A file over the limit is split** ([Limits](#limits)): contents with different reasons to change go to types of their own, and one type's one job spreads over `Type+Area.swift` extension files.
 
 ## Types
 
 **A type does one job: it has one reason to change.** The **reasons-to-change test** tells whether two pieces of code, such as two parts of a type or two sites that look alike, are one job: they are one when the same future requirement would change both, and two when either can change without the other. Split a type when it takes on a second job. These show one:
 
 - a group of members that reads and writes state the rest of the type doesn't touch, whether it sits under a `// MARK:` or in an extension file;
-- a name that needs *and*, or a vague noun such as *Manager*, *Helper* or *Context*, to cover what it does;
-- a type over the limit ([Limits](#limits)).
+- a name that needs *and*, or a vague noun such as *Manager*, *Helper* or *Context*, to cover what it does.
 
-**Splitting a type gives the second job a type of its own**, with its own state and a narrow interface that the first type calls. Moving members into an extension in another file spreads the type over two files and leaves its job whole, so it is no split. A file of its own holds an extension only for a protocol conformance, named `Type+Protocol.swift`. A private extension of another type, inside the file that uses it, is fine.
+**Splitting a type gives the second job a type of its own**, with its own state and a narrow interface that the first type calls. Moving members into an extension in another file leaves the type's job whole, so it is no split: it only organizes the job over files ([Files](#files)).
 
 ## Functions
 
@@ -163,20 +164,20 @@ static func significantNewlines(_ raw: [Token]) -> [Token] {
 
 ## Limits
 
-**A file holds at most 400 lines, a type at most 250, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. A type counts its nested types and every extension of it in the module. The numbers are SwiftLint's `file_length`, `type_body_length` and `function_body_length` defaults, with two changes: blank and comment lines never count, and a type counts its extensions, so moving code into an extension file doesn't hide its size.
+**A file holds at most 1000 lines, and a function body at most 50.** Only lines of code count: a line holding only whitespace or a comment doesn't. The numbers are SwiftLint's `file_length` error threshold and `function_body_length` warning default. A type has no limit of its own: [Types](#types) bounds it by its one job.
 
-**A data table is exempt from the limits.** A data table is a type whose body is one declaration per case with no logic between them, such as an enum of error codes, or a test's `arguments:` table. Its lines count toward no file, type, suite or test. Every other rule still applies to it.
+**A data table is exempt from the limits.** A data table is a type whose body is one declaration per case with no logic between them, such as an enum of error codes, or a test's `arguments:` table. Its lines count toward no file or test. Every other rule still applies to it.
 
 ## Tests
 
-**A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. For test files, this replaces the file rule under [Files](#files). Each suite counts as a type for the limits. A helper that several test files share goes in a file named for what it helps with.
+**A test file is named for the behaviour it covers**, such as `MoveTests.swift`, and may hold several suites of that behaviour. For test files, this replaces the file rule under [Files](#files). A helper that several test files share goes in a file named for what it helps with.
 
 ## Before you open a pull request
 
 Audit every file, type and function you add or change against this list, and fix what falls short:
 
-- **Every file** holds one primary type and its parts and is named after it (a test file is named for the behaviour its suites cover), and is within the limits.
-- **Every type** does one job, and is within the limits.
+- **Every file** holds one primary type and its parts and is named after it (an extension file holds one area of its type's job and is named `Type+Area.swift`, with the type's stored properties in `Type.swift`; a test file is named for the behaviour its suites cover), and is within the limits.
+- **Every type** does one job.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
 - **Every doc comment** describes its declaration as a black box: it names no step, test, state or helper of the body.
 - **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
