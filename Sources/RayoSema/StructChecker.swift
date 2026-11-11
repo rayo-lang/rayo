@@ -15,8 +15,9 @@ struct StructChecker {
 
     /// Declares the types of `structs` in `declarations`, and returns the types they make, or nil when they can't be
     /// laid out. A struct can't take the name of one of `functions` that comes before it.
-    func declare(_ structs: [StructDecl], besides functions: [FuncDecl],
-                 in declarations: inout Declarations) -> TypeTable? {
+    func declare(
+        _ structs: [StructDecl], besides functions: [FuncDecl], in declarations: inout Declarations,
+    ) -> TypeTable? {
         let ids = declareNames(of: structs, besides: functions, in: &declarations)
         // A field may name any struct, so every name is declared before a field is checked.
         let declared = checkFields(of: structs, declaredAs: ids, in: declarations)
@@ -26,8 +27,9 @@ struct StructChecker {
 
     /// Declares the name of each of `structs`, numbering them in source order, and returns their IDs, nil for each
     /// whose name was taken.
-    private func declareNames(of structs: [StructDecl], besides functions: [FuncDecl],
-                              in declarations: inout Declarations) -> [StructID?] {
+    private func declareNames(
+        of structs: [StructDecl], besides functions: [FuncDecl], in declarations: inout Declarations,
+    ) -> [StructID?] {
         var ids: [StructID?] = []
         var nextIndex = 0
         for declaration in structs {
@@ -46,8 +48,9 @@ struct StructChecker {
 
     /// Whether `declaration` may take its name, reporting it when the name is `_`, another struct's, or that of one
     /// of `functions` that comes before it.
-    private func hasFreeName(_ declaration: StructDecl, besides functions: [FuncDecl],
-                             in declarations: Declarations) -> Bool {
+    private func hasFreeName(
+        _ declaration: StructDecl, besides functions: [FuncDecl], in declarations: Declarations,
+    ) -> Bool {
         // `_` names nothing.
         guard declaration.name != "_" else {
             errors.report(.underscoreDeclared, at: declaration.nameRange)
@@ -69,8 +72,9 @@ struct StructChecker {
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
     /// with their fields' types.
-    private func checkFields(of structs: [StructDecl], declaredAs ids: [StructID?],
-                             in declarations: Declarations) -> [DeclaredStruct] {
+    private func checkFields(
+        of structs: [StructDecl], declaredAs ids: [StructID?], in declarations: Declarations,
+    ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
         for (declaration, id) in zip(structs, ids) {
             let fieldTypes = checkFields(of: declaration, in: declarations)

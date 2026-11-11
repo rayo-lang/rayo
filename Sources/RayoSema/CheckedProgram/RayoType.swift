@@ -7,10 +7,10 @@ public enum RayoType: Hashable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .int: return "Int"
-        case .bool: return "Bool"
-        case .void: return "Void"
-        case .structure(let id): return id.name
+        case .int: "Int"
+        case .bool: "Bool"
+        case .void: "Void"
+        case .structure(let id): id.name
         }
     }
 }

@@ -161,8 +161,8 @@ struct ExpressionChecker {
     /// Whether `==` and `!=` compare values of `type`.
     private func isComparable(_ type: RayoType) -> Bool {
         switch type {
-        case .int, .bool: return true
-        case .void, .structure: return false
+        case .int, .bool: true
+        case .void, .structure: false
         }
     }
 

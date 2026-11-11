@@ -21,8 +21,7 @@ struct TokenTests {
         #expect(tokens("a>b") == ["a", ">", "b"])
     }
 
-    @Test("keywords and identifiers")
-    func names() {
+    @Test func `keywords and identifiers`() {
         let (lexed, _) = Lexer.tokenize("let keep copy struct")
         #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
     }
