@@ -9,8 +9,8 @@ private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
 /// Installs a `rayoc` in `directory` that writes "rayoc: a note" to its standard error, then compiles as the built
 /// `rayoc` does, and returns it.
 private func notingCompiler(in directory: URL) throws -> URL {
-    let standIn = ToolStandIn([.write("rayoc: a note\n")], then: .handOff(toToolAt: builtProduct("rayoc").path))
-    return try install(standIn, at: directory.appendingPathComponent("rayoc"))
+    let standIn = ToolStandIn([.write("rayoc: a note\n")], then: .handOff(toToolAt: builtProduct("rayoc")))
+    return try install(standIn, as: "rayoc", in: directory)
 }
 
 struct DriverTests {
@@ -90,7 +90,7 @@ struct DriverTests {
         try withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
             let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .signal(9)),
-                                       at: directory.appendingPathComponent("rayoc"))
+                                       as: "rayoc", in: directory)
             #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
                 exitCode: 128 + 9, output: "", errors: "rayoc: started\nrayo: rayoc was ended by signal 9\n"))
         }

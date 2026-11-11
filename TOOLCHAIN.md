@@ -110,10 +110,10 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoSemaTests` | The tests of the type table's layouts, and of which kind of declaration each top-level name belongs to, over parsed files |
 | `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of its pipeline's steps, and of the errors it reports for each program, over files held in memory |
 | `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
+| `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
+| `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |
 | `Tests/CLLVMJIT` | The module map that imports LLVM's JIT into the LLVM tests, and into nothing that ships |
-| `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
-| `Tests/tool-stand-in` | The executable that does what the stand-in installed as the file it was started as says |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |

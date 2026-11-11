@@ -1,7 +1,6 @@
 import Foundation
 import Testing
 import RayoDriver
-import ToolStandIn
 
 /// Marks the bundle these tests build into, so that its place on disk can be found.
 private final class TestBundle {}
@@ -12,13 +11,6 @@ func builtProduct(_ name: String) -> URL {
     // On macOS the tests are an `.xctest` bundle beside the products; elsewhere they are an executable among them.
     let products = bundle.pathExtension == "xctest" ? bundle.deletingLastPathComponent() : bundle
     return products.appendingPathComponent(name)
-}
-
-/// Has the file at `url` stand in for a tool, as `standIn` says, run by the built `tool-stand-in`, and returns
-/// `url`.
-func install(_ standIn: ToolStandIn, at url: URL) throws -> URL {
-    try standIn.install(at: url, running: builtProduct("tool-stand-in"))
-    return url
 }
 
 /// Runs the built `rayo` with `arguments` in `directory`, as a user would there, and gives what it exits with and
