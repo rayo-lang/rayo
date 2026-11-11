@@ -1,5 +1,5 @@
-/// The steps of `steps`, run in the order they're written, each on what the step before it gives. A step that
-/// doesn't take what the step before it gives doesn't compile.
+/// Chains `steps` into one step, which runs them in the order they're written, each on what the step before it
+/// gives. A step that doesn't take what the step before it gives doesn't compile.
 func pipeline<Steps: CompilationStep>(@PipelineBuilder _ steps: () -> Steps) -> Steps {
     steps()
 }

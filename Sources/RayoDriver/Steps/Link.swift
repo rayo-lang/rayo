@@ -6,10 +6,6 @@ struct Link: CompilationStep {
     var executable: URL
 
     func run(_ objectCode: [UInt8]) throws(CompilationError) {
-        do {
-            try toolchain.link(objectCode, to: executable)
-        } catch {
-            throw CompilationError(error)
-        }
+        try toolchain.link(objectCode, to: executable)
     }
 }

@@ -52,31 +52,31 @@ struct Toolchain {
     var environment: [String: String]
 
     /// Links `objectCode` with the C library into an executable at `output`.
-    func link(_ objectCode: [UInt8], to output: URL) throws {
+    func link(_ objectCode: [UInt8], to output: URL) throws(CompilationError) {
         guard Self.isExecutableFile(tools.clang) else {
-            throw CompilationError.failed("can't find clang at '\(tools.clang.path)'")
+            throw .failed("can't find clang at '\(tools.clang.path)'")
         }
         let linkerArguments = try linkerArguments()
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let object = directory.appendingPathComponent("program.o")
-        try Data(objectCode).write(to: object)
+        try hostCall { try Data(objectCode).write(to: object) }
         let result = try runCapturingOutput(tools.clang, arguments: linkerArguments + [object.path, "-o", output.path])
         if result.exitCode != 0 {
             let errors = result.errors.hasSuffix("\n") ? String(result.errors.dropLast()) : result.errors
-            throw CompilationError.failed("clang failed:\n\(errors)")
+            throw .failed("clang failed:\n\(errors)")
         }
     }
 
     /// Links `objectCode` into a temporary executable, runs it, and removes it.
-    func linkAndRun(_ objectCode: [UInt8], output: Driver.ProgramOutput) throws -> Driver.Result {
+    func linkAndRun(_ objectCode: [UInt8], output: Driver.ProgramOutput) throws(CompilationError) -> Driver.Result {
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let executable = directory.appendingPathComponent("program")
         try link(objectCode, to: executable)
-        switch output {
-        case .captured: return try runCapturingOutput(executable)
-        case .inherited: return Driver.Result(exitCode: try runAttached(executable), output: "", errors: "")
+        return switch output {
+        case .captured: try runCapturingOutput(executable)
+        case .inherited: Driver.Result(exitCode: try runAttached(executable), output: "", errors: "")
         }
     }
 
@@ -121,7 +121,9 @@ struct Toolchain {
 
     /// Runs `executable` to completion, and returns its exit code and what it wrote. Its output streams go
     /// to temporary files, so that neither can fill up and stall it while the other is read.
-    private func runCapturingOutput(_ executable: URL, arguments: [String] = []) throws -> Driver.Result {
+    private func runCapturingOutput(
+        _ executable: URL, arguments: [String] = [],
+    ) throws(CompilationError) -> Driver.Result {
         let directory = try Self.temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let outputFile = directory.appendingPathComponent("stdout")
@@ -131,17 +133,17 @@ struct Toolchain {
 
         let process = newProcess(executable, arguments: arguments)
         process.standardInput = FileHandle.nullDevice
-        process.standardOutput = try FileHandle(forWritingTo: outputFile)
-        process.standardError = try FileHandle(forWritingTo: errorFile)
+        process.standardOutput = try hostCall { try FileHandle(forWritingTo: outputFile) }
+        process.standardError = try hostCall { try FileHandle(forWritingTo: errorFile) }
         let exitCode = try runToCompletion(process)
         return Driver.Result(exitCode: exitCode,
-                             output: try String(contentsOf: outputFile, encoding: .utf8),
-                             errors: try String(contentsOf: errorFile, encoding: .utf8))
+                             output: try hostCall { try String(contentsOf: outputFile, encoding: .utf8) },
+                             errors: try hostCall { try String(contentsOf: errorFile, encoding: .utf8) })
     }
 
     /// Runs `executable` to completion on `rayoc`'s own standard input, output and error, and returns its
     /// exit code.
-    private func runAttached(_ executable: URL) throws -> Int32 {
+    private func runAttached(_ executable: URL) throws(CompilationError) -> Int32 {
         // An interrupt from the terminal reaches the program and `rayoc` alike. `rayoc` outlives it, so that
         // it still removes the executable; a handled signal, unlike an ignored one, is reset in the program.
         let interrupt = signal(SIGINT) { _ in }
@@ -162,17 +164,27 @@ struct Toolchain {
     }
 
     /// The exit code of `process`, or 128 plus the signal that ended it.
-    private func runToCompletion(_ process: Process) throws -> Int32 {
-        try process.run()
+    private func runToCompletion(_ process: Process) throws(CompilationError) -> Int32 {
+        try hostCall { try process.run() }
         process.waitUntilExit()
         return process.terminationReason == .uncaughtSignal ? 128 + process.terminationStatus : process.terminationStatus
     }
 
     /// Creates a new, empty directory, which the caller removes.
-    private static func temporaryDirectory() throws -> URL {
+    private static func temporaryDirectory() throws(CompilationError) -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("rayoc-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try hostCall { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         return directory
+    }
+}
+
+/// What `operation`, a call into the host's files or processes, gives, or a failure that the error it throws
+/// describes.
+private func hostCall<Value>(_ operation: () throws -> Value) throws(CompilationError) -> Value {
+    do {
+        return try operation()
+    } catch {
+        throw .failed(error.localizedDescription)
     }
 }

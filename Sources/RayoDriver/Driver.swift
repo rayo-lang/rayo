@@ -1,5 +1,6 @@
 import Foundation
 import RayoDiagnostics
+import RayoIR
 import RayoRuntime
 
 public enum Driver {
@@ -121,59 +122,86 @@ public enum Driver {
         }
 
         let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
+        let command = CommandRun(invocation: invocation, readFile: readFile, toolchain: toolchain,
+                                 programOutput: programOutput)
         do {
-            return try run(invocation, readingWith: readFile, linkingWith: toolchain, programOutput: programOutput)
+            return try command.result()
         } catch {
             return result(of: error, in: invocation.path)
         }
     }
 
-    /// Runs the command that `invocation` asks for on the file it names, and gives what the command gave.
-    private static func run(
-        _ invocation: Invocation, readingWith readFile: @escaping (String) -> [UInt8]?,
-        linkingWith toolchain: Toolchain, programOutput: ProgramOutput,
-    ) throws(CompilationError) -> Result {
-        let path = invocation.path
-        let compile = pipeline {
-            ReadSource(readFile: readFile)
-            Parse()
-            Check()
-            Lower()
-            CheckOwnership()
-        }
-        let emit = Emit(mode: invocation.mode, sourcePath: path)
+    /// The command an invocation asks for, run on the file it names, with the host's files and tools.
+    private struct CommandRun {
+        var invocation: Invocation
+        /// The bytes of the file at a path, or nil when the file can't be read.
+        var readFile: (String) -> [UInt8]?
+        var toolchain: Toolchain
+        var programOutput: ProgramOutput
 
-        switch invocation.command {
-        case .check:
-            _ = try compile.run(path)
-        case .build:
+        /// Runs the command, and gives what it gave.
+        func result() throws(CompilationError) -> Result {
+            switch invocation.command {
+            case .check: try check()
+            case .build: try build()
+            case .run: try run()
+            }
+        }
+
+        /// Checks the file, and writes nothing.
+        private func check() throws(CompilationError) -> Result {
+            _ = try compile.run(invocation.path)
+            return Result(exitCode: 0, output: "", errors: "")
+        }
+
+        /// Compiles the file to an executable beside it, and writes nothing else.
+        private func build() throws(CompilationError) -> Result {
             // A path that names no executable stops `build` before it reads the file.
-            let executable = try executable(building: path)
+            let executable = try executable(building: invocation.path)
             try pipeline {
-                compile
-                emit
+                objectCode
                 Link(toolchain: toolchain, executable: executable)
-            }.run(path)
-        case .run:
-            return try pipeline {
-                compile
-                emit
-                LinkAndRun(toolchain: toolchain, output: programOutput)
-            }.run(path)
+            }.run(invocation.path)
+            return Result(exitCode: 0, output: "", errors: "")
         }
-        // `check` and `build` write nothing of their own when they succeed.
-        return Result(exitCode: 0, output: "", errors: "")
-    }
 
-    /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.
-    private static func executable(building path: String) throws(CompilationError) -> URL {
-        guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
-        let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
-        // An empty name, '.' or '..' would name the source's own directory.
-        guard !name.isEmpty && name != "." && name != ".." else {
-            throw .failed("'\(path)' has no name before '.rayo'")
+        /// Compiles the file and runs it, and gives what the run gave.
+        private func run() throws(CompilationError) -> Result {
+            try pipeline {
+                objectCode
+                LinkAndRun(toolchain: toolchain, output: programOutput)
+            }.run(invocation.path)
         }
-        return URL(fileURLWithPath: String(path.dropLast(".rayo".count)))
+
+        /// Compiles the source file at a path to Rayo IR.
+        private var compile: some CompilationStep<String, IRProgram> {
+            pipeline {
+                ReadSource(readFile: readFile)
+                Parse()
+                Check()
+                Lower()
+                CheckOwnership()
+            }
+        }
+
+        /// Compiles the source file at a path to object code, as a build in the invocation's mode.
+        private var objectCode: some CompilationStep<String, [UInt8]> {
+            pipeline {
+                compile
+                Emit(mode: invocation.mode, sourcePath: invocation.path)
+            }
+        }
+
+        /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.
+        private func executable(building path: String) throws(CompilationError) -> URL {
+            guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
+            let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
+            // An empty name, '.' or '..' would name the source's own directory.
+            guard !name.isEmpty && name != "." && name != ".." else {
+                throw .failed("'\(path)' has no name before '.rayo'")
+            }
+            return URL(fileURLWithPath: String(path.dropLast(".rayo".count)))
+        }
     }
 
     /// What `rayoc` gives when a compile of the file at `path` stops with `error`.

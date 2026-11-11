@@ -4,10 +4,6 @@ struct LinkAndRun: CompilationStep {
     var output: Driver.ProgramOutput
 
     func run(_ objectCode: [UInt8]) throws(CompilationError) -> Driver.Result {
-        do {
-            return try toolchain.linkAndRun(objectCode, output: output)
-        } catch {
-            throw CompilationError(error)
-        }
+        try toolchain.linkAndRun(objectCode, output: output)
     }
 }

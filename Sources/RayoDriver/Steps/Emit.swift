@@ -8,8 +8,8 @@ struct Emit: CompilationStep {
 
     func run(_ program: IRProgram) throws(CompilationError) -> [UInt8] {
         do {
-            return try LLVMEmitter.objectCode(for: program, sourcePath: sourcePath, checksOverflow: mode == .debug,
-                                              optimizes: mode == .release)
+            return try LLVMEmitter.objectCode(for: program, sourcePath: sourcePath,
+                                              checksOverflow: mode.checksOverflow, optimizes: mode.optimizes)
         } catch {
             // LLVM fails only through a fault in rayoc or in LLVM, never one in the program.
             throw .failed("internal error: \(error.message)")
