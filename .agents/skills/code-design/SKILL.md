@@ -1,11 +1,11 @@
 ---
 name: code-design
-description: Use before implementing a feature, fix, or refactor to place the change, reuse existing concepts, and keep seams narrow.
+description: Use before implementing a feature, fix, or refactor to place the change, reuse existing concepts, and keep interfaces small.
 ---
 
 # Code Design
 
-Aim for the smallest change in the right module: reuse existing concepts and keep seams narrow.
+Aim for the smallest change in the right module: reuse existing concepts and keep interfaces small.
 
 Apply the first three gates before editing, and the last two after the behavior works. `code-style` governs how files, types and functions are split and laid out, and `code-comments` governs documentation and naming.
 
@@ -21,14 +21,14 @@ If the sentence still assumes the proposed fix, restate it until another valid i
 
 ## 2. Owning module
 
-Name the smallest module that owns the behavior and the level where it lives: target, directory, type, or file.
+Name the smallest module that owns the behavior and the level where it lives: target, directory, subsystem, type, or file.
 
 Map it:
 
-- **Interface:** everything a caller must know to use it: the few entry points callers use to make it do work, the values that cross its seam with them, and the invariants and error modes that hold there.
+- **Interface:** everything a caller must know to use it, in `codebase-design`'s sense; here, chiefly the few entry points callers use to make it do work, the values that cross its seam with them, and the invariants and error modes that hold there.
 - **Implementation:** everything else, used only inside the module.
 
-Verify only the map entries the change depends on: relevant build dependencies, exported surface, and sibling references to alleged implementation. Treat code and build configuration as authoritative over prose.
+Verify only the map entries the change depends on: relevant build dependencies, exported surface, and sibling references to what you take to be implementation. Treat code and build configuration as authoritative over prose.
 
 Implement inside the owner. Reach sibling modules only through their interfaces and along existing dependency edges.
 
@@ -45,10 +45,10 @@ Search by behavior, not by the name you plan to introduce. Inspect the owning mo
 
 Apply the `code-style` skill's reasons-to-change test to that concept and the site you are changing:
 
-- One job: they are one concept. Widen the existing implementation and migrate every affected caller in this change.
+- One job: they are one concept. Widen the existing concept and migrate every affected caller in this change.
 - Two jobs: keep them separate, even when the code looks similar.
 
-A flag or mode added only to make one abstraction serve two callers is evidence that the seam should remain. So is sharing across modules intentionally kept independent.
+A flag or mode added only to make one module serve two callers is evidence that its two uses need two modules. So is sharing across modules intentionally kept independent.
 
 When the evidence is genuinely inconclusive and the choice changes a module's interface, surface the two meanings, what each option couples, and one recommendation before editing.
 

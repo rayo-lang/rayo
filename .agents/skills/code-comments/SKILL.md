@@ -141,8 +141,9 @@ loops.removeLast()
 ```
 
 **A case's opening comment says which case it is and what the function does with it**, in the terms of the function's
-job, in one line where one will do. What else it says is decided by whether a reader would stumble without it. Two
-comments on the same guard; only one does its job.
+job, in one line where one will do. Where a case opens a block, its comment opens the block too, and says the case.
+What else it says is decided by whether a reader would stumble without it. Two comments on the same guard; only one
+does its job.
 
 **A second copy of the code — rewrite it.** `case .paid` already says "paid". The comment is the guard translated back
 into English, and it drifts.
@@ -304,7 +305,8 @@ and fix what falls short:
 - **Every block's opening comment** says the block's step whole, in one line.
 - **Every case's opening comment** says which case it is and what the function does with it.
 - **Every other comment in a body** explains a line a reader would stumble on.
-- **Every comment and name** states the thing itself in the present tense, and cites no issue, pull request, spec
-  section or ADR.
+- **Every name** is spelled out, and names what it covers rather than the artifact that asked for it.
+- **Every comment and name** states the thing itself in the present tense, and cites no record of a decision: no
+  spec section, ADR, issue, pull request, bug or milestone.
 
 A reviewer audits the same list.

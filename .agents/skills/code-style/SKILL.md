@@ -66,7 +66,7 @@ A tidy function also has:
 
 **A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A leaf's block of more than one line opens with a comment that says its step**, so a reader skims the steps without rebuilding each from its lines. The `code-comments` skill says how to word it. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
+**A leaf's block of more than one line opens with a comment**, worded as the `code-comments` skill says, so a reader skims the steps without rebuilding each from its lines. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
 
 This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
@@ -107,7 +107,7 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 }
 ```
 
-**A leaf explains its algorithm in its body, case by case.** Its doc comment says only what it does, as a black box (the `code-comments` skill), so the body is where a reader learns how. Each case the body tells apart opens with a comment, worded as the `code-comments` skill says:
+**A leaf explains its algorithm in its body, case by case**, since the `code-comments` skill keeps its doc comment to what it does, not how. Each case the body tells apart opens with a comment, worded as the `code-comments` skill says:
 
 - each case of a `switch`;
 - each `if`, and each of its `else` branches;
