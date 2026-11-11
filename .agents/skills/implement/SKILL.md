@@ -1,15 +1,20 @@
 ---
 name: implement
-description: "Implement a piece of work based on a spec or set of tickets."
-disable-model-invocation: true
+description: "Implement an issue, spec or set of tickets end to end: build it test-first, open its pull request, and take it through review until approved. Use when handed work to implement."
 ---
 
-Implement the work described by the user in the spec or tickets.
+Implement the work described by the spec, tickets or issue you were given. Branches, pull requests and reviews follow the repo's rules.
 
-Use /tdd where possible, at pre-agreed seams.
+Work on a branch of your own, from the newest code the work builds on; where a branch or pull request for the work already exists, continue it. Use /tdd where possible, at pre-agreed seams.
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 
-Once done, use /code-review to review the work.
+Commit your work, and open a pull request.
 
-Commit your work to the current branch.
+## Review
+
+Start a fresh reviewer agent on the pull request. Fix every finding that blocks approval, and apply the nits you judge worth it. Send each round back to the same reviewer, with what you fixed and what you declined and why, until it approves.
+
+## Hand back
+
+Report the pull request and its approved head to whoever gave you the work, and stop: the merge is theirs. Hand back early with any decision only they can make, or when the pull request can't open yet. When they send you back, because a slot opened, CI failed, or the pull request conflicts with or falls behind its base, open or fix it and take it through the same reviewer again.
