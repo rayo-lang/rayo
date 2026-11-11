@@ -2,11 +2,37 @@
 
 The Rayo toolchain is a Swift package at the root of this repository. It builds two executables: `rayo`, the driver, and `rayoc`, the reference compiler.
 
+- **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
+- **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
+- **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both.
+- **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
+
+## Build it
+
+Install LLVM 23, as [LLVM](#llvm) says. Then build `rayo` and `rayoc`, and put the directory that holds them on your search path:
+
 ```sh
-swift build
-swift test
-swift run rayo run program.rayo
+swift build -c release
+export PATH="$(swift build -c release --show-bin-path):$PATH"
 ```
+
+## Use it
+
+`rayo` is the command you run. It checks a program, builds it into an executable beside it, or builds and runs it:
+
+```sh
+rayo check program.rayo
+rayo build program.rayo
+rayo run program.rayo
+```
+
+## Test it
+
+```sh
+swift test
+```
+
+## How rayo and rayoc work together
 
 `rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with the clang and LLD of the LLVM they were built against. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
 
@@ -18,11 +44,6 @@ swift run rayo run program.rayo
 | `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file to object code for the host, in release mode where no mode is named, and writes it to the object file |
 
 `--` ends the options, so the file after it may be named like one; `rayo` always passes it. `rayoc` exits with 0 when it checked or compiled the file, 1 when the program has errors or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
-
-- **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
-- **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both.
-- **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## LLVM
 
