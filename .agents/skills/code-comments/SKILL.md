@@ -21,9 +21,9 @@ the body uses. Those are explained in the body, on the code they belong to. The 
 something the signature does not already say. When the signature says it all, write nothing.
 
 **Inside a body.** A comment goes in three places. One opens a block, and one opens each case a leaf tells apart; the
-`code-style` skill says when each is called for and what it says. The third sits on a line that is not obvious, or
-where something happens the line does not show: a side effect, an ordering that matters, a trap. Never a translation
-of the line back into English.
+`code-style` skill says when each is called for, and this one says what it says. The third sits on a line that is not
+obvious, or where something happens the line does not show: a side effect, an ordering that matters, a trap. Never a
+translation of the line back into English.
 
 Everything below is these two rules applied.
 
@@ -121,8 +121,28 @@ How the write replaces the file — a temporary file renamed over it, say — is
 
 ## Inside a body
 
-Every case a leaf tells apart takes an opening comment, as the `code-style` skill says. What the comment says is
-decided by whether a reader would stumble without it. Two comments on the same guard; only one does its job.
+**A block's opening comment says the block's step**, in one line, in the terms of the function's job. It describes the
+block whole, never one line of it.
+
+```swift
+// Before — the lines read back, one clause each.
+// Push the loop, lower the body, then pop the loop.
+loops.append(Loop(header: header, exit: exit))
+lower(body)
+loops.removeLast()
+```
+
+```swift
+// After — the step, and what it means for the code inside it.
+// Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
+loops.append(Loop(header: header, exit: exit))
+lower(body)
+loops.removeLast()
+```
+
+**A case's opening comment says which case it is and what the function does with it**, in the terms of the function's
+job, in one line where one will do. What else it says is decided by whether a reader would stumble without it. Two
+comments on the same guard; only one does its job.
 
 **A second copy of the code — rewrite it.** `case .paid` already says "paid". The comment is the guard translated back
 into English, and it drifts.
@@ -273,3 +293,18 @@ asked for it — `RetryReusesRequestId`, not `Issue812Tests`.
 
 **Present tense, about what is.** Never about what was or will be: no "now", "no longer", "previously", "older",
 "legacy", "until X ships". A comment that dates itself is wrong the moment it comes true. Names carry the same rule.
+
+## Before you open a pull request
+
+Audit every comment and name you add or change, and every comment you keep in code you touched, against this list,
+and fix what falls short:
+
+- **Every doc comment** describes its declaration as a black box, says something the signature does not, and names no
+  step, test, state or helper of the body.
+- **Every block's opening comment** says the block's step whole, in one line.
+- **Every case's opening comment** says which case it is and what the function does with it.
+- **Every other comment in a body** explains a line a reader would stumble on.
+- **Every comment and name** states the thing itself in the present tense, and cites no issue, pull request, spec
+  section or ADR.
+
+A reviewer audits the same list.
