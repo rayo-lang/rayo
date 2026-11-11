@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 import CompilerPluginSupport
 import Foundation
 import PackageDescription
@@ -117,6 +117,7 @@ func llvmMajorVersion(at prefix: String) -> Int? {
 
 let package = Package(
     name: "Rayo",
+    platforms: [.macOS(.v27)],
     products: [
         .executable(name: "rayo", targets: ["rayo"]),
         .executable(name: "rayoc", targets: ["rayoc"]),
@@ -154,11 +155,11 @@ let package = Package(
                 .unsafeFlags(["-L\(llvmPrefix)/lib"]),
                 .linkedLibrary("LLVM-\(llvmMajorVersion)", .when(platforms: [.macOS, .linux])),
                 .linkedLibrary("LLVM-C", .when(platforms: [.windows])),
-            ]
+            ],
         ),
         .target(
             name: "RayoLLVM",
-            dependencies: ["LLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"]
+            dependencies: ["LLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource", "RayoSyntax"],
         ),
         .target(name: "RayoCompiler", dependencies: [
             "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM", "RayoSource",
@@ -194,7 +195,7 @@ let package = Package(
             "CLLVM", "CLLVMJIT", "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoSema",
             "RayoSource", "RayoSyntax",
         ]),
-    ]
+    ],
 )
 
 // A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
