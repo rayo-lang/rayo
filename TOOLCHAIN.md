@@ -64,21 +64,33 @@ swift test
 
 On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against Visual Studio's C runtime, and `--linker=platform` runs its `link.exe`.
 
-LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. Unpack it, and move its directory to where LLVM is to stay, such as `C:\llvm`:
+LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. Its installer doesn't put 7-Zip on the search path, so the commands run it from where it installs. Install 7-Zip, unpack the archive, and move its directory to where LLVM is to stay, such as `C:\llvm`:
 
 ```powershell
-7z x -so clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz | 7z x -si -ttar -oC:\
+winget install 7zip.7zip
+$sevenZip = "$env:ProgramFiles\7-Zip\7z.exe"
+& $sevenZip x clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz
+& $sevenZip x clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar -oC:\
+Remove-Item clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar
 Move-Item C:\clang+llvm-23.x.y-x86_64-pc-windows-msvc C:\llvm
 ```
 
-`Package.swift` looks for LLVM nowhere on Windows, so set `LLVM_PREFIX` to that directory, and put its `bin` on the search path, where `rayoc` loads `LLVM-C.dll` from. `$env:` sets them for the shell you are in, and `[Environment]::SetEnvironmentVariable` with `"User"` sets them for every shell you open after:
+`Package.swift` looks for LLVM nowhere on Windows, so set `LLVM_PREFIX` to that directory, and put its `bin` on the search path, where `rayoc` loads `LLVM-C.dll` from. These set them for the shell you are in:
 
 ```powershell
 $env:LLVM_PREFIX = "C:\llvm"
 $env:Path = "$env:LLVM_PREFIX\bin;$env:Path"
 ```
 
-`Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
+And these set them for every shell you open after. `$env:Path` holds the machine's search path as well as your own, so they add to your own alone, which keeps the machine's out of it:
+
+```powershell
+[Environment]::SetEnvironmentVariable("LLVM_PREFIX", "C:\llvm", "User")
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "C:\llvm\bin;$userPath", "User")
+```
+
+On macOS and Linux, `Package.swift` looks for LLVM 23 where apt and Homebrew install it: under `/usr/lib/llvm-23`, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
 `rayo` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. On Windows it looks only in LLVM's prefix, whose archive holds LLD. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
 
