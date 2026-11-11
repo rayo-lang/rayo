@@ -1,4 +1,3 @@
-import CLLVM
 import LLVM
 @testable import RayoLLVM
 import RayoSema
@@ -56,9 +55,10 @@ struct OperatorModule: ~Copyable {
         let value = try expression(self, parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
-        let givesBool = IntValue<I1>(value) != nil
-        program.builder.return(givesBool ? widened(value) : value)
-        return (function, givesBool)
+        let bool = IntValue<I1>(value)
+        let result = if let bool { widened(bool) } else { value }
+        program.builder.return(result)
+        return (function, bool != nil)
     }
 
     /// Defines `name() -> i64` to return what `function` returns on `left` and `right`.
@@ -84,7 +84,7 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `left op right`, where `right` is an Int constant.
     func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
-        try self(op, left, AnyValue(LLVMConstInt(left.type.ref, UInt64(bitPattern: right), 1)))
+        try self(op, left, types.int64.constant(right).anyValue)
     }
 
     /// Emits `op operand`.
@@ -102,13 +102,13 @@ struct OperatorModule: ~Copyable {
 
     /// `parameter`, an Int, as the type `operands` names.
     private func narrowed(_ parameter: AnyValue, to operands: Operands) -> AnyValue {
-        // A Bool is the Int's low bit.
+        // A Bool is the Int's low bit. Every function `define` makes takes Ints, so the parameter is one.
         guard operands == .bools else { return parameter }
-        return AnyValue(LLVMBuildTrunc(program.builder.ref, parameter.ref, types.bool.ref, "")!)
+        return program.builder.truncate(IntValue<I64>(parameter)!, to: types.bool).anyValue
     }
 
     /// `value`, a Bool, as the Int 0 or 1.
-    private func widened(_ value: AnyValue) -> AnyValue {
-        AnyValue(LLVMBuildZExt(program.builder.ref, value.ref, types.int64.ref, "")!)
+    private func widened(_ value: IntValue<I1>) -> AnyValue {
+        program.builder.zeroExtend(value, to: types.int64).anyValue
     }
 }

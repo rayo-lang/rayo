@@ -39,6 +39,7 @@ struct TypeTests {
         #expect(bench.context.arrayType(of: bench.context.integerType(I8.self), count: 3).text == "[3 x i8]")
         #expect(pair.anyType.text == "%Pair = type <{ i64, i1 }>")
         #expect(bench.context.functionType(returning: pair, taking: [bench.int64]).parameters == [bench.int64.anyType])
+        #expect(bench.context.functionType(returning: pair, taking: [bench.int64]).result == pair.anyType)
     }
 
     @Test func `a struct's fields are laid out packed or padded, as it is given them`() throws {

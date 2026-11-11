@@ -1,4 +1,4 @@
-import CLLVM
+import LLVM
 @testable import RayoLLVM
 import RayoSyntax
 
@@ -21,19 +21,19 @@ func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Fol
     try module.ready(exporting: ["f", "g"])
 
     // `f` and its instructions belong to the module, so it lives until they have been read.
-    return withExtendedLifetime(module) { folding(returnedBy: caller.ref) }
+    return withExtendedLifetime(module) { folding(returnedBy: caller) }
 }
 
 /// What the optimiser folds `function`'s result to.
-private func folding(returnedBy function: LLVMValueRef) -> Folding {
+private func folding(returnedBy function: Function) -> Folding {
     // Where the optimiser left `function` no `ret`, every path through it reaches behaviour LLVM leaves undefined.
     guard let returned = returnedValue(of: function) else { return .undefined }
 
-    return if LLVMIsAConstantInt(returned) != nil {
+    return if let result = IntValue<I64>(returned)?.constantValue {
         // An Int constant is the result the optimiser computed.
-        .defined(LLVMConstIntGetSExtValue(returned))
-    } else if LLVMIsUndef(returned) != 0 {
-        // LLVM counts poison as undef, and either is a result it leaves undefined.
+        .defined(result)
+    } else if returned.isUndefined {
+        // Undef and poison are results LLVM leaves undefined.
         .undefined
     } else {
         // Anything else is a result the optimiser couldn't compute.
@@ -42,14 +42,8 @@ private func folding(returnedBy function: LLVMValueRef) -> Folding {
 }
 
 /// The value the first `ret` among `function`'s blocks returns, or nil where none of its blocks returns.
-private func returnedValue(of function: LLVMValueRef) -> LLVMValueRef? {
-    var block = LLVMGetFirstBasicBlock(function)
-    while let current = block {
-        // A block that ends in a `ret` holds the returned value as the `ret`'s operand.
-        if let end = LLVMGetBasicBlockTerminator(current), LLVMGetInstructionOpcode(end) == LLVMRet {
-            return LLVMGetOperand(end, 0)
-        }
-        block = LLVMGetNextBasicBlock(current)
-    }
-    return nil
+private func returnedValue(of function: Function) -> AnyValue? {
+    // A block that ends in a `ret` holds the returned value as the `ret`'s operand.
+    let returning = function.blocks.lazy.compactMap(\.terminator).first { $0.opcode == .return }
+    return returning?.operand(at: 0)
 }

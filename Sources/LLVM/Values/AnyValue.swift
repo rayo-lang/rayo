@@ -14,4 +14,7 @@ public struct AnyValue: ValueHandle, Equatable {
 
     /// The value as LLVM IR writes it: an instruction, a constant, or a whole function's definition.
     public var text: String { takeMessage(LLVMPrintValueToString(ref)) }
+
+    /// Whether this is LLVM's `undef` or `poison`, a value of no particular bits.
+    public var isUndefined: Bool { LLVMIsUndef(ref) != 0 }
 }

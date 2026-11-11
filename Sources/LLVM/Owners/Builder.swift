@@ -70,6 +70,20 @@ public struct Builder: ~Copyable {
         IntValue(unchecked: LLVMBuildSelect(ref, condition.ref, then.ref, otherwise.ref, ""))
     }
 
+    // MARK: Integer conversions
+
+    /// Builds `trunc`, which keeps the low bits of `value` that `type` holds. `type` must be narrower than `value`.
+    public func truncate<From, To>(_ value: IntValue<From>, to type: IntegerType<To>) -> IntValue<To> {
+        precondition(To.bitWidth < From.bitWidth, "LLVM truncates an integer only to a narrower one")
+        return IntValue(unchecked: LLVMBuildTrunc(ref, value.ref, type.ref, ""))
+    }
+
+    /// Builds `zext`, which pads `value` with zero bits to the width of `type`. `type` must be wider than `value`.
+    public func zeroExtend<From, To>(_ value: IntValue<From>, to type: IntegerType<To>) -> IntValue<To> {
+        precondition(To.bitWidth > From.bitWidth, "LLVM zero-extends an integer only to a wider one")
+        return IntValue(unchecked: LLVMBuildZExt(ref, value.ref, type.ref, ""))
+    }
+
     // MARK: Aggregates and calls
 
     /// Builds `extractvalue`, which gives the field at `index` of `aggregate`.

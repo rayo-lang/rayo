@@ -191,7 +191,7 @@ let package = Package(
         .testTarget(name: "LLVMTests", dependencies: ["LLVM"]),
         .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),
         .testTarget(name: "RayoLLVMTests", dependencies: [
-            "CLLVM", "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoSema", "RayoSource",
+            "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoSema", "RayoSource",
             "RayoSyntax",
         ]),
     ],

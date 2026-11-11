@@ -10,7 +10,7 @@ import re
 import sys
 
 # The directories whose Swift files may import LLVM's C module.
-ALLOWED = ['Sources/LLVM', 'Sources/RayoLLVMInstall', 'Tests/RayoLLVMTests']
+ALLOWED = ['Sources/LLVM', 'Sources/RayoLLVMInstall']
 
 # An import declaration of the C module, or of a submodule or a declaration of it, where a statement starts: at the
 # start of a line or after a `;`, behind any attributes and access level. Its groups are the attributes, the `import`
