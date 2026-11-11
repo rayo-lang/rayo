@@ -13,7 +13,9 @@ inputs:
     required: false
     default: ""
   changed-paths:
-    description: The paths a pull request changes that the build reads, as a JSON array; without them, every test runs.
+    description: >-
+      The paths a pull request changes that can change what a test does, as a JSON array; without them, every test
+      runs.
     required: false
     default: ""
 

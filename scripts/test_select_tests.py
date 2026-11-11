@@ -1,19 +1,28 @@
+import contextlib
+import io
+import json
+import os
+import tempfile
 import unittest
 
-from select_tests import selection
+from select_tests import main, selection
 
-# A package laid out as `swift package dump-package` describes one: a chain of source targets, test targets that
-# depend on links of it, and a target at a path of its own.
+
+def target(name, kind, dependencies, path=None):
+    # `swift package dump-package` writes every key of a target, with `null` for a path the manifest leaves out.
+    return {'name': name, 'type': kind, 'path': path, 'dependencies': dependencies}
+
+
+# A chain of source targets, test targets that depend on links of it, and a target at a path of its own.
 PACKAGE = {'targets': [
-    {'name': 'Source', 'type': 'regular', 'dependencies': []},
-    {'name': 'Syntax', 'type': 'regular', 'dependencies': [{'byName': ['Source', None]}]},
-    {'name': 'Sema', 'type': 'regular', 'dependencies': [{'target': ['Syntax', None]}]},
-    {'name': 'Tool', 'type': 'executable', 'path': 'Tests/tool', 'dependencies': []},
-    {'name': 'SyntaxTests', 'type': 'test', 'dependencies': [{'byName': ['Syntax', None]}]},
-    {'name': 'SemaTests', 'type': 'test',
-     'dependencies': [{'byName': ['Sema', None]}, {'product': ['Parser', 'other-package', None, None]}]},
-    {'name': 'ToolTests', 'type': 'test', 'dependencies': [{'byName': ['Tool', None]}]},
-    {'name': 'Unused', 'type': 'regular', 'dependencies': []},
+    target('Source', 'regular', []),
+    target('Syntax', 'regular', [{'byName': ['Source', None]}]),
+    target('Sema', 'regular', [{'target': ['Syntax', None]}]),
+    target('Tool', 'executable', [], path='Tests/tool'),
+    target('SyntaxTests', 'test', [{'byName': ['Syntax', None]}]),
+    target('SemaTests', 'test', [{'byName': ['Sema', None]}, {'product': ['Parser', 'other-package', None, None]}]),
+    target('ToolTests', 'test', [{'byName': ['Tool', None]}]),
+    target('Unused', 'regular', []),
 ]}
 
 
@@ -41,18 +50,50 @@ class SelectTestsTests(unittest.TestCase):
 
     def test_a_dependency_on_a_condition_or_under_module_aliases_is_a_dependency_all_the_same(self):
         package = {'targets': [
-            {'name': 'Source', 'type': 'regular', 'dependencies': []},
-            {'name': 'Syntax', 'type': 'regular', 'dependencies': [
+            target('Source', 'regular', []),
+            target('Syntax', 'regular', [
                 {'target': ['Source', {'platformNames': ['linux']}]},
                 {'product': ['Parser', 'other-package', {'Parser': 'OtherParser'}, {'platformNames': ['macos']}]},
-            ]},
-            {'name': 'SyntaxTests', 'type': 'test', 'dependencies': [{'byName': ['Syntax', {'platformNames': ['windows']}]}]},
+            ]),
+            target('SyntaxTests', 'test', [{'byName': ['Syntax', {'platformNames': ['windows']}]}]),
         ]}
 
         self.assertEqual(selection(package, ['Sources/Source/File.swift']), r'^(SyntaxTests)\.')
 
     def test_a_change_that_no_test_target_depends_on_selects_none(self):
         self.assertEqual(selection(PACKAGE, ['Sources/Unused/File.swift']), 'none')
+
+    def test_no_changed_paths_select_none(self):
+        self.assertEqual(selection(PACKAGE, []), 'none')
+
+
+class SelectTestsMainTests(unittest.TestCase):
+    def run_main(self, arguments):
+        output, errors = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+            status = main(arguments)
+        return status, output.getvalue(), errors.getvalue()
+
+    def write_json(self, directory, name, value):
+        path = os.path.join(directory, name)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(value, f)
+        return path
+
+    def test_the_selection_for_the_files_named_is_written_to_standard_output(self):
+        directory = tempfile.mkdtemp()
+        package = self.write_json(directory, 'package.json', PACKAGE)
+        paths = self.write_json(directory, 'changed-paths.json', ['Sources/Sema/Checker.swift'])
+
+        self.assertEqual(self.run_main([package, paths]), (0, '^(SemaTests)\\.\n', ''))
+
+    def test_any_other_number_of_arguments_is_a_misuse(self):
+        for arguments in [[], ['package.json'], ['package.json', 'changed-paths.json', 'extra']]:
+            with self.subTest(arguments=arguments):
+                status, output, errors = self.run_main(arguments)
+
+                self.assertEqual((status, output), (2, ''))
+                self.assertIn('usage: select_tests.py', errors)
 
 
 if __name__ == '__main__':

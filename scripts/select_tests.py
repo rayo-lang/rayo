@@ -57,7 +57,8 @@ def main(arguments):
     if len(arguments) != 2:
         print('usage: select_tests.py <package.json> <changed-paths.json>', file=sys.stderr)
         return 2
-    with open(arguments[0]) as package, open(arguments[1]) as paths:
+    # Windows reads a file in its own code page unless told otherwise.
+    with open(arguments[0], encoding='utf-8') as package, open(arguments[1], encoding='utf-8') as paths:
         print(selection(json.load(package), json.load(paths)))
     return 0
 
