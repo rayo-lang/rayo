@@ -81,11 +81,11 @@ class SelectTestsMainTests(unittest.TestCase):
         return path
 
     def test_the_selection_for_the_files_named_is_written_to_standard_output(self):
-        directory = tempfile.mkdtemp()
-        package = self.write_json(directory, 'package.json', PACKAGE)
-        paths = self.write_json(directory, 'changed-paths.json', ['Sources/Sema/Checker.swift'])
+        with tempfile.TemporaryDirectory() as directory:
+            package = self.write_json(directory, 'package.json', PACKAGE)
+            paths = self.write_json(directory, 'changed-paths.json', ['Sources/Sema/Checker.swift'])
 
-        self.assertEqual(self.run_main([package, paths]), (0, '^(SemaTests)\\.\n', ''))
+            self.assertEqual(self.run_main([package, paths]), (0, '^(SemaTests)\\.\n', ''))
 
     def test_any_other_number_of_arguments_is_a_misuse(self):
         for arguments in [[], ['package.json'], ['package.json', 'changed-paths.json', 'extra']]:

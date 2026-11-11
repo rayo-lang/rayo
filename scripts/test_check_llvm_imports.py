@@ -9,7 +9,9 @@ from check_llvm_imports import findings, main
 
 class CheckLLVMImportsTests(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = directory.name
 
     def write(self, path, text):
         full = os.path.join(self.root, path)
@@ -104,7 +106,9 @@ class CheckLLVMImportsTests(unittest.TestCase):
 
 class CheckLLVMImportsMainTests(unittest.TestCase):
     def setUp(self):
-        self.root = tempfile.mkdtemp()
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = directory.name
         os.makedirs(os.path.join(self.root, 'Sources/RayoIR'))
 
     def run_main(self):
