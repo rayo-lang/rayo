@@ -2,7 +2,7 @@
 public struct PackageTargets: Decodable, Sendable {
     let targets: [Target]
 
-    /// A target, as much of it as decides which targets a change reaches.
+    /// A target, as much of it as says where its sources are and what it depends on.
     struct Target: Decodable, Sendable {
         let name: String
         let type: String

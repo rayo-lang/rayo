@@ -167,8 +167,9 @@ jobs:
           changed-paths: ${{ needs.changes.outputs.code-paths }}
       # A target can import LLVM's C modules through a dependency it doesn't name, so the check reads the imports
       # themselves. They are the same on every platform, so it runs here alone, whether or not the tests passed.
+      # It needs LLVM installed, since the manifest looks for LLVM before it describes the package.
       - name: Check the imports of LLVM's C modules
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.llvm.outcome == 'success' }}
         run: |
           swift package dump-package > "$RUNNER_TEMP/package.json"
           swift run -q check-llvm-imports "$RUNNER_TEMP/package.json"

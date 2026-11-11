@@ -5,8 +5,8 @@ import PackageGraph
 /// The modules that may import LLVM's C modules.
 let allowedModules: Set<String> = ["RayoLLVM", "RayoLLVMInstall", "RayoLLVMTests"]
 
-/// The Swift files under `directories`, by their paths relative to the current directory, with `/` between their
-/// components.
+/// Reads the Swift files under `directories`, and returns their text by their paths relative to the current
+/// directory, with `/` between the paths' components.
 func swiftFiles(under directories: [String]) throws -> [String: String] {
     var files: [String: String] = [:]
     for directory in directories {
@@ -36,7 +36,7 @@ do {
     let check = LLVMImportCheck(allowedModules: allowedModules)
     let violations = check.violations(in: try swiftFiles(under: ["Sources", "Tests"]), of: package)
     for violation in violations {
-        FileHandle.standardError.write(Data((violation.description(allowing: allowedModules) + "\n").utf8))
+        FileHandle.standardError.write(Data((check.description(of: violation) + "\n").utf8))
     }
     if !violations.isEmpty { exit(1) }
 } catch {

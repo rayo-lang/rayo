@@ -32,11 +32,11 @@ rayo run program.rayo
 swift test
 ```
 
-Only `RayoLLVM`, `RayoLLVMInstall` and `RayoLLVMTests` may import LLVM's C modules, `CLLVM` and `CLLVMJIT`. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. `check-llvm-imports` reads every Swift file's imports instead, and names each import that another module makes. CI runs it on every change to code, and you can run it from the package's root:
+Only the modules that `check-llvm-imports` lists may import LLVM's C modules, `CLLVM` and `CLLVMJIT`, and no module may re-export them. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. `check-llvm-imports` reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from the package's root:
 
 ```sh
-swift package dump-package > package.json
-swift run check-llvm-imports package.json
+swift package dump-package > "${TMPDIR:-/tmp}/package.json"
+swift run check-llvm-imports "${TMPDIR:-/tmp}/package.json"
 ```
 
 ## How rayo and rayoc work together
