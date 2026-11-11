@@ -239,8 +239,8 @@ struct FunctionEmitter {
 
         // Each argument is of its parameter's type.
         for (argument, parameter) in zip(arguments, parameters) where argument.type != parameter {
-            let types = "an argument of type \(argument.type.text), where it takes \(parameter.text)"
-            throw LLVMError(message: "the IR passes '\(function.name)' \(types)")
+            let passed = "an argument of type \(argument.type.text), where it takes \(parameter.text)"
+            throw LLVMError(message: "the IR passes '\(function.name)' \(passed)")
         }
     }
 }

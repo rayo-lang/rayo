@@ -27,6 +27,16 @@ private let illTypedIR = [
         error: "the IR gives '+' an operand of type i1, where it takes i64",
     ),
     IllTypedIR(
+        testDescription: "a division by a Bool",
+        executable: computing(.binary(.divide, read(0), read(1)), on: [.int, .bool], into: .int),
+        error: "the IR gives '/' an operand of type i1, where it takes i64",
+    ),
+    IllTypedIR(
+        testDescription: "a remainder of a Bool",
+        executable: computing(.binary(.remainder, read(0), read(1)), on: [.bool, .int], into: .int),
+        error: "the IR gives '%' an operand of type i1, where it takes i64",
+    ),
+    IllTypedIR(
         testDescription: "negation of a Bool",
         executable: computing(.unary(.negate, read(0)), on: [.bool], into: .int),
         error: "the IR gives '-' an operand of type i1, where it takes i64",
