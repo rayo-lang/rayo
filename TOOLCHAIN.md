@@ -4,7 +4,7 @@ The Rayo toolchain is a Swift package at the root of this repository. It builds 
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both.
+- **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## Build it
@@ -112,6 +112,9 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
+| `Tests/TestSelection` | Which test targets a change reaches, through the manifest's dependencies |
+| `Tests/select-tests` | The executable that CI runs to choose the tests a pull request needs |
+| `Tests/TestSelectionTests` | The tests of the choice of test targets |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |

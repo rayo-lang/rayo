@@ -27,6 +27,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.paths.outputs.code }}
+      code-paths: ${{ steps.paths.outputs.code-paths }}
       docs: ${{ steps.paths.outputs.docs }}
       swift-release: ${{ env.SWIFT_RELEASE }}
     steps:
@@ -61,12 +62,18 @@ jobs:
           # The compiler's build reads only its sources, its tests and the package manifest, and the tests run
           # through this workflow and its actions. The docs check reads every Markdown file, its own scripts and
           # every file a link names, so a deleted file of any kind can break a link.
-          code='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
-          docs='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
-          if grep -q -E "$code" <<< "$changed"; then code=true; else code=false; fi
-          if grep -q -E "$docs" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
+          code_paths='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
+          docs_paths='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
+          if grep -q -E "$code_paths" <<< "$changed"; then code=true; else code=false; fi
+          if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "docs=$docs" >> "$GITHUB_OUTPUT"
+
+          # A pull request runs only the tests that its code paths reach, which each test job finds from them. A
+          # push to main runs every test, since its build is the one pull requests start from.
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "$code" = true ]; then
+            echo "code-paths=$(grep -E "$code_paths" <<< "$changed" | jq -R . | jq -s -c .)" >> "$GITHUB_OUTPUT"
+          fi
 
   linux:
     name: Test on Linux
@@ -156,6 +163,7 @@ jobs:
         with:
           platform: linux
           llvm-version: ${{ steps.llvm.outputs.version }}
+          changed-paths: ${{ needs.changes.outputs.code-paths }}
 
   macos:
     name: Test on macOS
@@ -223,6 +231,7 @@ jobs:
         with:
           platform: macos
           llvm-version: ${{ steps.brew.outputs.llvm }}
+          changed-paths: ${{ needs.changes.outputs.code-paths }}
 
   windows:
     name: Test on Windows
@@ -299,6 +308,7 @@ jobs:
         with:
           platform: windows
           llvm-version: ${{ env.LLVM_BUILD }}
+          changed-paths: ${{ needs.changes.outputs.code-paths }}
           # The driver's tests link and run programs, which the toolchain doesn't do on Windows.
           arguments: --skip RayoDriverTests
 
