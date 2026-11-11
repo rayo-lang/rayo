@@ -91,7 +91,7 @@ struct EmittedTypeTests {
 
     /// Emits `program` into a new module for the host, as a debug build does, and runs `checks` on the module.
     private func withEmitted(_ program: IRProgram, _ checks: (ModuleBuilder) throws -> Void) throws {
-        try withProgramModule(for: .debug, types: program.types) { programModule in
+        try withProgramModule(for: .debug) { programModule in
             programModule.emitter.emit(program)
             try checks(programModule.module)
         }
@@ -119,9 +119,11 @@ struct EmittedTypeTests {
         var found: [LLVMValueRef] = []
         var block = LLVMGetFirstBasicBlock(function)
         while let currentBlock = block {
-            // Walk the block's instructions, keeping each of the opcode.
+            // Walk the block's instructions in order.
             var instruction = LLVMGetFirstInstruction(currentBlock)
             while let current = instruction {
+                // An instruction of the opcode is one the caller checks, such as a slot's load or store; any other
+                // is passed over.
                 if LLVMGetInstructionOpcode(current) == opcode { found.append(current) }
                 instruction = LLVMGetNextInstruction(current)
             }

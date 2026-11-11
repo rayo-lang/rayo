@@ -9,22 +9,27 @@ struct FunctionEmitter {
     private let llvmFunction: LLVMValueRef
     /// The program's functions, indexed by `FunctionID`, that calls go to.
     private let functions: [FunctionValue]
+    /// The LLVM types of the program's values.
+    private let types: LLVMTypes
     private let program: ProgramEmitter
     private let operators: OperatorEmitter
     private var slots: [LLVMValueRef] = []
     private var blocks: [LLVMBasicBlockRef] = []
 
-    init(function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], program: ProgramEmitter) {
+    init(
+        function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], types: LLVMTypes,
+        program: ProgramEmitter,
+    ) {
         self.function = function
         self.llvmFunction = llvmFunction
         self.functions = functions
+        self.types = types
         self.program = program
         self.operators = OperatorEmitter(program: program, into: llvmFunction)
     }
 
     private var module: ModuleBuilder { program.module }
     private var builder: LLVMBuilderRef { module.builder }
-    private var types: LLVMTypes { program.types }
 
     mutating func emit() {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
