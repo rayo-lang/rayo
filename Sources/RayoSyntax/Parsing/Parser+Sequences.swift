@@ -1,20 +1,21 @@
-import RayoDiagnostics
+internal import RayoDiagnostics
 
 /// Parses the grammar's sequences of items: statements and declarations, one to a line or `;`, and the
 /// arguments and parameters a `(` opens, separated by commas.
-struct SequenceParser {
-    let tokens: TokenStream
-
+extension Parser {
     /// Parses items separated by newlines or `;`, up to a `}` or the end of the file, which it leaves for the
     /// caller. An item that fails is skipped, and its error stays reported.
-    func parseLines<T>(ifUnended unended: TokenStream.ErrorCase, _ item: () throws(ParseFailure) -> T) -> [T] {
+    mutating func parseLines<T>(
+        ifUnended unended: ErrorCase,
+        _ item: (inout Parser) throws(ParseFailure) -> T,
+    ) -> [T] {
         var items: [T] = []
         skipSeparators()
-        while !tokens.current.isPunct(.rbrace) && !tokens.atEnd {
-            do {
-                items.append(try item())
+        while !current.isPunct(.rbrace) && !atEnd {
+            do throws(ParseFailure) {
+                items.append(try item(&self))
                 // An item that runs on past its end is reported, and the rest of it skipped.
-                if !tokens.atStatementEnd { throw tokens.fail(unended) }
+                if !atStatementEnd { throw fail(unended) }
             } catch {
                 // An item that failed is skipped, and the sequence goes on with the next one.
                 recover()
@@ -25,28 +26,30 @@ struct SequenceParser {
     }
 
     /// After a `(`: parses items separated by commas, with an optional trailing comma, and the `)`.
-    func parseList<T>(ifUnclosed unclosed: TokenStream.ErrorCase,
-                      _ item: () throws(ParseFailure) -> T) throws(ParseFailure) -> [T] {
+    mutating func parseList<T>(
+        ifUnclosed unclosed: ErrorCase,
+        _ item: (inout Parser) throws(ParseFailure) -> T,
+    ) throws(ParseFailure) -> [T] {
         var items: [T] = []
-        while !tokens.current.isPunct(.rparen) {
-            items.append(try item())
+        while !current.isPunct(.rparen) {
+            items.append(try item(&self))
             // An item without a comma after it is the last.
-            if !tokens.consume(.comma) { break }
+            if !consume(.comma) { break }
         }
-        try tokens.expect(.rparen, else: unclosed)
+        try expect(.rparen, else: unclosed)
         return items
     }
 
-    private func skipSeparators() {
-        while tokens.current.kind == .newline || tokens.current.isPunct(.semicolon) { tokens.advance() }
+    private mutating func skipSeparators() {
+        while current.kind == .newline || current.isPunct(.semicolon) { advance() }
     }
 
     /// Skips the rest of an item that failed, up to the newline or `;` that ends it, the `}` after it, or the end
     /// of the file.
-    private func recover() {
+    private mutating func recover() {
         var depth = 0
-        loop: while !tokens.atEnd {
-            switch tokens.current.kind {
+        loop: while !atEnd {
+            switch current.kind {
             // A bracket the item opens is skipped whole, up to the bracket that closes it.
             case .punct(.lbrace), .punct(.lparen):
                 depth += 1
@@ -68,7 +71,7 @@ struct SequenceParser {
             default:
                 break
             }
-            tokens.advance()
+            advance()
         }
     }
 }

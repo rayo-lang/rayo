@@ -1,5 +1,5 @@
-import RayoDiagnostics
-import RayoSource
+public import RayoDiagnostics
+internal import RayoSource
 
 /// Turns UTF-8 source into tokens, keeping only the newlines that end statements.
 public struct Lexer {

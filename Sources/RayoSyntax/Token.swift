@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 /// Reserved words. Other words, such as `keep`, lex as identifiers.
 public enum Keyword: String, Sendable {

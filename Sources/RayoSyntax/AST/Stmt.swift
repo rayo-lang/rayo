@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 public struct Stmt: Sendable {
     public var kind: StmtKind

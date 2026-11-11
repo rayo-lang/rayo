@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 public enum TypeExpr: Sendable {
     /// `Int`.

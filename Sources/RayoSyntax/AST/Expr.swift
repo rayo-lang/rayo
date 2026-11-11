@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 public struct Expr: Sendable {
     public var kind: ExprKind

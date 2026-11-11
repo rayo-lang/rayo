@@ -1,4 +1,4 @@
-import RayoSource
+public import RayoSource
 
 /// `func name(parameters) -> Result { … }`, where the result type is optional.
 public struct FuncDecl: Sendable {
