@@ -1,4 +1,5 @@
 import RayoDiagnostics
+import RayoSource
 import RayoSyntax
 
 /// Checks a file's structs: that each has a name of its own, that its fields have names of their own and types that
@@ -14,14 +15,16 @@ struct StructChecker {
     let errors: ErrorList
 
     /// Declares the types of `structs` in `declarations`, and returns the types they make, or nil when they can't be
-    /// laid out. A struct can't take the name of one of `functions` that comes before it.
+    /// laid out. A struct that comes after a function of its name, `firstFunctions` giving where the first of each
+    /// name starts, is reported, and still declared.
     func declare(
-        _ structs: [StructDecl], besides functions: [FuncDecl], in declarations: inout Declarations,
+        _ structs: [StructDecl], besides firstFunctions: [String: SourceLocation],
+        in declarations: inout Declarations,
     ) -> TypeTable? {
-        let ids = declareNames(of: structs, besides: functions, in: &declarations)
+        let ids = declareNames(of: structs, besides: firstFunctions, in: &declarations)
 
         // A field may name any struct, so every name is declared before a field is checked.
-        let declared = declareFields(of: structs, declaredAs: ids, in: declarations)
+        let declared = declaredStructs(structs, withIDs: ids, in: declarations)
 
         guard !reportSelfContaining(among: declared) else { return nil }
 
@@ -29,18 +32,24 @@ struct StructChecker {
     }
 
     /// Declares the name of each of `structs`, numbering them in source order, and returns their IDs, nil for each
-    /// whose name was taken.
+    /// whose name is `_` or another struct's. A struct that comes after a function of its name, `firstFunctions`
+    /// giving where the first of each name starts, is reported, and still declared.
     private func declareNames(
-        of structs: [StructDecl], besides functions: [FuncDecl], in declarations: inout Declarations,
+        of structs: [StructDecl], besides firstFunctions: [String: SourceLocation],
+        in declarations: inout Declarations,
     ) -> [StructID?] {
         var ids: [StructID?] = []
         var nextIndex = 0
         for declaration in structs {
-            // A struct whose name is taken is reported, and gets no ID.
-            guard hasFreeName(declaration, besides: functions, in: declarations) else {
+            // A struct whose name is `_` or another struct's is reported, and gets no ID.
+            guard hasFreeName(declaration, in: declarations) else {
                 ids.append(nil)
                 continue
             }
+
+            // Number and declare the struct, even when a function before it has its name: a type is looked up
+            // apart from a function, so the struct's uses still find it, and raise no error of their own.
+            reportNameOfEarlierFunction(declaration, besides: firstFunctions)
             let id = StructID(index: nextIndex, name: declaration.name)
             declarations.declare(id)
             ids.append(id)
@@ -49,39 +58,41 @@ struct StructChecker {
         return ids
     }
 
-    /// Whether `declaration` may take its name, reporting it when the name is `_`, another struct's, or that of one
-    /// of `functions` that comes before it.
-    private func hasFreeName(
-        _ declaration: StructDecl, besides functions: [FuncDecl], in declarations: Declarations,
-    ) -> Bool {
+    /// Whether `declaration` may take its name, reporting it when the name is `_` or another struct's.
+    private func hasFreeName(_ declaration: StructDecl, in declarations: Declarations) -> Bool {
         // `_` names nothing.
         guard declaration.name != "_" else {
             errors.report(.underscoreDeclared, at: declaration.nameRange)
             return false
         }
-        let isAnotherStructsName = declarations.structure(named: declaration.name) != nil
-        // A struct or a function before it holds the name already.
-        guard !isAnotherStructsName, !isNameOfEarlierFunction(declaration, among: functions) else {
+        // A struct before it holds the name already.
+        guard declarations.structure(named: declaration.name) == nil else {
             errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
             return false
         }
         return true
     }
 
-    /// Whether one of `functions` that comes before `declaration` has its name.
-    private func isNameOfEarlierFunction(_ declaration: StructDecl, among functions: [FuncDecl]) -> Bool {
-        functions.contains { $0.name == declaration.name && $0.nameRange.start < declaration.nameRange.start }
+    /// Reports `declaration` when a function of its name comes before it, `firstFunctions` giving where the first of
+    /// each name starts, since a name names one struct, or functions.
+    private func reportNameOfEarlierFunction(
+        _ declaration: StructDecl, besides firstFunctions: [String: SourceLocation],
+    ) {
+        // A function before it holds the name already.
+        if let start = firstFunctions[declaration.name], start < declaration.nameRange.start {
+            errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
+        }
     }
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
     /// with their fields' types.
-    private func declareFields(
-        of structs: [StructDecl], declaredAs ids: [StructID?], in declarations: Declarations,
+    private func declaredStructs(
+        _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
         for (declaration, id) in zip(structs, ids) {
             let fieldTypes = checkFields(of: declaration, in: declarations)
-            // A struct whose name was taken has its fields checked, and is declared no further.
+            // A struct with no ID has its fields checked, and is declared no further.
             if let id { declared.append(DeclaredStruct(id: id, declaration: declaration, fieldTypes: fieldTypes)) }
         }
         return declared

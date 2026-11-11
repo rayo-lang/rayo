@@ -105,6 +105,18 @@ struct StructDeclarationTests {
         #expect(reported.map(\.range.start.line) == [3])
     }
 
+    @Test(arguments: [
+        ("func main() {}\nfunc S() {}\nstruct S\nfunc g(_ s: S) {}", "S"),
+        ("func main() {}\nfunc S() {}\nstruct S\nfunc S(_ x: Int) {}", "S"),
+        ("func main() {\n    S()\n}\nstruct S\nfunc S() {}", "S"),
+        ("struct main\nfunc main() {}", "main"),
+    ])
+    func `a struct or function whose name is taken is still declared, so its uses raise no error of their own`(
+        source: String, name: String,
+    ) {
+        #expect(errors(source) == [.alreadyDeclared(name: name)])
+    }
+
     @Test func `'_' can't name a struct`() {
         #expect(errors("func main() {}\nstruct _") == [.underscoreDeclared])
     }

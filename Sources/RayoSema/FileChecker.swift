@@ -13,6 +13,10 @@ final class FileChecker {
     private var bodies: [FunctionID: CheckedBody] = [:]
     /// The functions whose bodies are being checked.
     private var checking: Set<FunctionID> = []
+    /// Where the first struct of each name starts.
+    private lazy var firstStructs = Self.firstStarts(of: file.structs.map { ($0.name, $0.nameRange.start) })
+    /// Where the first function of each name starts.
+    private lazy var firstFunctions = Self.firstStarts(of: file.functions.map { ($0.name, $0.nameRange.start) })
 
     /// What checking a body gave: its result type is nil when it isn't known.
     private struct CheckedBody {
@@ -27,7 +31,7 @@ final class FileChecker {
 
     func check() -> CheckedProgram? {
         // Check every struct and function, so each one's errors are reported, whether or not the file has a `main`.
-        let types = StructChecker(errors: errors).declare(file.structs, besides: file.functions, in: &declarations)
+        let types = StructChecker(errors: errors).declare(file.structs, besides: firstFunctions, in: &declarations)
         let main = declareFunctions()
         let functions = signatures.indices.map { function(FunctionID(index: $0)) }
         // A file without a `main` has nowhere to start.
@@ -73,7 +77,8 @@ final class FileChecker {
     }
 
     /// Declares the file's functions, then the prelude's functions they and the structs leave free, and returns the
-    /// first `main`. A function can't take the name of a struct that comes before it.
+    /// first `main`. A function named like a struct that comes before every function of the name is reported, and
+    /// still declared.
     private func declareFunctions() -> FunctionID? {
         // Declare each function, and note the first `main`.
         var main: FunctionID?
@@ -83,15 +88,19 @@ final class FileChecker {
             let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
                                       result: declaredResult(of: function, id))
             signatures.append(signature)
-            // A function named like a struct before it is reported, since a name names one struct or functions.
-            if declarations.structure(named: function.name) != nil {
+            let isDeclared = declarations.declare(signature)
+            if isNameOfEarlierStruct(function) {
+                // A function named like a struct that comes before every function of the name is reported, since a
+                // name names one struct or functions. It is still declared: a call looks up functions alone, so it
+                // still finds the function, and raises no error of its own.
                 errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)
-            } else if !declarations.declare(signature) {
+            } else if !isDeclared {
                 // A function with the name, labels and parameter types of one before it is reported, since no call
                 // could reach it.
                 errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
-            } else if function.name == "main" {
-                // The first `main` is where the program starts.
+            }
+            // The first `main` declared is where the program starts.
+            if isDeclared && function.name == "main" {
                 main = main ?? id
                 // A `main` takes no parameters.
                 if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
@@ -101,6 +110,18 @@ final class FileChecker {
         // Declare the prelude's functions that the file's own leave free.
         declarations.declarePrelude()
         return main
+    }
+
+    /// Whether a struct named like `function` comes before every function of that name.
+    private func isNameOfEarlierStruct(_ function: FuncDecl) -> Bool {
+        // A name no struct has is the functions' alone.
+        guard let structStart = firstStructs[function.name] else { return false }
+        return structStart < firstFunctions[function.name, default: function.nameRange.start]
+    }
+
+    /// Where the first of `declarations`, each given by its name and where it starts, of each name starts.
+    private static func firstStarts(of declarations: [(String, SourceLocation)]) -> [String: SourceLocation] {
+        Dictionary(declarations, uniquingKeysWith: { first, _ in first })
     }
 
     /// What a call needs to know about `parameter`. Reports what in it rayoc doesn't support: a convention, a
