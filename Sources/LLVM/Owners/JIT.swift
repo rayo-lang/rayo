@@ -23,7 +23,7 @@ public struct JIT: ~Copyable {
     }
 
     /// Hands `module` to the JIT, which compiles its functions when they are first looked up. The module's functions,
-    /// globals and blocks are invalid once this returns.
+    /// globals and blocks are invalid once this returns or throws.
     public func add(_ module: consuming Module) throws(LLVMError) {
         // Copy `module` through its bitcode into a context of its own, since the JIT owns the context of each module
         // it takes, and `module`'s is shared with what else was made in it.
