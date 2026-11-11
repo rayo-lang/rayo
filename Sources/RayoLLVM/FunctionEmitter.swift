@@ -28,8 +28,9 @@ struct FunctionEmitter {
         self.operators = OperatorEmitter(into: llvmFunction, types: types, panic: runtime.panic)
     }
 
-    /// Emits the body into the function, in `program`'s module.
-    mutating func emit(in program: borrowing ProgramEmitter) {
+    /// Emits the body into the function, in `program`'s module. Throws where the IR gives an instruction a value of a
+    /// type it doesn't take.
+    mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
         program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: llvmFunction))
         slots = allocateSlots(with: program.builder)
@@ -41,7 +42,7 @@ struct FunctionEmitter {
 
         // Emit each IR block into the LLVM block made for it.
         for (block, llvmBlock) in zip(function.blocks, blocks) {
-            emit(block, into: llvmBlock, in: program)
+            try emit(block, into: llvmBlock, in: program)
         }
     }
 
@@ -85,19 +86,19 @@ struct FunctionEmitter {
 
     private func emit(
         _ block: RayoIR.BasicBlock, into llvmBlock: LLVM.BasicBlock, in program: borrowing ProgramEmitter,
-    ) {
+    ) throws(LLVMError) {
         program.builder.position(atEndOf: llvmBlock)
         for statement in block.statements {
-            emit(statement, in: program)
+            try emit(statement, in: program)
         }
         // The terminator ends the block that the statements leave the builder in.
-        emit(block.terminator, in: program)
+        try emit(block.terminator, in: program)
     }
 
-    private func emit(_ statement: Statement, in program: borrowing ProgramEmitter) {
+    private func emit(_ statement: Statement, in program: borrowing ProgramEmitter) throws(LLVMError) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
-            emit(rvalue, into: destination, at: range, in: program)
+            try emit(rvalue, into: destination, at: range, in: program)
 
         // A declaration emits nothing: the program reads a slot only once a statement has stored to it.
         case .declare:
@@ -108,8 +109,8 @@ struct FunctionEmitter {
     /// Emits the instructions that compute `rvalue`, and stores its result in `destination` when there is one.
     private func emit(
         _ rvalue: Rvalue, into destination: Place?, at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) {
-        let value = compute(rvalue, at: range, in: program)
+    ) throws(LLVMError) {
+        let value = try compute(rvalue, at: range, in: program)
 
         // A value that no local takes is dropped.
         guard let destination else { return }
@@ -118,16 +119,19 @@ struct FunctionEmitter {
         store(value, in: destination.local, with: program.builder)
     }
 
-    private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) {
+    private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
         switch terminator {
         // A `goto` branches to the LLVM block made for its target.
         case .goto(let target):
             program.builder.branch(to: blocks[target.index])
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
-        case .branch(let condition, let then, let otherwise):
-            // The checker makes every condition a Bool, and LLVM's verifier rejects a module where one isn't.
-            let condition = IntValue<I1>(unchecked: read(condition, in: program).ref)
+        case .branch(let operand, let then, let otherwise):
+            let value = read(operand, in: program)
+            // A condition that isn't a Bool, which the checker passes no IR with, fails here, saying what it is.
+            guard let condition = IntValue<I1>(value) else {
+                throw LLVMError(message: "the IR branches on a value of type \(value.type.text), where it takes i1")
+            }
             program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
         // A `return` with an operand returns its value.
@@ -162,7 +166,9 @@ struct FunctionEmitter {
 
     /// Emits the instructions that compute `rvalue`, and returns the LLVM value holding its result, or nil
     /// when it has none.
-    private func compute(_ rvalue: Rvalue, at range: SourceRange, in program: borrowing ProgramEmitter) -> AnyValue? {
+    private func compute(
+        _ rvalue: Rvalue, at range: SourceRange, in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) -> AnyValue? {
         switch rvalue {
         // A use is its operand's value.
         case .use(let operand):
@@ -170,9 +176,9 @@ struct FunctionEmitter {
 
         // An operator computes on its operands' values.
         case .unary(let op, let operand):
-            operators.emit(op, on: read(operand, in: program), at: range, in: program)
+            try operators.emit(op, on: read(operand, in: program), at: range, in: program)
         case .binary(let op, let left, let right):
-            operators.emit(op, read(left, in: program), read(right, in: program), at: range, in: program)
+            try operators.emit(op, read(left, in: program), read(right, in: program), at: range, in: program)
 
         // A call passes its arguments' values.
         case .call(let callee, let arguments):

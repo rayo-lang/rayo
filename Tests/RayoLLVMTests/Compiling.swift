@@ -43,9 +43,6 @@ func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     return written
 }
 
-/// Whether the LLVM install checks its own invariants, and so stops the process on IR it should only reject.
-let llvmAssertsOnInvalidIR = (try? llvmTool("llvm-config", ["--assertion-mode"])) != "OFF\n"
-
 #if os(macOS)
 let hostFormat = "Mach-O"
 #elseif os(Linux)

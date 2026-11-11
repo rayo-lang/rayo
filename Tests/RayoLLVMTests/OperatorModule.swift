@@ -23,7 +23,7 @@ struct OperatorModule: ~Copyable {
     private let programModule: ProgramModule
     private let types: LLVMTypes
     /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
-    /// it has made them.
+    /// it has made them, and the tests give them only operands of the types they take, so they never throw.
     private var operators: OperatorEmitter?
 
     init(for build: Build) throws(LLVMError) {
@@ -77,7 +77,7 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `left op right`.
     func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) -> AnyValue {
-        operators!.emit(op, left, right, at: Self.range, in: program)
+        try! operators!.emit(op, left, right, at: Self.range, in: program)
     }
 
     /// Emits `left op right`, where `right` is an Int constant.
@@ -87,7 +87,7 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `op operand`.
     func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) -> AnyValue {
-        operators!.emit(op, on: operand, at: Self.range, in: program)
+        try! operators!.emit(op, on: operand, at: Self.range, in: program)
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.

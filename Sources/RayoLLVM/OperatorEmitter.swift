@@ -18,31 +18,37 @@ struct OperatorEmitter {
     }
 
     /// Emits `op` on `operand` at the builder's position and returns its value. An operator that can panic leaves the
-    /// builder in a new block.
+    /// builder in a new block. Throws where the IR gives `op` an operand of a type it doesn't take.
     func emit(_ op: UnaryOperator, on operand: AnyValue, at range: SourceRange,
-              in program: borrowing ProgramEmitter) -> AnyValue {
+              in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
         switch op {
-        case .negate: emitArithmetic(.subtract, types.int64.constant(0), int(operand), at: range, in: program).anyValue
-        case .not: program.builder.xor(bool(operand), types.bool.constant(1)).anyValue
+        // Negation subtracts an Int from 0.
+        case .negate:
+            let negated = try int(operand, op)
+            return emitArithmetic(.subtract, types.int64.constant(0), negated, at: range, in: program).anyValue
+
+        // `!` flips a Bool's one bit.
+        case .not:
+            return program.builder.xor(try bool(operand, op), types.bool.constant(1)).anyValue
         }
     }
 
     /// Emits `left op right` at the builder's position and returns its value. An operator that can panic leaves the
-    /// builder in a new block.
+    /// builder in a new block. Throws where the IR gives `op` an operand of a type it doesn't take.
     func emit(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue, at range: SourceRange,
-              in program: borrowing ProgramEmitter) -> AnyValue {
+              in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
         switch op {
-        case .add: emitArithmetic(.add, int(left), int(right), at: range, in: program).anyValue
-        case .subtract: emitArithmetic(.subtract, int(left), int(right), at: range, in: program).anyValue
-        case .multiply: emitArithmetic(.multiply, int(left), int(right), at: range, in: program).anyValue
-        case .divide: emitDivision(int(left), int(right), at: range, in: program).anyValue
-        case .remainder: emitRemainder(int(left), int(right), at: range, in: program).anyValue
-        case .equal: compare(.equal, left, right, with: program.builder).anyValue
-        case .notEqual: compare(.notEqual, left, right, with: program.builder).anyValue
-        case .less: compare(.signedLess, left, right, with: program.builder).anyValue
-        case .lessEqual: compare(.signedLessEqual, left, right, with: program.builder).anyValue
-        case .greater: compare(.signedGreater, left, right, with: program.builder).anyValue
-        case .greaterEqual: compare(.signedGreaterEqual, left, right, with: program.builder).anyValue
+        case .add: try emitArithmetic(.add, int(left, op), int(right, op), at: range, in: program).anyValue
+        case .subtract: try emitArithmetic(.subtract, int(left, op), int(right, op), at: range, in: program).anyValue
+        case .multiply: try emitArithmetic(.multiply, int(left, op), int(right, op), at: range, in: program).anyValue
+        case .divide: try emitDivision(int(left, op), int(right, op), at: range, in: program).anyValue
+        case .remainder: try emitRemainder(int(left, op), int(right, op), at: range, in: program).anyValue
+        case .equal: try compare(.equal, op, left, right, with: program.builder).anyValue
+        case .notEqual: try compare(.notEqual, op, left, right, with: program.builder).anyValue
+        case .less: try compare(.signedLess, op, left, right, with: program.builder).anyValue
+        case .lessEqual: try compare(.signedLessEqual, op, left, right, with: program.builder).anyValue
+        case .greater: try compare(.signedGreater, op, left, right, with: program.builder).anyValue
+        case .greaterEqual: try compare(.signedGreaterEqual, op, left, right, with: program.builder).anyValue
         case .and, .or: preconditionFailure("lowering turns '\(op.rawValue)' into branches")
         }
     }
@@ -110,13 +116,13 @@ struct OperatorEmitter {
         builder.select(isMinusOne, types.int64.constant(1), right)
     }
 
-    /// Emits the comparison of `left` and `right`, two Bools or two Ints.
-    private func compare(_ predicate: IntegerPredicate, _ left: AnyValue, _ right: AnyValue,
-                         with builder: borrowing Builder) -> IntValue<I1> {
+    /// Emits the comparison of `left` and `right`, two Bools or two Ints, for `op`.
+    private func compare(_ predicate: IntegerPredicate, _ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue,
+                         with builder: borrowing Builder) throws(LLVMError) -> IntValue<I1> {
         // Bools compare as `i1`s.
-        if let left = IntValue<I1>(left) { return builder.compare(predicate, left, bool(right)) }
+        if let left = IntValue<I1>(left) { return builder.compare(predicate, left, try bool(right, op)) }
         // Everything else compares as `i64`s.
-        return builder.compare(predicate, int(left), int(right))
+        return builder.compare(predicate, try int(left, op), try int(right, op))
     }
 
     private func panic(ifZero value: IntValue<I64>, _ reason: PanicReason, at range: SourceRange,
@@ -145,18 +151,25 @@ struct OperatorEmitter {
         program.builder.position(atEndOf: continues)
     }
 
-    /// `value` as an integer of `Width`, which the checker makes every operand of an operator on Ints or on Bools.
-    /// LLVM's verifier rejects a module where one isn't.
-    private func operand<Width>(_ value: AnyValue, as width: Width.Type) -> IntValue<Width> {
-        IntValue(unchecked: value.ref)
+    /// `value`, an operand of `op`, as an integer of `Width`. Throws where it is of another type, which the checker
+    /// passes no IR with.
+    private func operand<Width, Operator: RawRepresentable<String>>(
+        _ value: AnyValue, of op: Operator, as width: Width.Type,
+    ) throws(LLVMError) -> IntValue<Width> {
+        // An operand of another type would reach LLVM only to be rejected, so it fails here, saying what it is.
+        guard let operand = IntValue<Width>(value) else {
+            let types = "an operand of type \(value.type.text), where it takes i\(Width.bitWidth)"
+            throw LLVMError(message: "the IR gives '\(op.rawValue)' \(types)")
+        }
+        return operand
     }
 
-    private func int(_ value: AnyValue) -> IntValue<I64> {
-        operand(value, as: I64.self)
+    private func int(_ value: AnyValue, _ op: some RawRepresentable<String>) throws(LLVMError) -> IntValue<I64> {
+        try operand(value, of: op, as: I64.self)
     }
 
-    private func bool(_ value: AnyValue) -> IntValue<I1> {
-        operand(value, as: I1.self)
+    private func bool(_ value: AnyValue, _ op: some RawRepresentable<String>) throws(LLVMError) -> IntValue<I1> {
+        try operand(value, of: op, as: I1.self)
     }
 }
 

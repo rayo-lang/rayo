@@ -23,8 +23,9 @@ struct ProgramEmitter: ~Copyable {
     }
 
     /// Defines the program's functions in the module, its structs as named LLVM types, calling `runtime`'s
-    /// functions where the program calls the runtime.
-    func emit(_ executable: IRExecutable, calling runtime: RuntimeFunctions) {
+    /// functions where the program calls the runtime. Throws where the IR gives an instruction a value of a type it
+    /// doesn't take.
+    func emit(_ executable: IRExecutable, calling runtime: RuntimeFunctions) throws(LLVMError) {
         let program = executable.program
         let types = LLVMTypes(program.types, in: context)
         let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: executable, using: types) }
@@ -33,7 +34,7 @@ struct ProgramEmitter: ~Copyable {
         for (function, llvmFunction) in zip(program.functions, functions) {
             var emitter = FunctionEmitter(function: function, into: llvmFunction, functions: functions, types: types,
                                           runtime: runtime)
-            emitter.emit(in: self)
+            try emitter.emit(in: self)
         }
     }
 
