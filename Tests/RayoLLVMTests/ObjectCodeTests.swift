@@ -58,10 +58,12 @@ struct ObjectCodeTests {
 
     @Test(arguments: Build.allCases)
     func `a declaration compiles to no code, in debug and in release`(build: Build) throws {
+        // The same program of one local, with the local declared and without.
         let declared = program(locals: [.int], [
             BasicBlock(statements: [.declare(LocalID(index: 0))], terminator: .return(nil)),
         ])
         let empty = program(locals: [.int], [BasicBlock(statements: [], terminator: .return(nil))])
+
         #expect(try compile(declared, for: build) == compile(empty, for: build))
     }
 

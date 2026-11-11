@@ -237,13 +237,13 @@ struct InitializationCheckerTests {
             ),
         ])
 
+        // The checker reports the second function's error first, as the source has it.
         let reported = InitializationChecker.check(program(of: [usesLate, usesEarly]))
         #expect(reported.map(\.range.start.offset) == [5, 6])
     }
 }
 
-/// The errors the checker reports in a program whose one function is made of `blocks`, the first `parameterCount`
-/// of its locals its parameters.
+/// The errors the checker reports in a program of the one function `function(blocks, parameterCount:)` makes.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
     InitializationChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
 }

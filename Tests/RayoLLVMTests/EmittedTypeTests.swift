@@ -11,7 +11,7 @@ struct EmittedTypeTests {
         result: RayoType, resultText: String,
     ) throws {
         let irFunction = try pick(returning: result, [])
-        try withEmitted(program(of: [voidMain, irFunction])) { module in
+        try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let signature = try signature(of: irFunction.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
             #expect(text(of: LLVMGetReturnType(signature)) == resultText)
@@ -19,7 +19,7 @@ struct EmittedTypeTests {
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
-        try withEmitted(program(of: [voidMain])) { module in
+        try withEmitted(program(of: [emptyMain])) { module in
             let signature = try signature(of: "rayo.main", in: module)
             #expect(try parameterTypes(of: signature) == [])
             #expect(text(of: LLVMGetReturnType(signature)) == "void")
@@ -28,14 +28,14 @@ struct EmittedTypeTests {
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
         let irFunction = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
-        try withEmitted(program(of: [voidMain, irFunction])) { module in
+        try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let llvmFunction = try function(named: irFunction.name, in: module)
             #expect(slotTypes(of: llvmFunction) == ["i64", "i1", "i1", "i64"])
         }
     }
 
     /// A `main` that takes nothing, returns nothing and does nothing.
-    private var voidMain: IRFunction {
+    private var emptyMain: IRFunction {
         mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
     }
 
