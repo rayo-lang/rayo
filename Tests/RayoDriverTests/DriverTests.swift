@@ -1,9 +1,17 @@
 import Foundation
 import Testing
 import RayoDriver
+import ToolStandIn
 
 /// A `rayoc` that no file is: the commands that stop before they compile never run it, and the others fail without it.
 private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
+
+/// Installs a `rayoc` in `directory` that writes "rayoc: a note" to its standard error, then compiles as the built
+/// `rayoc` does, and returns it.
+private func notingCompiler(in directory: URL) throws -> URL {
+    let standIn = ToolStandIn([.write("rayoc: a note\n")], then: .handOff(toToolAt: builtProduct("rayoc")))
+    return try install(standIn, as: "rayoc", in: directory)
+}
 
 struct DriverTests {
     @Test("wrong arguments print the usage", arguments: [
@@ -55,8 +63,7 @@ struct DriverTests {
     ) throws {
         try withTemporaryDirectory { directory in
             let source = try save("func main() { print(1) }", as: "main.rayo", in: directory)
-            let compiler = try script("echo 'rayoc: a note' >&2\nexec '\(builtProduct("rayoc").path)' \"$@\"",
-                                      at: directory.appendingPathComponent("rayoc"))
+            let compiler = try notingCompiler(in: directory)
             #expect(Driver.run([command, source], compiler: compiler) ==
                 CommandResult(exitCode: 0, output: output, errors: "rayoc: a note\n"))
         }
@@ -68,8 +75,7 @@ struct DriverTests {
     ) throws {
         try withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
-            let compiler = try script("echo 'rayoc: a note' >&2\nexec '\(builtProduct("rayoc").path)' \"$@\"",
-                                      at: directory.appendingPathComponent("rayoc"))
+            let compiler = try notingCompiler(in: directory)
             let clang = directory.appendingPathComponent("nonexistent")
             let linkTools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             #expect(Driver.run([command, source], compiler: compiler, linkTools: linkTools) == CommandResult(
@@ -83,8 +89,8 @@ struct DriverTests {
     ) throws {
         try withTemporaryDirectory { directory in
             let source = try save("func main() {}", as: "main.rayo", in: directory)
-            let compiler = try script("echo 'rayoc: started' >&2\nkill -KILL $$",
-                                      at: directory.appendingPathComponent("rayoc"))
+            let compiler = try install(ToolStandIn([.write("rayoc: started\n")], then: .signal(9)),
+                                       as: "rayoc", in: directory)
             #expect(Driver.run([command, source], compiler: compiler) == CommandResult(
                 exitCode: 128 + 9, output: "", errors: "rayoc: started\nrayo: rayoc was ended by signal 9\n"))
         }

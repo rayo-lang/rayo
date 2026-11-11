@@ -5,7 +5,7 @@ import RayoDriver
 /// Marks the bundle these tests build into, so that its place on disk can be found.
 private final class TestBundle {}
 
-/// The executable `name` that the package's build puts beside these tests: `rayo` or `rayoc`.
+/// The executable `name` that the package's build puts beside these tests: `rayo`, `rayoc` or `tool-stand-in`.
 func builtProduct(_ name: String) -> URL {
     let bundle = Bundle(for: TestBundle.self).bundleURL
     // On macOS the tests are an `.xctest` bundle beside the products; elsewhere they are an executable among them.

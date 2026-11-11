@@ -14,10 +14,3 @@ func save(_ source: String, as name: String, in directory: URL) throws -> String
     try Data(source.utf8).write(to: file)
     return file.path
 }
-
-/// Writes a shell script running `body` to `url`, makes it executable, and returns `url`.
-func script(_ body: String, at url: URL) throws -> URL {
-    try Data("#!/bin/sh\n\(body)\n".utf8).write(to: url)
-    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
-    return url
-}

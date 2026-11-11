@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import RayoDriver
 import RayoRuntime
+import ToolStandIn
 
 /// The `rayoc` that the tests that run `rayo` in this process compile with.
 private let compiler = builtProduct("rayoc")
@@ -118,8 +119,8 @@ struct BuildTests {
     @Test("a clang that fails has its errors reported")
     func clangFails() throws {
         try withTemporaryDirectory { directory in
-            let clang = try script("echo 'clang: something broke' >&2\nexit 1",
-                                   at: directory.appendingPathComponent("clang"))
+            let clang = try install(ToolStandIn([.write("clang: something broke\n")], then: .exit(1)),
+                                    as: "clang", in: directory)
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             #expect(try runEmptyMain(linkTools: tools) ==
                 CommandResult(exitCode: 1, output: "", errors: "rayo: clang failed:\nclang: something broke\n"))
@@ -130,14 +131,9 @@ struct BuildTests {
     func clangOnlyLinks() throws {
         try withTemporaryDirectory { directory in
             // Hands what it is given to the installed clang, unless it is source clang would compile.
-            let clang = try script("""
-                for argument in "$@"; do
-                    case "$argument" in
-                        *.ll|*.bc|*.c|*.s) echo "clang: asked to compile $argument" >&2; exit 1 ;;
-                    esac
-                done
-                exec '\(LinkTools.installed.clang.path)' "$@"
-                """, at: directory.appendingPathComponent("clang"))
+            let standIn = ToolStandIn([.refuseArguments(endingIn: [".ll", ".bc", ".c", ".s"])],
+                                      then: .handOff(toToolAt: LinkTools.installed.clang))
+            let clang = try install(standIn, as: "clang", in: directory)
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
             let result = Driver.run(["run", source], compiler: compiler, linkTools: tools)
@@ -151,8 +147,8 @@ struct BuildTests {
         try withTemporaryDirectory { directory in
             // Records that it ran, and hands what it is given to the installed LLD.
             let ran = directory.appendingPathComponent("lld-ran")
-            let lld = try script("touch '\(ran.path)'\nexec '\(LinkTools.installed.lld.path)' \"$@\"",
-                                 at: directory.appendingPathComponent(LinkTools.installed.lld.lastPathComponent))
+            let standIn = ToolStandIn([.touch(ran)], then: .handOff(toToolAt: LinkTools.installed.lld))
+            let lld = try install(standIn, as: LinkTools.installed.lld.lastPathComponent, in: directory)
             let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
             let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
@@ -179,7 +175,7 @@ struct BuildTests {
     func platformLinkerIgnoresSearchPath() throws {
         try withTemporaryDirectory { directory in
             let ran = directory.appendingPathComponent("ld-ran")
-            _ = try script("touch '\(ran.path)'\nexit 1", at: directory.appendingPathComponent("ld"))
+            _ = try install(ToolStandIn([.touch(ran)], then: .exit(1)), as: "ld", in: directory)
             let path = ProcessInfo.processInfo.environment["PATH", default: ""]
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
             let result = Driver.run(["run", "--linker=platform", source], compiler: compiler,
