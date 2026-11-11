@@ -83,7 +83,4 @@ These come after v0.3, in an order not yet decided:
 Each of these is decided in its issue, apart from the questions the issue leaves open, and the spec changes before the work it shapes starts.
 
 - **Two text types** ([#223](https://github.com/rayo-lang/rayo/issues/223)). A user meets the owning `String` and the borrowed `StringView`. A view that borrows only immortal data is a `static` view, as a literal is, which retires `StaticString` and `StaticSpan`. `Name` stays the interned identifier type.
-- **Allocation marked with `alloc`** ([#224](https://github.com/rayo-lang/rayo/issues/224)). Every construction that gives a value heap storage says `alloc`, and growth and escaping closures allocate without it. Where `alloc` names no allocator, it uses the ambient one, in place of today's current allocator:
-  - inside a function that makes a new value of a type that conforms to `Allocating`, such as an initializer or `clone()`, the allocator the new value gets;
-  - inside such a type's other methods, the allocator the instance came from;
-  - everywhere else, the heap.
+- **Allocation marked with `alloc`** ([#224](https://github.com/rayo-lang/rayo/issues/224)). Every construction that gives a value heap storage says `alloc`, `clone()` and other functions that return a new value included, and growth and escaping closures may allocate without it. In place of today's current allocator, a bare `alloc` uses the ambient one: the new value's inside a function that returns a new `Allocating` value, the instance's inside an `Allocating` type's other methods, and `.heap` everywhere else.
