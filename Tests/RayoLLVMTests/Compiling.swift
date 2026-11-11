@@ -5,7 +5,7 @@ import RayoLLVMInstall
 import Testing
 
 /// Compiles `program` the way `build` does.
-func compile(_ program: IRProgram, for build: Build) throws(LLVMError) -> [UInt8] {
+func compile(_ program: IRExecutable, for build: Build) throws(LLVMError) -> [UInt8] {
     try LLVMEmitter.objectCode(
         for: program, sourcePath: "main.rayo", checksOverflow: build == .debug, optimizes: build == .release,
     )

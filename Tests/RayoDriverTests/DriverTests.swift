@@ -177,19 +177,28 @@ struct DriverTests {
         }
     }
 
-    @Test(arguments: ["build", "run"])
-    func `build and run make no executable of a file without 'main', which is a library`(command: String) throws {
+    @Test func `build makes no executable of a file without 'main', which is a library`() throws {
         try withTemporaryDirectory { directory in
             _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
-            #expect(rayo([command, "lib.rayo"], in: directory) == CommandResult(exitCode: 1, output: "", errors: """
-                lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built \
-                into an executable or run
-
-                """))
+            #expect(rayo(["build", "lib.rayo"], in: directory) == libraryRejected)
             let executable = directory.appendingPathComponent(Executable.fileName("lib"))
             #expect(!FileManager.default.fileExists(atPath: executable.path))
         }
     }
+
+    @Test func `run fails on a file without 'main', which is a library, and runs nothing`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo(["run", "lib.rayo"], in: directory) == libraryRejected)
+        }
+    }
+
+    /// What `rayo build` and `rayo run` give for `lib.rayo`, a file without `main`.
+    private let libraryRejected = CommandResult(exitCode: 1, output: "", errors: """
+        lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into an \
+        executable or run
+
+        """)
 
     @Test func `a file rayoc can't read fails the command with rayoc's error`() throws {
         try withTemporaryDirectory { directory in

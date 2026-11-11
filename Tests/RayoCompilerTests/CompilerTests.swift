@@ -40,12 +40,13 @@ struct CompilerTests {
         #expect(compiled.written.isEmpty)
     }
 
-    @Test func `'--check' checks a file without 'main' as a library, and reports only the errors it has`() {
-        let library = compile(["--check", "lib.rayo"], files: ["lib.rayo": "func double(_ n: Int) -> Int { n * 2 }"])
+    @Test(arguments: ["func double(_ n: Int) -> Int { n * 2 }", ""])
+    func `'--check' checks a file without 'main' as a library`(source: String) {
+        let library = compile(["--check", "lib.rayo"], files: ["lib.rayo": source])
         #expect(library.result == CompilerResult(exitCode: 0, errors: ""))
-        let empty = compile(["--check", "lib.rayo"], files: ["lib.rayo": ""])
-        #expect(empty.result == CompilerResult(exitCode: 0, errors: ""))
+    }
 
+    @Test func `'--check' reports only a library's own errors, and no missing 'main'`() {
         let wrong = compile(["--check", "lib.rayo"], files: ["lib.rayo": "func f() { print(x) }"])
         #expect(wrong.result.diagnostics.map(\.code) == [.notDeclared(name: "x")])
     }
