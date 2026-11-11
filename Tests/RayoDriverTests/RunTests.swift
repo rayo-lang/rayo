@@ -313,6 +313,32 @@ struct BuildTests {
                 CommandResult(exitCode: Int32(bitPattern: 0xC000_00FD), output: "", errors: ""))
         }
     }
+
+    @Test("a program that overflows its stack ends with the stack overflow's code on every run")
+    func stackOverflowEveryRun() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("""
+                func main() { print(deeper(0)) }
+                func deeper(_ n: Int) -> Int { deeper(n + 1) + 1 }
+                """, as: "overflow.rayo", in: directory)
+            #expect(rayo(["build", "--debug", "overflow.rayo"], in: directory) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+
+            // How much stack Windows takes to handle the overflow varies from run to run, so one run shows little.
+            let runs = 20
+            let codes = try (0..<runs).map { _ in
+                let executable = Process()
+                executable.executableURL = directory.appendingPathComponent(Executable.fileName("overflow"))
+                try executable.run()
+                executable.waitUntilExit()
+                return executable.terminationStatus
+            }
+
+            // Foundation reports an exception's code without its two highest bits: 0xFD for the stack overflow,
+            // 0xC00000FD, and 0x05 for an access violation, 0xC0000005.
+            #expect(codes == Array(repeating: 0xFD, count: runs))
+        }
+    }
     #endif
 
     @Test("build and run take a source whose path has spaces, and build writes the executable beside it")
