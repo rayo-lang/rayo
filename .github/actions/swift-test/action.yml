@@ -66,7 +66,9 @@ runs:
         else
           swift package dump-package > "$RUNNER_TEMP/package.json"
           printf '%s' "$CHANGED_PATHS" > "$RUNNER_TEMP/changed-paths.json"
-          selection=$(swift run -q select-tests "$RUNNER_TEMP/package.json" "$RUNNER_TEMP/changed-paths.json")
+          # Windows names its Python `python`. Linux's container has the `python3` that LLVM's packages install.
+          if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+          selection=$("$python" scripts/select_tests.py "$RUNNER_TEMP/package.json" "$RUNNER_TEMP/changed-paths.json")
         fi
         echo "Selected tests: $selection"
         echo "selection=$selection" >> "$GITHUB_OUTPUT"
