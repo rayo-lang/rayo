@@ -21,6 +21,21 @@ private struct Fail: CompilationStep {
     }
 }
 
+/// The texts that `Record` steps were given, in the order they were given them.
+private final class Log {
+    var texts: [String] = []
+}
+
+/// Adds the text it's given to its log, and gives the text on.
+private struct Record: CompilationStep {
+    var log: Log
+
+    func run(_ text: String) -> String {
+        log.texts.append(text)
+        return text
+    }
+}
+
 /// Rejects the text it's given with `diagnostics`.
 private struct Reject: CompilationStep {
     var diagnostics: [Diagnostic]
@@ -44,13 +59,16 @@ struct PipelineTests {
         #expect(pipeline { Append(letter: "a") }.run(">") == ">a")
     }
 
-    @Test func `a step that fails stops the pipeline, and no step after it runs`() {
+    @Test func `a step that fails stops the pipeline with its error, and no step after it runs`() {
+        let log = Log()
         let steps = pipeline {
-            Append(letter: "a")
+            Record(log: log)
             Fail(message: "first")
+            Record(log: log)
             Fail(message: "second")
         }
         #expect(throws: CompilationError.failed("first")) { try steps.run(">") }
+        #expect(log.texts == [">"])
     }
 
     @Test func `a rejection gives every diagnostic of the step that rejects, as the step gave them`() {
