@@ -236,7 +236,7 @@ let bad: Vec3 = [1, 2]                    // error: a Vec3 literal needs 3 eleme
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
 | `ExpressibleByFloatLiteral` | `init(floatLiteral value: FloatLiteralType)` | `Half`, `Float`, `Double` |
 
-**A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll([a, b])` passes the `List` that `[a, b]` builds, as `spawnAll(List([a, b]))` would, and that `List` allocates from the current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)). In an annotation or after `as`, `_` stands for what the literal fills in, as in `List<_>`.
+**A literal becomes the type its position expects, wherever that type conforms**: in an annotation, after `as`, and as an argument, a `return` value or the right side of an assignment. So `spawnAll([a, b])` passes the `List` that `[a, b]` builds, as `spawnAll(List([a, b]))` would, and that `List` allocates from the current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). In an annotation or after `as`, `_` stands for what the literal fills in, as in `List<_>`.
 
 **In `@noalloc` code, a literal converts only where that can't allocate** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). That holds when either of these does:
 

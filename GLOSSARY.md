@@ -280,7 +280,7 @@ The allocator another allocator draws its memory from, such as the one a wrapper
 _Avoid_: parent allocator, upstream
 
 **Current allocator**:
-The allocator, kept per thread, that constructors record when they aren't given one, and that `using allocator` sets for a block ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-current-allocator)).
+The allocator, kept per thread, that constructors record when they aren't given one, and that `using allocator` sets for a block ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
 _Avoid_: default allocator, context allocator
 
 **Frozen**:

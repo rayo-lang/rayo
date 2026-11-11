@@ -57,7 +57,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C6 · Allocation inside lent work
 
-**Each call of a parallel loop's body appends to a `List` it owns locally, and to a `List` owned by the element it was given.** Either append may grow its list, through the allocator the list was built with, on whichever thread runs the call ([06](../../spec/06-memory-and-allocators/allocator-basics.md#the-current-allocator)).
+**Each call of a parallel loop's body appends to a `List` it owns locally, and to a `List` owned by the element it was given.** Either append may grow its list, through the allocator the list was built with, on whichever thread runs the call ([06](../../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
 
 - **Must accept** with defined thread-safety for the allocators involved. A scratch arena that gives each thread its own block to allocate from, used from many threads, must be well-defined.
 - **Must accept** the lending thread using and freeing, after the join, what lent work allocated through an allocator that keeps state per thread.

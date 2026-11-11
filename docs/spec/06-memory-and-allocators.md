@@ -1,26 +1,32 @@
 # 06 · Memory and allocators
 
-Values that own heap storage need somewhere to allocate it and a defined way to release it. In Rayo, an allocator names where the storage comes from, and an owning value remembers that allocator as it grows and is destroyed. An arena can reclaim many allocations at once, so resetting one also has to account for values and views that may still reach its memory.
+Values that own heap storage need somewhere to allocate it and a defined way to release it. In Rayo, an allocator names where the storage comes from, every construction that gives a value storage says `alloc`, and an owning value remembers its allocator as it grows and is destroyed. An arena can reclaim many allocations at once, so resetting one also has to account for values and views that may still reach its memory.
 
 ```swift
-let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))   // a heap for level data
-let scratch = Allocator.register(Arena(size: 64.mb))        // an arena for short-lived work
+let levelHeap = AllocatorId.register(TlsfHeap(size: 64.mb))   // a heap for level data
+let scratch = AllocatorId.register(BlockArena(size: 64.mb))   // an arena for short-lived work
 
-var props = List<Prop>(allocator: levelHeap)      // an allocator named explicitly
-var names = List<String>()                        // the current allocator: .system unless a block says otherwise
+var props = levelHeap.alloc List<Prop>()          // an allocator named at the construction
+var names = alloc List<String>()                  // the ambient allocator: .heap here
 
-using allocator = scratch {                       // everything built in here uses the scratch arena
-    var visible = List<Handle<Mesh>>()            // no allocator parameter anywhere
-    cull(scene, into: &visible)
+do {
+    var visible = scratch.alloc List<Handle<Mesh>>()   // built in the scratch arena
+    cull(scene, into: &visible)                        // grows there, though 'cull' names no allocator
     submit(visible.span)
-}                                                 // 'visible' is destroyed here; freeing to an arena is a no-op
+}                                                      // 'visible' is destroyed here; freeing to an arena is a no-op
 
-scratch.reset()                                   // everything the arena handed out is freed at once
+scratch.reset()                                        // everything the arena handed out is freed at once
 ```
 
-`props` records `levelHeap` as its allocator, while `names` takes the current one. The `using` block makes `scratch` current for values built inside it; after `visible` is destroyed, `scratch.reset()` reclaims the arena's storage. A reset that would invalidate a live use panics instead.
+`props` records `levelHeap` as its allocator, and `names` the ambient one, which outside an `Allocating` type's methods is `.heap`. `visible` records `scratch`, so `cull` grows it there without naming an allocator. After `visible` is destroyed, `scratch.reset()` reclaims the arena's storage. A reset that would invalidate a live use panics instead.
 
-**Every heap allocation goes through an allocator the code can name, and every release happens at a point the code shows**, where a value is destroyed:
+**Every heap allocation goes through an allocator the code shows**, in one of three ways ([Allocating with `alloc`](06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)):
+
+- a construction says `alloc`, with an allocator it names or the ambient one;
+- a value grows through the allocator its construction showed;
+- a closure converted to a `Closure` that owns its captures may allocate from the ambient allocator, which its type shows.
+
+**Every release happens at a point the code shows**, where a value is destroyed:
 
 - a scope end, an overwrite or a `consume`;
 - a removal from a container;
@@ -32,7 +38,7 @@ scratch.reset()                                   // everything the arena handed
 
 ## Subchapters
 
-- [Allocator values and defaults](06-memory-and-allocators/allocator-basics.md)
+- [Allocator values and `alloc`](06-memory-and-allocators/allocator-basics.md)
 - [Arena safety and allocator lifetimes](06-memory-and-allocators/arena-safety.md)
 - [Allocator storage and implementations](06-memory-and-allocators/allocator-implementations.md)
 - [Owning boxes and long-lived views](06-memory-and-allocators/owning-values.md)

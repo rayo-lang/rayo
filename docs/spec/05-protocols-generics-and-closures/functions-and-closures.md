@@ -324,7 +324,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
     - its alignment is at most 8;
     - no capture has a layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one ([11](../11-compilation-model.md#what-the-language-leaves-open)).
 
-  Otherwise the captures go in an out-of-line context that the closure owns, from the current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)). The capture list shows at the literal what moves in, and so whether it fits. In `@noalloc` code, a conversion into a `Closure` that allocates is an error.
+  Otherwise the captures go in an out-of-line context that the closure owns, from the current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). The capture list shows at the literal what moves in, and so whether it fits. In `@noalloc` code, a conversion into a `Closure` that allocates is an error.
 - **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a borrowed `Closure` is always the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)), and a `@packed` struct can't hold one.
 - **An out-of-line context is checked like any owning storage** ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, as when an arena was reset since the closure was made, panics. Destroying such a `Closure` skips its captures' `deinit`s and the free, as for a stale `Box`.
 - **Calling.** A stored `Closure<mutating …>` needs `mutable` access to be called, and calling a `Closure<consuming …>` consumes it.

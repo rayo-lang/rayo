@@ -77,7 +77,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 - **Ranges.** A range operator borrows its operands and copies them in, so `0..<count` leaves `count` usable ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **Vectors.** A `Simd` initializer, a load included, copies the lanes it borrows, a store copies its lanes into the span, and a lane read, a swizzle or a shuffle copies the lanes it reads, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).
 - **Inline arrays.** An inline array's `.init(repeating:)` copies the value it repeats ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
-- **The current allocator.** `using allocator = a` reads the id in `a` once, on entry, and holds no borrow of `a`, so the block may contain an `await` ([06](../06-memory-and-allocators/allocator-basics.md#the-current-allocator)).
+- **The current allocator.** `using allocator = a` reads the id in `a` once, on entry, and holds no borrow of `a`, so the block may contain an `await` ([06](../06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).
 - **`as` patterns.** An `as` pattern on a place copies it, since the conversion makes a new value ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **`get` and `set`.** A change through a value property with a `get` and a `set` copies a copyable `owned` subscript argument for the `get`, since one value can't move into both calls ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).

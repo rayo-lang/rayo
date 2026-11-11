@@ -17,24 +17,31 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
 }
 ```
 
-**An allocating operation of the language's, or of a std type the language names, such as `Box` or `Shared`, ends the program when its allocator can't make the allocation** ([11](../11-compilation-model.md#the-prelude), [10](../10-errors-and-safety/panics.md#what-ends-the-program)). So no operation goes on with memory it didn't get. Those operations that build or grow a value at run time also have a fallible form, for code that can make room and try again, as `addSpawn` does. The fallible form returns `nil` or fails with `AllocError`, the prelude's error for an allocation its allocator couldn't make:
+**`alloc` ends the program when its allocator can't make the allocation, without unwinding** ([10](../10-errors-and-safety/panics.md#what-ends-the-program)). Every other allocating operation of the language's, or of a std type the language names, such as growing a `List`, does the same ([11](../11-compilation-model.md#the-prelude)). So no operation goes on with memory it didn't get. Those operations also have a fallible form, for code that can make room and try again, as `addSpawn` does. The fallible form returns `nil` or fails with `AllocError`, the prelude's error for an allocation its allocator couldn't make:
 
-- `try Box.tryNew(v)`, `try Shared.tryNew(v)`, `try LocalShared.tryNew(v)` and `try UniquePointer.tryNew(v)`;
-- `try Closure.tryNew { … }`, for a closure whose captures exceed the inline budget ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
-- the builtin `SoA`'s growing operations, such as `try rows.tryAppend(x)` ([04](../04-types/data-layout.md#struct-of-arrays-soat));
+- `try alloc X(…)`, which fails with `AllocError` through the function's `!` result, as in `try alloc Box(v)` or `try level.alloc List<Prop>()` ([Allocating with `alloc`](allocator-basics.md#allocating-with-alloc));
+- `try Closure.tryNew { … }`, for a closure whose conversion to a `Closure` may allocate ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
+- growing operations, such as the builtin `SoA`'s `try rows.tryAppend(x)` ([04](../04-types/data-layout.md#struct-of-arrays-soat));
 - `Name(interning:)` ([04](../04-types/collections.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
-**`@noalloc` on a function makes any call in it that may allocate a compile error:**
+**Growth and closures keep fallible forms of their own**, `tryAppend` and `Closure.tryNew`, since they have no `alloc` for a `try` to mark.
+
+**`@noalloc` on a function makes anything in it that may allocate a compile error:**
+
+- any `alloc` in its body, `try alloc` included;
+- any call that may allocate (below), such as one that may grow a value, as `append` may;
+- any conversion to `Closure<F>`, whether or not that one would allocate, since its type says it may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
 ```swift
 @noalloc
 func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
     history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
+    var spare = alloc List<Float>()              // error: 'alloc' allocates, and 'fillSilence' is @noalloc
 }
 ```
 
-**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a span. That includes the calls the language makes for the code ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)), so `[1, 2] as List<_>` is an error there ([04](../04-types/collections.md#literals)). Arithmetic that a software routine computes counts as an operation that doesn't allocate, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). A call with no static callee is checked through its type:
+**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a span. That includes the calls the language makes for the code, such as a literal's initializer ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures), [04](../04-types/collections.md#literals)). Arithmetic that a software routine computes counts as an operation that doesn't allocate, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). A call with no static callee is checked through its type:
 
 - a call through a function value may allocate unless its type is `@noalloc` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values));
 - a call through `any P`, and a requirement call in generic code, may allocate unless the protocol declares the requirement `@noalloc`, which every witness to it must then be.
@@ -51,10 +58,10 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 ## Releasing a value without destroying it: `TrivialFree`
 
 ```swift
-using allocator = levelArena { world.level = loadLevel(3) }  // the level's lists and strings come from the arena
+world.level = levelArena.alloc loadLevel(3)                     // the level's lists and strings come from the arena
 
-levelArena.release(replace(&world.level, with: Level()))     // requires Level: TrivialFree; forgets the old level instead of destroying it
-levelArena.reset()                                           // what the arena holds goes stale, and its memory is freed
+levelArena.release(replace(&world.level, with: alloc Level()))  // requires Level: TrivialFree; forgets the old level instead of destroying it
+levelArena.reset()                                              // what the arena holds goes stale, and its memory is freed
 ```
 
 **The compiler derives `TrivialFree`, a marker protocol, for a type whose destruction does nothing but free memory**, as it derives `Frozen`: one in which every `deinit`, at any depth, is `PlainDeinit` ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)). So such a type holds none of these, whose destruction does more:

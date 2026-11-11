@@ -8,7 +8,7 @@ When a value needs a lifetime independent of the local that created it, an ownin
 
 ```swift
 enum Tree { case leaf(Int); case node(Box<Tree>, Box<Tree>) }   // recursion goes through a Box
-let rock = Shared(loadTexture("rock.tex"))                      // immutable, with any number of owners
+let rock = alloc Shared(loadTexture("rock.tex"))                // immutable, with any number of owners
 ```
 
 **Four types own a value through a pointer.** They differ in how many owners the value may have, and on which threads:
@@ -20,6 +20,8 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 | `Shared<T>` | Reference-counted pointer to a `Frozen` or `Synchronized` `T`, with an atomic count; hands out checked `WeakShared<T>`s |
 | `LocalShared<T>` | Reference-counted pointer to a `Frozen` `T`, with a plain count, on one thread |
 
+**Each of the four is `Allocating`, so making one says `alloc`**, as in `alloc Box(v)` or `level.alloc Shared(config)`, and `try alloc Box(v)` is the fallible form ([Allocating with `alloc`](allocator-basics.md#allocating-with-alloc)). The allocator gets only the value the owner points at. The owner itself is a small pointer that lives wherever it is put.
+
 **`Box.leak` gives up a box's allocation for C to hold.** It applies only to a box whose value type is unscoped, a `T: ~Scoped`, since a `RawAllocation` holds the value with no borrows ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). It returns the `RawAllocation` that holds the value, with its address, size, alignment and allocator word ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
 **`Box.adopt`, which is `unsafe`, takes it back.** Its caller promises that the allocation came from leaking a `Box<T>`, and that it is adopted at most once, since a second `adopt` would make a second owner of the value.
@@ -29,14 +31,14 @@ let rock = Shared(loadTexture("rock.tex"))                      // immutable, wi
 **`Shared<T>` counts the owners of a value that many places, on any threads, hold at once:**
 
 ```swift
-struct Texture(var pixels: List<UInt8>, var width: Int)                // Frozen: derived by the compiler
-struct Material(var albedo: Shared<Texture>, var roughness: Float)      // Frozen too, since Shared<Texture> is
+struct Texture(var pixels: List<UInt8>, var width: Int)                  // Frozen: derived by the compiler
+struct Material(var albedo: Shared<Texture>, var roughness: Float)       // Frozen too, since Shared<Texture> is
 
-let rock = Shared(Texture(pixels: loadPixels("rock.tex"), width: 512))
-let wet = Shared(Material(albedo: rock.share(), roughness: 0.2))       // share() adds an owner, visibly
-let dry = Shared(Material(albedo: consume rock, roughness: 0.9))       // a move: the count doesn't change
+let rock = alloc Shared(Texture(pixels: alloc loadPixels("rock.tex"), width: 512))
+let wet = alloc Shared(Material(albedo: rock.share(), roughness: 0.2))   // share() adds an owner, visibly
+let dry = alloc Shared(Material(albedo: consume rock, roughness: 0.9))   // a move: the count doesn't change
 
-let log = Shared(Mutex(List<Message>()))                               // Synchronized: changes only under its lock
+let log = alloc Shared(Mutex(alloc List<Message>()))                     // Synchronized: changes only under its lock
 log.value.lock { $0.append(m) }
 ```
 
@@ -91,16 +93,16 @@ log.value.lock { $0.append(m) }
 **For a view that has to be stored in long-lived state, which a scoped `Span` can't be, the view is a checked `Slice<T>`** ([02](../02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go)). Its buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`:
 
 ```swift
-let package = Shared(try Blob.load("level3.pak"))       // Blob: fixed-size bytes, 16-byte-aligned unless asked
-struct MeshComponent(var vertices: Slice<Vertex>)        // a checked view: a weak link to the buffer and an element range
+let package = alloc Shared(try alloc Blob.load("level3.pak"))   // Blob: fixed-size bytes, 16-byte-aligned unless asked
+struct MeshComponent(var vertices: Slice<Vertex>)                // a checked view: a weak link to the buffer and an element range
 
 let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.vertexOffset, count: header.vertexCount))
-upload(m.vertices.read()!)                               // Span<Vertex>: one check, then none per element
+upload(m.vertices.read()!)                                       // Span<Vertex>: one check, then none per element
 ```
 
 **`Slice<T>` is unscoped, copyable and `Sendable`.** It can be unscoped because it reads its buffer only through a scoped span it hands out for each use, so nothing frees the buffer while it is read ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`.
 
-**A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction.** The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `Blob(count: n, align: 64)`.
+**A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction.** The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `alloc Blob(count: n, align: 64)`.
 
 **A slice is checked when it is made, and again at each read or lock:**
 

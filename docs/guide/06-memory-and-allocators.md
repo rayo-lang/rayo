@@ -36,13 +36,13 @@ A list, string or box that owns allocated storage is an **owning value**. It rec
 - An **arena** frees nothing on its own. Freeing into it does nothing, and a **reset** frees everything it handed out at once.
 - A **wrapper**, such as a memory budget, passes another allocator's allocations through and keeps accounts of them ([06](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators)).
 
-**You can write an allocator of your own.** Every allocator but `.system` is library code that implements the `AllocatorImpl` protocol ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)). Conforming is an `unsafe` promise to keep that protocol's contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
+**You can write an allocator of your own.** Every allocator but `.system` is library code that implements the `AllocatorImpl` protocol ([06](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)). Conforming is an `unsafe` promise to keep that protocol's contract, since the compiler can't check an allocator's bookkeeping ([06](../spec/06-memory-and-allocators/allocator-implementations.md#what-conforming-promises)).
 
 **Every registered allocator must be safe to call from any thread**, since any thread can allocate through an id it holds.
 
 ## The current allocator
 
-Each thread starts with `.system` as its current allocator. `using allocator = a { … }` changes that choice for its block and restores the previous one when the block exits, even by an early return ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-current-allocator)). Code reads the current allocator when it builds new storage without naming another one. That includes:
+Each thread starts with `.system` as its current allocator. `using allocator = a { … }` changes that choice for its block and restores the previous one when the block exits, even by an early return ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). Code reads the current allocator when it builds new storage without naming another one. That includes:
 
 - a constructor that isn't given an allocator, such as `List<Enemy>()`, `String("wave \(n)")` or `Box(e)`;
 - a literal that builds a `List`;
@@ -290,7 +290,7 @@ func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Floa
 - [06 What a reset does](../spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does): every case in which a reset panics, how it orders with other threads, and the `deinit`s it runs.
 - [06 Opening an owning value](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it): what counts as an open, and how opens race with resets.
 - [06 Allocators over other allocators](../spec/06-memory-and-allocators/allocator-implementations.md#allocators-over-other-allocators): budgets and other wrappers, and allocators with a backing.
-- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl): `AllocatorImpl` and what conforming to it promises.
+- [06 Writing an allocator](../spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena): `AllocatorImpl` and what conforming to it promises.
 - [06 Owning boxes](../spec/06-memory-and-allocators/owning-values.md#owning-boxes): `Box`, `Shared`, `LocalShared` and weak links in full, `Frozen`, and handing an owner to C.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): slices of a locked `Blob` or `List`, and what making one checks.
 - [06 Allocation failure](../spec/06-memory-and-allocators/allocation-lifecycle.md#allocation-failure): every fallible form, and what `@noalloc` rejects.
