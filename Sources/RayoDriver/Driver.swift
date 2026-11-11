@@ -100,14 +100,6 @@ public enum Driver {
         }
     }
 
-    /// Where `rayoc run` sends what the program writes.
-    public enum ProgramOutput: Sendable {
-        /// Into the result, once the program ends.
-        case captured
-        /// To `rayoc`'s own standard output and error, as the program writes it.
-        case inherited
-    }
-
     /// Runs `rayoc` with `arguments`, which exclude the program's name, reading source files through
     /// `readFile`, which returns nil for a file it can't read. `build` and `run` link with `linkTools`, and
     /// `environment` is the environment that clang and a program run in.

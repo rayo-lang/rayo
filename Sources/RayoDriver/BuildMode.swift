@@ -1,5 +1,4 @@
-/// A build's mode, which turns the diagnostic checks on and optimisation off in a debug build, and the other way
-/// round in a release one.
+/// Whether a build is a debug or a release build.
 enum BuildMode: String {
     case debug = "--debug"
     case release = "--release"

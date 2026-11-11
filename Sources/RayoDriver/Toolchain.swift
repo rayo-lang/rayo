@@ -8,42 +8,6 @@ import Darwin
 import Foundation
 import RayoLLVM
 
-extension Driver {
-    /// The clang that drives the link of a program, and the LLD it links with unless the platform's linker is asked
-    /// for.
-    public struct LinkTools: Sendable {
-        public var clang: URL
-        /// The LLD for the host's object file format: `ld64.lld` for Mach-O, and `ld.lld` for ELF.
-        public var lld: URL
-
-        public init(clang: URL, lld: URL) {
-            self.clang = clang
-            self.lld = lld
-        }
-
-        /// The clang and LLD of the LLVM install that `rayoc` was built against.
-        public static let installed = LinkTools(
-            clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent("clang"),
-            lld: URL(fileURLWithPath: LLVMInstall.lldDirectory).appendingPathComponent(hostLLD))
-
-        #if canImport(Darwin)
-        private static let hostLLD = "ld64.lld"
-        #elseif os(Linux)
-        private static let hostLLD = "ld.lld"
-        #else
-        #error("rayoc links with LLD only on macOS and Linux")
-        #endif
-    }
-}
-
-/// The linker that clang links a program with.
-enum Linker: String {
-    /// LLD, which links the same way on every platform.
-    case lld
-    /// The platform's own: Apple's `ld` on macOS, and the system `ld` on Linux.
-    case platform
-}
-
 /// The host tools that link object code into an executable and run it.
 struct Toolchain {
     var tools: Driver.LinkTools
@@ -65,6 +29,7 @@ struct Toolchain {
         let object = directory.appendingPathComponent("program.o")
         try runOnHost { try Data(objectCode).write(to: object) }
 
+        // Have clang link the object file into the executable.
         let result = try runCapturingOutput(tools.clang, arguments: linkerArguments + [object.path, "-o", output.path])
         // A link that clang fails reports what clang wrote, without its last newline.
         if result.exitCode != 0 {
@@ -111,7 +76,7 @@ struct Toolchain {
     /// The platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld` where
     /// it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
     private func platformLinker() throws(CompilationError) -> URL {
-        // Ask `xcrun` for the developer tools' `ld` on macOS, where an `xcrun` that fails selects none.
+        // Find where the platform keeps its linker.
         #if canImport(Darwin)
         let found = try? runCapturingOutput(URL(fileURLWithPath: "/usr/bin/xcrun"), arguments: ["--find", "ld"])
         let path = found.flatMap { $0.exitCode == 0 ? $0.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil }
@@ -205,6 +170,7 @@ private func runOnHost<Value>(_ operation: () throws -> Value) throws(Compilatio
     do {
         return try operation()
     } catch {
+        // The host's error stops the compile, with the host's words for what went wrong.
         throw .failed(error.localizedDescription)
     }
 }
