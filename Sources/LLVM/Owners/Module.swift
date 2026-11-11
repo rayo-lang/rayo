@@ -61,7 +61,7 @@ public struct Module: ~Copyable {
     }
 
     /// How many errors LLVM has reported in the module's context.
-    var reportedErrorCount: Int { context.errors.count }
+    package var reportedErrorCount: Int { context.errors.count }
 
     /// An error that says `summary`, then `detail` and the errors LLVM reported in the module's context after the
     /// first `earlier` of them, whichever there are.

@@ -17,9 +17,6 @@ public enum LLVMEmitter {
         emitter.emit(executable)
         try runtime.link(into: module)
         try module.ready(for: target, exporting: [Runtime.entryPoint])
-        let objectCode = try target.objectCode(of: module.llvmModule)
-
-        try module.checkReportedErrors()
-        return objectCode
+        return try module.objectCode(for: target)
     }
 }

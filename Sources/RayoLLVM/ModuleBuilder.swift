@@ -4,7 +4,7 @@ import LLVM
 /// An LLVM module for the host, in a context of its own, and the IR builder that adds to it.
 final class ModuleBuilder {
     private let llvmContext: Context
-    let llvmModule: Module
+    private let llvmModule: Module
     private let llvmBuilder: Builder
 
     let void: LLVMTypeRef
@@ -31,12 +31,6 @@ final class ModuleBuilder {
     var context: LLVMContextRef { llvmContext.ref }
     var module: LLVMModuleRef { llvmModule.ref }
     var builder: LLVMBuilderRef { llvmBuilder.ref }
-
-    /// Throws the errors LLVM has reported in this module's context, if any.
-    func checkReportedErrors() throws(LLVMError) {
-        // Only an error fails the module; a warning fails nothing.
-        if !llvmContext.reportedErrors.isEmpty { throw llvmModule.error("LLVM reported errors:", reportedAfter: 0) }
-    }
 
     /// Makes an empty module in this module's context, for the same target, so that the two link.
     func makeModule(named name: String) -> Module {
@@ -67,10 +61,26 @@ final class ModuleBuilder {
 
     /// Readies the module to compile as `target`'s build: hides every definition but the functions `exported` names
     /// from code outside the module, checks the module is well formed, and optimises it if `target` optimises.
+    /// Throws the errors LLVM has reported in the module's context, if any.
     func ready(for target: borrowing TargetMachine, exporting exported: Set<String>) throws(LLVMError) {
         hideDefinitions(except: exported)
         try llvmModule.verify()
         if target.optimizes { try target.optimize(llvmModule) }
+        try checkReportedErrors()
+    }
+
+    /// Writes the object code of the module, once it is ready, as `target` compiles it, and returns it.
+    func objectCode(for target: borrowing TargetMachine) throws(LLVMError) -> [UInt8] {
+        let objectCode = try target.objectCode(of: llvmModule)
+        // LLVM can report an error as it writes object code and write it all the same, wrongly.
+        try checkReportedErrors()
+        return objectCode
+    }
+
+    /// Throws the errors LLVM has reported in this module's context, if any.
+    private func checkReportedErrors() throws(LLVMError) {
+        // Only an error fails the module; a warning fails nothing.
+        if llvmModule.reportedErrorCount > 0 { throw llvmModule.error("LLVM reported errors:", reportedAfter: 0) }
     }
 
     /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
