@@ -150,7 +150,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - `n` valid elements there, aligned for `T`;
     - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
 
-  Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#variable-sized-structs-trailingarray)).
+  Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 - **Structs and unions that import as `@opaque`.** A struct or union imports as `@opaque` when Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported, since an `@opaque` type is usable only behind a pointer.
 - **Typedefs.** A typedef of a type `T` imports as a `typealias` of `T`, except for these:
     - a typedef that names a tagged type by its own tag, which adds nothing;

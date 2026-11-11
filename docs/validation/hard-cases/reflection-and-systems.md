@@ -137,7 +137,7 @@ mesh->verts = (Vertex*)(blob + (uintptr_t)mesh->verts);    // the fixup
 
 ### I7 · Variable-sized struct
 
-**A header followed by N trailing elements in one allocation (C flexible array member), created and accessed in Rayo.** Network packets and C APIs with a flexible array member want this layout ([04](../../spec/04-types/data-layout.md#variable-sized-structs-trailingarray)).
+**A header followed by N trailing elements in one allocation (C flexible array member), created and accessed in Rayo.** Network packets and C APIs with a flexible array member want this layout ([04](../../spec/04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 
 - **Must accept** with a safe accessor for the trailing elements.
 
