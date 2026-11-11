@@ -10,7 +10,7 @@ struct Enemy(
     var vel: Vec3 = .zero,
     var hp: Float = 100,
     @Transient var target: Handle<Player>? = nil,       // a live player link, not part of a save game
-    @Transient var path: List<Vec3> = [],                 // a cache: rebuilt after loading, never saved
+    @Transient var path: List<Vec3> = alloc [],           // a cache: rebuilt after loading, never saved
 )
 
 game.window = unsafe plat.window_create(1280, 720, "Rayo".cString) // a direct call into C, which you vouch for
@@ -243,9 +243,9 @@ let startTime = now()            // fine: a global 'let' is initialized at start
 **A `const` that run-time code names is frozen into the program's read-only data** ([09](../spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)), since the running program has no compile-time heap.
 
 ```swift
-const lootWeights: Map<Int, Float, FixedHashing> = [1: 0.6, 2: 0.3, 3: 0.1]   // frozen into read-only data
-const dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                  // error: a seeded Map can't be made at compile time
-let dropRates: Map<Int, Float> = [1: 0.6, 2: 0.3, 3: 0.1]                    // fine: built at startup
+const lootWeights: Map<Int, Float, FixedHashing> = alloc [1: 0.6, 2: 0.3, 3: 0.1]   // frozen into read-only data
+const dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                  // error: a seeded Map can't be made at compile time
+let dropRates: Map<Int, Float> = alloc [1: 0.6, 2: 0.3, 3: 0.1]                    // fine: built at startup
 ```
 
 **By default, a `Map` or a `Set` hashes its keys with a secret seed, derived from one the program draws when it starts** ([04](../spec/04-types/collections.md#hash-maps-and-sets)). A server that puts keys from its clients in a map would otherwise let a client send keys that all land in one bucket, which makes every lookup slow. The compiler can't know a seed drawn later, so it can't build such a map, and a global `let` of one is built at startup instead.
@@ -348,7 +348,7 @@ struct Enemy(
     var vel: Vec3 = .zero,
     @Bounds(0, 5000) var hp: Float = 100,
     @Transient var target: Handle<Player>? = nil,
-    @Transient var path: List<Vec3> = [],
+    @Transient var path: List<Vec3> = alloc [],
 )
 
 func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {

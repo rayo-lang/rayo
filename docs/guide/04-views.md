@@ -19,7 +19,7 @@ func parse(_ lines: Span<StringView>) { ... }
 
 func loadScript(_ path: StringView) -> Void!IoError {
     var source = try readText(path)
-    var lines = List<StringView>()
+    var lines = alloc List<StringView>()
     splitLines(source.view, into: &lines)     // 'lines' now borrows 'source'
     source.append("\n")                       // error: 'source' is borrowed by 'lines' (used below)
     parse(lines.span)
@@ -131,9 +131,9 @@ log(title)
 ## Storing views through a `mutable` argument
 
 ```swift
-var lines = List<StringView>()
+var lines = alloc List<StringView>()
 splitLines(source.view, into: &lines)     // 'lines' takes on what 'source.view' carries: 'source'
-var names = List<StringView>()
+var names = alloc List<StringView>()
 names.append(banner.view)                 // 'self' absorbs too: 'names' takes on 'banner'
 
 struct Scanner(var text: StringView, var pos: Int = 0): Scoped {
@@ -270,7 +270,7 @@ use(kept)
 **A `for` loop can collect views of a collection's elements.** The loop gets each element from an **iterator**, a value that walks the collection, by calling its `next()`. A collection's iterator declares `next()` `where return outlives self`, so each element borrows the collection, not the iterator:
 
 ```swift
-var names = List<StringView>()
+var names = alloc List<StringView>()
 for entry in table.entries { names.append(entry.name.view) }   // 'names' borrows 'table'
 use(names)                                                     // fine: the loop's iterator is gone
 ```
@@ -281,7 +281,7 @@ use(names)                                                     // fine: the loop
 
 - **A handle.** An element of a pool is named by a `Handle<T>`: a small copyable index, checked at each use, which reads `nil` once the element is removed ([Handles and objects](05-handles-and-objects.md)).
 - **A `Slice<T>`.** A range of a buffer held by a `Shared` is named by a `Slice<T>`: a checked view that can be stored anywhere, and reads `nil` once the buffer is gone ([Memory and allocators](06-memory-and-allocators.md)).
-- **An owning copy.** Small data can be copied. `String("\(word)")` builds a `String` that owns its text, so it isn't scoped and can go anywhere.
+- **An owning copy.** Small data can be copied. `alloc String("\(word)")` builds a `String` that owns its text, so it isn't scoped and can go anywhere.
 
 **Each of these costs something, and the code shows it.** A handle or a slice costs a check at each use, and a copy allocates once.
 

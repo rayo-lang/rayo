@@ -3,13 +3,13 @@
 In the first chapter, an enemy lost health when it took a hit. To keep a record of those hits, put their damage in a list. A list allocates memory on the heap for its values, and may allocate more as you add them:
 
 ```swift
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
 hits.append(30)
 log("\(hits.count) hits")       // 2 hits
 ```
 
-`List<Int>()` makes an empty list of `Int`s. `append` adds a value at the end, and `count` says how many values the list holds ([04](../spec/04-types/collections.md#collections-and-strings)). `hits` is a `var`, since appending changes the list.
+`alloc List<Int>()` makes an empty list of `Int`s. The `alloc` marks it as a value that owns heap memory: Rayo makes you write it wherever such a value is made, and chapter 6 shows where the memory comes from ([Memory and allocators](06-memory-and-allocators.md)). `append` adds a value at the end, and `count` says how many values the list holds ([04](../spec/04-types/collections.md#collections-and-strings)). `hits` is a `var`, since appending changes the list.
 
 That heap memory has to be freed when the list is no longer needed, and freed only once. If it's freed too early, something else may get that memory while the list still reads it. Freeing it twice corrupts memory, and never freeing it leaks it.
 
@@ -21,7 +21,7 @@ A list in a function's local variable is destroyed when the function returns:
 
 ```swift
 func recordFight() {
-    var hits = List<Int>()
+    var hits = alloc List<Int>()
     hits.append(12)
     log("\(hits.count) hits")
 }                               // 'hits' goes out of scope, and its list is destroyed
@@ -36,9 +36,9 @@ You never write a `free`. The compiler knows where each variable goes out of sco
 A value is also destroyed when its owner is assigned another value, since nothing owns the old one any more:
 
 ```swift
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
-hits = List<Int>()              // the first list is destroyed here
+hits = alloc List<Int>()        // the first list is destroyed here
 ```
 
 ## Moves
@@ -50,7 +50,7 @@ func archive(list: owned List<Int>) {
     log("archived \(list.count) hits")
 }
 
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
 archive(list: hits)
 log("\(hits.count)")            // error: 'hits' was moved
@@ -67,7 +67,7 @@ A move is also cheap. The list itself is only a few bytes, which say where its h
 A `var` that has been moved from can be assigned a new value, and is usable again:
 
 ```swift
-hits = List<Int>()
+hits = alloc List<Int>()
 hits.append(5)                  // fine
 ```
 
@@ -109,14 +109,14 @@ log("best is \(best)")          // fine: best is 30
 
 ```swift
 let backup = copy hits          // error: 'List<Int>' is not copyable
-let twin = hits.clone()         // a second list, sharing nothing with the first
+let twin = alloc hits.clone()   // a second list, sharing nothing with the first
 ```
 
 `copy` would duplicate only the list's own bytes, and those don't hold its values. They only say where the values are on the heap. So a copy of them would be a second list sharing the first one's heap memory. When both lists were destroyed, that memory would be freed twice.
 
 So `copy` works only on a **copyable** type, such as a number or a `Bool`. A type can be copyable only if it owns nothing outside its own bytes ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)). `List` owns heap memory, so it's **move-only**, and `copy` refuses it.
 
-To get a second list, you have to build one: allocate memory for it, and fill it with values of its own. Only the type knows what it owns and how to rebuild it, so its author writes a method for that, `clone()`. `List` has one. A move-only type you define has one only if you write it.
+To get a second list, you have to build one: allocate memory for it, and fill it with values of its own. Only the type knows what it owns and how to rebuild it, so its author writes a method for that, `clone()`. `List` has one. A move-only type you define has one only if you write it. A clone allocates, so you write `alloc` before it, as you do when you make a list.
 
 A clone is meant to be fully independent of the original: changing or destroying one never affects the other. Rayo never calls `clone()` on its own, since it runs the type's code and usually allocates.
 
@@ -132,18 +132,20 @@ log("\(hits.count)")            // error: 'hits' was moved
 Assigning to a variable that already exists moves the value the same way. So does `return`, which moves a value out to the caller ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
 
 ```swift
-func newRound() -> List<Int> {
-    var round = List<Int>()
+alloc func newRound() -> List<Int> {
+    var round = alloc List<Int>()
     round.append(0)
     return round
 }
 
-let current = newRound()        // 'current' owns the new list
-var older = List<Int>()
+let current = alloc newRound()  // 'current' owns the new list
+var older = alloc List<Int>()
 older = current                 // older's first list is destroyed, and 'current' holds nothing
 ```
 
-So if you need a variable's old value after changing it, copy it first:
+`newRound` builds the list it hands back, so it is declared `alloc func`, and a call to it takes `alloc`, as making a list does. Chapter 6 shows what that gives the function ([Memory and allocators](06-memory-and-allocators.md#the-ambient-allocator)).
+
+Every assignment moves, so if you need a variable's old value after changing it, copy it first:
 
 ```swift
 var hp = 100
@@ -157,7 +159,7 @@ Without `copy`, the 100 would move into `before`, leaving `hp` with nothing. The
 To give a value a second name without moving or copying it, borrow it:
 
 ```swift
-var hits = List<Int>()
+var hits = alloc List<Int>()
 hits.append(12)
 let same = borrow hits
 log("\(same.count)")            // 1
@@ -180,7 +182,7 @@ Once `same` isn't used any more, `hits` can change the list again. Chapter 3 sho
 The compiler follows every path through the code to know whether a variable still holds a value. Here the list moves on only one path:
 
 ```swift
-var hits = List<Int>()
+var hits = alloc List<Int>()
 if bossFight {
     archive(list: hits)
 }
@@ -194,7 +196,7 @@ The fix is to make sure every path leaves `hits` holding a list ([01](../spec/01
 ```swift
 if bossFight {
     archive(list: hits)
-    hits = List<Int>()
+    hits = alloc List<Int>()
 }
 log("\(hits.count)")            // fine
 ```

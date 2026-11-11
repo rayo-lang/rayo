@@ -42,7 +42,7 @@ struct Enemy(
 ## Pools and handles
 
 ```swift
-var players = Pool<Player>(capacity: 8)
+var players = alloc Pool<Player>(capacity: 8)
 let p1 = players.insert(Player(pos: .zero))            // p1: Handle<Player>
 var grunt = Enemy(pos: [5, 0, 5], target: copy p1)    // the enemy keeps a copy of the handle
 
@@ -90,7 +90,7 @@ log("hp \(p.hp)")
 players.remove(p3)
 if let p = players[p2] { log("hp \(p.hp)") }   // p2 still finds its player, wherever it moved
 
-var dead = List<Handle<Enemy>>()
+var dead = alloc List<Handle<Enemy>>()
 for (h, e) in enemies.entries where e.hp <= 0 { dead.append(h) }   // 'h' is the loop's own handle, so it moves in
 for h in dead { enemies.remove(h) }
 ```
@@ -103,16 +103,16 @@ The game's menus have a different shape. A menu is a tree of widgets: each widge
 
 ```swift
 struct Widget(
-    var parent: WeakPointer<Widget>? = nil,            // nil once the parent is gone
-    var children = List<UniquePointer<Widget>>(),      // owns the child widgets
+    var parent: WeakPointer<Widget>? = nil,              // nil once the parent is gone
+    var children = alloc List<UniquePointer<Widget>>(),  // owns the child widgets
     var visible = true,
 )
 ```
 
 ```swift
-var menu = UniquePointer(Widget())                     // the one owner of a new widget
+var menu = alloc UniquePointer(Widget())               // the one owner of a new widget
 let m: WeakPointer<Widget> = menu.weak()               // a link to it
-menu.value.children.append(UniquePointer(Widget(parent: menu.weak())))
+menu.value.children.append(alloc UniquePointer(Widget(parent: menu.weak())))
 
 menu.value.visible = false                             // through the owner: the widget itself
 m.value?.visible = true                                // nil, and skipped, if the menu is gone
@@ -138,7 +138,7 @@ if m.value == nil { log("menu closed") }               // checks only that the m
 ### Moving an owner
 
 ```swift
-var toolbar = UniquePointer(Widget())
+var toolbar = alloc UniquePointer(Widget())
 let save = menu.value.children[0].weak()               // a link to the menu's first child
 var moved = menu.value.children.remove(at: 0)          // its owner leaves the menu's list
 moved.value.parent = toolbar.weak()
