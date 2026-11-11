@@ -1,4 +1,5 @@
 import Foundation
+import PackageGraph
 import Testing
 import TestSelection
 

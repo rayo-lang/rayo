@@ -1,4 +1,5 @@
 import Foundation
+import PackageGraph
 import TestSelection
 
 // The first argument names a file of `swift package dump-package`'s output, and the second a file that holds the

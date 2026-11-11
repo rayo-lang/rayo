@@ -165,6 +165,13 @@ jobs:
           platform: linux
           llvm-version: ${{ steps.llvm.outputs.version }}
           changed-paths: ${{ needs.changes.outputs.code-paths }}
+      # A target can import LLVM's C modules through a dependency it doesn't name, so the check reads the imports
+      # themselves. They are the same on every platform, so it runs here alone, whether or not the tests passed.
+      - name: Check the imports of LLVM's C modules
+        if: ${{ !cancelled() }}
+        run: |
+          swift package dump-package > "$RUNNER_TEMP/package.json"
+          swift run -q check-llvm-imports "$RUNNER_TEMP/package.json"
 
   macos:
     name: Test on macOS
