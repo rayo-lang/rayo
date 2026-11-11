@@ -1,8 +1,8 @@
 import LLVM
 import RayoLLVMTestSupport
 
-/// A module run in this process, whose functions LLVM compiles when they are first looked up, with a call to the
-/// runtime's `rayo.panic` ending the call that reached it instead of the process.
+/// A module run in this process, with a call to the runtime's `rayo.panic` ending the call that reached it instead of
+/// the process.
 struct InProcessJIT: ~Copyable {
     /// What a call came to: the value it returned, or the message of the panic that ended it.
     enum Call {
@@ -14,9 +14,9 @@ struct InProcessJIT: ~Copyable {
 
     /// Takes `module`, which leaves `rayo.panic` undefined.
     init(running module: consuming Module) throws(LLVMError) {
-        // `rayo.panic` is the stand-in that ends a call with its message.
+        // Run `module` in a JIT where `rayo.panic` is the stand-in that ends a call with its message.
         let jit = try JIT()
-        try jit.define("rayo.panic", at: UnsafeRawPointer(bitPattern: UInt(rayo_test_panic_address()))!)
+        try jit.define("rayo.panic", at: rayo_test_panic_address())
         try jit.add(module)
         self.jit = jit
     }

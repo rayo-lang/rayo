@@ -22,10 +22,11 @@ public struct JIT: ~Copyable {
         LLVMConsumeError(LLVMOrcDisposeLLJIT(ref))
     }
 
-    /// Hands `module` to the JIT, which compiles its functions when they are first looked up.
+    /// Hands `module` to the JIT, which compiles its functions when they are first looked up. The module's functions,
+    /// globals and blocks are invalid once this returns.
     public func add(_ module: consuming Module) throws(LLVMError) {
-        // The JIT owns the context of each module it takes, and `module`'s context is shared with what else was
-        // made in it, so the JIT takes a copy of `module`, read from its bitcode into a context of its own.
+        // Copy `module` through its bitcode into a context of its own, since the JIT owns the context of each module
+        // it takes, and `module`'s is shared with what else was made in it.
         let bitcode = LLVMWriteBitcodeToMemoryBuffer(module.ref)!
         defer { LLVMDisposeMemoryBuffer(bitcode) }
         let context = LLVMContextCreate()!
@@ -54,7 +55,7 @@ public struct JIT: ~Copyable {
         var pair = LLVMOrcCSymbolMapPair(Name: LLVMOrcLLJITMangleAndIntern(ref, name), Sym: symbol)
         let definition = LLVMOrcAbsoluteSymbols(&pair, 1)
 
-        // A definition the JIT refuses stays the caller's to dispose of.
+        // Define it in the JIT's main library; a definition the JIT refuses stays the caller's to dispose of.
         let error = LLVMOrcJITDylibDefine(LLVMOrcLLJITGetMainJITDylib(ref), definition)
         if error != nil { LLVMOrcDisposeMaterializationUnit(definition) }
         try check(error, "LLVM's JIT couldn't define '\(name)'")

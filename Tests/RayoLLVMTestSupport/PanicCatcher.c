@@ -89,6 +89,6 @@ static _Noreturn void panic(const char *message, int64_t length) {
     endCall();
 }
 
-uint64_t rayo_test_panic_address(void) {
-    return (uint64_t)(uintptr_t)&panic;
+const void *rayo_test_panic_address(void) {
+    return (const void *)&panic;
 }

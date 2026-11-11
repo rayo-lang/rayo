@@ -214,7 +214,7 @@ func readsLLVMHeaders(_ target: Target, among targets: [Target]) -> Bool {
         case .targetItem(let name, _), .byNameItem(let name, _):
             return name == "CLLVM" || targets.contains { $0.name == name && readsLLVMHeaders($0, among: targets) }
 
-        // A product of another package is not one.
+        // A product of another package never reaches them.
         default:
             return false
         }

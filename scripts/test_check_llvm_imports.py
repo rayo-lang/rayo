@@ -19,7 +19,7 @@ class CheckLLVMImportsTests(unittest.TestCase):
         with open(full, 'w', encoding='utf-8') as f:
             f.write(text)
 
-    def test_an_allowed_directory_may_import_llvms_c_modules(self):
+    def test_an_allowed_directory_may_import_llvms_c_module(self):
         self.write('Sources/LLVM/Context.swift', 'import CLLVM\n')
 
         self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [])
