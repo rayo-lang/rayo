@@ -1,6 +1,7 @@
 import Foundation
 import RayoIR
 import RayoLLVM
+import RayoLLVMInstall
 import Testing
 
 /// Compiles `program` the way `build` does.

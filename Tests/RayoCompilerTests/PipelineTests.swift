@@ -1,6 +1,6 @@
 import Testing
 import RayoDiagnostics
-@testable import RayoDriver
+@testable import RayoCompiler
 import RayoSource
 
 /// Adds its letter to the end of the text it's given.

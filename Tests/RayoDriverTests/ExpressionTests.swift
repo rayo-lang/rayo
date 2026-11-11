@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 import RayoDriver
 
 struct PrecedenceTests {
@@ -18,11 +17,6 @@ struct PrecedenceTests {
     ])
     func logic(expression: String, value: Bool) {
         #expect(output("if \(expression) { print(1) } else { print(0) }") == (value ? "1\n" : "0\n"))
-    }
-
-    @Test("every comparison has one level, so '==' doesn't wait for a '<' on its right")
-    func comparisonsShareALevel() {
-        #expect(errors("func main() { if true == 1 < 2 { } }") == [.operandsDiffer(op: "==", left: "Bool", right: "Int")])
     }
 
     @Test("prefix operators and 'copy' bind tighter than binary operators", arguments: [
@@ -45,12 +39,8 @@ struct LineTests {
         #expect(output(body) == expected + "\n")
     }
 
-    @Test("a line that starts with '-' starts a statement, and one that starts with another operator joins")
+    @Test("a line that starts with a binary operator other than '-' joins the line above")
     func leadingOperator() {
-        let source = "func main() {\nlet a = 3\n-2\n}"
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.unusedValue(type: "Int")])
-        #expect(coveredText(reported, in: source) == ["-2"])
         #expect(output("let a = 3\n    * 2\nprint(a)") == "6\n")
     }
 
@@ -58,28 +48,5 @@ struct LineTests {
     func nextLine() {
         #expect(output("if false { print(1) }\nelse { print(2) }") == "2\n")
         #expect(output("if true\n{ print(3) }") == "3\n")
-    }
-}
-
-struct RangeTests {
-    @Test("an error covers the expression or the name it's about", arguments: [
-        ("let x: Bool = 1 + 2", "1 + 2"),
-        ("let x: Bool = (1 + 2)", "(1 + 2)"),
-        ("let x: Bool = -1", "-1"),
-        ("var a = 1\nlet x: Bool = -a", "-a"),
-        ("if true == 1 < 2 { }", "true == 1"),
-        ("var x = 1\nx += true", "x += true"),
-        ("break", "break"),
-        ("let x: Bool = print(1)", "print(1)"),
-        ("var a = 1\nlet b: Bool = copy a", "copy a"),
-        ("print(1, 2)", "print(1, 2)"),
-        ("print(1) + 2", "print(1) + 2"),
-        ("let x = 1\nx = 2", "x"),
-        ("let x = 1\nlet x = 2", "x"),
-        ("if 1 { }", "1"),
-    ])
-    func covered(body: String, text: String) {
-        let source = "func main() {\n\(body)\n}"
-        #expect(coveredText(diagnostics(source), in: source) == [text])
     }
 }

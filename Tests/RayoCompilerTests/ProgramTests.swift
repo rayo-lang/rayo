@@ -1,6 +1,5 @@
 import Testing
 import RayoDiagnostics
-import RayoDriver
 
 struct ProgramTests {
     @Test("a program that checks reports nothing", arguments: [

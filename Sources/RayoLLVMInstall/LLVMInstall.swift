@@ -1,6 +1,6 @@
 internal import CLLVM
 
-/// The LLVM install that `rayoc` was built against, whose clang and LLD link the programs it compiles.
+/// The LLVM install that Rayo's tools were built against, whose clang and LLD link the programs `rayoc` compiles.
 public enum LLVMInstall {
     public static let majorVersion = Int(LLVM_VERSION_MAJOR)
 

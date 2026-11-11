@@ -5,7 +5,7 @@ import Musl
 #elseif canImport(Darwin)
 import Darwin
 #endif
-import RayoDriver
+import RayoCompiler
 
 func readFile(_ path: String) -> [UInt8]? {
     guard let handle = fopen(path, "rb") else { return nil }
@@ -20,6 +20,14 @@ func readFile(_ path: String) -> [UInt8]? {
     return ferror(handle) != 0 ? nil : bytes
 }
 
+/// Writes `bytes` to the file at `path`, replacing what it held, and returns whether all of them were written.
+func writeFile(_ path: String, _ bytes: [UInt8]) -> Bool {
+    guard let handle = fopen(path, "wb") else { return false }
+    let written = bytes.withUnsafeBytes { fwrite($0.baseAddress, 1, $0.count, handle) }
+    // A write that stops short, or a close that fails to flush, leaves the file incomplete.
+    return fclose(handle) == 0 && written == bytes.count
+}
+
 /// Writes all of `text` to `descriptor`, retrying after a partial or interrupted write.
 func writeAll(_ text: String, to descriptor: Int32) {
     var bytes = Array(text.utf8)[...]
@@ -31,7 +39,6 @@ func writeAll(_ text: String, to descriptor: Int32) {
     }
 }
 
-let result = Driver.run(Array(CommandLine.arguments.dropFirst()), programOutput: .inherited, readFile: readFile)
-writeAll(result.output, to: STDOUT_FILENO)
+let result = Compiler.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile, writeFile: writeFile)
 writeAll(result.errors, to: STDERR_FILENO)
 exit(result.exitCode)

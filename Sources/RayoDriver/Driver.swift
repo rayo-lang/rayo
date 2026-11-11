@@ -1,30 +1,10 @@
 import Foundation
-import RayoDiagnostics
-import RayoIR
-import RayoRuntime
 
+/// The driver, `rayo`, which has the compiler, `rayoc`, compile a source file, and links and runs the program.
 public enum Driver {
-    public struct Result: Equatable, Sendable {
-        public var exitCode: Int32
-        public var output: String
-        public var errors: String
-        /// The errors found in the program, which `errors` also shows.
-        public var diagnostics: [Diagnostic]
-
-        public init(exitCode: Int32, output: String, errors: String, diagnostics: [Diagnostic] = []) {
-            self.exitCode = exitCode
-            self.output = output
-            self.errors = errors
-            self.diagnostics = diagnostics
-        }
-    }
-
-    /// The exit code of a run whose program panics.
-    public static let panicExitCode = ProgramRuntime.panicExitCode
-
     static let usage = """
-        usage: rayoc <command> <file>
-               rayoc build|run [--debug | --release] [--linker=lld | --linker=platform] <file>
+        usage: rayo <command> <file>
+               rayo build|run [--debug | --release] [--linker=lld | --linker=platform] <file>
 
         commands:
           check    check the file and report its errors
@@ -37,7 +17,7 @@ public enum Driver {
                      release build
 
         linkers:
-          --linker=lld       LLD, from the LLVM that rayoc was built with; the linker when none is named
+          --linker=lld       LLD, from the LLVM that rayo was built with; the linker when none is named
           --linker=platform  the platform's own linker
 
         """
@@ -46,7 +26,7 @@ public enum Driver {
         case check, build, run
     }
 
-    /// What the arguments ask `rayoc` to do.
+    /// What the arguments ask `rayo` to do.
     private struct Invocation {
         var command: Command
         var mode: BuildMode
@@ -54,21 +34,29 @@ public enum Driver {
         var path: String
 
         init(_ arguments: [String]) throws(CommandLineError) {
+            // Arguments that start with no command `rayo` knows ask for nothing it does.
             guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { throw .usage }
+
+            // Read each option of `build` and `run` before the file, each at most once; `check` takes none.
             var operands = arguments.dropFirst()
             var mode: BuildMode?
             var linker: Linker?
             while command != .check, operands.count > 1, let option = operands.first {
                 if let newMode = BuildMode(rawValue: option), mode == nil {
+                    // A build mode says how the program is built.
                     mode = newMode
                 } else if let name = Self.value(of: option, named: "--linker"), linker == nil {
+                    // `--linker=` names the linker, which has to be one `rayo` knows.
                     guard let newLinker = Linker(rawValue: name) else { throw .unknownLinker(name) }
                     linker = newLinker
                 } else {
+                    // An option `rayo` doesn't take, or one given twice, asks for nothing it does.
                     throw .usage
                 }
                 operands = operands.dropFirst()
             }
+
+            // The one operand left is the source file; an option there leaves the arguments without one.
             guard operands.count == 1, let path = operands.first, !Self.isOption(path) else { throw .usage }
             self.command = command
             self.mode = mode ?? .release
@@ -76,7 +64,7 @@ public enum Driver {
             self.path = path
         }
 
-        /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
+        /// Whether `operand` is one of `rayo`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
             BuildMode(rawValue: operand) != nil || operand == "--linker" || value(of: operand, named: "--linker") != nil
         }
@@ -87,7 +75,7 @@ public enum Driver {
         }
     }
 
-    /// Why the arguments don't make a command `rayoc` can run.
+    /// Why the arguments don't make a command `rayo` can run.
     private enum CommandLineError: Error {
         case usage
         case unknownLinker(String)
@@ -95,46 +83,52 @@ public enum Driver {
         var errors: String {
             switch self {
             case .usage: Driver.usage
-            case .unknownLinker(let name): "rayoc: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
+            case .unknownLinker(let name): "rayo: unknown linker '\(name)': use --linker=lld or --linker=platform\n"
             }
         }
     }
 
-    /// Runs `rayoc` with `arguments`, which exclude the program's name, reading source files through
-    /// `readFile`, which returns nil for a file it can't read. `build` and `run` link with `linkTools`, and
-    /// `environment` is the environment that clang and a program run in.
-    public static func run(_ arguments: [String], programOutput: ProgramOutput = .captured,
-                           environment: [String: String] = ProcessInfo.processInfo.environment,
-                           linkTools: LinkTools = .installed, readFile: @escaping (String) -> [UInt8]?) -> Result {
+    /// Runs `rayo` with `arguments`, which exclude the program's name. It compiles with the `rayoc` at `compiler`,
+    /// and `build` and `run` link with `linkTools`; `environment` is the environment those tools and a program run in.
+    public static func run(
+        _ arguments: [String], compiler: URL, processOutput: ProcessOutput = .captured,
+        environment: [String: String] = ProcessInfo.processInfo.environment, linkTools: LinkTools = .installed,
+    ) -> CommandResult {
         // Read what the arguments ask for.
         let invocation: Invocation
         do {
             invocation = try Invocation(arguments)
         } catch {
-            // Arguments that ask for nothing `rayoc` does are reported with how to use it.
-            return Result(exitCode: 2, output: "", errors: error.errors)
+            // Arguments that ask for nothing `rayo` does are reported with how to use it.
+            return CommandResult(exitCode: 2, output: "", errors: error.errors)
         }
 
         // Run the command the arguments ask for, with the host's tools.
-        let toolchain = Toolchain(tools: linkTools, linker: invocation.linker, environment: environment)
-        let command = CommandRun(invocation: invocation, readFile: readFile, toolchain: toolchain,
-                                 programOutput: programOutput)
+        let toolchain = Toolchain(compiler: compiler, tools: linkTools, linker: invocation.linker,
+                                  output: processOutput, environment: environment)
+        let command = CommandRun(invocation: invocation, toolchain: toolchain)
         do {
             return try command.result()
         } catch {
             // A command that stops is reported with why.
-            return result(of: error, in: invocation.path)
+            return result(of: error)
         }
     }
 
-    /// The command an invocation asks for, run on the file it names, with the host's files and tools.
+    /// Returns the `rayoc` that `rayo` compiles with: the one `RAYOC` in `environment` names, or else the one
+    /// beside `executable`, the `rayo` that runs.
+    public static func compiler(in environment: [String: String], beside executable: URL) -> URL {
+        // `RAYOC` names the compiler to use.
+        if let path = environment["RAYOC"], !path.isEmpty { return URL(fileURLWithPath: path) }
+        return executable.deletingLastPathComponent().appendingPathComponent("rayoc")
+    }
+
+    /// The command an invocation asks for, run on the file it names, with the host's tools.
     private struct CommandRun {
         var invocation: Invocation
-        var readFile: (String) -> [UInt8]?
         var toolchain: Toolchain
-        var programOutput: ProgramOutput
 
-        func result() throws(CompilationError) -> Result {
+        func result() throws(CommandError) -> CommandResult {
             switch invocation.command {
             case .check: try check()
             case .build: try build()
@@ -142,57 +136,37 @@ public enum Driver {
             }
         }
 
-        /// Checks the file, and writes nothing.
-        private func check() throws(CompilationError) -> Result {
-            _ = try compile.run(invocation.path)
+        /// Checks the file, and writes nothing but what `rayoc` wrote.
+        private func check() throws(CommandError) -> CommandResult {
+            let errors = try toolchain.check(invocation.path)
 
-            return Result(exitCode: 0, output: "", errors: "")
+            return CommandResult(exitCode: 0, output: "", errors: errors)
         }
 
-        /// Compiles the file to an executable beside it, and writes nothing else.
-        private func build() throws(CompilationError) -> Result {
-            // A path that names no executable stops `build` before it reads the file.
+        /// Compiles the file to an executable beside it, and writes nothing but what `rayoc` wrote.
+        private func build() throws(CommandError) -> CommandResult {
             let executable = try executable(building: invocation.path)
 
-            // Compile the file, and link it into the executable.
-            try pipeline {
-                objectCode
-                Link(toolchain: toolchain, executable: executable)
-            }.run(invocation.path)
-
-            return Result(exitCode: 0, output: "", errors: "")
-        }
-
-        /// Compiles the file and runs it, and gives what the run gave.
-        private func runProgram() throws(CompilationError) -> Result {
-            try pipeline {
-                objectCode
-                LinkAndRun(toolchain: toolchain, output: programOutput)
-            }.run(invocation.path)
-        }
-
-        /// Compiles the source file at a path to Rayo IR.
-        private var compile: some CompilationStep<String, IRProgram> {
-            pipeline {
-                ReadSource(readFile: readFile)
-                Parse()
-                Check()
-                Lower()
-                CheckOwnership()
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try toolchain.link(objectFile, to: executable)
             }
+
+            return CommandResult(exitCode: 0, output: "", errors: compiled.errors)
         }
 
-        /// Compiles the source file at a path to object code, as a build in the invocation's mode.
-        private var objectCode: some CompilationStep<String, [UInt8]> {
-            pipeline {
-                compile
-                Emit(mode: invocation.mode, sourcePath: invocation.path)
+        /// Compiles the file and runs it, and gives what the run gave, after what `rayoc` wrote.
+        private func runProgram() throws(CommandError) -> CommandResult {
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+                objectFile throws(CommandError) in try toolchain.linkAndRun(objectFile)
             }
+
+            return CommandResult(exitCode: compiled.value.exitCode, output: compiled.value.output,
+                                 errors: compiled.errors + compiled.value.errors)
         }
 
         /// Returns the executable for the source at `path`, which is the same path without `.rayo`, or fails when
         /// that names no file apart from the source.
-        private func executable(building path: String) throws(CompilationError) -> URL {
+        private func executable(building path: String) throws(CommandError) -> URL {
             // A path that doesn't end in '.rayo' would name the source itself.
             guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
             let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
@@ -204,16 +178,15 @@ public enum Driver {
         }
     }
 
-    /// Returns what `rayoc` gives when a command on the file at `path` stops with `error`.
-    private static func result(of error: CompilationError, in path: String) -> Result {
+    /// Returns what `rayo` gives when a command stops with `error`.
+    private static func result(of error: CommandError) -> CommandResult {
         switch error {
-        // Each of the program's errors is shown at its place in the file.
-        case .rejected(let diagnostics):
-            Result(exitCode: 1, output: "", errors: diagnostics.map { "\(path):\($0)\n" }.joined(),
-                   diagnostics: diagnostics)
-        // A reason of rayoc's own is shown as its message.
-        case .failed(let message):
-            Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n")
+        // A file `rayoc` didn't compile ends the command as `rayoc` ended, with its errors.
+        case .compileFailed(let exitCode, let errors):
+            CommandResult(exitCode: exitCode, output: "", errors: errors)
+        // A reason of rayo's own is shown as its message, after what `rayoc` wrote.
+        case .failed(let message, let errors):
+            CommandResult(exitCode: 1, output: "", errors: errors + "rayo: \(message)\n")
         }
     }
 }
