@@ -32,7 +32,8 @@ void             platform_log(int32_t level, const char* msg, size_t len);
 platform_window* platform_window_create(int32_t width, int32_t height, const char* title);
 bool             platform_poll_pad(int32_t index, platform_pad* out);
 int64_t          platform_read(uint8_t* dst, size_t len);       /* synchronous read from the open stream */
-int32_t          platform_read_file_async(const char* path, platform_file_cb cb, void* user);
+int32_t          platform_read_file_async(const char* path, size_t path_len,   /* keeps 'path' until 'cb' runs */
+                                          platform_file_cb cb, void* user);
 void             platform_set_audio_callback(platform_audio_cb cb, void* user);
 void             platform_upload(const float* data, size_t count);
 void             platform_gpu_free(uint32_t id);

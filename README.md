@@ -22,7 +22,7 @@ heal(&a)                           // a borrow: heal changes 'a' in place, witho
 let spot = borrow a.pos            // also a borrow: 'a.pos' can't change while 'spot' is in use
 
 var names = alloc List<String>()   // an empty list, which owns the buffer it allocates as it grows
-names.append("grunt")
+names.append(alloc String("grunt")) // a String owns its text, so it is made with 'alloc' too
 var backup = alloc names.clone()   // a copy of heap data is a named call, and it allocates
 var moved = names                  // a move: using 'names' after this is a compile error
 
