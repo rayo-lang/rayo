@@ -117,7 +117,7 @@ func log(_ level: Int32, _ text: StringView) {
 
 **A span hands C a pointer and a count.** Its `baseAddress` is an `unsafe` field, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
 
-**A string literal passes to C as a C string, at no cost.** A `StaticString`, such as a literal, is followed by a NUL, so `"Rayo".cString` is a `const char*` ([04](../spec/04-types/collections.md#strings)).
+**A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `const char*` ([04](../spec/04-types/collections.md#strings)).
 
 **Other strings needn't end in a NUL, so you pass them with a length.** `s.cchars` views any string's bytes as a `Span<CChar>`, for C functions that take a pointer and a length.
 
@@ -314,7 +314,7 @@ func save<T>(_ value: T, into w: mutable Writer) {
 
 **Every type has metadata that code reads at compile time** ([09](../spec/09-compile-time/reflection.md#static-reflection)). Reading it is **reflection**.
 
-**`T.fields` lists `T`'s stored fields in declaration order** ([09](../spec/09-compile-time/reflection.md#what-reflection-can-read)). Each has a `name`, a `StaticString`, and a `type`.
+**`T.fields` lists `T`'s stored fields in declaration order** ([09](../spec/09-compile-time/reflection.md#what-reflection-can-read)). Each has a `name`, a `static StringView`, and a `type`.
 
 **`static for` repeats its body once per field, and checks each copy with that field's type.**
 

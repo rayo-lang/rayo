@@ -55,6 +55,13 @@ let word = text[0..<5]                    // a range of bytes: also a StringView
 let name: StringView = "grunt"            // the literal's bytes, which last for the whole run
 ```
 
+**A `String` passes as a `StringView`, and a `List` as a `Span`, with nothing written.** Where a function expects a `StringView`, you can hand it the `String` itself, and the compiler borrows the string shared to make the view, as `.view` would ([05](../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A `List<T>` turns into a `Span<T>` the same way. Nothing is copied, so a function that only reads text takes a `StringView`, and its callers pass whatever they have:
+
+```swift
+splitLines(source, into: &lines)          // the same call as splitLines(source.view, into: &lines)
+parse(lines)                              // and the same as parse(lines.span)
+```
+
 **A string is indexed by byte offset.** A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics. So a string view always holds whole UTF-8 sequences ([04](../spec/04-types/collections.md#strings)).
 
 **`Span` and `StringView` are copyable**: a copy is a second view of the same memory.
@@ -66,6 +73,7 @@ let name: StringView = "grunt"            // the literal's bytes, which last for
 ```swift
 struct Token(var text: StringView, var line: Int): Scoped   // a token views the script's text
 struct Label(var text: StringView)                          // error: a struct with a scoped field must be declared 'Scoped'
+struct Banner(var text: static StringView)                  // fine: a static view, such as a literal, isn't scoped
 ```
 
 **A view of memory that can be freed must stay within the scope that lent it** ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)). Inside that scope, the compiler sees every borrow, so it can reject freeing the memory while the view lives.
@@ -79,6 +87,8 @@ struct Label(var text: StringView)                          // error: a struct w
 - a local that lives across an `await`, which chapter 7 teaches ([Concurrency](07-concurrency.md)).
 
 **A type that holds a scoped value is scoped too.** A struct with a field of a scoped type says so with `: Scoped` ([02](../spec/02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
+
+**A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a view of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected, but never the other way, since a plain view may borrow memory that can be freed. Only the compiler and the runtime make static views, as the compiler makes one for each literal, and `static Span<T>` is the same thing for elements ([09](../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 
 **A generic type is scoped when what it holds is.** `List<StringView>` and `List<Token>` own their buffers, but the views inside them borrow, so each list must stay within the scope too.
 
@@ -162,14 +172,14 @@ use(tokens)
 
 ```swift
 func defaultName() -> StringView {
-    let s: String = "grunt"
+    let s = alloc String("grunt")
     return s.view                         // error: the result borrows local 's', which is destroyed on return
 }
 
 func addDefault(into out: mutable List<StringView>) {
-    let s: String = "grunt"
+    let s = alloc String("grunt")
     out.append(s.view)                    // error: 'out' would borrow local 's', which is destroyed on return
-    out.append("grunt")                   // fine: a view of a literal borrows nothing
+    out.append("grunt")                   // fine: a literal is a static view, which borrows nothing
 }
 ```
 
@@ -294,5 +304,7 @@ use(names)                                                     // fine: the loop
 - [02 When destroying a value counts as using it](../spec/02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it): which values keep what they borrow until they are destroyed.
 - [02 Precise dependencies](../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in): every form of `where` item, and naming a field of a parameter or a result.
 - [02 `outlives`](../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives): when the compiler accepts it, and values moved out of an owner.
-- [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): the views beside the owning collections, and how strings are indexed.
+- [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): the views beside the owning collections, the two text types, and how strings are indexed.
+- [05 Implicit conversions](../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions): a `String` or a `List` passed where its view is expected, and a static view passed as a plain one.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): `Slice<T>` and the buffers it views.
+- [09 Static views](../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data): views of immortal data, which can be stored anywhere, and who may make one.
