@@ -73,6 +73,8 @@ let size = (try readText(path)).count   // the count of the String that readText
 let bad = try readText(path).count      // error: '.count' applies to the Result, which has no 'count'
 ```
 
+**`alloc` takes the whole postfix chain after it, and `a.alloc` the postfix chain before it.** So `alloc x.clone()` allocates the clone, and `level.alloc xs.filtered { … }` the filtered list from `level`. A `.alloc` after a postfix expression always begins an allocation, never a member access, since `alloc` is a keyword. The prefix operators come before it, so `try alloc Box(v)` is the fallible form of `alloc Box(v)` ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+
 **A `?` after an operand is always postfix optional chaining**, since Rayo has no ternary operator.
 
 **Whitespace tells the prefix and postfix range operators, as in `..<x` and `x...`, from the binary ones.** Between two operands, with whitespace on both sides or on neither, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side: whitespace, a bracket or punctuation.
