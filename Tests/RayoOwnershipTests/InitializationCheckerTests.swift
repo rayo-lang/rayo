@@ -243,7 +243,8 @@ struct InitializationCheckerTests {
     }
 }
 
-/// The errors the checker reports in a program of the one function `function(blocks, parameterCount:)` makes.
+/// The errors the checker reports in a program of one function made of `blocks`, whose first `parameterCount` locals
+/// are its parameters.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
     InitializationChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
 }

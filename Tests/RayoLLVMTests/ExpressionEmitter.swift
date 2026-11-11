@@ -5,7 +5,7 @@ import RayoSyntax
 
 /// Emits an expression of operators, each at `range`, on values and on Int constants.
 struct ExpressionEmitter {
-    /// The source range of every operator the emitter emits: line 3, columns 7 to 12, of main.rayo.
+    /// The source range, in main.rayo, of every operator the emitter emits.
     static let range = SourceRange(
         SourceLocation(line: 3, column: 7, offset: 20), SourceLocation(line: 3, column: 12, offset: 25),
     )

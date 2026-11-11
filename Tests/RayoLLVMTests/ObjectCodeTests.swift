@@ -31,8 +31,8 @@ struct ObjectCodeTests {
             BasicBlock(statements: [], terminator: .return(nil)),
         ])
 
+        // LLVM's verifier rejects each module, and the emitter throws what it says.
         for program in [addsBoolToInt, branchesOnInt] {
-            // LLVM's verifier rejects the module, and the emitter throws what it says.
             let error = #expect(throws: LLVMError.self) { try compile(program, for: build) }
             #expect(error?.message.hasPrefix("LLVM rejected the module it was given:\n") == true)
         }

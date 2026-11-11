@@ -11,6 +11,8 @@ struct EmittedTypeTests {
         result: RayoType, resultText: String,
     ) throws {
         let irFunction = try pick(returning: result, [])
+
+        // The emitted signature takes an i64 and an i1, and returns the LLVM type of `result`.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let signature = try signature(of: irFunction.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
@@ -28,6 +30,8 @@ struct EmittedTypeTests {
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
         let irFunction = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
+
+        // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let llvmFunction = try function(named: irFunction.name, in: module)
             #expect(slotTypes(of: llvmFunction) == ["i64", "i1", "i1", "i64"])
