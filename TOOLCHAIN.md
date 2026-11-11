@@ -16,6 +16,13 @@ swift build -c release
 export PATH="$(swift build -c release --show-bin-path):$PATH"
 ```
 
+On Windows, in PowerShell:
+
+```powershell
+swift build -c release
+$env:Path = "$(swift build -c release --show-bin-path);$env:Path"
+```
+
 ## Use it
 
 `rayo` is the command you run. It checks a program, builds it into an executable beside it, or builds and runs it:
@@ -47,12 +54,20 @@ swift test
 
 ## LLVM
 
-`rayoc` builds against one major release of LLVM, 23, and links its shared library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
+`rayoc` builds against one major release of LLVM, 23, and links its shared library, or on Windows `LLVM-C`, the one that holds the C API, since MSVC can't build LLVM as one library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
 
 | Platform | Install |
 | --- | --- |
 | macOS | `brew install llvm@23 lld@23` |
 | Ubuntu or Debian | `llvm-23-dev clang-23 lld-23`, from [apt.llvm.org](https://apt.llvm.org) or the distribution |
+| Windows x64 | The archive `clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz`, from [LLVM's releases](https://github.com/llvm/llvm-project/releases), unpacked anywhere |
+
+On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against their C runtime, and `--linker=platform` runs their `link.exe`. LLVM's installer for Windows holds no headers, so only the archive will do. Windows' own `tar` takes many minutes over it, where 7-Zip takes seconds. Then set `LLVM_PREFIX` to the directory the archive unpacked into, and put its `bin` on the search path, where `rayoc` loads `LLVM-C.dll` from:
+
+```powershell
+$env:LLVM_PREFIX = "C:\llvm"
+$env:Path = "C:\llvm\bin;$env:Path"
+```
 
 `Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
