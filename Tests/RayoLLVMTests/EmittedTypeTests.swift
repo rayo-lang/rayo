@@ -6,43 +6,31 @@ import Testing
 
 @Suite("The LLVM types a program is emitted with")
 struct EmittedTypeTests {
-    @Test func `a function's signature holds its parameters and result in their types`() throws {
-        let pick = IRFunction(
-            name: "pick(_: Int, _: Bool)", parameterCount: 2, result: .bool,
-            locals: [
-                .source(name: "n", kind: .parameter, type: .int), .source(name: "b", kind: .parameter, type: .bool),
-            ],
-            blocks: [BasicBlock(statements: [], terminator: .return(read(1)))],
-        )
-        let emitted = try emit(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0)))
-
-        // The module owns the function and its types, so it lives until the checks have read them.
-        try withExtendedLifetime(emitted) {
-            let signature = try signature(of: "pick(_: Int, _: Bool)", in: emitted)
+    @Test(arguments: [(RayoType.int, "i64"), (RayoType.bool, "i1")])
+    func `a function's signature holds its parameters and result in their types`(
+        result: RayoType, resultText: String,
+    ) throws {
+        let pick = try pick(returning: result, [])
+        try emitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+            let signature = try signature(of: pick.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
-            #expect(text(of: LLVMGetReturnType(signature)) == "i1")
+            #expect(text(of: LLVMGetReturnType(signature)) == resultText)
         }
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
-        let emitted = try emit(IRProgram(functions: [voidMain], main: FunctionID(index: 0)))
-
-        // The module owns the function and its types, so it lives until the checks have read them.
-        try withExtendedLifetime(emitted) {
-            let signature = try signature(of: "rayo.main", in: emitted)
+        try emitted(IRProgram(functions: [voidMain], main: FunctionID(index: 0))) { module in
+            let signature = try signature(of: "rayo.main", in: module)
             #expect(try parameterTypes(of: signature) == [])
             #expect(text(of: LLVMGetReturnType(signature)) == "void")
         }
     }
 
-    @Test func `each local's slot holds the type of its value`() throws {
-        let program = function(locals: [.int, .bool, .int], [BasicBlock(statements: [], terminator: .return(nil))])
-        let emitted = try emit(program)
-
-        // The module owns the function and its slots, so it lives until the check has read them.
-        try withExtendedLifetime(emitted) {
-            let main = try #require(LLVMGetNamedFunction(emitted.module, "rayo.main"))
-            #expect(slotTypes(of: main) == ["i64", "i1", "i64"])
+    @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
+        let pick = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
+        try emitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+            let function = try #require(LLVMGetNamedFunction(module.module, pick.name))
+            #expect(slotTypes(of: function) == ["i64", "i1", "i1", "i64"])
         }
     }
 
@@ -51,14 +39,28 @@ struct EmittedTypeTests {
         mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
     }
 
-    /// Emits `program` into a new module for the host, as a debug build does, and returns the module.
-    private func emit(_ program: IRProgram) throws(LLVMError) -> ModuleBuilder {
-        let emitting = try ProgramModule(for: .debug)
-        emitting.emitter.emit(program)
-        return emitting.module
+    /// A function that takes an Int and a Bool, holds `temporaries` besides them, and returns the parameter of type
+    /// `result`.
+    private func pick(returning result: RayoType, _ temporaries: [IRLocal]) throws -> IRFunction {
+        let parameters: [IRLocal] = [
+            .source(name: "n", kind: .parameter, type: .int), .source(name: "b", kind: .parameter, type: .bool),
+        ]
+        let returned = try #require(parameters.firstIndex { $0.type == result })
+        return IRFunction(
+            name: "pick(_: Int, _: Bool)", parameterCount: 2, result: result, locals: parameters + temporaries,
+            blocks: [BasicBlock(statements: [], terminator: .return(read(returned)))],
+        )
     }
 
-    /// The type of the function `module` names `name`: its parameters and its result.
+    /// Emits `program` into a new module for the host, as a debug build does, and runs `checks` on the module.
+    private func emitted(_ program: IRProgram, _ checks: (ModuleBuilder) throws -> Void) throws {
+        try withProgramModule(for: .debug) { emitting in
+            emitting.emitter.emit(program)
+            try checks(emitting.module)
+        }
+    }
+
+    /// The type of the function named `name` in `module`: its parameters and its result.
     private func signature(of name: String, in module: ModuleBuilder) throws -> LLVMTypeRef {
         let function = try #require(LLVMGetNamedFunction(module.module, name))
         return try #require(LLVMGlobalGetValueType(function))

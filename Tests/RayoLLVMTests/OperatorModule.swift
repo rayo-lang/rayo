@@ -59,7 +59,8 @@ struct OperatorModule {
     }
 
     /// Readies the module to run as the compiler readies a program's for the build, exporting the functions
-    /// `exported` names where the compiler would export only the program's entry point.
+    /// `exported` names where the compiler would export only the program's entry point. The runtime is left out, so
+    /// that the stand-in for its panic catches a panic.
     func ready(exporting exported: Set<String>) throws {
         try target.ready(module, exporting: exported)
     }
