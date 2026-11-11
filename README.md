@@ -5,7 +5,7 @@ Rayo is a general-purpose systems programming language. It gives the same contro
 Game development is one of Rayo's priorities: engines and gameplay code, of the kind written in C++ today and shipped on consoles.
 
 > [!NOTE]
-> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The reference compiler, `rayoc`, parses a first subset of the language, and checks and runs programs of functions that take borrowed parameters, which compute with `Int` and `Bool` locals, branches and loops, and print integers. Programs may declare structs, but can't yet make their values. `rayoc` moves a local's value where a declaration, an assignment, a `return` or `_ =` takes it. It checks that a local declared without a value, or moved, isn't used until it is assigned, and that a `let` is assigned at most once on each path. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
+> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The [toolchain](TOOLCHAIN.md) parses a first subset of the language, and checks and runs programs of functions that take borrowed parameters, which compute with `Int` and `Bool` locals, branches and loops, and print integers. Programs may declare structs, but can't yet make their values. It moves a local's value where a declaration, an assignment, a `return` or `_ =` takes it. It checks that a local declared without a value, or moved, isn't used until it is assigned, and that a `let` is assigned at most once on each path. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
 
 Source files use the `.rayo` extension.
 
@@ -91,7 +91,7 @@ The spec starts with an [Introduction](docs/spec/introduction.md), then has one 
 | [`docs/`](docs/) | [Why Rayo](docs/why-rayo.md), and the [agent docs](docs/agents/) the project rules point to |
 | [`GLOSSARY.md`](GLOSSARY.md) | The spec's terms, each with a one-sentence description and a link to its definition |
 | [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system |
-| `Sources/`, `Tests/` | `rayoc` and its tests. [TOOLCHAIN.md](TOOLCHAIN.md#layout) says what each module does |
+| `Sources/`, `Tests/` | `rayo`, `rayoc` and their tests. [TOOLCHAIN.md](TOOLCHAIN.md#layout) says what each module does |
 | [`AGENTS.md`](AGENTS.md), [`.agents/skills/`](.agents/skills/) | The project rules, and the workflows that AI coding agents follow in this repository |
 
 ## Contribute
@@ -101,7 +101,7 @@ Rayo is early, so questions and criticism of the design help as much as code.
 - **Ask questions and report problems** in [GitHub issues](https://github.com/rayo-lang/rayo/issues). A rule that is hard to follow, two parts of the spec that disagree, and a program the spec accepts that isn't safe are each worth an issue.
 - **Find work** in the issues labeled [`good first issue`](https://github.com/rayo-lang/rayo/labels/good%20first%20issue), [`help wanted`](https://github.com/rayo-lang/rayo/labels/help%20wanted) or [`ready-for-human`](https://github.com/rayo-lang/rayo/labels/ready-for-human).
 - **Propose a spec change in an issue first,** so it can be discussed before anyone writes it. Review the change against the [safety argument](docs/validation/safety-argument.md) and the criteria in the [hard cases](docs/validation/hard-cases.md).
-- **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI tests on Linux and macOS with Swift 6.4, and a change must pass on both. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
+- **Change the compiler** test first: write a test, see it fail for the right reason, then write the code that makes it pass. [TOOLCHAIN.md](TOOLCHAIN.md) says how to build and test `rayo` and `rayoc`, and the [issues](https://github.com/rayo-lang/rayo/issues) say what it builds next, each with the issues that block it. CI tests on Linux and macOS with Swift 6.4, and a change must pass on both. Comments and test names give the reason in place, and don't point at issues, pull requests or spec sections.
 - **Work on a branch** named `impl-<feature-slug>`, never on `main`. A pull request description has two sections, **Purpose** (why the change exists) and **What changed** (the change at a high level), and ends with `Closes #N` for each issue it resolves.
 
 [AGENTS.md](AGENTS.md) has the full project rules.

@@ -1,5 +1,5 @@
 import Foundation
-import RayoLLVM
+import RayoLLVMInstall
 
 /// The clang that drives the link of a program, and the LLD it links with unless the platform's linker is asked for.
 public struct LinkTools: Sendable {
@@ -12,7 +12,7 @@ public struct LinkTools: Sendable {
         self.lld = lld
     }
 
-    /// The clang and LLD of the LLVM install that `rayoc` was built against.
+    /// The clang and LLD of the LLVM install that `rayo` was built against.
     public static let installed = LinkTools(
         clang: URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent("clang"),
         lld: URL(fileURLWithPath: LLVMInstall.lldDirectory).appendingPathComponent(hostLLD))
@@ -22,6 +22,6 @@ public struct LinkTools: Sendable {
     #elseif os(Linux)
     private static let hostLLD = "ld.lld"
     #else
-    #error("rayoc links with LLD only on macOS and Linux")
+    #error("rayo links with LLD only on macOS and Linux")
     #endif
 }

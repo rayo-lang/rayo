@@ -1,8 +1,8 @@
 import Testing
+import RayoCompiler
 import RayoDiagnostics
-import RayoDriver
 
-/// The errors `rayoc check` reports for `source`, saved as `main.rayo`.
+/// The errors `rayoc --check` reports for `source`, saved as `main.rayo`.
 func errors(_ source: String) -> [ErrorCode] {
     diagnostics(source).map(\.code)
 }
@@ -13,11 +13,12 @@ func coveredText(_ diagnostics: [Diagnostic], in source: String) -> [String] {
     return diagnostics.map { String(decoding: bytes[$0.range.start.offset..<$0.range.end.offset], as: UTF8.self) }
 }
 
-/// The diagnostics `rayoc check` reports for `source`, saved as `main.rayo`.
+/// The diagnostics `rayoc --check` reports for `source`, saved as `main.rayo`.
 func diagnostics(_ source: String) -> [Diagnostic] {
-    let result = Driver.run(["check", "main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
+    let result = Compiler.run(["--check", "main.rayo"], readFile: { $0 == "main.rayo" ? Array(source.utf8) : nil }) {
+        _, _ in false
+    }
     #expect(result.exitCode == (result.diagnostics.isEmpty ? 0 : 1))
-    #expect(result.output == "")
     return result.diagnostics
 }
 

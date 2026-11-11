@@ -1,12 +1,13 @@
 import Testing
 import RayoDiagnostics
 import RayoDriver
+import RayoRuntime
 
 struct FunctionTests {
     @Test("a call runs a function declared after it, and gives what the function returns")
     func callBeforeDeclaration() {
         #expect(run("func main() { print(answer()) }\nfunc answer() -> Int { 42 }") ==
-            Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            CommandResult(exitCode: 0, output: "42\n", errors: ""))
     }
 
     @Test("'return' leaves the function, with its value when it has one, and code after it doesn't run")
@@ -29,7 +30,7 @@ struct FunctionTests {
                 }
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n42\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "1\n42\n", errors: ""))
     }
 
     @Test("what a function returns has its result type", arguments: [
@@ -55,7 +56,7 @@ struct FunctionTests {
     ])
     func everyPathReturns(body: String) {
         #expect(run("func main() { print(f()) }\nfunc f() -> Int {\n\(body)\n}") ==
-            Driver.Result(exitCode: 0, output: "1\n", errors: ""))
+            CommandResult(exitCode: 0, output: "1\n", errors: ""))
     }
 
     @Test("a function with a result can't reach its end, and the error covers the '}' it reaches", arguments: [
@@ -81,7 +82,7 @@ struct FunctionTests {
             func seven() { 3 + 4 }
             func say() { print(1) }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n1\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n1\n", errors: ""))
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
             [.voidLocal, .unusedValue(type: "Int")])
@@ -114,7 +115,7 @@ struct FunctionTests {
             }
             func odd() -> Int { even() }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
     }
 
     @Test("a function's name is declared once, and the second declaration is still checked")
@@ -146,7 +147,7 @@ struct FunctionTests {
     @Test("a panic in a function names its place in that function")
     func panicInCallee() {
         let source = "func main() {\n    print(1)\n    print(f())\n}\nfunc f() -> Int {\n    return 1 / zero()\n}\nfunc zero() { 0 }"
-        #expect(run(source) == Driver.Result(exitCode: Driver.panicExitCode, output: "1\n",
+        #expect(run(source) == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "1\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }
 
@@ -164,7 +165,7 @@ struct FunctionTests {
             func print_int() {}
             func panic() {}
             """
-        #expect(run(source) == Driver.Result(exitCode: Driver.panicExitCode, output: "10\n",
+        #expect(run(source) == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "10\n",
                                              errors: "main.rayo:3:11: panic: division by zero\n"))
     }
 
@@ -173,7 +174,7 @@ struct FunctionTests {
     ])
     func voidReturns(declaration: String) {
         let source = declaration.hasPrefix("func main") ? declaration : "func main() { f() }\n" + declaration
-        #expect(run(source) == Driver.Result(exitCode: 0, output: declaration.contains("print") ? "1\n" : "",
+        #expect(run(source) == CommandResult(exitCode: 0, output: declaration.contains("print") ? "1\n" : "",
                                              errors: ""))
     }
 }

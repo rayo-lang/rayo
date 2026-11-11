@@ -22,7 +22,7 @@ struct MoveTests {
                 return x
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "2\n1\n42\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "2\n1\n42\n", errors: ""))
     }
 
     @Test("a use of a moved local is an error at the use", arguments: [
@@ -126,7 +126,7 @@ struct MoveTests {
                 print(x)
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
     }
 
     @Test("an argument is borrowed, not moved, so the local keeps its value")

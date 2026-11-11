@@ -29,7 +29,7 @@ struct InitializationTests {
                 return picked
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "34\n1\n2\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "34\n1\n2\n", errors: ""))
     }
 
     @Test("a local declared without a value needs a type, and the error covers its name", arguments: [
@@ -121,7 +121,7 @@ struct InitializationTests {
                 return x
             }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "5\n0\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "5\n0\n", errors: ""))
     }
 
     @Test("a loop may run no pass, so a local it assigns isn't initialized on every path after it", arguments: [
@@ -176,7 +176,7 @@ struct InitializationTests {
                 }
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "10\n20\n30\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "10\n20\n30\n", errors: ""))
         #expect(errorLines(inMain: "var i = 0\nwhile i < 3 {\ni += 1\nvar x: Int\nprint(x)\nx = copy i\n}") == [
             "6:7: error[E0304]: 'x' isn't initialized",
         ])

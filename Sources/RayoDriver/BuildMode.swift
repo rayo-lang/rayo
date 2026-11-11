@@ -1,10 +1,5 @@
+/// The build mode that `build` and `run` compile in, spelled as both `rayo` and `rayoc` take it.
 enum BuildMode: String {
     case debug = "--debug"
     case release = "--release"
-
-    /// Whether integer overflow panics, where it would otherwise wrap.
-    var checksOverflow: Bool { self == .debug }
-
-    /// Whether LLVM optimises the program.
-    var optimizes: Bool { self == .release }
 }

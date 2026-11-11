@@ -1,6 +1,7 @@
 import Testing
 import RayoDiagnostics
 import RayoDriver
+import RayoRuntime
 
 /// The error for adding a Bool to an Int, as in `1 + true`.
 private let intAndBool = ErrorCode.operandTypes(op: "+", needs: "Int", left: "Int", right: "Bool")
@@ -118,7 +119,7 @@ struct LocalTests {
 
     @Test("a compound assignment that divides by zero panics at the assignment")
     func compoundPanic() {
-        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == Driver.Result(
-            exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:4:5: panic: division by zero\n"))
+        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == CommandResult(
+            exitCode: ProgramRuntime.panicExitCode, output: "", errors: "main.rayo:4:5: panic: division by zero\n"))
     }
 }

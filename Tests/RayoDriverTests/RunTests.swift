@@ -1,10 +1,31 @@
 import Foundation
 import Testing
 import RayoDriver
+import RayoRuntime
 
-/// Compiles `source` as `main.rayo` in the build mode `options` name, and runs it.
-func run(_ source: String, options: [String] = []) -> Driver.Result {
-    Driver.run(["run"] + options + ["main.rayo"]) { $0 == "main.rayo" ? Array(source.utf8) : nil }
+/// The `rayoc` that the tests that run `rayo` in this process compile with.
+private let compiler = builtProduct("rayoc")
+
+/// Compiles `source`, saved as `main.rayo` in a directory of its own, in the build mode `options` name, and runs
+/// it, with `rayo run` in that directory. A source that can't be saved is recorded as an issue, and gives exit
+/// code -1.
+func run(_ source: String, options: [String] = []) -> CommandResult {
+    do {
+        return try withTemporaryDirectory { directory in
+            _ = try save(source, as: "main.rayo", in: directory)
+            return rayo(["run"] + options + ["main.rayo"], in: directory)
+        }
+    } catch {
+        Issue.record(error)
+        return CommandResult(exitCode: -1, output: "", errors: "")
+    }
+}
+
+/// Saves `source` as the file `name` in `directory`, and returns the file's path.
+private func save(_ source: String, as name: String, in directory: URL) throws -> String {
+    let file = directory.appendingPathComponent(name)
+    try Data(source.utf8).write(to: file)
+    return file.path
 }
 
 /// The output of running `body` as `main`'s body, which must not fail.
@@ -23,9 +44,9 @@ struct Panic: Equatable {
 
 /// The panic `result` reports in `path`, at any line and column; nil unless the error stream is exactly that one
 /// panic's line and the exit code is a panic's.
-func panic(in result: Driver.Result, file path: String = "main.rayo") -> Panic? {
-    guard result.exitCode == Driver.panicExitCode, result.errors.hasPrefix(path + ":"), result.errors.hasSuffix("\n")
-    else { return nil }
+func panic(in result: CommandResult, file path: String = "main.rayo") -> Panic? {
+    guard result.exitCode == ProgramRuntime.panicExitCode, result.errors.hasPrefix(path + ":"),
+          result.errors.hasSuffix("\n") else { return nil }
     let line = result.errors.dropFirst(path.count + 1).dropLast()
     let fields = line.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
     guard !line.contains("\n"), fields.count == 4, fields[0..<2].allSatisfy(isNumeral), fields[2] == " panic",
@@ -37,17 +58,12 @@ private func isNumeral(_ text: Substring) -> Bool {
     !text.isEmpty && text.allSatisfy { ("0"..."9").contains($0) }
 }
 
-/// A new, empty directory, which `body` may fill and which is removed after it.
-func withTemporaryDirectory<T>(_ body: (URL) throws -> T) throws -> T {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("rayo-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    return try body(directory)
-}
-
 /// Runs an empty `main`, linked with `linkTools` in the way `options` name.
-private func runEmptyMain(options: [String] = [], linkTools: LinkTools) -> Driver.Result {
-    Driver.run(["run"] + options + ["main.rayo"], linkTools: linkTools) { _ in Array("func main() {}".utf8) }
+private func runEmptyMain(options: [String] = [], linkTools: LinkTools) throws -> CommandResult {
+    try withTemporaryDirectory { directory in
+        let source = try save("func main() {}", as: "main.rayo", in: directory)
+        return Driver.run(["run"] + options + [source], compiler: compiler, linkTools: linkTools)
+    }
 }
 
 /// Writes a shell script running `body` to `url`, makes it executable, and returns `url`.
@@ -74,9 +90,8 @@ struct BuildTests {
     @Test("build writes an executable beside the source, named after it")
     func build() throws {
         try withTemporaryDirectory { directory in
-            let source = directory.appendingPathComponent("answer.rayo").path
-            let result = Driver.run(["build", source]) { $0 == source ? Array("func main() { print(42) }".utf8) : nil }
-            #expect(result == Driver.Result(exitCode: 0, output: "", errors: ""))
+            _ = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
+            #expect(rayo(["build", "answer.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
             let program = Process()
             program.executableURL = directory.appendingPathComponent("answer")
@@ -96,9 +111,9 @@ struct BuildTests {
         ("dir/...rayo", "'dir/...rayo' has no name before '.rayo'"),
     ])
     func nameRequired(path: String, message: String) {
-        // The file can't be read, so a check that lets the path through fails without writing anything.
-        #expect(Driver.run(["build", path]) { _ in nil } ==
-            Driver.Result(exitCode: 1, output: "", errors: "rayoc: \(message)\n"))
+        // No file exists at the path, so a check that let the path through would fail without writing anything.
+        #expect(Driver.run(["build", path], compiler: compiler) ==
+            CommandResult(exitCode: 1, output: "", errors: "rayo: \(message)\n"))
     }
 
     @Test("build and run need the clang of the LLVM install, and a directory named clang isn't one")
@@ -108,8 +123,8 @@ struct BuildTests {
             try FileManager.default.createDirectory(at: decoy, withIntermediateDirectories: true)
             for clang in [directory.appendingPathComponent("nonexistent"), decoy] {
                 let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-                #expect(runEmptyMain(linkTools: tools) ==
-                    Driver.Result(exitCode: 1, output: "", errors: "rayoc: can't find clang at '\(clang.path)'\n"))
+                #expect(try runEmptyMain(linkTools: tools) ==
+                    CommandResult(exitCode: 1, output: "", errors: "rayo: can't find clang at '\(clang.path)'\n"))
             }
         }
     }
@@ -119,8 +134,8 @@ struct BuildTests {
         try withTemporaryDirectory { directory in
             let clang = try script("echo 'clang: something broke' >&2\nexit 1", at: directory.appendingPathComponent("clang"))
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-            #expect(runEmptyMain(linkTools: tools) ==
-                Driver.Result(exitCode: 1, output: "", errors: "rayoc: clang failed:\nclang: something broke\n"))
+            #expect(try runEmptyMain(linkTools: tools) ==
+                CommandResult(exitCode: 1, output: "", errors: "rayo: clang failed:\nclang: something broke\n"))
         }
     }
 
@@ -137,8 +152,9 @@ struct BuildTests {
                 exec '\(LinkTools.installed.clang.path)' "$@"
                 """, at: directory.appendingPathComponent("clang"))
             let tools = LinkTools(clang: clang, lld: LinkTools.installed.lld)
-            let result = Driver.run(["run", "main.rayo"], linkTools: tools) { _ in Array("func main() { print(42) }".utf8) }
-            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
+            let result = Driver.run(["run", source], compiler: compiler, linkTools: tools)
+            #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
         }
     }
 
@@ -150,12 +166,10 @@ struct BuildTests {
             let ran = directory.appendingPathComponent("lld-ran")
             let lld = try script("touch '\(ran.path)'\nexec '\(LinkTools.installed.lld.path)' \"$@\"",
                                  at: directory.appendingPathComponent(LinkTools.installed.lld.lastPathComponent))
-            let source = directory.appendingPathComponent("answer.rayo").path
+            let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-            let result = Driver.run(["build"] + options + [source], linkTools: tools) {
-                $0 == source ? Array("func main() { print(42) }".utf8) : nil
-            }
-            #expect(result == Driver.Result(exitCode: 0, output: "", errors: ""))
+            let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
+            #expect(result == CommandResult(exitCode: 0, output: "", errors: ""))
             #expect(try runExecutable(directory.appendingPathComponent("answer")) == "42\n")
             #expect(FileManager.default.fileExists(atPath: ran.path) == linksWithLLD)
         }
@@ -165,13 +179,13 @@ struct BuildTests {
     func lldMissing() throws {
         let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
         let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-        #expect(runEmptyMain(linkTools: tools) == Driver.Result(exitCode: 1, output: "", errors: """
-            rayoc: can't find LLD at '/nonexistent/ld.lld': install LLD 23, run 'swift package purge-cache' and \
-            build rayoc again, or link with --linker=platform
+        #expect(try runEmptyMain(linkTools: tools) == CommandResult(exitCode: 1, output: "", errors: """
+            rayo: can't find LLD at '/nonexistent/ld.lld': install LLD 23, run 'swift package purge-cache' and \
+            build rayo again, or link with --linker=platform
 
             """))
-        #expect(runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
-            Driver.Result(exitCode: 0, output: "", errors: ""))
+        #expect(try runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
+            CommandResult(exitCode: 0, output: "", errors: ""))
     }
 
     @Test("the platform's linker is the platform's, not an ld first on the search path")
@@ -180,11 +194,10 @@ struct BuildTests {
             let ran = directory.appendingPathComponent("ld-ran")
             _ = try script("touch '\(ran.path)'\nexit 1", at: directory.appendingPathComponent("ld"))
             let path = ProcessInfo.processInfo.environment["PATH", default: ""]
-            let result = Driver.run(["run", "--linker=platform", "main.rayo"],
-                                    environment: ["PATH": "\(directory.path):\(path)"]) { _ in
-                Array("func main() { print(42) }".utf8)
-            }
-            #expect(result == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+            let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
+            let result = Driver.run(["run", "--linker=platform", source],
+                                    environment: ["PATH": "\(directory.path):\(path)"], compiler: compiler)
+            #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
             #expect(!FileManager.default.fileExists(atPath: ran.path))
         }
     }
@@ -192,9 +205,8 @@ struct BuildTests {
     @Test("an executable exports the C entry point and nothing of the program or the runtime")
     func exportedSymbols() throws {
         try withTemporaryDirectory { directory in
-            let source = directory.appendingPathComponent("empty.rayo").path
-            #expect(Driver.run(["build", source]) { _ in Array("func main() {}".utf8) } ==
-                Driver.Result(exitCode: 0, output: "", errors: ""))
+            _ = try save("func main() {}", as: "empty.rayo", in: directory)
+            #expect(rayo(["build", "empty.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
             let nm = Process()
             nm.executableURL = LinkTools.installed.clang.deletingLastPathComponent()
@@ -214,10 +226,9 @@ struct BuildTests {
     @Test("build builds in the mode it names")
     func buildMode() throws {
         try withTemporaryDirectory { directory in
-            let source = directory.appendingPathComponent("overflow.rayo").path
-            let program = "func main() { print(9223372036854775807 + 1) }"
-            #expect(Driver.run(["build", "--debug", source]) { _ in Array(program.utf8) } ==
-                Driver.Result(exitCode: 0, output: "", errors: ""))
+            _ = try save("func main() { print(9223372036854775807 + 1) }", as: "overflow.rayo", in: directory)
+            #expect(rayo(["build", "--debug", "overflow.rayo"], in: directory) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
 
             let executable = Process()
             executable.executableURL = directory.appendingPathComponent("overflow")
@@ -226,24 +237,25 @@ struct BuildTests {
             try executable.run()
             executable.waitUntilExit()
             let reported = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            let result = Driver.Result(exitCode: executable.terminationStatus, output: "", errors: reported)
-            #expect(panic(in: result, file: source) == Panic(reason: "integer overflow"))
+            let result = CommandResult(exitCode: executable.terminationStatus, output: "", errors: reported)
+            #expect(panic(in: result, file: "overflow.rayo") == Panic(reason: "integer overflow"))
         }
     }
 
     @Test("a run whose output is the terminal's ends with the program's exit status")
-    func attached() {
-        let result = Driver.run(["run", "main.rayo"], programOutput: .inherited) { _ in
-            Array("func main() { print(1 / 0) }".utf8)
+    func attached() throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() { print(1 / 0) }", as: "main.rayo", in: directory)
+            let result = Driver.run(["run", source], programOutput: .inherited, compiler: compiler)
+            #expect(result == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "", errors: ""))
         }
-        #expect(result == Driver.Result(exitCode: Driver.panicExitCode, output: "", errors: ""))
     }
 }
 
 struct IntegerTests {
     @Test("main prints the value of an integer expression")
     func printsArithmetic() {
-        #expect(run("func main() { print(1 + 2 * 3) }") == Driver.Result(exitCode: 0, output: "7\n", errors: ""))
+        #expect(run("func main() { print(1 + 2 * 3) }") == CommandResult(exitCode: 0, output: "7\n", errors: ""))
     }
 
     @Test("'/' rounds toward zero, '%' takes the dividend's sign, and Int.min % -1 is 0", arguments: [
@@ -257,7 +269,7 @@ struct IntegerTests {
     func division(expression: String, value: String) {
         for mode in [["--debug"], ["--release"]] {
             #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                Driver.Result(exitCode: 0, output: value + "\n", errors: ""))
+                CommandResult(exitCode: 0, output: value + "\n", errors: ""))
         }
     }
 
@@ -291,7 +303,7 @@ struct IntegerTests {
     func overflowWraps(expression: String, value: String) {
         for mode in [[], ["--release"]] {
             #expect(run("func main() { print(\(expression)) }", options: mode) ==
-                Driver.Result(exitCode: 0, output: value + "\n", errors: ""))
+                CommandResult(exitCode: 0, output: value + "\n", errors: ""))
         }
     }
 
@@ -311,12 +323,12 @@ struct IntegerTests {
             }
             """
         #expect(run(source, options: ["--release"]) ==
-            Driver.Result(exitCode: 0, output: "-9141782528521893711\n", errors: ""))
+            CommandResult(exitCode: 0, output: "-9141782528521893711\n", errors: ""))
     }
 
     @Test("a panic names the operation that fails, not the expression around it")
     func nestedPanic() {
-        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == Driver.Result(
-            exitCode: Driver.panicExitCode, output: "", errors: "main.rayo:1:25: panic: integer overflow\n"))
+        #expect(run("func main() { print(1 + (9223372036854775807 + 1)) }", options: ["--debug"]) == CommandResult(
+            exitCode: ProgramRuntime.panicExitCode, output: "", errors: "main.rayo:1:25: panic: integer overflow\n"))
     }
 }

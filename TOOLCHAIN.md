@@ -1,14 +1,23 @@
 # Toolchain
 
-`rayoc`, the reference compiler, is a Swift package at the root of this repository.
+The Rayo toolchain is a Swift package at the root of this repository. It builds two executables: `rayo`, the driver, and `rayoc`, the reference compiler.
 
 ```sh
 swift build
 swift test
-swift run rayoc run program.rayo
+swift run rayo run program.rayo
 ```
 
-`rayoc build` and `rayoc run` compile a program to object code themselves, and link it with the clang and LLD of the LLVM they were built against.
+`rayo check`, `rayo build` and `rayo run` have `rayoc` check or compile the program, in a process of its own, and `rayo build` and `rayo run` link the object code `rayoc` writes with the clang and LLD of the LLVM they were built against. `rayo` runs the `rayoc` beside it, or the one the `RAYOC` environment variable names.
+
+`rayoc` takes one source file and writes nothing but its object code:
+
+| Command line | Does |
+| --- | --- |
+| `rayoc --check <file>` | Checks the file, and writes nothing |
+| `rayoc [--debug \| --release] -o <object file> <file>` | Compiles the file to object code for the host, in release mode where no mode is named, and writes it to the object file |
+
+It exits with 0 when it checked or compiled the file, 1 when the program has errors or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes them on as they are.
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
@@ -17,7 +26,7 @@ swift run rayoc run program.rayo
 
 ## LLVM
 
-`rayoc` builds against one major release of LLVM, 23, and links its shared library. It links programs with that release's clang and LLD. Install all three before you build:
+`rayoc` builds against one major release of LLVM, 23, and links its shared library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
 
 | Platform | Install |
 | --- | --- |
@@ -26,7 +35,7 @@ swift run rayoc run program.rayo
 
 `Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
-`rayoc` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayoc` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayoc` is built.
+`rayo` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
 
 SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLVM install changes. After installing, moving or upgrading LLVM, run `swift package purge-cache`, which clears that cache, and build again.
 
@@ -46,7 +55,7 @@ The program runtime is the code every Rayo program links besides its own: the C 
 
 ## Linking
 
-clang drives every link, so the platform's C startup files, C library and system library paths are the ones it would use for a C program. Which linker it runs is a choice of `rayoc build` and `rayoc run`:
+clang drives every link, so the platform's C startup files, C library and system library paths are the ones it would use for a C program. Which linker it runs is a choice of `rayo build` and `rayo run`:
 
 | Option | Linker |
 | --- | --- |
@@ -69,13 +78,17 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
-| `Sources/RayoDriver` | What each `rayoc` command does, given its arguments and a way to read files, and the clang and linker it links a program with |
-| `Sources/rayoc` | The executable: reads files and writes the driver's output and errors |
+| `Sources/RayoCompiler` | What `rayoc` does, given its arguments and a way to read and write files: the pipeline that reads, checks and compiles a source file, and writes its object code |
+| `Sources/rayoc` | The compiler's executable: reads and writes files, and writes the compiler's errors |
+| `Sources/RayoLLVMInstall` | The LLVM install the toolchain was built against, whose clang and LLD link programs |
+| `Sources/RayoDriver` | What each `rayo` command does, given its arguments and the `rayoc` to run: the `rayoc` it runs out of process, and the clang and linker it links a program with |
+| `Sources/rayo` | The driver's executable: finds `rayoc` beside itself, and writes the driver's output and errors |
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
 | `Tests/RayoSemaTests` | The tests of the type table's layouts, and of which kind of declaration each top-level name belongs to, over parsed files |
-| `Tests/RayoDriverTests` | The commands' tests, over files held in memory |
+| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line and of its pipeline's steps, over files held in memory |
+| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check a program's errors in memory |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |

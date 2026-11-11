@@ -25,7 +25,7 @@ struct StructTests {
             struct Shot(var hit: Hit, let team: Bool)
             struct Hit(var damage: Int)
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "1\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
     }
 
     @Test(arguments: [
@@ -57,7 +57,7 @@ struct StructTests {
     @Test func `a local may share a struct's name, which a type names the struct by, and any other use the local`() {
         let body = "let S = 2\nvar s: S\nprint(S)"
         #expect(run("func main() {\n\(body)\n}\nstruct S(var a: Int)") ==
-            Driver.Result(exitCode: 0, output: "2\n", errors: ""))
+            CommandResult(exitCode: 0, output: "2\n", errors: ""))
     }
 
     @Test(arguments: [

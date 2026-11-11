@@ -1,6 +1,7 @@
 import Testing
 import RayoDiagnostics
 import RayoDriver
+import RayoRuntime
 
 struct ParameterTests {
     @Test("a call passes its arguments to the parameters in order, labeled as the parameters are declared")
@@ -13,7 +14,7 @@ struct ParameterTests {
             func difference(from a: Int, take b: Int) -> Int { a - b }
             func scaled(_ value: Int, by: Int) -> Int { value * by }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "7\n20\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "7\n20\n", errors: ""))
     }
 
     @Test("functions recurse, directly and through each other, in debug and in release", arguments: [["--debug"], ["--release"]])
@@ -38,7 +39,7 @@ struct ParameterTests {
                 return n + sum(to: n - 1)
             }
             """
-        #expect(run(source, options: mode) == Driver.Result(exitCode: 0, output: "6765\n0\n5000050000\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "6765\n0\n5000050000\n", errors: ""))
     }
 
     @Test("arguments are evaluated left to right, before the call")
@@ -51,13 +52,13 @@ struct ParameterTests {
             }
             func pair(_ a: Int, _ b: Int) -> Int { a * 10 + b }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n12\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "1\n2\n12\n", errors: ""))
     }
 
     @Test("a panic in a function names its place there, whatever its arguments")
     func panicInCallee() {
         let source = "func main() {\n    print(ratio(6, 3))\n    print(ratio(1, 0))\n}\nfunc ratio(_ a: Int, _ b: Int) -> Int {\n    return a / b\n}"
-        #expect(run(source) == Driver.Result(exitCode: Driver.panicExitCode, output: "2\n",
+        #expect(run(source) == CommandResult(exitCode: ProgramRuntime.panicExitCode, output: "2\n",
                                              errors: "main.rayo:6:12: panic: division by zero\n"))
     }
 
@@ -78,7 +79,7 @@ struct ParameterTests {
     @Test("a keyword can be an argument label")
     func keywordLabels() {
         #expect(run("func main() { print(pick(if: true, else: 2)) }\nfunc pick(if c: Bool, else e: Int) -> Int { copy e }")
-            == Driver.Result(exitCode: 0, output: "2\n", errors: ""))
+            == CommandResult(exitCode: 0, output: "2\n", errors: ""))
     }
 
     @Test("a parameter is borrowed: it can't change, and an expression reads it", arguments: [
@@ -107,7 +108,7 @@ struct ParameterTests {
             func main() { print(next(41)) }
             func next(_ next: Int) -> Int { copy next + 1 }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "42\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "42\n", errors: ""))
     }
 
     @Test("a call skips a parameter, which can't be called, and reaches the functions of its name")
@@ -123,7 +124,7 @@ struct ParameterTests {
             }
             func show(print: Int) { print(print) }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "6\n7\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "6\n7\n", errors: ""))
     }
 
     @Test("functions may share a name when their labels or parameter types differ, and a call picks the one it fits")
@@ -140,7 +141,7 @@ struct ParameterTests {
             func kind(of x: Int) -> Int { 3 }
             func kind() -> Int { 4 }
             """
-        #expect(run(source) == Driver.Result(exitCode: 0, output: "1\n2\n3\n4\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "1\n2\n3\n4\n", errors: ""))
     }
 
     @Test("a call that fits none of a name's functions is an error, unless an argument already is", arguments: [
@@ -195,7 +196,8 @@ struct ParameterTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.voidParameter])
         #expect(coveredText(reported, in: source) == [covered])
-        #expect(run(source).diagnostics.map(\.code) == [.voidParameter])
+        #expect(run(source) ==
+            CommandResult(exitCode: 1, output: "", errors: reported.map { "main.rayo:\($0)\n" }.joined()))
     }
 
     @Test("overloads whose parameter types aren't types aren't declared twice")
