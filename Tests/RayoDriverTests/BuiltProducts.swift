@@ -21,11 +21,12 @@ func builtProduct(_ name: String) -> URL {
 /// what it writes. A run that can't start is recorded as an issue, and gives exit code -1.
 func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
     do {
-        // Give each output stream a file, so that neither fills up and stalls the run while the other is read.
+        // Give each output stream a file, so that neither fills up and stalls the run while the other is read. Each
+        // is written in place, where creating a file renames one into place, which Windows may refuse unreported.
         let outputFile = directory.appendingPathComponent(".rayo-stdout")
         let errorFile = directory.appendingPathComponent(".rayo-stderr")
-        FileManager.default.createFile(atPath: outputFile.path, contents: nil)
-        FileManager.default.createFile(atPath: errorFile.path, contents: nil)
+        try Data().write(to: outputFile)
+        try Data().write(to: errorFile)
 
         // Run `rayo` there, and give what it wrote.
         let process = Process()

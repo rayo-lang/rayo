@@ -190,8 +190,10 @@ struct Toolchain {
             // Give each output stream a file, so that neither fills up and stalls the process while the other is read.
             let outputFile = directory.appendingPathComponent("stdout")
             let errorFile = directory.appendingPathComponent("stderr")
-            FileManager.default.createFile(atPath: outputFile.path, contents: nil)
-            FileManager.default.createFile(atPath: errorFile.path, contents: nil)
+            // Each is written in place, where creating a file renames one into place, which Windows may refuse
+            // unreported.
+            try runOnHost { try Data().write(to: outputFile) }
+            try runOnHost { try Data().write(to: errorFile) }
 
             // Run the process on those files, with nothing to read, and give what it wrote.
             var process = childProcess(executable, arguments: arguments)

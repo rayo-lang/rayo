@@ -67,9 +67,16 @@ public struct ToolStandIn: Codable {
             // The text goes out at once, before anything that follows it.
             case .write(let text):
                 FileHandle.standardError.write(Data(text.utf8))
-            // The file shows that the stand-in ran.
+            // The file shows that the stand-in ran, so a stand-in that can't write it fails the run, and says why.
+            // It is written in place, where creating a file renames one into place, which Windows may refuse
+            // unreported.
             case .touch(let url):
-                FileManager.default.createFile(atPath: url.path, contents: nil)
+                do {
+                    try Data().write(to: url)
+                } catch {
+                    FileHandle.standardError.write(Data("\(path): can't write '\(url.path)': \(error)\n".utf8))
+                    Foundation.exit(1)
+                }
             // An argument the tool wasn't meant to be given fails the run, and says which.
             case .refuseArguments(let suffixes):
                 if let refused = Self.firstArgument(of: arguments, endingIn: suffixes) {
