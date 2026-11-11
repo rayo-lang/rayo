@@ -1,4 +1,9 @@
 public struct SourceFile: Sendable {
     public var functions: [FuncDecl]
-    public init(functions: [FuncDecl]) { self.functions = functions }
+    public var structs: [StructDecl]
+
+    public init(functions: [FuncDecl], structs: [StructDecl]) {
+        self.functions = functions
+        self.structs = structs
+    }
 }

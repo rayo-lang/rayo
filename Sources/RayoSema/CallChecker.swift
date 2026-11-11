@@ -37,6 +37,10 @@ struct CallChecker {
         case .functions(let functions):
             return functions
 
+        // A call of a struct's name would make the struct's value, through an initializer rayoc doesn't support.
+        case .structure:
+            errors.report(.structInitializer, at: range)
+
         // A local can't be called.
         case .inScope(.local):
             errors.report(.notAFunction(name: name), at: range)

@@ -110,6 +110,11 @@ struct ExpressionChecker {
             errors.report(.functionAsValue(name: name), at: range)
             return nil
 
+        // A struct's name is a type, which is no value.
+        case .structure:
+            errors.report(.typeAsValue(name: name), at: range)
+            return nil
+
         // Nothing has the name.
         case nil:
             errors.report(.notDeclared(name: name), at: range)
@@ -148,14 +153,24 @@ struct ExpressionChecker {
                 errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil
             }
-            // Void values have nothing to compare.
-            guard left.type != .void else {
-                errors.report(.voidComparison(op: spelled), at: range)
+            // Comparing values of a type that doesn't compare is reported.
+            guard isComparable(left.type) else {
+                errors.report(.incomparable(op: spelled, type: "\(left.type)"), at: range)
                 return nil
             }
             result = .bool
         }
         return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
+    }
+
+    /// Whether `==` and `!=` compare values of `type`.
+    private func isComparable(_ type: RayoType) -> Bool {
+        switch type {
+        // Ints and Bools compare.
+        case .int, .bool: true
+        // A Void value holds nothing to compare, and a struct has no `==`.
+        case .void, .structure: false
+        }
     }
 
     /// Whether `left` and `right` both have `type`, reporting it when they don't.

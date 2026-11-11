@@ -2,12 +2,14 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks a file's functions, each once. A function whose body gives its result type is checked when a call
-/// first needs that type, so a call may come before the function it calls.
+/// Checks a file's structs, then its functions, each once. A function whose body gives its result type is checked
+/// when a call first needs that type, so a call may come before the function it calls.
 final class FileChecker {
     let errors = ErrorList()
     private(set) var declarations = Declarations()
     private let file: SourceFile
+    /// Which kind of declaration each of the file's top-level names belongs to.
+    let names: TopLevelNames
     /// The signature of each of the file's functions, indexed by `FunctionID`.
     private var signatures: [Signature] = []
     private var bodies: [FunctionID: CheckedBody] = [:]
@@ -23,10 +25,12 @@ final class FileChecker {
 
     init(_ file: SourceFile) {
         self.file = file
+        names = TopLevelNames(of: file)
     }
 
     func check() -> CheckedProgram? {
-        // Check every function, so that each one's errors are reported, whether or not the file has a `main`.
+        // Check every struct and function, so each one's errors are reported, whether or not the file has a `main`.
+        let types = StructChecker(errors: errors).declare(file.structs, among: names, in: &declarations)
         let main = declareFunctions()
         let functions = signatures.indices.map { function(FunctionID(index: $0)) }
         // A file without a `main` has nowhere to start.
@@ -35,9 +39,10 @@ final class FileChecker {
             return nil
         }
 
-        // The program is checked only when each of its functions is.
+        // The program is checked only when its structs can be laid out and each of its functions is checked.
         let checked = functions.compactMap { $0 }
-        return checked.count == functions.count ? CheckedProgram(functions: checked, main: main) : nil
+        guard let types, checked.count == functions.count else { return nil }
+        return CheckedProgram(types: types, functions: checked, main: main)
     }
 
     /// The result type of a call to `signature` at `range`, or nil when it isn't known. A result type that depends
@@ -70,31 +75,47 @@ final class FileChecker {
         errors.report(.noMain, at: SourceRange(start, start))
     }
 
-    /// Declares the file's functions, then the prelude's functions they leave free, and returns the first `main`.
+    /// Declares the file's functions, then the prelude's functions they and the structs leave free, and returns the
+    /// first `main`.
     private func declareFunctions() -> FunctionID? {
-        // Declare each function, and note the first `main`.
+        // Declare each function, and note the first `main` declared, which is where the program starts.
         var main: FunctionID?
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
-            let parameters = function.parameters.map(parameter(from:))
-            let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
-                                      result: declaredResult(of: function, id))
-            signatures.append(signature)
-            // A function with the name, labels and parameter types of one before it is reported, since no call could
-            // reach it.
-            if !declarations.declare(signature) {
-                errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
-            } else if function.name == "main" {
-                // The first `main` is where the program starts.
-                main = main ?? id
-                // A `main` takes no parameters.
-                if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
-            }
+            let isDeclared = declare(function, as: id)
+            // A function that isn't declared, or isn't a `main`, starts nothing.
+            guard isDeclared, function.name == "main" else { continue }
+            main = main ?? id
+            // A `main` takes no parameters.
+            if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
         }
 
-        // Declare the prelude's functions that the file's own leave free.
+        // Declare the prelude's functions that the file's structs and functions leave free.
         declarations.declarePrelude()
         return main
+    }
+
+    /// Declares `function` as `id`, and returns whether it is declared. Reports a function whose name belongs to a
+    /// struct, which is still declared, and one that takes arguments as a function before it does, which isn't.
+    private func declare(_ function: FuncDecl, as id: FunctionID) -> Bool {
+        // Give the function its signature.
+        let parameters = function.parameters.map(parameter(from:))
+        let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
+                                  result: declaredResult(of: function, id))
+        signatures.append(signature)
+
+        // Declare the function, reporting a name it can't take.
+        let isDeclared = declarations.declare(signature)
+        if names.kind(of: function.name) == .structure {
+            // A function whose name belongs to a struct is reported, and still declared: a call looks up functions
+            // alone, so it still finds the function, and raises no error of its own.
+            errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)
+        } else if !isDeclared {
+            // A function with the name, labels and parameter types of one before it is reported, since no call
+            // could reach it.
+            errors.report(.functionDeclaredTwice(signature: "\(signature)"), at: function.nameRange)
+        }
+        return isDeclared
     }
 
     /// What a call needs to know about `parameter`. Reports what in it rayoc doesn't support: a convention, a

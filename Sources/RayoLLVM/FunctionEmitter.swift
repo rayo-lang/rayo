@@ -9,22 +9,27 @@ struct FunctionEmitter {
     private let llvmFunction: LLVMValueRef
     /// The program's functions, indexed by `FunctionID`, that calls go to.
     private let functions: [FunctionValue]
+    /// The LLVM types of the program's values.
+    private let types: LLVMTypes
     private let program: ProgramEmitter
     private let operators: OperatorEmitter
     private var slots: [LLVMValueRef] = []
     private var blocks: [LLVMBasicBlockRef] = []
 
-    init(function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], program: ProgramEmitter) {
+    init(
+        function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], types: LLVMTypes,
+        program: ProgramEmitter,
+    ) {
         self.function = function
         self.llvmFunction = llvmFunction
         self.functions = functions
+        self.types = types
         self.program = program
         self.operators = OperatorEmitter(program: program, into: llvmFunction)
     }
 
     private var module: ModuleBuilder { program.module }
     private var builder: LLVMBuilderRef { module.builder }
-    private var types: LLVMTypes { program.types }
 
     mutating func emit() {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
@@ -44,7 +49,12 @@ struct FunctionEmitter {
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
     private func allocateSlots() -> [LLVMValueRef] {
-        function.locals.indices.map { LLVMBuildAlloca(builder, slotType(of: LocalID(index: $0)), "") }
+        function.locals.indices.map { allocateSlot(of: LocalID(index: $0)) }
+    }
+
+    /// Allocates a stack slot for `local`, aligned as its type is.
+    private func allocateSlot(of local: LocalID) -> LLVMValueRef {
+        aligned(LLVMBuildAlloca(builder, slotType(of: local), ""), as: local)
     }
 
     /// Stores each argument in its parameter's slot.
@@ -64,12 +74,19 @@ struct FunctionEmitter {
 
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
     private func load(_ local: LocalID) -> LLVMValueRef {
-        LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], "")
+        aligned(LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], ""), as: local)
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
     private func store(_ value: LLVMValueRef, in local: LocalID) {
-        LLVMBuildStore(builder, value, slots[local.index])
+        aligned(LLVMBuildStore(builder, value, slots[local.index]), as: local)
+    }
+
+    /// Aligns `instruction`, which allocates, loads or stores `local`'s slot, as `local`'s type is, and returns it.
+    @discardableResult
+    private func aligned(_ instruction: LLVMValueRef, as local: LocalID) -> LLVMValueRef {
+        LLVMSetAlignment(instruction, types.alignment(of: function.locals[local.index].type))
+        return instruction
     }
 
     private func appendBlock(named name: String) -> LLVMBasicBlockRef {

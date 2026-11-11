@@ -249,9 +249,9 @@ private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagno
     InitializationChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
 }
 
-/// A program of `functions`, the first of them its `main`.
+/// A program of `functions`, the first of them its `main`, which declares no structs.
 private func program(of functions: [IRFunction]) -> IRProgram {
-    IRProgram(functions: functions, main: FunctionID(index: 0))
+    IRProgram(types: .empty, functions: functions, main: FunctionID(index: 0))
 }
 
 /// A function made of `blocks`, whose locals are `x`, `y` and `k`, the first `parameterCount` of them its

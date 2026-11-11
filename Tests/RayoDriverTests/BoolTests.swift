@@ -25,7 +25,7 @@ struct BoolTests {
         ("let b = 1 && true", .operandTypes(op: "&&", needs: "Bool", left: "Int", right: "Bool")),
         ("let b = !1", .typeMismatch(expected: "Bool", found: "Int")),
         ("let b = -true", .typeMismatch(expected: "Int", found: "Bool")),
-        ("let b = print(1) == print(2)", .voidComparison(op: "==")),
+        ("let b = print(1) == print(2)", .incomparable(op: "==", type: "Void")),
     ])
     func rejected(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
