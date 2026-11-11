@@ -1,4 +1,5 @@
 import CLLVM
+import LLVM
 import RayoIR
 @testable import RayoLLVM
 import RayoSema
@@ -107,20 +108,20 @@ struct EmittedTypeTests {
     }
 
     /// Emits `executable` into a new module for the host, as a debug build does, and runs `checks` on the module.
-    private func withEmitted(_ executable: IRExecutable, _ checks: (ModuleBuilder) throws -> Void) throws {
+    private func withEmitted(_ executable: IRExecutable, _ checks: (borrowing Module) throws -> Void) throws {
         try withProgramModule(for: .debug) { programModule in
-            programModule.emitter.emit(executable)
-            try checks(programModule.module)
+            programModule.emit(executable)
+            try checks(programModule.emitter.module)
         }
     }
 
     /// The function named `name` in `module`.
-    private func function(named name: String, in module: ModuleBuilder) throws -> LLVMValueRef {
-        try #require(LLVMGetNamedFunction(module.module, name))
+    private func function(named name: String, in module: borrowing Module) throws -> LLVMValueRef {
+        try #require(LLVMGetNamedFunction(module.ref, name))
     }
 
     /// The type of the function named `name` in `module`: its parameters and its result.
-    private func signature(of name: String, in module: ModuleBuilder) throws -> LLVMTypeRef {
+    private func signature(of name: String, in module: borrowing Module) throws -> LLVMTypeRef {
         try #require(LLVMGlobalGetValueType(try function(named: name, in: module)))
     }
 

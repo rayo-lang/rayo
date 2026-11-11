@@ -13,7 +13,7 @@ enum Folding: Equatable {
 /// What a release build's optimiser folds `left op right` to.
 func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Folding {
     // Have the optimiser compute the operator, emitted in `g` on parameters, once it inlines `f`'s call of `g`.
-    let module = try OperatorModule(for: .release)
+    var module = try OperatorModule(for: .release)
     let (operation, _) = module.define("g", on: .ints) { emit, a, b in emit(op, a, b) }
     let caller = module.defineCall("f", of: operation, left, right)
     // `g` is exported too, since a hidden `g` would let the optimiser specialise it on one constant first, and
@@ -21,7 +21,7 @@ func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Fol
     try module.ready(exporting: ["f", "g"])
 
     // `f` and its instructions belong to the module, so it lives until they have been read.
-    return withExtendedLifetime(module) { folding(returnedBy: caller.value) }
+    return withExtendedLifetime(module) { folding(returnedBy: caller.ref) }
 }
 
 /// What the optimiser folds `function`'s result to.

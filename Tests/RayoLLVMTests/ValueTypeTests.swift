@@ -8,7 +8,7 @@ struct ValueTypeTests {
     @Test(arguments: [(RayoType.int, UInt32(64)), (RayoType.bool, UInt32(1))])
     func `an Int is held in a 64-bit integer, and a Bool in a 1-bit one`(type: RayoType, width: UInt32) throws {
         try withTypes(of: []) { types in
-            let llvmType = types.llvmType(type)
+            let llvmType = types.llvmType(type).ref
             #expect(LLVMGetTypeKind(llvmType) == LLVMIntegerTypeKind)
             #expect(LLVMGetIntTypeWidth(llvmType) == width)
         }
@@ -16,7 +16,7 @@ struct ValueTypeTests {
 
     @Test func `a function that returns nothing returns LLVM's void`() throws {
         try withTypes(of: []) { types in
-            #expect(LLVMGetTypeKind(types.llvmType(.void)) == LLVMVoidTypeKind)
+            #expect(LLVMGetTypeKind(types.llvmType(.void).ref) == LLVMVoidTypeKind)
         }
     }
 
@@ -27,7 +27,7 @@ struct ValueTypeTests {
         ])
 
         try withTypes(of: [pair]) { types in
-            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Pair")))
+            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Pair"))).ref
             #expect(text(of: llvmType) == "%Pair = type <{ i64, i1, i1, [6 x i8] }>")
         }
     }
@@ -39,7 +39,7 @@ struct ValueTypeTests {
         let inner = StructType(name: "Inner", fields: [Field(name: "count", type: .int)])
 
         try withTypes(of: [outer, inner]) { types in
-            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Outer")))
+            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Outer"))).ref
             #expect(text(of: llvmType) == "%Outer = type <{ %Inner }>")
         }
     }
@@ -61,7 +61,7 @@ struct ValueTypeTests {
     /// Runs `body` on the LLVM types of a program whose structs are `structs`, made in a new module for the host.
     private func withTypes(of structs: [StructType], _ body: (LLVMTypes) throws -> Void) throws {
         try withProgramModule(for: .debug) { programModule in
-            try body(LLVMTypes(TypeTable(structs: structs), in: programModule.module))
+            try body(LLVMTypes(TypeTable(structs: structs), in: programModule.emitter.context))
         }
     }
 }

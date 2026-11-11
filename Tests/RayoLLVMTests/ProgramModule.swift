@@ -1,24 +1,32 @@
 import LLVM
+import RayoIR
 @testable import RayoLLVM
 
-/// A module for the host, and the emitter of a program into it, made as a debug or a release build makes them.
+/// A program's emitter for the host, with the runtime's functions declared in its module, made as a debug or a
+/// release build makes them.
 struct ProgramModule: ~Copyable {
     let target: TargetMachine
-    let module: ModuleBuilder
     let emitter: ProgramEmitter
+    /// The functions of the runtime that the program calls. The runtime itself is never linked in.
+    let runtime: RuntimeFunctions
 
     init(for build: Build) throws(LLVMError) {
-        // Make the build's machine, a module for it, and the runtime the program's code calls. Each can throw, so
-        // all come before any field is set: Swift can't track a field that isn't copyable set on one path only.
+        // Make the build's machine, the program's emitter for it, and the runtime's functions in the emitter's
+        // module. Each can throw, so all come before any field is set: Swift can't track a field that isn't
+        // copyable set on one path only.
         let target = try TargetMachine(optimizes: build == .release)
-        let module = ModuleBuilder(named: "main.rayo", for: target)
-        let runtime = try Runtime(in: module)
+        let emitter = ProgramEmitter(sourcePath: "main.rayo", for: target, checksOverflow: build == .debug)
+        let runtime = try Runtime(for: emitter)
 
-        // Emit into the module as the build does, with the runtime's functions to call.
-        emitter = ProgramEmitter(module: module, runtime: runtime.functions, sourcePath: "main.rayo",
-                                 checksOverflow: build == .debug)
-        self.module = module
+        // Keep the runtime's functions, which outlive the runtime's own module.
+        self.runtime = runtime.functions
+        self.emitter = emitter
         self.target = target
+    }
+
+    /// Emits `executable` into the module, as the build does.
+    func emit(_ executable: IRExecutable) {
+        emitter.emit(executable, calling: runtime)
     }
 }
 

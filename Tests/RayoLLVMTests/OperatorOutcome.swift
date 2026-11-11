@@ -1,4 +1,4 @@
-import CLLVM
+import LLVM
 @testable import RayoLLVM
 import RayoSyntax
 
@@ -8,7 +8,7 @@ enum OperatorOutcome: Equatable {
     case bool(Bool)
     case panic(String)
 
-    /// The panic that an operator at line 3, column 7 of main.rayo, where `ExpressionEmitter.range` starts,
+    /// The panic that an operator at line 3, column 7 of main.rayo, where `OperatorModule.range` starts,
     /// reports for `reason`.
     static func panics(_ reason: String) -> OperatorOutcome {
         .panic("main.rayo:3:7: panic: \(reason)\n")
@@ -39,7 +39,7 @@ func outcome(of op: UnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
 /// release build is, and run on `operand` in this process.
 func releaseOutcome(
     of operand: Int64,
-    _ expression: (ExpressionEmitter, LLVMValueRef) -> LLVMValueRef,
+    _ expression: (borrowing OperatorModule, AnyValue) -> AnyValue,
 ) throws -> OperatorOutcome {
     try outcome(operand, 0, on: .ints, in: .release) { emit, a, _ in expression(emit, a) }
 }
@@ -48,10 +48,10 @@ func releaseOutcome(
 /// runs it on `left` and `right` in this process.
 private func outcome(
     _ left: Int64, _ right: Int64, on operands: OperatorModule.Operands, in build: Build,
-    _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef,
+    _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
 ) throws -> OperatorOutcome {
     // Emit `f`, and ready the module as the build does.
-    let module = try OperatorModule(for: build)
+    var module = try OperatorModule(for: build)
     let (_, givesBool) = module.define("f", on: operands, expression)
     try module.ready(exporting: ["f"])
 
