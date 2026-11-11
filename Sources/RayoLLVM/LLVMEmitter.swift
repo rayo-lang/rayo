@@ -16,8 +16,8 @@ public enum LLVMEmitter {
                                      checksOverflow: checksOverflow)
         emitter.emit(executable)
         try runtime.link(into: module)
-        try target.ready(module, exporting: [Runtime.entryPoint])
-        let objectCode = try target.objectCode(of: module)
+        try module.ready(for: target, exporting: [Runtime.entryPoint])
+        let objectCode = try target.objectCode(of: module.llvmModule)
 
         try module.checkReportedErrors()
         return objectCode

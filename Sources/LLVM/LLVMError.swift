@@ -17,3 +17,10 @@ package func takeMessage(_ message: UnsafeMutablePointer<CChar>?) -> String {
     defer { LLVMDisposeMessage(message) }
     return String(cString: message)
 }
+
+/// Returns the message of an error LLVM hands back, and disposes of the error.
+func takeMessage(_ error: LLVMErrorRef) -> String {
+    let message = LLVMGetErrorMessage(error)!
+    defer { LLVMDisposeErrorMessage(message) }
+    return String(cString: message)
+}

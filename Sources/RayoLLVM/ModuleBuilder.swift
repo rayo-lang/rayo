@@ -4,7 +4,7 @@ import LLVM
 /// An LLVM module for the host, in a context of its own, and the IR builder that adds to it.
 final class ModuleBuilder {
     private let llvmContext: Context
-    private let llvmModule: Module
+    let llvmModule: Module
     private let llvmBuilder: Builder
 
     let void: LLVMTypeRef
@@ -13,7 +13,7 @@ final class ModuleBuilder {
     let int32: LLVMTypeRef
     let int64: LLVMTypeRef
 
-    init(named name: String, for target: TargetMachine) {
+    init(named name: String, for target: borrowing TargetMachine) {
         // Make the module, its builder and the types it builds with, in a context of their own.
         let context = Context()
         llvmModule = context.makeModule(named: name)
@@ -25,28 +25,17 @@ final class ModuleBuilder {
         int64 = context.integerType(I64.self).ref
         llvmContext = context
 
-        target.configure(llvmModule.ref)
+        target.configure(llvmModule)
     }
 
     var context: LLVMContextRef { llvmContext.ref }
     var module: LLVMModuleRef { llvmModule.ref }
     var builder: LLVMBuilderRef { llvmBuilder.ref }
 
-    func verify() throws(LLVMError) {
-        try llvmModule.verify()
-    }
-
     /// Throws the errors LLVM has reported in this module's context, if any.
     func checkReportedErrors() throws(LLVMError) {
         // Only an error fails the module; a warning fails nothing.
-        if !llvmContext.reportedErrors.isEmpty { throw error("LLVM reported errors:") }
-    }
-
-    /// An error that says `summary`, then `detail` and the errors LLVM has reported in this module's context,
-    /// whichever there are.
-    func error(_ summary: String, detail: String = "") -> LLVMError {
-        let reasons = ([detail] + llvmContext.reportedErrors).filter { !$0.isEmpty }
-        return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
+        if !llvmContext.reportedErrors.isEmpty { throw llvmModule.error("LLVM reported errors:", reportedAfter: 0) }
     }
 
     /// Makes an empty module in this module's context, for the same target, so that the two link.
@@ -76,9 +65,17 @@ final class ModuleBuilder {
         functionValue(llvmModule.addFunction(named: definition.name, type: definition.type))
     }
 
+    /// Readies the module to compile as `target`'s build: hides every definition but the functions `exported` names
+    /// from code outside the module, checks the module is well formed, and optimises it if `target` optimises.
+    func ready(for target: borrowing TargetMachine, exporting exported: Set<String>) throws(LLVMError) {
+        hideDefinitions(except: exported)
+        try llvmModule.verify()
+        if target.optimizes { try target.optimize(llvmModule) }
+    }
+
     /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
     /// globals, a linkage that keeps it out of the executable's symbols.
-    func hideDefinitions(except exported: Set<String>) {
+    private func hideDefinitions(except exported: Set<String>) {
         // Functions become internal, so that optimisation can drop those nothing calls.
         for function in llvmModule.functions where isHideable(function) && !exported.contains(function.name) {
             function.setLinkage(.internal)
