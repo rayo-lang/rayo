@@ -60,12 +60,18 @@ public struct Module: ~Copyable {
         throw error("LLVM couldn't link \(otherName) into \(name):", reportedAfter: earlierErrors)
     }
 
+    /// Throws the errors LLVM has reported in the module's context, if any.
+    public func checkReportedErrors() throws(LLVMError) {
+        // Only an error fails the module; a warning fails nothing.
+        if reportedErrorCount > 0 { throw error("LLVM reported errors:", reportedAfter: 0) }
+    }
+
     /// How many errors LLVM has reported in the module's context.
-    package var reportedErrorCount: Int { context.errors.count }
+    var reportedErrorCount: Int { context.errors.count }
 
     /// An error that says `summary`, then `detail` and the errors LLVM reported in the module's context after the
     /// first `earlier` of them, whichever there are.
-    package func error(_ summary: String, detail: String = "", reportedAfter earlier: Int) -> LLVMError {
+    func error(_ summary: String, detail: String = "", reportedAfter earlier: Int) -> LLVMError {
         let reasons = ([detail] + context.errors.dropFirst(earlier)).filter { !$0.isEmpty }
         return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
@@ -102,6 +108,27 @@ public struct Module: ~Copyable {
             next = LLVMGetNextGlobal(global)
         }
         return globals
+    }
+
+    /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
+    /// globals, a linkage that keeps it out of the symbols the object code exports, so that optimisation can drop what
+    /// nothing uses.
+    public func hideDefinitions(except exported: Set<String>) {
+        // Functions become internal, where code in the module still calls them.
+        for function in functions where isHideable(function) && !exported.contains(function.name) {
+            function.setLinkage(.internal)
+        }
+
+        // Globals become private, where code in the module still reads them.
+        for global in globals where isHideable(global) {
+            global.setLinkage(.private)
+        }
+    }
+
+    /// Whether `value` is a definition, and not one of LLVM's own, such as `llvm.used` or `llvm.global_ctors`,
+    /// whose linkage LLVM requires to stay as it is.
+    private func isHideable(_ value: some GlobalValue) -> Bool {
+        !value.isDeclaration && !value.name.hasPrefix("llvm.")
     }
 
     /// Adds a global variable named `name`, which holds `initializer` when a run starts.

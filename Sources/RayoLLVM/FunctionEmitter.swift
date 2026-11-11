@@ -1,4 +1,4 @@
-internal import CLLVM
+import LLVM
 import RayoIR
 import RayoSema
 import RayoSource
@@ -6,106 +6,98 @@ import RayoSource
 /// Emits one function's body into an LLVM function, holding each local in a stack slot.
 struct FunctionEmitter {
     private let function: IRFunction
-    private let llvmFunction: LLVMValueRef
+    private let llvmFunction: Function
     /// The program's functions, indexed by `FunctionID`, that calls go to.
-    private let functions: [FunctionValue]
+    private let functions: [Function]
     /// The LLVM types of the program's values.
     private let types: LLVMTypes
-    private let program: ProgramEmitter
+    private let runtime: RuntimeFunctions
     private let operators: OperatorEmitter
-    private var slots: [LLVMValueRef] = []
-    private var blocks: [LLVMBasicBlockRef] = []
+    private var slots: [PointerValue] = []
+    private var blocks: [LLVM.BasicBlock] = []
 
     init(
-        function: IRFunction, into llvmFunction: LLVMValueRef, functions: [FunctionValue], types: LLVMTypes,
-        program: ProgramEmitter,
+        function: IRFunction, into llvmFunction: Function, functions: [Function], types: LLVMTypes,
+        runtime: RuntimeFunctions,
     ) {
         self.function = function
         self.llvmFunction = llvmFunction
         self.functions = functions
         self.types = types
-        self.program = program
-        self.operators = OperatorEmitter(program: program, into: llvmFunction)
+        self.runtime = runtime
+        self.operators = OperatorEmitter(into: llvmFunction, types: types, panic: runtime.panic)
     }
 
-    private var module: ModuleBuilder { program.module }
-    private var builder: LLVMBuilderRef { module.builder }
-
-    mutating func emit() {
+    /// Emits the body into the function, in `program`'s module.
+    mutating func emit(in program: borrowing ProgramEmitter) {
         // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
-        LLVMPositionBuilderAtEnd(builder, appendBlock(named: "entry"))
-        slots = allocateSlots()
-        storeArguments()
+        program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: llvmFunction))
+        slots = allocateSlots(with: program.builder)
+        storeArguments(with: program.builder)
 
         // Make an LLVM block for each IR block, and go on from the entry block to the first.
-        blocks = function.blocks.indices.map { appendBlock(named: "bb\($0)") }
-        LLVMBuildBr(builder, blocks[0])
+        blocks = function.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
+        program.builder.branch(to: blocks[0])
 
         // Emit each IR block into the LLVM block made for it.
         for (block, llvmBlock) in zip(function.blocks, blocks) {
-            emit(block, into: llvmBlock)
+            emit(block, into: llvmBlock, in: program)
         }
     }
 
     /// Allocates a stack slot for each local, and returns the slots in the locals' order.
-    private func allocateSlots() -> [LLVMValueRef] {
-        function.locals.indices.map { allocateSlot(of: LocalID(index: $0)) }
-    }
-
-    /// Allocates a stack slot for `local`, aligned as its type is.
-    private func allocateSlot(of local: LocalID) -> LLVMValueRef {
-        aligned(LLVMBuildAlloca(builder, slotType(of: local), ""), as: local)
+    private func allocateSlots(with builder: borrowing Builder) -> [PointerValue] {
+        function.locals.indices.map { index in
+            let local = LocalID(index: index)
+            return builder.allocate(slotType(of: local), alignment: alignment(of: local))
+        }
     }
 
     /// Stores each argument in its parameter's slot.
-    private func storeArguments() {
+    private func storeArguments(with builder: borrowing Builder) {
         // The parameters are the first locals, in order.
         for index in 0..<function.parameterCount {
-            store(LLVMGetParam(llvmFunction, UInt32(index)), in: LocalID(index: index))
+            store(llvmFunction.parameter(at: index), in: LocalID(index: index), with: builder)
         }
     }
 
     /// Lowers `local`'s type to the LLVM type of its stack slot.
-    private func slotType(of local: LocalID) -> LLVMTypeRef {
+    private func slotType(of local: LocalID) -> AnyType {
         let type = function.locals[local.index].type
         precondition(type != .void, "lowering makes no local of type Void")
         return types.llvmType(type)
     }
 
+    /// The alignment, in bytes, of `local`'s slot, which is its type's.
+    private func alignment(of local: LocalID) -> Int {
+        types.alignment(of: function.locals[local.index].type)
+    }
+
     /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
-    private func load(_ local: LocalID) -> LLVMValueRef {
-        aligned(LLVMBuildLoad2(builder, slotType(of: local), slots[local.index], ""), as: local)
+    private func load(_ local: LocalID, with builder: borrowing Builder) -> AnyValue {
+        builder.load(slotType(of: local), from: slots[local.index], alignment: alignment(of: local))
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot.
-    private func store(_ value: LLVMValueRef, in local: LocalID) {
-        aligned(LLVMBuildStore(builder, value, slots[local.index]), as: local)
+    private func store(_ value: AnyValue, in local: LocalID, with builder: borrowing Builder) {
+        builder.store(value, to: slots[local.index], alignment: alignment(of: local))
     }
 
-    /// Aligns `instruction`, which allocates, loads or stores `local`'s slot, as `local`'s type is, and returns it.
-    @discardableResult
-    private func aligned(_ instruction: LLVMValueRef, as local: LocalID) -> LLVMValueRef {
-        LLVMSetAlignment(instruction, types.alignment(of: function.locals[local.index].type))
-        return instruction
-    }
-
-    private func appendBlock(named name: String) -> LLVMBasicBlockRef {
-        module.appendBlock(to: llvmFunction, named: name)
-    }
-
-    private func emit(_ block: BasicBlock, into llvmBlock: LLVMBasicBlockRef) {
-        LLVMPositionBuilderAtEnd(builder, llvmBlock)
+    private func emit(
+        _ block: RayoIR.BasicBlock, into llvmBlock: LLVM.BasicBlock, in program: borrowing ProgramEmitter,
+    ) {
+        program.builder.position(atEndOf: llvmBlock)
         for statement in block.statements {
-            emit(statement)
+            emit(statement, in: program)
         }
         // The terminator ends the block that the statements leave the builder in.
-        emit(block.terminator)
+        emit(block.terminator, in: program)
     }
 
-    private func emit(_ statement: Statement) {
+    private func emit(_ statement: Statement, in program: borrowing ProgramEmitter) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
-            emit(rvalue, into: destination, at: range)
+            emit(rvalue, into: destination, at: range, in: program)
 
         // A declaration emits nothing: the program reads a slot only once a statement has stored to it.
         case .declare:
@@ -114,74 +106,87 @@ struct FunctionEmitter {
     }
 
     /// Emits the instructions that compute `rvalue`, and stores its result in `destination` when there is one.
-    private func emit(_ rvalue: Rvalue, into destination: Place?, at range: SourceRange) {
-        let value = compute(rvalue, at: range)
+    private func emit(
+        _ rvalue: Rvalue, into destination: Place?, at range: SourceRange, in program: borrowing ProgramEmitter,
+    ) {
+        let value = compute(rvalue, at: range, in: program)
 
         // A value that no local takes is dropped.
         guard let destination else { return }
         // Only a call that returns nothing gives no value.
         guard let value else { preconditionFailure("lowering stores no call that returns nothing") }
-        store(value, in: destination.local)
+        store(value, in: destination.local, with: program.builder)
     }
 
-    private func emit(_ terminator: Terminator) {
+    private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) {
         switch terminator {
         // A `goto` branches to the LLVM block made for its target.
         case .goto(let target):
-            LLVMBuildBr(builder, blocks[target.index])
+            program.builder.branch(to: blocks[target.index])
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let condition, let then, let otherwise):
-            LLVMBuildCondBr(builder, read(condition), blocks[then.index], blocks[otherwise.index])
+            // The checker makes every condition a Bool, and LLVM's verifier rejects a module where one isn't.
+            let condition = IntValue<I1>(unchecked: read(condition, in: program).ref)
+            program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
         // A `return` with an operand returns its value.
         case .return(let result?):
-            LLVMBuildRet(builder, read(result))
+            program.builder.return(read(result, in: program))
 
         // A `return` without an operand, from a function that returns Void, returns nothing.
         case .return(nil):
-            LLVMBuildRetVoid(builder)
+            program.builder.returnVoid()
 
         // A block that no path reaches ends in LLVM's `unreachable`.
         case .unreachable:
-            LLVMBuildUnreachable(builder)
+            program.builder.unreachable()
         }
     }
 
-    private func read(_ operand: Operand) -> LLVMValueRef {
+    private func read(_ operand: Operand, in program: borrowing ProgramEmitter) -> AnyValue {
         switch operand {
         // An Int constant needs no instruction: it is an `i64` holding the Int's bits.
         case .constant(.int(let value)):
-            module.constant(value)
+            types.int64.constant(value).anyValue
 
         // A Bool constant needs no instruction either: it is an `i1`, 1 for true and 0 for false.
         case .constant(.bool(let value)):
-            module.constant(value)
+            types.bool.constant(value ? 1 : 0).anyValue
 
         // A read or a move loads the local from its slot; a move leaves the slot as it is, unread until assigned again.
         case .read(let place), .move(let place):
-            load(place.local)
+            load(place.local, with: program.builder)
         }
     }
 
     /// Emits the instructions that compute `rvalue`, and returns the LLVM value holding its result, or nil
     /// when it has none.
-    private func compute(_ rvalue: Rvalue, at range: SourceRange) -> LLVMValueRef? {
+    private func compute(_ rvalue: Rvalue, at range: SourceRange, in program: borrowing ProgramEmitter) -> AnyValue? {
         switch rvalue {
-        case .use(let operand): read(operand)
-        case .unary(let op, let operand): operators.emit(op, on: read(operand), at: range)
-        case .binary(let op, let left, let right): operators.emit(op, read(left), read(right), at: range)
-        case .call(let callee, let arguments): call(callee, passing: arguments.map { read($0) })
+        // A use is its operand's value.
+        case .use(let operand):
+            read(operand, in: program)
+
+        // An operator computes on its operands' values.
+        case .unary(let op, let operand):
+            operators.emit(op, on: read(operand, in: program), at: range, in: program)
+        case .binary(let op, let left, let right):
+            operators.emit(op, read(left, in: program), read(right, in: program), at: range, in: program)
+
+        // A call passes its arguments' values.
+        case .call(let callee, let arguments):
+            call(callee, passing: arguments.map { read($0, in: program) }, with: program.builder)
         }
     }
 
     /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing.
-    private func call(_ callee: Callee, passing arguments: [LLVMValueRef]) -> LLVMValueRef? {
+    private func call(_ callee: Callee, passing arguments: [AnyValue], with builder: borrowing Builder) -> AnyValue? {
         // Call the LLVM function that `callee` names: the prelude's `print` is the runtime's.
         let function = switch callee {
-        case .printInt: program.runtime.printInt
+        case .printInt: runtime.printInt
         case .function(let id): functions[id.index]
         }
-        return module.call(function, arguments)
+        return builder.call(function, arguments)
     }
 }

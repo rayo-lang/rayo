@@ -1,8 +1,12 @@
 import CLLVM
 import LLVM
 @testable import RayoLLVM
+import RayoSema
+import RayoSource
+import RayoSyntax
 
-/// A module for the host, into which a debug or a release build's operators are emitted in functions of their own.
+/// A module for the host, into which a debug or a release build's operators are emitted in functions of their own,
+/// each operator at `range`. An expression that `define` takes emits its operators by calling the module.
 struct OperatorModule: ~Copyable {
     /// The type of the operands of a function's operators.
     enum Operands: Equatable {
@@ -11,52 +15,56 @@ struct OperatorModule: ~Copyable {
         case bools
     }
 
+    /// The source range, in main.rayo, of every operator the module emits.
+    static let range = SourceRange(
+        SourceLocation(line: 3, column: 7, offset: 20), SourceLocation(line: 3, column: 12, offset: 25),
+    )
+
     private let programModule: ProgramModule
+    private let types: LLVMTypes
+    /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
+    /// it has made them.
+    private var operators: OperatorEmitter?
 
     init(for build: Build) throws(LLVMError) {
         programModule = try ProgramModule(for: build)
+        types = LLVMTypes(TypeTable(structs: []), in: programModule.emitter.context)
     }
 
-    private var module: ModuleBuilder {
-        borrow { programModule.module }
+    private var program: ProgramEmitter {
+        borrow { programModule.emitter }
     }
 
     /// The text of the module's IR.
     var llvmIR: String {
-        takeMessage(LLVMPrintModuleToString(module.module))
+        program.module.text
     }
 
     /// Defines `name(i64, i64) -> i64`, which takes its parameters as the type `operands` names and returns what
     /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool.
-    func define(
-        _ name: String, on operands: Operands,
-        _ expression: (ExpressionEmitter, LLVMValueRef, LLVMValueRef) -> LLVMValueRef,
-    ) -> (function: FunctionValue, givesBool: Bool) {
-        // Make the function, and build from its entry block.
-        let function = module.addFunction(name, taking: [module.int64, module.int64], returning: module.int64)
-        LLVMPositionBuilderAtEnd(module.builder, module.appendBlock(to: function.value, named: "entry"))
+    mutating func define(
+        _ name: String, on operands: Operands, _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
+    ) -> (function: Function, givesBool: Bool) {
+        // Make the function, and its operators.
+        let function = beginFunction(name, taking: [types.int64, types.int64])
+        operators = OperatorEmitter(into: function, types: types, panic: programModule.runtime.panic)
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are.
-        let parameters = (0..<2).map { index in
-            let parameter = LLVMGetParam(function.value, UInt32(index))!
-            return operands == .bools ? LLVMBuildTrunc(module.builder, parameter, module.bool, "")! : parameter
-        }
-        let operators = OperatorEmitter(program: programModule.emitter, into: function.value)
-        let value = expression(ExpressionEmitter(operators: operators), parameters[0], parameters[1])
+        let parameters = (0..<2).map { narrowed(function.parameter(at: $0), to: operands) }
+        let value = expression(self, parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
-        let givesBool = LLVMTypeOf(value) == module.bool
-        let result = givesBool ? LLVMBuildZExt(module.builder, value, module.int64, "")! : value
-        LLVMBuildRet(module.builder, result)
+        let givesBool = IntValue<I1>(value) != nil
+        program.builder.return(givesBool ? widened(value) : value)
         return (function, givesBool)
     }
 
     /// Defines `name() -> i64` to return what `function` returns on `left` and `right`.
-    func defineCall(_ name: String, of function: FunctionValue, _ left: Int64, _ right: Int64) -> FunctionValue {
-        let caller = module.addFunction(name, taking: [], returning: module.int64)
-        LLVMPositionBuilderAtEnd(module.builder, module.appendBlock(to: caller.value, named: "entry"))
+    func defineCall(_ name: String, of function: Function, _ left: Int64, _ right: Int64) -> Function {
+        let caller = beginFunction(name, taking: [])
         // Every operator gives a value, so the call does too.
-        LLVMBuildRet(module.builder, module.call(function, [module.constant(left), module.constant(right)])!)
+        let result = program.builder.call(function, [types.int64.constant(left), types.int64.constant(right)])!
+        program.builder.return(result)
         return caller
     }
 
@@ -64,6 +72,41 @@ struct OperatorModule: ~Copyable {
     /// `exported` names where the compiler would export only the program's entry point. The runtime is left out, so
     /// that the stand-in for its panic catches a panic.
     func ready(exporting exported: Set<String>) throws {
-        try module.ready(for: programModule.target, exporting: exported)
+        try LLVMEmitter.ready(program.module, for: programModule.target, exporting: exported)
+    }
+
+    /// Emits `left op right`.
+    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) -> AnyValue {
+        operators!.emit(op, left, right, at: Self.range, in: program)
+    }
+
+    /// Emits `left op right`, where `right` is an Int constant.
+    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: Int64) -> AnyValue {
+        self(op, left, AnyValue(LLVMConstInt(left.type.ref, UInt64(bitPattern: right), 1)))
+    }
+
+    /// Emits `op operand`.
+    func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) -> AnyValue {
+        operators!.emit(op, on: operand, at: Self.range, in: program)
+    }
+
+    /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.
+    private func beginFunction(_ name: String, taking parameters: [any TypeHandle]) -> Function {
+        let type = program.context.functionType(returning: types.int64, taking: parameters)
+        let function = program.module.addFunction(named: name, type: type)
+        program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: function))
+        return function
+    }
+
+    /// `parameter`, an Int, as the type `operands` names.
+    private func narrowed(_ parameter: AnyValue, to operands: Operands) -> AnyValue {
+        // A Bool is the Int's low bit.
+        guard operands == .bools else { return parameter }
+        return AnyValue(LLVMBuildTrunc(program.builder.ref, parameter.ref, types.bool.ref, "")!)
+    }
+
+    /// `value`, a Bool, as the Int 0 or 1.
+    private func widened(_ value: AnyValue) -> AnyValue {
+        AnyValue(LLVMBuildZExt(program.builder.ref, value.ref, types.int64.ref, "")!)
     }
 }
