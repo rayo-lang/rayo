@@ -141,9 +141,8 @@ loops.removeLast()
 ```
 
 **A case's opening comment says which case it is and what the function does with it**, in the terms of the function's
-job, in one line where one will do. Where a case opens a block, its comment opens the block too, and says the case.
-What else it says is decided by whether a reader would stumble without it. Two comments on the same guard; only one
-does its job.
+job, in one line where one will do. A case's comment that also opens a block says the case. What else it says is
+decided by whether a reader would stumble without it. Two comments on the same guard; only one does its job.
 
 **A second copy of the code — rewrite it.** `case .paid` already says "paid". The comment is the guard translated back
 into English, and it drifts.
