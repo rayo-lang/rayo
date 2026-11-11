@@ -23,10 +23,10 @@ struct DeclarationParser {
     /// `'func' …` or `'struct' …`.
     private func parseDeclaration() throws(ParseFailure) -> Declaration {
         if tokens.consume(.func) {
-            // A `func` begins a function.
+            // A `func` is followed by a function's name, parameters, result and body.
             .function(try parseFunction())
         } else if tokens.consume(.struct) {
-            // A `struct` begins a struct.
+            // A `struct` is followed by a struct's name, its header of fields, and its body.
             .structure(try parseStruct())
         } else {
             // Any other token begins no declaration.
@@ -120,12 +120,15 @@ struct DeclarationParser {
         }
     }
 
-    /// `('var' | 'let') identifier (':' type)?`.
+    /// `('var' | 'let') identifier (':' type)? ('=' expression)?`.
     private func parseField() throws(ParseFailure) -> FieldDecl {
+        // Read the field's parts in order; a type or default value left out reads as nil.
         let kind = try parseFieldKind()
         let (name, nameRange) = try tokens.expectIdentifier(else: ErrorCode.missingFieldName)
         let type = tokens.consume(.colon) ? try TypeParser(tokens: tokens).parseType() : nil
-        return FieldDecl(kind: kind, name: name, nameRange: nameRange, type: type)
+        let defaultValue = tokens.consume(.assign) ? try ExpressionParser(tokens: tokens).parseExpression() : nil
+
+        return FieldDecl(kind: kind, name: name, nameRange: nameRange, type: type, defaultValue: defaultValue)
     }
 
     /// `'var'` or `'let'`, which begins a field.

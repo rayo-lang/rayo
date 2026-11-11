@@ -37,9 +37,9 @@ struct LLVMTypes {
     /// its end, if any.
     private func defineBody(of id: StructID) {
         // Lay the fields out in the order the table puts them in memory.
-        let layout = table.layout(of: id)
+        let layout = table.structLayout(of: id)
         let fields = table[id].fields
-        var body: [LLVMTypeRef?] = layout.fieldOrder.map { llvmType(fields[$0].type) }
+        var body: [LLVMTypeRef?] = layout.layoutOrder.map { llvmType(fields[$0].type) }
 
         // The bytes that pad the end, if there are any, hold nothing.
         if layout.endPadding > 0 { body.append(LLVMArrayType2(module.int8, UInt64(layout.endPadding))) }

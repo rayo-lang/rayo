@@ -212,6 +212,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(239, error: "'{name}' contains itself")
     case containsItself(name: String)
 
+    @Code(240, error: "field defaults aren't supported")
+    case fieldDefault
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

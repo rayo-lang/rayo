@@ -20,6 +20,23 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `a struct is passed and returned by value, as its named LLVM type`() throws {
+        let parameter = IRLocal.source(name: "p", kind: .parameter, type: pairType)
+        let relay = IRFunction(
+            name: "relay(_: Pair)", parameterCount: 1, result: pairType, locals: [parameter],
+            blocks: [BasicBlock(statements: [], terminator: .return(read(0)))],
+        )
+
+        // The emitted signature takes a Pair and returns one, neither through a pointer. LLVM writes a named struct
+        // type with its body.
+        let pairText = "%Pair = type <{ i64, i1, [7 x i8] }>"
+        try withEmitted(program(of: [emptyMain, relay], types: pairTable)) { module in
+            let signature = try signature(of: relay.name, in: module)
+            #expect(try parameterTypes(of: signature) == [pairText])
+            #expect(text(of: LLVMGetReturnType(signature)) == pairText)
+        }
+    }
+
     @Test func `a function that returns nothing is declared returning void`() throws {
         try withEmitted(program(of: [emptyMain])) { module in
             let signature = try signature(of: "rayo.main", in: module)

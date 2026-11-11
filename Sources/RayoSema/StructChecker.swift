@@ -15,16 +15,14 @@ struct StructChecker {
     let errors: ErrorList
 
     /// Declares the types of `structs` in `declarations`, and returns the types they make, or nil when they can't be
-    /// laid out. A struct that comes after a function of its name, `firstFunctions` giving where the first of each
-    /// name starts, is reported, and still declared.
+    /// laid out. A struct whose name `names` gives to functions is reported, and still declared.
     func declare(
-        _ structs: [StructDecl], besides firstFunctions: [String: SourceLocation],
-        in declarations: inout Declarations,
+        _ structs: [StructDecl], among names: TopLevelNames, in declarations: inout Declarations,
     ) -> TypeTable? {
-        let ids = declareNames(of: structs, besides: firstFunctions, in: &declarations)
+        let ids = declareNames(of: structs, among: names, in: &declarations)
 
         // A field may name any struct, so every name is declared before a field is checked.
-        let declared = declaredStructs(structs, withIDs: ids, in: declarations)
+        let declared = checkStructs(structs, withIDs: ids, in: declarations)
 
         guard !reportSelfContaining(among: declared) else { return nil }
 
@@ -32,11 +30,10 @@ struct StructChecker {
     }
 
     /// Declares the name of each of `structs`, numbering them in source order, and returns their IDs, nil for each
-    /// whose name is `_` or another struct's. A struct that comes after a function of its name, `firstFunctions`
-    /// giving where the first of each name starts, is reported, and still declared.
+    /// whose name is `_` or another struct's. A struct whose name `names` gives to functions is reported, and still
+    /// declared.
     private func declareNames(
-        of structs: [StructDecl], besides firstFunctions: [String: SourceLocation],
-        in declarations: inout Declarations,
+        of structs: [StructDecl], among names: TopLevelNames, in declarations: inout Declarations,
     ) -> [StructID?] {
         var ids: [StructID?] = []
         var nextIndex = 0
@@ -47,9 +44,9 @@ struct StructChecker {
                 continue
             }
 
-            // Number and declare the struct, even when a function before it has its name: a type is looked up
-            // apart from a function, so the struct's uses still find it, and raise no error of their own.
-            reportNameOfEarlierFunction(declaration, besides: firstFunctions)
+            // Number and declare the struct, even when its name belongs to functions: a type is looked up apart from
+            // a function, so the struct's uses still find it, and raise no error of their own.
+            reportNameOfFunctions(declaration, among: names)
             let id = StructID(index: nextIndex, name: declaration.name)
             declarations.declare(id)
             ids.append(id)
@@ -60,11 +57,8 @@ struct StructChecker {
 
     /// Whether `declaration` may take its name, reporting it when the name is `_` or another struct's.
     private func hasFreeName(_ declaration: StructDecl, in declarations: Declarations) -> Bool {
-        // `_` names nothing.
-        guard declaration.name != "_" else {
-            errors.report(.underscoreDeclared, at: declaration.nameRange)
-            return false
-        }
+        // A struct named `_` was reported.
+        guard isNaming(declaration.name, at: declaration.nameRange) else { return false }
         // A struct before it holds the name already.
         guard declarations.structure(named: declaration.name) == nil else {
             errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
@@ -73,20 +67,26 @@ struct StructChecker {
         return true
     }
 
-    /// Reports `declaration` when a function of its name comes before it, `firstFunctions` giving where the first of
-    /// each name starts, since a name names one struct, or functions.
-    private func reportNameOfEarlierFunction(
-        _ declaration: StructDecl, besides firstFunctions: [String: SourceLocation],
-    ) {
+    /// Whether `name`, written at `range`, names a struct or a field, reporting it when it is `_`, which names
+    /// nothing.
+    private func isNaming(_ name: String, at range: SourceRange) -> Bool {
+        // Any name but `_` names one.
+        guard name == "_" else { return true }
+        errors.report(.underscoreDeclared, at: range)
+        return false
+    }
+
+    /// Reports `declaration`, the first struct of its name, when `names` gives the name to functions.
+    private func reportNameOfFunctions(_ declaration: StructDecl, among names: TopLevelNames) {
         // A function before it holds the name already.
-        if let start = firstFunctions[declaration.name], start < declaration.nameRange.start {
+        if names.holder(of: declaration.name) == .functions {
             errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
         }
     }
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
     /// with their fields' types.
-    private func declaredStructs(
+    private func checkStructs(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
@@ -104,7 +104,7 @@ struct StructChecker {
         var types: [RayoType?] = []
         for field in declaration.fields {
             checkName(of: field, besides: &names)
-            types.append(type(of: field, in: declarations))
+            types.append(checkType(of: field, in: declarations))
         }
         return types
     }
@@ -112,22 +112,31 @@ struct StructChecker {
     /// Checks that `field`'s name is neither `_` nor one of `names`, the names of the fields before it, reporting
     /// it when it is, and adds the name to `names`.
     private func checkName(of field: FieldDecl, besides names: inout Set<String>) {
-        // `_` names nothing.
-        if field.name == "_" {
-            errors.report(.underscoreDeclared, at: field.nameRange)
-        } else if !names.insert(field.name).inserted {
-            // A field before it has the name already.
+        // A field named `_` was reported.
+        guard isNaming(field.name, at: field.nameRange) else { return }
+        // A field before it has the name already.
+        if !names.insert(field.name).inserted {
             errors.report(.alreadyDeclared(name: field.name), at: field.nameRange)
         }
     }
 
-    /// The type of `field`, reporting it when the field has none, or one that holds no value.
-    private func type(of field: FieldDecl, in declarations: Declarations) -> RayoType? {
-        // A field must write its type.
+    /// Checks `field`'s type and default value, and returns the type, nil where it isn't known. Reports a field with
+    /// no type, one whose type holds no value, and a default value, which rayoc doesn't support.
+    private func checkType(of field: FieldDecl, in declarations: Declarations) -> RayoType? {
+        // A default value is reported, and the field is checked as though it had none.
+        if let defaultValue = field.defaultValue { errors.report(.fieldDefault, at: defaultValue.range) }
+
+        // A field that writes no type has none to check.
         guard let written = field.type else {
-            errors.report(.missingFieldType(name: field.name), at: field.nameRange)
+            // A field with no default value needs its type written; one with a default, reported above, would take
+            // its type from the default.
+            if field.defaultValue == nil {
+                errors.report(.missingFieldType(name: field.name), at: field.nameRange)
+            }
             return nil
         }
+
+        // Resolve the written type, which must hold a value.
         let type = declarations.resolve(written, reporting: errors)
         // A field of type Void would hold no value.
         guard type != .void else {

@@ -148,7 +148,7 @@ struct ExpressionChecker {
                 errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil
             }
-            // Only Ints and Bools compare: a Void value holds nothing, and a struct has no `==`.
+            // Comparing values of a type that doesn't compare is reported.
             guard isComparable(left.type) else {
                 errors.report(.incomparable(op: spelled, type: "\(left.type)"), at: range)
                 return nil
@@ -158,7 +158,8 @@ struct ExpressionChecker {
         return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
     }
 
-    /// Whether `==` and `!=` compare values of `type`.
+    /// Whether `==` and `!=` compare values of `type`: only Ints and Bools compare, since a Void value holds nothing
+    /// and a struct has no `==`.
     private func isComparable(_ type: RayoType) -> Bool {
         switch type {
         case .int, .bool: true

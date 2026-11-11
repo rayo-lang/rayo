@@ -1,4 +1,4 @@
-/// A program's structs, and how a value of each of its types lies in memory, which code generation follows.
+/// A program's structs, and how a value of each of its types lies in memory.
 public struct TypeTable: Equatable, Sendable {
     /// The structs, indexed by `StructID`.
     public let structs: [StructType]
@@ -26,7 +26,7 @@ public struct TypeTable: Equatable, Sendable {
         structs[id.index]
     }
 
-    public func layout(of id: StructID) -> StructLayout {
+    public func structLayout(of id: StructID) -> StructLayout {
         layouts[id.index]
     }
 

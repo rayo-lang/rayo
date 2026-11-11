@@ -79,8 +79,10 @@ struct StructDeclarationTests {
         ("struct S(var a)", .missingFieldType(name: "a"), "a"),
         ("struct S(var a: Int, let a: Bool)", .alreadyDeclared(name: "a"), "a"),
         ("struct S(var _: Int)", .underscoreDeclared, "_"),
+        ("struct S(var a: Int = 1)", .fieldDefault, "1"),
+        ("struct S(var a = 1 + 2)", .fieldDefault, "1 + 2"),
     ])
-    func `a field has a name of its own and a type that isn't Void, and the error covers what is wrong`(
+    func `a field has a name of its own, a type that isn't Void and no default, and the error covers what is wrong`(
         declaration: String, expected: ErrorCode, covered: String,
     ) {
         let source = "func main() {}\n" + declaration
@@ -117,6 +119,12 @@ struct StructDeclarationTests {
         #expect(errors(source) == [.alreadyDeclared(name: name)])
     }
 
+    @Test func `each function after a struct of its name is an error, though it overloads another`() {
+        let reported = diagnostics("func main() {}\nstruct f\nfunc f() {}\nfunc f(_ x: Int) {}")
+        #expect(reported.map(\.code) == [.alreadyDeclared(name: "f"), .alreadyDeclared(name: "f")])
+        #expect(reported.map(\.range.start.line) == [3, 4])
+    }
+
     @Test func `'_' can't name a struct`() {
         #expect(errors("func main() {}\nstruct _") == [.underscoreDeclared])
     }
@@ -129,6 +137,11 @@ struct StructDeclarationTests {
     func `a struct can't contain itself, through its fields at any depth, and each struct in the cycle is an error`(
         declarations: String, names: [String],
     ) {
-        #expect(errors("func main() {}\n" + declarations) == names.map { .containsItself(name: $0) })
+        let source = "func main() {}\n" + declarations
+
+        // Each error covers the name of a struct on the cycle.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == names.map { .containsItself(name: $0) })
+        #expect(coveredText(reported, in: source) == names)
     }
 }

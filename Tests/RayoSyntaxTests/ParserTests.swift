@@ -115,6 +115,11 @@ struct ParserErrorTests {
         #expect(errors(source) == [])
     }
 
+    @Test(arguments: ["struct S(var a: Int = 1)", "struct S(var a = 1 + 2, let b: Bool)"])
+    func `a field may have a default value, with or without a type`(source: String) {
+        #expect(errors(source) == [])
+    }
+
     @Test(arguments: [
         ("struct 1", ErrorCode.missingStructName(found: .token("1"))),
         ("struct S(a: Int)", .missingFieldKind(found: .token("a"))),
