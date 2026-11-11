@@ -78,6 +78,9 @@ These come after v0.3, in an order not yet decided:
 - installing a toolchain ([#184](https://github.com/rayo-lang/rayo/issues/184), [#216](https://github.com/rayo-lang/rayo/issues/216));
 - arm64 Windows ([#186](https://github.com/rayo-lang/rayo/issues/186)).
 
-## Open design questions
+## Design changes the spec still needs
 
-**How many text types the language has.** The spec defines four: `StaticString` for immortal text, the scoped view `StringView`, the owning `String`, and the interned `Name` ([04](docs/spec/04-types/collections.md#collections-and-strings)). Most languages have one, and Rust's two are already a lot for a user to learn. This is settled in the spec before any text work starts.
+Each of these is decided, and the spec changes before the work it shapes starts.
+
+- **Two text types** ([#223](https://github.com/rayo-lang/rayo/issues/223)). A user meets the owning `String` and the borrowed `StringView`. A view that borrows only immortal data is a `static` view, as a literal is, which retires `StaticString` and `StaticSpan`. `Name` stays the interned identifier type.
+- **Allocation marked with `alloc`** ([#224](https://github.com/rayo-lang/rayo/issues/224)). Every place a value first gets heap storage says `alloc`. Inside a type's methods, `alloc` uses the allocator that instance came from, and elsewhere it uses the heap, in place of today's current allocator.
