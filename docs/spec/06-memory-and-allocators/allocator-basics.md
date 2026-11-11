@@ -38,9 +38,10 @@ var boxed = alloc boss.value                         // error: 'Enemy' isn't All
 
 - an initializer of a type that conforms to `Allocating` ([below](#the-allocating-protocol));
 - an `alloc func`, which makes a new value for its caller, such as `clone()` or `filter` ([below](#functions-that-make-a-new-value-alloc-func));
-- an array or dictionary literal, which then builds the `Allocating` type its position expects, such as a `List` or a `Map`, or a `List` from an array literal where nothing expects a type ([04](../04-types/collections.md#literals)).
+- an array or dictionary literal, which then builds the `Allocating` type its position expects, such as a `List` or a `Map`, or a `List` from an array literal where nothing expects a type ([04](../04-types/collections.md#literals));
+- a string literal, which then makes a `String`, formatting an interpolated one into it, as in `alloc "Wave \(n) cleared"` ([04](../04-types/collections.md#strings)).
 
-**Each of those without `alloc` is a compile error**, such as `List<Prop>()`, `String("hp \(hp)")` or a bare `x.clone()` ([below](#functions-that-make-a-new-value-alloc-func)). So every value that owns storage shows where the storage comes from. A string literal isn't among them: it converts to a `String` as `ExpressibleByStringLiteral` says, with no `alloc` ([04](../04-types/collections.md#literals)).
+**An `Allocating` initializer or an `alloc func` called without `alloc` is a compile error**, such as `List<Prop>()`, `String("hp \(hp)")` or a bare `x.clone()` ([below](#functions-that-make-a-new-value-alloc-func)). So is an array or dictionary literal that would become an `Allocating` type without `alloc`. So every value that owns storage shows where the storage comes from. A string literal without `alloc` is a `static StringView`, which owns nothing ([04](../04-types/collections.md#literals)).
 
 **`alloc` applies to nothing else.** So `a.alloc f()` on a plain function `f`, one not declared `alloc func`, is a compile error. `alloc` never boxes a value either: `alloc` before a plain value, such as `boss.value` above, is a compile error, and boxing one is written `alloc Box(v)`. Only the `Box`'s contents go to the allocator. The `Box` itself is a small owning pointer that lives wherever it is put, as the inline part of every `Allocating` value does.
 

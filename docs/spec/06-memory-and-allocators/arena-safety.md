@@ -93,7 +93,7 @@ struct Door(var name: String) {
 
 var doors = alloc List<UniquePointer<Door>>()  // from .heap: the list's buffer isn't in the arena
 for i in 0..<4 {
-    let name = levelArena.alloc String("gate \(i)")                  // the names and the doors come from the arena
+    let name = levelArena.alloc "gate \(i)"                          // the names and the doors come from the arena
     doors.append(levelArena.alloc UniquePointer(Door(name: name)))
 }
 levelArena.reset()                             // destroys the doors; each deinit can still read its 'name'

@@ -67,7 +67,9 @@ struct Loads(
 
 let completedLoads = alloc MpscQueue<(UInt32, LoadState)>(capacity: 256)
 
-func requestFile(_ path: StaticString, _ loads: mutable Loads) -> Handle<LoadState> {
+// The SDK keeps 'path' until the load completes, so only a static view, whose bytes
+// are never freed, may be passed.
+func requestFile(_ path: static StringView, _ loads: mutable Loads) -> Handle<LoadState> {
     let h = loads.requests.insert(.pending)
     while loads.nextTicket == 0 || loads.tickets[loads.nextTicket] != nil {   // 0 would be a null user pointer
         loads.nextTicket &+= 1                                               // skips tickets still in flight after a wrap
@@ -75,7 +77,10 @@ func requestFile(_ path: StaticString, _ loads: mutable Loads) -> Handle<LoadSta
     let ticket = copy loads.nextTicket
     loads.nextTicket &+= 1
     loads.tickets[ticket] = copy h
-    unsafe { plat.read_file_async(path.cString, onFileLoaded, .init(bitPattern: CUIntPtr(ticket))) }
+    unsafe {
+        let chars = path.cchars
+        plat.read_file_async(chars.baseAddress, CSize(chars.count), onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))
+    }
     return h
 }
 

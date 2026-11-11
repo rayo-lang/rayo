@@ -63,12 +63,12 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | Expression | Meaning |
 | --- | --- |
 | `T.fields` | Compile-time list of stored fields, in declaration order |
-| `field.name` | `StaticString`: the field's name, or, for an unlabeled tuple element or an imported struct's anonymous union or struct member, its position among the fields, `0`, `1`, … |
+| `field.name` | `static StringView`: the field's name, or, for an unlabeled tuple element or an imported struct's anonymous union or struct member, its position among the fields, `0`, `1`, … |
 | `field.type` | The field's type, usable as a type |
 | `field.hasDefault` | A `const`: whether the declaration has an initializer, or is an optional `var` that isn't `unsafe`, which defaults to `nil` ([04](../04-types/structs.md#initializers)) |
 | `field.defaultValue()` | A call that evaluates that default |
 | `T.field(ofType: U.self)`, `T.hasField(ofType: U.self)` | The one stored field of type `U` (a compile error if there are none or several), and whether there is exactly one |
-| `T.cases`, `c.name`, `c.payload` | Enum cases, their names as `StaticString`s, and their payload types (a list of fields, like `T.fields`) |
+| `T.cases`, `c.name`, `c.payload` | Enum cases, their names as `static StringView`s, and their payload types (a list of fields, like `T.fields`) |
 | `field.attribute(Bounds.self)`, `T.attribute(A.self)`, `c.attribute(A.self)` | That attribute's value on the field, the type or the enum case, the first one where it is written more than once, or `nil` |
 | `field.attributes(Requires.self)`, `T.attributes(A.self)`, `c.attributes(A.self)` | A compile-time list of every value of that attribute there, in order |
 | `field.has(Transient.self)`, `T.has(A.self)`, `c.has(A.self)` | Whether the attribute is present |
@@ -77,9 +77,9 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 | Expression | Meaning |
 | --- | --- |
-| `T.name` | `StaticString`: the type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)` |
-| `T.baseName` | `StaticString`: the name `T`'s declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration |
-| `T.module` | `StaticString`: `T`'s module's name, empty for a structural type |
+| `T.name` | `static StringView`: the type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)` |
+| `T.baseName` | `static StringView`: the name `T`'s declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration |
+| `T.module` | `static StringView`: `T`'s module's name, empty for a structural type |
 | `T.id` | A stable 64-bit type id that no other type of the program has (below) |
 | `T.layoutId` | A 64-bit hash of every representation `T` depends on (below) |
 | `field.offset`, `field.bitRange`, `T.size`, `T.alignment` | Layout facts |
@@ -107,7 +107,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
 - a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
-- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or `StaticString`.
+- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`.
 
 For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
 
@@ -152,7 +152,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
 
 **A `T!Never` reads as the enum it is, though it stores no tag** ([04](../04-types/enums.md#enums)). `isEnum` is true for it, and its `cases` are `success` and `failure`. `value[case: .success]` always holds the `T`, and `value[case: .failure]` is always `nil`. Its `size` and `alignment` are `T`'s, and its `layoutId` covers its two cases and the absence of a tag, so it differs from `T`'s.
 
-The types it holds are those of its stored fields, elements and payloads. The recursion goes through `StaticSpan`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
+The types it holds are those of its stored fields, elements and payloads. The recursion goes through `static Span`, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
 
 ## Reflection and access control
 

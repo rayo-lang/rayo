@@ -432,13 +432,17 @@ An imported C enum, which may hold any value of its underlying type unless its h
 Said of a value that can be frozen: copied into read-only data, where it stays unchanged for the whole run, as a `const` that reaches run time must be ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 **Immortal data**:
-Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a `StaticSpan` or a `StaticString` views ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).
+Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a static view points at ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 
 **Reaches run time**:
 Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, an attribute argument or a `const` argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 **Static closure**:
 A closure whose body is instantiated once per field, as the argument of `T.construct` or `T.makeCase` ([09](docs/spec/09-compile-time/reflection.md#constructing-values-reflectively)).
+
+**Static view**:
+A `static StringView` or a `static Span<T>`: a view of immortal data only, such as a string literal, which is unscoped and converts implicitly to the plain view ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+_Avoid_: static string, static span
 
 ### Errors and safety
 

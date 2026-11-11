@@ -78,7 +78,7 @@ log.value.lock { $0.append(m) }
 - nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
 - nothing at all writes a value of the type frozen into read-only data ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
-**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for `StaticSpan` and `StaticString`, and std for `Name`, which point into immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).
+**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for the static views, `static Span` and `static StringView`, and std for `Name`, which point into immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 
 **Some types hide what they hold, or hold it through a raw pointer, yet are `Frozen` according to what they hold:**
 

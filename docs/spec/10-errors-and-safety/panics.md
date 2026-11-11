@@ -223,7 +223,7 @@ let frame = catchPanic {
 catchPanic {
     views.append(name.view)          // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
-    name = alloc String("b")         // error: 'views' depends on 'name', and is used below
+    name = alloc "b"                 // error: 'views' depends on 'name', and is used below
 }
 print(views[0])
 ```
@@ -244,7 +244,7 @@ struct Panic {                 // copyable and Sendable: up to 256 bytes of its 
     let sequence: UInt64       // its place in the runtime's report order
     …
 }
-struct SourceLocation(let file: StaticString, let line: Int, let column: Int)
+struct SourceLocation(let file: static StringView, let line: Int, let column: Int)
 ```
 
 **A `Panic` keeps a copy of its message, since the unwind destroys what the message's segments borrowed:**

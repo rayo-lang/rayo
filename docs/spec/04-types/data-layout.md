@@ -2,7 +2,24 @@
 
 [04 · Types](../04-types.md)
 
-Rayo normally lays out a value according to its fields. Systems code sometimes needs stronger guarantees about those bytes or a different way to store repeated values. The type's layout rules make those choices explicit, including plain data, trailing arrays and struct-of-arrays storage.
+Rayo normally lays out a value according to its fields. Systems code sometimes needs stronger guarantees about those bytes or a different way to store repeated values. The type's layout rules make those choices explicit, from the size every type has to plain data, trailing arrays and struct-of-arrays storage.
+
+## Sizes fixed when the program is built
+
+```swift
+let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // 16 bytes: the count is part of the type
+let names = alloc ["ana", "bo"]              // a List: a fixed-size value, with its elements in storage it allocated
+let first: StringView = names[0]             // a pointer and a length, whatever the text's length
+```
+
+**Every type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live on the stack, in a field, in an array or in a register, and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
+
+**An `@opaque` type is the one exception.** It is a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)). So it has no values, and `T.size` and `T.alignment` on it are compile errors.
+
+**No value's size depends on what it holds.** A count whose bound is fixed when the program is built is part of the type, and the elements lie inside the value. That bound is an array's `N` ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)), or the capacity of an `InlineList` or of std's `FixedString`, which may hold fewer ([Collections and strings](collections.md#collections-and-strings)). A count with no such bound puts the elements outside the value, which reaches them through a fixed-size part:
+
+- **an owner**, such as a `List`, a `String` or a `TrailingArray`, holds them in storage it allocated ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc));
+- **a view**, such as a `Span` or a `StringView`, holds a pointer to them and their count, and lends them from wherever they lie ([02](../02-views-and-dependencies.md)).
 
 ## Plain data: `Pod` and bit casts
 
@@ -56,7 +73,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 - **Bit casts.** `U(bitPattern: t)` between `Pod` types of equal size is safe when `t`'s type is padding-free.
 - **Span casts.** `span.reinterpret(as: Vertex.self)` views a span of a `Pod` type `A` as a `Span<U>?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. Its alignment check is an alignment query, so it runs at compile time for a `U` aligned no more than the span's allocation ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A shared cast needs `A` padding-free, so every byte read is initialized. A mutable cast needs both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see `A`.
 
-## Variable-sized structs: `TrailingArray`
+## A header and trailing elements: `TrailingArray`
 
 **`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s**, as a network packet or a C API with a flexible array member wants.
 

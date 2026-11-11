@@ -20,7 +20,7 @@ var hot = &heat.span                          // a MutableSpan<Float>: borrows t
 
 **An iterator that borrows nothing is unscoped**, such as a `Range`'s. So a task may `await` inside `for i in 0..<n`: a scoped value can't live across an `await` ([below](#where-a-scoped-value-can-go)), but this loop's iterator isn't one.
 
-**A view needn't be scoped when nothing can free its memory while it reads it.** A `StaticSpan<T>` is unscoped, since it views immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)). So is a `Slice<T>`, which reads its buffer only through a scoped span it hands out for each use ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped.
+**A view needn't be scoped when nothing can free its memory while it reads it.** A static view, a `static StringView` or a `static Span<T>`, is unscoped, since it views only immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). So is a `Slice<T>`, which reads its buffer only through a scoped span it hands out for each use ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped.
 
 **Making a view from a raw pointer requires `unsafe`.** Safe code gets views only from what owns the memory, since a view built from a raw pointer carries no dependencies for the compiler to verify ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
 
@@ -97,7 +97,7 @@ The closure can compute any unscoped result from the protected data. It can't sm
 - the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)) can't track what goes in ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
 - the concrete type in every conversion to an unscoped existential (`Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`), since erasure would hide what the value borrows;
 - task parameters and a `task func` method's `self`, which a task keeps in its state ([07](../07-concurrency/tasks.md#semantics));
-- the elements of a `StaticSpan`, which outlive every scope ([09](../09-compile-time/attributes-and-runtime-data.md#staticspan-views-of-immortal-data)).
+- the elements of a `static Span`, which outlive every scope ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
 
 **In a type, `~` means "not", and comes only before `Copyable`, `Sendable` and `Scoped`** ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 

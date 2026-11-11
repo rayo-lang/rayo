@@ -25,6 +25,7 @@
 **Rules 1 and 2 cover a view taken from a place, and a value derived from another** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)):
 
 - **Projection.** A view taken from a place reaches only that place's storage and what it owns, so it depends on the place.
+- **View conversions are projections.** A `String` or a `List` converted to its view, where one is expected, lends it by a shared borrow of its place, as `.view` and `.span` do ([05](../../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)), so the view depends on the place.
 - **Sub-views of a shared view**, from a `get` or a place property declared `where return outlives self`, depend only on what the view carries. Verification checks the two facts that make this safe ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)):
     - nothing the view carries can be changed through it, since its type holds no mutable view;
     - nothing it carries ends with it, since destroying it is no use.
@@ -87,6 +88,8 @@ use(a)                           // 'a' is still live here
 - a store through a parameter's exclusive dependencies that depends on the parameter's own storage, which absorption never reports.
 
 **Static storage is always allowed**, since it is never moved or destroyed ([07](../../spec/07-concurrency/global-state.md#shutdown)). The views a `Synchronized` global lends stay valid by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)).
+
+**A static view depends on nothing, since nothing frees or writes what it views** ([09](../../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). Only the compiler and the runtime make one safely, from immortal data, and no plain view converts to one. So a view of memory that can be freed never sheds its dependencies by becoming static.
 
 **What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage** ([08](../../spec/08-c-interop/calling-rayo-from-c.md#what-a-c-entry-hands-back-to-c)). Once it returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator. So a reset or an unregistration could free an owning value's storage while C still holds a view of it.
 

@@ -5,7 +5,7 @@ Rayo gives expected failures and broken assumptions different paths. An expected
 ```swift
 enum ConfigError: Error {
     case notFound
-    case badValue(field: StaticString)
+    case badValue(field: static StringView)
 }
 
 func loadConfig(_ path: StringView) -> Config!ConfigError { ... }   // the result type names the error type

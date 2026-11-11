@@ -150,7 +150,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - `n` valid elements there, aligned for `T`;
     - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
 
-  Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#variable-sized-structs-trailingarray)).
+  Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 - **Structs and unions that import as `@opaque`.** A struct or union imports as `@opaque` when Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported, since an `@opaque` type is usable only behind a pointer.
 - **Typedefs.** A typedef of a type `T` imports as a `typealias` of `T`, except for these:
     - a typedef that names a tagged type by its own tag, which adds nothing;
@@ -162,7 +162,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - a pointer.
 
   The promotions would change a `Float` or a narrower integer, so the code converts one explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern c func` can't declare one.
-- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `StaticString`:
+- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `static StringView`:
 
     ```c
     #define MAX_PADS 16          // const MAX_PADS: CInt = 16
@@ -173,7 +173,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     #define SEP ','              // a CInt, the type C gives a character literal
     #define SCALE 0.1f           // a Float, its value rounded to float
     #define RATE 0.1             // a Double
-    #define TITLE "Rayo"         // a StaticString
+    #define TITLE "Rayo"         // a static StringView
     ```
 
 **A C type the table doesn't map isn't imported.** Such types include:

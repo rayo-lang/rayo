@@ -48,7 +48,7 @@ struct Level(var names: List<String> = alloc List<String>()): Allocating   // le
 
 extension Level {
     mutating func addWave(_ wave: Int) {
-        names.append(alloc String("wave \(wave)"))     // from the level's own allocator
+        names.append(alloc "wave \(wave)")             // from the level's own allocator
     }
 }
 
@@ -77,7 +77,7 @@ A list keeps the allocator it was built with, wherever it later grows. A new str
 
 ```swift
 var names = alloc List<String>()                         // from .heap
-names.append(frameArena.alloc String("wave \(wave)"))    // the list grows in .heap, but the new String is in the arena
+names.append(frameArena.alloc "wave \(wave)")            // the list grows in .heap, but the new String is in the arena
 frameArena.reset()
 print(names[0])                                          // panics: the string came from 'frameArena' before its reset
 ```
@@ -141,7 +141,7 @@ do {
     world.results = alloc names.clone()                // the clone and its strings come from .heap
 }
 frameArena.reset()
-world.results.append(alloc String("late"))             // fine: nothing in it came from the arena
+world.results.append(alloc "late")                     // fine: nothing in it came from the arena
 ```
 
 **To keep a value past a reset, build it in an allocator that outlives the reset.** `clone()` builds its copy, and every string in it, in the allocator its `alloc` gives. So `alloc names.clone()` copies a value out of the arena into `.heap`.
