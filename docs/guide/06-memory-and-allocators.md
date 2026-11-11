@@ -44,7 +44,7 @@ A list, string or box that owns allocated storage is an **owning value**. It rec
 A bare `alloc` takes the **ambient allocator**. It depends only on where the code is written, never on a setting the program changes as it runs ([06](../spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)). In most code it is `.heap`. A type whose values allocate changes that inside its own methods:
 
 ```swift
-struct Level(var names: List<String> = alloc List<String>()): Allocating   // a type that allocates says so
+struct Level(var names: List<String> = alloc List<String>()): Allocating   // lets its caller choose where it's made
 
 extension Level {
     mutating func addWave(_ wave: Int) {
