@@ -9,7 +9,7 @@ inputs:
     description: The exact build of LLVM the compiler links, which a cached build depends on.
     required: true
   arguments:
-    description: What swift test takes besides, such as the tests a platform can't run yet.
+    description: What swift test takes besides, such as the tests a platform can't run.
     required: false
     default: ""
 

@@ -24,13 +24,13 @@ private func compile(
 }
 
 /// Whether `bytes` start as an object file for the host does: a 64-bit Mach-O file, an ELF one, or a COFF one for
-/// x86-64 or arm64.
+/// x86-64.
 private func isObjectFile(_ bytes: [UInt8]) -> Bool {
     let machO: [UInt8] = [0xCF, 0xFA, 0xED, 0xFE]
     let elf: [UInt8] = [0x7F, 0x45, 0x4C, 0x46]
     // A COFF object file has no magic number; it starts with the machine it is for, little-endian.
-    let coff: [[UInt8]] = [[0x64, 0x86], [0x64, 0xAA]]
-    return bytes.starts(with: machO) || bytes.starts(with: elf) || coff.contains { bytes.starts(with: $0) }
+    let coff: [UInt8] = [0x64, 0x86]
+    return bytes.starts(with: machO) || bytes.starts(with: elf) || bytes.starts(with: coff)
 }
 
 struct CompilerTests {

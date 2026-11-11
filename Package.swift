@@ -33,8 +33,7 @@ let packageManagerLLDPrefixes = [
 #endif
 
 /// The directory LLVM `llvmMajorVersion` is installed under: `LLVM_PREFIX` when it's set, and otherwise the first
-/// of the places a package manager installs it that holds that release. On Windows only `LLVM_PREFIX` names one,
-/// since no package manager there installs LLVM's headers.
+/// of the places a package manager installs it that holds that release.
 let llvmPrefix: String = {
     // Read the release installed under each candidate.
     let candidates = Context.environment["LLVM_PREFIX"].map { [manifestPath($0)] } ?? packageManagerLLVMPrefixes
@@ -92,7 +91,8 @@ func lldMajorVersion(at prefix: String) -> Int? {
     // LLD's version file says its release; without one, an LLVM installed with it under the same prefix does.
     let definition = "set(PACKAGE_VERSION \""
     let config = try? String(contentsOfFile: prefix + "/lib/cmake/lld/LLDConfigVersion.cmake", encoding: .utf8)
-    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    // A file written on Windows may end its lines in "\r\n", which Swift reads as one newline character.
+    let line = config?.split(whereSeparator: \.isNewline).first { $0.hasPrefix(definition) }
     let major = line.flatMap { Int($0.dropFirst(definition.count).prefix { $0.isNumber }) }
     return major ?? llvmMajorVersion(at: prefix)
 }
@@ -110,7 +110,8 @@ func checkedForDefine(_ path: String) -> String {
 func llvmMajorVersion(at prefix: String) -> Int? {
     let definition = "#define LLVM_VERSION_MAJOR "
     let config = try? String(contentsOfFile: prefix + "/include/llvm/Config/llvm-config.h", encoding: .utf8)
-    let line = config?.split(separator: "\n").first { $0.hasPrefix(definition) }
+    // A file written on Windows may end its lines in "\r\n", which Swift reads as one newline character.
+    let line = config?.split(whereSeparator: \.isNewline).first { $0.hasPrefix(definition) }
     return line.flatMap { Int($0.dropFirst(definition.count)) }
 }
 

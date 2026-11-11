@@ -28,12 +28,8 @@ func llvmTool(_ tool: String, _ arguments: [String], on objectCode: [UInt8]) thr
 func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     // Run the tool with its standard output on a pipe.
     let process = Process()
-    #if os(Windows)
-    let file = tool + ".exe"
-    #else
-    let file = tool
-    #endif
-    process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(file)
+    process.executableURL = URL(fileURLWithPath: LLVMInstall.toolDirectory)
+        .appendingPathComponent(Executable.fileName(tool))
     process.arguments = arguments
     let output = Pipe()
     process.standardOutput = output
@@ -54,7 +50,7 @@ let hostFormat = "Mach-O"
 #elseif os(Linux)
 let hostFormat = "elf64-"
 #elseif os(Windows)
-let hostFormat = "coff-"
+let hostFormat = "COFF-"
 #endif
 
 #if arch(arm64)

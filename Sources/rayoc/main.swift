@@ -9,9 +9,9 @@ import CRT
 #endif
 import RayoCompiler
 
+/// The C library's descriptor for standard error.
 #if os(Windows)
-/// The C library's descriptor for standard error, which the Windows C runtime numbers as the POSIX ones do.
-let standardError: Int32 = 2
+let standardError: Int32 = 2 // The Windows C runtime numbers its standard descriptors as POSIX does.
 #else
 let standardError = STDERR_FILENO
 #endif
@@ -53,15 +53,15 @@ func openFile(_ path: String, mode: String) -> UnsafeMutablePointer<FILE>? {
 func writeAll(_ text: String, to descriptor: Int32) {
     var bytes = Array(text.utf8)[...]
     while !bytes.isEmpty {
-        let written = bytes.withUnsafeBytes { write(to: descriptor, $0) }
+        let written = bytes.withUnsafeBytes { writeSome(to: descriptor, $0) }
         if written < 0 && errno == EINTR { continue }
         if written <= 0 { return }
         bytes = bytes.dropFirst(written)
     }
 }
 
-/// Writes what it can of `bytes` to `descriptor`, and returns how many it wrote, or -1 where it wrote none.
-func write(to descriptor: Int32, _ bytes: UnsafeRawBufferPointer) -> Int {
+/// Writes what it can of `bytes` to `descriptor`, and returns how many it wrote, or -1 when the write fails.
+func writeSome(to descriptor: Int32, _ bytes: UnsafeRawBufferPointer) -> Int {
     #if os(Windows)
     // The Windows C runtime's `_write` takes the count as an `unsigned int`, and returns an `int`.
     Int(_write(descriptor, bytes.baseAddress, UInt32(bytes.count)))

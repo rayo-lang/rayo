@@ -261,7 +261,9 @@ jobs:
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm.tar.xz" \
             "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_BUILD/$name.tar.xz"
           mkdir -p "$RUNNER_TEMP/llvm"
-          tar -xf "$RUNNER_TEMP/llvm.tar.xz" -C "$RUNNER_TEMP/llvm" --strip-components=1
+          # Windows' own tar reads the drive in a Windows path as a drive; Git Bash's reads it as a remote host.
+          /c/Windows/System32/tar.exe -xf "$(cygpath -w "$RUNNER_TEMP/llvm.tar.xz")" \
+            -C "$(cygpath -w "$RUNNER_TEMP/llvm")" --strip-components=1
       # Only a push to main saves LLVM, as it does the build, so pull requests share main's one copy.
       - name: Save LLVM
         if: github.event_name == 'push' && steps.llvm-archive.outputs.cache-hit != 'true'
@@ -281,7 +283,7 @@ jobs:
         with:
           platform: windows
           llvm-version: ${{ env.LLVM_BUILD }}
-          # The driver's tests link and run programs, which the toolchain doesn't do on Windows yet.
+          # The driver's tests link and run programs, which the toolchain doesn't do on Windows.
           arguments: --skip RayoDriverTests
 
   docs:
