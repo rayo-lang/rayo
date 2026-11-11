@@ -11,7 +11,7 @@ struct EmittedTypeTests {
         result: RayoType, resultText: String,
     ) throws {
         let pick = try pick(returning: result, [])
-        try emitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+        try withEmitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
             let signature = try signature(of: pick.name, in: module)
             #expect(try parameterTypes(of: signature) == ["i64", "i1"])
             #expect(text(of: LLVMGetReturnType(signature)) == resultText)
@@ -19,7 +19,7 @@ struct EmittedTypeTests {
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
-        try emitted(IRProgram(functions: [voidMain], main: FunctionID(index: 0))) { module in
+        try withEmitted(IRProgram(functions: [voidMain], main: FunctionID(index: 0))) { module in
             let signature = try signature(of: "rayo.main", in: module)
             #expect(try parameterTypes(of: signature) == [])
             #expect(text(of: LLVMGetReturnType(signature)) == "void")
@@ -28,9 +28,9 @@ struct EmittedTypeTests {
 
     @Test func `each local's slot, a parameter's too, holds the type of its value`() throws {
         let pick = try pick(returning: .int, [.temporary(.bool), .temporary(.int)])
-        try emitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
-            let function = try #require(LLVMGetNamedFunction(module.module, pick.name))
-            #expect(slotTypes(of: function) == ["i64", "i1", "i1", "i64"])
+        try withEmitted(IRProgram(functions: [voidMain, pick], main: FunctionID(index: 0))) { module in
+            let emittedPick = try function(named: pick.name, in: module)
+            #expect(slotTypes(of: emittedPick) == ["i64", "i1", "i1", "i64"])
         }
     }
 
@@ -53,17 +53,21 @@ struct EmittedTypeTests {
     }
 
     /// Emits `program` into a new module for the host, as a debug build does, and runs `checks` on the module.
-    private func emitted(_ program: IRProgram, _ checks: (ModuleBuilder) throws -> Void) throws {
-        try withProgramModule(for: .debug) { emitting in
-            emitting.emitter.emit(program)
-            try checks(emitting.module)
+    private func withEmitted(_ program: IRProgram, _ checks: (ModuleBuilder) throws -> Void) throws {
+        try withProgramModule(for: .debug) { programModule in
+            programModule.emitter.emit(program)
+            try checks(programModule.module)
         }
+    }
+
+    /// The function named `name` in `module`.
+    private func function(named name: String, in module: ModuleBuilder) throws -> LLVMValueRef {
+        try #require(LLVMGetNamedFunction(module.module, name))
     }
 
     /// The type of the function named `name` in `module`: its parameters and its result.
     private func signature(of name: String, in module: ModuleBuilder) throws -> LLVMTypeRef {
-        let function = try #require(LLVMGetNamedFunction(module.module, name))
-        return try #require(LLVMGlobalGetValueType(function))
+        try #require(LLVMGlobalGetValueType(try function(named: name, in: module)))
     }
 
     /// The types of the parameters `signature` takes, as LLVM writes them.

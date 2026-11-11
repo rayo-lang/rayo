@@ -21,6 +21,6 @@ struct ProgramModule {
 /// Runs `body` on a new module made as `build` makes it, and keeps the module, which owns every LLVM type and value
 /// read from it, alive until `body` returns.
 func withProgramModule(for build: Build, _ body: (ProgramModule) throws -> Void) throws {
-    let emitting = try ProgramModule(for: build)
-    try withExtendedLifetime(emitting) { try body(emitting) }
+    let programModule = try ProgramModule(for: build)
+    try withExtendedLifetime(programModule) { try body(programModule) }
 }

@@ -15,10 +15,10 @@ struct OperatorModule {
     private let target: TargetMachine
 
     init(for build: Build) throws(LLVMError) {
-        let emitting = try ProgramModule(for: build)
-        target = emitting.target
-        module = emitting.module
-        program = emitting.emitter
+        let programModule = try ProgramModule(for: build)
+        target = programModule.target
+        module = programModule.module
+        program = programModule.emitter
     }
 
     /// The text of the module's IR.
