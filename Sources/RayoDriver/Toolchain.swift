@@ -113,8 +113,9 @@ struct Toolchain {
                     """)
             }
             #if os(Windows)
-            // clang's driver for MSVC takes no --ld-path, and runs the linker -fuse-ld names by its path.
-            return ["-fuse-ld=\(tools.lld.path)"]
+            // clang's driver for MSVC takes no --ld-path, and finds a linker that -fuse-ld names by its path under
+            // a name with the target's triple before it. It looks for `lld-link` first in the directories -B names.
+            return ["-fuse-ld=lld", "-B\(tools.lld.deletingLastPathComponent().path)"]
             #else
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
             return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
@@ -125,6 +126,7 @@ struct Toolchain {
             // clang runs the `link.exe` of the Visual Studio whose libraries it links, not one on the search path.
             return ["-fuse-ld=link"]
             #else
+            // clang runs the `ld` that --ld-path names, which is where the platform keeps its linker.
             return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
             #endif
         }

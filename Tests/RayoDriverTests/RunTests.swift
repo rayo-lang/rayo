@@ -109,7 +109,7 @@ private func symbols(exportedBy executable: URL) throws -> [String] {
 
 /// The LLVM install's tool `name`.
 private func llvmTool(_ name: String) -> URL {
-    LinkTools.installed.clang.deletingLastPathComponent().appendingPathComponent(Executable.fileName(name))
+    URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(Executable.fileName(name))
 }
 
 struct BuildTests {
@@ -119,14 +119,7 @@ struct BuildTests {
             _ = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             #expect(rayo(["build", "answer.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
-            let program = Process()
-            program.executableURL = directory.appendingPathComponent(Executable.fileName("answer"))
-            let output = Pipe()
-            program.standardOutput = output
-            try program.run()
-            program.waitUntilExit()
-            #expect(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self) == "42\n")
-            #expect(program.terminationStatus == 0)
+            #expect(try runExecutable(directory.appendingPathComponent(Executable.fileName("answer"))) == "42\n")
         }
     }
 
@@ -187,7 +180,12 @@ struct BuildTests {
             // Records that it ran, and hands what it is given to the installed LLD.
             let ran = directory.appendingPathComponent("lld-ran")
             let standIn = ToolStandIn([.touch(ran)], then: .handOff(toToolAt: LinkTools.installed.lld))
+            // clang on Windows finds LLD by its name, `lld-link`, in the directory `rayo` names.
+            #if os(Windows)
+            let lld = try install(standIn, as: "lld-link", in: directory)
+            #else
             let lld = try install(standIn, as: "lld", in: directory)
+            #endif
             let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
             let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
@@ -232,19 +230,19 @@ struct BuildTests {
         }
     }
 
-    @Test("an executable exports nothing of the program or the runtime")
+    @Test("an executable exports nothing of the program or the runtime, and on macOS and Linux the C entry point")
     func exportedSymbols() throws {
         try withTemporaryDirectory { directory in
             _ = try save("func main() {}", as: "empty.rayo", in: directory)
             #expect(rayo(["build", "empty.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
             let exported = try symbols(exportedBy: directory.appendingPathComponent(Executable.fileName("empty")))
+            #expect(exported.filter { $0.contains("rayo.") } == [])
             #if os(Windows)
             // A Windows executable exports only the functions marked for export, and the C entry point is none.
             #expect(exported == [])
             #else
             #expect(exported.contains { $0 == "main" || $0 == "_main" })
-            #expect(exported.filter { $0.contains("rayo.") } == [])
             #endif
         }
     }

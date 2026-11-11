@@ -4,7 +4,7 @@ The Rayo toolchain is a Swift package at the root of this repository. It builds 
 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux and macOS**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4. Code must pass on both. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
+- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4, and on Windows x64 with Swift 6.4 and the build of LLVM that LLVM publishes for Windows. Code must pass on all three. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## Build it
@@ -74,7 +74,7 @@ The program runtime is the code every Rayo program links besides its own: the C 
 
 `rayoc` embeds those files in its own binary. For each program it parses them into the program's LLVM context, links them into the program's module, and then verifies and compiles the whole. So the runtime is part of every program's object code, and nothing is left to find when the program is linked or run.
 
-Most of the runtime is the same everywhere. What it needs from the platform's C runtime, to ready a run and to write to standard error, is in `host-posix.ll` for macOS and Linux and in `host-windows.ll` for Windows, and `rayoc` links in the one for the platform it runs on.
+Most of the runtime is the same everywhere. What it needs from the platform's C runtime is to ready a run and to write to standard error. That part is in `host-posix.ll` for macOS and Linux and in `host-windows.ll` for Windows, and `rayoc` links in the one for its platform.
 
 ## Linking
 

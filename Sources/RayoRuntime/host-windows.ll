@@ -1,7 +1,7 @@
 ; What the runtime needs from Windows: to ready a run, and to write to standard error.
 
-; The C runtime's headers define printf inline, so its library exports none; legacy_stdio_definitions.lib holds the
-; printf a program that calls it links. The object asks for that library itself, as MSVC's own objects do.
+; The C runtime's headers define printf inline, so its library exports none. legacy_stdio_definitions.lib holds the
+; printf that a program calling it links against, so the object names that library itself.
 !llvm.linker.options = !{!0}
 !0 = !{!"/DEFAULTLIB:legacy_stdio_definitions.lib"}
 

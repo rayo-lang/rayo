@@ -14,8 +14,8 @@ public enum ProgramRuntime {
         host,
     ]
 
+    // The file that readies a run and writes to standard error the way the host's C runtime does.
     #if os(Windows)
-    /// The file that readies a run and writes to standard error the way the host's C runtime does.
     private static let host = File(name: "host-windows.ll", llvmIR: PackageResources.host_windows_ll)
     #else
     private static let host = File(name: "host-posix.ll", llvmIR: PackageResources.host_posix_ll)

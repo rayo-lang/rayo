@@ -72,6 +72,11 @@ func writeSome(to descriptor: Int32, _ bytes: UnsafeRawBufferPointer) -> Int {
     #endif
 }
 
+#if os(Windows)
+// The Windows C runtime writes a newline to a descriptor in text mode as "\r\n"; binary mode writes it as itself.
+_ = _setmode(standardError, _O_BINARY)
+#endif
+
 let result = Compiler.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile, writeFile: writeFile)
 writeAll(result.errors, to: standardError)
 exit(result.exitCode)
