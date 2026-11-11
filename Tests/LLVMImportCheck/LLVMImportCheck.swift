@@ -24,9 +24,12 @@ public struct LLVMImportCheck: Sendable {
     /// Describes `violation` in one line, by its file, its line and its import, and why the import is one.
     public func description(of violation: ImportViolation) -> String {
         let place = "\(violation.path):\(violation.line): \(violation.module)"
+
         switch violation.kind {
+        // An import by a module off the list names the modules on it.
         case .notAllowed:
             return "\(place) imports \(violation.imported), which only \(Self.list(allowedModules.sorted())) may import"
+        // A re-export names the modules it hands the C module to.
         case .reexported:
             return "\(place) re-exports \(violation.imported), which hands it to every module that imports "
                 + violation.module

@@ -125,7 +125,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/TestSelection` | Which test targets a change reaches, through the manifest's dependencies |
 | `Tests/select-tests` | The executable that CI runs to choose the tests a pull request needs |
 | `Tests/TestSelectionTests` | The tests of the choice of test targets |
-| `Tests/LLVMImportCheck` | The check that only the modules allowed to import LLVM's C modules do |
+| `Tests/LLVMImportCheck` | The check that only the modules it allows import LLVM's C modules, and that none re-exports them |
 | `Tests/check-llvm-imports` | The executable that runs that check on the package's Swift files, with the modules it allows |
 | `Tests/LLVMImportCheckTests` | The check's tests |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |

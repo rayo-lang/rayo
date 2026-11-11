@@ -4,15 +4,16 @@ import PackageGraph
 import Testing
 
 /// A package laid out as `swift package dump-package` describes one: `Binding` imports LLVM's C API, `Emitter`
-/// depends on `Binding`, `Emitter`'s tests depend on `Emitter` alone, and `Direct` names `CLLVM` in its own
-/// dependencies.
+/// depends on `Binding`, `Emitter`'s tests depend on `Emitter` alone, `Direct` names `CLLVM` in its own
+/// dependencies, and `Support`'s sources are where the manifest says.
 private let package = try! JSONDecoder().decode(PackageTargets.self, from: Data("""
     {"targets": [
         {"name": "CLLVM", "type": "system-target", "dependencies": []},
         {"name": "Binding", "type": "regular", "dependencies": [{"byName": ["CLLVM", null]}]},
         {"name": "Emitter", "type": "regular", "dependencies": [{"byName": ["Binding", null]}]},
         {"name": "EmitterTests", "type": "test", "dependencies": [{"byName": ["Emitter", null]}]},
-        {"name": "Direct", "type": "regular", "dependencies": [{"byName": ["CLLVM", null]}]}
+        {"name": "Direct", "type": "regular", "dependencies": [{"byName": ["CLLVM", null]}]},
+        {"name": "Support", "type": "regular", "path": "Tests/Support", "dependencies": []}
     ]}
     """.utf8))
 
@@ -48,6 +49,13 @@ struct LLVMImportCheckTests {
         let files = ["Sources/Direct/Direct.swift": "import CLLVM\n"]
         #expect(check.violations(in: files, of: package) ==
             [violation(.notAllowed, at: "Sources/Direct/Direct.swift", line: 1, of: "Direct")])
+    }
+
+    @Test("a file in the directory the manifest names for a target is checked as that target's")
+    func namedDirectory() {
+        let files = ["Tests/Support/Support.swift": "import CLLVM\n"]
+        #expect(check.violations(in: files, of: package) ==
+            [violation(.notAllowed, at: "Tests/Support/Support.swift", line: 1, of: "Support")])
     }
 
     @Test("an import of LLVM's C modules counts in every form Swift writes one", arguments: [
