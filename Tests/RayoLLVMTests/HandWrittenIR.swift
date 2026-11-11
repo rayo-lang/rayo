@@ -3,7 +3,7 @@ import RayoSema
 import RayoSource
 
 /// A program whose `main` holds temporaries of `locals`' types and is made of `blocks`.
-func program(locals: [RayoType], _ blocks: [BasicBlock]) -> IRProgram {
+func program(locals: [RayoType], _ blocks: [BasicBlock]) -> IRExecutable {
     program(of: [mainFunction(locals: locals, blocks)])
 }
 
@@ -15,8 +15,9 @@ func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> IRFunction {
 }
 
 /// A program of `functions`, the first of them its `main`, whose structs `types` holds, none by default.
-func program(of functions: [IRFunction], types: TypeTable = .empty) -> IRProgram {
-    IRProgram(types: types, functions: functions, main: FunctionID(index: 0))
+func program(of functions: [IRFunction], types: TypeTable = .empty) -> IRExecutable {
+    // A program with a `main` is always an executable.
+    IRExecutable(IRProgram(types: types, functions: functions, main: FunctionID(index: 0)))!
 }
 
 /// An operand that reads the local `index`.
@@ -30,7 +31,7 @@ func move(_ index: Int) -> Operand {
 }
 
 /// A program that prints what `value` computes.
-func printing(_ value: Rvalue) -> IRProgram {
+func printing(_ value: Rvalue) -> IRExecutable {
     program(locals: [.int], [
         BasicBlock(statements: [
             statement(storingIn: 0, value),

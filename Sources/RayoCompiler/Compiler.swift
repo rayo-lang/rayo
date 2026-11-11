@@ -126,6 +126,7 @@ public enum Compiler {
         case .objectFile(let path, let mode):
             try pipeline {
                 frontEnd(readFile: readFile)
+                RequireMain()
                 Emit(mode: mode, sourcePath: invocation.path)
                 WriteObject(path: path, writeFile: writeFile)
             }.run(invocation.path)

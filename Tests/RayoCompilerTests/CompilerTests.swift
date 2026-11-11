@@ -40,6 +40,31 @@ struct CompilerTests {
         #expect(compiled.written.isEmpty)
     }
 
+    @Test(arguments: ["func double(_ n: Int) -> Int { n * 2 }", ""])
+    func `'--check' checks a file without 'main' as a library`(source: String) {
+        let library = compile(["--check", "lib.rayo"], files: ["lib.rayo": source])
+        #expect(library.result == CompilerResult(exitCode: 0, errors: ""))
+    }
+
+    @Test func `'--check' reports only a library's own errors, and no missing 'main'`() {
+        let wrong = compile(["--check", "lib.rayo"], files: ["lib.rayo": "func f() { print(x) }"])
+        #expect(wrong.result.diagnostics.map(\.code) == [.notDeclared(name: "x")])
+    }
+
+    @Test(arguments: [[], ["--debug"], ["--release"]])
+    func `'-o' makes no object code of a file without 'main', which is a library`(mode: [String]) {
+        let compiled = compile(mode + ["-o", "lib.o", "lib.rayo"],
+                               files: ["lib.rayo": "func double(_ n: Int) -> Int { n * 2 }"])
+        #expect(compiled.result.exitCode == 1)
+        #expect(compiled.result.diagnostics.map(\.code) == [.noMain])
+        #expect(compiled.result.errors == """
+            lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into \
+            an executable or run
+
+            """)
+        #expect(compiled.written.isEmpty)
+    }
+
     @Test(arguments: [[], ["--debug"], ["--release"]])
     func `'-o' writes the file's object code to the path it names, in either build mode`(mode: [String]) throws {
         let compiled = compile(mode + ["-o", "a.o", "a.rayo"], files: ["a.rayo": "func main() { print(1) }"])

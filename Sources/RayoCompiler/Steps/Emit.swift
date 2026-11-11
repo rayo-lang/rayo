@@ -1,14 +1,14 @@
 import RayoIR
 import RayoLLVM
 
-/// Compiles a program to object code for the host, as a build of the source at `sourcePath`.
+/// Compiles an executable program to object code for the host, as a build of the source at `sourcePath`.
 struct Emit: CompilationStep {
     var mode: BuildMode
     var sourcePath: String
 
-    func run(_ program: IRProgram) throws(CompilationError) -> [UInt8] {
+    func run(_ executable: IRExecutable) throws(CompilationError) -> [UInt8] {
         do {
-            return try LLVMEmitter.objectCode(for: program, sourcePath: sourcePath,
+            return try LLVMEmitter.objectCode(for: executable, sourcePath: sourcePath,
                                               checksOverflow: mode.checksOverflow, optimizes: mode.optimizes)
         } catch {
             // LLVM fails only through a fault in rayoc or in LLVM, never one in the program.

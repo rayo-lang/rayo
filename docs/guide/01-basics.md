@@ -13,6 +13,8 @@ func main() {
 
 Rayo starts at `main` ([07](../spec/07-concurrency/global-state.md#initialization-at-startup)). The program has familiar pieces, but their details matter when values begin to own memory. `let` and `var` say which names may change. Number types do not silently discard information, and a function's parameters say what it may do with its arguments. From here on, we'll look at one part of the program at a time.
 
+Code without a `main` is a library. The compiler checks it all the same, but can't build it into an executable or run it, because nothing says where to start ([09](../spec/09-compile-time/attributes-and-runtime-data.md#what-a-build-declares)).
+
 ## Variables
 
 A variable gives a value a name. The program uses `let` for `damage`, since it never changes, and `var` for `hp`, which loses health. Writing `\(hp)` inside the quotes puts its value into the text.
@@ -218,5 +220,7 @@ for i in 0..<100 {
 - [04 Types](../spec/04-types/numbers-and-math.md#numbers): the number types, how a number written in the code takes its type, and which conversions happen on their own.
 - [04 Types](../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts): what every integer operation does at its limits.
 - [05 Protocols, generics and closures](../spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures): functions, their parameters and what they return.
+- [07 Concurrency](../spec/07-concurrency/global-state.md#initialization-at-startup): how a program starts at its `main`.
+- [09 Compile time](../spec/09-compile-time/attributes-and-runtime-data.md#what-a-build-declares): what a build declares, and why code without a `main` can only be a library.
 - [10 Errors and safety](../spec/10-errors-and-safety/checks-and-build-modes.md#build-modes): the build modes, and the checks each one keeps.
 - [10 Errors and safety](../spec/10-errors-and-safety/panics.md#panics): what panics, how a panic unwinds its thread, and how code catches one.

@@ -32,7 +32,8 @@ func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func loweredMain(_ body: String) throws(RejectedSource) -> IRFunction {
     let program = try lowered("func main() {\n\(body)\n}")
-    return program.functions[program.main.index]
+    // The source declares `main`, so the program has one.
+    return program.functions[program.main!.index]
 }
 
 private extension IRFunction {

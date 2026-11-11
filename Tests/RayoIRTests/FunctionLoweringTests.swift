@@ -13,7 +13,8 @@ struct FunctionLoweringTests {
                 then: .return(nil),
             ),
         )
-        #expect(program.functions[program.main.index] == expected)
+        // The source declares `main`, so the program has one.
+        #expect(program.functions[program.main!.index] == expected)
     }
 
     @Test func `a function's parameters are its first locals, ahead of its temporaries`() throws(RejectedSource) {

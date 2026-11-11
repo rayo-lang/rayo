@@ -7,6 +7,13 @@ import ToolStandIn
 /// A `rayoc` that no file is: the commands that stop before they compile never run it, and the others fail without it.
 private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
 
+/// What `rayo build` and `rayo run` give for `lib.rayo`, a file without `main`.
+private let libraryRejected = CommandResult(exitCode: 1, output: "", errors: """
+    lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into an \
+    executable or run
+
+    """)
+
 /// Installs a `rayoc` in `directory` that writes "rayoc: a note" to its standard error, then compiles as the built
 /// `rayoc` does, and returns it.
 private func notingCompiler(in directory: URL) throws -> URL {
@@ -167,6 +174,29 @@ struct DriverTests {
         try withTemporaryDirectory { directory in
             _ = try save("func main() { print(1) }", as: name, in: directory)
             #expect(rayo(["run", name], in: directory) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
+        }
+    }
+
+    @Test func `check checks a file without 'main' as a library`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo(["check", "lib.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
+        }
+    }
+
+    @Test func `build makes no executable of a file without 'main', which is a library`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo(["build", "lib.rayo"], in: directory) == libraryRejected)
+            let executable = directory.appendingPathComponent(Executable.fileName("lib"))
+            #expect(!FileManager.default.fileExists(atPath: executable.path))
+        }
+    }
+
+    @Test func `run fails on a file without 'main', which is a library, and runs nothing`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo(["run", "lib.rayo"], in: directory) == libraryRejected)
         }
     }
 

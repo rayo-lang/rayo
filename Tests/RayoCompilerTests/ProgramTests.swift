@@ -11,9 +11,8 @@ struct ProgramTests {
         #expect(errors(source) == [])
     }
 
-    @Test("a program needs a 'main' that returns Void", arguments: [
-        ("", ErrorCode.noMain),
-        ("func main() -> Int { 0 }", .mainReturnsNonVoid),
+    @Test("a 'main' returns Void", arguments: [
+        ("func main() -> Int { 0 }", ErrorCode.mainReturnsNonVoid),
         ("func main() -> Int32 {}", .notAType(name: "Int32")),
     ])
     func main(source: String, expected: ErrorCode) {

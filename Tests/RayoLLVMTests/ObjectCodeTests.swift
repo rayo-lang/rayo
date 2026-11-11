@@ -43,7 +43,7 @@ struct ObjectCodeTests {
         build: Build,
     ) throws {
         /// A program that stores 42 in one local, then `taken` in another, and prints that one.
-        func handingOn(_ taken: Operand) -> IRProgram {
+        func handingOn(_ taken: Operand) -> IRExecutable {
             program(locals: [.int, .int], [
                 BasicBlock(statements: [
                     statement(storingIn: 0, .use(.constant(.int(42)))),
