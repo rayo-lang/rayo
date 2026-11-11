@@ -38,11 +38,11 @@ var boxed = alloc boss.value                         // error: 'Enemy' isn't All
 
 - an initializer of a type that conforms to `Allocating` ([below](#the-allocating-protocol));
 - an `alloc func`, which makes a new value of an `Allocating` type, such as `clone()` or `filtered` ([below](#functions-that-make-a-new-value-alloc-func));
-- an array or dictionary literal, which then builds the `Allocating` type its position expects, such as a `List` or a `Map` ([04](../04-types/collections.md#literals)).
+- an array or dictionary literal, which then builds the `Allocating` type its position expects, such as a `List` or a `Map`, or a `List` from an array literal where nothing expects a type ([04](../04-types/collections.md#literals)).
 
 **Each of those without `alloc` is a compile error**, such as `List<Prop>()`, `String("hp \(hp)")` or `x.clone()`. So every value that owns storage shows where the storage comes from.
 
-**`alloc` applies to nothing else.** It never boxes a value: `alloc` before a plain value, such as `boss.value` above, is a compile error, and boxing one is written `alloc Box(v)`. Only the `Box`'s contents go to the allocator. The `Box` itself is a small owning pointer that lives wherever it is put, as the inline part of every `Allocating` value does.
+**`alloc` applies to nothing else.** So `a.alloc f()` on a plain function `f`, one not declared `alloc func`, is a compile error. `alloc` never boxes a value either: `alloc` before a plain value, such as `boss.value` above, is a compile error, and boxing one is written `alloc Box(v)`. Only the `Box`'s contents go to the allocator. The `Box` itself is a small owning pointer that lives wherever it is put, as the inline part of every `Allocating` value does.
 
 **`a.alloc` reads the id in `a` once, and holds no borrow of `a`.** The read needs no `copy` written, as a `static const` is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)), and the value it makes keeps its own copy of the id.
 
@@ -56,14 +56,17 @@ struct Inventory(var items: List<Item> = alloc List<Item>()): Allocating   // th
 let inv = level.alloc Inventory()        // 'items' comes from 'level' too
 ```
 
-**A type that allocates conforms to `Allocating`, and declares nothing else for it.** The compiler gives the type its allocator as a field of its own, which its declaration and its initializers never mention. The field is the value's allocator word ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)), which every allocating value carries and which a reset's checks read. So any type can hold an allocator, and the stale-value checks come with it.
+**A type that allocates conforms to `Allocating`, and declares nothing else for it.** The compiler gives the type its allocator as a field of its own, which its declaration and its initializers never mention. The field is the value's allocator word ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)), which every allocating value carries and which a reset's checks read. So any type can hold an allocator, and the stale-value checks come with it. An open checks the storage reached through that word, as an `unsafe` core's open checks a raw allocation's ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
-**A field's default is part of the primary initializer**, so in an `Allocating` type its `alloc` takes the allocator the initializer received, as `items` does above ([04](../04-types/structs.md#initializers)).
+**The type's code reads its allocator as `self.allocator`**, an `Allocator` the compiler gives it, which no code assigns. So a type that allocates through raw memory passes it on, as in `self.allocator.allocateRaw(bytes: n, align: 8)` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
+
+**A field's default is part of the primary initializer**, so in an `Allocating` type its `alloc` takes the allocator the initializer received, as `items` does above ([04](../04-types/structs.md#initializers)). A secondary initializer's `self.init(…)` passes on the allocator that initializer received.
 
 **std's owners and containers are all `Allocating`, and each is made the same way:**
 
 - the owners `Box`, `UniquePointer`, `Shared` and `LocalShared`, as in `alloc Box(v)`, `alloc UniquePointer(Renderer(…))` or `level.alloc Shared(config)`;
 - the containers `List`, `Map`, `Set`, `String`, `Pool`, `StablePool`, `TrailingArray` and `Blob`, as in `alloc Pool<Enemy>(capacity: 4096)`;
+- the synchronized values that own buffers, `Published`, `MpscQueue` and `SpscQueue`, and channels, whose `Channel.make` is an `alloc func`, as in `alloc Channel<Request>.make(capacity: 64)` ([07](../07-concurrency/synchronization.md#queues-and-channels));
 - the builtin `SoA`, as in `alloc SoA<Particle>()` ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 
 ### Functions that make a new value: `alloc func`
@@ -79,6 +82,8 @@ extension List {
 ```
 
 **A function that makes a new value of an `Allocating` type is declared `alloc func`, and receives that value's allocator as a parameter**, which `alloc` fills at the call site. Initializers of an `Allocating` type receive one the same way, without the modifier. That covers `clone()`, and methods that build a new value from an existing one, such as `filtered`, `concatenated` or `uppercased`: `alloc x.clone()`, `level.alloc xs.filtered { … }`. A protocol requirement declared `alloc func` is witnessed only by an `alloc func`.
+
+**A plain function may still make an `Allocating` value and return it.** Its bare `alloc` takes `.heap`, whoever calls it, so its result's storage comes from `.heap` ([below](#the-ambient-allocator)).
 
 **`clone()` is an `alloc func`**, so a bare `x.clone()` is a compile error. A clone's elements are cloned into the clone's allocator ([below](#the-ambient-allocator)).
 
@@ -105,6 +110,8 @@ func report(_ level: Level) {
 - **Inside an `alloc func` or an initializer of an `Allocating` type, it is the allocator the call received**, never the instance's. So no function that builds a copy reaches the source's allocator by default, and `alloc field.clone()` inside `clone()` puts each nested part where the copy goes.
 - **Inside every other method of an `Allocating` type, it is the allocator `self` was allocated with.** So a value hands its allocator down to what it allocates: an `Inventory` made with `level.alloc Inventory()` makes its lists from `level`, and a level's `names.append(alloc String(n))` puts the string where the list is.
 - **Everywhere else, it is `.heap`**, in a free function included, even one called from such a method.
+
+A closure's body takes the ambient allocator of the function the closure is written in, since the rule follows where code is written.
 
 **The ambient allocator is never a setting the program changes.** It follows from where the code is written, so code deep in a call tree allocates from an allocator only when the allocator reaches it through a value or an `alloc` its caller wrote.
 

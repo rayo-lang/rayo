@@ -139,7 +139,7 @@ The panic left the data as it found it, perhaps half-changed. Only the panicking
 **`Channel<T>` makes a channel, a queue that two kinds of owned ends share, `Sender<T>` and `Receiver<T>`:**
 
 ```swift
-let (tx, rx) = Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
+let (tx, rx) = alloc Channel<Request>.make(capacity: 64)   // tx: a Sender<Request>, rx: a Receiver<Request>
 ```
 
 The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). A channel has one `Receiver`, and as many `Sender`s as `share()` makes. Like `Shared`'s `share()`, it adds an owner of the shared state visibly ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
@@ -372,7 +372,7 @@ struct Services(                                   // Synchronized, derived
     let config: Published<GameConfig>,
     let mixer: Shared<Mutex<AudioMixer>>
 )
-let services = alloc Shared(Services(log: Mutex(…), registry: Mutex(…), config: Published(…), mixer: alloc Shared(Mutex(AudioMixer()))))   // fine: a Shared of it
+let services = alloc Shared(Services(log: Mutex(…), registry: Mutex(…), config: alloc Published(…), mixer: alloc Shared(Mutex(AudioMixer()))))   // fine: a Shared of it
 ```
 
 **Declaring a conformance to `Synchronized` requires `unsafe`**, because the compiler can't verify the implementation ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)):

@@ -240,7 +240,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 
 ```swift
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
-    let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
+    let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
         for snapshot in &rx { draw(snapshot) }                               // waits for each snapshot in turn
     }
@@ -283,7 +283,7 @@ render.join()                                    // waits for the last frame
 ## Global state
 
 ```swift
-let config = Published(GameConfig())          // any thread reads it, and publish swaps in a new one
+let config = alloc Published(GameConfig())    // any thread reads it, and publish swaps in a new one
 let spawned = Atomic(0)
 @threadlocal var scratch = alloc List<Int>()  // each thread has its own copy
 var frames = 0                                // a bare global 'var'

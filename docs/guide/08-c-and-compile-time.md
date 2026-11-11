@@ -139,10 +139,10 @@ unsafe { audio.track(voice.pin.address) }          // valid for as long as 'voic
 ## Callbacks: `@c func`
 
 ```swift
-let audioEvents = MpscQueue<AudioEvent>(capacity: 256)  // a global queue any thread may push to
+let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // a global queue any thread may push to
 
-@c func onAudioEvent(_ user: *Void?, _ event: CInt) {   // runs on the SDK's audio thread
-    audioEvents.push(AudioEvent(raw: copy event))       // 'event' is borrowed, so copy it in
+@c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the SDK's audio thread
+    audioEvents.push(AudioEvent(raw: copy event))             // 'event' is borrowed, so copy it in
 }
 
 unsafe { plat.set_audio_callback(onAudioEvent, nil) }

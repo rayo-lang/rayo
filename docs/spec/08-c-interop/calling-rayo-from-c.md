@@ -110,9 +110,9 @@ A C or C++ program uses a library written in Rayo:
 A `@c func` is a Rayo function that C can call through a function pointer:
 
 ```swift
-let audioEvents = MpscQueue<AudioEvent>(capacity: 256)       // global let: Synchronized, safe from any thread
+let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // global let: Synchronized, safe from any thread
 
-@c func onAudioEvent(_ user: *Void?, _ event: CInt) {        // runs on the audio library's thread
+@c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the audio library's thread
     audioEvents.push(AudioEvent(raw: copy event))
 }
 

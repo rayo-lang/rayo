@@ -24,6 +24,8 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
 - growing operations, such as the builtin `SoA`'s `try rows.tryAppend(x)` ([04](../04-types/data-layout.md#struct-of-arrays-soat));
 - `Name(interning:)` ([04](../04-types/collections.md#collections-and-strings)), and `allocateRaw` and `reallocateRaw` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
+**One `try` covers both failures of `try alloc f(…)`, when `f` can fail itself.** The expression fails with the error union of `AllocError` and `f`'s failure type ([10](../10-errors-and-safety/typed-errors.md#error-unions)), as in `try alloc Blob.load(path)`, which can fail to read or to allocate. `try?` and `try!` apply to it as to any `try`.
+
 **Growth and closures keep fallible forms of their own**, `tryAppend` and `Closure.tryNew`, since they have no `alloc` for a `try` to mark.
 
 **`@noalloc` on a function makes anything in it that may allocate a compile error:**

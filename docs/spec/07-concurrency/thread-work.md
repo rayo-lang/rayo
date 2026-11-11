@@ -156,7 +156,7 @@ let table = catchPanic {                          // a global's initializer, run
 
 ```swift
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
-    let (tx, rx) = Channel<Shared<Snapshot>>.make(capacity: 3)
+    let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
         for snapshot in &rx { draw(snapshot) }                               // parks between snapshots; ends once every sender is gone
     }
@@ -173,7 +173,7 @@ func runSimulation(_ world: mutable World) {                                 // 
     render.join()                                                            // waits for it, or resumes its panic here
 }
 
-let snapshots = SpscQueue<Shared<Snapshot>>(capacity: 3)                     // instead of a channel, a global queue: a Synchronized let
+let snapshots = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)               // instead of a channel, a global queue: a Synchronized let
 
 func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
