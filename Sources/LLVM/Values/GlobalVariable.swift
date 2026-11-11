@@ -13,15 +13,13 @@ public struct GlobalVariable: GlobalValue, Equatable {
     /// The pointer to the variable's value, which code loads it through.
     public var pointer: PointerValue { PointerValue(ref) }
 
-    /// Whether no code may store to the variable.
-    public var isConstant: Bool {
-        get { LLVMIsGlobalConstant(ref) != 0 }
-        nonmutating set { LLVMSetGlobalConstant(ref, newValue ? 1 : 0) }
+    /// Makes the variable a constant, which no code may store to.
+    public func setConstant() {
+        LLVMSetGlobalConstant(ref, 1)
     }
 
-    /// Whether no code compares the variable's address, so LLVM may merge it with an equal constant.
-    public var hasUnnamedAddress: Bool {
-        get { LLVMGetUnnamedAddress(ref) == LLVMGlobalUnnamedAddr }
-        nonmutating set { LLVMSetUnnamedAddress(ref, newValue ? LLVMGlobalUnnamedAddr : LLVMNoUnnamedAddr) }
+    /// Marks the variable's address as one no code compares, so that LLVM may merge it with an equal constant.
+    public func setUnnamedAddress() {
+        LLVMSetUnnamedAddress(ref, LLVMGlobalUnnamedAddr)
     }
 }

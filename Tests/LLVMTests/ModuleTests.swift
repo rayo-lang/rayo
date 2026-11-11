@@ -59,8 +59,8 @@ struct ModuleTests {
         let bench = Workbench()
         let bytes = bench.context.constant(bytes: Array("hi".utf8))
         let message = bench.module.addGlobal(named: "message", initializer: bytes)
-        message.isConstant = true
-        message.hasUnnamedAddress = true
+        message.setConstant()
+        message.setUnnamedAddress()
         message.setLinkage(.private)
 
         try bench.module.verify()

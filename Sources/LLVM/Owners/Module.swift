@@ -49,7 +49,7 @@ public struct Module: ~Copyable {
 
     /// Links `other` into this module, which takes its functions and globals in.
     public func link(_ other: consuming Module) throws(LLVMError) {
-        // LLVM disposes of `other` whether or not the link succeeds.
+        // Link `other` in, which LLVM disposes of whether or not the link succeeds.
         let otherName = other.name
         let earlierErrors = context.errors.count
         let failed = LLVMLinkModules2(ref, other.ref) != 0

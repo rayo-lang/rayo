@@ -110,7 +110,7 @@ final class ModuleBuilder {
     /// Adds a constant array holding `bytes`, and returns it.
     func addConstant(_ name: String, bytes: [UInt8]) -> LLVMValueRef {
         let constant = addConstant(name, llvmContext.constant(bytes: bytes))
-        constant.hasUnnamedAddress = true
+        constant.setUnnamedAddress()
         return constant.ref
     }
 
@@ -122,7 +122,7 @@ final class ModuleBuilder {
     @discardableResult
     private func addConstant(_ name: String, _ initializer: some ValueHandle) -> GlobalVariable {
         let constant = llvmModule.addGlobal(named: name, initializer: initializer)
-        constant.isConstant = true
+        constant.setConstant()
         return constant
     }
 

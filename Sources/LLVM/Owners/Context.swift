@@ -1,7 +1,7 @@
 package import CLLVM
 
 /// An LLVM context, which owns the types and constants made in it and makes the modules and builders that use them.
-/// Every handle made in it is valid while it lives, and its modules and builders keep it alive.
+/// The types and constants made in it are valid while it lives, and its modules and builders keep it alive.
 public struct Context: ~Copyable {
     let owned: OwnedContext
 
