@@ -155,10 +155,11 @@ struct Toolchain {
     }
     #endif
 
+    /// What every link gives the linker for the size of a program's main thread's stack.
     #if os(Windows)
-    /// What every link on Windows gives the linker: a main thread's stack of 8 MiB, as macOS and Linux give it, where
-    /// Windows would give 1 MiB, so a program recurses as deep on each.
-    private static let stackArguments = ["-Wl,/STACK:8388608"]
+    // Windows reserves 1 MiB where macOS and Linux give 8 MiB, and a debug build's frames are larger on x64 Windows,
+    // which has each call reserve 32 bytes for its callee. A stack of 16 MiB lets a program recurse at least as deep.
+    private static let stackArguments = ["-Wl,/STACK:16777216"]
     #else
     private static let stackArguments: [String] = []
     #endif
