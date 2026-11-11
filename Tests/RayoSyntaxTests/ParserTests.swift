@@ -52,8 +52,7 @@ struct ParserErrorTests {
         #expect(errors("}\nfunc f() {}") == [.unmatchedBrace])
     }
 
-    @Test("'return' takes a value on its own line, and a 'return' that ends its line takes none")
-    func returns() {
+    @Test func `'return' takes a value on its own line, and a 'return' that ends its line takes none`() {
         let source = "func f() -> Int { return 1 }\nfunc g() {\n    return\n    1\n}\n"
             + "func h() { if true { return } }"
         #expect(errors(source) == [])

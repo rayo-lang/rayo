@@ -222,16 +222,19 @@ struct InitializationCheckerTests {
         ])
     }
 
-    @Test("the errors come in source order across the program's functions")
-    func sourceOrder() {
+    @Test func `the errors come in source order across the program's functions`() {
         // The first function's error comes after the second's in the source.
         let usesLate = function([
-            BasicBlock(statements: [store(1, in: x), store(move(x, at: 1), in: y), printing(read(x, at: 6))],
-                       terminator: .return(nil)),
+            BasicBlock(
+                statements: [store(1, in: x), store(move(x, at: 1), in: y), printing(read(x, at: 6))],
+                terminator: .return(nil),
+            ),
         ])
         let usesEarly = function([
-            BasicBlock(statements: [store(1, in: x), store(move(x, at: 2), in: y), printing(read(x, at: 5))],
-                       terminator: .return(nil)),
+            BasicBlock(
+                statements: [store(1, in: x), store(move(x, at: 2), in: y), printing(read(x, at: 5))],
+                terminator: .return(nil),
+            ),
         ])
 
         let reported = InitializationChecker.check(program(of: [usesLate, usesEarly]))
