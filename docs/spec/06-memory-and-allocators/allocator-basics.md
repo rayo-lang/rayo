@@ -56,9 +56,9 @@ struct Inventory(var items: List<Item> = alloc List<Item>()): Allocating   // th
 let inv = level.alloc Inventory()        // 'items' comes from 'level' too
 ```
 
-**A type that allocates conforms to `Allocating`, and declares nothing else for it.** The compiler gives the type its allocator as a field of its own, which its declaration and its initializers never mention. The field is the value's allocator word ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)), which every allocating value carries and which a reset's checks read. So any type can hold an allocator, and the stale-value checks come with it. An open checks the storage reached through that word, as an `unsafe` core's open checks a raw allocation's ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
+**A type conforms to `Allocating` by declaring it, and declares nothing else for it.** The compiler gives the type its allocator as a field of its own, which its declaration and its initializers never mention. The field is the value's allocator word ([How values record their allocator](allocator-implementations.md#how-values-record-their-allocator)), which every allocating value carries and which a reset's checks read. So any type can hold an allocator, and the stale-value checks come with it. An open checks the storage reached through that word, as an `unsafe` core's open checks a raw allocation's ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
-**A type conforms only when its own code allocates with the ambient allocator.** One that only holds `Allocating` values, such as an `Enemy` with a `List` of waypoints, needn't conform, and a bare `alloc` in its methods takes `.heap`.
+**Conforming is the type's choice, and it is always allowed.** It buys the caller the choice of allocator: a value of the type is made with `alloc`, and the allocator that `alloc` gives is the ambient one throughout the type's code. A type that doesn't conform is made without `alloc`, and its own allocations, its field defaults' included, take `.heap`, as any code outside an `Allocating` type's does. So a type that only holds `Allocating` values, such as an `Enemy` with a `List` of waypoints given to its initializer, needn't conform.
 
 **The type's code reads its allocator as `self.allocator`**, an `Allocator` the compiler gives it, which no code assigns. So a type that allocates through raw memory passes it on, as in `self.allocator.allocateRaw(bytes: n, align: 8)` ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)).
 
@@ -130,7 +130,7 @@ spawns.append(.zero)                // grows through 'scratch', as the alloc at 
 
 ### Allocations with no construction
 
-Literals aren't among these, since a literal never allocates by itself ([04](../04-types/collections.md#literals)).
+A literal is never one of them, since it never allocates by itself ([04](../04-types/collections.md#literals)).
 
 **Converting a closure to `Closure<F>`, which owns its captures, may allocate, and takes no `alloc`** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)). Whether it allocates depends on how much the closure captures, as whether `append` allocates depends on how many elements the list holds. So the type, `Closure<…>`, says that it may allocate, and `button.onClick { … }` may allocate with nothing at the call site, as `append` may. **The conversion allocates from the ambient allocator of the function it is written in** ([above](#the-ambient-allocator)).
 

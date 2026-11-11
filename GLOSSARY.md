@@ -271,7 +271,7 @@ The keyword that marks every construction giving a value heap storage, with an a
 A function that makes a new value for its caller, of any type, and receives that value's allocator from the `alloc` at its call, as `clone()` does ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
 **Allocating**:
-A type whose own code allocates with the ambient allocator: the compiler gives it an allocator of its own, `self.allocator`, and making one says `alloc` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)).
+A type that lets its caller choose the allocator it is made with: making one says `alloc`, the compiler gives it an allocator of its own, `self.allocator`, and that allocator is the ambient one throughout the type's code ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)).
 
 **Allocator**:
 A copyable id that names a registered allocator implementation ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
