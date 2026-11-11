@@ -5,7 +5,7 @@ import RayoSema
 /// Emits a program into an LLVM module, calling the runtime's functions.
 struct ProgramEmitter {
     let module: ModuleBuilder
-    let runtime: Runtime
+    let runtime: RuntimeFunctions
     let sourcePath: String
     let checksOverflow: Bool
 

@@ -3,9 +3,9 @@ package import CLLVM
 /// An LLVM IR builder, which adds instructions at the end of the block it is positioned at.
 public struct Builder: ~Copyable {
     package let ref: LLVMBuilderRef
-    private let context: ContextHandle
+    private let context: OwnedContext
 
-    init(_ ref: LLVMBuilderRef, in context: ContextHandle) {
+    init(_ ref: LLVMBuilderRef, in context: OwnedContext) {
         self.ref = ref
         self.context = context
     }
@@ -72,15 +72,16 @@ public struct Builder: ~Copyable {
 
     // MARK: Aggregates and calls
 
-    /// Builds `extractvalue`, which gives the field at `index` of `aggregate`, a struct or an array.
-    public func extractValue(from aggregate: some ValueHandle, at index: Int) -> AnyValue {
-        AnyValue(LLVMBuildExtractValue(ref, aggregate.anyValue.ref, UInt32(index), ""))
+    /// Builds `extractvalue`, which gives the field at `index` of `aggregate`.
+    public func extractValue(from aggregate: AggregateValue, at index: Int) -> AnyValue {
+        AnyValue(LLVMBuildExtractValue(ref, aggregate.ref, UInt32(index), ""))
     }
 
     /// Builds `call`, which calls `function` with `arguments`, and gives its result, or nil where it returns
     /// nothing.
     @discardableResult
     public func call(_ function: Function, _ arguments: [any ValueHandle]) -> AnyValue? {
+        // Build the call, whose instruction is its result.
         var arguments = arguments.map { Optional($0.anyValue.ref) }
         let count = UInt32(arguments.count)
         let call = AnyValue(LLVMBuildCall2(ref, function.type.ref, function.ref, &arguments, count, ""))
@@ -124,7 +125,7 @@ public struct Builder: ~Copyable {
         LLVMBuildCondBr(ref, condition.ref, then.ref, otherwise.ref)
     }
 
-    /// Builds `ret`, which returns `value`.
+    /// Builds `ret`.
     public func `return`(_ value: some ValueHandle) {
         LLVMBuildRet(ref, value.anyValue.ref)
     }

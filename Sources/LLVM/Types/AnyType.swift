@@ -16,7 +16,7 @@ public struct AnyType: TypeHandle, Equatable {
     /// Whether this is the type of a function's result when it returns nothing.
     public var isVoid: Bool { LLVMGetTypeKind(ref) == LLVMVoidTypeKind }
 
-    /// The width of this type in bits, where it is an integer type, or nil where it isn't.
+    /// The width of this type in bits, where it is an integer type.
     public var integerWidth: UInt32? {
         LLVMGetTypeKind(ref) == LLVMIntegerTypeKind ? LLVMGetIntTypeWidth(ref) : nil
     }

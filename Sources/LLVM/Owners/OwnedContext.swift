@@ -1,18 +1,16 @@
 internal import CLLVM
 
-/// An LLVM context, and what LLVM reports in it, kept alive by the context and by each module and builder made in
-/// it, so that none of them outlives it.
-final class ContextHandle {
+/// An LLVM context and the errors LLVM reports in it, which disposes of the context once nothing holds it.
+final class OwnedContext {
     let ref: LLVMContextRef
-    /// The errors LLVM has reported in the context, in order.
     private(set) var errors: [String] = []
 
     init() {
         ref = LLVMContextCreate()
 
         // Without a handler, LLVM prints what it reports to standard error, and exits on an error.
-        LLVMContextSetDiagnosticHandler(ref, { info, handle in
-            Unmanaged<ContextHandle>.fromOpaque(handle!).takeUnretainedValue().record(info!)
+        LLVMContextSetDiagnosticHandler(ref, { info, context in
+            Unmanaged<OwnedContext>.fromOpaque(context!).takeUnretainedValue().record(info!)
         }, Unmanaged.passUnretained(self).toOpaque())
     }
 
@@ -20,9 +18,10 @@ final class ContextHandle {
         LLVMContextDispose(ref)
     }
 
-    /// Keeps what LLVM reports, if it is an error; a warning or a remark fails nothing.
+    /// Keeps what LLVM reports where it is an error.
     private func record(_ info: LLVMDiagnosticInfoRef) {
         let message = takeMessage(LLVMGetDiagInfoDescription(info))
+        // A warning or a remark fails nothing, so only an error is kept.
         if LLVMGetDiagInfoSeverity(info) == LLVMDSError { errors.append(message) }
     }
 }

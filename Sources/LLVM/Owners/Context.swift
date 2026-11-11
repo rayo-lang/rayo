@@ -3,23 +3,23 @@ package import CLLVM
 /// An LLVM context, which owns the types and constants made in it and makes the modules and builders that use them.
 /// Every handle made in it is valid while it lives, and its modules and builders keep it alive.
 public struct Context: ~Copyable {
-    let handle: ContextHandle
+    let owned: OwnedContext
 
     public init() {
-        handle = ContextHandle()
+        owned = OwnedContext()
     }
 
-    package var ref: LLVMContextRef { handle.ref }
+    package var ref: LLVMContextRef { owned.ref }
 
     /// The errors LLVM has reported in the context, in order.
-    public var reportedErrors: [String] { handle.errors }
+    public var reportedErrors: [String] { owned.errors }
 
     public func makeModule(named name: String) -> Module {
-        Module(LLVMModuleCreateWithNameInContext(name, ref), in: handle)
+        Module(LLVMModuleCreateWithNameInContext(name, ref), in: owned)
     }
 
     public func makeBuilder() -> Builder {
-        Builder(LLVMCreateBuilderInContext(ref), in: handle)
+        Builder(LLVMCreateBuilderInContext(ref), in: owned)
     }
 
     /// Parses `llvmIR`, the text of a module named `name`, into a module of this context.
@@ -32,14 +32,14 @@ public struct Context: ~Copyable {
         }
         defer { LLVMDisposeMemoryBuffer(buffer) }
 
-        // Parse the buffer, which LLVM leaves to its caller to dispose of.
+        // Parse the buffer into a module, which the `Module` returned disposes of.
         var parsed: LLVMModuleRef?
         var message: UnsafeMutablePointer<CChar>?
         let failed = LLVMParseIRInContext2(ref, buffer, &parsed, &message) != 0
         let report = takeMessage(message)
         // Text LLVM can't parse fails with LLVM's report of it.
         guard !failed, let parsed else { throw LLVMError(message: "LLVM couldn't parse \(name):\n\(report)") }
-        return Module(parsed, in: handle)
+        return Module(parsed, in: owned)
     }
 
     /// Appends a block named `name` to the end of `function`'s body.
@@ -61,7 +61,6 @@ public struct Context: ~Copyable {
         StructType(LLVMStructCreateNamed(ref, name))
     }
 
-    /// The type of an array of `count` values of `element`.
     public func arrayType(of element: some TypeHandle, count: Int) -> AnyType {
         AnyType(LLVMArrayType2(element.anyType.ref, UInt64(count)))
     }

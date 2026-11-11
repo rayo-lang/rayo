@@ -6,8 +6,6 @@ final class ModuleBuilder {
     private let llvmContext: Context
     private let llvmModule: Module
     private let llvmBuilder: Builder
-    /// The modules parsed from LLVM IR, linked together, until they are linked into this module.
-    private var parsed: Module?
 
     let void: LLVMTypeRef
     let bool: LLVMTypeRef
@@ -34,7 +32,6 @@ final class ModuleBuilder {
     var module: LLVMModuleRef { llvmModule.ref }
     var builder: LLVMBuilderRef { llvmBuilder.ref }
 
-    /// Throws what LLVM finds wrong with the module, which is a fault in the code that built it.
     func verify() throws(LLVMError) {
         try llvmModule.verify()
     }
@@ -52,36 +49,31 @@ final class ModuleBuilder {
         return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
 
-    /// Parses `llvmIR`, for the same target as this module, to link into it later with the other text parsed.
-    func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) {
-        // The parsed module builds for this module's target, so the two link.
-        let module = try llvmContext.parseModule(llvmIR, named: name)
+    /// Makes an empty module in this module's context, for the same target, so that the two link.
+    func makeModule(named name: String) -> Module {
+        targeted(llvmContext.makeModule(named: name))
+    }
+
+    /// Parses `llvmIR` into a module of this module's context, for the same target, so that the two link.
+    func parse(_ llvmIR: [UInt8], named name: String) throws(LLVMError) -> Module {
+        targeted(try llvmContext.parseModule(llvmIR, named: name))
+    }
+
+    /// `module`, set to build for this module's target.
+    private func targeted(_ module: consuming Module) -> Module {
         module.target = llvmModule.target
         module.dataLayout = llvmModule.dataLayout
-
-        // The first text parsed takes in the rest.
-        if let earlier = parsed.take() {
-            try earlier.link(module)
-            parsed = Optional(earlier)
-        } else {
-            parsed = Optional(module)
-        }
+        return module
     }
 
-    /// Declares the function `name` that the text parsed defines, with the type it is defined with.
-    func declare(_ name: String) throws(LLVMError) -> FunctionValue {
-        // A function the text doesn't define is a fault in the runtime rayoc carries.
-        guard let definition = parsed?.function(named: name) else {
-            throw LLVMError(message: "the runtime defines no function '\(name)'")
-        }
-        return functionValue(llvmModule.addFunction(named: name, type: definition.type))
+    /// Links `other`, a module of this module's context, into this one.
+    func link(_ other: consuming Module) throws(LLVMError) {
+        try llvmModule.link(other)
     }
 
-    /// Links the text parsed into this module.
-    func linkParsed() throws(LLVMError) {
-        // Without text parsed, nothing is linked.
-        guard let parsed = parsed.take() else { return }
-        try llvmModule.link(parsed)
+    /// Declares the function that another module defines as `definition`, by its name and type.
+    func declare(_ definition: Function) -> FunctionValue {
+        functionValue(llvmModule.addFunction(named: definition.name, type: definition.type))
     }
 
     /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
@@ -138,7 +130,6 @@ final class ModuleBuilder {
         llvmContext.appendBlock(named: name, to: Function(function)).ref
     }
 
-    /// Emits a call of `function` with `arguments`, and returns its result, or nil where it returns nothing.
     @discardableResult
     func call(_ function: FunctionValue, _ arguments: [LLVMValueRef]) -> LLVMValueRef? {
         let callee = Function(function.value, type: FunctionType(function.type))

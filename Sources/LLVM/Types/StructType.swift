@@ -1,6 +1,6 @@
 package import CLLVM
 
-/// A named LLVM struct type, whose fields are set once it is made, so that a field may hold any named struct.
+/// A named LLVM struct type, which has no fields until it is given them.
 public struct StructType: TypeHandle, Equatable {
     package let ref: LLVMTypeRef
 

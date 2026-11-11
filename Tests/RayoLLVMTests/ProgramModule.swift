@@ -12,7 +12,7 @@ struct ProgramModule {
         module = ModuleBuilder(named: "main.rayo", for: target)
         emitter = ProgramEmitter(
             module: module,
-            runtime: try Runtime(in: module),
+            runtime: try Runtime(in: module).functions,
             sourcePath: "main.rayo",
             checksOverflow: build == .debug,
         )

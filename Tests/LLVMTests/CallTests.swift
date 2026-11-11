@@ -24,9 +24,9 @@ struct CallTests {
         let bench = Workbench()
         let function = bench.function(named: "f", returning: bench.bool, taking: [bench.int64, bench.int64])
         let add = bench.module.intrinsic(named: "llvm.sadd.with.overflow", overloadedOn: bench.int64)
-        // The expectations take the builder's results, since they can't take a builder, which isn't copyable.
         let call = bench.builder.call(add, [function.parameter(at: 0), function.parameter(at: 1)])
-        let pair = try #require(call)
+        let result = try #require(call)
+        let pair = try #require(AggregateValue(result))
         let field = bench.builder.extractValue(from: pair, at: 1)
         bench.builder.return(try #require(IntValue<I1>(field)))
 

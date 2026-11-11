@@ -18,6 +18,17 @@ struct TypeTests {
         #expect(IntValue<I8>(bytes) == nil)
     }
 
+    @Test func `a struct or an array converts to an aggregate, and an integer doesn't`() {
+        let bench = Workbench()
+        let pair = bench.context.makeStructType(named: "Pair")
+        pair.setFields([bench.int64, bench.bool], packed: false)
+        let function = bench.function(named: "f", returning: bench.context.voidType, taking: [pair])
+
+        #expect(AggregateValue(function.parameter(at: 0)) != nil)
+        #expect(AggregateValue(bench.context.constant(bytes: Array("hi".utf8))) != nil)
+        #expect(AggregateValue(bench.int64.constant(1)) == nil)
+    }
+
     @Test func `a type says what LLVM IR writes it as`() {
         let bench = Workbench()
         let pair = bench.context.makeStructType(named: "Pair")

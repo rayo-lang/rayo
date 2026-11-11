@@ -3,16 +3,17 @@ package import CLLVM
 /// An LLVM module: the functions and globals that compile to one object file.
 public struct Module: ~Copyable {
     package let ref: LLVMModuleRef
-    private let context: ContextHandle
+    private let context: OwnedContext
     /// Whether this disposes of the module, which it doesn't once another module has taken it in a link.
     private var owns = true
 
-    init(_ ref: LLVMModuleRef, in context: ContextHandle) {
+    init(_ ref: LLVMModuleRef, in context: OwnedContext) {
         self.ref = ref
         self.context = context
     }
 
     deinit {
+        // A module that another took in a link was disposed of by the link.
         if owns { LLVMDisposeModule(ref) }
     }
 
@@ -50,12 +51,13 @@ public struct Module: ~Copyable {
     public func link(_ other: consuming Module) throws(LLVMError) {
         // LLVM disposes of `other` whether or not the link succeeds.
         let otherName = other.name
+        let earlierErrors = context.errors.count
         let failed = LLVMLinkModules2(ref, other.ref) != 0
         other.owns = false
 
-        // A module that won't link fails with the errors LLVM reported about it.
+        // A link that succeeds is done; one that fails throws the errors LLVM reported as it linked.
         guard failed else { return }
-        let reasons = context.errors.joined(separator: "\n")
+        let reasons = context.errors.dropFirst(earlierErrors).joined(separator: "\n")
         throw LLVMError(message: "LLVM couldn't link \(otherName) into \(name):\n\(reasons)")
     }
 
@@ -66,7 +68,7 @@ public struct Module: ~Copyable {
         Function(LLVMAddFunction(ref, name, type.ref), type: type)
     }
 
-    /// The function named `name` that the module declares or defines, or nil where it has none.
+    /// The function named `name` that the module declares or defines.
     public func function(named name: String) -> Function? {
         LLVMGetNamedFunction(ref, name).map(Function.init)
     }
