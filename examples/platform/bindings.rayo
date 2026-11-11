@@ -78,8 +78,8 @@ func requestFile(_ path: static StringView, _ loads: mutable Loads) -> Handle<Lo
     loads.nextTicket &+= 1
     loads.tickets[ticket] = copy h
     unsafe {
-        plat.read_file_async(path.cchars.baseAddress, CSize(path.cchars.count),
-                             onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))
+        let chars = path.cchars
+        plat.read_file_async(chars.baseAddress, CSize(chars.count), onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))
     }
     return h
 }

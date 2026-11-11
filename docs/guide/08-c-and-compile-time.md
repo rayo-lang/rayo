@@ -117,7 +117,7 @@ func log(_ level: Int32, _ text: StringView) {
 
 **A span hands C a pointer and a count.** Its `baseAddress` is an `unsafe` field, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
 
-**A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `const char*` ([04](../spec/04-types/collections.md#strings)).
+**A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `*CChar` that C reads as a `const char*` ([04](../spec/04-types/collections.md#strings)). It belongs to the literal, not to its type: a `static StringView` kept in a variable has no `cString`, since a range of one has no NUL after it.
 
 **Other strings needn't end in a NUL, so you pass them with a length.** `s.cchars` views any string's bytes as a `Span<CChar>`, for C functions that take a pointer and a length.
 

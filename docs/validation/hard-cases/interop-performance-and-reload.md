@@ -198,7 +198,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 
 - **Must hold:** safe code can't learn a value's address, only immortal data's, unless `unsafe` code or C gives it a raw pointer. Its stored links are these:
     - handles, weak pointers, owners, `Slice`s, `Pin`s, `RawAllocation`s and `Allocator` ids;
-    - static views and `Name`s, and `String`s that still use a literal's bytes;
+    - static views and `Name`s, and `String`s that still use a static view's bytes;
     - `Closure`s and `@c` pointers, which name code;
     - raw pointers, which only `unsafe` code or C makes.
 - **Must hold:** a thread with no Rayo frame on any of its stacks holds no borrow and no dynamic access.
