@@ -40,6 +40,7 @@ struct Toolchain {
             do throws(CommandError) {
                 return (try body(objectFile), errors)
             } catch {
+                // A body that stops does so after what `rayoc` wrote.
                 throw error.after(errors)
             }
         }

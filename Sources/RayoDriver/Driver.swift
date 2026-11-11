@@ -185,8 +185,8 @@ public enum Driver {
         case .compileFailed(let exitCode, let errors):
             CommandResult(exitCode: exitCode, output: "", errors: errors)
         // A reason of rayo's own is shown as its message, after what `rayoc` wrote.
-        case .failed(let message, let written):
-            CommandResult(exitCode: 1, output: "", errors: written + "rayo: \(message)\n")
+        case .failed(let message, let errors):
+            CommandResult(exitCode: 1, output: "", errors: errors + "rayo: \(message)\n")
         }
     }
 }
