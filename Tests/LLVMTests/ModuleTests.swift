@@ -78,7 +78,8 @@ struct ModuleTests {
         #expect(function.text.hasPrefix("define internal void @helper() {"))
     }
 
-    @Test func `hiding a module's definitions keeps out of its symbols all but the exported functions`() throws {
+    @Test func `hiding a module's definitions keeps all but the exported functions out of the symbols it exports`()
+        throws {
         let bench = Workbench()
         for name in ["exported", "helper"] {
             _ = bench.function(named: name, returning: bench.context.voidType)

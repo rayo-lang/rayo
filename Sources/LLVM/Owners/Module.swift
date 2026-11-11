@@ -111,7 +111,8 @@ public struct Module: ~Copyable {
     }
 
     /// Gives every function and global the module defines, but the functions `exported` names and LLVM's own
-    /// globals, a linkage that keeps it out of the module's symbols, so that optimisation can drop what nothing uses.
+    /// globals, a linkage that keeps it out of the symbols the object code exports, so that optimisation can drop what
+    /// nothing uses.
     public func hideDefinitions(except exported: Set<String>) {
         // Functions become internal, where code in the module still calls them.
         for function in functions where isHideable(function) && !exported.contains(function.name) {

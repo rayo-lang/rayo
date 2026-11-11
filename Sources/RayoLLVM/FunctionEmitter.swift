@@ -126,7 +126,7 @@ struct FunctionEmitter {
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let condition, let then, let otherwise):
-            // The checker makes every condition a Bool.
+            // The checker makes every condition a Bool, and LLVM's verifier rejects a module where one isn't.
             let condition = IntValue<I1>(unchecked: read(condition, in: program).ref)
             program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
