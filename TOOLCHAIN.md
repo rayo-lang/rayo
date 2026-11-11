@@ -41,7 +41,7 @@ A file without a `main` function is a library. `rayo check` checks it as it chec
 swift test
 ```
 
-Only the directories that `scripts/check_llvm_imports.py` lists may import LLVM's C modules, `CLLVM` and `CLLVMJIT`, and no file may re-export them. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. The script reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from anywhere:
+Only the directories that `scripts/check_llvm_imports.py` lists may import LLVM's C module, `CLLVM`, and no file may re-export it. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. The script reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from anywhere:
 
 ```sh
 python3 scripts/check_llvm_imports.py
@@ -152,7 +152,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
 | `Sources/RayoOwnership` | The initialization checker, which follows what each local holds through Rayo IR's control flow, and reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been assigned |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
-| `Sources/LLVM` | The Swift binding of LLVM's C API: the context, modules and builders that own LLVM's handles, and the types and values they make, each integer typed by its width |
+| `Sources/LLVM` | The Swift binding of LLVM's C API: the context, modules, builders, target machine and JIT that own LLVM's handles, and the types and values they make, each integer typed by its width |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
 | `Sources/RayoCompiler` | What `rayoc` does, given its arguments and a way to read and write files: the pipeline that reads, checks and compiles a source file, and writes its object code |
@@ -168,9 +168,8 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
-| `Tests/LLVMTests` | The binding's tests, which build small functions with it and check what LLVM prints and reports |
+| `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
-| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through LLVM's JIT; and of the LLVM types a program's values, functions and stack slots get |
-| `Tests/CLLVMJIT` | The module map that imports LLVM's JIT into the LLVM tests, and into nothing that ships |
+| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through the binding's JIT; and of the LLVM types a program's values, functions and stack slots get |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |

@@ -1,6 +1,6 @@
-"""Checks that only the directories in `ALLOWED` import LLVM's C modules, `CLLVM` and `CLLVMJIT`, and that no file
-re-exports them. A target can import a module it reaches only through another dependency, so the package manifest
-can't enforce this.
+"""Checks that only the directories in `ALLOWED` import LLVM's C module, `CLLVM`, and that no file re-exports it.
+A target can import a module it reaches only through another dependency, so the package manifest can't enforce
+this.
 
     python3 scripts/check_llvm_imports.py   # writes each import that breaks the rule, and fails if there is any
 """
@@ -9,14 +9,14 @@ import os
 import re
 import sys
 
-# The directories whose Swift files may import LLVM's C modules.
+# The directories whose Swift files may import LLVM's C module.
 ALLOWED = ['Sources/LLVM', 'Sources/RayoLLVMInstall', 'Tests/RayoLLVMTests']
 
-# An import declaration of one of the C modules, or of a submodule or a declaration of one, where a statement starts:
-# at the start of a line or after a `;`, behind any attributes and access level. Its groups are the attributes, the
-# `import` keyword and the module.
+# An import declaration of the C module, or of a submodule or a declaration of it, where a statement starts: at the
+# start of a line or after a `;`, behind any attributes and access level. Its groups are the attributes, the `import`
+# keyword and the module.
 IMPORT = re.compile(r'(?:^|;)\s*((?:@\w+(?:\([^)]*\))?\s+)*)(?:(?:public|package|internal|fileprivate|private)\s+)?'
-                    r'(import)\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(CLLVM|CLLVMJIT)\b',
+                    r'(import)\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(CLLVM)\b',
                     re.MULTILINE)
 # The opening of a string literal: a raw string's `#`s, then one quote or three.
 STRING_OPENING = re.compile(r'(#*)("""|")')
