@@ -91,27 +91,12 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call given too few arguments",
-        executable: program(locals: [], [
-            BasicBlock(
-                statements: [.compute(destination: nil, value: .call(.printInt, arguments: []), range: nowhere)],
-                terminator: .return(nil),
-            ),
-        ]),
+        executable: callingPrint(with: []),
         error: "the IR passes 'rayo.print_int' 0 arguments, where it takes 1",
     ),
     IllTypedIR(
         testDescription: "a call given too many arguments",
-        executable: program(locals: [], [
-            BasicBlock(
-                statements: [
-                    .compute(
-                        destination: nil, value: .call(.printInt, arguments: [.constant(.int(1)), .constant(.int(2))]),
-                        range: nowhere,
-                    ),
-                ],
-                terminator: .return(nil),
-            ),
-        ]),
+        executable: callingPrint(with: [.constant(.int(1)), .constant(.int(2))]),
         error: "the IR passes 'rayo.print_int' 2 arguments, where it takes 1",
     ),
     IllTypedIR(
@@ -165,16 +150,21 @@ private func returning(_ terminator: Terminator, of local: RayoType, from result
 private func calling(
     _ name: String, taking parameterCount: Int, with arguments: [Operand], storingIn local: RayoType? = nil,
 ) -> IRExecutable {
-    // `main` calls the function, storing what it gives in its one temporary where it has one.
+    // `main` calls the function, storing what it gives where it has a temporary to store it in.
     let call = Rvalue.call(.function(FunctionID(index: 1)), arguments: arguments)
-    let callStatement = if local == nil {
-        Statement.compute(destination: nil, value: call, range: nowhere)
+    let main = if let local {
+        // A `main` with a temporary stores what the call gives in it.
+        mainFunction(locals: [local], [
+            BasicBlock(statements: [statement(storingIn: 0, call)], terminator: .return(nil)),
+        ])
     } else {
-        statement(storingIn: 0, call)
+        // A `main` without one drops it.
+        mainFunction(locals: [], [
+            BasicBlock(
+                statements: [.compute(destination: nil, value: call, range: nowhere)], terminator: .return(nil),
+            ),
+        ])
     }
-    let main = mainFunction(locals: local.map { [$0] } ?? [], [
-        BasicBlock(statements: [callStatement], terminator: .return(nil)),
-    ])
 
     // The function returns as soon as it is called.
     let function = IRFunction(
@@ -183,6 +173,16 @@ private func calling(
         blocks: [BasicBlock(statements: [], terminator: .return(nil))],
     )
     return program(of: [main, function])
+}
+
+/// A program whose `main` passes `arguments` to the prelude's `print`, which takes one Int.
+private func callingPrint(with arguments: [Operand]) -> IRExecutable {
+    program(locals: [], [
+        BasicBlock(
+            statements: [.compute(destination: nil, value: .call(.printInt, arguments: arguments), range: nowhere)],
+            terminator: .return(nil),
+        ),
+    ])
 }
 
 /// A struct of one Int.
