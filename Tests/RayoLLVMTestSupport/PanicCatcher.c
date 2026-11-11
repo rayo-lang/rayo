@@ -29,6 +29,7 @@ static void run(Call *call) {
 }
 
 #ifdef _WIN32
+// Runs the call at `call` on the thread made for it.
 static unsigned __stdcall runOnThread(void *call) {
     run(call);
     return 0;
@@ -70,6 +71,7 @@ RayoCaughtCall rayo_call_catching_panic(int64_t (*function)(int64_t, int64_t), i
     return call.outcome;
 }
 
+// Ends the call on this thread, which goes on where the call was made.
 static _Noreturn void endCall(void) {
     longjmp(caller, 1);
 }
