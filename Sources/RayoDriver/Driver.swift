@@ -134,12 +134,10 @@ public enum Driver {
     /// The command an invocation asks for, run on the file it names, with the host's files and tools.
     private struct CommandRun {
         var invocation: Invocation
-        /// The bytes of the file at a path, or nil when the file can't be read.
         var readFile: (String) -> [UInt8]?
         var toolchain: Toolchain
         var programOutput: ProgramOutput
 
-        /// Runs the command, and gives what it gave.
         func result() throws(CompilationError) -> Result {
             switch invocation.command {
             case .check: try check()
@@ -158,10 +156,13 @@ public enum Driver {
         private func build() throws(CompilationError) -> Result {
             // A path that names no executable stops `build` before it reads the file.
             let executable = try executable(building: invocation.path)
+
+            // Compile the file, and link it into the executable.
             try pipeline {
                 objectCode
                 Link(toolchain: toolchain, executable: executable)
             }.run(invocation.path)
+
             return Result(exitCode: 0, output: "", errors: "")
         }
 
@@ -194,6 +195,7 @@ public enum Driver {
 
         /// The executable that `build` writes for the source at `path`: the same path without `.rayo`.
         private func executable(building path: String) throws(CompilationError) -> URL {
+            // A path that doesn't end in '.rayo' would name the source itself.
             guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
             let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
             // An empty name, '.' or '..' would name the source's own directory.

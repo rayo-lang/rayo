@@ -1,5 +1,7 @@
 import Testing
+import RayoDiagnostics
 @testable import RayoDriver
+import RayoSource
 
 /// Adds its letter to the end of the text it's given.
 private struct Append: CompilationStep {
@@ -16,6 +18,15 @@ private struct Fail: CompilationStep {
 
     func run(_ text: String) throws(CompilationError) -> String {
         throw .failed(message)
+    }
+}
+
+/// Rejects the text it's given with `diagnostics`.
+private struct Reject: CompilationStep {
+    var diagnostics: [Diagnostic]
+
+    func run(_ text: String) throws(CompilationError) -> String {
+        throw .rejected(diagnostics)
     }
 }
 
@@ -40,5 +51,19 @@ struct PipelineTests {
             Fail(message: "second")
         }
         #expect(throws: CompilationError.failed("first")) { try steps.run(">") }
+    }
+
+    @Test func `a rejection gives every diagnostic of the step that rejects, as the step gave them`() {
+        let start = SourceLocation(line: 2, column: 5, offset: 20)
+        let diagnostics = [
+            Diagnostic(.notDeclared(name: "x"), at: SourceRange(start, start)),
+            Diagnostic(.noMain, at: SourceRange(start, start)),
+        ]
+        let steps = pipeline {
+            Append(letter: "a")
+            Reject(diagnostics: diagnostics)
+            Append(letter: "b")
+        }
+        #expect(throws: CompilationError.rejected(diagnostics)) { try steps.run(">") }
     }
 }
