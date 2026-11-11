@@ -12,7 +12,7 @@ public enum LLVMEmitter {
         let program = ProgramEmitter(sourcePath: sourcePath, for: target, checksOverflow: checksOverflow)
         let runtime = try Runtime(for: program)
 
-        program.emit(executable, calling: runtime.functions)
+        try program.emit(executable, calling: runtime.functions)
         try runtime.link(into: program.module)
         try ready(program.module, for: target, exporting: [Runtime.entryPoint])
         return try writeObjectCode(of: program.module, for: target)

@@ -41,17 +41,19 @@ struct OperatorModule: ~Copyable {
     }
 
     /// Defines `name(i64, i64) -> i64`, which takes its parameters as the type `operands` names and returns what
-    /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool.
+    /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool, or rethrows
+    /// what `expression` throws.
     mutating func define(
-        _ name: String, on operands: Operands, _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
-    ) -> (function: Function, givesBool: Bool) {
+        _ name: String, on operands: Operands,
+        _ expression: (borrowing OperatorModule, AnyValue, AnyValue) throws -> AnyValue,
+    ) rethrows -> (function: Function, givesBool: Bool) {
         // Make the function, and its operators.
         let function = beginFunction(name, taking: [types.int64, types.int64])
         operators = OperatorEmitter(into: function, types: types, panic: programModule.runtime.panic)
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are.
         let parameters = (0..<2).map { narrowed(function.parameter(at: $0), to: operands) }
-        let value = expression(self, parameters[0], parameters[1])
+        let value = try expression(self, parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
         let givesBool = IntValue<I1>(value) != nil
@@ -76,18 +78,18 @@ struct OperatorModule: ~Copyable {
     }
 
     /// Emits `left op right`.
-    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) -> AnyValue {
-        operators!.emit(op, left, right, at: Self.range, in: program)
+    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) throws(LLVMError) -> AnyValue {
+        try operators!.emit(op, left, right, at: Self.range, in: program)
     }
 
     /// Emits `left op right`, where `right` is an Int constant.
-    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: Int64) -> AnyValue {
-        self(op, left, AnyValue(LLVMConstInt(left.type.ref, UInt64(bitPattern: right), 1)))
+    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
+        try self(op, left, AnyValue(LLVMConstInt(left.type.ref, UInt64(bitPattern: right), 1)))
     }
 
     /// Emits `op operand`.
-    func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) -> AnyValue {
-        operators!.emit(op, on: operand, at: Self.range, in: program)
+    func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) throws(LLVMError) -> AnyValue {
+        try operators!.emit(op, on: operand, at: Self.range, in: program)
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.

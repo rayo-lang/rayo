@@ -17,42 +17,42 @@ enum OperatorOutcome: Equatable {
 
 /// What `left op right` comes to on two Ints, emitted as `build` does, and run in this process.
 func outcome(of op: BinaryOperator, _ left: Int64, _ right: Int64, in build: Build) throws -> OperatorOutcome {
-    try outcome(left, right, on: .ints, in: build) { emit, a, b in emit(op, a, b) }
+    try outcome(left, right, on: .ints, in: build) { emit, a, b in try emit(op, a, b) }
 }
 
 /// What `left op right` comes to on two Bools, run in this process.
 func outcome(of op: BinaryOperator, _ left: Bool, _ right: Bool) throws -> OperatorOutcome {
-    try outcome(left ? 1 : 0, right ? 1 : 0, on: .bools, in: .debug) { emit, a, b in emit(op, a, b) }
+    try outcome(left ? 1 : 0, right ? 1 : 0, on: .bools, in: .debug) { emit, a, b in try emit(op, a, b) }
 }
 
 /// What `op operand` comes to on an Int, emitted as `build` does, and run in this process.
 func outcome(of op: UnaryOperator, _ operand: Int64, in build: Build) throws -> OperatorOutcome {
-    try outcome(operand, 0, on: .ints, in: build) { emit, a, _ in emit(op, a) }
+    try outcome(operand, 0, on: .ints, in: build) { emit, a, _ in try emit(op, a) }
 }
 
 /// What `op operand` comes to on a Bool, run in this process.
 func outcome(of op: UnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
-    try outcome(operand ? 1 : 0, 0, on: .bools, in: .debug) { emit, a, _ in emit(op, a) }
+    try outcome(operand ? 1 : 0, 0, on: .bools, in: .debug) { emit, a, _ in try emit(op, a) }
 }
 
 /// What `expression` comes to on an Int in a release build: emitted where overflow isn't checked, optimised as a
 /// release build is, and run on `operand` in this process.
 func releaseOutcome(
     of operand: Int64,
-    _ expression: (borrowing OperatorModule, AnyValue) -> AnyValue,
+    _ expression: (borrowing OperatorModule, AnyValue) throws -> AnyValue,
 ) throws -> OperatorOutcome {
-    try outcome(operand, 0, on: .ints, in: .release) { emit, a, _ in expression(emit, a) }
+    try outcome(operand, 0, on: .ints, in: .release) { emit, a, _ in try expression(emit, a) }
 }
 
 /// Emits a function of two operands, as `build` does, whose result is the value `expression` makes of them, and
 /// runs it on `left` and `right` in this process.
 private func outcome(
     _ left: Int64, _ right: Int64, on operands: OperatorModule.Operands, in build: Build,
-    _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
+    _ expression: (borrowing OperatorModule, AnyValue, AnyValue) throws -> AnyValue,
 ) throws -> OperatorOutcome {
     // Emit `f`, and ready the module as the build does.
     var module = try OperatorModule(for: build)
-    let (_, givesBool) = module.define("f", on: operands, expression)
+    let (_, givesBool) = try module.define("f", on: operands, expression)
     try module.ready(exporting: ["f"])
 
     // Run `f` in this process, and read what it came to as the type it gave.

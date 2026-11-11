@@ -25,8 +25,8 @@ struct ProgramModule: ~Copyable {
     }
 
     /// Emits `executable` into the module, as the build does.
-    func emit(_ executable: IRExecutable) {
-        emitter.emit(executable, calling: runtime)
+    func emit(_ executable: IRExecutable) throws(LLVMError) {
+        try emitter.emit(executable, calling: runtime)
     }
 }
 

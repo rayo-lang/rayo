@@ -1,7 +1,6 @@
 internal import CLLVM
 
-/// A fault in a module or in the code that builds it, which LLVM reports: never one in the program the module
-/// compiles.
+/// A fault in a module or in the code that builds it: never one in the program the module compiles.
 public struct LLVMError: Error, Equatable {
     public var message: String
 

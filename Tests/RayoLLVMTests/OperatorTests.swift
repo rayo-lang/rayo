@@ -105,27 +105,27 @@ struct OperatorTests {
 @Suite("Operators optimised as a release build is")
 struct OptimizedOperatorTests {
     @Test func `Int.max + 1 wraps below Int.max`() throws {
-        #expect(try releaseOutcome(of: .max) { emit, a in emit(.less, emit(.add, a, 1), a) } == .bool(true))
+        #expect(try releaseOutcome(of: .max) { emit, a in try emit(.less, emit(.add, a, 1), a) } == .bool(true))
     }
 
     @Test func `Int.min - 1 wraps above Int.min`() throws {
-        #expect(try releaseOutcome(of: .min) { emit, a in emit(.greater, emit(.subtract, a, 1), a) } == .bool(true))
+        #expect(try releaseOutcome(of: .min) { emit, a in try emit(.greater, emit(.subtract, a, 1), a) } == .bool(true))
     }
 
     @Test func `Int.min * 2 wraps to 0`() throws {
-        #expect(try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.multiply, a, 2), 0) } == .bool(true))
+        #expect(try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.multiply, a, 2), 0) } == .bool(true))
     }
 
     @Test func `negating Int.min wraps to Int.min`() throws {
-        #expect(try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.negate, a), a) } == .bool(true))
+        #expect(try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.negate, a), a) } == .bool(true))
     }
 
     @Test func `Int.min / -1 wraps to Int.min, where the optimiser knows the divisor`() throws {
-        #expect(try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.divide, a, -1), a) } == .bool(true))
+        #expect(try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.divide, a, -1), a) } == .bool(true))
     }
 
     @Test func `7 / 2 rounds to 3, the quotient of a division with a remainder`() throws {
-        #expect(try releaseOutcome(of: 7) { emit, a in emit(.equal, emit(.divide, a, 2), 3) } == .bool(true))
+        #expect(try releaseOutcome(of: 7) { emit, a in try emit(.equal, emit(.divide, a, 2), 3) } == .bool(true))
     }
 
     @Test(arguments: [
