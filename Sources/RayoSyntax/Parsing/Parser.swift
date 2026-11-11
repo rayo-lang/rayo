@@ -2,7 +2,7 @@ import RayoDiagnostics
 import RayoSource
 
 /// A recursive-descent parser. It reports what it can't parse and recovers at the next statement, so one
-/// run lists every syntax error.
+/// run lists every syntax error, after the lexer's.
 public final class Parser {
     /// The `ErrorCode` case of a syntax error, which takes what the parser found where it expected something
     /// else.
@@ -12,7 +12,7 @@ public final class Parser {
     private var position = 0
     private var diagnostics: [Diagnostic]
 
-    /// A parser at the start of source held as UTF-8, with the errors the lexer found in it.
+    /// Lexes `bytes`, held as UTF-8, and starts at the first token, with the lexer's errors as the first diagnostics.
     private init(_ bytes: [UInt8]) {
         let (tokens, diagnostics) = Lexer.tokenize(bytes)
         self.tokens = tokens
