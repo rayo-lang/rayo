@@ -28,7 +28,7 @@ struct LLVMTypes {
         }
     }
 
-    /// The alignment, in bytes, that a value of `type` in memory has.
+    /// The alignment, in bytes, that a value of `type`, which isn't Void, has in memory.
     func alignment(of type: RayoType) -> UInt32 {
         UInt32(table.layout(of: type).alignment)
     }

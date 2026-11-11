@@ -82,14 +82,15 @@ final class FileChecker {
         var main: FunctionID?
         for (index, function) in file.functions.enumerated() {
             let id = FunctionID(index: index)
+            let isDeclared = declare(function, as: id)
             // A function that isn't declared, or isn't a `main`, starts nothing.
-            guard declare(function, as: id), function.name == "main" else { continue }
+            guard isDeclared, function.name == "main" else { continue }
             main = main ?? id
             // A `main` takes no parameters.
             if let first = function.parameters.first { errors.report(.mainTakesParameters, at: first.range) }
         }
 
-        // Declare the prelude's functions that the file's own leave free.
+        // Declare the prelude's functions that the file's structs and functions leave free.
         declarations.declarePrelude()
         return main
     }

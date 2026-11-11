@@ -30,6 +30,7 @@ public struct TypeTable: Equatable, Sendable {
         layouts[id.index]
     }
 
+    /// How a value of `type`, which isn't Void, lies in memory.
     public func layout(of type: RayoType) -> Layout {
         Self.layout(of: type) { layouts[$0.index].layout }
     }

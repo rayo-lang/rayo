@@ -12,7 +12,7 @@ struct ProgramEmitter {
     /// Defines the program's functions in the module, its structs as named LLVM types.
     func emit(_ program: IRProgram) {
         let types = LLVMTypes(program.types, in: module)
-        let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: program, as: types) }
+        let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: program, using: types) }
 
         // Emit the bodies once every function is declared, so a body can call a function that comes after it.
         for (function, llvmFunction) in zip(program.functions, functions) {
@@ -24,7 +24,7 @@ struct ProgramEmitter {
 
     /// Declares the function `id`: the program's `main` as `rayo.main`, which the runtime's C entry point runs, and
     /// any other function by its name and parameters, such as `f(_: Int)`.
-    private func declare(_ id: FunctionID, of program: IRProgram, as types: LLVMTypes) -> FunctionValue {
+    private func declare(_ id: FunctionID, of program: IRProgram, using types: LLVMTypes) -> FunctionValue {
         let function = program.functions[id.index]
         // A name with parentheses is none that the runtime or the C library defines or calls.
         let name = id == program.main ? "rayo.main" : function.name
