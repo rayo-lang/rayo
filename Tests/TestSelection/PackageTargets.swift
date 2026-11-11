@@ -16,12 +16,12 @@ public struct PackageTargets: Decodable, Sendable {
     /// A target's dependency, on a target of the package or on a product, which `swift package dump-package`
     /// writes as an object with one key, naming the kind, whose value is an array that starts with the name.
     struct Dependency: Decodable, Sendable {
-        /// The name of the target of the package depended on, or nil for a product.
+        /// The name a `byName` or `target` dependency gives, or nil for a product.
         let targetName: String?
 
         init(from decoder: any Decoder) throws {
-            // A product is another package's, so it names no target of this one.
             let container = try decoder.container(keyedBy: Kind.self)
+            // A product is another package's, so it names no target of this one.
             guard let kind = [Kind.byName, .target].first(where: container.contains) else {
                 targetName = nil
                 return
@@ -52,7 +52,7 @@ public struct PackageTargets: Decodable, Sendable {
         return names
     }
 
-    /// Returns the names, in order, of the test targets that reach one of `changed`.
+    /// Returns the names, in order of name, of the test targets that reach one of `changed`.
     func testTargets(reaching changed: Set<String>) -> [String] {
         let targetsByName = Dictionary(uniqueKeysWithValues: targets.map { ($0.name, $0) })
         return targets.filter { $0.isTest && Self.reaches($0, changed, in: targetsByName) }.map(\.name).sorted()
