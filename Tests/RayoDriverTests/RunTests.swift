@@ -93,18 +93,24 @@ private func environment(searchingFirst directory: URL) -> [String: String] {
 /// The symbols `executable` exports, as the LLVM install's tools list them.
 private func symbols(exportedBy executable: URL) throws -> [String] {
     #if os(Windows)
-    // An executable's export table lists each symbol it exports on a line of its own, as its `Name: `.
-    let listing = try runExecutable(llvmTool("llvm-readobj"), arguments: ["--coff-exports", executable.path])
-    return listing.split(whereSeparator: \.isNewline).compactMap { line in
-        let field = line.drop { $0 == " " }
-        return field.hasPrefix("Name: ") ? String(field.dropFirst("Name: ".count)) : nil
-    }
+    // An executable's export table lists each symbol it exports by its name.
+    return try values(of: "Name", in: executable, listedBy: "--coff-exports")
     #else
     // Each line of the symbol table ends in a symbol's name.
     let arguments = ["--extern-only", "--defined-only", executable.path]
     let listing = try runExecutable(llvmTool("llvm-nm"), arguments: arguments)
     return listing.split(whereSeparator: \.isNewline).compactMap { $0.split(separator: " ").last.map(String.init) }
     #endif
+}
+
+/// The values of each `field` that the LLVM install's `llvm-readobj`, given `option`, lists for `executable`.
+private func values(of field: String, in executable: URL, listedBy option: String) throws -> [String] {
+    // `llvm-readobj` lists each field on a line of its own, indented, as its name, `: ` and its value.
+    let listing = try runExecutable(llvmTool("llvm-readobj"), arguments: [option, executable.path])
+    return listing.split(whereSeparator: \.isNewline).compactMap { line in
+        let entry = line.drop { $0 == " " }
+        return entry.hasPrefix(field + ": ") ? String(entry.dropFirst(field.count + 2)) : nil
+    }
 }
 
 /// The LLVM install's tool `name`.
@@ -257,14 +263,8 @@ struct BuildTests {
             #expect(rayo(["build"] + options + ["empty.rayo"], in: directory) ==
                 CommandResult(exitCode: 0, output: "", errors: ""))
 
-            // The file headers give the stack the executable reserves on a line of its own.
             let executable = directory.appendingPathComponent(Executable.fileName("empty"))
-            let headers = try runExecutable(llvmTool("llvm-readobj"), arguments: ["--file-headers", executable.path])
-            let reserves = headers.split(whereSeparator: \.isNewline).compactMap { line in
-                let field = line.drop { $0 == " " }
-                return field.hasPrefix("SizeOfStackReserve: ") ? field.dropFirst("SizeOfStackReserve: ".count) : nil
-            }
-            #expect(reserves == ["16777216"])
+            #expect(try values(of: "SizeOfStackReserve", in: executable, listedBy: "--file-headers") == ["16777216"])
         }
     }
     #endif

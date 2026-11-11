@@ -155,7 +155,7 @@ struct Toolchain {
     }
     #endif
 
-    /// What every link gives the linker for the size of a program's main thread's stack.
+    // What every link gives the linker for the size of a program's main thread's stack.
     #if os(Windows)
     // Windows reserves 1 MiB where macOS and Linux give 8 MiB, and a debug build's frames are larger on x64 Windows,
     // which has each call reserve 32 bytes for its callee. A stack of 16 MiB lets a program recurse at least as deep.
