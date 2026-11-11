@@ -74,14 +74,16 @@ The program runtime is the code every Rayo program links besides its own: the C 
 
 `rayoc` embeds those files in its own binary. For each program it parses them into the program's LLVM context, links them into the program's module, and then verifies and compiles the whole. So the runtime is part of every program's object code, and nothing is left to find when the program is linked or run.
 
+Most of the runtime is the same everywhere. What it needs from the platform's C runtime, to ready a run and to write to standard error, is in `host-posix.ll` for macOS and Linux and in `host-windows.ll` for Windows, and `rayoc` links in the one for the platform it runs on.
+
 ## Linking
 
 clang drives every link, so the platform's C startup files, C library and system library paths are the ones it would use for a C program. Which linker it runs is a choice of `rayo build` and `rayo run`:
 
 | Option | Linker |
 | --- | --- |
-| `--linker=lld`, the default | LLD: `ld64.lld` for Mach-O on macOS, `ld.lld` for ELF on Linux |
-| `--linker=platform` | The platform's own: the `ld` that `xcrun --find ld` names on macOS, or `/usr/bin/ld` where it names none, and `/usr/bin/ld` on Linux |
+| `--linker=lld`, the default | LLD: `ld64.lld` for Mach-O on macOS, `ld.lld` for ELF on Linux, and `lld-link` for COFF on Windows |
+| `--linker=platform` | The platform's own: the `ld` that `xcrun --find ld` names on macOS, or `/usr/bin/ld` where it names none; `/usr/bin/ld` on Linux; and on Windows the `link.exe` of the Visual Studio that clang links the C runtime from |
 
 LLD is the default because it is the same linker, from the same LLVM, on every machine. The platform's linker is there for when a platform's own tools are required. Neither is taken from the search path.
 

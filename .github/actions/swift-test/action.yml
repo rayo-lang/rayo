@@ -8,10 +8,6 @@ inputs:
   llvm-version:
     description: The exact build of LLVM the compiler links, which a cached build depends on.
     required: true
-  arguments:
-    description: What swift test takes besides, such as the tests a platform can't run.
-    required: false
-    default: ""
   changed-paths:
     description: The paths a pull request changes that the build reads, as a JSON array; without them, every test runs.
     required: false
@@ -73,15 +69,13 @@ runs:
     - name: Test
       shell: bash
       env:
-        ARGUMENTS: ${{ inputs.arguments }}
         SELECTION: ${{ steps.tests.outputs.selection }}
-      # The arguments are words, split where they have spaces.
       run: |
         case "$SELECTION" in
-          all) swift test $ARGUMENTS ;;
+          all) swift test ;;
           # A change no test target reaches still has to build.
           none) swift build --build-tests ;;
-          *) swift test $ARGUMENTS --filter "$SELECTION" ;;
+          *) swift test --filter "$SELECTION" ;;
         esac
     - name: Save the build
       if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'

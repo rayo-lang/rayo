@@ -41,7 +41,7 @@ struct DriverTests {
     @Test("a command that has to compile fails without its rayoc", arguments: ["check", "build", "run"])
     func compilerMissing(command: String) {
         #expect(Driver.run([command, "a.rayo"], compiler: noCompiler) ==
-            CommandResult(exitCode: 1, output: "", errors: "rayo: can't find rayoc at '/nonexistent/rayoc'\n"))
+            CommandResult(exitCode: 1, output: "", errors: "rayo: can't find rayoc at '\(noCompiler.path)'\n"))
     }
 
     @Test(arguments: [
@@ -84,6 +84,8 @@ struct DriverTests {
         }
     }
 
+    // Windows ends a process by an exception, not a signal.
+    #if !os(Windows)
     @Test(arguments: ["check", "build", "run"])
     func `a rayoc that a signal ends fails the command, as a shell reports it, with how rayoc ended`(
         command: String,
@@ -96,6 +98,7 @@ struct DriverTests {
                 exitCode: 128 + 9, output: "", errors: "rayoc: started\nrayo: rayoc was ended by signal 9\n"))
         }
     }
+    #endif
 
     @Test(arguments: ["-o", "--check", "--"])
     func `a file named like one of rayoc's options is the file the command compiles`(name: String) throws {

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RayoDriver
+import RayoLLVMInstall
 
 /// Marks the bundle these tests build into, so that its place on disk can be found.
 private final class TestBundle {}
@@ -10,7 +11,7 @@ func builtProduct(_ name: String) -> URL {
     let bundle = Bundle(for: TestBundle.self).bundleURL
     // On macOS the tests are an `.xctest` bundle beside the products; elsewhere they are an executable among them.
     let products = bundle.pathExtension == "xctest" ? bundle.deletingLastPathComponent() : bundle
-    return products.appendingPathComponent(name)
+    return products.appendingPathComponent(Executable.fileName(name))
 }
 
 /// Runs the built `rayo` with `arguments` in `directory`, as a user would there, and gives what it exits with and

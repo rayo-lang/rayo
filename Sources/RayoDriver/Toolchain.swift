@@ -69,7 +69,7 @@ struct Toolchain {
     func linkAndRun(_ objectFile: URL) throws(CommandError) -> CommandResult {
         try Self.withTemporaryDirectory { directory throws(CommandError) in
             // Link the executable inside the directory, so it goes with the directory once the run ends.
-            let executable = directory.appendingPathComponent("program")
+            let executable = directory.appendingPathComponent(Executable.fileName("program"))
             try link(objectFile, to: executable)
 
             // Run it, and give how it ended and what of its output was captured.
@@ -112,14 +112,25 @@ struct Toolchain {
                     'swift package purge-cache' and build rayo again, or link with --linker=platform
                     """)
             }
+            #if os(Windows)
+            // clang's driver for MSVC takes no --ld-path, and runs the linker -fuse-ld names by its path.
+            return ["-fuse-ld=\(tools.lld.path)"]
+            #else
             // clang chooses the arguments it gives the linker by -fuse-ld, and runs the linker --ld-path names.
             return ["-fuse-ld=lld", "--ld-path=\(tools.lld.path)"]
+            #endif
         // The platform's linker is found where the platform keeps it.
         case .platform:
+            #if os(Windows)
+            // clang runs the `link.exe` of the Visual Studio whose libraries it links, not one on the search path.
+            return ["-fuse-ld=link"]
+            #else
             return ["-fuse-ld=ld", "--ld-path=\(try platformLinker().path)"]
+            #endif
         }
     }
 
+    #if !os(Windows)
     /// Finds the platform's linker: on macOS, the `ld` of the developer tools `xcrun` selects, or `/usr/bin/ld`
     /// where it selects none; on Linux, `/usr/bin/ld`. Never an `ld` the search path happens to hold first.
     private func platformLinker() throws(CommandError) -> URL {
@@ -140,6 +151,7 @@ struct Toolchain {
         }
         return linker
     }
+    #endif
 
     /// Whether `url` names a file, not a directory, that can be run.
     private static func isExecutableFile(_ url: URL) -> Bool {

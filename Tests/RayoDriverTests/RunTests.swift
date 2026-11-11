@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RayoDriver
+import RayoLLVMInstall
 import RayoRuntime
 import ToolStandIn
 
@@ -60,10 +61,11 @@ private func runEmptyMain(options: [String] = [], linkTools: LinkTools) throws -
     }
 }
 
-/// What `executable` writes to its standard output, once it exits with 0.
-private func runExecutable(_ executable: URL) throws -> String {
+/// What `executable` writes to its standard output when run with `arguments`, once it exits with 0.
+private func runExecutable(_ executable: URL, arguments: [String] = []) throws -> String {
     let process = Process()
     process.executableURL = executable
+    process.arguments = arguments
     let output = Pipe()
     process.standardOutput = output
     try process.run()
@@ -71,6 +73,43 @@ private func runExecutable(_ executable: URL) throws -> String {
     process.waitUntilExit()
     #expect(process.terminationStatus == 0)
     return written
+}
+
+/// The environment these tests run in, with `directory` first on its search path.
+private func environment(searchingFirst directory: URL) -> [String: String] {
+    var environment = ProcessInfo.processInfo.environment
+    #if os(Windows)
+    // Windows reads an environment variable's name in any case, and its own name for the search path is `Path`.
+    let name = environment.keys.first { $0.uppercased() == "PATH" } ?? "Path"
+    let separator = ";"
+    #else
+    let name = "PATH"
+    let separator = ":"
+    #endif
+    environment[name] = directory.path + separator + environment[name, default: ""]
+    return environment
+}
+
+/// The symbols `executable` exports, as the LLVM install's tools list them.
+private func symbols(exportedBy executable: URL) throws -> [String] {
+    #if os(Windows)
+    // An executable's export table lists each symbol it exports on a line of its own, as its `Name: `.
+    let listing = try runExecutable(llvmTool("llvm-readobj"), arguments: ["--coff-exports", executable.path])
+    return listing.split(whereSeparator: \.isNewline).compactMap { line in
+        let field = line.drop { $0 == " " }
+        return field.hasPrefix("Name: ") ? String(field.dropFirst("Name: ".count)) : nil
+    }
+    #else
+    // Each line of the symbol table ends in a symbol's name.
+    let arguments = ["--extern-only", "--defined-only", executable.path]
+    let listing = try runExecutable(llvmTool("llvm-nm"), arguments: arguments)
+    return listing.split(whereSeparator: \.isNewline).compactMap { $0.split(separator: " ").last.map(String.init) }
+    #endif
+}
+
+/// The LLVM install's tool `name`.
+private func llvmTool(_ name: String) -> URL {
+    LinkTools.installed.clang.deletingLastPathComponent().appendingPathComponent(Executable.fileName(name))
 }
 
 struct BuildTests {
@@ -81,7 +120,7 @@ struct BuildTests {
             #expect(rayo(["build", "answer.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
             let program = Process()
-            program.executableURL = directory.appendingPathComponent("answer")
+            program.executableURL = directory.appendingPathComponent(Executable.fileName("answer"))
             let output = Pipe()
             program.standardOutput = output
             try program.run()
@@ -148,61 +187,65 @@ struct BuildTests {
             // Records that it ran, and hands what it is given to the installed LLD.
             let ran = directory.appendingPathComponent("lld-ran")
             let standIn = ToolStandIn([.touch(ran)], then: .handOff(toToolAt: LinkTools.installed.lld))
-            let lld = try install(standIn, as: LinkTools.installed.lld.lastPathComponent, in: directory)
+            let lld = try install(standIn, as: "lld", in: directory)
             let source = try save("func main() { print(42) }", as: "answer.rayo", in: directory)
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
             let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
             #expect(result == CommandResult(exitCode: 0, output: "", errors: ""))
-            #expect(try runExecutable(directory.appendingPathComponent("answer")) == "42\n")
+            #expect(try runExecutable(directory.appendingPathComponent(Executable.fileName("answer"))) == "42\n")
             #expect(FileManager.default.fileExists(atPath: ran.path) == linksWithLLD)
         }
     }
 
     @Test("linking with LLD needs the LLD of the LLVM install, and the platform's linker doesn't")
     func lldMissing() throws {
-        let lld = URL(fileURLWithPath: "/nonexistent/ld.lld")
-        let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
-        #expect(try runEmptyMain(linkTools: tools) == CommandResult(exitCode: 1, output: "", errors: """
-            rayo: can't find LLD at '/nonexistent/ld.lld': install LLD 23, run 'swift package purge-cache' and \
-            build rayo again, or link with --linker=platform
+        // The closure throws only from inside `#expect`, which its type isn't inferred from.
+        try withTemporaryDirectory { directory throws in
+            let lld = directory.appendingPathComponent("nonexistent", isDirectory: true)
+                .appendingPathComponent(Executable.fileName("lld"))
+            let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
+            #expect(try runEmptyMain(linkTools: tools) == CommandResult(exitCode: 1, output: "", errors: """
+                rayo: can't find LLD at '\(lld.path)': install LLD 23, run 'swift package purge-cache' and \
+                build rayo again, or link with --linker=platform
 
-            """))
-        #expect(try runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
-            CommandResult(exitCode: 0, output: "", errors: ""))
+                """))
+            #expect(try runEmptyMain(options: ["--linker=platform"], linkTools: tools) ==
+                CommandResult(exitCode: 0, output: "", errors: ""))
+        }
     }
 
-    @Test("the platform's linker is the platform's, not an ld first on the search path")
+    @Test("the platform's linker is the platform's, not a linker of its name first on the search path")
     func platformLinkerIgnoresSearchPath() throws {
         try withTemporaryDirectory { directory in
-            let ran = directory.appendingPathComponent("ld-ran")
-            _ = try install(ToolStandIn([.touch(ran)], then: .exit(1)), as: "ld", in: directory)
-            let path = ProcessInfo.processInfo.environment["PATH", default: ""]
+            #if os(Windows)
+            let name = "link"
+            #else
+            let name = "ld"
+            #endif
+            let ran = directory.appendingPathComponent("linker-ran")
+            _ = try install(ToolStandIn([.touch(ran)], then: .exit(1)), as: name, in: directory)
             let source = try save("func main() { print(42) }", as: "main.rayo", in: directory)
             let result = Driver.run(["run", "--linker=platform", source], compiler: compiler,
-                                    environment: ["PATH": "\(directory.path):\(path)"])
+                                    environment: environment(searchingFirst: directory))
             #expect(result == CommandResult(exitCode: 0, output: "42\n", errors: ""))
             #expect(!FileManager.default.fileExists(atPath: ran.path))
         }
     }
 
-    @Test("an executable exports the C entry point and nothing of the program or the runtime")
+    @Test("an executable exports nothing of the program or the runtime")
     func exportedSymbols() throws {
         try withTemporaryDirectory { directory in
             _ = try save("func main() {}", as: "empty.rayo", in: directory)
             #expect(rayo(["build", "empty.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
 
-            let nm = Process()
-            nm.executableURL = LinkTools.installed.clang.deletingLastPathComponent()
-                .appendingPathComponent("llvm-nm")
-            nm.arguments = ["--extern-only", "--defined-only", directory.appendingPathComponent("empty").path]
-            let listing = Pipe()
-            nm.standardOutput = listing
-            try nm.run()
-            let symbols = String(decoding: listing.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                .split(separator: "\n").compactMap { $0.split(separator: " ").last.map(String.init) }
-            nm.waitUntilExit()
-            #expect(symbols.contains { $0 == "main" || $0 == "_main" })
-            #expect(symbols.filter { $0.contains("rayo.") } == [])
+            let exported = try symbols(exportedBy: directory.appendingPathComponent(Executable.fileName("empty")))
+            #if os(Windows)
+            // A Windows executable exports only the functions marked for export, and the C entry point is none.
+            #expect(exported == [])
+            #else
+            #expect(exported.contains { $0 == "main" || $0 == "_main" })
+            #expect(exported.filter { $0.contains("rayo.") } == [])
+            #endif
         }
     }
 
@@ -214,7 +257,7 @@ struct BuildTests {
                 CommandResult(exitCode: 0, output: "", errors: ""))
 
             let executable = Process()
-            executable.executableURL = directory.appendingPathComponent("overflow")
+            executable.executableURL = directory.appendingPathComponent(Executable.fileName("overflow"))
             let errors = Pipe()
             executable.standardError = errors
             try executable.run()

@@ -9,7 +9,7 @@ public enum Driver {
 
         commands:
           check    check the file and report its errors
-          build    compile the file to an executable beside it, named without '.rayo'
+          build    compile the file to an executable beside it, named after it
           run      compile the file and run it
 
         build modes:
@@ -165,17 +165,19 @@ public enum Driver {
                                  errors: compiled.errors + compiled.value.errors)
         }
 
-        /// Returns the executable for the source at `path`, which is the same path without `.rayo`, or fails when
-        /// that names no file apart from the source.
+        /// Returns the executable for the source at `path`: the same path without `.rayo`, and on Windows with
+        /// `.exe`. Fails when `path` doesn't end in `.rayo`, or has no name before it.
         private func executable(building path: String) throws(CommandError) -> URL {
-            // A path that doesn't end in '.rayo' would name the source itself.
+            // A path that doesn't end in '.rayo' isn't a source's, and where executables take no extension it would
+            // name the source itself.
             guard path.hasSuffix(".rayo") else { throw .failed("'\(path)' doesn't end in '.rayo'") }
             let name = URL(fileURLWithPath: path).lastPathComponent.dropLast(".rayo".count)
-            // An empty name, '.' or '..' would name the source's own directory.
+            // An empty name, '.' or '..' names no program, and where executables take no extension it would name the
+            // source's own directory.
             guard !name.isEmpty && name != "." && name != ".." else {
                 throw .failed("'\(path)' has no name before '.rayo'")
             }
-            return URL(fileURLWithPath: String(path.dropLast(".rayo".count)))
+            return URL(fileURLWithPath: Executable.fileName(String(path.dropLast(".rayo".count))))
         }
     }
 
