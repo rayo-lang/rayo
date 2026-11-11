@@ -54,24 +54,33 @@ swift test
 
 ## LLVM
 
-`rayoc` builds against one major release of LLVM, 23, and links its shared library, or on Windows `LLVM-C`, the one that holds the C API, since MSVC can't build LLVM as one library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
+`rayoc` builds against one major release of LLVM, 23, and links its shared library. On Windows it links `LLVM-C`, which holds the C API, since MSVC can't build LLVM as one library. `rayo` links programs with that release's clang and LLD, and links no LLVM library itself. Install all three before you build:
 
 | Platform | Install |
 | --- | --- |
 | macOS | `brew install llvm@23 lld@23` |
 | Ubuntu or Debian | `llvm-23-dev clang-23 lld-23`, from [apt.llvm.org](https://apt.llvm.org) or the distribution |
-| Windows x64 | The archive `clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz`, from [LLVM's releases](https://github.com/llvm/llvm-project/releases), unpacked anywhere |
+| Windows x64 | The archive `clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz`, from [LLVM's releases](https://github.com/llvm/llvm-project/releases) |
 
-On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against their C runtime, and `--linker=platform` runs their `link.exe`. LLVM's installer for Windows holds no headers, so only the archive will do. Windows' own `tar` takes many minutes over it, where 7-Zip takes seconds. Then set `LLVM_PREFIX` to the directory the archive unpacked into, and put its `bin` on the search path, where `rayoc` loads `LLVM-C.dll` from:
+On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against Visual Studio's C runtime, and `--linker=platform` runs its `link.exe`.
+
+LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. Unpack it, and move its directory to where LLVM is to stay, such as `C:\llvm`:
+
+```powershell
+7z x -so clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz | 7z x -si -ttar -oC:\
+Move-Item C:\clang+llvm-23.x.y-x86_64-pc-windows-msvc C:\llvm
+```
+
+`Package.swift` looks for LLVM nowhere on Windows, so set `LLVM_PREFIX` to that directory, and put its `bin` on the search path, where `rayoc` loads `LLVM-C.dll` from. `$env:` sets them for the shell you are in, and `[Environment]::SetEnvironmentVariable` with `"User"` sets them for every shell you open after:
 
 ```powershell
 $env:LLVM_PREFIX = "C:\llvm"
-$env:Path = "C:\llvm\bin;$env:Path"
+$env:Path = "$env:LLVM_PREFIX\bin;$env:Path"
 ```
 
 `Package.swift` looks for LLVM 23 under `/usr/lib/llvm-23`, where apt installs it, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
-`rayo` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
+`rayo` runs the `clang` in that LLVM's `bin`. It looks for LLD 23 in that LLVM's prefix, then in `/usr/lib/llvm-23`, where apt installs it, and then in `opt/lld@23` and `opt/lld` in Homebrew's prefix. On Windows it looks only in LLVM's prefix, whose archive holds LLD. Where LLD 23 is installed anywhere else, set `LLD_PREFIX` to the directory that holds its `bin`. Both paths are fixed when `rayo` is built, so the clang and LLD on the search path don't matter. A missing clang or LLD is an error when a program is linked, not when `rayo` is built.
 
 SwiftPM caches what `Package.swift` found, so it doesn't look again when the LLVM install changes. After installing, moving or upgrading LLVM, run `swift package purge-cache`, which clears that cache, and build again.
 
