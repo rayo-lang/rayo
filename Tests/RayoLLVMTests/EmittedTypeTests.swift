@@ -106,10 +106,10 @@ struct EmittedTypeTests {
         )
     }
 
-    /// Emits `program` into a new module for the host, as a debug build does, and runs `checks` on the module.
-    private func withEmitted(_ program: IRExecutable, _ checks: (ModuleBuilder) throws -> Void) throws {
+    /// Emits `executable` into a new module for the host, as a debug build does, and runs `checks` on the module.
+    private func withEmitted(_ executable: IRExecutable, _ checks: (ModuleBuilder) throws -> Void) throws {
         try withProgramModule(for: .debug) { programModule in
-            programModule.emitter.emit(program)
+            programModule.emitter.emit(executable)
             try checks(programModule.module)
         }
     }

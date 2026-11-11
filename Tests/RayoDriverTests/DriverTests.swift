@@ -7,6 +7,13 @@ import ToolStandIn
 /// A `rayoc` that no file is: the commands that stop before they compile never run it, and the others fail without it.
 private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
 
+/// What `rayo build` and `rayo run` give for `lib.rayo`, a file without `main`.
+private let libraryRejected = CommandResult(exitCode: 1, output: "", errors: """
+    lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into an \
+    executable or run
+
+    """)
+
 /// Installs a `rayoc` in `directory` that writes "rayoc: a note" to its standard error, then compiles as the built
 /// `rayoc` does, and returns it.
 private func notingCompiler(in directory: URL) throws -> URL {
@@ -192,14 +199,6 @@ struct DriverTests {
             #expect(rayo(["run", "lib.rayo"], in: directory) == libraryRejected)
         }
     }
-
-    /// What `rayo build` and `rayo run` give for `lib.rayo`, a file without `main`.
-    private let libraryRejected = CommandResult(exitCode: 1, output: "", errors: """
-        lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into an \
-        executable or run
-
-        """)
-
     @Test func `a file rayoc can't read fails the command with rayoc's error`() throws {
         try withTemporaryDirectory { directory in
             #expect(rayo(["run", "missing.rayo"], in: directory) ==
