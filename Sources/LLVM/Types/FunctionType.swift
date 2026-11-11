@@ -10,6 +10,8 @@ public struct FunctionType: TypeHandle, Equatable {
 
     public var anyType: AnyType { AnyType(ref) }
 
+    public var result: AnyType { AnyType(LLVMGetReturnType(ref)) }
+
     public var parameters: [AnyType] {
         var parameters = [LLVMTypeRef?](repeating: nil, count: Int(LLVMCountParamTypes(ref)))
         LLVMGetParamTypes(ref, &parameters)

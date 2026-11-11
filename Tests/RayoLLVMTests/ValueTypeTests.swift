@@ -1,4 +1,3 @@
-import CLLVM
 @testable import RayoLLVM
 import RayoSema
 import Testing
@@ -8,15 +7,13 @@ struct ValueTypeTests {
     @Test(arguments: [(RayoType.int, UInt32(64)), (RayoType.bool, UInt32(1))])
     func `an Int is held in a 64-bit integer, and a Bool in a 1-bit one`(type: RayoType, width: UInt32) throws {
         try withTypes(of: []) { types in
-            let llvmType = types.llvmType(type).ref
-            #expect(LLVMGetTypeKind(llvmType) == LLVMIntegerTypeKind)
-            #expect(LLVMGetIntTypeWidth(llvmType) == width)
+            #expect(types.llvmType(type).integerWidth == width)
         }
     }
 
     @Test func `a function that returns nothing returns LLVM's void`() throws {
         try withTypes(of: []) { types in
-            #expect(LLVMGetTypeKind(types.llvmType(.void).ref) == LLVMVoidTypeKind)
+            #expect(types.llvmType(.void).isVoid)
         }
     }
 
@@ -27,8 +24,8 @@ struct ValueTypeTests {
         ])
 
         try withTypes(of: [pair]) { types in
-            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Pair"))).ref
-            #expect(text(of: llvmType) == "%Pair = type <{ i64, i1, i1, [6 x i8] }>")
+            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Pair")))
+            #expect(llvmType.text == "%Pair = type <{ i64, i1, i1, [6 x i8] }>")
         }
     }
 
@@ -39,8 +36,8 @@ struct ValueTypeTests {
         let inner = StructType(name: "Inner", fields: [Field(name: "count", type: .int)])
 
         try withTypes(of: [outer, inner]) { types in
-            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Outer"))).ref
-            #expect(text(of: llvmType) == "%Outer = type <{ %Inner }>")
+            let llvmType = types.llvmType(.structure(StructID(index: 0, name: "Outer")))
+            #expect(llvmType.text == "%Outer = type <{ %Inner }>")
         }
     }
 

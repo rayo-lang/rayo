@@ -1,4 +1,3 @@
-import CLLVM
 import LLVM
 import RayoIR
 @testable import RayoLLVM
@@ -16,8 +15,8 @@ struct EmittedTypeTests {
         // The emitted signature takes an i64 and an i1, and returns the LLVM type of `result`.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let signature = try signature(of: irFunction.name, in: module)
-            #expect(try parameterTypes(of: signature) == ["i64", "i1"])
-            #expect(text(of: LLVMGetReturnType(signature)) == resultText)
+            #expect(signature.parameters.map(\.text) == ["i64", "i1"])
+            #expect(signature.result.text == resultText)
         }
     }
 
@@ -33,16 +32,16 @@ struct EmittedTypeTests {
         let pairText = "%Pair = type <{ i64, i1, [7 x i8] }>"
         try withEmitted(program(of: [emptyMain, relay], types: pairTable)) { module in
             let signature = try signature(of: relay.name, in: module)
-            #expect(try parameterTypes(of: signature) == [pairText])
-            #expect(text(of: LLVMGetReturnType(signature)) == pairText)
+            #expect(signature.parameters.map(\.text) == [pairText])
+            #expect(signature.result.text == pairText)
         }
     }
 
     @Test func `a function that returns nothing is declared returning void`() throws {
         try withEmitted(program(of: [emptyMain])) { module in
             let signature = try signature(of: "rayo.main", in: module)
-            #expect(try parameterTypes(of: signature) == [])
-            #expect(text(of: LLVMGetReturnType(signature)) == "void")
+            #expect(signature.parameters.map(\.text) == [])
+            #expect(signature.result.text == "void")
         }
     }
 
@@ -52,7 +51,7 @@ struct EmittedTypeTests {
         // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
             let llvmFunction = try function(named: irFunction.name, in: module)
-            let slotTypes = instructions(LLVMAlloca, in: llvmFunction).map { text(of: LLVMGetAllocatedType($0)) }
+            let slotTypes = instructions(.allocate, in: llvmFunction).map(\.allocatedType?.text)
             #expect(slotTypes == ["i64", "i1", "i1", "i64"])
         }
     }
@@ -62,8 +61,8 @@ struct EmittedTypeTests {
 
         // The emitted `main` aligns the Bool's slot to 1, and the Pair's and the Int's to 8.
         try withEmitted(program(of: [main], types: pairTable)) { module in
-            let slots = instructions(LLVMAlloca, in: try function(named: "rayo.main", in: module))
-            #expect(slots.map(LLVMGetAlignment) == [1, 8, 8])
+            let slots = instructions(.allocate, in: try function(named: "rayo.main", in: module))
+            #expect(slots.map(\.alignment) == [1, 8, 8])
         }
     }
 
@@ -76,8 +75,8 @@ struct EmittedTypeTests {
         // The emitted copy reads and writes 8-byte-aligned memory.
         try withEmitted(program(of: [main], types: pairTable)) { module in
             let llvmMain = try function(named: "rayo.main", in: module)
-            #expect(instructions(LLVMLoad, in: llvmMain).map(LLVMGetAlignment) == [8])
-            #expect(instructions(LLVMStore, in: llvmMain).map(LLVMGetAlignment) == [8])
+            #expect(instructions(.load, in: llvmMain).map(\.alignment) == [8])
+            #expect(instructions(.store, in: llvmMain).map(\.alignment) == [8])
         }
     }
 
@@ -116,37 +115,18 @@ struct EmittedTypeTests {
     }
 
     /// The function named `name` in `module`.
-    private func function(named name: String, in module: borrowing Module) throws -> LLVMValueRef {
-        try #require(LLVMGetNamedFunction(module.ref, name))
+    private func function(named name: String, in module: borrowing Module) throws -> Function {
+        let found = module.function(named: name)
+        return try #require(found)
     }
 
     /// The type of the function named `name` in `module`: its parameters and its result.
-    private func signature(of name: String, in module: borrowing Module) throws -> LLVMTypeRef {
-        try #require(LLVMGlobalGetValueType(try function(named: name, in: module)))
-    }
-
-    /// The types of the parameters `signature` takes, as LLVM writes them.
-    private func parameterTypes(of signature: LLVMTypeRef) throws -> [String] {
-        var parameters = [LLVMTypeRef?](repeating: nil, count: Int(LLVMCountParamTypes(signature)))
-        LLVMGetParamTypes(signature, &parameters)
-        return try parameters.map { text(of: try #require($0)) }
+    private func signature(of name: String, in module: borrowing Module) throws -> FunctionType {
+        try function(named: name, in: module).type
     }
 
     /// The instructions of `function` that `opcode` names, in the order its blocks hold them.
-    private func instructions(_ opcode: LLVMOpcode, in function: LLVMValueRef) -> [LLVMValueRef] {
-        var found: [LLVMValueRef] = []
-        var block = LLVMGetFirstBasicBlock(function)
-        while let currentBlock = block {
-            // Walk the block's instructions in order.
-            var instruction = LLVMGetFirstInstruction(currentBlock)
-            while let current = instruction {
-                // An instruction of the opcode is one the caller checks, such as a slot's load or store; any other
-                // is passed over.
-                if LLVMGetInstructionOpcode(current) == opcode { found.append(current) }
-                instruction = LLVMGetNextInstruction(current)
-            }
-            block = LLVMGetNextBasicBlock(currentBlock)
-        }
-        return found
+    private func instructions(_ opcode: Opcode, in function: Function) -> [Instruction] {
+        function.blocks.flatMap(\.instructions).filter { $0.opcode == opcode }
     }
 }

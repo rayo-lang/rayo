@@ -22,6 +22,17 @@ public struct Function: ValueHandle, GlobalValue, Equatable {
         AnyValue(LLVMGetParam(ref, UInt32(index)))
     }
 
+    /// The function's blocks, in order, the entry block first. A function the module only declares has none.
+    public var blocks: [BasicBlock] {
+        var blocks: [BasicBlock] = []
+        var next = LLVMGetFirstBasicBlock(ref)
+        while let block = next {
+            blocks.append(BasicBlock(block))
+            next = LLVMGetNextBasicBlock(block)
+        }
+        return blocks
+    }
+
     /// The function as LLVM IR writes it: its definition, or its declaration where it has no body.
     public var text: String { anyValue.text }
 }
