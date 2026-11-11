@@ -56,7 +56,7 @@ struct Toolchain {
         let linkerArguments = try linkerArguments()
 
         // Have clang link the object file into the executable.
-        let arguments = linkerArguments + [objectFile.path, "-o", executable.path]
+        let arguments = linkerArguments + Self.stackArguments + [objectFile.path, "-o", executable.path]
         let run = try runCapturingOutput(tools.clang, arguments: arguments)
         // A link that clang fails reports what clang wrote, without its last newline.
         if run.termination.exitCode != 0 {
@@ -153,6 +153,14 @@ struct Toolchain {
         }
         return linker
     }
+    #endif
+
+    #if os(Windows)
+    /// What every link on Windows gives the linker: a main thread's stack of 8 MiB, as macOS and Linux give it, where
+    /// Windows would give 1 MiB, so a program recurses as deep on each.
+    private static let stackArguments = ["-Wl,/STACK:8388608"]
+    #else
+    private static let stackArguments: [String] = []
     #endif
 
     /// Whether `url` names a file, not a directory, that can be run.

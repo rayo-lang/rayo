@@ -230,7 +230,8 @@ struct BuildTests {
         }
     }
 
-    @Test("an executable exports nothing of the program or the runtime, and on macOS and Linux the C entry point")
+    @Test(
+        "an executable exports nothing of the program or the runtime, and on macOS and Linux exports the C entry point")
     func exportedSymbols() throws {
         try withTemporaryDirectory { directory in
             _ = try save("func main() {}", as: "empty.rayo", in: directory)

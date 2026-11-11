@@ -29,10 +29,16 @@ func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
         process.executableURL = builtProduct("rayo")
         process.arguments = arguments
         process.currentDirectoryURL = directory
-        process.standardOutput = try FileHandle(forWritingTo: outputFile)
-        process.standardError = try FileHandle(forWritingTo: errorFile)
+        let output = try FileHandle(forWritingTo: outputFile)
+        let errors = try FileHandle(forWritingTo: errorFile)
+        process.standardOutput = output
+        process.standardError = errors
         try process.run()
         process.waitUntilExit()
+
+        // The files are read once this process holds them open no longer.
+        try output.close()
+        try errors.close()
         return CommandResult(exitCode: process.terminationStatus,
                              output: try String(contentsOf: outputFile, encoding: .utf8),
                              errors: try String(contentsOf: errorFile, encoding: .utf8))

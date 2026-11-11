@@ -2,7 +2,7 @@
 
 The Rayo toolchain is a Swift package at the root of this repository. It builds two executables: `rayo`, the driver, and `rayoc`, the reference compiler.
 
-- **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl` or `Darwin`.
+- **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl`, `Darwin` or `CRT`.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
 - **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4, and on Windows x64 with Swift 6.4 and the build of LLVM that LLVM publishes for Windows. Code must pass on all three. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
