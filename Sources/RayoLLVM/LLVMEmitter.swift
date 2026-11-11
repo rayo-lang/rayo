@@ -4,9 +4,11 @@ import RayoIR
 public enum LLVMEmitter {
     /// The object code of `program` and the program runtime, whose panics name `sourcePath` as the file they
     /// happen in, ready to link into an executable for the host. Integer overflow panics where `checksOverflow` is
-    /// true, and wraps where it's false; `optimizes` runs LLVM's optimisations over the module.
+    /// true, and wraps where it's false; `optimizes` runs LLVM's optimisations over the module. `program` must have
+    /// a `main`, which the runtime's C entry point runs.
     public static func objectCode(for program: IRProgram, sourcePath: String, checksOverflow: Bool,
                                   optimizes: Bool) throws(LLVMError) -> [UInt8] {
+        precondition(program.main != nil, "an executable's object code needs the program's main")
         let target = try TargetMachine(optimizes: optimizes)
         let module = ModuleBuilder(named: sourcePath, for: target)
         let runtime = try Runtime(in: module)

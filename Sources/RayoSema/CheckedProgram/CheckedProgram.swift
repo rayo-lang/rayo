@@ -3,5 +3,6 @@ public struct CheckedProgram: Sendable {
     public var types: TypeTable
     /// The file's functions, indexed by `FunctionID`.
     public var functions: [CheckedFunction]
-    public var main: FunctionID
+    /// The file's first `main`, which a run of the program starts at, or nil for a library, which has none.
+    public var main: FunctionID?
 }

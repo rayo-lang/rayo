@@ -13,7 +13,7 @@ struct FunctionLoweringTests {
                 then: .return(nil),
             ),
         )
-        #expect(program.functions[program.main.index] == expected)
+        #expect(program.main.map { program.functions[$0.index] } == expected)
     }
 
     @Test func `a function's parameters are its first locals, ahead of its temporaries`() throws(RejectedSource) {

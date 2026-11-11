@@ -157,7 +157,7 @@ let package = Package(
             ]
         ),
         .target(name: "RayoCompiler", dependencies: [
-            "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM",
+            "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM", "RayoSource",
         ]),
         .executableTarget(name: "rayoc", dependencies: ["RayoCompiler"]),
         .target(name: "RayoDriver", dependencies: ["RayoLLVMInstall"]),

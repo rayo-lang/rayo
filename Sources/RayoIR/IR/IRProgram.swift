@@ -7,9 +7,10 @@ public struct IRProgram: Equatable, Sendable {
     public var types: TypeTable
     /// The program's functions, indexed by `FunctionID`.
     public var functions: [IRFunction]
-    public var main: FunctionID
+    /// The function a run of the program starts at, or nil for a library, which has none.
+    public var main: FunctionID?
 
-    public init(types: TypeTable, functions: [IRFunction], main: FunctionID) {
+    public init(types: TypeTable, functions: [IRFunction], main: FunctionID?) {
         self.types = types
         self.functions = functions
         self.main = main

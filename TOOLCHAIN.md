@@ -26,6 +26,8 @@ rayo build program.rayo
 rayo run program.rayo
 ```
 
+A file without a `main` function is a library. `rayo check` checks it as it checks a program, but `rayo build` and `rayo run` refuse it with E0201, since an executable starts at `main`.
+
 ## Test it
 
 ```sh
@@ -40,8 +42,8 @@ swift test
 
 | Command line | Does |
 | --- | --- |
-| `rayoc --check [--] <file>` | Checks the file, and writes no file |
-| `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file to object code for the host, in release mode where no mode is named, and writes it to the object file |
+| `rayoc --check [--] <file>` | Checks the file, a program or a library, and writes no file |
+| `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file, which must have a `main`, to object code for the host, in release mode where no mode is named, and writes it to the object file |
 
 `--` ends the options, so the file after it may be named like one; `rayo` always passes it. `rayoc` exits with 0 when it checked or compiled the file, 1 when the program has errors or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
 

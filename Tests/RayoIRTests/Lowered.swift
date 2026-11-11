@@ -31,8 +31,9 @@ func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
 /// Parses, checks and lowers a `main` whose body is `body`, and gives its IR with every source range in it `nowhere`.
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func loweredMain(_ body: String) throws(RejectedSource) -> IRFunction {
+    // `main` is the source's one function, so the first of the program's.
     let program = try lowered("func main() {\n\(body)\n}")
-    return program.functions[program.main.index]
+    return program.functions[0]
 }
 
 private extension IRFunction {

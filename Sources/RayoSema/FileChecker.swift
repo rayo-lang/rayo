@@ -29,15 +29,10 @@ final class FileChecker {
     }
 
     func check() -> CheckedProgram? {
-        // Check every struct and function, so each one's errors are reported, whether or not the file has a `main`.
+        // Check every struct and function; a file without a `main` is a library, checked the same.
         let types = StructChecker(errors: errors).declare(file.structs, among: names, in: &declarations)
         let main = declareFunctions()
         let functions = signatures.indices.map { function(FunctionID(index: $0)) }
-        // A file without a `main` has nowhere to start.
-        guard let main else {
-            reportNoMain()
-            return nil
-        }
 
         // The program is checked only when its structs can be laid out and each of its functions is checked.
         let checked = functions.compactMap { $0 }
@@ -67,12 +62,6 @@ final class FileChecker {
         case .givenByBody(let id):
             return body(of: id).result
         }
-    }
-
-    /// Reports that the file has no `main`, at its start.
-    private func reportNoMain() {
-        let start = SourceLocation(line: 1, column: 1, offset: 0)
-        errors.report(.noMain, at: SourceRange(start, start))
     }
 
     /// Declares the file's functions, then the prelude's functions they and the structs leave free, and returns the

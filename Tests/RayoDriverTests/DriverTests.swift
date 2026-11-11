@@ -170,6 +170,27 @@ struct DriverTests {
         }
     }
 
+    @Test func `check checks a file without 'main' as a library`() throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo(["check", "lib.rayo"], in: directory) == CommandResult(exitCode: 0, output: "", errors: ""))
+        }
+    }
+
+    @Test(arguments: ["build", "run"])
+    func `build and run make no executable of a file without 'main', which is a library`(command: String) throws {
+        try withTemporaryDirectory { directory in
+            _ = try save("func double(_ n: Int) -> Int { n * 2 }", as: "lib.rayo", in: directory)
+            #expect(rayo([command, "lib.rayo"], in: directory) == CommandResult(exitCode: 1, output: "", errors: """
+                lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built \
+                into an executable or run
+
+                """))
+            let executable = directory.appendingPathComponent(Executable.fileName("lib"))
+            #expect(!FileManager.default.fileExists(atPath: executable.path))
+        }
+    }
+
     @Test func `a file rayoc can't read fails the command with rayoc's error`() throws {
         try withTemporaryDirectory { directory in
             #expect(rayo(["run", "missing.rayo"], in: directory) ==
