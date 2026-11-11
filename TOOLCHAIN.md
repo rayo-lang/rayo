@@ -90,12 +90,14 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 [Environment]::SetEnvironmentVariable("Path", "C:\llvm\bin;$userPath", "User")
 ```
 
-A new shell's search path puts the machine's ahead of your own. So where the machine's holds another LLVM's `bin`, such as the `C:\Program Files\LLVM\bin` that LLVM's installer adds, `rayoc` loads that LLVM's `LLVM-C.dll`, and fails to start or crashes. Remove that LLVM from the machine's search path, or put `C:\llvm\bin` at its front, from a shell run as administrator:
+A new shell's search path puts the machine's ahead of your own. So where the machine's holds another LLVM's `bin`, such as the `C:\Program Files\LLVM\bin` that LLVM's installer can add, `rayoc` loads that LLVM's `LLVM-C.dll`, and fails to start or crashes. Remove that LLVM from the machine's search path, or put `C:\llvm\bin` at its front, from a shell run as administrator:
 
 ```powershell
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 [Environment]::SetEnvironmentVariable("Path", "C:\llvm\bin;$machinePath", "Machine")
 ```
+
+These commands, like the ones for your own search path, write it back with each `%VARIABLE%` in it replaced by the variable's value today. Where the search path holds an entry you want to keep following its variable, edit it in the Environment Variables dialog of System Properties instead.
 
 On macOS and Linux, `Package.swift` looks for LLVM 23 where apt and Homebrew install it: under `/usr/lib/llvm-23`, and under `opt/llvm@23` and `opt/llvm` in Homebrew's prefix, `/opt/homebrew` or `/usr/local`. It takes the first of them whose `llvm/Config/llvm-config.h` names major version 23, and builds against its headers and libraries. Where LLVM 23 is installed anywhere else, set `LLVM_PREFIX` to the directory that holds its `include` and `lib`.
 
