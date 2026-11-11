@@ -73,7 +73,7 @@ let size = (try readText(path)).count   // the count of the String that readText
 let bad = try readText(path).count      // error: '.count' applies to the Result, which has no 'count'
 ```
 
-**`alloc` takes the whole postfix chain after it, and `a.alloc` the postfix chain before it.** So `alloc x.clone()` allocates the clone, and `level.alloc xs.filtered { … }` the filtered list from `level`. A `.alloc` after a postfix expression always begins an allocation, never a member access, since `alloc` is a keyword. The prefix operators come before it, so `try alloc Box(v)` is the fallible form of `alloc Box(v)`, and `try?` and `try!` apply to it as `try` does ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
+**`alloc` takes the whole postfix chain after it, and `a.alloc` the postfix chain before it.** So `alloc x.clone()` allocates the clone, and `level.alloc xs.filter { … }` the filtered list from `level`. A `.alloc` after a postfix expression always begins an allocation, never a member access, since `alloc` is a keyword. The prefix operators come before it, so `try alloc Box(v)` is the fallible form of `alloc Box(v)`, and `try?` and `try!` apply to it as `try` does ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
 **A `?` after an operand is always postfix optional chaining**, since Rayo has no ternary operator.
 

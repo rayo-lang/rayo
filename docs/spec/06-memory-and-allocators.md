@@ -4,18 +4,18 @@ Values that own heap storage need somewhere to allocate it and a defined way to 
 
 ```swift
 let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))   // a heap for level data
-let scratch = Allocator.register(Arena(size: 64.mb))   // an arena for short-lived work
+let scratch = Allocator.register(Arena(size: 64.mb))        // an arena for short-lived work
 
-var props = levelHeap.alloc List<Prop>()          // an allocator named at the construction
-var names = alloc List<String>()                  // the ambient allocator: .heap here
+var props = levelHeap.alloc List<Prop>()                    // an allocator named at the construction
+var names = alloc List<String>()                            // the ambient allocator: .heap here
 
 do {
-    var visible = scratch.alloc List<Handle<Mesh>>()   // built in the scratch arena
-    cull(scene, into: &visible)                        // grows there, though 'cull' names no allocator
+    var visible = scratch.alloc List<Handle<Mesh>>()        // built in the scratch arena
+    cull(scene, into: &visible)                             // grows there, though 'cull' names no allocator
     submit(visible.span)
-}                                                      // 'visible' is destroyed here; freeing to an arena is a no-op
+}                                                           // 'visible' is destroyed here; freeing to an arena is a no-op
 
-scratch.reset()                                        // everything the arena handed out is freed at once
+scratch.reset()                                             // everything the arena handed out is freed at once
 ```
 
 `props` records `levelHeap` as its allocator, and `names` the ambient one, which outside an `Allocating` type's methods is `.heap`. `visible` records `scratch`, so `cull` grows it there without naming an allocator. After `visible` is destroyed, `scratch.reset()` reclaims the arena's storage. A reset that would invalidate a live use panics instead.

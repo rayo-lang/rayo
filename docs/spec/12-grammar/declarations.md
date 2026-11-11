@@ -30,7 +30,7 @@ modifier      = 'public' | 'private' | 'static' | 'mutating' | 'consuming' | 'un
                                                                       'static' on a type's member, 'mutating' and 'consuming' on a method,
                                                                       'mutating' on a computed property or subscript (04),
                                                                       'unsafe' on a function, initializer, subscript, accessor, field or protocol,
-                                                                      'alloc' on a function that makes a new Allocating value (06).
+                                                                      'alloc' on a function that makes a new value for its caller, of any type (06).
                                                                       An extern-c-decl or protocol-decl only at a file's top level *)
 attribute     = '@' (type-name | keyword) ('(' attribute-args? ')')? ;   (* a keyword right after '@' is an attribute name: @guard; @ui.Bounds names another module's *)
 attribute-args= attribute-arg (',' attribute-arg)* ','? ;

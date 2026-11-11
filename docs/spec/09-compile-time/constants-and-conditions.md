@@ -58,16 +58,16 @@ A `const` **reaches run time** when code names it anywhere but in these places, 
 Here `enemyPresets` reaches run time, since `presets()` names it, even if nothing calls `presets()`:
 
 ```swift
-struct Preset(var name: String, var hp: Float): Allocating {
-    alloc func clone() -> Preset { alloc Preset(name: alloc name.clone(), hp: copy hp) }   // so a List<Preset> can be cloned
+struct Preset(var name: String, var hp: Float) {
+    alloc func clone() -> Preset { Preset(name: alloc name.clone(), hp: copy hp) }   // so a List<Preset> can be cloned
 }
 
 const enemyPresets: List<Preset> = alloc makePresets()   // built in the compiler, allocating as it goes
 
 alloc func makePresets() -> List<Preset> {
     var a = alloc List<Preset>()
-    a.append(alloc Preset(name: "grunt", hp: 50))
-    a.append(alloc Preset(name: "brute", hp: 400))
+    a.append(Preset(name: "grunt", hp: 50))
+    a.append(Preset(name: "brute", hp: 400))
     return a
 }
 
@@ -78,8 +78,8 @@ struct World(var presets: StaticSpan<Preset>, …)
 func setUp(_ world: mutable World) {
     world.presets = enemyPresets.staticSpan            // an unscoped view, so a field can keep it
     var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
-    edited.append(alloc Preset(name: "boss", hp: 900))
-    enemyPresets.append(alloc Preset(name: "boss", hp: 900))   // error: a const is never mutated
+    edited.append(Preset(name: "boss", hp: 900))
+    enemyPresets.append(Preset(name: "boss", hp: 900))   // error: a const is never mutated
 }
 ```
 
@@ -114,7 +114,7 @@ func setUp(_ world: mutable World) {
 **The same test, with the rules above for what can run at compile time, decides which global `let`s go into read-only data** ([07](../07-concurrency/global-state.md#initialization-at-startup)). So the first three below are initialized at startup, and only the last is frozen:
 
 ```swift
-let frameArena = Allocator.register(Arena(size: 64.mb))               // holds an allocator id other than .heap
+let frameArena = Allocator.register(Arena(size: 64.mb))                      // holds an allocator id other than .heap
 let godMode = Atomic(false)                                                  // Synchronized: kept in memory its methods can write
 let presetIds: Map<Name, Int> = alloc ["grunt": 0, "brute": 1]               // seeded hashing: can't run at compile time
 let fixedIds: Map<Name, Int, FixedHashing> = alloc ["grunt": 0, "brute": 1]  // fixed hashing: frozen into read-only data

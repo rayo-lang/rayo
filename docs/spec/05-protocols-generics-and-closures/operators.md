@@ -92,8 +92,8 @@ let half = catchPanic { 1 } recover: { _ in 2.5 }    // both results are literal
 **An expected type that isn't a `Result` binds only the success type of a result type `R!E`.** The match binds `R` from it, and leaves `E` to the arguments, as `try` leaves an expected failure type open ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). Where `E` then binds to `Never`, the call is an `R` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), which fits. Otherwise the call is a `Result`, which doesn't, and the error says to write `try`:
 
 ```swift
-let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // R is Panic?; neither closure fails, so EB and ER are Never
-let level: Level = catchPanic { try loadLevel(path) } recover: { _ in Level() }    // error: the call is a Level!(IoError | ParseError); write 'try'
+let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }       // R is Panic?; neither closure fails, so EB and ER are Never
+let level: Level = catchPanic { try loadLevel(path) } recover: { _ in alloc Level() }  // error: the call is a Level!(IoError | ParseError); write 'try'
 ```
 
 **Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and fourth of those ways. The third then gives its untyped `.seconds(0.5)` the type `Duration`, and the last call gives its untyped `0` the type `Float`:

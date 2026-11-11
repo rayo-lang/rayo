@@ -201,7 +201,7 @@ While `latest` borrows an element of `rounds`, `rounds` can't change:
 
 ```swift
 let latest = borrow rounds[rounds.count - 1]
-rounds.append(alloc List<Int>())      // error: 'rounds' is borrowed by 'latest' (used below)
+rounds.append(alloc List<Int>())  // error: 'rounds' is borrowed by 'latest' (used below)
 log("\(latest.count) hits")
 ```
 

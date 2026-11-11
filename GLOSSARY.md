@@ -268,25 +268,31 @@ The member, or for an associated type the type, that meets one requirement of a 
 The keyword that marks every construction giving a value heap storage, with an allocator it names, as in `a.alloc`, or the ambient one ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 
 **`alloc func`**:
-A function that makes a new `Allocating` value, and receives that value's allocator from the `alloc` at its call, as `clone()` does ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
+A function that makes a new value for its caller, of any type, and receives that value's allocator from the `alloc` at its call, as `clone()` does ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
 **Allocating**:
-A type whose values allocate: the compiler gives it an allocator of its own, and making one says `alloc` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)).
+A type whose own code allocates with the ambient allocator: the compiler gives it an allocator of its own, `self.allocator`, and making one says `alloc` ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-allocating-protocol)).
 
 **Allocator**:
 A copyable id that names a registered allocator implementation ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: allocator handle, allocator reference
 
+**AllocatorImpl**:
+The `unsafe` protocol a heap's implementation conforms to, which allocates, reallocates and frees, and which `ArenaImpl` and `WrapperImpl` refine ([06](docs/spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
+
 **Allocator word**:
 The 8 bytes in which an owning value records the allocator its storage came from, dated against that allocator's resets ([06](docs/spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)).
 
 **Ambient allocator**:
-The allocator a bare `alloc` takes: the one an `alloc func` or an initializer received, the instance's inside an `Allocating` type's other methods, and `.heap` everywhere else ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
+The allocator a bare `alloc` takes: the one an `alloc func` or an `Allocating` type's initializer received, the instance's inside an `Allocating` type's other methods, and `.heap` everywhere else ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
 _Avoid_: current allocator, default allocator, context allocator
 
 **Arena**:
 An allocator, of a type conforming to `ArenaImpl`, that frees nothing individually, and frees everything it handed out at once when it is reset ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: region, zone, bump allocator
+
+**ArenaImpl**:
+The protocol an arena's implementation conforms to, refining `AllocatorImpl` with the arena's part in a reset ([06](docs/spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 
 **Backing**:
 The allocator another allocator draws its memory from, such as the one a wrapper wraps ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
@@ -341,6 +347,9 @@ _Avoid_: weak reference, weak pointer (an object's)
 **Wrapper**:
 An allocator that passes another allocator's allocations through and keeps accounts of them, such as a budget ([06](docs/spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 _Avoid_: decorator, proxy allocator
+
+**WrapperImpl**:
+The protocol a wrapper's implementation conforms to, refining `AllocatorImpl` with the hooks that tell it when the arena memory under its allocations stops existing ([06](docs/spec/06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 
 ### Concurrency
 

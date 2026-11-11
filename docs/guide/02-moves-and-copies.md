@@ -9,7 +9,7 @@ hits.append(30)
 log("\(hits.count) hits")       // 2 hits
 ```
 
-`alloc List<Int>()` makes an empty list of `Int`s. The `alloc` marks it as a value that owns heap memory: Rayo makes you write it wherever such a value is made, and chapter 6 shows where the memory comes from ([Memory and allocators](06-memory-and-allocators.md)). `append` adds a value at the end, and `count` says how many values the list holds ([04](../spec/04-types/collections.md#collections-and-strings)). `hits` is a `var`, since appending changes the list.
+`alloc List<Int>()` makes an empty list of `Int`s. The `alloc` marks it as a value that owns heap memory: Rayo makes you write it wherever such a value is made ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)), and chapter 6 shows where the memory comes from ([Memory and allocators](06-memory-and-allocators.md)). `append` adds a value at the end, and `count` says how many values the list holds ([04](../spec/04-types/collections.md#collections-and-strings)). `hits` is a `var`, since appending changes the list.
 
 That heap memory has to be freed when the list is no longer needed, and freed only once. If it's freed too early, something else may get that memory while the list still reads it. Freeing it twice corrupts memory, and never freeing it leaks it.
 

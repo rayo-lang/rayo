@@ -109,7 +109,7 @@ levelArena.reset()                             // destroys the doors; each deini
 let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))
 var props = levelHeap.alloc List<Prop>()
 // ... the level runs ...
-Allocator.unregister(levelHeap)   // every value still allocated from the heap goes stale
+Allocator.unregister(levelHeap)     // every value still allocated from the heap goes stale
 props.append(p)                     // panics: 'props' came from an unregistered allocator
 ```
 

@@ -34,7 +34,7 @@ var a = copy player.items                  // error: 'List<Item>' is not copyabl
 **Copies are written out.** Code asks for a copy in one of two forms:
 
 - **`copy x`** duplicates the bytes of a copyable value, as `memcpy` does. It never allocates.
-- **`alloc x.clone()`** copies a move-only value together with what it owns, such as a `List` and its buffer. It allocates, and is always written as a named call. `clone()` is a function that receives the copy's allocator, which the `alloc` before it gives, so a bare `x.clone()` is a compile error ([06](../06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
+- **`alloc x.clone()`** copies a move-only value together with what it owns, such as a `List` and its buffer. It allocates, and is always written as a named call. `clone()` receives the copy's allocator from the `alloc` before it ([06](../06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
 Taking a copyable `const` also makes a new value ([Constants](moving-values-out.md#constants)), and so do the few operations defined to copy their operands ([below](#operations-that-copy)).
 

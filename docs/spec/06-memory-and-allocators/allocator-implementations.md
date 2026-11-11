@@ -53,7 +53,7 @@ levelArena.reset()                           // 'props' goes stale with the aren
 
 - a **heap** conforms to `AllocatorImpl` alone, which allocates, reallocates and frees;
 - an **arena** conforms to `ArenaImpl`, which refines it with the arena's part in a reset and in releasing its old blocks;
-- a **wrapper** conforms to `WrapperImpl`, which refines it for an allocator that passes its backing's allocations through.
+- a **wrapper** conforms to `WrapperImpl`, which refines it for an allocator that passes its backing's allocations through, with the hooks that tell it when the memory under them stops existing.
 
 The runtime carries out every reset, so no implementation writes one ([What a reset does](arena-safety.md#what-a-reset-does)).
 
@@ -63,8 +63,6 @@ unsafe protocol AllocatorImpl: Synchronized {          // must be callable from 
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?   // address, plus the arena block it lies in, if any
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func free(_ p: *Void, bytes: Int, align: Int)   // arenas: no-op
-    unsafe func backingDidSwitch(stamp: Stamp)         // wrappers: the backing arena now serves fresh blocks stamped `stamp`
-    unsafe func backingDidFree(stampedBefore: Stamp)   // wrappers: memory stamped before `stampedBefore` is gone; newer memory isn't
 }
 
 unsafe protocol ArenaImpl: AllocatorImpl {             // frees nothing individually; the runtime resets it
@@ -72,7 +70,10 @@ unsafe protocol ArenaImpl: AllocatorImpl {             // frees nothing individu
     unsafe func freeBlocks(stampedBefore: Stamp)       // every older block is free; keep it as a spare or give it back
 }
 
-unsafe protocol WrapperImpl: AllocatorImpl {}          // passes its backing's allocations through, and keeps accounts of them
+unsafe protocol WrapperImpl: AllocatorImpl {           // passes its backing's allocations through, and keeps accounts of them
+    unsafe func backingDidSwitch(stamp: Stamp)         // the backing arena now serves fresh blocks stamped `stamp`
+    unsafe func backingDidFree(stampedBefore: Stamp)   // memory stamped before `stampedBefore` is gone; newer memory isn't
+}
 
 struct Allocation(
     let address: *Void,

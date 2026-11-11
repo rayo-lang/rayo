@@ -3,8 +3,8 @@
 The game now needs memory at two speeds. Its meshes, the shapes it draws, live until the level unloads. Each frame's scratch data, such as the list of meshes the camera sees, lives for one frame. An arena suits the scratch: it frees nothing one value at a time, and frees everything it gave out at once, when you reset it.
 
 ```swift
-let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))    // the level's data
-let frameArena = Allocator.register(Arena(size: 64.mb))   // scratch data, freed every frame
+let levelHeap = Allocator.register(TlsfHeap(size: 256.mb))       // the level's data
+let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data, freed every frame
 
 while running {
     do {
@@ -25,7 +25,7 @@ var levelMeshes = levelHeap.alloc List<Mesh>()   // grows and frees through leve
 var editorMeshes = alloc List<Mesh>()            // the same type, List<Mesh>, from the ambient allocator (below)
 ```
 
-Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. Since chapter 2, every list has been made with `alloc`, which marks a value that gets heap memory of its own. Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
+Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. Every construction of a list, string or box says `alloc`, which marks a value that gets heap memory of its own ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 
 A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `List<Mesh>` accepts either.
 
@@ -62,9 +62,16 @@ So a value hands its allocator to what it allocates, and nothing else does. Code
 
 **A function that builds a new value for its caller is an `alloc func`**, as `clone()` is. The `alloc` before its call gives it the allocator its result goes in, and inside it a bare `alloc` takes that allocator ([06](../spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
-**`alloc` applies only to values that allocate.** There is no hidden boxing: `alloc enemy` on an `Enemy` is an error, and you box one with `alloc Box(enemy)` ([below](#one-owned-value-box)).
+**`alloc` applies only to values that allocate.** There is no hidden boxing:
 
-**Two kinds of allocation have no construction to mark.** A list grows through the allocator its `alloc` showed. A closure stored as a `Closure` value may allocate room for what it captures, from the ambient allocator, and its type shows that it may ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+```swift
+var boxed = alloc enemy          // error: 'Enemy' isn't Allocating
+var boss = alloc Box(enemy)      // a Box owns the enemy, in one allocation
+```
+
+`alloc` before a plain value is an error, and you box the value yourself, with `alloc Box(enemy)` ([below](#one-owned-value-box)).
+
+**Two kinds of allocation have no construction to mark.** A list grows through the allocator its `alloc` showed. A closure stored as a `Closure` value may allocate room for what it captures, and its type shows that it may ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)).
 
 A list keeps the allocator it was built with, wherever it later grows. A new string appended to it may come from somewhere else:
 
