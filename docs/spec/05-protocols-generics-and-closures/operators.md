@@ -65,17 +65,17 @@ func h(_ m: Map<Name, Int, SeededHashing>) { … }
 func h(_ m: Map<Name, Int, FixedHashing>) { … }
 func run<R>(_ body: () -> R) -> R { … }
 func f<K>(_ body: () -> Map<K, Int, FixedHashing>) { … }
-var fixed: Map<Name, Int, FixedHashing> = [:]
+var fixed: Map<Name, Int, FixedHashing> = alloc [:]
 let pairs: [2 of (Name, Int)] = [("jump", 0), ("fire", 1)]
 
-takesFixed(Map())                                    // H is FixedHashing, from the parameter's type
-merge(&fixed, Map())                                 // K and H bind from 'fixed', and Map() takes them from the parameter's type
-merge(&fixed, Map<Name, Int>())                      // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
-g(Map(dictionaryLiteral: copy pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
-g(Map<Name, Int>(dictionaryLiteral: copy pairs))     // fine: the written type takes its default, so H is SeededHashing
-h(Map())                                             // error: ambiguous, since Map() fits both overloads
-let m = run { Map(dictionaryLiteral: copy pairs) }   // R is Map<Name, Int, SeededHashing>: the body takes the default
-f { Map(dictionaryLiteral: copy pairs) }             // FixedHashing, fixed by f's parameter type; K binds to Name
+takesFixed(alloc Map())                                    // H is FixedHashing, from the parameter's type
+merge(&fixed, alloc Map())                                 // K and H bind from 'fixed', and Map() takes them from the parameter's type
+merge(&fixed, alloc Map<Name, Int>())                      // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
+g(alloc Map(dictionaryLiteral: copy pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
+g(alloc Map<Name, Int>(dictionaryLiteral: copy pairs))     // fine: the written type takes its default, so H is SeededHashing
+h(alloc Map())                                             // error: ambiguous, since Map() fits both overloads
+let m = run { alloc Map(dictionaryLiteral: copy pairs) }   // R is Map<Name, Int, SeededHashing>: the body takes the default
+f { alloc Map(dictionaryLiteral: copy pairs) }             // FixedHashing, fixed by f's parameter type; K binds to Name
 ```
 
 **A closure literal binds through the type its body gives it, which the rule for a bare `!` works out** ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)):

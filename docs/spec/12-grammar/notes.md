@@ -103,7 +103,7 @@ let add: (Int, Int) -> Int = (+)        // anywhere else, in parentheses
 **Otherwise `<` is the comparison operator.**
 
 ```swift
-let xs = List<Int>()                              // '<Int>' parses as generic arguments, and '(' follows
+let xs = alloc List<Int>()                        // '<Int>' parses as generic arguments, and '(' follows
 if a < b, c > d { … }                             // two comparisons: 'd' can't follow generic arguments
 f(a < b, c > (d))                                 // a generic call 'a<b, c>(d)': written '(c > d)', it is two comparisons
 static if T == List<Int> || T == Set<Int> { … }   // '||' can't begin an operand, so '<Int>' is generic arguments

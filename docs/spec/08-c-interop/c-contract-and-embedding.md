@@ -57,7 +57,7 @@ enum NavMode: Int32 { case walk, fly }
 - a `UInt64` with `WeakShared<T>(bits:)`, with `WeakPointer<T>(bits:)`, which also checks the thread, since an object is used only on its home thread ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c)), or with `Handle<T>(bits:)`;
 - a raw integer with `E(rawValue:)`.
 
-**A value C hands back that names a creation may find no entry for a live creation**, such as a weak link's bits or an `Allocator` id. That happens when no carried chain of stores and no synchronization orders the creation before the use. The outcomes 07 gives then follow, such as `nil` from `WeakShared<T>(bits:)`, so this is defined behavior, not a broken obligation ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
+**A value C hands back that names a creation may find no entry for a live creation**, such as a weak link's bits or an `AllocatorId`. That happens when no carried chain of stores and no synchronization orders the creation before the use. The outcomes 07 gives then follow, such as `nil` from `WeakShared<T>(bits:)`, so this is defined behavior, not a broken obligation ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## The platform, and embedding Rayo in C
 
@@ -65,12 +65,11 @@ enum NavMode: Int32 { case walk, fly }
 
 **The runtime needs these from the platform:**
 
-- memory for `.system`, the platform's general-purpose heap ([06](../06-memory-and-allocators/allocator-basics.md#allocator-values));
+- memory for `.heap`, the platform's general-purpose heap ([06](../06-memory-and-allocators/allocator-basics.md#allocator-values));
 - threads, which `Runtime.startThread` starts ([07](../07-concurrency/thread-work.md#starting-a-thread-runtimestartthread));
 - thread-local storage, which holds each thread's own state:
     - its copies of the `@threadlocal var`s and their access marks ([07](../07-concurrency/global-state.md#thread-locals));
     - its thread identity ([07](../07-concurrency/global-state.md#thread-identity));
-    - its current allocator ([06](../06-memory-and-allocators/allocator-basics.md#the-ambient-allocator));
     - the bounds of the stack it runs on, and the rest of the runtime's state for the thread;
 - the bounds of each stack Rayo code runs on, so running out of one ends the program instead of writing past its end ([10](../10-errors-and-safety/panics.md#what-ends-the-program)): a C thread's when it attaches, and a fiber's when C declares it ([above](#what-c-must-uphold));
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));

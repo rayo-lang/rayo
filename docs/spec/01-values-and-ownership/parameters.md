@@ -12,7 +12,7 @@ func remember(_ pos: owned Vec3) { ... }            // takes ownership: keeps th
 
 damage(&boss, by: 10)                                   // '&' marks the mutable borrow; 'boss' must be a changeable place
 adopt(loot)                                             // 'loot' is moved in and can't be used after
-adopt(backpack.items.clone())                           // a clone is a new value, so nothing moves
+adopt(alloc backpack.items.clone())                     // a clone is a new value, so nothing moves
 remember(copy e.pos)                                    // a copy moves in, and e.pos stays as it was
 ```
 

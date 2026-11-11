@@ -25,16 +25,16 @@ cmds = CommandList()              // fine: a new value makes 'cmds' usable again
 ## Copies
 
 ```swift
-var spawn = copy e.pos               // Vec3 is copyable: copy duplicates its bytes
-spawn.y += 2                         // e.pos is unchanged
-var loadout = player.items.clone()   // List owns heap memory: clone allocates a new buffer
-var a = copy player.items            // error: 'List<Item>' is not copyable
+var spawn = copy e.pos                     // Vec3 is copyable: copy duplicates its bytes
+spawn.y += 2                               // e.pos is unchanged
+var loadout = alloc player.items.clone()   // List owns heap memory: clone allocates a new buffer
+var a = copy player.items                  // error: 'List<Item>' is not copyable
 ```
 
 **Copies are written out.** Code asks for a copy in one of two forms:
 
 - **`copy x`** duplicates the bytes of a copyable value, as `memcpy` does. It never allocates.
-- **`x.clone()`** copies a move-only value together with what it owns, such as a `List` and its buffer. It allocates, and is always written as a named call.
+- **`alloc x.clone()`** copies a move-only value together with what it owns, such as a `List` and its buffer. It allocates, and is always written as a named call. `clone()` is a function that receives the copy's allocator, which the `alloc` before it gives, so a bare `x.clone()` is a compile error ([06](../06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
 Taking a copyable `const` also makes a new value ([Constants](moving-values-out.md#constants)), and so do the few operations defined to copy their operands ([below](#operations-that-copy)).
 
@@ -77,7 +77,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 - **Ranges.** A range operator borrows its operands and copies them in, so `0..<count` leaves `count` usable ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **Vectors.** A `Simd` initializer, a load included, copies the lanes it borrows, a store copies its lanes into the span, and a lane read, a swizzle or a shuffle copies the lanes it reads, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).
 - **Inline arrays.** An inline array's `.init(repeating:)` copies the value it repeats ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
-- **The current allocator.** `using allocator = a` reads the id in `a` once, on entry, and holds no borrow of `a`, so the block may contain an `await` ([06](../06-memory-and-allocators/allocator-basics.md#the-ambient-allocator)).
+- **Allocations.** `a.alloc` reads the id in `a` once, and holds no borrow of `a`, and the value it makes keeps a copy of the id ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).
 - **`as` patterns.** An `as` pattern on a place copies it, since the conversion makes a new value ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **`get` and `set`.** A change through a value property with a `get` and a `set` copies a copyable `owned` subscript argument for the `get`, since one value can't move into both calls ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).

@@ -7,7 +7,7 @@ Most changes of type are written out, especially when they may lose information.
 ```swift
 var target: Handle<Enemy>? = h                  // T to T?, taking h
 let seen: any Drawable = sprite                 // a shared borrow of 'sprite' to an existential view
-var w: Box<any Widget> = Box(Slider(…))         // Box<Slider> to Box<any Widget>: no new allocation
+var w: Box<any Widget> = alloc Box(Slider(…))   // Box<Slider> to Box<any Widget>: no new allocation
 let pickMax: (Int, Int) -> Int = max            // a named function to a function type
 ```
 

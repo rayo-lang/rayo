@@ -6,10 +6,9 @@ The [README](../README.md) introduces Rayo. This page makes the case for it: the
 
 Six principles decide Rayo's trade-offs.
 
-1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)), with three exceptions:
+1. **Costs are visible.** Allocation, dynamic dispatch, copies and unsafe memory access are spelled out in source. Nothing implicitly counts references, boxes or collects garbage. Nothing copies beyond what 01 lists ([01](spec/01-values-and-ownership/moves-copies-destruction.md#operations-that-copy)), with two exceptions:
     - a `String` made from a literal copies the literal's bytes at its first write or growth ([04](spec/04-types/collections.md#literals));
-    - a closure moved into a `Closure` puts the captures its capture list shows in an allocated context, when they don't fit inline ([05](spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
-    - a literal where a `List`, `Set` or `Map` is expected, such as a parameter of that type, builds one, which allocates ([04](spec/04-types/collections.md#literals)).
+    - a closure moved into a `Closure` may put the captures its capture list shows in an allocated context, which the `Closure` type shows and no `alloc` marks ([05](spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
    Where the compiler stages a place through a temporary, a declaration announces it:
     - a `@packed` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
@@ -44,7 +43,7 @@ Six principles decide Rayo's trade-offs.
 | Borrow checker vs. shared, mutable, cyclic object graphs | Borrows are checked within a function, with no lifetime annotations. Stored links (parents, observers, services, cycles) are handles or weak pointers, in the dynamic tier. Any graph is expressible in safe code. | [02](spec/02-views-and-dependencies.md), [03](spec/03-handles-and-objects.md) |
 | Slow compiles | No trait solver or lifetime inference, one-directional local inference, generics checked once. | [11](spec/11-compilation-model.md#type-checking-is-local) |
 | Unsafe is harder than C++ (two live `&mut` are instant undefined behavior; Miri can't run code that calls platform SDKs) | Raw pointers follow six stated rules (in bounds, aligned, valid, whole, race-free, exposed), with no hidden `noalias` and no type-based aliasing. Its aliasing promises are the ones borrows, bindings and views make. | [10](spec/10-errors-and-safety/unsafe-code.md#raw-accesses), [10](spec/10-errors-and-safety/unsafe-code.md#aliasing-and-skipped-deinits) |
-| The allocator API for std collections is unstable | Allocators are stable values that every owning collection takes, a scoped `using` sets the default, and arena resets are memory-safe. | [06](spec/06-memory-and-allocators.md) |
+| The allocator API for std collections is unstable | Allocators are stable values that every owning collection records, every construction that allocates says `alloc`, and arena resets are memory-safe. | [06](spec/06-memory-and-allocators.md) |
 | A hash map built at compile time needs an external crate, such as `phf` | A `const` `Map` that names `FixedHashing` is built by ordinary code in the compiler and frozen into read-only data. The default hashing is still seeded for each map, as `RandomState` is. | [04](spec/04-types/collections.md#hash-maps-and-sets) |
 | Portable SIMD is unstable | SIMD vectors of up to 64 lanes are built in, with shuffles, swizzles, masks and reductions. | [04](spec/04-types/numbers-and-math.md#simd-and-math), [08](spec/08-c-interop.md) |
 | Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. The binding says whether it moves, copies or borrows, whatever the type: `let b = a`, `let b = copy a`, `let b = borrow a`. | [01](spec/01-values-and-ownership.md) |
@@ -96,9 +95,9 @@ struct Door(var state: DoorState = .closed)
 
 // All the game's state, passed explicitly to the code that needs it.
 struct World(
-    var players = Pool<Player>(),           // a Pool stores its elements densely and hands out Handles to them
-    var enemies = Pool<Enemy>(capacity: 4096),
-    var doors = Pool<Door>(),
+    var players = alloc Pool<Player>(),     // a Pool stores its elements densely and hands out Handles to them
+    var enemies = alloc Pool<Enemy>(capacity: 4096),
+    var doors = alloc Pool<Door>(),
     var clock = Instant<World>(nanoseconds: 0),   // simulation time, on the World's own clock
 )
 

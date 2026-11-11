@@ -132,12 +132,12 @@ ThreadScope.run { s in
 
 ```swift
 let table = catchPanic {                          // a global's initializer, run during startup
-    var buf = List<Int>()
+    var buf = alloc List<Int>()
     ThreadScope.run { s in
         s.spawn { buf.append(1) }                 // runs here, before 'spawn' returns
     }
     return buf
-} recover: { _ in List<Int>() }
+} recover: { _ in alloc List<Int>() }
 ```
 
 **Inline work runs as code the block calls, so it follows the rules for startup code:**
@@ -150,7 +150,7 @@ let table = catchPanic {                          // a global's initializer, run
 
 ### Thread-locals in lent work
 
-**Thread-locals belong to the thread that runs the code.** Lent work that reads a `@threadlocal var`, or allocates through the current allocator, gets the running thread's copy. Work that the lending thread runs itself, as the job system's `join` may, touches the lender's copy. A conflict with an access the waiting lender holds then panics on the ordinary access mark ([Thread-locals](global-state.md#thread-locals)).
+**Thread-locals belong to the thread that runs the code.** Lent work that reads a `@threadlocal var` gets the running thread's copy. Work that the lending thread runs itself, as the job system's `join` may, touches the lender's copy. A conflict with an access the waiting lender holds then panics on the ordinary access mark ([Thread-locals](global-state.md#thread-locals)).
 
 ## Work that outlives the caller: threads
 
@@ -167,7 +167,7 @@ func runSimulation(_ world: mutable World) {                                 // 
     let (render, var tx) = startRenderer()
     while !world.quit {
         step(&world)
-        if case .failure = tx.send(Shared(world.snapshot())) { break }      // the render thread is gone
+        if case .failure = tx.send(alloc Shared(world.snapshot())) { break }   // the render thread is gone
     }
     _ = tx                                                                   // drops the last sender: the render loop ends
     render.join()                                                            // waits for it, or resumes its panic here

@@ -17,12 +17,12 @@ A copyable `const` is the exception: taking one makes a new value ([below](#cons
 **`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
 ```swift
-var loot = List<Item>()
+var loot = alloc List<Item>()
 give(loot)                            // fine: 'loot' is a local that owns its list
-var spare = List<Item>()
+var spare = alloc List<Item>()
 show(consume spare)                   // 'show' only borrows; 'consume' moves 'spare' out, destroyed after the statement
 give(player.inventory)                // error if 'player' is a mutable parameter: the caller still owns it
-let old = replace(&player.inventory, with: List())    // the way to take it: leave a value behind
+let old = replace(&player.inventory, with: alloc List())    // the way to take it: leave a value behind
 ```
 
 ## What can be moved from
@@ -72,7 +72,7 @@ extension Bag {
 
 **The alternatives leave a value in the place:**
 
-- `copy place` and `place.clone()` leave it as it was;
+- `copy place` and `alloc place.clone()` leave it as it was;
 - through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
 So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).

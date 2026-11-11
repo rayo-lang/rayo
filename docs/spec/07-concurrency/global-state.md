@@ -9,7 +9,7 @@
 ```swift
 let config = Published(GameConfig())           // global; safe from any thread
 let godMode = Atomic(false)
-@threadlocal var scratch = List<Int>()
+@threadlocal var scratch = alloc List<Int>()
 
 func damageScale() -> Float { copy config.snapshot().value.damageScale }   // an owner that never waits, then a copy
 func debugMenuSet(_ c: owned GameConfig) { config.publish(c) }      // readers see old or new, never torn
@@ -65,7 +65,7 @@ So an identity names one thread, and what is keyed by it, such as an object's ho
 1. The thread's copies are destroyed in reverse order, except those of the prelude's modules and every module they import. Each copy is marked dead before its value is destroyed, so a `deinit` that touches it later in the teardown panics, whether the copy's own destruction runs that `deinit` or a later step does.
 2. The thread's objects end ([03](../03-handles-and-objects.md#destroying-an-object)).
 3. A `deinit` of step 2 may make or leak another object of the thread, so that step repeats until a round leaves nothing. No object outlives its thread.
-4. Those copies, the current allocator among them, are destroyed last, each marked dead first as in step 1.
+4. Those copies are destroyed last, each marked dead first as in step 1.
 
 **A thread that never tears down leaks what its copies and objects own**, as a C thread that exits without calling `rayo_thread_detach` does.
 
@@ -114,7 +114,7 @@ For a global `Map` or `Set`, its hashing type and its keys decide whether it goe
 
 **At shutdown, the thread that shuts down tears down, and then entry closes:**
 
-1. The thread's teardown runs ([above](#thread-teardown)), so a `deinit` that flushes or closes something runs, and sees that thread's copies, the current allocator included.
+1. The thread's teardown runs ([above](#thread-teardown)), so a `deinit` that flushes or closes something runs, and sees that thread's copies.
 2. Entry closes: from then on, an entry from C with no Rayo frame below it on its thread panics ([above](#initialization-at-startup)), and `Runtime.startThread` refuses every start, handing its body back unstarted ([Starting a thread: `Runtime.startThread`](thread-work.md#starting-a-thread-runtimestartthread)).
 
 **Other threads don't tear down at shutdown.** When `main` returns, the process exits, ending them where they stand. In a C program that embeds Rayo, a thread that `Runtime.startThread` started still tears down when its body returns. An attached C thread can no longer call `rayo_thread_detach`, since that call enters Rayo as any call from C does, and entry has closed ([08](../08-c-interop/c-contract-and-embedding.md#embedding-rayo-in-a-c-program)).

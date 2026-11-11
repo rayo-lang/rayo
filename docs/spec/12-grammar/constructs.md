@@ -103,7 +103,7 @@ literal       = int-literal | float-literal | string-lit | 'true' | 'false' ;
 prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'borrow' | 'unsafe' ;
                                                                    (* 'borrow' only where a declaration borrows (01) *)
 postfix-expr  = primary postfix* ;
-postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); gameplay.Box<Int>(x) *)
+postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); alloc gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
 call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
 trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)

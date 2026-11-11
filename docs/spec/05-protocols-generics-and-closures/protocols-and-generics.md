@@ -190,9 +190,9 @@ Most maps hash the same way, so std's `Map` lets code leave its hashing type out
 ```swift
 struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
 
-let a: Map<Name, Int> = [:]                           // Map<Name, Int, SeededHashing>
-let b: Map<Name, Int, FixedHashing> = [:]             // the default replaced
-let c: Map<Name, Int, FixedHashing> = Map()           // H comes from the expected type
+let a: Map<Name, Int> = alloc [:]                     // Map<Name, Int, SeededHashing>
+let b: Map<Name, Int, FixedHashing> = alloc [:]       // the default replaced
+let c: Map<Name, Int, FixedHashing> = alloc Map()     // H comes from the expected type
 func report<K>(_ m: Map<K, Int>) { … }                // takes only maps with SeededHashing
 func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any hashing type
 ```
@@ -202,7 +202,7 @@ func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any 
 - **Trailing.** Every type parameter after one with a default has one too, so written arguments fill the parameters in order.
 - **Checked at the declaration.** The default meets the parameter's constraints, and names none of the type's own parameters.
 - **Taken where an argument is left out.** A type written with fewer arguments than it has parameters takes the default for each one left out. That holds wherever the type is written: in an annotation, a parameter's or field's type, after `as`, or in an extension's header, as `extension Map<Name, Int>` extends only `Map<Name, Int, SeededHashing>`.
-- **Taken where inference gives nothing.** Where a type's arguments come from a call, as for `Map()` above, the default is the last way a parameter binds, after the call's arguments and its expected type ([Operators](operators.md#operators)). So a `_` written for such a parameter, as in `Map<_, _, _>`, takes the default when the initializer leaves it unbound.
+- **Taken where inference gives nothing.** Where a type's arguments come from a call, as for `alloc Map()` above, the default is the last way a parameter binds, after the call's arguments and its expected type ([Operators](operators.md#operators)). So a `_` written for such a parameter, as in `Map<_, _, _>`, takes the default when the initializer leaves it unbound.
 
 **A type written with no arguments at all, in an extension's header, still covers every instance**, so `extension Map` extends maps with every hashing type ([04](../04-types/structs.md#initializers)). **Generic code that should take any hashing type declares a parameter for it**, as `reportAny` does, since `Map<K, V>` in a signature means `Map<K, V, SeededHashing>`.
 
@@ -221,7 +221,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 - **Conformances are declared** in the type's module or the protocol's (the orphan rule), so lookup is local. An implied conformance obeys it too. Take a conformance to `Q` declared in neither the type's module nor that of a protocol `B` that `Q` inherits. It implies one to `B` only where the type's conformance to `B` is already declared in the type's module or `B`'s, or given by the language. Otherwise it is a compile error that asks for that declaration. So every module that sees the type and `B` sees the one conformance between them.
 - **A conformance is one fact for the whole program.** An extension declares a conformance only at a file's top level, never inside a function's or a type's body, where one declaration would stand for one conformance per instantiation. A local type declares its own conformances in its header.
 - **A type conforms to a protocol through one conformance.** A conformance to a protocol `Q` implies one, with its conditions, to each protocol `Q` inherits, except where a declared conformance to that protocol already holds for every type it covers. Implied conformances of one type to one protocol with the same conditions are one, so `Comparable, Hashable` implies `Equatable` once. Any other two conformances of one type to one protocol, declared or implied, are a compile error whatever their `where` clauses, since generic code could then see one associated type as two types.
-- **Derived and restricted marker protocols are never implied.** A conformance to `Q` implies none of the marker protocols the language derives or restricts: `Copyable`, `Sendable`, `Frozen`, `Pod`, `TrivialFree`, `Scoped`, `Synchronized` and `SimdLane`. Each one `Q` inherits must already hold for every type the conformance covers, derived or declared under that protocol's own rules. Otherwise the conformance is a compile error, as listing `Copyable` for a move-only type is ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). So a protocol that inherits `Copyable` admits only copyable types, and a type conforming to `AllocatorImpl`, which inherits `Synchronized`, declares `: unsafe Synchronized` itself, unconditionally (next).
+- **Derived and restricted marker protocols are never implied.** A conformance to `Q` implies none of the marker protocols the language derives or restricts: `Copyable`, `Sendable`, `Frozen`, `Pod`, `TrivialFree`, `Scoped`, `Synchronized` and `SimdLane`. Each one `Q` inherits must already hold for every type the conformance covers, derived or declared under that protocol's own rules. Otherwise the conformance is a compile error, as listing `Copyable` for a move-only type is ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). So a protocol that inherits `Copyable` admits only copyable types, and a type conforming to `Allocator`, which inherits `Synchronized`, declares `: unsafe Synchronized` itself, unconditionally (next).
 - **`~Copyable`, `~Sendable`, `Scoped` and `Synchronized` are declared unconditionally.** Each is declared in the type's own module, in its declaration or in an unconditional extension ([04](../04-types/structs.md#initializers)). None is declared in an extension that gives some of the type's generic arguments, such as an extension of `Cell<Int>`, or that has a `where` clause. Generic code relies on this, since it derives a generic type's copyability, sendability and scope from its fields, its type arguments and these declarations, for every type argument at once ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types), [07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
 **What a member can witness depends on what its name allows where the conformance is declared:**
@@ -235,7 +235,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
     - **Thread-locals.** A `@threadlocal` static `var` witnesses no place requirement ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)), since every access to it is a dynamic access that a view of it can't outlast, by rule 6 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). When its type is copyable, it witnesses a `{ get }` or `{ get set }` requirement, each access copying under its own dynamic access.
 - **An `unsafe` witness, a function, initializer, operator, subscript or accessor, meets only an `unsafe` requirement**, or any requirement in a conformance declared `: unsafe P`, promising that every call generic code can make through it is safe. An `unsafe` requirement's callers write `unsafe`, except the build's call for an interned literal ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe)).
 
-**`unsafe protocol P` declares a contract the compiler can't check**, such as "memory is never handed out twice" for `AllocatorImpl` ([06](../06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)).
+**`unsafe protocol P` declares a contract the compiler can't check**, such as "memory is never handed out twice" for `Allocator` ([06](../06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocator-and-arena)).
 
 - **Declared conformances to it are promises.** Every declared conformance to it is written `: unsafe P`. A derived one, as `Frozen` is for a type with no interior mutability ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)), is no promise. `@safe` modules can declare no `: unsafe` conformance, since they reject everything the compiler takes on trust ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)).
 - **Inheriting an `unsafe` protocol.** A conformance to a protocol `Q` that isn't `unsafe` itself but inherits an `unsafe` one promises only through the conformance it implies. It needs no `unsafe` when every type it covers already conforms to that protocol, by a conformance declared elsewhere whose conditions `Q`'s imply. Nor does it when that protocol is one of the marker protocols the language derives or restricts, which are never implied and so already hold ([above](#conformances)). Otherwise it is written `: unsafe Q`.
@@ -249,8 +249,8 @@ func drawAll(_ items: Span<any Drawable>, _ ctx: mutable DrawContext) {
     for d in items { d.draw(&ctx) }                  // dynamic dispatch, visible in the signature
 }
 
-var widgets = List<Box<any Widget>>()
-widgets.append(Box(Button(label: "Play")))          // allocation, visible in source
+var widgets = alloc List<Box<any Widget>>()
+widgets.append(alloc Box(Button(label: "Play")))    // allocation, visible in source
 for w in &widgets { w.value.update(dt) }           // mutable any Widget: mutating requirement, dynamic dispatch
 ```
 

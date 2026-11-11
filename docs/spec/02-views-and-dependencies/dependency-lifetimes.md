@@ -123,7 +123,7 @@ struct SpanIterator<T>(var rest: Span<T>): SharedIterator, Scoped {
     mutating func next() -> Borrow<T>? where return outlives self { ... }   // elements borrow the collection, not the iterator
 }
 
-var names = List<StringView>()
+var names = alloc List<StringView>()
 for s in table.entries { names.append(s.name.view) }   // names depends on 'table', shared
 use(names)                                              // fine; mutating 'table' here would be the error
 ```
@@ -226,14 +226,14 @@ cur = Node()                                     // replaces the node in tree.ro
 A cursor walking down a structure moves the name itself with `rebind … to …`:
 
 ```swift
-struct Node(var value: Int = 0, var children: List<Box<Node>> = [])
+struct Node(var value: Int = 0, var children: List<Box<Node>> = alloc [])
 
 var cur = &tree.root
 for i in path {
     guard i < cur.children.count else { break }
     rebind cur to &cur.children[i].value         // 'cur' now names that child; nothing is written
 }
-cur.children.append(Box(Node(value: 0)))
+cur.children.append(alloc Box(Node(value: 0)))
 tree.root.value = 1                              // error if placed before the last use of 'cur'
 ```
 

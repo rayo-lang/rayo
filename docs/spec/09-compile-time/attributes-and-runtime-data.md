@@ -17,7 +17,7 @@ struct Replicated(var reliable: Bool = false): Attribute
 struct Enemy(
     @Bounds(0, 500) @Tooltip(text: "Hit points") var hp: Float = 100,
     @Replicated var pos: Vec3,
-    @Transient var cachedPath: List<Vec3> = [],
+    @Transient var cachedPath: List<Vec3> = alloc [],
 )
 ```
 
