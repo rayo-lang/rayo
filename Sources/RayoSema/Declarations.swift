@@ -49,8 +49,8 @@ struct Declarations {
         }
     }
 
-    /// The type `name`, written at `range`, names: one of the file's structs, which shadow the prelude's types, or
-    /// one of those. Reports a name that names no type, and returns nil for it.
+    /// Resolves `name` to one of the file's structs or one of the prelude's types, or reports that `name`, written
+    /// at `range`, names neither, and returns nil.
     private func resolve(named name: String, at range: SourceRange, reporting errors: ErrorList) -> RayoType? {
         // A struct shadows the prelude's type of its name.
         if let id = structs[name] { return .structure(id) }

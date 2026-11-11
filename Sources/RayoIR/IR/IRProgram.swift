@@ -3,7 +3,7 @@ import RayoSema
 /// Rayo IR: a checked program as a control-flow graph of basic blocks over numbered locals, which code
 /// generation works from.
 public struct IRProgram: Equatable, Sendable {
-    /// The program's structs, and how a value of each type lies in memory.
+    /// The program's structs, laid out.
     public var types: TypeTable
     /// The program's functions, indexed by `FunctionID`.
     public var functions: [IRFunction]

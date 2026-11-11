@@ -19,9 +19,12 @@ struct StructChecker {
         _ structs: [StructDecl], besides functions: [FuncDecl], in declarations: inout Declarations,
     ) -> TypeTable? {
         let ids = declareNames(of: structs, besides: functions, in: &declarations)
+
         // A field may name any struct, so every name is declared before a field is checked.
-        let declared = checkFields(of: structs, declaredAs: ids, in: declarations)
-        guard !reportContainment(among: declared) else { return nil }
+        let declared = declareFields(of: structs, declaredAs: ids, in: declarations)
+
+        guard !reportSelfContaining(among: declared) else { return nil }
+
         return types(of: declared)
     }
 
@@ -72,7 +75,7 @@ struct StructChecker {
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
     /// with their fields' types.
-    private func checkFields(
+    private func declareFields(
         of structs: [StructDecl], declaredAs ids: [StructID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
@@ -124,8 +127,8 @@ struct StructChecker {
     }
 
     /// Reports each of `structs`, which are indexed by `StructID`, that contains itself through its fields at any
-    /// depth, and returns whether any does.
-    private func reportContainment(among structs: [DeclaredStruct]) -> Bool {
+    /// depth, and returns whether it reported any.
+    private func reportSelfContaining(among structs: [DeclaredStruct]) -> Bool {
         let containing = structs.filter { contained(in: $0, among: structs).contains($0.id.index) }
         for structure in containing {
             errors.report(.containsItself(name: structure.id.name), at: structure.declaration.nameRange)

@@ -42,8 +42,9 @@ public struct TypeTable: Equatable, Sendable {
     }
 
     /// The layout of the struct at `index` in `structs`. `laidOut` keeps it, with the layout of each struct it holds.
-    private static func layout(ofStruct index: Int, in structs: [StructType],
-                               laidOut: inout [StructLayout?]) -> StructLayout {
+    private static func layout(
+        ofStruct index: Int, in structs: [StructType], laidOut: inout [StructLayout?],
+    ) -> StructLayout {
         // A struct laid out already keeps its layout.
         if let layout = laidOut[index] { return layout }
 

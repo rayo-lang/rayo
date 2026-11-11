@@ -148,7 +148,7 @@ struct ExpressionChecker {
                 errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
                 return nil
             }
-            // Values of a type that `==` can't compare are reported.
+            // Only Ints and Bools compare: a Void value holds nothing, and a struct has no equality of its own yet.
             guard isComparable(left.type) else {
                 errors.report(.incomparable(op: spelled, type: "\(left.type)"), at: range)
                 return nil

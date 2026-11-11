@@ -3,9 +3,8 @@ import RayoSyntax
 import Testing
 
 struct LayoutTests {
-    @Test
-    func `a struct's fields lie in memory by decreasing alignment, fields of one alignment in declaration order`()
-        throws {
+    @Test("a struct's fields lie in memory by decreasing alignment, fields of one alignment in declaration order")
+    func fieldOrder() throws {
         let hit = try layout(of: "Hit", in: types("struct Hit(var crit: Bool, var damage: Int, let team: Bool)"))
         #expect(hit.fieldOrder == [1, 0, 2])
         #expect(hit.fieldOffsets == [8, 0, 9])
