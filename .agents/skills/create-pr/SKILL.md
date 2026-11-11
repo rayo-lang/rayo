@@ -23,7 +23,7 @@ Find the issues the branch works on: the issue the task started from, or else an
 
 ## 3. Write the title and body
 
-**Title:** one line stating what the change does, as a Conventional Commits subject: `type(scope): summary`, the summary starting with a lowercase imperative verb, and `!` before the colon for a breaking change. Aim for a title under 65 characters, since the merge commit that takes it adds ` (#N)`, so `git log --oneline` and GitHub show it whole; a reviewer treats its length as advice, never a finding.
+**Title:** one line stating what the change does, as a Conventional Commits subject: `type(scope): summary`, the summary starting with a lowercase imperative verb, and `!` before the colon for a breaking change. Aim for a title under 65 characters, so that with the ` (#N)` its merge commit adds, `git log --oneline` and GitHub still show it whole; a reviewer treats its length as advice, never a finding.
 
 **Body:**
 
