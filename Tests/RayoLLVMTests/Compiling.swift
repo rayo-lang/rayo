@@ -1,4 +1,5 @@
 import Foundation
+import LLVM
 import RayoIR
 import RayoLLVM
 import RayoLLVMInstall

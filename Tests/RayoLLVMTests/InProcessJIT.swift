@@ -1,5 +1,6 @@
 import CLLVM
 import CLLVMJIT
+import LLVM
 @testable import RayoLLVM
 import RayoLLVMTestSupport
 

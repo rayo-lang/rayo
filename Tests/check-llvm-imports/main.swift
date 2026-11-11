@@ -3,7 +3,7 @@ import LLVMImportCheck
 import PackageGraph
 
 /// The modules that may import LLVM's C modules.
-let allowedModules: Set<String> = ["RayoLLVM", "RayoLLVMInstall", "RayoLLVMTests"]
+let allowedModules: Set<String> = ["LLVM", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTests"]
 
 /// Reads the Swift files under `directories`, and returns their text by their paths relative to the current
 /// directory, with `/` between the paths' components.

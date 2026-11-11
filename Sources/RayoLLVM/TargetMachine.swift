@@ -1,4 +1,5 @@
 internal import CLLVM
+import LLVM
 
 /// Why LLVM can't compile for the host, or nil when it can. Initialising it registers the host's target, once per
 /// process, since registration isn't safe to run on two threads at once.
