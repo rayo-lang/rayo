@@ -23,12 +23,17 @@ func diagnostics(_ source: String) -> [Diagnostic] {
 
 /// The errors that `body`, as `main`'s body, reports, each as its position, code and message.
 func errorLines(inMain body: String) -> [String] {
-    diagnostics("func main() {\n\(body)\n}").map(\.description)
+    diagnostics(mainSource(body)).map(\.description)
 }
 
 /// The codes of the errors that `body`, as `main`'s body, reports, and the text of `main.rayo` each covers.
 func codesAndCoverage(inMain body: String) -> (codes: [ErrorCode], covered: [String]) {
-    let source = "func main() {\n\(body)\n}"
+    let source = mainSource(body)
     let reported = diagnostics(source)
     return (reported.map(\.code), coveredText(reported, in: source))
+}
+
+/// The source of a program whose `main` runs `body`.
+private func mainSource(_ body: String) -> String {
+    "func main() {\n\(body)\n}"
 }

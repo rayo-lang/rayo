@@ -54,8 +54,14 @@ struct ParserErrorTests {
 
     @Test func `'return' takes a value on its own line, and a 'return' that ends its line takes none`() {
         // A `return` with its value on its line, one that ends its line before a value, and one in an `if` parse.
-        let source = "func f() -> Int { return 1 }\nfunc g() {\n    return\n    1\n}\n"
-            + "func h() { if true { return } }"
+        let source = """
+            func f() -> Int { return 1 }
+            func g() {
+                return
+                1
+            }
+            func h() { if true { return } }
+            """
         #expect(errors(source) == [])
 
         // A value that doesn't end the statement, a missing value, and `return` as a name are each an error.
