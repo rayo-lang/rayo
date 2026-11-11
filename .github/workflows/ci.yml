@@ -262,7 +262,8 @@ jobs:
             -o "$RUNNER_TEMP/llvm.tar.xz" "$release/clang+llvm-$LLVM_BUILD-x86_64-pc-windows-msvc.tar.xz"
       # The archive holds a whole install, thousands of files of it libraries rayoc doesn't link, so only what rayoc
       # builds against and its tests run is unpacked: LLVM's C API headers and library, the release's version files,
-      # and the tools. tar lists each file it writes, and fails on any of these the archive lacks.
+      # and the tools. Windows' own tar takes many minutes to decompress the archive, so the 7-Zip the runner's
+      # image installs decompresses it, and a second 7-Zip unpacks those files from the stream, listing each.
       - name: Unpack LLVM
         if: steps.llvm-archive.outputs.cache-hit != 'true'
         run: |
@@ -271,10 +272,14 @@ jobs:
             include/llvm-c include/llvm/Config lib/LLVM-C.lib bin/LLVM-C.dll lib/cmake/lld
             bin/clang.exe bin/lld.exe bin/lld-link.exe bin/llvm-config.exe bin/llvm-nm.exe bin/llvm-readobj.exe
           )
-          mkdir -p "$RUNNER_TEMP/llvm"
-          # Windows' own tar reads the drive in a Windows path as a drive; Git Bash's reads it as a remote host.
-          /c/Windows/System32/tar.exe -xvf "$(cygpath -w "$RUNNER_TEMP/llvm.tar.xz")" \
-            -C "$(cygpath -w "$RUNNER_TEMP/llvm")" --strip-components=1 "${members[@]/#/$name/}"
+          7z x -so "$(cygpath -w "$RUNNER_TEMP/llvm.tar.xz")" \
+            | 7z x -si -ttar -bb1 -o"$(cygpath -w "$RUNNER_TEMP")" "${members[@]/#/$name/}"
+          mv "$RUNNER_TEMP/$name" "$RUNNER_TEMP/llvm"
+
+          # 7-Zip unpacks nothing for a file the archive lacks, and doesn't fail.
+          for member in "${members[@]}"; do
+            [ -e "$RUNNER_TEMP/llvm/$member" ] || { echo "::error::the LLVM archive holds no $member"; exit 1; }
+          done
       # Only a push to main saves LLVM, as it does the build, so pull requests share main's one copy.
       - name: Save LLVM
         if: github.event_name == 'push' && steps.llvm-archive.outputs.cache-hit != 'true'
