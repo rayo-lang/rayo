@@ -11,6 +11,11 @@ struct Workbench: ~Copyable {
         builder = context.makeBuilder()
     }
 
+    /// Ends the workbench, handing its module on.
+    consuming func takeModule() -> Module {
+        module
+    }
+
     var int64: IntegerType<I64> { context.integerType(I64.self) }
     var bool: IntegerType<I1> { context.integerType(I1.self) }
 

@@ -56,7 +56,7 @@ private func outcome(
     try module.ready(exporting: ["f"])
 
     // Run `f` in this process, and read what it came to as the type it gave.
-    let jit = try InProcessJIT(llvmIR: module.llvmIR)
+    let jit = try InProcessJIT(running: module.takeModule())
     return switch try jit.call("f", left, right) {
     case .returned(let value): givesBool ? .bool(value != 0) : .int(value)
     case .panicked(let message): .panic(message)

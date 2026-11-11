@@ -35,9 +35,9 @@ struct OperatorModule: ~Copyable {
         borrow { programModule.emitter }
     }
 
-    /// The text of the module's IR.
-    var llvmIR: String {
-        program.module.text
+    /// Ends the module, handing on the LLVM module it emitted into.
+    consuming func takeModule() -> Module {
+        programModule.takeModule()
     }
 
     /// Defines `name(i64, i64) -> i64`, which takes its parameters as the type `operands` names and returns what

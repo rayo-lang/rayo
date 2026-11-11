@@ -22,6 +22,11 @@ struct ProgramEmitter: ~Copyable {
         self.checksOverflow = checksOverflow
     }
 
+    /// Ends the emitter, handing on the module it emitted into.
+    consuming func takeModule() -> Module {
+        module
+    }
+
     /// Defines the program's functions in the module, its structs as named LLVM types, calling `runtime`'s
     /// functions where the program calls the runtime. Throws where the IR gives an instruction a value of a type it
     /// doesn't take.

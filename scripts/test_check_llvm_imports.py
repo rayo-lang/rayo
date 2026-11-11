@@ -20,7 +20,7 @@ class CheckLLVMImportsTests(unittest.TestCase):
             f.write(text)
 
     def test_an_allowed_directory_may_import_llvms_c_modules(self):
-        self.write('Sources/LLVM/Context.swift', 'import CLLVM\nimport CLLVMJIT\n')
+        self.write('Sources/LLVM/Context.swift', 'import CLLVM\n')
 
         self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [])
 
@@ -32,7 +32,7 @@ class CheckLLVMImportsTests(unittest.TestCase):
         ])
 
     def test_an_import_counts_in_every_form_swift_writes_one(self):
-        for source in ['import CLLVMJIT', '@preconcurrency import CLLVM', '@_implementationOnly import CLLVM',
+        for source in ['import CLLVM', '@preconcurrency import CLLVM', '@_implementationOnly import CLLVM',
                        'internal import CLLVM', '    package import CLLVM', 'import struct CLLVM.LLVMOpaqueValue',
                        'import CLLVM.Core', '#if canImport(CLLVM)\nimport CLLVM\n#endif',
                        '@available(macOS 10.15, *)\n@preconcurrency\nimport CLLVM']:
@@ -84,12 +84,12 @@ class CheckLLVMImportsTests(unittest.TestCase):
         ])
 
     def test_the_findings_of_several_files_come_in_order_of_path(self):
-        self.write('Tests/RayoIRTests/Lowered.swift', 'import CLLVMJIT\n')
+        self.write('Tests/RayoIRTests/Lowered.swift', 'import CLLVM\n')
         self.write('Sources/RayoIR/Lowering.swift', '\nimport CLLVM\n')
 
         self.assertEqual(findings(self.root, allowed=['Sources/LLVM', 'Sources/RayoLLVM']), [
             'Sources/RayoIR/Lowering.swift:2: imports CLLVM, which only Sources/LLVM and Sources/RayoLLVM may import',
-            'Tests/RayoIRTests/Lowered.swift:1: imports CLLVMJIT, which only Sources/LLVM and Sources/RayoLLVM may '
+            'Tests/RayoIRTests/Lowered.swift:1: imports CLLVM, which only Sources/LLVM and Sources/RayoLLVM may '
             'import',
         ])
 

@@ -188,18 +188,16 @@ let package = Package(
             "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),
         .testTarget(name: "LLVMTests", dependencies: ["LLVM"]),
-        .systemLibrary(name: "CLLVMJIT", path: "Tests/CLLVMJIT"),
         .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),
         .testTarget(name: "RayoLLVMTests", dependencies: [
-            "CLLVM", "CLLVMJIT", "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoSema",
-            "RayoSource", "RayoSyntax",
+            "CLLVM", "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoSema", "RayoSource",
+            "RayoSyntax",
         ]),
     ]
 )
 
 // A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
-// directories of the tools that link a program, which CLLVM's header holds. A target that imports CLLVMJIT reads
-// LLVM's headers as well.
+// directories of the tools that link a program, which CLLVM's header holds.
 for target in package.targets where readsLLVMHeaders(target, among: package.targets) {
     target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
         "-Xcc", "-I\(llvmPrefix)/include",
@@ -212,13 +210,11 @@ for target in package.targets where readsLLVMHeaders(target, among: package.targ
 func readsLLVMHeaders(_ target: Target, among targets: [Target]) -> Bool {
     target.dependencies.contains { dependency in
         switch dependency {
-        // A dependency reaches LLVM's headers when it is CLLVM or CLLVMJIT, or one of `targets` that depends on
-        // either.
+        // A dependency reaches LLVM's headers when it is CLLVM, or one of `targets` that depends on it.
         case .targetItem(let name, _), .byNameItem(let name, _):
-            return ["CLLVM", "CLLVMJIT"].contains(name)
-                || targets.contains { $0.name == name && readsLLVMHeaders($0, among: targets) }
+            return name == "CLLVM" || targets.contains { $0.name == name && readsLLVMHeaders($0, among: targets) }
 
-        // A product of another package is neither.
+        // A product of another package is not one.
         default:
             return false
         }
