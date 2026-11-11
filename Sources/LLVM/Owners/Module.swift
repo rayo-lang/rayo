@@ -51,14 +51,23 @@ public struct Module: ~Copyable {
     public func link(_ other: consuming Module) throws(LLVMError) {
         // Link `other` in, which LLVM disposes of whether or not the link succeeds.
         let otherName = other.name
-        let earlierErrors = context.errors.count
+        let earlierErrors = reportedErrorCount
         let failed = LLVMLinkModules2(ref, other.ref) != 0
         other.owns = false
 
         // A link that succeeds is done; one that fails throws the errors LLVM reported as it linked.
         guard failed else { return }
-        let reasons = context.errors.dropFirst(earlierErrors).joined(separator: "\n")
-        throw LLVMError(message: "LLVM couldn't link \(otherName) into \(name):\n\(reasons)")
+        throw error("LLVM couldn't link \(otherName) into \(name):", reportedAfter: earlierErrors)
+    }
+
+    /// How many errors LLVM has reported in the module's context.
+    package var reportedErrorCount: Int { context.errors.count }
+
+    /// An error that says `summary`, then `detail` and the errors LLVM reported in the module's context after the
+    /// first `earlier` of them, whichever there are.
+    package func error(_ summary: String, detail: String = "", reportedAfter earlier: Int) -> LLVMError {
+        let reasons = ([detail] + context.errors.dropFirst(earlier)).filter { !$0.isEmpty }
+        return LLVMError(message: ([summary] + reasons).joined(separator: "\n"))
     }
 
     // MARK: Functions and globals

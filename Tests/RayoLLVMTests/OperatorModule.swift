@@ -3,7 +3,7 @@ import LLVM
 @testable import RayoLLVM
 
 /// A module for the host, into which a debug or a release build's operators are emitted in functions of their own.
-struct OperatorModule {
+struct OperatorModule: ~Copyable {
     /// The type of the operands of a function's operators.
     enum Operands: Equatable {
         case ints
@@ -64,6 +64,6 @@ struct OperatorModule {
     /// `exported` names where the compiler would export only the program's entry point. The runtime is left out, so
     /// that the stand-in for its panic catches a panic.
     func ready(exporting exported: Set<String>) throws {
-        try programModule.target.ready(module, exporting: exported)
+        try module.ready(for: programModule.target, exporting: exported)
     }
 }
