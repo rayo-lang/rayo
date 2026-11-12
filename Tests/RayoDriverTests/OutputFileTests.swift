@@ -11,9 +11,10 @@ struct OutputFileTests {
             #expect(rayo(["run", "main.rayo"], in: directory) == answer)
 
             // Hold each file the run left open for writing, as a process that outlives the run might.
-            let leftFiles = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            let leftoverFiles = try FileManager.default
+                .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
                 .filter { $0.lastPathComponent != "main.rayo" }
-            let openHandles = try leftFiles.map { try FileHandle(forWritingTo: $0) }
+            let openHandles = try leftoverFiles.map { try FileHandle(forWritingTo: $0) }
             defer { for handle in openHandles { try? handle.close() } }
 
             #expect(rayo(["run", "main.rayo"], in: directory) == answer)
