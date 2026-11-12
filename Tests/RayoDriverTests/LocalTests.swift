@@ -17,7 +17,7 @@ struct LocalTests {
     @Test("a local may share a function's name: a call reaches the function, and every other use the local")
     func sharesFunctionName() {
         #expect(output("""
-            var print = 1
+            var print: Int
             print = 3
             print += 2
             print(print)
@@ -28,7 +28,7 @@ struct LocalTests {
 
     @Test("'copy' gives a local's value, and leaves the local as it was")
     func copies() {
-        #expect(output("var a = 1\nlet b = copy a\na = 2\nvar c = 0\nc = copy b\nprint(a + b + c)") == "4\n")
+        #expect(output("var a = 1\nlet b = copy a\na = 2\nvar c: Int\nc = copy b\nprint(a + b + c)") == "4\n")
     }
 
     @Test("compound assignments apply their operator", arguments: [
@@ -41,7 +41,7 @@ struct LocalTests {
 
     @Test("a compound assignment that divides by zero panics at the assignment")
     func compoundPanic() {
-        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n}") == CommandResult(
+        #expect(run("func main() {\n    var x = 1\n    var zero = 0\n    x /= zero\n    print(x)\n}") == CommandResult(
             exitCode: ProgramRuntime.panicExitCode, output: "", errors: "main.rayo:4:5: panic: division by zero\n"))
     }
 }

@@ -32,7 +32,7 @@ struct LineTests {
     @Test("a statement goes on past a line that ends in an operator, '=' or an open '('", arguments: [
         ("let total = 1 +\n    2 * 3\nprint(total)", "7"),
         ("let ok = 2 >\n    1\nif ok { print(1) }", "1"),
-        ("var x = 0\nx =\n    4\nprint(x)", "4"),
+        ("var x: Int\nx =\n    4\nprint(x)", "4"),
         ("print(\n    1 + 1,\n)", "2"),
     ])
     func continued(body: String, expected: String) {

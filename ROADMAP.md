@@ -20,7 +20,7 @@ These are still to do:
 
 - **Fields.** A program reads nested fields, and assigns a field of a `var` local. Moving a field out leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
 - **Issues.**
-  - [#149](https://github.com/rayo-lang/rayo/issues/149), [#178](https://github.com/rayo-lang/rayo/issues/178) and [#179](https://github.com/rayo-lang/rayo/issues/179) in the compiler;
+  - [#178](https://github.com/rayo-lang/rayo/issues/178) and [#179](https://github.com/rayo-lang/rayo/issues/179) in the compiler;
   - [#220](https://github.com/rayo-lang/rayo/issues/220) and [#221](https://github.com/rayo-lang/rayo/issues/221) on Windows;
   - the refactor [#177](https://github.com/rayo-lang/rayo/issues/177).
 
@@ -58,7 +58,7 @@ These are still to do:
 
 These are still to do:
 
-- `mutable` and `owned` parameters, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity);
+- `mutable` and `owned` parameters, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an `owned` parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
 - `mutating func`, which takes `self` as a `mutable` parameter.
 
 ## Not yet planned

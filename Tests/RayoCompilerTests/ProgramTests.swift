@@ -90,7 +90,7 @@ struct ProgramTests {
     }
 
     @Test(arguments: [
-        ("let x: Int = 1; let y: Bool = true; print(x)", []),
+        ("let x: Int = 1; let y: Bool = true; print(x); print(y)", []),
         ("let x: Int8 = 1", [ErrorCode.notAType(name: "Int8")]),
         ("let x: Vec = 1", [.notAType(name: "Vec")]),
         ("var x: List", []),

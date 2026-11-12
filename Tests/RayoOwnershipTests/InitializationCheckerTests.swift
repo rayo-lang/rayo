@@ -5,9 +5,6 @@ import RayoOwnership
 import RayoSema
 import RayoSource
 
-/// The locals of the function each test checks: `x` and `y` are `var`s, and `k` is a `let`.
-private let x = 0, y = 1, k = 2
-
 struct InitializationCheckerTests {
     @Test("a use of a local after a move reports that it was moved, at the use")
     func useAfterMove() {
@@ -247,64 +244,4 @@ struct InitializationCheckerTests {
 /// are its parameters.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
     InitializationChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
-}
-
-/// A program of `functions`, the first of them its `main`, which declares no structs.
-private func program(of functions: [IRFunction]) -> IRProgram {
-    IRProgram(types: .empty, functions: functions, main: FunctionID(index: 0))
-}
-
-/// A function made of `blocks`, whose locals are `x`, `y` and `k`, the first `parameterCount` of them its
-/// parameters.
-private func function(_ blocks: [BasicBlock], parameterCount: Int = 0) -> IRFunction {
-    let locals = [
-        IRLocal.source(name: "x", kind: .var, type: .int), .source(name: "y", kind: .var, type: .int),
-        .source(name: "k", kind: .let, type: .int),
-    ]
-    return IRFunction(name: "f()", parameterCount: parameterCount, result: .void, locals: locals, blocks: blocks)
-}
-
-private func goto(_ block: Int) -> Terminator {
-    .goto(BlockID(index: block))
-}
-
-/// A branch on a condition that the checker can't tell the value of.
-private func branch(then: Int, otherwise: Int) -> Terminator {
-    .branch(.constant(.bool(true)), then: BlockID(index: then), otherwise: BlockID(index: otherwise))
-}
-
-/// A range that starts and ends at `offset` in a file of one line, so each use a test writes has a range of its
-/// own.
-private func at(_ offset: Int) -> SourceRange {
-    let location = SourceLocation(line: 1, column: offset + 1, offset: offset)
-    return SourceRange(location, location)
-}
-
-private func read(_ local: Int, at offset: Int) -> Operand {
-    .read(Place(local: LocalID(index: local), range: at(offset)))
-}
-
-private func move(_ local: Int, at offset: Int) -> Operand {
-    .move(Place(local: LocalID(index: local), range: at(offset)))
-}
-
-/// Stores what `value` computes in `local`, which the source names at `offset`.
-private func store(_ value: Rvalue, in local: Int, at offset: Int = 0) -> Statement {
-    .compute(destination: Place(local: LocalID(index: local), range: at(offset)), value: value, range: at(0))
-}
-
-private func store(_ operand: Operand, in local: Int, at offset: Int = 0) -> Statement {
-    store(.use(operand), in: local, at: offset)
-}
-
-private func store(_ value: Int64, in local: Int, at offset: Int = 0) -> Statement {
-    store(.constant(.int(value)), in: local, at: offset)
-}
-
-private func declare(_ local: Int) -> Statement {
-    .declare(LocalID(index: local))
-}
-
-private func printing(_ operand: Operand) -> Statement {
-    .compute(destination: nil, value: .call(.printInt, arguments: [operand]), range: at(0))
 }

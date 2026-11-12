@@ -141,6 +141,9 @@ public enum Compiler {
             Check()
             Lower()
             CheckOwnership()
+            // Only a program whose locals hold a value at each use is checked for values no code reads, so a
+            // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
+            CheckUnusedValues()
         }
     }
 

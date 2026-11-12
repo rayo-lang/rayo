@@ -60,7 +60,7 @@ struct MoveTests {
             i += 1
             print(copy x)
             if i == 1 {
-            let y = x
+            _ = x
             continue
             }
             x = 5
@@ -92,7 +92,7 @@ struct MoveTests {
         ("func f(x: Int) { let y = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { _ = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) {\n    var y = 0\n    y = x\n}", [.moveFromParameter(name: "x")], ["x"]),
-        ("func f(x: Int) -> Int {\n    let y = copy x\n    print(x)\n    return copy x\n}", [], []),
+        ("func f(x: Int) -> Int {\n    let y = copy x\n    print(x + y)\n    return copy x\n}", [], []),
     ])
     func borrowedParameter(declaration: String, expected: [ErrorCode], covered: [String]) {
         let source = "func main() {}\n" + declaration
