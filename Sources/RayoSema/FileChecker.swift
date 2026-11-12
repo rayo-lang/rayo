@@ -6,7 +6,7 @@ import RayoSyntax
 /// when a call first needs that type, so a call may come before the function it calls.
 final class FileChecker {
     let errors = ErrorList()
-    private(set) var declarations = Declarations()
+    private(set) var declarations: Declarations
     private let file: SourceFile
     /// Which kind of declaration each of the file's top-level names belongs to.
     let names: TopLevelNames
@@ -26,6 +26,7 @@ final class FileChecker {
     init(_ file: SourceFile) {
         self.file = file
         names = TopLevelNames(of: file)
+        declarations = Declarations(names: names)
     }
 
     func check() -> CheckedProgram? {
