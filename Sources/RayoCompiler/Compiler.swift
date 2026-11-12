@@ -163,7 +163,7 @@ public enum Compiler {
 }
 
 private extension Build {
-    /// The build that `option`, a build mode as `rayoc` spells it, names, or nil when it names none.
+    /// The build `option` names, as `rayoc`'s command line spells a build mode.
     init?(option: String) {
         switch option {
         case "--debug": self = .debug

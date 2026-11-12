@@ -1,5 +1,5 @@
-/// A build `rayoc` makes of a program, which decides how the program's code is emitted and optimised.
-public enum Build: CaseIterable, Sendable {
+/// The build mode `rayoc` compiles a program in, which decides how the program's code is emitted and optimised.
+package enum Build: CaseIterable, Sendable {
     case debug
     case release
 
