@@ -54,13 +54,5 @@ gh pr merge <N> -R rayo-lang/rayo --auto --squash --match-head-commit <approved 
 - **If GitHub refuses auto-merge because the pull request can already merge**, run the same command without `--auto`: it merges at once.
 - **Before you push to a pull request whose auto-merge is on, or edit its title or body**, turn it off with `gh pr merge <N> -R rayo-lang/rayo --disable-auto`, so nothing the next round hasn't approved can merge, whether a new head or the old subject and message. Turn it on again, with the subject and message that round's head and title call for, once that round approves.
 - **Once `main` moves ahead of a pull request, rebase it onto `main`** and send it to the reviewer as a round, since `main` takes only a branch that is up to date with it; CI runs again on the new head. The bottom of a stack moves only with the branches above it, through `gh stack rebase` and `gh stack push`, a round for each pull request that moves.
-- **A stacked pull request merges by hand, through GitHub's asynchronous merge API**: GitHub refuses `gh pr merge` for one and has no auto-merge for it. Only the bottom of a stack merges, since GitHub merges every pull request below the one it is given along with it. Once its review has approved its head and CI has passed on that head, send the API the same head, subject and message as above:
-
-  ```sh
-  gh api --method PUT repos/rayo-lang/rayo/pulls/<N>/merge-async -f merge_method=squash \
-    -f merge_action=direct_merge -f sha=<approved head> \
-    -f commit_title="<pull request title> (#<N>)" -F commit_message=@<message file>
-  ```
-
-  It answers with a `uuid` in `details`; poll `gh api repos/rayo-lang/rayo/pulls/<N>/merge-async/<uuid> --jq .status` until it says `merged`. `failed` means nothing merged, and `details.message` says why. `gh stack merge` sends none of the head, subject and message, so its squash commit would carry GitHub's default message, the pull request's commit messages one after another.
+- **A stacked pull request merges by hand, through GitHub's asynchronous merge API**: GitHub refuses `gh pr merge` for one and has no auto-merge for it. Only the bottom of a stack merges, since GitHub merges every pull request below the one it is given along with it. Once its review has approved its head and CI has passed on that head, give the API that head, the subject and the message file as above; `gh stack merge` passes none of the three.
 - **A pull request whose CI fails doesn't merge.** Fix the failure in a new commit, and send it to the reviewer as a round.
