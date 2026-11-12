@@ -42,6 +42,21 @@ struct StructLoweringTests {
         #expect(main == expected)
     }
 
+    @Test func `a copy of a field reads it where it lies, and leaves its struct whole`() throws(RejectedSource) {
+        let main = try loweredMain(withEnemy: "let e = Enemy(hp: 1, armor: 2)\nlet a = copy e.armor\nprint(a + e.hp)")
+        let expected = mainFunction(
+            locals: [letLocal("e", .structure(enemy)), letLocal("a", .int), .temporary(.int)],
+            block(
+                declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
+                declare(1), compute(1, .use(read(0, fields: 1))),
+                compute(2, .binary(.add, read(1), read(0, fields: 0))),
+                compute(nil, .call(.printInt, arguments: [read(2)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
     @Test func `a field of a value that no local holds is read from a temporary that holds the value`()
         throws(RejectedSource) {
         let main = try loweredMain(withEnemy: "print(Enemy(hp: 1, armor: 2).hp)")

@@ -19,7 +19,7 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `'copy' identifier`, `('-' | '!') unary`, or a postfix expression.
+    /// `'-' int-literal`, `'copy' identifier ('.' member)*`, `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -29,10 +29,11 @@ extension Parser {
             advance()
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        // A `copy` takes the name of the local it copies.
+        // A `copy` takes the local it copies, or a field of it.
         if consume(.copy) {
             let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingCopiedName)
-            return Expr(kind: .copy(name: name, nameRange: nameRange), range: range(from: start))
+            let place = try parseMembers(of: Expr(kind: .name(name), range: nameRange))
+            return Expr(kind: .copy(place), range: range(from: start))
         }
         // An expression without a `-` or `!` in front is a postfix one.
         guard case .punct(let punct) = current.kind, let op = punct.unaryOperator else {
@@ -47,7 +48,12 @@ extension Parser {
 
     /// `primary ('.' member)*`.
     private mutating func parsePostfix() throws(ParseFailure) -> Expr {
-        var value = try parsePrimary()
+        try parseMembers(of: parsePrimary())
+    }
+
+    /// After `base`: the members taken of it, each after a `.`.
+    private mutating func parseMembers(of base: Expr) throws(ParseFailure) -> Expr {
+        var value = base
 
         // Each `.` takes a member of the value before it, so `a.b.c` is the `c` of `a.b`.
         while consume(.dot) {

@@ -168,3 +168,72 @@ struct NestedStructTests {
         #expect(run(source, options: mode) == expected)
     }
 }
+
+struct FieldCopyTests {
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a copy of a field is a value of its own, and leaves its struct whole, in debug and in release`(
+        mode: [String],
+    ) {
+        // Each copy starts with the field's value, and changing the copy leaves the field as it was. `e` is read,
+        // copied and passed after the copies are made, and moved last.
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                var hp = copy e.stats.hp
+                var stats = copy e.stats
+                let armor = copy e.armor
+                hp -= 30
+                print(hp)
+                print(stats.speed)
+                stats = Stats(alive: false, hp: 1, speed: 9)
+                print(stats.speed)
+                print(armor)
+                print(e.stats.hp)
+                print(e.stats.speed)
+                let kept = copy e
+                print(kept.stats.alive)
+                print(total(of: e))
+                let last = e
+                print(last.armor)
+            }
+            func total(of e: Enemy) -> Int { e.stats.hp + e.armor }
+            """ + bossEnemyAndStats
+        let output = "70\n3\n9\n5\n100\n3\ntrue\n105\n5\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a function returns a copy of a field of what it borrows, in debug and in release`(mode: [String]) {
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: false, hp: 40, speed: 7), armor: 9)
+                print(armorOf(e))
+                print(statsOf(e).speed)
+                print(statsOf(e).alive)
+                print(hpOf(e))
+            }
+            func armorOf(_ e: Enemy) -> Int { return copy e.armor }
+            func statsOf(_ e: Enemy) -> Stats { return copy e.stats }
+            func hpOf(_ e: Enemy) -> Int { copy e.stats.hp }
+            """ + bossEnemyAndStats
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "9\n7\nfalse\n40\n", errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]], [
+        ("let h = copy e.mana", "4:20: error[E0244]: Enemy has no field 'mana'"),
+        ("let h = copy e.stats.mana", "4:26: error[E0244]: Stats has no field 'mana'"),
+    ])
+    func `a copy of a field the struct doesn't have is an error that names the field, in debug and in release`(
+        mode: [String], failure: (body: String, error: String),
+    ) {
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                print(e.armor)
+                \(failure.body)
+            }
+            """ + bossEnemyAndStats
+        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
+        #expect(run(source, options: mode) == expected)
+    }
+}
