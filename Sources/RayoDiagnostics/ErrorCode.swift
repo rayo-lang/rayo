@@ -97,6 +97,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(126, error: "expected '}' to close the struct's body, found {found}")
     case unclosedStructBody(found: FoundToken)
 
+    @Code(127, error: "expected a member's name after '.', found {found}")
+    case missingMemberName(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "a file without a 'main' function is a library, which can't be built into an executable or run")
@@ -215,14 +218,34 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(240, error: "field defaults aren't supported")
     case fieldDefault
 
-    @Code(241, error: "struct initializers aren't supported")
-    case structInitializer
+    // 241 is unused, and stays so.
 
     @Code(242, error: "'{name}' is a type, not a value")
     case typeAsValue(name: String)
 
     @Code(243, error: "'{name}' is a type, so it can't change")
     case assignToType(name: String)
+
+    @Code(244, error: "{type} has no field '{field}'")
+    case noSuchField(type: String, field: String)
+
+    @Code(245, error: "the call leaves out the field '{field}'")
+    case fieldLeftOut(field: String)
+
+    @Code(246, error: "the call gives the field '{field}' more than once")
+    case fieldGivenTwice(field: String)
+
+    @Code(247, error: "'{field}' must come before '{after}', as the struct declares them")
+    case fieldOutOfOrder(field: String, after: String)
+
+    @Code(248, error: "the field '{field}' takes {expected}, found {found}")
+    case fieldTypeMismatch(field: String, expected: String, found: String)
+
+    @Code(249, error: "the argument names no field of {type}")
+    case argumentNamesNoField(type: String)
+
+    @Code(250, error: "moving a field out of a struct isn't supported")
+    case fieldMove
 
     // MARK: Ownership
 

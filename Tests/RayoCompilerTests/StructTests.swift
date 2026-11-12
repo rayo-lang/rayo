@@ -32,11 +32,10 @@ struct StructTests {
     }
 
     @Test(arguments: [
-        ("S()", ErrorCode.structInitializer),
-        ("let s = S", .typeAsValue(name: "S")),
+        ("let s = S", ErrorCode.typeAsValue(name: "S")),
         ("S = 1", .assignToType(name: "S")),
     ])
-    func `a struct's name used as a call, a value or an assignment's target is reported as a struct's`(
+    func `a struct's name used as a value or an assignment's target is reported as a struct's`(
         body: String, expected: ErrorCode,
     ) {
         let source = "func main() {\n\(body)\n}\nstruct S(var a: Int)"
@@ -49,7 +48,7 @@ struct StructTests {
 
     @Test(arguments: [
         ("let x: Int = 1", "struct Int(var big: Bool)", [ErrorCode.typeMismatch(expected: "Int", found: "Int")]),
-        ("print(1)", "struct print", [.structInitializer]),
+        ("print(1)", "struct print", [.argumentNamesNoField(type: "print")]),
     ])
     func `a struct's name shadows the prelude's type or function of that name`(
         body: String, declaration: String, expected: [ErrorCode],
@@ -142,5 +141,113 @@ struct StructDeclarationTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == names.map { .containsItself(name: $0) })
         #expect(coveredText(reported, in: source) == names)
+    }
+}
+
+/// A struct of two Int fields, whose layout keeps their declaration order.
+private let enemy = "\nstruct Enemy(var hp: Int, let armor: Int)"
+
+struct StructInitializerTests {
+    @Test(arguments: [
+        "_ = Enemy(hp: 1, armor: 2)", "let e = Enemy(\n    hp: 1,\n    armor: 2,\n)", "_ = Empty()",
+        "let hp = 1\n_ = Enemy(hp: copy hp, armor: 2)\nprint(hp)",
+    ])
+    func `a call of a struct's name gives each field's value, labeled, in order, and makes the struct`(body: String) {
+        #expect(errors("func main() {\n\(body)\n}" + enemy + "\nstruct Empty") == [])
+    }
+
+    @Test(arguments: [
+        ("_ = Enemy(hp: 1)", [ErrorCode.fieldLeftOut(field: "armor")], ["Enemy(hp: 1)"]),
+        ("_ = Enemy()", [.fieldLeftOut(field: "hp"), .fieldLeftOut(field: "armor")], ["Enemy()", "Enemy()"]),
+        ("_ = Enemy(hp: 1, armor: 2, speed: 3)", [.noSuchField(type: "Enemy", field: "speed")], ["speed: 3"]),
+        ("_ = Enemy(hp: 1, armor: 2, 3)", [.argumentNamesNoField(type: "Enemy")], ["3"]),
+        ("_ = Enemy(hp: 1, hp: 2, armor: 3)", [.fieldGivenTwice(field: "hp")], ["hp: 2"]),
+        ("_ = Enemy(hp: 1, armr: 2)", [.argumentLabel(expected: .label("armor"), found: .label("armr"))], ["armr: 2"]),
+        ("_ = Enemy(1, armor: 2)", [.argumentLabel(expected: .label("hp"), found: .none)], ["1"]),
+        ("_ = Enemy(armor: 2, hp: 1)", [.fieldOutOfOrder(field: "hp", after: "armor")], ["hp: 1"]),
+        ("_ = Enemy(hp: true, armor: 2)", [.fieldTypeMismatch(field: "hp", expected: "Int", found: "Bool")], ["true"]),
+        (
+            "_ = Enemy(armor: 2, hq: 1)",
+            [.fieldLeftOut(field: "hp"), .noSuchField(type: "Enemy", field: "hq")], ["Enemy(armor: 2, hq: 1)", "hq: 1"],
+        ),
+    ])
+    func `a call that doesn't give each field once, labeled and in order, is an error that names the field`(
+        body: String, expected: [ErrorCode], covered: [String],
+    ) {
+        let source = "func main() {\n\(body)\n}" + enemy
+
+        // Each error covers the call where a field is left out, and otherwise the argument or its value.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == expected)
+        #expect(coveredText(reported, in: source) == covered)
+    }
+
+    @Test(arguments: [
+        ("func main() {\nlet hp = 1\n_ = Enemy(hp: hp, armor: 2)\nprint(hp)\n}", ErrorCode.usedAfterMove(name: "hp")),
+        ("func main() {}\nfunc f(hp: Int) -> Enemy { Enemy(hp: hp, armor: 2) }", .moveFromParameter(name: "hp")),
+        ("func main() {}\nfunc f(e: Enemy) -> Enemy { Enemy(hp: e.hp, armor: 2) }", .fieldMove),
+    ])
+    func `the initializer takes each argument owned, so it moves a local, and can't take a parameter or a field`(
+        source: String, expected: ErrorCode,
+    ) {
+        #expect(errors(source + enemy) == [expected])
+    }
+
+    @Test func `a call of a struct whose field failed checks only its arguments, so the failure doesn't spread`() {
+        #expect(errors("func main() {\n_ = S(a: true, b: Q)\n}\nstruct S(var a: Q)") == [
+            .notDeclared(name: "Q"), .notAType(name: "Q"),
+        ])
+    }
+}
+
+struct FieldReadTests {
+    @Test(arguments: [
+        "func main() {\nlet e = Enemy(hp: 1, armor: 2)\nprint(e.hp - e.armor)\nprint(e.hp)\n}",
+        "func main() {}\nfunc f(e: Enemy) -> Int { -e.armor }",
+        "func main() {}\nfunc f(e: Enemy) -> Bool { e.hp > 0 && f(e: e) }",
+        "func main() {\nprint(Enemy(hp: 1, armor: 2).hp)\n}",
+    ])
+    func `a field of a local, a parameter or a value is read where a borrow suffices, leaving the struct whole`(
+        source: String,
+    ) {
+        #expect(errors(source + enemy) == [])
+    }
+
+    @Test(arguments: [
+        ("print(e.speed)", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
+        ("print(e.0)", .noSuchField(type: "Enemy", field: "0"), "0"),
+        ("print(e.0_07)", .noSuchField(type: "Enemy", field: "0_07"), "0_07"),
+        ("print(e.hp.armor)", .noSuchField(type: "Int", field: "armor"), "armor"),
+        ("let b: Bool = e.hp + 1", .typeMismatch(expected: "Bool", found: "Int"), "e.hp + 1"),
+        ("let f = e\nprint(e.hp)", .usedAfterMove(name: "e"), "e.hp"),
+    ])
+    func `a read of a field the value doesn't have, or of a moved struct, is an error`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = "func main() {\nlet e = Enemy(hp: 1, armor: 2)\n\(body)\n}" + enemy
+
+        // The one error names the type and the field where the field is missing, and covers what is wrong.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test(arguments: [
+        ("let h = e.hp", "e.hp"), ("_ = e.hp", "e.hp"), ("var h = 0\nh = e.hp", "e.hp"), ("return e.hp", "e.hp"),
+        ("return (e.hp)", "(e.hp)"),
+    ])
+    func `a declaration, an assignment, a 'return' or '_ =' can't take a field, which would move it`(
+        body: String, covered: String,
+    ) {
+        let source = "func main() {}\nfunc f(e: Enemy) -> Int {\n\(body)\nreturn 0\n}" + enemy
+
+        // The one error covers the field the statement takes.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.fieldMove])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test func `a field whose declaration failed is read with no error of its own`() {
+        #expect(errors("func main() {}\nfunc f(s: S) { print(s.a) }\nstruct S(var a: Q)") == [.notAType(name: "Q")])
     }
 }

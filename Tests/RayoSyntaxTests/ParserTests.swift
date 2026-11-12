@@ -141,6 +141,23 @@ struct ParserErrorTests {
         ])
     }
 
+    @Test(arguments: [
+        "func f() { print(e.hp) }", "func f() { print(-e.hp.max + f().x * (e).y) }", "func f() { print(e.if) }",
+        "func f() { print(e.0) }", "func f() {\n    let a = e\n        .hp\n}",
+    ])
+    func `a member follows a value and a '.', and may be a keyword or an integer`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { print(e.) }", ErrorCode.missingMemberName(found: .token(")"))),
+        ("func f() { print(e.(hp)) }", .missingMemberName(found: .token("("))),
+        ("func f() { print(.hp) }", .missingExpression(found: .token("."))),
+    ])
+    func `a '.' needs a value before it and a member's name after it`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
     @Test func `a struct's body that the file ends inside is reported at the file's end`() {
         #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
     }

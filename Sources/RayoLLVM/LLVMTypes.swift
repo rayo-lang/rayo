@@ -34,9 +34,25 @@ struct LLVMTypes {
         }
     }
 
+    /// The LLVM type that holds a value of the struct `id`.
+    func llvmStruct(_ id: StructID) -> LLVM.StructType {
+        structs[id.index]
+    }
+
     /// The alignment, in bytes, that a value of `type`, which isn't Void, has in memory.
     func alignment(of type: RayoType) -> Int {
         table.layout(of: type).alignment
+    }
+
+    /// The type of each field of the struct `id`, in the order the struct declares them, and the index of the element
+    /// of the struct's LLVM type that holds it.
+    func fields(of id: StructID) -> [(type: RayoType, element: Int)] {
+        // The elements hold the fields in the order they lie in memory, so each field's element is its place there.
+        var elements = Array(repeating: 0, count: table[id].fields.count)
+        for (element, field) in table.structLayout(of: id).layoutOrder.enumerated() {
+            elements[field] = element
+        }
+        return zip(table[id].fields, elements).map { ($0.type, $1) }
     }
 
     /// Gives the LLVM type of the struct `id` its fields in the order they lie in memory, then the bytes that pad

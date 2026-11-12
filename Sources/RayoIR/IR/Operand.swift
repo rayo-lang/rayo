@@ -2,7 +2,7 @@ import RayoSema
 
 public enum Operand: Equatable, Sendable {
     case constant(Constant)
-    /// Reads the local's value, which the local keeps.
+    /// Reads the value of the local, or of the field inside it, which keeps the value.
     case read(Place)
     /// Takes the local's value, which leaves the local without one until it is assigned again.
     case move(Place)

@@ -23,6 +23,10 @@ struct NewlineTests {
             ["if", "ready", "{", "start", "(", ")", "}", "else", "{", "wait", "(", ")", "}"])
     }
 
+    @Test func `a line that starts with '.' joins the one above`() {
+        #expect(tokens("let hp = e\n    .hp") == ["let", "hp", "=", "e", ".", "hp"])
+    }
+
     @Test("';' separates statements on one line")
     func semicolon() {
         #expect(tokens("x = 1; y = 2") == ["x", "=", "1", ";", "y", "=", "2"])

@@ -80,13 +80,52 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `a struct's value holds each field's value in the element that its layout puts the field in`() throws {
+        // `main` makes a Pair of its Bool and its Int, which the Pair declares in that order.
+        let main = mainFunction(locals: [.bool, .int, pairType], [
+            BasicBlock(
+                statements: [statement(storingIn: 2, .structure(pairID, fields: [read(0), read(1)]))],
+                terminator: .return(nil),
+            ),
+        ])
+
+        // The Bool goes in the second element and the Int in the first.
+        try withEmitted(program(of: [main], types: pairTable)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %5 = insertvalue %Pair poison, i1 %3, 1
+                  %6 = insertvalue %Pair %5, i64 %4, 0
+                """))
+        }
+    }
+
+    @Test func `a field is read from the element that its struct's layout puts it in, aligned as its type is`() throws {
+        // `main` reads the Pair's Bool, which it declares first.
+        let flag = Operand.read(Place(local: LocalID(index: 0), fields: [0], range: nowhere))
+        let main = mainFunction(locals: [pairType, .bool], [
+            BasicBlock(statements: [statement(storingIn: 1, .use(flag))], terminator: .return(nil)),
+        ])
+
+        // The read loads one byte from the Pair's second element.
+        try withEmitted(program(of: [main], types: pairTable)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %2 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
+                  %3 = load i1, ptr %2, align 1
+                """))
+        }
+    }
+
     /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding.
     private let pairTable = TypeTable(structs: [
         StructType(name: "Pair", fields: [Field(name: "flag", type: .bool), Field(name: "count", type: .int)]),
     ])
 
+    /// The struct `pairTable` holds.
+    private let pairID = StructID(index: 0, name: "Pair")
+
     /// The type of the struct `pairTable` holds.
-    private let pairType = RayoType.structure(StructID(index: 0, name: "Pair"))
+    private var pairType: RayoType { .structure(pairID) }
 
     /// A `main` that takes nothing, returns nothing and does nothing.
     private var emptyMain: IRFunction {

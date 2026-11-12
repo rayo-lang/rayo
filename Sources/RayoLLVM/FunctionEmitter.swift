@@ -74,9 +74,40 @@ struct FunctionEmitter {
         types.alignment(of: function.locals[local.index].type)
     }
 
-    /// Emits the instruction that loads `local`'s value from its slot, and returns the value.
-    private func load(_ local: LocalID, with builder: borrowing Builder) -> AnyValue {
-        builder.load(slotType(of: local), from: slots[local.index], alignment: alignment(of: local))
+    /// Emits the instructions that load the value at `place`, a local's slot or a field inside it, and returns the
+    /// value. Throws where the place names a field that the value holding it doesn't have.
+    private func load(_ place: Place, with builder: borrowing Builder) throws(LLVMError) -> AnyValue {
+        // Start at the local's slot, and step into each field in turn.
+        var pointer = slots[place.local.index]
+        var type = function.locals[place.local.index].type
+        for field in place.fields {
+            (pointer, type) = try fieldPointer(to: field, of: type, at: pointer, with: builder)
+        }
+
+        // A value lies in memory aligned as its type is, a field too, since its struct's layout keeps it so.
+        return builder.load(types.llvmType(type), from: pointer, alignment: types.alignment(of: type))
+    }
+
+    /// Emits the instruction that gives a pointer to the field at `field`, its place in its struct's declaration, of
+    /// the value of `type` that `pointer` points to, and returns the pointer with the field's type. Throws where
+    /// `type` has no such field.
+    private func fieldPointer(
+        to field: Int, of type: RayoType, at pointer: PointerValue, with builder: borrowing Builder,
+    ) throws(LLVMError) -> (PointerValue, RayoType) {
+        // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
+        // with, would point outside the value, so each fails here.
+        guard case .structure(let id) = type else { throw noField(field, of: type) }
+        let fields = types.fields(of: id)
+        guard fields.indices.contains(field) else { throw noField(field, of: type) }
+
+        // Point at the element of the struct's LLVM type that holds the field.
+        let (fieldType, element) = fields[field]
+        return (builder.fieldPointer(to: element, of: types.llvmStruct(id), at: pointer), fieldType)
+    }
+
+    /// The error that says the IR reads the field at `field` of a value of `type`, which has no such field.
+    private func noField(_ field: Int, of type: RayoType) -> LLVMError {
+        LLVMError(message: "the IR reads field \(field) of a value of type \(types.llvmType(type).text)")
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot. Throws where `value` is of another type than
@@ -143,7 +174,7 @@ struct FunctionEmitter {
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let operand, let then, let otherwise):
-            let value = read(operand, in: program)
+            let value = try read(operand, in: program)
             // A condition that isn't a Bool, which the checker passes no IR with, fails here, saying what it is.
             guard let condition = IntValue<I1>(value) else {
                 throw LLVMError(message: "the IR branches on a value of type \(value.type.text), where it takes i1")
@@ -175,7 +206,7 @@ struct FunctionEmitter {
         }
 
         // A value of another type than the function's result, which the checker passes no IR with, fails here.
-        let value = read(result, in: program)
+        let value = try read(result, in: program)
         guard value.type == resultType else {
             let returned = "a value of type \(value.type.text)"
             throw LLVMError(message: "the IR returns \(returned) from a function that returns \(resultType.text)")
@@ -183,7 +214,9 @@ struct FunctionEmitter {
         program.builder.return(value)
     }
 
-    private func read(_ operand: Operand, in program: borrowing ProgramEmitter) -> AnyValue {
+    /// Emits the instructions that read `operand`'s value, and returns the value. Throws where it names a field that
+    /// the value holding it doesn't have.
+    private func read(_ operand: Operand, in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
         switch operand {
         // An Int constant needs no instruction: it is an `i64` holding the Int's bits.
         case .constant(.int(let value)):
@@ -193,9 +226,9 @@ struct FunctionEmitter {
         case .constant(.bool(let value)):
             types.bool.constant(value ? 1 : 0).anyValue
 
-        // A read or a move loads the local from its slot; a move leaves the slot as it is, unread until assigned again.
+        // A read or a move loads the place from its slot; a move leaves the slot as it is, unread until assigned again.
         case .read(let place), .move(let place):
-            load(place.local, with: program.builder)
+            try load(place, with: program.builder)
         }
     }
 
@@ -207,7 +240,7 @@ struct FunctionEmitter {
         switch rvalue {
         // A use is its operand's value.
         case .use(let operand):
-            read(operand, in: program)
+            try read(operand, in: program)
 
         // An operator computes on its operands' values.
         case .unary(let op, let operand):
@@ -217,8 +250,50 @@ struct FunctionEmitter {
 
         // A call passes its arguments' values.
         case .call(let callee, let arguments):
-            try call(callee, passing: arguments.map { read($0, in: program) }, with: program.builder)
+            try call(callee, passing: read(arguments, in: program), with: program.builder)
+
+        // A struct's value is made of its fields' values.
+        case .structure(let id, let fields):
+            try structure(id, from: read(fields, in: program), with: program.builder)
         }
+    }
+
+    /// Emits the instructions that read each of `operands`, in order, and returns their values.
+    private func read(_ operands: [Operand], in program: borrowing ProgramEmitter) throws(LLVMError) -> [AnyValue] {
+        var values: [AnyValue] = []
+        for operand in operands {
+            values.append(try read(operand, in: program))
+        }
+        return values
+    }
+
+    /// Emits the instructions that make a value of the struct `id` from `fields`, the values of its fields in the order
+    /// it declares them, and returns the value. Throws where `fields` aren't as many as the struct's, or of their
+    /// types.
+    private func structure(
+        _ id: StructID, from fields: [AnyValue], with builder: borrowing Builder,
+    ) throws(LLVMError) -> AnyValue {
+        // LLVM stops the process on an `insertvalue` of the wrong type, where it checks its own invariants, so IR that
+        // the checker passes no program with fails here.
+        let declared = types.fields(of: id)
+        // Values for more or fewer fields than the struct has fail.
+        guard fields.count == declared.count else {
+            let counts = "\(fields.count) fields, where it has \(declared.count)"
+            throw LLVMError(message: "the IR makes '\(id.name)' of \(counts)")
+        }
+
+        // Insert each field's value into the element that holds the field, starting from a value of no particular bits.
+        var value = types.llvmStruct(id).poison
+        for (index, (field, declaredField)) in zip(fields, declared).enumerated() {
+            // A value of another type than its field's fails.
+            let fieldType = types.llvmType(declaredField.type)
+            guard field.type == fieldType else {
+                let given = "a value of type \(field.type.text), where it takes \(fieldType.text)"
+                throw LLVMError(message: "the IR gives field \(index) of '\(id.name)' \(given)")
+            }
+            value = builder.insertValue(field, into: value, at: declaredField.element)
+        }
+        return value.anyValue
     }
 
     /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing. Throws where

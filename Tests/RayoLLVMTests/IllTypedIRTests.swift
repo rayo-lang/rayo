@@ -129,14 +129,40 @@ private let illTypedIR = [
         executable: returning(.return(read(0)), of: .bool, from: .void),
         error: "the IR returns a value of type i1 from a function that returns void",
     ),
+    IllTypedIR(
+        testDescription: "a struct made of fewer values than it has fields",
+        executable: computing(.structure(pairID, fields: []), on: [], into: pairType),
+        error: "the IR makes 'Pair' of 0 fields, where it has 1",
+    ),
+    IllTypedIR(
+        testDescription: "a struct's field given a value of another type",
+        executable: computing(.structure(pairID, fields: [.constant(.bool(true))]), on: [], into: pairType),
+        error: "the IR gives field 0 of 'Pair' a value of type i1, where it takes i64",
+    ),
+    IllTypedIR(
+        testDescription: "a read of a field of an Int",
+        executable: computing(.use(read(0, field: 0)), on: [.int], into: .int),
+        error: "the IR reads field 0 of a value of type i64",
+    ),
+    IllTypedIR(
+        testDescription: "a read of a field that a struct doesn't have",
+        executable: computing(.use(read(0, field: 1)), on: [pairType], into: .int),
+        error: "the IR reads field 1 of a value of type %Pair = type <{ i64 }>",
+    ),
 ]
 
 /// A program whose `main` holds temporaries of `operands`' types and then of `result`'s, and stores what `rvalue`
-/// computes in the last.
+/// computes in the last. Its structs are `pairTable`'s.
 private func computing(_ rvalue: Rvalue, on operands: [RayoType], into result: RayoType) -> IRExecutable {
-    program(locals: operands + [result], [
+    let main = mainFunction(locals: operands + [result], [
         BasicBlock(statements: [statement(storingIn: operands.count, rvalue)], terminator: .return(nil)),
     ])
+    return program(of: [main], types: pairTable)
+}
+
+/// An operand that reads the field at `field` of the value of the local `index`.
+private func read(_ index: Int, field: Int) -> Operand {
+    .read(Place(local: LocalID(index: index), fields: [field], range: nowhere))
 }
 
 /// A program whose `main` returns nothing, and whose `f()`, which returns `result`, holds a temporary of `local`'s
@@ -193,5 +219,8 @@ private func callingPrint(_ print: Callee, with arguments: [Operand]) -> IRExecu
 /// A struct of one Int.
 private let pairTable = TypeTable(structs: [StructType(name: "Pair", fields: [Field(name: "count", type: .int)])])
 
+/// The struct `pairTable` holds.
+private let pairID = StructID(index: 0, name: "Pair")
+
 /// The type of the struct `pairTable` holds.
-private let pairType = RayoType.structure(StructID(index: 0, name: "Pair"))
+private let pairType = RayoType.structure(pairID)

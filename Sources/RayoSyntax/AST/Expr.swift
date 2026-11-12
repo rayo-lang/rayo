@@ -15,6 +15,8 @@ public indirect enum ExprKind: Sendable {
     case name(String)
     /// `name(arguments)`.
     case call(name: String, nameRange: SourceRange, arguments: [Argument])
+    /// `value.name`: the member `name` of the value.
+    case member(Expr, name: String, nameRange: SourceRange)
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
     /// `copy name`: the value of a local, which the local keeps.

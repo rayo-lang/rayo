@@ -1,0 +1,58 @@
+import RayoIR
+import RayoSema
+import Testing
+
+/// The struct the tests make and read, whose fields are `hp` and then `armor`.
+private let enemy = StructID(index: 0, name: "Enemy")
+
+/// The IR of a `main` that runs `body`, in a program that declares `Enemy` after it.
+private func loweredMain(withEnemy body: String) throws(RejectedSource) -> IRFunction {
+    // `main` is the program's one function.
+    try lowered("func main() {\n\(body)\n}\nstruct Enemy(var hp: Int, let armor: Int)").functions[0]
+}
+
+@Suite("Lowering structs")
+struct StructLoweringTests {
+    @Test func `a struct's value is made of its fields' values, and a local given as one is moved`()
+        throws(RejectedSource) {
+        let main = try loweredMain(withEnemy: "let hp = 1\nlet e = Enemy(hp: hp, armor: 2)")
+        let expected = mainFunction(
+            locals: [letLocal("hp", .int), letLocal("e", .structure(enemy))],
+            block(
+                declare(0), compute(0, .use(int(1))),
+                declare(1), compute(1, .structure(enemy, fields: [move(0), int(2)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
+    @Test func `a field used as an operand is read where it lies in its local`() throws(RejectedSource) {
+        let main = try loweredMain(withEnemy: "let e = Enemy(hp: 1, armor: 2)\nprint(-e.armor)\nprint(e.hp)")
+        let expected = mainFunction(
+            locals: [letLocal("e", .structure(enemy)), .temporary(.int)],
+            block(
+                declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
+                compute(1, .unary(.negate, read(0, fields: 1))),
+                compute(nil, .call(.printInt, arguments: [read(1)])),
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
+    @Test func `a field of a value that no local holds is read from a temporary that holds the value`()
+        throws(RejectedSource) {
+        let main = try loweredMain(withEnemy: "print(Enemy(hp: 1, armor: 2).hp)")
+        let expected = mainFunction(
+            locals: [.temporary(.structure(enemy))],
+            block(
+                compute(0, .structure(enemy, fields: [int(1), int(2)])),
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+}
