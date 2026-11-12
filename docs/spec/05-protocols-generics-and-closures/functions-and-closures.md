@@ -164,14 +164,14 @@ let saved = save(level)           // error if no code reads 'saved': its error w
 - held in an `owned` parameter that no code reads;
 - assigned to a local, by its declaration or a later assignment, where no path from there reads it before an assignment overwrites it or the local's scope ends.
 
-**A value that one path reads is used, though another path overwrites it**, since the compiler can't tell which path a run takes. So is a value that a loop's next pass reads, though the last pass leaves it unread.
-
 ```swift
 var r = save(a)                   // error: the next line overwrites it before any code reads it
 r = save(b)
 check(r)
 r = save(c)                       // error: no code reads it before the scope ends
 ```
+
+**A value that one path reads is used, though another path overwrites it**, since the compiler can't tell which path a run takes. So is a value that a loop's next pass reads, though the last pass leaves it unread.
 
 **`_ = x` drops a value on purpose.** It takes `x` as a value, and destroys it at the end of its statement. `let _ = x` is a compile error ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 
