@@ -126,7 +126,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 - where a shuffle's index is out of range for a generic `N`, or its result's count isn't a lane count ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles));
 - where a swizzle names a lane that a vector of a generic `N` lacks ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
-**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation.** Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
+**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation**, except where it uses an `@opaque` type parameter ([below](#type-parameters-with-no-known-size-opaque)). Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
 
 - `static if` branches, checked only when their condition holds;
 - `static for` bodies and static closures, checked per element;
@@ -146,24 +146,32 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 
 ## Type parameters with no known size: `@opaque`
 
+A wrapper around a C handle needs only a pointer to the C type, so one generic wrapper can serve C types whose layout Rayo doesn't know, and keep them apart. Here `CHandle` is user code, which frees each handle with the C function it was made with:
+
 ```swift
-struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt): ~Copyable {
+struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt) {
     deinit { unsafe { _ = release(raw) } }         // the body uses T only behind a pointer
 }
 
-let db = CHandle(raw: conn, release: sqlite3_close)        // T is sqlite3, an @opaque C type
+let db = CHandle(raw: conn, release: sqlite3_close)        // conn: the *sqlite3 that sqlite3_open gave
 let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
 ```
 
-**A type parameter has a size, unless it is marked `@opaque`.** So an unmarked one never stands for an `@opaque` type, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). An `@opaque` one stands for any type, with a size or without, since its body is checked as though the type were `@opaque`.
+**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type were `@opaque`. Only such a parameter stands for an `@opaque` type, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). An unmarked type parameter, an associated type and the `Self` of a protocol extension never do.
 
-**An `@opaque` type parameter's body uses `T` only where no layout is needed.** It may write `*T` and `*T?`, which are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`. It may also write `T.self` and `p.cast(to: T.self)`. Anything that needs `T`'s layout or a `T` value is a compile error in its body:
+**An `@opaque` type conforms to no protocol, and an `@opaque` type parameter takes no constraints.** A protocol extension is generic code over an unmarked `Self`, which may hold a `Self` by value, so no conformance could keep it sound.
 
-- a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value;
+**The language's own type parameters that need no layout are `@opaque` too:** the pointee of `*T` and `*T?`, the `T` of a type value `Type<T>`, so `T.self` names any type, and the target `U` of `p.cast(to: U.self)` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). `*T` and `*T?` are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`.
+
+**In an `@opaque` type parameter's body, anything that needs `T`'s layout or a `T` value is a compile error:**
+
+- a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
+- a function type that takes or gives a `T`, a `@c` one included;
 - `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
-- `T.size`, `T.alignment`, `T.construct` and every other reflective query of `T`'s layout or fields ([09](../09-compile-time/reflection.md#what-reflection-can-read));
-- `T` as the argument for a type parameter not marked `@opaque`;
-- a requirement of one of `T`'s constraints that takes or gives a `T` by value, or that is an instance member, whose `self` is a `T`.
+- every reflective query of `T` except `T.name`, `T.baseName`, `T.module`, `T.id`, `T == U` and `T != U`, so `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, the kind queries, `T.conforms`, `T.isConstructible`, `T.construct` and `T`'s attributes are errors ([09](../09-compile-time/reflection.md#what-reflection-can-read));
+- `T` as the argument for a type parameter that isn't `@opaque`.
+
+**Compile-time code in that body treats `T` as `@opaque` too**, so it is checked at the definition, as the rest of the body is, and a `static if` branch can't use what only some types allow.
 
 ## Instantiation
 
@@ -193,7 +201,7 @@ func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an er
 
 **A generic parameter declared `let` takes a `const` value** of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>`. Such a parameter is a **value parameter**. Two arguments are the same exactly when they are the same value: the same integer, the same `Bool` or the same case, whatever `==` the type declares.
 
-**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a span's `reinterpret` does:
+**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` one included ([above](#type-parameters-with-no-known-size-opaque)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a span's `reinterpret` does:
 
 ```swift
 func reinterpret<U: Pod>(as _: Type<U>) -> Span<U>?   // binds U from the type value it is passed

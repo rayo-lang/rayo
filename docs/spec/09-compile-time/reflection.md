@@ -88,6 +88,8 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | `T.isConstructible` | Whether `T.construct` applies here ([below](#constructing-values-reflectively)) |
 | `T.conforms(P.self)`, `T == U`, `T != U` | Protocol conformance and type equality, for use in `static if` |
 
+**An `@opaque` type parameter's body reads only `T.name`, `T.baseName`, `T.module`, `T.id`, `T == U` and `T != U`**, since every other query needs a layout or a conformance that an `@opaque` type lacks ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+
 **Reaching into a value:**
 
 | Expression | Meaning |

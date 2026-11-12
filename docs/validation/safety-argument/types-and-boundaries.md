@@ -18,7 +18,7 @@
 - **Text is UTF-8.** String ranges are checked on scalar boundaries ([04](../../spec/04-types/collections.md#strings)), so every string holds whole UTF-8 sequences, as a valid one must ([10](../../spec/10-errors-and-safety/unsafe-code.md#raw-accesses)).
 - **Arithmetic** ([04](../../spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts)). An overflow that wraps gives a wrong value, never an invalid one, and the next bounds check still catches a wrong index. Division by zero and converting NaN or an out-of-range float are memory-safety checks, since their failure, unchecked, is undefined behavior ([10](../../spec/10-errors-and-safety/checks-and-build-modes.md#the-checks)).
 - **Imports keep C's meaning** ([08](../../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)):
-    - a struct Rayo can't lay out exactly imports as `@opaque`, and generic code takes one only through an `@opaque` type parameter, whose body never needs its layout ([05](../../spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque));
+    - a struct Rayo can't lay out exactly imports as `@opaque`, and only an `@opaque` type parameter may stand for one, since its body never needs its layout ([05](../../spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque));
     - a zeroing `init()` exists only where all-zero bytes are valid;
     - an enum is closed only where its header says so, holding any value of its underlying type otherwise, since C lets an enum object hold any value of that type.
 
