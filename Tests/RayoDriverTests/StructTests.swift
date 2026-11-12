@@ -35,7 +35,8 @@ struct StructTests {
         mode: [String],
     ) {
         // `Enemy` lays `alive` out after the Ints, so each field is read from where its layout puts it. Each read
-        // leaves `e` whole, so it is passed and read again after.
+        // leaves `e` whole, so it is passed and read again after. `Empty` holds no field, and a local holds it all
+        // the same.
         let source = """
             func main() {
                 let hp = 100
@@ -46,7 +47,8 @@ struct StructTests {
                 print(e.hp - damage(to: e, by: 30))
                 if e.alive && e.hp > e.armor { print(-e.armor) }
                 print(spawned(hp: 40).hp)
-                _ = Empty()
+                let nothing = Empty()
+                _ = nothing
             }
             func damage(to e: Enemy, by hit: Int) -> Int { return hit - e.armor }
             func spawned(hp: Int) -> Enemy { Enemy(alive: false, hp: copy hp, armor: 0) }
