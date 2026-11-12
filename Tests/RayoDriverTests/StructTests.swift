@@ -35,7 +35,8 @@ struct StructTests {
         mode: [String],
     ) {
         // `Enemy` lays `alive` out after the Ints, so each field is read from where its layout puts it. Each read
-        // leaves `e` whole, so it is passed and read again after.
+        // leaves `e` whole, so it is passed and read again after. `nothing` is bound before it is discarded, so a
+        // struct with no fields is stored in a local's slot, which discarding the call alone would skip.
         let source = """
             func main() {
                 let hp = 100
