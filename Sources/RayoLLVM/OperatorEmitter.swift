@@ -58,7 +58,7 @@ struct OperatorEmitter {
     private func emitArithmetic(_ op: OverflowingOperation, _ left: IntValue<I64>, _ right: IntValue<I64>,
                                 at range: SourceRange, in program: borrowing ProgramEmitter) -> IntValue<I64> {
         // Where overflow isn't checked, the plain instruction wraps.
-        guard program.checksOverflow else { return emitWrapping(op, left, right, with: program.builder) }
+        guard program.build.checksOverflow else { return emitWrapping(op, left, right, with: program.builder) }
 
         // Where it is, the intrinsic flags an overflow beside the result, and an overflow panics. The intrinsic
         // returns a pair of an Int and a Bool, so its call always gives one.
@@ -88,7 +88,7 @@ struct OperatorEmitter {
         let isMinusOne = program.builder.compare(.equal, right, types.int64.constant(-1))
 
         // Where overflow is checked, Int.min / -1, the one quotient that overflows, panics.
-        if program.checksOverflow {
+        if program.build.checksOverflow {
             let isMin = program.builder.compare(.equal, left, types.int64.constant(.min))
             panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
         }

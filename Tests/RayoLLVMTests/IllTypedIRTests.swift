@@ -1,5 +1,6 @@
 import LLVM
 import RayoIR
+import RayoLLVM
 import RayoSema
 import Testing
 
