@@ -329,7 +329,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 **A type interns its string literals with the build's help by conforming to `ExpressibleByInternedLiteral`**, as std's `Name` does. The build makes each text's entry once, and the type's interner starts out holding them all. So a literal costs nothing at run time, and still names the entry that interning its text at run time finds:
 
 ```swift
-protocol ExpressibleByInternedLiteral {
+protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {             // an entry views nothing that ends
     associatedtype InternedEntry: Frozen & TrivialFree & Sendable              // one per distinct text
     static func internedEntry(for text: static StringView) -> InternedEntry     // run by the compiler, once per distinct text
     @noalloc unsafe init(internedLiteral entry: static Span<InternedEntry>)     // the entry the build bound for the literal
@@ -339,7 +339,7 @@ protocol ExpressibleByInternedLiteral {
 ```
 
 - **One table per type.** The table holds an entry for each text the build converts to a `T` literal in checked code, anywhere in the program. The build runs `internedEntry(for:)` once per text and freezes the results into one table in read-only data, so equal texts in different modules share one entry.
-- **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree` and `Sendable`, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+- **Entries are freezable.** `InternedEntry` is `Frozen`, `TrivialFree`, `Sendable` and unscoped, and the build checks the rest of the freezable test on each entry it makes ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 - **A stray entry never becomes a value.** `internedEntry(for:)` is safe to call from anywhere, since it only builds an entry from a text and touches no interner. An entry built that way never becomes a value of the type, since only `unsafe` code calls `init(internedLiteral:)`, promising the entry is the one the build bound (below). std's `Name` also keeps its entry's fields private.
 - **The table exists only at run time.** `T.internedLiterals`, a `static Span<T.InternedEntry>`, views it. Compile-time code can't read it, and `static if` can't test it, since what it holds depends on every literal the build checks, compile-time code's included.
 - **Each literal is built at compile time.** The `@noalloc` `init(internedLiteral:)` receives the literal's element of the table, and must be able to run at compile time, so every such literal converts at compile time ([above](#literals)).

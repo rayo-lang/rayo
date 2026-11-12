@@ -26,7 +26,7 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 ## Rule 2: Transitivity
 
-**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing the value it came from can't, so that value's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)).
+**A value derived from a scoped value inherits that value's dependency set.** It reaches nothing the value it came from can't, so that value's set covers it. A copy or a sub-view inherits the set whole. A stored field or tuple element inherits that field's set, where the caller keeps one ([Naming a field](dependency-lifetimes.md#naming-a-field)), except a lock guard's, which depends on the guard ([Lock guards](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)).
 
 ## Rule 3: Call results
 

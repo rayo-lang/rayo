@@ -90,7 +90,7 @@ struct Banner(var text: static StringView)                  // fine: a static vi
 
 **A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected. The other way works only for a view of something that also lasts for the whole run, such as a global `let`: a view borrowed from a parameter never becomes static, since that memory may be freed.
 
-**`static` works on any type that holds shared views**, such as a `static Span<T>` of elements or a struct of views like `Token` above. A global that holds views is static without `static` written:
+**`static` works on any type that holds shared views**, such as a `static Span<Float>` of elements or a struct of views like `Token` above. A global that holds views is static without `static` written:
 
 ```swift
 let keywords: [2 of Token] = [Token(text: "if", line: 0), Token(text: "else", line: 0)]   // static: every view is of a literal

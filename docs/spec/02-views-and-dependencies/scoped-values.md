@@ -118,8 +118,8 @@ let keywords: [2 of Token] = [Token(kind: .kIf, text: "if"), Token(kind: .kElse,
 struct Hint(let text: static StringView, let delay: Float)    // a plain struct can store a static view
 
 let fileLog = FileLogger(path: "game.log")                    // a global let of a Logger, with a Mutex inside
-struct Telemetry(let log: static any Logger)                  // a view of a logger that lives as long as the program
-let telemetry = Telemetry(log: fileLog)
+struct AudioLog(let log: static any Logger)                   // a view of a logger that lives as long as the program
+let audioLog = AudioLog(log: fileLog)
 
 func show(_ hint: Hint, _ token: Token) {
     let shown: StringView = hint.text                         // fine: a static value converts to its plain type
@@ -150,16 +150,16 @@ func show(_ hint: Hint, _ token: Token) {
 **A static type is a type of its own, with its plain type's layout.** It differs from its plain type in what its views may view:
 
 - **Parts.** A static value's fields, elements, payloads and ranges are static too, since they view the same data. So `keywords[0]` is a `static Token`, `keywords[0].text` a `static StringView`, and `keywords[1].text[0..<2]` a static view. A `var` field of a static value takes only a static value.
-- **Type arguments.** On a generic type, `static` applies to the type arguments too. So `static List<StringView>` is the same type as `List<static StringView>`, whose own methods, such as `append`, take and give static values, and a `static Span<Token>` views `static Token`s.
-- **Members.** A static value has its plain type's members, which it is lent to as its plain type, shared, so `keywords[0].text.count` works. A `mutating` member of a type that isn't generic can't be called on it, since that member could store a view of shorter-lived data in it.
+- **Type arguments.** On a generic type, `static` applies to the scoped type arguments too, and leaves an unscoped one as it is. So `static List<StringView>` is the same type as `List<static StringView>`, a `static Span<Token>` views `static Token`s, and a `static Span<Preset>` views plain `Preset`s. A type argument that may be scoped or not, such as a type parameter or an associated type not constrained `~Scoped`, is a compile error there.
+- **Members.** A static value has its plain type's members, which it is lent to as its plain type, shared, so `keywords[0].text.count` works. A `mutating` member can be called on it only when every scoped field and payload of its type has a type argument's type, a raw pointer to one counting as one, as `List`'s, `Optional`'s and an inline array's do. Then the member is the static instance's own, and takes static values, as `List<static StringView>.append` does. Any other `mutating` member could store a view of shorter-lived data in it, so calling one is a compile error.
 - **Conformances.** It conforms to its plain type's protocols through that type's witnesses, so a `Set<static Token>` hashes as `Token` does. It is copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is (below).
-- **Reflection.** It reads as its plain type, with the same fields, cases and layout. Its `T.name` puts `static` before its plain type's name, and its `T.id` is its own ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
+- **Reflection.** It reads as its plain type, with the same fields, cases and layout, except that each scoped field's and payload's type is its static type. So `field.type` and `value[field]` give a `static StringView` for a `static Token`'s `text`, and `T.construct` takes static values. Its `T.name` puts `static` before its plain type's name, and its `T.id` is its own ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
 ### Converting to and from a static type
 
 **A static value converts to its plain type wherever that is expected** ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A copyable one is read and a move-only one taken, as a declaration takes a value ([01](../01-values-and-ownership/bindings.md#conversions)), and a place of one is lent as its plain type, shared. No conversion applies through `mutable`, so a static value is never lent to a `mutable` parameter of its plain type. A static value depends on nothing, so it meets `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
 
-**A value converts to its static type where it depends only on static storage and immortal data**, and on no lock guard or view lent under a lock, read or taken as above ([Dependencies](../02-views-and-dependencies.md#dependencies)). So these convert wherever a static type is expected:
+**A value converts to its static type where it depends only on static storage and immortal data**, read or taken as above ([Dependencies](../02-views-and-dependencies.md#dependencies)). What a lock guard lends depends on the guard, a local, so it never converts ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)). So these convert wherever a static type is expected:
 
 - a literal, which views the program image ([04](../04-types/collections.md#literals));
 - a value built only from static and unscoped values, such as `keywords[0]` above;

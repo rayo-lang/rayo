@@ -68,6 +68,8 @@ A **guard type** is a type declared `@guard`: the type of a value that holds a l
 - **`~Copyable`**, since a copy would release the lock a second time.
 - **`~Sendable`.** Nothing that isn't `Sendable` moves to or is lent to another thread, even inside a type parameter, an existential or a closure. So a guard is dropped, or consumed as a `Condvar` wait consumes one, only on the thread that took it, as many platform mutexes require ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock)).
 
+**What a guard lends depends on the guard itself**, so nothing lent under the lock outlives it. That covers its `.value`, a place property whose source is the guard ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)). It also covers a value read from one of its stored fields, which depends on the guard instead of inheriting the field's set ([Rule 2: Transitivity](dependency-projection-and-results.md#rule-2-transitivity)).
+
 ## Precise dependencies (opt-in)
 
 **A `where` clause can say what a function's result, a place property's place or an absorbing parameter depends on.** By default a result depends on every argument rule 3 names, even one it only read. The clause helps where that gets in the way, as with a lookup keyed by a view into a buffer you want to advance:
