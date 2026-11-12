@@ -38,11 +38,11 @@ struct StatementLowering: ~Copyable {
         case .binding(let place, let value):
             lowerDeclaration(of: place, givenBy: value)
 
-        // An assignment computes its value into the local.
+        // An assignment computes its value into its place.
         case .assign(let place, let value):
             ExpressionLowering.compute(value, into: Place(place), in: &builder)
 
-        // A compound assignment applies its operator to the local and the value.
+        // A compound assignment applies its operator to its place and the value.
         case .compoundAssign(let place, let op, let value):
             lowerCompoundAssign(place, op, value)
 
@@ -156,6 +156,6 @@ struct StatementLowering: ~Copyable {
 
 private extension Place {
     init(_ place: CheckedPlace) {
-        self.init(local: place.local, range: place.range)
+        self.init(local: place.local, fields: place.fields, range: place.range)
     }
 }

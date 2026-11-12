@@ -38,6 +38,12 @@ func compute(_ destination: Int?, _ value: Rvalue) -> Statement {
     .compute(destination: destination.map(local), value: value, range: nowhere)
 }
 
+/// Computes `value` into the field that `fields` lead to, outermost first, inside the local at `index`.
+func compute(_ index: Int, fields: Int..., value: Rvalue) -> Statement {
+    .compute(destination: Place(local: LocalID(index: index), fields: fields, range: nowhere), value: value,
+             range: nowhere)
+}
+
 func declare(_ index: Int) -> Statement {
     .declare(LocalID(index: index))
 }

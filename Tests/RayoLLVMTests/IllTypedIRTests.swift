@@ -81,7 +81,17 @@ private let illTypedIR = [
     IllTypedIR(
         testDescription: "a store of an Int in a Bool",
         executable: computing(.use(read(0)), on: [.int], into: .bool),
-        error: "the IR stores a value of type i64 in a local of type i1",
+        error: "the IR stores a value of type i64 in a place of type i1",
+    ),
+    IllTypedIR(
+        testDescription: "a store of a Bool in an Int field",
+        executable: computing(.use(read(0)), on: [.bool], intoFieldOf: pairType),
+        error: "the IR stores a value of type i1 in a place of type i64",
+    ),
+    IllTypedIR(
+        testDescription: "a store in a field of an Int",
+        executable: computing(.use(read(0)), on: [.int], intoFieldOf: .int),
+        error: "the IR names field 0 of a value of type i64",
     ),
     IllTypedIR(
         testDescription: "a call given an argument of a type its function doesn't take",
@@ -113,7 +123,7 @@ private let illTypedIR = [
     IllTypedIR(
         testDescription: "a store of what a call that returns nothing gives",
         executable: calling("f()", taking: 0, with: [], storingIn: .int),
-        error: "the IR stores the result of 'f()', which returns nothing, in a local of type i64",
+        error: "the IR stores the result of 'f()', which returns nothing, in a place of type i64",
     ),
     IllTypedIR(
         testDescription: "a return of a Bool from a function that returns an Int",
@@ -143,12 +153,12 @@ private let illTypedIR = [
     IllTypedIR(
         testDescription: "a read of a field of an Int",
         executable: computing(.use(read(0, field: 0)), on: [.int], into: .int),
-        error: "the IR reads field 0 of a value of type i64",
+        error: "the IR names field 0 of a value of type i64",
     ),
     IllTypedIR(
         testDescription: "a read of a field that a struct doesn't have",
         executable: computing(.use(read(0, field: 1)), on: [pairType], into: .int),
-        error: "the IR reads field 1 of a value of type %Pair = type <{ i64 }>",
+        error: "the IR names field 1 of a value of type %Pair = type <{ i64 }>",
     ),
 ]
 
@@ -157,6 +167,18 @@ private let illTypedIR = [
 private func computing(_ rvalue: Rvalue, on operands: [RayoType], into result: RayoType) -> IRExecutable {
     let main = mainFunction(locals: operands + [result], [
         BasicBlock(statements: [statement(storingIn: operands.count, rvalue)], terminator: .return(nil)),
+    ])
+    return program(of: [main], types: pairTable)
+}
+
+/// A program whose `main` holds temporaries of `operands`' types and then of `holder`'s, and stores what `rvalue`
+/// computes in the first field of the last. Its structs are `pairTable`'s.
+private func computing(_ rvalue: Rvalue, on operands: [RayoType], intoFieldOf holder: RayoType) -> IRExecutable {
+    let field = Place(local: LocalID(index: operands.count), fields: [0], range: nowhere)
+    let main = mainFunction(locals: operands + [holder], [
+        BasicBlock(
+            statements: [.compute(destination: field, value: rvalue, range: nowhere)], terminator: .return(nil),
+        ),
     ])
     return program(of: [main], types: pairTable)
 }

@@ -219,6 +219,30 @@ struct InitializationCheckerTests {
         ])
     }
 
+    @Test(arguments: [
+        ([declare(s)], ErrorCode.usedUninitialized(name: "s")),
+        (storeShot() + [dropping(move(s, at: 1))], .usedAfterMove(name: "s")),
+    ])
+    func `a store to a field uses its local, which must hold the rest of its value`(
+        before: [Statement], expected: ErrorCode,
+    ) {
+        let blocks = [
+            BasicBlock(statements: before + [store(9, in: s, fields: shotDamage, at: 2), printing(read(s, at: 3))],
+                       terminator: .return(nil)),
+        ]
+        // The read after the store has the same cause as the store, so the store alone is reported.
+        #expect(errors(in: blocks) == [Diagnostic(expected, at: at(2))])
+    }
+
+    @Test func `a store to a field leaves its local holding its value, which a move may then take`() {
+        let blocks = [
+            BasicBlock(statements: storeShot() + [
+                store(9, in: s, fields: shotRange, at: 1), dropping(move(s, at: 2)), printing(read(s, at: 3)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3))])
+    }
+
     @Test func `the errors come in source order across the program's functions`() {
         // The first function's error comes after the second's in the source.
         let usesLate = function([

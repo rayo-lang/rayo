@@ -49,7 +49,9 @@ struct ExpressionChecker {
 
         // A member of a struct value is one of its fields.
         case .member(let base, let name, let nameRange):
-            return field(named: name, at: nameRange, of: base, in: expr.range)
+            // A value that failed was reported already.
+            guard let value = check(base) else { return nil }
+            return field(named: name, at: nameRange, of: value, in: expr.range)?.read
 
         // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
         case .copy(let place):
@@ -139,13 +141,10 @@ struct ExpressionChecker {
         }
     }
 
-    /// Checks `base.name`, where the source writes `name` at `nameRange`, as a read of the field `name` of the struct
-    /// value `base`, which keeps the field.
-    private func field(named name: String, at nameRange: SourceRange, of base: Expr,
-                       in range: SourceRange) -> CheckedExpr? {
-        // A value that failed was reported already.
-        guard let value = check(base) else { return nil }
-
+    /// Checks `value.name`, where the source writes `name` at `nameRange`, as a read of the field `name` of the struct
+    /// value `value`, which keeps the field. Returns the read, and whether the field is a `var` or a `let`.
+    func field(named name: String, at nameRange: SourceRange, of value: CheckedExpr,
+               in range: SourceRange) -> (read: CheckedExpr, kind: BindingKind)? {
         // Find the field among the struct's; a value of any other type has none.
         let fields: [DeclaredField] =
             if case .structure(let id) = value.type { file.declarations.fields(of: id) } else { [] }
@@ -157,7 +156,7 @@ struct ExpressionChecker {
 
         // A field whose declaration failed was reported there.
         guard let type = fields[index].type else { return nil }
-        return CheckedExpr(kind: .field(value, index: index), type: type, range: range)
+        return (CheckedExpr(kind: .field(value, index: index), type: type, range: range), fields[index].kind)
     }
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a

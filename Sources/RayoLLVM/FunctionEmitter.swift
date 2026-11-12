@@ -5,6 +5,12 @@ import RayoSource
 
 /// Emits one function's body into an LLVM function, holding each local in a stack slot.
 struct FunctionEmitter {
+    /// A pointer to a place, a local's slot or a field inside it, and the type of the value there.
+    private struct Address {
+        var pointer: PointerValue
+        var type: RayoType
+    }
+
     private let function: IRFunction
     private let llvmFunction: Function
     /// The program's functions, indexed by `FunctionID`, that calls go to.
@@ -58,7 +64,7 @@ struct FunctionEmitter {
     private func storeArguments(with builder: borrowing Builder) throws(LLVMError) {
         // The parameters are the first locals, in order.
         for index in 0..<function.parameterCount {
-            try store(llvmFunction.parameter(at: index), in: LocalID(index: index), with: builder)
+            try store(llvmFunction.parameter(at: index), at: slot(of: LocalID(index: index)), with: builder)
         }
     }
 
@@ -77,50 +83,61 @@ struct FunctionEmitter {
     /// Emits the instructions that load the value at `place`, a local's slot or a field inside it, and returns the
     /// value. Throws where the place names a field that the value holding it doesn't have.
     private func load(_ place: Place, with builder: borrowing Builder) throws(LLVMError) -> AnyValue {
-        // Start at the local's slot, and step into each field in turn.
-        var pointer = slots[place.local.index]
-        var type = function.locals[place.local.index].type
-        for field in place.fields {
-            (pointer, type) = try fieldPointer(to: field, of: type, at: pointer, with: builder)
-        }
-
+        let address = try address(of: place, with: builder)
         // A value lies in memory aligned as its type is, a field too, since its struct's layout keeps it so.
-        return builder.load(types.llvmType(type), from: pointer, alignment: types.alignment(of: type))
+        let alignment = types.alignment(of: address.type)
+        return builder.load(types.llvmType(address.type), from: address.pointer, alignment: alignment)
     }
 
-    /// Emits the instruction that gives a pointer to the field at `field`, its place in its struct's declaration, of
-    /// the value of `type` that `pointer` points to, and returns the pointer with the field's type. Throws where
-    /// `type` has no such field.
-    private func fieldPointer(
-        to field: Int, of type: RayoType, at pointer: PointerValue, with builder: borrowing Builder,
-    ) throws(LLVMError) -> (PointerValue, RayoType) {
+    /// Emits the instructions that point at `place`, a local's slot or a field inside it, and returns its address.
+    /// Throws where the place names a field that the value holding it doesn't have.
+    private func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
+        // Start at the local's slot, and step into each field in turn.
+        var address = slot(of: place.local)
+        for field in place.fields {
+            address = try fieldAddress(of: field, in: address, with: builder)
+        }
+        return address
+    }
+
+    /// The address of `local`'s slot.
+    private func slot(of local: LocalID) -> Address {
+        Address(pointer: slots[local.index], type: function.locals[local.index].type)
+    }
+
+    /// Emits the instruction that points at the field at `field`, its place in its struct's declaration, of the
+    /// value at `address`, and returns the field's address. Throws where the value has no such field.
+    private func fieldAddress(
+        of field: Int, in address: Address, with builder: borrowing Builder,
+    ) throws(LLVMError) -> Address {
         // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
         // with, would point outside the value, so each fails here.
-        guard case .structure(let id) = type else { throw noField(field, of: type) }
+        guard case .structure(let id) = address.type else { throw noField(field, of: address.type) }
         let fields = types.fields(of: id)
-        guard fields.indices.contains(field) else { throw noField(field, of: type) }
+        guard fields.indices.contains(field) else { throw noField(field, of: address.type) }
 
         // Point at the element of the struct's LLVM type that holds the field.
         let (fieldType, element) = fields[field]
-        return (builder.fieldPointer(to: element, of: types.llvmStruct(id), at: pointer), fieldType)
+        let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(id), at: address.pointer)
+        return Address(pointer: pointer, type: fieldType)
     }
 
-    /// The error that says the IR reads the field at `field` of a value of `type`, which has no such field.
+    /// The error that says the IR names the field at `field` of a value of `type`, which has no such field.
     private func noField(_ field: Int, of type: RayoType) -> LLVMError {
-        LLVMError(message: "the IR reads field \(field) of a value of type \(types.llvmType(type).text)")
+        LLVMError(message: "the IR names field \(field) of a value of type \(types.llvmType(type).text)")
     }
 
-    /// Emits the instruction that stores `value` in `local`'s slot. Throws where `value` is of another type than
-    /// `local`'s.
-    private func store(_ value: AnyValue, in local: LocalID, with builder: borrowing Builder) throws(LLVMError) {
-        // A value of another type, which the checker passes no IR with, would pass LLVM's verifier, since a slot is
-        // a pointer of no type, and run as bits of the wrong type, so it fails here.
-        let slotType = slotType(of: local)
-        guard value.type == slotType else {
+    /// Emits the instruction that stores `value` at `address`. Throws where `value` is of another type than the
+    /// place's.
+    private func store(_ value: AnyValue, at address: Address, with builder: borrowing Builder) throws(LLVMError) {
+        // A value of another type, which the checker passes no IR with, would pass LLVM's verifier, since a pointer
+        // has no type, and run as bits of the wrong type, so it fails here.
+        let placeType = types.llvmType(address.type)
+        guard value.type == placeType else {
             let stored = "a value of type \(value.type.text)"
-            throw LLVMError(message: "the IR stores \(stored) in a local of type \(slotType.text)")
+            throw LLVMError(message: "the IR stores \(stored) in a place of type \(placeType.text)")
         }
-        builder.store(value, to: slots[local.index], alignment: alignment(of: local))
+        builder.store(value, to: address.pointer, alignment: types.alignment(of: address.type))
     }
 
     private func emit(
@@ -151,19 +168,20 @@ struct FunctionEmitter {
     ) throws(LLVMError) {
         let value = try compute(rvalue, at: range, in: program)
 
-        // A value that no local takes is dropped.
+        // A value that no place takes is dropped.
         guard let destination else { return }
+        let address = try address(of: destination, with: program.builder)
         // A call that returns nothing gives no value to store, and lowering stores none, so its store fails here.
-        guard let value else { throw storeOfNothing(from: rvalue, in: destination.local) }
-        try store(value, in: destination.local, with: program.builder)
+        guard let value else { throw storeOfNothing(from: rvalue, in: address.type) }
+        try store(value, at: address, with: program.builder)
     }
 
-    /// The error that says the IR stores the result of `rvalue`, a call that returns nothing, in `local`.
-    private func storeOfNothing(from rvalue: Rvalue, in local: LocalID) -> LLVMError {
+    /// The error that says the IR stores the result of `rvalue`, a call that returns nothing, in a place of `type`.
+    private func storeOfNothing(from rvalue: Rvalue, in type: RayoType) -> LLVMError {
         // Only a call gives no value.
         guard case .call(let callee, _) = rvalue else { preconditionFailure("only a call gives no value") }
         let result = "the result of '\(calledFunction(callee).name)', which returns nothing,"
-        return LLVMError(message: "the IR stores \(result) in a local of type \(slotType(of: local).text)")
+        return LLVMError(message: "the IR stores \(result) in a place of type \(types.llvmType(type).text)")
     }
 
     private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {

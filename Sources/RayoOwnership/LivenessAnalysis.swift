@@ -1,7 +1,7 @@
 import RayoIR
 
-/// The backward data flow of which locals of a function hold a value that some code reads later, through the
-/// function's control-flow graph.
+/// The backward data flow of which locals of a function, and which fields inside them, hold a value that some code
+/// reads later, through the function's control-flow graph.
 struct LivenessAnalysis {
     /// The state at the exit of each block, indexed by `BlockID`; nil for a block that no path from the function's
     /// entry reaches.
