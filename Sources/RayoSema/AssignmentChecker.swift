@@ -63,44 +63,26 @@ struct AssignmentChecker {
     /// Checks `target` as the place an assignment changes, a local or a field of one, and returns the read of its
     /// current value, or nil when it can't be assigned, which was reported.
     private func assignedPlace(_ target: Expr) -> CheckedExpr? {
+        // A local's name assigns the whole local, and a member a field of a struct; nothing else, `_` included,
+        // names a place.
         switch target.kind {
-        // A local's name assigns the whole local, which must be one that may change.
-        case .name(let name) where name != "_":
-            guard let local = local(named: name, at: target.range), isAssignable(local, at: target.range) else {
-                return nil
-            }
-            return read(of: local, at: target.range)
-
-        // A member assigns a field of a struct, which must be one whose fields may change.
+        case .name(let name) where name != "_": assignableLocal(named: name, at: target.range)
         case .member(let base, let name, let nameRange):
-            return assignedField(named: name, at: nameRange, of: base, in: target.range)
-
-        // Nothing else, `_` included, names a place that can be assigned.
-        default:
-            errors.report(.assignToNonLocal, at: target.range)
-            return nil
+            assignedField(named: name, at: nameRange, of: base, in: target.range)
+        default: refuse(.assignToNonLocal, at: target.range)
         }
     }
 
     /// Checks `base`, the struct whose field an assignment's target names, as a local, or a field of one, whose
     /// fields may change, and returns the read of its current value, or nil when they can't, which was reported.
     private func changedStructure(_ base: Expr) -> CheckedExpr? {
+        // A local's name names a local whose own fields must be able to change, and a member a field that must
+        // itself be one an assignment may change; nothing else, `_` included, names a place.
         switch base.kind {
-        // A local's name names a local whose own fields must be able to change.
-        case .name(let name) where name != "_":
-            guard let local = local(named: name, at: base.range), hasChangeableFields(local, at: base.range) else {
-                return nil
-            }
-            return read(of: local, at: base.range)
-
-        // A member names a field that must itself be one an assignment may change.
+        case .name(let name) where name != "_": localWithChangeableFields(named: name, at: base.range)
         case .member(let structure, let name, let nameRange):
-            return assignedField(named: name, at: nameRange, of: structure, in: base.range)
-
-        // Nothing else, `_` included, names a place whose fields can be assigned.
-        default:
-            errors.report(.assignToNonLocal, at: base.range)
-            return nil
+            assignedField(named: name, at: nameRange, of: structure, in: base.range)
+        default: refuse(.assignToNonLocal, at: base.range)
         }
     }
 
@@ -112,13 +94,40 @@ struct AssignmentChecker {
         guard let structure = changedStructure(base) else { return nil }
         // So was a name that names no field of it.
         guard let field = expressions.field(named: name, at: nameRange, of: structure, in: range) else { return nil }
-
         // A `let` field never changes, whatever holds it.
-        guard field.kind == .var else {
-            errors.report(.assignToLetField(field: name), at: nameRange)
-            return nil
-        }
+        guard field.kind == .var else { return refuse(.assignToLetField(field: name), at: nameRange) }
         return field.read
+    }
+
+    /// The read of the local called `name`, which the source names at `range`, when it may be assigned whole.
+    /// Reports it when it can't, or when no local has the name.
+    private func assignableLocal(named name: String, at range: SourceRange) -> CheckedExpr? {
+        // A name that names no local was reported.
+        guard let local = local(named: name, at: range) else { return nil }
+        // Any local but a borrowed parameter may be assigned; a `let` only once on each path, which the
+        // initialization check enforces.
+        guard names[local].kind != .parameter else {
+            return refuse(.assignToParameter(name: names[local].name), at: range)
+        }
+        return read(of: local, at: range)
+    }
+
+    /// The read of the local called `name`, which the source names at `range`, when its fields may be assigned.
+    /// Reports it when they can't, or when no local has the name.
+    private func localWithChangeableFields(named name: String, at range: SourceRange) -> CheckedExpr? {
+        // A name that names no local was reported.
+        guard let local = local(named: name, at: range) else { return nil }
+
+        // A `var` owns its value, and may change it field by field. A `let` never changes, even field by field, and
+        // a borrowed parameter's value is its caller's.
+        let refusal: ErrorCode? = switch names[local].kind {
+        case .var: nil
+        case .let: .assignToFieldOfLet(name: names[local].name)
+        case .parameter: .assignToParameter(name: names[local].name)
+        }
+        // A local whose fields can't change is reported.
+        if let refusal { return refuse(refusal, at: range) }
+        return read(of: local, at: range)
     }
 
     /// The read of `local`'s current value, which the source names at `range`.
@@ -126,32 +135,10 @@ struct AssignmentChecker {
         CheckedExpr(kind: .local(local), type: names[local].type, range: range)
     }
 
-    /// Whether `local` may be assigned, reporting it when it can't.
-    private func isAssignable(_ local: LocalID, at range: SourceRange) -> Bool {
-        // Any local but a borrowed parameter may be; a `let` only once on each path, which the initialization check
-        // enforces.
-        guard names[local].kind == .parameter else { return true }
-        errors.report(.assignToParameter(name: names[local].name), at: range)
-        return false
-    }
-
-    /// Whether `local`'s fields may be assigned, reporting it when they can't.
-    private func hasChangeableFields(_ local: LocalID, at range: SourceRange) -> Bool {
-        switch names[local].kind {
-        // A `var` owns its value, and may change it field by field.
-        case .var:
-            return true
-
-        // A `let` never changes, even field by field.
-        case .let:
-            errors.report(.assignToFieldOfLet(name: names[local].name), at: range)
-            return false
-
-        // A borrowed parameter's value is its caller's.
-        case .parameter:
-            errors.report(.assignToParameter(name: names[local].name), at: range)
-            return false
-        }
+    /// Reports `error` at `range`, the target it refuses, and returns nil in place of the target's read.
+    private func refuse(_ error: ErrorCode, at range: SourceRange) -> CheckedExpr? {
+        errors.report(error, at: range)
+        return nil
     }
 
     /// The local called `name`, which an assignment's target names at `range`, reporting it when there is none,
