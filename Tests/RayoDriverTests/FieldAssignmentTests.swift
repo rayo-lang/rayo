@@ -112,20 +112,20 @@ struct FieldAssignmentTests {
     }
 
     @Test(arguments: [
-        ("e.armor += 9223372036854775807", "e.armor", "-9223372036854775804"),
-        ("e.stats.hp -= 1", "e.stats.hp", "9223372036854775807"),
-        ("e.stats.speed *= 4611686018427387904", "e.stats.speed", "-4611686018427387904"),
-        ("e.stats.hp /= -1", "e.stats.hp", "-9223372036854775808"),
+        ("e.armor", "+= 9223372036854775807", "-9223372036854775804"),
+        ("e.stats.hp", "-= 1", "9223372036854775807"),
+        ("e.stats.speed", "*= 4611686018427387904", "-4611686018427387904"),
+        ("e.stats.hp", "/= -1", "-9223372036854775808"),
     ])
     func `a compound assignment to a field that overflows panics at it in a debug build, and wraps in a release one`(
-        statement: String, field: String, wrapped: String,
+        field: String, change: String, wrapped: String,
     ) {
         // `hp` starts at Int's least value, so taking 1 from it, or dividing it by -1, overflows.
         let source = """
             func main() {
                 var e = Enemy(alive: true, stats: Stats(alive: true, hp: -9223372036854775807 - 1, speed: 3), armor: 5)
                 print(1)
-                \(statement)
+                \(field) \(change)
                 print(\(field))
             }
             """ + enemyAndStats
@@ -136,18 +136,30 @@ struct FieldAssignmentTests {
             CommandResult(exitCode: 0, output: "1\n\(wrapped)\n", errors: ""))
     }
 
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `the remainder of a field that holds Int's least value by -1 is 0, in debug and release`(mode: [String]) {
+        let source = """
+            func main() {
+                var e = Enemy(alive: true, stats: Stats(alive: true, hp: -9223372036854775807 - 1, speed: 3), armor: 5)
+                e.stats.hp %= -1
+                print(e.stats.hp)
+            }
+            """ + enemyAndStats
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n", errors: ""))
+    }
+
     @Test(arguments: [["--debug"], ["--release"]], [
-        ("e.armor /= 0", "e.armor", "division"),
-        ("e.stats.hp %= 0", "e.stats.hp", "remainder"),
+        ("e.armor", "/=", "division"),
+        ("e.stats.hp", "%=", "remainder"),
     ])
     func `a compound assignment that divides a field by zero panics at it, in debug and release`(
-        mode: [String], failure: (statement: String, field: String, operation: String),
+        mode: [String], failure: (field: String, operator: String, operation: String),
     ) {
         let source = """
             func main() {
                 var e = Enemy(alive: true, stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
                 print(1)
-                \(failure.statement)
+                \(failure.field) \(failure.operator) 0
                 print(\(failure.field))
             }
             """ + enemyAndStats
