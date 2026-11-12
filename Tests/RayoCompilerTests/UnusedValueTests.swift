@@ -26,7 +26,7 @@ struct UnusedValueTests {
         #expect(coveredText(reported, in: source) == [expression])
     }
 
-    @Test("a value that no code reads is an error at the local it is assigned to", arguments: [
+    @Test(arguments: [
         ("let x = g()", ["2:5: error[E0308]: the value assigned to 'x' is never read"]),
         ("var y = g()\ny = g()\nprint(y)", ["2:5: error[E0308]: the value assigned to 'y' is never read"]),
         ("var y = g()\nprint(y)\ny = g()", ["4:1: error[E0308]: the value assigned to 'y' is never read"]),
@@ -36,17 +36,17 @@ struct UnusedValueTests {
             "3:29: error[E0308]: the value assigned to 'k' is never read",
         ]),
     ])
-    func unread(body: String, expected: [String]) {
+    func `a value that no code reads is an error at the local it is assigned to`(body: String, expected: [String]) {
         #expect(diagnostics("func main() {\n\(body)\n}\nfunc g() -> Int { 3 }").map(\.description) == expected)
     }
 
-    @Test("a value that code reads on some path is used, whether it reads, moves or drops it", arguments: [
+    @Test(arguments: [
         "let x = g()\n_ = x",
         "let x = g()\nlet y = x\nprint(y)",
-        "var y = g()\nif y > 0 { print(y) }\ny = g()\nprint(copy y)",
+        "var y = g()\nif g() > 0 { print(y) }\ny = g()\nprint(y)",
         "var i = 0\nwhile i < 3 { i += 1 }",
     ])
-    func read(body: String) {
+    func `a value that code reads on some path is used, whether it reads, moves or drops it`(body: String) {
         #expect(errors("func main() {\n\(body)\n}\nfunc g() -> Int { 3 }") == [])
     }
 
@@ -58,8 +58,7 @@ struct UnusedValueTests {
         #expect(errors(source) == [])
     }
 
-    @Test("a local's other errors are reported in place of its values that no code reads")
-    func otherErrorsFirst() {
+    @Test func `a local's other errors are reported in place of its values that no code reads`() {
         #expect(errors("func main() {\nlet k = 1\nk = 2\n}") == [.letAssignedTwice(name: "k")])
     }
 

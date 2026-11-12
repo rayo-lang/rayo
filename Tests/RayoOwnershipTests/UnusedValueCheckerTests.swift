@@ -4,8 +4,7 @@ import RayoIR
 import RayoOwnership
 
 struct UnusedValueCheckerTests {
-    @Test("a value stored in a local that no code reads is reported at the store")
-    func neverRead() {
+    @Test func `a value stored in a local that no code reads is reported at the store`() {
         let blocks = [BasicBlock(statements: [declare(k), store(1, in: k, at: 1)], terminator: .return(nil))]
         #expect(errors(in: blocks) == [Diagnostic(.unreadValue(name: "k"), at: at(1))])
     }
@@ -19,8 +18,7 @@ struct UnusedValueCheckerTests {
         #expect(errors(in: blocks) == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
     }
 
-    @Test("a value read on one of the paths from its store is used, though another path overwrites it")
-    func readOnOnePath() {
+    @Test func `a value read on one of the paths from its store is used, though another path overwrites it`() {
         let blocks = [
             BasicBlock(statements: [store(1, in: x, at: 1)], terminator: branch(then: 1, otherwise: 2)),
             BasicBlock(statements: [printing(read(x, at: 2))], terminator: goto(2)),
@@ -44,8 +42,7 @@ struct UnusedValueCheckerTests {
         #expect(errors(in: blocks) == expected)
     }
 
-    @Test("a branch's condition and a return's result read the locals they name")
-    func terminators() {
+    @Test func `a branch's condition and a return's result read the locals they name`() {
         let toNext = Terminator.branch(read(x, at: 1), then: BlockID(index: 1), otherwise: BlockID(index: 1))
         let blocks = [
             BasicBlock(statements: [store(1, in: x)], terminator: toNext),
@@ -54,8 +51,7 @@ struct UnusedValueCheckerTests {
         #expect(errors(in: blocks) == [])
     }
 
-    @Test("a declaration starts its local's life, so a read after it reads no value stored before it")
-    func declarationEndsValue() {
+    @Test func `a declaration starts its local's life, so a read after it reads no value stored before it`() {
         let blocks = [
             BasicBlock(statements: [store(1, in: x, at: 1), declare(x), printing(read(x, at: 2))],
                        terminator: .return(nil)),
@@ -63,14 +59,12 @@ struct UnusedValueCheckerTests {
         #expect(errors(in: blocks) == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
     }
 
-    @Test("a temporary that no code reads reports nothing, since lowering made it")
-    func temporary() {
+    @Test func `a temporary that no code reads reports nothing, since lowering made it`() {
         let blocks = [BasicBlock(statements: [store(1, in: t)], terminator: .return(nil))]
         #expect(errors(in: blocks) == [])
     }
 
-    @Test("a block that no path reaches reports nothing")
-    func unreachable() {
+    @Test func `a block that no path reaches reports nothing`() {
         let blocks = [
             BasicBlock(statements: [], terminator: .return(nil)),
             BasicBlock(statements: [store(1, in: x, at: 1)], terminator: .return(nil)),
@@ -89,8 +83,7 @@ struct UnusedValueCheckerTests {
     }
 }
 
-/// The errors the checker reports in a program of one function made of `blocks`, whose first `parameterCount` locals
-/// are its parameters.
-private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {
-    UnusedValueChecker.check(program(of: [function(blocks, parameterCount: parameterCount)]))
+/// The errors the checker reports in a program of one function made of `blocks`.
+private func errors(in blocks: [BasicBlock]) -> [Diagnostic] {
+    UnusedValueChecker.check(program(of: [function(blocks)]))
 }

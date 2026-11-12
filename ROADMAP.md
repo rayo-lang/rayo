@@ -58,7 +58,7 @@ These are still to do:
 
 These are still to do:
 
-- `mutable` and `owned` parameters, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity);
+- `mutable` and `owned` parameters, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an `owned` parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
 - `mutating func`, which takes `self` as a `mutable` parameter.
 
 ## Not yet planned

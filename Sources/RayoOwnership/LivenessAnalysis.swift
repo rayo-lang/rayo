@@ -13,7 +13,7 @@ struct LivenessAnalysis {
         self.exitStates = exitStates.indices.map { reached.contains($0) ? exitStates[$0] : nil }
     }
 
-    /// The state at the exit of each block of `function`, indexed by `BlockID`.
+    /// Solves the state at the exit of each block of `function`, indexed by `BlockID`.
     private static func exitStates(of function: IRFunction) -> [LivenessState] {
         // No block starts out reading any local, and the passes below add each read they find.
         var entryStates = Array(repeating: LivenessState(), count: function.blocks.count)
@@ -35,7 +35,7 @@ struct LivenessAnalysis {
         return exitStates
     }
 
-    /// The indices of the blocks of `function` that some path from its entry reaches.
+    /// Walks the blocks of `function` that some path from its entry reaches, and returns their indices.
     private static func reachedBlocks(of function: IRFunction) -> Set<Int> {
         var reached: Set<Int> = [0]
         var pending = [BlockID(index: 0)]
