@@ -1,12 +1,14 @@
 import Testing
 import RayoDriver
 
-/// A struct that holds a struct. Each lays `alive` out after its Ints, so an assignment that stores into the wrong
-/// element at either level changes another field.
+/// Two structs that hold a struct, the one in a `var` field and the other in a `let` one. `Enemy` and `Stats` each lay
+/// `alive` out after its Ints, so an assignment that stores into the wrong element at either level changes another
+/// field.
 private let enemyAndStats = """
 
     struct Enemy(let alive: Bool, var stats: Stats, var armor: Int)
     struct Stats(let alive: Bool, var hp: Int, var speed: Int)
+    struct Boss(let stats: Stats, var armor: Int)
     """
 
 struct FieldAssignmentTests {
@@ -90,8 +92,12 @@ struct FieldAssignmentTests {
         ("e.mana = 1", "4:7: error[E0244]: Enemy has no field 'mana'"),
         ("e.armor.hp = 1", "4:13: error[E0244]: Int has no field 'hp'"),
         ("hit(e).armor = 1", "4:5: error[E0223]: only a local, or a field of one, can be assigned"),
+        (
+            "var b = Boss(stats: Stats(alive: true, hp: 1, speed: 2), armor: 3)\n    b.stats.hp = 1",
+            "5:7: error[E0252]: 'stats' is a 'let' field, so it can't change",
+        ),
     ])
-    func `assigning a field of a 'let' or a 'let' field, or a value of the wrong type, is an error in both builds`(
+    func `a field of a 'let' or a temporary, a 'let' field, no field, or a wrong value is rejected in either build`(
         mode: [String], failure: (body: String, error: String),
     ) {
         let source = """
@@ -130,6 +136,10 @@ struct FieldAssignmentTests {
         ),
         (
             "var e = enemy()\n    e.stats.hp = 1\n    print(e.armor)",
+            "3:5: error[E0308]: the value assigned to 'e.stats.hp' is never read",
+        ),
+        (
+            "var e = enemy()\n    e.stats.hp = 1\n    e.stats.hp = 2\n    _ = e",
             "3:5: error[E0308]: the value assigned to 'e.stats.hp' is never read",
         ),
     ])
