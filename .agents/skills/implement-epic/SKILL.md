@@ -10,7 +10,7 @@ An **epic** is an issue whose sub-issues, and the blocking edges between them, l
 
 ## 1. Check the epic
 
-The epic is executable when every open sub-issue is triaged, as ready for an agent or ready for a human. Otherwise, move the epic's triage state to needing triage, tell the user which sub-issues need triage, and stop.
+The epic is executable when it has sub-issues and every open one is triaged, as ready for an agent or ready for a human. Otherwise, move the epic's triage state to needing triage, tell the user what is missing, and stop.
 
 ## 2. Fill the lanes
 
