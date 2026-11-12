@@ -69,12 +69,13 @@ struct LocalState: Equatable {
     /// hold no value, or nil where each holds one on every path.
     private func missingValue(onPathTo fields: [Int], through depth: Int) -> MissingValue? {
         // A local that may hold no value holds none of its fields either.
-        guard whole.isInitialized else { return .missing(fields: [], state: whole) }
+        guard whole.isInitialized else { return MissingValue(kind: .placeOrHolder, fields: [], state: whole) }
 
-        // The outermost field moved out on the way down is the one that leaves the place without its value.
+        // Step down the path, outermost field first.
         for length in 0..<depth {
             let field = Array(fields.prefix(length + 1))
-            if let state = movedFields[field] { return .missing(fields: field, state: state) }
+            // The first field moved out on the way down is the one that leaves the place without its value.
+            if let state = movedFields[field] { return MissingValue(kind: .placeOrHolder, fields: field, state: state) }
         }
         return nil
     }
@@ -84,7 +85,7 @@ struct LocalState: Equatable {
         let inside = movedFields.filter { $0.key.count > fields.count && $0.key.starts(with: fields) }
         // A place with no field moved out from inside it holds all of its value.
         guard let first = inside.min(by: { $0.key.lexicographicallyPrecedes($1.key) }) else { return nil }
-        return .partlyMoved(fields: first.key, state: first.value)
+        return MissingValue(kind: .insidePlace, fields: first.key, state: first.value)
     }
 
     /// Forgets what the place at `fields` and each field inside it held, where a move or an assignment replaces it.

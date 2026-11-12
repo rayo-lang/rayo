@@ -14,7 +14,7 @@ public enum InitializationChecker {
         program.functions.flatMap { check(PlaceTypes(function: $0, types: program.types)) }.inSourceOrder
     }
 
-    /// Checks the function whose places `places` gives the types of.
+    /// Checks `places.function`.
     private static func check(_ places: PlaceTypes) -> [Diagnostic] {
         var errors = FunctionErrors(places: places)
         let analysis = InitializationAnalysis(places.function)
@@ -50,15 +50,19 @@ private struct FunctionErrors {
     }
 
     mutating func use(_ place: Place, missing: MissingValue) {
-        let code = switch missing {
+        // The error names the local or field that may hold no value, and says how it leaves the place short.
+        let missingName = name(of: place.local, fields: missing.fields)
+        let code = switch missing.kind {
         // The place itself, or a place that holds it, may hold no value, and the error names that place.
-        case .missing(let fields, let state):
-            useError(naming: name(of: place.local, fields: fields), holding: state)
+        case .placeOrHolder:
+            useError(naming: missingName, holding: missing.state)
         // A field inside the place may have been moved out of it, so the place can't be used whole.
-        case .partlyMoved(let fields, let state):
-            partlyMovedError(naming: name(of: place.local, fields: place.fields),
-                             movedField: name(of: place.local, fields: fields), holding: state)
+        case .insidePlace:
+            partlyMovedError(naming: name(of: place.local, fields: place.fields), movedField: missingName,
+                             holding: missing.state)
         }
+
+        // Of the uses with the same cause, only the first in the source is kept.
         let cause = Cause(local: place.local, fields: missing.fields, moves: missing.state.moves)
         keep(Diagnostic(code, at: place.range), for: cause)
     }

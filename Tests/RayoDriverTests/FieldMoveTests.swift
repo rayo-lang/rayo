@@ -17,7 +17,7 @@ struct FieldMoveTests {
         mode: [String],
     ) {
         // `e` is a `var`, whose other fields are copied, assigned and moved in turn, and `l` a `let`; `l`'s `hp` moves
-        // out of the struct inside it, and `made`'s `stats` out of a call's result.
+        // out of the struct inside it, `made`'s `stats` out of a call's result, and `statsOf` returns a local's.
         let source = """
             func main() {
                 var e = enemy()
@@ -37,9 +37,14 @@ struct FieldMoveTests {
                 print(l.armor)
                 let made = Enemy(alive: true, stats: enemy().stats, armor: 9)
                 print(made.stats.hp)
+                print(statsOf(Enemy(alive: true, stats: Stats(alive: true, hp: 1, speed: 4), armor: 2)).speed)
+            }
+            func statsOf(_ given: Enemy) -> Stats {
+                let e = copy given
+                return e.stats
             }
             """ + enemyAndStats
-        let output = "100\n3\n5\ntrue\n6\n20\n7\n2\n100\n"
+        let output = "100\n3\n5\ntrue\n6\n20\n7\n2\n100\n4\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
     }
 
@@ -72,6 +77,7 @@ struct FieldMoveTests {
         (["_ = e"], "5:9: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole"),
         (["print(e.stats.hp)"], "5:11: error[E0302]: 'e.stats' was moved"),
         (["let t = e.stats", "print(t.hp)"], "5:13: error[E0302]: 'e.stats' was moved"),
+        (["let t = copy e.stats", "print(t.hp)"], "5:13: error[E0302]: 'e.stats' was moved"),
     ])
     func `a struct a field was moved out of can't be used whole, nor the field read, in either build`(
         mode: [String], failure: (lines: [String], error: String),
@@ -87,12 +93,38 @@ struct FieldMoveTests {
             "7:20: error[E0310]: 'e.stats' may have been moved out of 'e', so 'e' can't be used whole",
         ),
         ("print(e.stats.speed)", "7:11: error[E0303]: 'e.stats' may have been moved"),
+        ("let t = copy e.stats", "7:13: error[E0303]: 'e.stats' may have been moved"),
     ])
     func `a field moved in one branch of an 'if' may have been moved after it, in either build`(
         mode: [String], failure: (line: String, error: String),
     ) {
         let lines = ["var e = enemy()", "if e.armor > 1 {", "    let s = e.stats", "    print(s.hp)", "}", failure.line]
         let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
+        #expect(run(main(running: lines), options: mode) == expected)
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a loop's body may move a field out on each pass where it assigns the field again, in debug and release`(
+        mode: [String],
+    ) {
+        let lines = [
+            "var e = enemy()", "while e.armor > 3 {", "    let s = e.stats", "    print(s.hp)",
+            "    e.stats = Stats(alive: true, hp: s.hp - 10, speed: s.speed)", "    e.armor -= 1", "}",
+            "print(e.stats.hp)",
+        ]
+        let expected = CommandResult(exitCode: 0, output: "100\n90\n80\n", errors: "")
+        #expect(run(main(running: lines), options: mode) == expected)
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a field that a loop's body moves out and leaves may have been moved on the next pass, in either build`(
+        mode: [String],
+    ) {
+        let lines = [
+            "var e = enemy()", "while e.armor > 3 {", "    let s = e.stats", "    print(s.hp)", "    e.armor -= 1", "}",
+        ]
+        let expected = CommandResult(
+            exitCode: 1, output: "", errors: "main.rayo:4:17: error[E0303]: 'e.stats' may have been moved\n")
         #expect(run(main(running: lines), options: mode) == expected)
     }
 

@@ -4,6 +4,9 @@ import RayoSyntax
 
 /// Checks expressions: the names they use, their operators' operands, and the types they give.
 struct ExpressionChecker {
+    /// A borrowed parameter's name, and the name of a place inside it as the source writes it, such as `e.stats.hp`.
+    private typealias ParameterPath = (parameter: String, spelling: String)
+
     let file: FileChecker
     let names: NameScopes
 
@@ -118,25 +121,27 @@ struct ExpressionChecker {
     }
 
     /// The borrowed parameter that `place`, a local or a field read through one, lies in, and the place as the source
-    /// names it, such as `e.stats.hp`; or nil where the place lies in a `let`, a `var` or a temporary.
-    private func parameterPath(to place: CheckedExpr) -> (parameter: String, spelling: String)? {
+    /// names it; or nil where the place lies in a `let`, a `var` or a temporary.
+    private func parameterPath(to place: CheckedExpr) -> ParameterPath? {
         switch place.kind {
-        // A field lies in whatever holds its struct, and takes its name from that struct's declaration.
-        case .field(let structure, let index):
-            // A struct that lies in no parameter holds its fields there too.
-            guard let holder = parameterPath(to: structure), case .structure(let id) = structure.type else {
-                return nil
-            }
-            return (holder.parameter, holder.spelling + "." + file.declarations.fields(of: id)[index].name)
-
+        // A field lies in whatever holds its struct.
+        case .field(let structure, let index): parameterPath(toField: index, of: structure)
         // A local is the place's own, which may be a borrowed parameter.
-        case .local(let local):
-            return names[local].kind == .parameter ? (names[local].name, names[local].name) : nil
-
+        case .local(let local): names[local].kind == .parameter ? (names[local].name, names[local].name) : nil
         // Any other value is a temporary, which no parameter holds.
-        default:
-            return nil
+        default: nil
         }
+    }
+
+    /// The borrowed parameter that the field at `index` of `structure` lies in, and the field as the source names it;
+    /// or nil where `structure` lies in no borrowed parameter.
+    private func parameterPath(toField index: Int, of structure: CheckedExpr) -> ParameterPath? {
+        // A struct that lies in no parameter holds its fields there too.
+        guard let holder = parameterPath(to: structure) else { return nil }
+
+        // The field takes its name from the declaration of the struct that holds it.
+        guard case .structure(let id) = structure.type else { preconditionFailure("only a struct has fields") }
+        return (holder.parameter, holder.spelling + "." + file.declarations.fields(of: id)[index].name)
     }
 
     private func reference(to name: String, at range: SourceRange) -> CheckedExpr? {

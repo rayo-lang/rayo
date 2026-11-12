@@ -38,6 +38,7 @@ struct FieldMoveTests {
         ("print(strength(e))", .usedPartlyMoved(name: "e", field: "e.stats"), "e"),
         ("print(e.stats.hp)", .usedAfterMove(name: "e.stats"), "e.stats.hp"),
         ("let t = e.stats\nprint(t.hp)", .usedAfterMove(name: "e.stats"), "e.stats"),
+        ("let t = copy e.stats\nprint(t.hp)", .usedAfterMove(name: "e.stats"), "copy e.stats"),
         ("e.stats.hp = 1", .usedAfterMove(name: "e.stats"), "e.stats.hp"),
     ])
     func `a struct that a field was moved out of can't be used whole, nor the field read, until it is assigned`(
@@ -60,6 +61,7 @@ struct FieldMoveTests {
     @Test(arguments: [
         ("print(strength(e))", ErrorCode.usedMaybePartlyMoved(name: "e", field: "e.stats"), "e"),
         ("print(e.stats.speed)", .usedAfterMaybeMove(name: "e.stats"), "e.stats.speed"),
+        ("let t = copy e.stats\nprint(t.hp)", .usedAfterMaybeMove(name: "e.stats"), "copy e.stats"),
     ])
     func `a field moved in one branch may have been moved after it, so it and its struct can't be used`(
         body: String, expected: ErrorCode, covered: String,
@@ -70,6 +72,21 @@ struct FieldMoveTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [expected])
         #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test func `a field moved in a loop's body may have been moved on the next pass, unless the body assigns it`() {
+        let loop = "while e.armor > 0 {\nlet s = e.stats\nprint(s.hp)\ne.armor -= 1\n"
+        let movingLoop = source(running: loop + "}")
+
+        // The one error is at the move, which the pass before may have made.
+        let reported = diagnostics(movingLoop)
+        #expect(reported.map(\.code) == [.usedAfterMaybeMove(name: "e.stats")])
+        #expect(coveredText(reported, in: movingLoop) == ["e.stats"])
+        #expect(errors(source(running: loop + "e.stats = s\n}")) == [])
+    }
+
+    @Test func `a 'return' moves a field out of a local`() {
+        #expect(errors("func main() {}\nfunc g() -> Stats {\nlet e = made()\nreturn e.stats\n}" + enemyAndStats) == [])
     }
 
     @Test(arguments: [
