@@ -116,7 +116,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 }
 ```
 
-**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things. So a body that passes is sound for every instantiation.
+**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things, though it has a size unless it is marked `@opaque` ([below](#type-parameters-with-no-known-size-opaque)). So a body that passes is sound for every instantiation.
 
 **So a generic fails at an instantiation only in these cases, where the arguments decide the outcome:**
 
@@ -143,6 +143,27 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 - a reflective projection: `value[f]`, `value[fields:]` or `value[case:]`.
 
 **The checks that run on the expanded body are those of moves, initialization, borrows, dependencies, the places that place properties hand out, and `self.init` calls.** So a move in a `static for` body moves once per element ([09](../09-compile-time/reflection.md#static-reflection)).
+
+## Type parameters with no known size: `@opaque`
+
+```swift
+struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt): ~Copyable {
+    deinit { unsafe { _ = release(raw) } }         // the body uses T only behind a pointer
+}
+
+let db = CHandle(raw: conn, release: sqlite3_close)        // T is sqlite3, an @opaque C type
+let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
+```
+
+**A type parameter has a size, unless it is marked `@opaque`.** So an unmarked one never stands for an `@opaque` type, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). An `@opaque` one stands for any type, with a size or without, since its body is checked as though the type were `@opaque`.
+
+**An `@opaque` type parameter's body uses `T` only where no layout is needed.** It may write `*T` and `*T?`, which are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`. It may also write `T.self` and `p.cast(to: T.self)`. Anything that needs `T`'s layout or a `T` value is a compile error in its body:
+
+- a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value;
+- `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
+- `T.size`, `T.alignment`, `T.construct` and every other reflective query of `T`'s layout or fields ([09](../09-compile-time/reflection.md#what-reflection-can-read));
+- `T` as the argument for a type parameter not marked `@opaque`;
+- a requirement of one of `T`'s constraints that takes or gives a `T` by value, or that is an instance member, whose `self` is a `T`.
 
 ## Instantiation
 

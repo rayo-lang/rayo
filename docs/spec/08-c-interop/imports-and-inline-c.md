@@ -109,7 +109,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | anonymous `union`/`struct` members | Their fields are accessible directly on the enclosing struct, as in C |
 | flexible array member `T data[]` | The struct without the member, as a `TrailingArray` header (below) |
 | `__attribute__((packed))` / `#pragma pack(n)` / `__attribute__((aligned(n)))` | `@packed` / `@packed(n)` / `@align(n)`, with identical layout ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)) |
-| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S` |
+| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S`, and in generic code only for an `@opaque` type parameter ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)) |
 | a struct or union whose layout Rayo can't reproduce, or whose members don't all map (below) | `@opaque` too |
 | `typedef T N;` | `typealias N = T`, with the exceptions below |
 | `union U` | `@c union U` |
