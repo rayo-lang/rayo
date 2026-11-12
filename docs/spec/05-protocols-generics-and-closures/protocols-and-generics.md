@@ -168,8 +168,10 @@ let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_
 - a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
 - a function type that takes or gives a `T`, a `@c` one included;
 - `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
-- a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible` and `T.construct`. Its name, module and id, the kind queries, its attributes and `T == U` stay readable ([09](../09-compile-time/reflection.md#what-reflection-can-read));
+- a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible`, `T.construct` and `T.makeCase` ([09](../09-compile-time/reflection.md#what-reflection-can-read));
 - `T` as the argument for a type parameter that isn't `@opaque`.
+
+**`T.name`, `T.baseName`, `T.module`, `T.id`, the kind queries, `T`'s attributes, `T == U` and `T != U` stay readable**, since none needs a layout or a conformance.
 
 **Compile-time code in that body treats `T` as `@opaque` too**, so it is checked at the definition, as the rest of the body is, and a `static if` branch can't use what only some types allow.
 

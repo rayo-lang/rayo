@@ -235,7 +235,6 @@ func rebuild<T>(_ old: owned T) -> T {
 
 **`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](../04-types/structs.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), or a tuple type. Even then it is false when the type:
 
-- is marked `@opaque`, as an imported C type is when a header only declares it, or when Rayo can't reproduce its layout or map its members ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - has stored fields the use site can't see (`private` ones, without `@reflect(private)`);
 - has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe));
 - has a primary initializer the use site can't call: a `private init` one, from another module, whatever `@reflect(private)` shows, since a `private init` guards the type's invariants ([above](#reflection-and-access-control)). The private fields `@reflect(private)` shows count as `public` here, so they don't stop the call.
