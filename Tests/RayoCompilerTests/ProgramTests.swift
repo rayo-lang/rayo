@@ -52,10 +52,11 @@ struct ProgramTests {
 
     @Test("calls match the function's arguments and their types", arguments: [
         ("foo(1)", ErrorCode.notDeclared(name: "foo")),
-        ("print()", .argumentCount(name: "print", takes: 1, passes: 0)),
-        ("print(1, 2)", .argumentCount(name: "print", takes: 1, passes: 2)),
-        ("print(print(1))", .typeMismatch(expected: "Int", found: "Void")),
-        ("print(true)", .typeMismatch(expected: "Int", found: "Bool")),
+        ("print()", .noMatchingFunction(name: "print", arguments: "")),
+        ("print(1, 2)", .noMatchingFunction(name: "print", arguments: "Int, Int")),
+        ("print(1, true)", .noMatchingFunction(name: "print", arguments: "Int, Bool")),
+        ("print(print(1))", .noMatchingFunction(name: "print", arguments: "Void")),
+        ("print(value: true)", .noMatchingFunction(name: "print", arguments: "value: Bool")),
         ("print(1) + 2", .operandTypes(op: "+", needs: "Int", left: "Void", right: "Int")),
         ("print", .functionAsValue(name: "print")),
         ("print(main)", .functionAsValue(name: "main")),
@@ -107,8 +108,7 @@ struct ProgramTests {
 
     @Test("a call's arguments are checked even when the call doesn't match its function", arguments: [
         ("main(a)", [ErrorCode.argumentCount(name: "main", takes: 0, passes: 1), .notDeclared(name: "a")]),
-        ("print(a, b)", [.argumentCount(name: "print", takes: 1, passes: 2), .notDeclared(name: "a"),
-                         .notDeclared(name: "b")]),
+        ("print(a, b)", [.notDeclared(name: "a"), .notDeclared(name: "b")]),
     ])
     func everyArgument(body: String, expected: [ErrorCode]) {
         #expect(errors("func main() { \(body) }") == expected)

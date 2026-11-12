@@ -8,7 +8,7 @@ struct StructTests {
     @Test(arguments: [
         ("let i: Int = copy s", ErrorCode.typeMismatch(expected: "Int", found: "S")),
         ("let e: E = copy s", .typeMismatch(expected: "E", found: "S")),
-        ("print(s)", .typeMismatch(expected: "Int", found: "S")),
+        ("print(s)", .noMatchingFunction(name: "print", arguments: "S")),
         ("let t = s + s", .operandTypes(op: "+", needs: "Int", left: "S", right: "S")),
         ("let b = s == s", .incomparable(op: "==", type: "S")),
     ])

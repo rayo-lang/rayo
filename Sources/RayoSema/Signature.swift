@@ -5,9 +5,13 @@ struct Signature: CustomStringConvertible {
     var parameters: [Parameter]
     var result: DeclaredResult
 
-    static let print = Signature(name: "print", callee: .printInt,
-                                 parameters: [Parameter(label: nil, type: .int, spelledType: "Int")],
-                                 result: .type(.void))
+    static let printInt = Signature(name: "print", callee: .printInt,
+                                    parameters: [Parameter(label: nil, type: .int, spelledType: "Int")],
+                                    result: .type(.void))
+
+    static let printBool = Signature(name: "print", callee: .printBool,
+                                     parameters: [Parameter(label: nil, type: .bool, spelledType: "Bool")],
+                                     result: .type(.void))
 
     /// The name and the parameters, such as `f(_: Int, by: Bool)`, which tell the function apart from every other.
     var description: String {
