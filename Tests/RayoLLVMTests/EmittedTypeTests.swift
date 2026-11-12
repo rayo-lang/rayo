@@ -116,6 +116,29 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `a field inside a field is read by stepping into each struct's element that holds the next`() throws {
+        // `main` reads the Bool of the Pair that a Holder declares second.
+        let holderTable = TypeTable(structs: pairTable.structs + [
+            StructType(name: "Holder", fields: [Field(name: "flag", type: .bool), Field(name: "pair", type: pairType)]),
+        ])
+        let holderType = RayoType.structure(StructID(index: 1, name: "Holder"))
+        let flag = Operand.read(Place(local: LocalID(index: 0), fields: [1, 0], range: nowhere))
+        let main = mainFunction(locals: [holderType, .bool], [
+            BasicBlock(statements: [statement(storingIn: 1, .use(flag))], terminator: .return(nil)),
+        ])
+
+        // The Holder lays its Pair out first, and the Pair its Bool second, so the read steps into the first element
+        // of the one and the second of the other.
+        try withEmitted(program(of: [main], types: holderTable)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %2 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
+                  %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 1
+                  %4 = load i1, ptr %3, align 1
+                """))
+        }
+    }
+
     /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding.
     private let pairTable = TypeTable(structs: [
         StructType(name: "Pair", fields: [Field(name: "flag", type: .bool), Field(name: "count", type: .int)]),
