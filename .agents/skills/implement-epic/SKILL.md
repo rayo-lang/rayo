@@ -10,13 +10,15 @@ An **epic** is an issue whose sub-issues, and the blocking edges between them, l
 
 ## 1. Check the epic
 
-The epic is executable when it has sub-issues, every open one is ready for an agent, every blocker is a sub-issue or closed, and the edges form no cycle. Otherwise, move the epic's triage state to needing triage, tell the user what is missing, and stop.
+An epic with no sub-issues has no work laid out: move its triage state to needing triage, tell the user, and stop. Any other epic goes ahead, even when some of its work can't start yet. A cycle in the blocking edges is the one flaw to tell the user about now, naming the issues it holds, since none of them can ever start until the user breaks it.
 
 ## 2. Fill the lanes
 
-The **frontier** is every open sub-issue whose blockers are all closed, that no lane holds, and that no one else has claimed. For each free lane, claim the next issue on the frontier and start a new implementer for it, in the background and in a worktree of its own, with the prompt `/implement <issue URL>` and nothing else.
+The **frontier** is every open sub-issue whose blockers are all closed, that no lane holds, and that no one else has claimed. For each free lane, claim the next issue on the frontier that is ready for an agent, and start a new implementer for it, in the background and in a worktree of its own, with the prompt `/implement <issue URL>` and nothing else.
 
-A new issue always gets a new implementer: continue one only about its own pull request. Keep the lanes within the repo's limit on open pull requests, and count the free slots again on each hand-back. When no lane is running and none can start while sub-issues stay open, tell the user why and stop.
+An issue on the frontier that isn't ready for an agent, such as one for a human or one that needs triage, is the user's. Tell them once, when it reaches the frontier, and fill the lanes with the rest: it holds back only the issues it blocks.
+
+A new issue always gets a new implementer: continue one only about its own pull request. Keep the lanes within the repo's limit on open pull requests, and count the free slots again on each hand-back. When no lane is running and none can start while sub-issues stay open, tell the user what each open one waits on, and stop.
 
 ## 3. Merge
 
