@@ -19,6 +19,7 @@ struct StructTests {
     @Test(arguments: [
         ("func f(_ s: Shot) -> Shot { s }", "s"),
         ("func f(_ s: Shot) {\n    _ = s\n}", "s"),
+        ("func f(_ h: Hit) -> Shot { Shot(hit: h) }", "h"),
     ])
     func `a borrowed parameter of a struct type can't be moved, and the error covers the parameter`(
         declaration: String, name: String,
@@ -289,20 +290,15 @@ struct NestedStructTests {
             .usedAfterMove(name: "s"), "s.hp",
         ),
     ])
-    func `a read through a field the inner struct lacks, or a field or moved struct as a field's value, is an error`(
+    func `a nested read of no field, a taken field, a wrong or partial field value, or a moved local is an error`(
         body: String, expected: ErrorCode, covered: String,
     ) {
-        let enemy = "let e = Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)"
-        let source = "func main() {}\nfunc f(b: Boss) {\n\(enemy)\n\(body)\n}" + bossEnemyAndStats
+        let madeEnemy = "let e = Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)"
+        let source = "func main() {}\nfunc f(b: Boss) {\n\(madeEnemy)\n\(body)\n}" + bossEnemyAndStats
 
-        // The one error names the inner struct where the field is missing, and covers what is wrong.
+        // The one error covers what is wrong.
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [expected])
         #expect(coveredText(reported, in: source) == [covered])
-    }
-
-    @Test func `the initializer can't take a borrowed parameter of a struct type as a field's value`() {
-        let source = "func main() {}\nfunc f(s: Stats) -> Enemy { Enemy(stats: s, armor: 1) }" + bossEnemyAndStats
-        #expect(errors(source) == [.moveFromParameter(name: "s")])
     }
 }

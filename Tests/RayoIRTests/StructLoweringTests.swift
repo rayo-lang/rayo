@@ -58,7 +58,6 @@ struct StructLoweringTests {
 
     @Test func `a struct made inside another is computed into a temporary, and a field is read through its fields`()
         throws(RejectedSource) {
-        // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
         let source = """
             func main() {
                 let s = Shot(range: 4, hit: Hit(damage: 7))
@@ -77,6 +76,7 @@ struct StructLoweringTests {
                 declare(0),
                 compute(1, .structure(hit, fields: [int(7)])),
                 compute(0, .structure(shot, fields: [int(4), read(1)])),
+                // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
                 compute(nil, .call(.printInt, arguments: [read(0, fields: 1, 0)])),
                 then: .return(nil),
             ),

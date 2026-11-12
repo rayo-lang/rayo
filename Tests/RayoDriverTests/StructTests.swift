@@ -97,8 +97,8 @@ struct NestedStructTests {
     func `a field read through the fields that hold it gives the value it was made with, in debug and in release`(
         mode: [String],
     ) {
-        // `e` is made from a nested initializer call, and `b` from a local that the call moves in. Each read leaves
-        // its struct whole, so it is read again after.
+        // `e` is made from a nested initializer call, and `b` holds an Enemy made from the local `stats`, which that
+        // call moves in. Each read leaves its struct whole, so it is read again after.
         let source = """
             func main() {
                 let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
@@ -144,7 +144,7 @@ struct NestedStructTests {
         ("print(e.stats.mana)", "4:19: error[E0244]: Stats has no field 'mana'"),
         ("print(b.minion.stats.mana)", "4:26: error[E0244]: Stats has no field 'mana'"),
         ("print(b.minion.mana)", "4:20: error[E0244]: Enemy has no field 'mana'"),
-        ("let f = Enemy(stats: 3, armor: 1)", "4:26: error[E0248]: the field 'stats' takes Stats, found Int"),
+        ("let f = Enemy(stats: e, armor: 1)", "4:26: error[E0248]: the field 'stats' takes Stats, found Enemy"),
         (
             "let f = Enemy(stats: e.stats, armor: 1)",
             "4:26: error[E0250]: moving a field out of a struct isn't supported",
@@ -154,7 +154,7 @@ struct NestedStructTests {
             "6:11: error[E0302]: 's' was moved",
         ),
     ])
-    func `a read of a field that the inner struct lacks, or of a moved struct, is an error, in debug and release`(
+    func `a nested read of no field, a field given a wrong or taken value, or a moved local is an error in both builds`(
         mode: [String], failure: (body: String, error: String),
     ) {
         let source = """
