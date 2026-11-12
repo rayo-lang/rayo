@@ -27,7 +27,8 @@ v0.1 adds:
 - struct declarations, whose names are the types of locals, parameters and results, and `copy` of a struct;
 - making a struct with its primary initializer, as `Enemy(hp: 100, armor: 5)`, which takes its arguments owned, and reading a field of a struct where a borrow of the field suffices, as `e.hp - 5` or `print(e.hp)`;
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
-- assigning a field of a `var` local, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
+- `copy` of a field of a local or a borrowed parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
+- assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
 - `print(Int)`, and `print(Bool)`, which prints `true` or `false`.
 
 ## v0.1.5: Float
