@@ -69,21 +69,21 @@ struct FunctionTests {
             [.argumentCount(name: "print", takes: 0, passes: 1)])
     }
 
-    @Test(arguments: [
-        "func main() {\n    let x: Bool = true\n    print(x)\n}",
-        "func main() {}\nfunc f(_ b: Bool) {}",
-        "func main() {}\nfunc f() -> Bool { true }",
-        "func main() {}\nstruct S(var b: Bool)",
+    @Test(arguments: ["Int", "Bool", "Void"], [
+        "func main() {\n    let x: {T} = true\n    print(x)\n}",
+        "func main() {}\nfunc f(_ b: {T}) {}",
+        "func main() {}\nfunc f() -> {T} { true }",
+        "func main() {}\nstruct S(var b: {T})",
     ])
     func `a function shadows the prelude's type of its name wherever a type names it, and the error covers the name`(
-        declarations: String,
+        type: String, declarations: String,
     ) {
-        let source = declarations + "\nfunc Bool() {}"
+        let source = declarations.replacing("{T}", with: type) + "\nfunc \(type)() {}"
 
         // The one error is that the name isn't a type, and it covers the name.
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.notAType(name: "Bool")])
-        #expect(coveredText(reported, in: source) == ["Bool"])
+        #expect(reported.map(\.code) == [.notAType(name: type)])
+        #expect(coveredText(reported, in: source) == [type])
     }
 
     @Test("a function is called, not used as a value or assigned", arguments: [

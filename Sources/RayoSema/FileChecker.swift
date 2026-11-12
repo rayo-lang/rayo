@@ -8,8 +8,6 @@ final class FileChecker {
     let errors = ErrorList()
     private(set) var declarations: Declarations
     private let file: SourceFile
-    /// Which kind of declaration each of the file's top-level names belongs to.
-    let names: TopLevelNames
     /// The signature of each of the file's functions, indexed by `FunctionID`.
     private var signatures: [Signature] = []
     private var bodies: [FunctionID: CheckedBody] = [:]
@@ -25,13 +23,12 @@ final class FileChecker {
 
     init(_ file: SourceFile) {
         self.file = file
-        names = TopLevelNames(of: file)
-        declarations = Declarations(names: names)
+        declarations = Declarations(names: TopLevelNames(of: file))
     }
 
     func check() -> CheckedProgram? {
         // Check every struct and function; a file without a `main` is a library, checked the same.
-        let types = StructChecker(errors: errors).declare(file.structs, among: names, in: &declarations)
+        let types = StructChecker(errors: errors).declare(file.structs, in: &declarations)
         let main = declareFunctions()
         let functions = signatures.indices.map { function(FunctionID(index: $0)) }
 
@@ -96,7 +93,7 @@ final class FileChecker {
 
         // Declare the function, reporting a name it can't take.
         let isDeclared = declarations.declare(signature)
-        if names.kind(of: function.name) == .structure {
+        if declarations.kind(of: function.name) == .structure {
             // A function whose name belongs to a struct is reported, and still declared: a call looks up functions
             // alone, so it still finds the function, and raises no error of its own.
             errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)

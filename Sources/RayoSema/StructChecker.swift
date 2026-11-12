@@ -23,11 +23,9 @@ struct StructChecker {
     let errors: ErrorList
 
     /// Declares the types and fields of `structs` in `declarations`, and returns the types they make, or nil when
-    /// they can't be laid out. A struct whose name `names` gives to functions is reported, and still declared.
-    func declare(
-        _ structs: [StructDecl], among names: TopLevelNames, in declarations: inout Declarations,
-    ) -> TypeTable? {
-        let ids = declareNames(of: structs, among: names, in: &declarations)
+    /// they can't be laid out. A struct whose name belongs to the file's functions is reported, and still declared.
+    func declare(_ structs: [StructDecl], in declarations: inout Declarations) -> TypeTable? {
+        let ids = declareNames(of: structs, in: &declarations)
 
         // A field may name any struct, so every name is declared before a field is checked.
         let declared = checkStructs(structs, withIDs: ids, in: declarations)
@@ -40,9 +38,7 @@ struct StructChecker {
 
     /// Declares the name of each of `structs`, numbering them in source order, and returns their IDs, nil for each
     /// whose name is `_` or another struct's.
-    private func declareNames(
-        of structs: [StructDecl], among names: TopLevelNames, in declarations: inout Declarations,
-    ) -> [StructID?] {
+    private func declareNames(of structs: [StructDecl], in declarations: inout Declarations) -> [StructID?] {
         var ids: [StructID?] = []
         var nextIndex = 0
         for declaration in structs {
@@ -54,7 +50,7 @@ struct StructChecker {
 
             // Number and declare the struct, even when its name belongs to functions: a type is looked up apart from
             // a function, so the struct's uses still find it, and raise no error of their own.
-            reportNameTakenByFunctions(declaration, among: names)
+            reportNameTakenByFunctions(declaration, in: declarations)
             let id = StructID(index: nextIndex, name: declaration.name)
             declarations.declare(id)
             ids.append(id)
@@ -84,10 +80,10 @@ struct StructChecker {
         return false
     }
 
-    /// Reports `declaration`, the first struct of its name, when `names` gives the name to functions.
-    private func reportNameTakenByFunctions(_ declaration: StructDecl, among names: TopLevelNames) {
+    /// Reports `declaration`, the first struct of its name, when the name belongs to the file's functions.
+    private func reportNameTakenByFunctions(_ declaration: StructDecl, in declarations: Declarations) {
         // A function before it holds the name already.
-        if names.kind(of: declaration.name) == .functions {
+        if declarations.kind(of: declaration.name) == .functions {
             errors.report(.alreadyDeclared(name: declaration.name), at: declaration.nameRange)
         }
     }
