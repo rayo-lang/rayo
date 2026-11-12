@@ -18,9 +18,9 @@
 
 ## Semantic checking: `RayoSema`
 
-**Decides:** what the program means: what each name refers to, each expression's type, and what each expression does, including which uses of a value are moves and which are reads, which places the code may change, that an expression standing as a statement is Void, and what the syntax alone says about where a function can run, such as a body that reaches its end without a `return`. It reports a program that means nothing or the wrong thing, and produces the checked program.
+**Decides:** what the program means: what each name refers to, each expression's type, and what each expression does, including which uses of a value are moves and which are reads, which places the code may change, that an expression standing as a statement is Void, and what the syntax alone says about where a function can run, such as a body that reaches its end without a `return`. It also decides how each type lies in memory: its size and alignment, and a struct's field order and each field's offset. It reports a program that means nothing or the wrong thing, and produces the checked program.
 
-**Leaves to the others:** what a function's places hold over its paths, and every rule about it: it marks each move, and the ownership pass decides whether the move is allowed. It also leaves how values lie in memory to emitting.
+**Leaves to the others:** what a function's places hold over its paths, and every rule about it: it marks each move, and the ownership pass decides whether the move is allowed.
 
 ## Lowering: `RayoIR`
 
@@ -36,13 +36,13 @@
 
 ## Emitting: `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM`
 
-**Decides:** how the program is written as LLVM code: the LLVM type of each Rayo type, where each value and each field lies in memory, how the build mode changes the code, such as overflow that panics in a debug build, and the runtime each program links.
+**Decides:** how the program is written as LLVM code: the LLVM type of each Rayo type, which maps the layout semantic checking decides onto LLVM's types, how the build mode changes the code, such as overflow that panics in a debug build, and the runtime each program links.
 
-**Leaves to the others:** every rule of the language. It reports no error in a program, since every program that reaches it was accepted.
+**Leaves to the others:** every rule of the language, how each type lies in memory among them. It reports no error in a program, since every program that reaches it was accepted.
 
-## The pipeline: `RayoCompiler`
+## The pipeline: `RayoCompiler`, `rayoc`
 
-**Decides:** which stages run for what `rayoc` is asked, in which order, and that each stops the compile when it reports errors, so a stage sees only a program that every stage before it accepted. It also decides what the output asks of a program: an executable needs a `main`.
+**Decides:** which stages run for what `rayoc` is asked, in which order, and that each stops the compile when it reports errors, so a stage sees only a program that every stage before it accepted. It also decides what the output asks of a program, such as a `main` for an executable, and what `rayoc` reads, writes and prints.
 
 **Leaves to the others:** every question about what the program says or means.
 
@@ -53,4 +53,3 @@ The driver, `rayo`, in `RayoDriver` and `RayoLLVMInstall`, runs `rayoc` and link
 Code that answers another stage's question today. A change that touches it moves it to its stage first, and takes it off this list.
 
 - **A move out of a borrowed parameter, or out of a field of one,** is reported by semantic checking, though whether a move is allowed is ownership's.
-- **Where each field of a struct lies in memory** is worked out in semantic checking's type table, though how values lie in memory is emitting's.
