@@ -12,28 +12,27 @@ struct AssignmentChecker {
     /// Checks `target op valueExpr`, checking the value even when the target fails.
     func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr, in range: SourceRange) -> CheckedStmt? {
         let current = assignedPlace(target)
-        let value = checkAssigned(valueExpr, by: op)
+        let value = checkAssigned(valueExpr, by: op, to: current)
         guard let current, let value else { return nil }
 
         switch op.binary {
         case nil:
-            return assign(value, to: current)
+            return .assign(place(readBy: current), value)
         case let binaryOp?:
             return compoundAssign(value, binaryOp, spelled: op.rawValue, to: current, in: range)
         }
     }
 
-    /// Checks `expr` as the value an assignment with `op` takes: a plain assignment moves a local's value, and a
-    /// compound one reads it.
-    private func checkAssigned(_ expr: Expr, by op: AssignOperator) -> CheckedExpr? {
-        op.binary == nil ? expressions.checkTaken(expr) : expressions.check(expr)
-    }
-
-    /// Checks `place = value`, where `current` reads the place, whose type the value must have.
-    private func assign(_ value: CheckedExpr, to current: CheckedExpr) -> CheckedStmt? {
-        // A value of another type was reported.
-        guard expressions.expect(value, current.type) else { return nil }
-        return .assign(place(readBy: current), value)
+    /// Checks `expr` as the value an assignment with `op` gives the place that `current` reads, which is nil where the
+    /// place can't be assigned.
+    private func checkAssigned(_ expr: Expr, by op: AssignOperator, to current: CheckedExpr?) -> CheckedExpr? {
+        // A plain assignment takes the value, which must have the place's type.
+        if op.binary == nil {
+            expressions.check(expr, as: .take, expecting: current.map { Expectation($0.type) })
+        } else {
+            // A compound one reads it, as its operator's right operand.
+            expressions.check(expr)
+        }
     }
 
     /// Checks `place op= value`, where `current` reads the place and the source spells the operator `spelled`, as

@@ -36,6 +36,13 @@ struct BindingChecker {
         case resolved(RayoType, range: SourceRange)
         /// An annotation that names no type, which was reported there.
         case failed
+
+        /// What the annotation expects of the binding's value: the type it names, where it names one.
+        var expected: Expectation? {
+            // An absent annotation expects nothing, and nor does one that failed.
+            guard case .resolved(let type, _) = self else { return nil }
+            return Expectation(type)
+        }
     }
 
     let expressions: ExpressionChecker
@@ -68,9 +75,12 @@ struct BindingChecker {
         let annotation = resolveAnnotation(of: binding)
         // Without a value, the annotation alone gives the local's type.
         guard let valueExpr = binding.value else { return Declared(annotation) }
-        // A value that failed was reported.
-        guard let value = expressions.checkTaken(valueExpr) else { return .failed }
-        return checkValue(value, against: annotation)
+        // A value that failed, or that has another type than the annotation names, was reported.
+        let value = expressions.check(valueExpr, as: .take, expecting: annotation.expected)
+        guard let value else { return .failed }
+        // So was an annotation that failed; otherwise the value has the local's type.
+        if case .failed = annotation { return .failed }
+        return .typed(value.type, typeRange: value.range, value: value)
     }
 
     /// Resolves `binding`'s type annotation, reporting it when it names no type.
@@ -80,24 +90,6 @@ struct BindingChecker {
         // A name that names no type was reported.
         guard let type = expressions.file.declarations.resolve(annotation, reporting: errors) else { return .failed }
         return .resolved(type, range: annotation.range)
-    }
-
-    /// Checks `value` against `annotation`, reporting a value of another type, and gives what the binding gives its
-    /// local.
-    private func checkValue(_ value: CheckedExpr, against annotation: Annotation) -> Declared {
-        switch annotation {
-        // The value must have the annotated type.
-        case .resolved(let type, _):
-            return expressions.expect(value, type) ? .typed(type, typeRange: value.range, value: value) : .failed
-
-        // Without an annotation, the value gives the type, at the value.
-        case .absent:
-            return .typed(value.type, typeRange: value.range, value: value)
-
-        // An annotation that failed was reported.
-        case .failed:
-            return .failed
-        }
     }
 
     /// Checks that `declared` gives the local `binding` declares a type other than Void, reporting it when it

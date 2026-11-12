@@ -22,6 +22,8 @@ public indirect enum ExprKind: Sendable {
     /// `copy place`: the value of a local, or of a field of one at any depth, which the place keeps. `place` is a
     /// name, or a member of a place.
     case copy(Expr)
+    /// An `if` whose value is that of the branch that runs.
+    case `if`(IfExpr)
 }
 
 /// `label: value`, or the value alone.

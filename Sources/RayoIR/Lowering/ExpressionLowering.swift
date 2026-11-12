@@ -1,12 +1,19 @@
 import RayoSema
 import RayoSource
 
-/// Lowers expressions into the current block of the function a builder builds, as the operations that compute them
-/// and the operands that hold their values.
+/// Lowers expressions into the function a builder builds, from its current block on, as the operations that compute
+/// them and the operands that hold their values.
 enum ExpressionLowering {
     /// Lowers `expr` into `builder`, as the computation of its value into `destination`, or, where `destination` is
     /// nil, of a value that is dropped.
     static func compute(_ expr: CheckedExpr, into destination: Place?, in builder: inout FunctionBuilder) {
+        // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
+        // what it does, so a Void `if` needs no temporary.
+        if destination == nil, case .if(let condition, let then, let otherwise) = expr.kind {
+            return lowerIf(condition, then, otherwise, into: nil, in: &builder)
+        }
+
+        // Any other value is one operation, whose operands are computed first.
         let value = rvalue(of: expr, in: &builder)
         builder.emit(value, into: destination, range: expr.range)
     }
@@ -29,8 +36,8 @@ enum ExpressionLowering {
         // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range, in: &builder)
-        // A field is read where it lies, in its struct's place.
-        case .field:
+        // A field is read where it lies, in its struct's place, and an `if` from the temporary its branches compute.
+        case .field, .if:
             .read(place(of: expr, in: &builder))
         // Any other operation, a call, and a struct's value, is computed into a temporary.
         case .unary, .binary, .call, .structure:
@@ -39,7 +46,7 @@ enum ExpressionLowering {
     }
 
     /// Lowers `expr` to the place that holds its value: a local, a field inside the place of its struct, or else a
-    /// new temporary of `builder` that `expr` is computed into.
+    /// new temporary of `builder` that `expr`, or each branch of an `if`, is computed into.
     private static func place(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Place {
         switch expr.kind {
         // A local that the checker reads is its own place.
@@ -50,6 +57,10 @@ enum ExpressionLowering {
         case .field(let structure, let index):
             place(of: structure, in: &builder).appending(field: index, at: expr.range)
 
+        // An `if` holds its value in a temporary, which the branch that runs computes it into, on that branch's path.
+        case .if(let condition, let then, let otherwise):
+            lowerIf(condition, then, otherwise, intoTemporaryOf: expr.type, at: expr.range, in: &builder)
+
         // Any other value is held in a temporary.
         default:
             lowerIntoTemporary(expr, in: &builder)
@@ -59,8 +70,9 @@ enum ExpressionLowering {
     /// Lowers `expr` to the operation that computes its value, computing its operands into `builder` first.
     private static func rvalue(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Rvalue {
         switch expr.kind {
-        // A constant, a local or a field is an operand as it is, and so is `&&` or `||`, which lowers to branches.
-        case .intLiteral, .boolLiteral, .local, .move, .field, .binary(.and, _, _), .binary(.or, _, _):
+        // A constant, a local or a field is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to
+        // branches.
+        case .intLiteral, .boolLiteral, .local, .move, .field, .binary(.and, _, _), .binary(.or, _, _), .if:
             .use(operand(of: expr, in: &builder))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
@@ -75,6 +87,43 @@ enum ExpressionLowering {
         case .structure(let id, let fields):
             .structure(id, fields: fields.map { operand(of: $0, in: &builder) })
         }
+    }
+
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into a new
+    /// temporary of `type` at `range`, and returns the temporary's place.
+    private static func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
+                                intoTemporaryOf type: RayoType, at range: SourceRange,
+                                in builder: inout FunctionBuilder) -> Place {
+        let temporary = builder.newTemporary(type, at: range)
+        lowerIf(condition, then, otherwise, into: temporary, in: &builder)
+        return temporary
+    }
+
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into
+    /// `destination`, or dropping it where `destination` is nil.
+    private static func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
+                                into destination: Place?, in builder: inout FunctionBuilder) {
+        // Compute the condition, and make the blocks of the two branches and of the join after them.
+        let conditionValue = operand(of: condition, in: &builder)
+        let thenBlock = builder.newBlock()
+        let elseBlock = builder.newBlock()
+        let join = builder.newBlock()
+
+        // Each branch runs its statements and computes its value, then goes on to the join.
+        builder.end(with: .branch(conditionValue, then: thenBlock, otherwise: elseBlock), continuingIn: thenBlock)
+        lower(then, into: destination, in: &builder)
+        builder.end(with: .goto(join), continuingIn: elseBlock)
+        lower(otherwise, into: destination, in: &builder)
+        builder.end(with: .goto(join), continuingIn: join)
+    }
+
+    /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`.
+    private static func lower(_ branch: CheckedBranch, into destination: Place?, in builder: inout FunctionBuilder) {
+        StatementLowering.lower(branch.statements, in: &builder)
+
+        // A branch that gives no value computes none.
+        guard let value = branch.value else { return }
+        compute(value, into: destination, in: &builder)
     }
 
     /// Computes `expr` into a new temporary of `builder`, and returns the temporary's place.

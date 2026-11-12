@@ -65,6 +65,47 @@ struct ControlFlowLoweringTests {
         #expect(main == expected)
     }
 
+    @Test("an 'if' computes each branch's value into a temporary, and a declaration takes it from there once")
+    func ifIntoLocal() throws(RejectedSource) {
+        let main = try loweredMain("let c = true\nlet y = if c { 1 } else { 2 }")
+        let expected = mainFunction(
+            locals: [letLocal("c", .bool), letLocal("y", .int), .temporary(.int)],
+            block(
+                declare(0), compute(0, .use(bool(true))),
+                declare(1),
+                then: branch(read(0), then: 1, otherwise: 2),
+            ),
+            block(compute(2, .use(int(1))), then: goto(3)),
+            block(compute(2, .use(int(2))), then: goto(3)),
+            block(compute(1, .use(read(2))), then: .return(nil)),
+        )
+        #expect(main == expected)
+    }
+
+    @Test func `an 'if' whose value is dropped computes each branch's value for what it does`() throws(RejectedSource) {
+        let main = try loweredMain("let c = true\n_ = if c { print(1) } else { print(2) }")
+        let expected = mainFunction(
+            locals: [letLocal("c", .bool)],
+            block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
+            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: goto(3)),
+            block(compute(nil, .call(.printInt, arguments: [int(2)])), then: goto(3)),
+            block(then: .return(nil)),
+        )
+        #expect(main == expected)
+    }
+
+    @Test func `an 'if' that is a call's argument passes the temporary its branches compute`() throws(RejectedSource) {
+        let program = try lowered("func main() {\nlet c = true\nshow(if c { 1 } else { 2 })\n}\nfunc show(_ n: Int) {}")
+        let expected = mainFunction(
+            locals: [letLocal("c", .bool), .temporary(.int)],
+            block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
+            block(compute(1, .use(int(1))), then: goto(3)),
+            block(compute(1, .use(int(2))), then: goto(3)),
+            block(compute(nil, .call(.function(FunctionID(index: 1)), arguments: [read(1)])), then: .return(nil)),
+        )
+        #expect(program.functions[0] == expected)
+    }
+
     @Test("a 'while' tests its condition in a header, whose body goes back to it, and whose exit goes on")
     func whileLoop() throws(RejectedSource) {
         let main = try loweredMain("var i = 0\nwhile i < 3 { i += 1 }")

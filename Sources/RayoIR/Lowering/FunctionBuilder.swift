@@ -1,7 +1,7 @@
 import RayoSema
 import RayoSource
 
-/// Builds one IR function's blocks and locals.
+/// Builds one IR function's blocks and locals, and keeps the loops around the block it is building.
 struct FunctionBuilder: ~Copyable {
     /// A block as lowering builds it, which has no terminator until lowering leaves it.
     private struct PendingBlock {
@@ -9,9 +9,17 @@ struct FunctionBuilder: ~Copyable {
         var terminator: Terminator?
     }
 
+    /// The blocks that a `continue` and a `break` in a loop's body go to.
+    struct Loop {
+        var header: BlockID
+        var exit: BlockID
+    }
+
     private var locals: [IRLocal]
     private var blocks = [PendingBlock()]
     private var current = BlockID(index: 0)
+    /// The loops around the current block, innermost last.
+    private var loops: [Loop] = []
 
     init(locals: [IRLocal]) {
         self.locals = locals
@@ -54,6 +62,20 @@ struct FunctionBuilder: ~Copyable {
 
     mutating func emit(_ statement: Statement) {
         blocks[current.index].statements.append(statement)
+    }
+
+    /// The loop that a `break` or a `continue` belongs to, which the checker allows only inside one.
+    var innermostLoop: Loop {
+        loops[loops.count - 1]
+    }
+
+    /// Starts the body of `loop`, which is the innermost loop until `leaveLoop()`.
+    mutating func enterLoop(_ loop: Loop) {
+        loops.append(loop)
+    }
+
+    mutating func leaveLoop() {
+        loops.removeLast()
     }
 
     /// Adds a temporary of `type` to the function, and returns its place at `range`.

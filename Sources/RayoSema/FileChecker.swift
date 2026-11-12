@@ -171,7 +171,7 @@ final class FileChecker {
         // Give the body a checker of its own.
         let function = file.functions[id.index]
         let signature = signatures[id.index]
-        var body = BodyChecker(file: self, parameters: function.parameters, types: signature.parameters.map(\.type),
+        let body = BodyChecker(file: self, parameters: function.parameters, types: signature.parameters.map(\.type),
                                result: signature.result.type)
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.
@@ -203,57 +203,5 @@ final class FileChecker {
         // body that can't run to its end.
         guard let result = signature.result.type, result != .void, function.body.canComplete else { return }
         errors.report(.missingReturn(signature: "\(signature)"), at: function.body.closingBrace)
-    }
-}
-
-private extension Block {
-    /// Whether a run can reach the block's end, worked out from its syntax alone, so a statement that fails to check
-    /// still counts for what it does.
-    var canComplete: Bool {
-        statements.allSatisfy(\.canComplete)
-    }
-
-    /// Whether a `break` in the block, outside any loop nested in it, leaves the loop the block belongs to.
-    var breaks: Bool {
-        statements.contains { statement in
-            switch statement.kind {
-            // A `break` leaves the loop.
-            case .breakStmt:
-                return true
-
-            // So does one in either branch of an `if`.
-            case .ifStmt(_, let then, let otherwise):
-                return then.breaks || otherwise?.breaks == true
-
-            // A `break` in a nested loop leaves that loop, and no other statement leaves one.
-            default:
-                return false
-            }
-        }
-    }
-}
-
-private extension Stmt {
-    /// Whether a run can go on past the statement.
-    var canComplete: Bool {
-        switch kind {
-        // A `return`, a `break` and a `continue` go elsewhere.
-        case .returnStmt, .breakStmt, .continueStmt:
-            return false
-
-        // An `if` with an `else` completes when either branch does.
-        case .ifStmt(_, let then, let otherwise?):
-            return then.canComplete || otherwise.canComplete
-
-        // A loop completes once its condition fails.
-        case .whileStmt(let condition, let body):
-            // A `while true` that no `break` leaves never completes.
-            if case .boolLiteral(true) = condition.kind { return body.breaks }
-            return true
-
-        // Every other statement goes on, an `if` without an `else` among them.
-        default:
-            return true
-        }
     }
 }

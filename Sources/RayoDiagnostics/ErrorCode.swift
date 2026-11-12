@@ -252,6 +252,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(252, error: "'{field}' is a 'let' field, so it can't change")
     case assignToLetField(field: String)
 
+    @Code(253, error: "an 'if' used for its value needs an 'else'")
+    case valueIfWithoutElse
+
+    @Code(254, error: "the 'if' gives {first} in one branch and {second} in another")
+    case branchTypesDiffer(first: TypeName, second: TypeName)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

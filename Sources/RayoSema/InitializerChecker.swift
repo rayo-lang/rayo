@@ -115,19 +115,12 @@ struct InitializerChecker {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
         for (argument, given) in zip(arguments, given) {
-            let value = expressions.checkTaken(argument.value)
-            // A value that failed, or that gives no field, was reported.
-            guard let value, let field = given.field else { continue }
-            // A value of another type than the field's is reported.
-            guard value.type == types[field] else {
-                let code = ErrorCode.fieldTypeMismatch(
-                    field: fields[field].name,
-                    expected: expressions.typeName(of: types[field]),
-                    found: expressions.typeName(of: value.type),
-                )
-                errors.report(code, at: value.range)
-                continue
+            let expected = given.field.map { field in
+                Expectation(types[field]) { .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1) }
             }
+            let value = expressions.check(argument.value, as: .take, expecting: expected)
+            // A value that failed, that has another type than its field's, or that gives no field, was reported.
+            guard let value, given.field != nil else { continue }
             values.append(value)
         }
         return values.count == arguments.count ? values : nil
