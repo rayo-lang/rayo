@@ -55,4 +55,32 @@ struct StructLoweringTests {
         )
         #expect(main == expected)
     }
+
+    @Test func `a struct made inside another is computed into a temporary, and a field is read through its fields`()
+        throws(RejectedSource) {
+        let source = """
+            func main() {
+                let s = Shot(range: 4, hit: Hit(damage: 7))
+                print(s.hit.damage)
+            }
+            struct Shot(let range: Int, var hit: Hit)
+            struct Hit(var damage: Int)
+            """
+        let main = try lowered(source).functions[0]
+
+        let shot = StructID(index: 0, name: "Shot")
+        let hit = StructID(index: 1, name: "Hit")
+        let expected = mainFunction(
+            locals: [letLocal("s", .structure(shot)), .temporary(.structure(hit))],
+            block(
+                declare(0),
+                compute(1, .structure(hit, fields: [int(7)])),
+                compute(0, .structure(shot, fields: [int(4), read(1)])),
+                // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 1, 0)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
 }
