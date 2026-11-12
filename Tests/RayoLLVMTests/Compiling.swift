@@ -7,9 +7,7 @@ import Testing
 
 /// Compiles `executable` the way `build` does.
 func compile(_ executable: IRExecutable, for build: Build) throws(LLVMError) -> [UInt8] {
-    try LLVMEmitter.objectCode(
-        for: executable, sourcePath: "main.rayo", checksOverflow: build == .debug, optimizes: build == .release,
-    )
+    try LLVMEmitter.objectCode(for: executable, sourcePath: "main.rayo", build: build)
 }
 
 /// What `tool`, from the LLVM install `rayoc` builds against, writes to its standard output when it reads

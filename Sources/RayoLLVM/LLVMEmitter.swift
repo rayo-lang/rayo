@@ -2,14 +2,13 @@ import LLVM
 import RayoIR
 
 /// Compiles Rayo IR to object code for the host, through LLVM.
-public enum LLVMEmitter {
+package enum LLVMEmitter {
     /// The object code of `executable` and the program runtime, whose panics name `sourcePath` as the file they
-    /// happen in, ready to link into an executable for the host. Integer overflow panics where `checksOverflow` is
-    /// true, and wraps where it's false; `optimizes` runs LLVM's optimisations over the module.
-    public static func objectCode(for executable: IRExecutable, sourcePath: String, checksOverflow: Bool,
-                                  optimizes: Bool) throws(LLVMError) -> [UInt8] {
-        let target = try TargetMachine(optimizes: optimizes)
-        let program = ProgramEmitter(sourcePath: sourcePath, for: target, checksOverflow: checksOverflow)
+    /// happen in, compiled for `build` and ready to link into an executable for the host.
+    package static func objectCode(for executable: IRExecutable, sourcePath: String, build: Build) throws(LLVMError)
+        -> [UInt8] {
+        let target = try TargetMachine(optimizes: build.optimizes)
+        let program = ProgramEmitter(sourcePath: sourcePath, for: target, build: build)
         let runtime = try Runtime(for: program)
 
         try program.emit(executable, calling: runtime.functions)

@@ -1,4 +1,5 @@
 import RayoIR
+import RayoLLVM
 
 /// The compiler, `rayoc`, which checks a source file or compiles it to object code for the host.
 public enum Compiler {
@@ -24,8 +25,8 @@ public enum Compiler {
         enum Output {
             /// Nothing: the file is only checked.
             case check
-            /// Object code, written to the file at `path`, in `mode`.
-            case objectFile(path: String, mode: BuildMode)
+            /// Object code, written to the file at `path`, as `build` makes it.
+            case objectFile(path: String, build: Build)
         }
 
         /// Why the arguments don't make a compile `rayoc` can run.
@@ -38,7 +39,7 @@ public enum Compiler {
             // Read each option before the file, each at most once.
             var checks = false
             var objectFile: String?
-            var mode: BuildMode?
+            var build: Build?
             var optionsEnded = false
             var operands = arguments[...]
             while !optionsEnded, operands.count > 1, let option = operands.popFirst() {
@@ -48,9 +49,9 @@ public enum Compiler {
                 } else if option == "--check", !checks {
                     // `--check` asks for the file to be checked only.
                     checks = true
-                } else if let newMode = BuildMode(rawValue: option), mode == nil {
+                } else if let newBuild = Build(option: option), build == nil {
                     // A build mode says how the object code is built.
-                    mode = newMode
+                    build = newBuild
                 } else if option == "-o", objectFile == nil, operands.count > 1, let path = operands.first,
                           !Self.isOption(path) {
                     // `-o` takes the operand after it as the object file's path.
@@ -72,11 +73,11 @@ public enum Compiler {
             // Decide what the run makes of the file.
             switch (checks, objectFile) {
             // `--check` alone checks the file; a build mode would change no check.
-            case (true, nil) where mode == nil:
+            case (true, nil) where build == nil:
                 output = .check
             // `-o` alone writes the file's object code, in release mode unless a mode is named.
             case (false, let objectFile?):
-                output = .objectFile(path: objectFile, mode: mode ?? .release)
+                output = .objectFile(path: objectFile, build: build ?? .release)
             // Both, or neither, or a mode with `--check`, ask for no one compile.
             default:
                 throw UsageError()
@@ -85,7 +86,7 @@ public enum Compiler {
 
         /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
-            operand == "--check" || operand == "-o" || operand == "--" || BuildMode(rawValue: operand) != nil
+            operand == "--check" || operand == "-o" || operand == "--" || Build(option: operand) != nil
         }
     }
 
@@ -123,11 +124,11 @@ public enum Compiler {
         switch invocation.output {
         case .check:
             _ = try frontEnd(readFile: readFile).run(invocation.path)
-        case .objectFile(let path, let mode):
+        case .objectFile(let path, let build):
             try pipeline {
                 frontEnd(readFile: readFile)
                 RequireMain()
-                Emit(mode: mode, sourcePath: invocation.path)
+                Emit(build: build, sourcePath: invocation.path)
                 WriteObject(path: path, writeFile: writeFile)
             }.run(invocation.path)
         }
@@ -157,6 +158,17 @@ public enum Compiler {
         // A reason of rayoc's own is shown as its message.
         case .failed(let message):
             CompilerResult(exitCode: 1, errors: "rayoc: \(message)\n")
+        }
+    }
+}
+
+private extension Build {
+    /// The build `option` names, as `rayoc`'s command line spells a build mode.
+    init?(option: String) {
+        switch option {
+        case "--debug": self = .debug
+        case "--release": self = .release
+        default: return nil
         }
     }
 }

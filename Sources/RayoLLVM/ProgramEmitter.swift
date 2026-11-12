@@ -10,16 +10,16 @@ struct ProgramEmitter: ~Copyable {
     let builder: Builder
     /// The path of the program's source, which a panic names as the file it happens in.
     let sourcePath: String
-    /// Whether integer overflow panics, where otherwise it wraps.
-    let checksOverflow: Bool
+    /// The build the program's code is emitted for.
+    let build: Build
 
     /// Makes an empty module named `sourcePath`, configured to compile as `target` does.
-    init(sourcePath: String, for target: borrowing TargetMachine, checksOverflow: Bool) {
+    init(sourcePath: String, for target: borrowing TargetMachine, build: Build) {
         module = context.makeModule(named: sourcePath)
         builder = context.makeBuilder()
         target.configure(module)
         self.sourcePath = sourcePath
-        self.checksOverflow = checksOverflow
+        self.build = build
     }
 
     /// Ends the emitter, handing on the module it emitted into.
