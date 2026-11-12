@@ -196,7 +196,7 @@ spawn(at: rng.next(), heading: rng.next())    // each argument draws the next ra
 
 **A field with a default is added to a struct while many values of it are alive**, in a pool inside an object that `main` owns.
 
-- **Must hold:** safe code can't learn a value's address, only immortal data's, unless `unsafe` code or C gives it a raw pointer. Its stored links are these:
+- **Must hold:** safe code can't learn a value's address, only immortal data's and static storage's, unless `unsafe` code or C gives it a raw pointer. Its stored links are these:
     - handles, weak pointers, owners, `Slice`s, `Pin`s, `RawAllocation`s and `Allocator` ids;
     - static values, which view immortal data or static storage, and `Name`s, and `String`s that still use a static view's bytes;
     - `Closure`s and `@c` pointers, which name code;

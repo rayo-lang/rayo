@@ -110,14 +110,16 @@ The closure can compute any unscoped result from the protected data. It can't sm
 ## Static values
 
 ```swift
+protocol Logger: Sendable { func write(_ line: StringView) }
+enum TokenKind { case kIf, kElse }
 struct Token(let kind: TokenKind, let text: StringView): Scoped
 
 let keywords: [2 of Token] = [Token(kind: .kIf, text: "if"), Token(kind: .kElse, text: "else")]   // a global: [2 of static Token]
 struct Hint(let text: static StringView, let delay: Float)    // a plain struct can store a static view
 
-let fileLog = FileLogger(path: "game.log")                    // a global let, with a Mutex inside
-struct AudioMixer(let log: static any Logger)                 // a view of a logger that lives as long as the program
-let mixer = AudioMixer(log: fileLog)
+let fileLog = FileLogger(path: "game.log")                    // a global let of a Logger, with a Mutex inside
+struct Telemetry(let log: static any Logger)                  // a view of a logger that lives as long as the program
+let telemetry = Telemetry(log: fileLog)
 
 func show(_ hint: Hint, _ token: Token) {
     let shown: StringView = hint.text                         // fine: a static value converts to its plain type
@@ -125,12 +127,7 @@ func show(_ hint: Hint, _ token: Token) {
 }
 ```
 
-**A static value views only data that lives as long as the program, so unlike a value of its plain type it is unscoped.** That data is one of two kinds:
-
-- static storage: the global `let`s and `const`s, which no code moves or destroys ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side));
-- **immortal data**: memory that is never freed, and that nothing writes once a value names it, such as the program image or the runtime's tables.
-
-The qualifier `static` marks such a value in its type: `static T` is the **static type** of `T`, a `T` whose every view views such data. A static value of a view type, such as a `static StringView`, is a **static view**.
+**A static value views only data that lives as long as the program, so unlike a value of its plain type it is unscoped.** That data is static storage, which no code moves or destroys ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)), or immortal data. **Immortal data** is memory that is never freed, and that nothing writes once a value names it, such as the program image or the runtime's tables. The qualifier `static` marks a static value in its type: `static T` is the **static type** of `T`, a `T` whose every view views such data. A static value of a view type, such as a `static StringView`, is a **static view**.
 
 **`static` qualifies a scoped type whose scoped parts are all shared views:**
 
@@ -147,24 +144,41 @@ The qualifier `static` marks such a value in its type: `static T` is the **stati
 
 **`static` on a concrete unscoped type is a compile error**, as `static Int` is, since it would change nothing.
 
-**A static value's parts are static too**, since they view the same data. So `keywords[0]` is a `static Token`, `keywords[0].text` a `static StringView`, and a range of a static view, such as `keywords[1].text[0..<2]`, a static view.
+### What a static type is
 
-**A value converts to its static type where its dependencies are only static storage and immortal data** ([Dependencies](../02-views-and-dependencies.md#dependencies)). So these convert wherever a static type is expected:
+**A static type is a type of its own, with its plain type's layout.** It differs from its plain type in what its views may view:
+
+- **Parts.** A static value's fields, elements, payloads and ranges are static too, since they view the same data. So `keywords[0]` is a `static Token`, `keywords[0].text` a `static StringView`, and `keywords[1].text[0..<2]` a static view. A `var` field of a static value takes only a static value.
+- **Type arguments.** On a generic type, `static` applies to the type arguments too. So `static List<StringView>` is the same type as `List<static StringView>`, whose own methods, such as `append`, take and give static values, and a `static Span<Token>` views `static Token`s.
+- **Members.** A static value has its plain type's members, which it is lent to as its plain type, shared, so `keywords[0].text.count` works. A `mutating` member of a type that isn't generic can't be called on it, since that member could store a view of shorter-lived data in it.
+- **Conformances.** It conforms to its plain type's protocols through that type's witnesses, so a `Set<static Token>` hashes as `Token` does. It is copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is (below).
+- **Reflection.** It reads as its plain type, with the same fields, cases and layout. Its `T.name` puts `static` before its plain type's name, and its `T.id` is its own ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
+
+### Converting to and from a static type
+
+**A static value converts to its plain type wherever that is expected** ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A copyable one is read and a move-only one taken, as a declaration takes a value ([01](../01-values-and-ownership/bindings.md#conversions)), and a place of one is lent as its plain type, shared. No conversion applies through `mutable`, so a static value is never lent to a `mutable` parameter of its plain type. A static value depends on nothing, so it meets `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
+
+**A value converts to its static type where it depends only on static storage and immortal data**, and on no lock guard or view lent under a lock, read or taken as above ([Dependencies](../02-views-and-dependencies.md#dependencies)). So these convert wherever a static type is expected:
 
 - a literal, which views the program image ([04](../04-types/collections.md#literals));
 - a value built only from static and unscoped values, such as `keywords[0]` above;
-- a view of a global `let` or a `const`, such as the `any Logger` view of `fileLog` above, which converts as a place does to `any P` and then to its static type ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
-- the result of a function declared `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
+- a view of a global `let` or a `const`, such as the `any Logger` view of `fileLog` above, made as any `any P` view is and then converted ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
+- a view that a `Synchronized` value in a global lends for the rest of the program, such as `Once.get()`'s ([07](../07-concurrency/synchronization.md#snapshots-one-time-values-and-waits));
+- the result of a function declared `where return borrows static`.
 
-A value that depends on anything else, such as a borrowed parameter, never converts, since that memory may be freed. A static value converts to its plain type wherever that is expected, and depends on nothing, so it meets `where return borrows static`. Besides these conversions, only the runtime makes static values, such as a `Name`'s text and the names and lists that reflection and `typeInfo` give ([09](../09-compile-time/reflection.md#what-reflection-can-read)). `unsafe` code that makes one, and C that passes one to Rayo, promise that its data lives as long as the program ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+**A value that depends on anything else never converts**, since what it views may be freed or locked: a borrowed parameter, a local, a global `var`, a thread-local, or a view lent through a lock guard.
 
-**A global whose type would be scoped has its static type, with nothing written.** That covers a global `let`, `var` or `@threadlocal var`, a `const`, and a type's static stored property ([07](../07-concurrency/global-state.md#global-state)). So `keywords` above is a `[2 of static Token]`, and its initializer converts to it.
+**Besides these conversions, only the runtime makes static values**, such as a `Name`'s text and the names and lists that reflection and `typeInfo` give ([09](../09-compile-time/reflection.md#what-reflection-can-read)). `unsafe` code that makes one, and C that passes one to Rayo, promise that its data lives as long as the program ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
 
-**A static type is copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is.** The language declares its `Frozen` conformance ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)):
+### Static globals and `Frozen`
+
+**A global whose type would be scoped has its static type, with nothing written.** That covers a global `let`, `var` or `@threadlocal var`, a `const`, and a type's static stored property ([07](../07-concurrency/global-state.md#global-state)). So `keywords` above is a `[2 of static Token]`, and its initializer converts to it. A global whose type can't take `static`, such as a `MutableSpan`, is a compile error.
+
+**A static type is `Frozen` when what it views is.** The language declares the conformance ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)):
 
 - a `static StringView` is always `Frozen`, since the text it views is never written: a literal's bytes, interned text, or a `String` in a global `let` or a `const`;
 - a static `Span<U>` or `Borrow<U>` is `Frozen` when `U` is;
 - a static `any P` is `Frozen` when `P` refines `Frozen`;
 - any other static type is `Frozen` when each of its fields, taken as static, is.
 
-So `static any Logger` above isn't `Frozen`, since a logger writes through its `Mutex`. It can be a global `let`'s or a field's type, but a `const` can't hold one ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+So `static any Logger` above isn't `Frozen`, since `Logger` doesn't refine `Frozen`. It can be a global `let`'s or a field's type, but a `const` can't hold one ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).

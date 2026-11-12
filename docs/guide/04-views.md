@@ -88,13 +88,12 @@ struct Banner(var text: static StringView)                  // fine: a static vi
 
 **A type that holds a scoped value is scoped too.** A struct with a field of a scoped type says so with `: Scoped` ([02](../spec/02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
-**A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected. The other way works only for a view of something that also lasts for the whole run, such as a global: a view borrowed from a parameter never becomes static, since that memory may be freed.
+**A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected. The other way works only for a view of something that also lasts for the whole run, such as a global `let`: a view borrowed from a parameter never becomes static, since that memory may be freed.
 
-**`static` works on any type that holds shared views**, such as a `static Span<T>` of elements or a struct of views. A global that holds views is static without `static` written:
+**`static` works on any type that holds shared views**, such as a `static Span<T>` of elements or a struct of views like `Token` above. A global that holds views is static without `static` written:
 
 ```swift
-struct Token(let kind: TokenKind, let text: StringView): Scoped
-let keywords: [2 of Token] = [Token(kind: .kIf, text: "if"), Token(kind: .kElse, text: "else")]   // static: every view is of a literal
+let keywords: [2 of Token] = [Token(text: "if", line: 0), Token(text: "else", line: 0)]   // static: every view is of a literal
 ```
 
 Each `keywords[i]` is a `static Token`, which can go anywhere ([02](../spec/02-views-and-dependencies/scoped-values.md#static-values)).
