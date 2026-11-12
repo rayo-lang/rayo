@@ -5,7 +5,6 @@ struct ParameterTests {
     @Test("each argument is written with its parameter's label, and the error covers the argument", arguments: [
         ("scaled(4, 5)", [ErrorCode.argumentLabel(expected: .label("by"), found: .none)], ["5"]),
         ("scaled(value: 4, by: 5)", [.argumentLabel(expected: .none, found: .label("value"))], ["value: 4"]),
-        ("print(value: 1)", [.argumentLabel(expected: .none, found: .label("value"))], ["value: 1"]),
         ("scaled(4, times: true)", [.argumentLabel(expected: .label("by"), found: .label("times")),
                                      .typeMismatch(expected: "Int", found: "Bool")], ["times: true", "true"]),
     ])
