@@ -16,8 +16,6 @@ The epic is executable when every open sub-issue is triaged, as ready for an age
 
 The **frontier** is every open sub-issue whose blockers are all closed, that no lane holds, and that no one else has claimed. For each free lane, claim the next issue on the frontier that is ready for an agent, and start a new implementer for it, in the background and in a worktree of its own, with the prompt `/implement <issue URL>` and nothing else.
 
-An issue ready for a human is the user's to build. Tell them once, when it reaches the frontier, and fill the lanes with the rest: it holds back only the issues it blocks.
-
 A new issue always gets a new implementer: continue one only about its own pull request. Keep the lanes within the repo's limit on open pull requests, and count the free slots again on each hand-back. When no lane is running and none can start while sub-issues stay open, tell the user what each open one waits on, and stop.
 
 ## 3. Merge
