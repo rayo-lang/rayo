@@ -69,4 +69,5 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
         case .keyword(let keyword): keyword.rawValue
         default: nil
         }
-    }}
+    }
+}
