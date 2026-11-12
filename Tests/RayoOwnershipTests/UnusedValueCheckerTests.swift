@@ -101,6 +101,24 @@ struct UnusedValueCheckerTests {
         #expect(errors(in: blocks) == [])
     }
 
+    @Test(arguments: [
+        (shotRange, Rvalue.use(.constant(.int(9))), "s.range"),
+        (shotDamage, .use(.constant(.int(9))), "s.hit.damage"),
+        (shotHit, .structure(hit, fields: [.constant(.int(9))]), "s.hit"),
+    ])
+    func `a later read of the whole struct doesn't read a field's value that a store replaced before it`(
+        field: [Int], value: Rvalue, path: String,
+    ) {
+        // The struct's other fields keep the values the first store to `s` gave them, which the move reads.
+        let blocks = [
+            BasicBlock(statements: storeShot(at: 1) + [
+                store(value, in: s, fields: field, at: 2), store(value, in: s, fields: field, at: 3),
+                dropping(move(s, at: 4)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(.unreadValue(name: path), at: at(2))])
+    }
+
     @Test func `a struct's value is never read when each of its fields that code reads is replaced first`() {
         let blocks = [
             BasicBlock(statements: storeShot(at: 1) + [

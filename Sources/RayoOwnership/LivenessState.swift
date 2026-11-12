@@ -11,9 +11,13 @@ struct LivenessState: Equatable {
         var local: LocalID
         var fields: [Int]
 
+        init(local: LocalID, fields: [Int]) {
+            self.local = local
+            self.fields = fields
+        }
+
         init(_ place: Place) {
-            local = place.local
-            fields = place.fields
+            self.init(local: place.local, fields: place.fields)
         }
 
         /// Whether `other` is this path's place or lies inside it.
@@ -35,24 +39,27 @@ struct LivenessState: Equatable {
         return union
     }
 
-    /// Takes the state after `block` back to the state before it, handing `store` each statement's destination.
-    mutating func apply(backwardsThrough block: BasicBlock, store: StoreVisitor = { _, _ in }) {
+    /// Takes the state after `block`, a block of the function whose places `places` gives the types of, back to the
+    /// state before it, handing `store` each statement's destination.
+    mutating func apply(
+        backwardsThrough block: BasicBlock, in places: PlaceTypes, store: StoreVisitor = { _, _ in },
+    ) {
         // The terminator's operand is the block's last read, so it comes first going backwards.
         if let operand = block.terminator.operand {
             apply(operand)
         }
         for statement in block.statements.reversed() {
-            apply(statement, store: store)
+            apply(statement, in: places, store: store)
         }
     }
 
-    private mutating func apply(_ statement: Statement, store: StoreVisitor) {
+    private mutating func apply(_ statement: Statement, in places: PlaceTypes, store: StoreVisitor) {
         switch statement {
         // A computation reads its operands before it stores to its destination, so going backwards it stores
         // first.
         case .compute(let destination, let value, _):
             // A computation with a destination stores a value in its place.
-            if let destination { assign(destination, store: store) }
+            if let destination { assign(destination, in: places, store: store) }
             value.operands.forEach { apply($0) }
 
         // A declaration starts its local's life, so no code before it reads a value the local holds after it.
@@ -63,14 +70,33 @@ struct LivenessState: Equatable {
 
     /// Hands `store` `destination` and whether some code reads the value stored there, then leaves what the place
     /// held before the store unread by any code after it.
-    private mutating func assign(_ destination: Place, store: StoreVisitor) {
+    private mutating func assign(_ destination: Place, in places: PlaceTypes, store: StoreVisitor) {
         // A later read of the place, of a field inside it, or of a struct that holds it reads the stored value.
         let stored = Path(destination)
-        store(destination, live.contains { stored.contains($0) || $0.contains(stored) })
+        let isRead = live.contains { stored.contains($0) || $0.contains(stored) }
+        store(destination, isRead)
 
-        // The store replaces the place's value, and the values of the fields inside it; a struct that holds it keeps
-        // the values of its other fields, so a read of the struct still reads those.
+        // The store replaces the place's value, and the values of the fields inside it.
         live = live.filter { !stored.contains($0) }
+        narrowHolders(of: stored, in: places)
+    }
+
+    /// Narrows each live place that holds `stored` inside it to the fields beside the path down to `stored`, at each
+    /// level, since a store to `stored` leaves only their values for a later read of the holder.
+    private mutating func narrowHolders(of stored: Path, in places: PlaceTypes) {
+        let holders = live.filter { $0.contains(stored) }
+        for holder in holders {
+            live.remove(holder)
+
+            // At each level from the holder down, the fields beside the one on the path to `stored` stay live.
+            for depth in holder.fields.count..<stored.fields.count {
+                let level = Array(stored.fields.prefix(depth))
+                let count = places.fields(ofStructIn: stored.local, at: level).count
+                for field in 0..<count where field != stored.fields[depth] {
+                    live.insert(Path(local: stored.local, fields: level + [field]))
+                }
+            }
+        }
     }
 
     private mutating func apply(_ operand: Operand) {

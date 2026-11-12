@@ -6,18 +6,19 @@ import RayoSema
 public enum UnusedValueChecker {
     /// Reports each place that assigns a local, or a field inside one, a value that no code reads, in source order.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
-        program.functions.flatMap { check($0, types: program.types) }.inSourceOrder
+        program.functions.flatMap { check(PlaceTypes(function: $0, types: program.types)) }.inSourceOrder
     }
 
-    private static func check(_ function: IRFunction, types: TypeTable) -> [Diagnostic] {
+    /// Checks the function whose places `places` gives the types of.
+    private static func check(_ places: PlaceTypes) -> [Diagnostic] {
         var errors: [Diagnostic] = []
-        let analysis = LivenessAnalysis(function)
-        for case (let block, var state?) in zip(function.blocks, analysis.exitStates) {
-            state.apply(backwardsThrough: block) { destination, isRead in
+        let analysis = LivenessAnalysis(of: places)
+        for case (let block, var state?) in zip(places.function.blocks, analysis.exitStates) {
+            state.apply(backwardsThrough: block, in: places) { destination, isRead in
                 // A store that some code reads leaves nothing to report.
                 guard !isRead else { return }
                 // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
-                guard let name = sourceName(of: destination, in: function, types: types) else { return }
+                guard let name = sourceName(of: destination, in: places) else { return }
                 errors.append(Diagnostic(.unreadValue(name: name), at: destination.range))
             }
         }
@@ -25,17 +26,14 @@ public enum UnusedValueChecker {
     }
 
     /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where it lies in a temporary.
-    private static func sourceName(of place: Place, in function: IRFunction, types: TypeTable) -> String? {
+    private static func sourceName(of place: Place, in places: PlaceTypes) -> String? {
         // A temporary has no name in the source.
-        guard case .source(var name, _, var type) = function.locals[place.local.index] else { return nil }
+        guard case .source(let local, _, _) = places.function.locals[place.local.index] else { return nil }
 
-        // Each field steps into the struct that holds it, which declares the field's name.
-        for field in place.fields {
-            guard case .structure(let id) = type else { preconditionFailure("only a struct holds a field") }
-            let declared = types[id].fields[field]
-            name += "." + declared.name
-            type = declared.type
+        // Each field takes its name from the struct that holds it.
+        let fields = place.fields.indices.map { depth in
+            places.fields(ofStructIn: place.local, at: place.fields.prefix(depth))[place.fields[depth]].name
         }
-        return name
+        return ([local] + fields).joined(separator: ".")
     }
 }
