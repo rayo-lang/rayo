@@ -1,0 +1,102 @@
+// A goblin sizes up a troll and fights it, and then a copy of the goblin in lighter armor fights the same troll.
+//
+// Each fight prints each round's number, then each hit as the change it makes to its target's health, and the
+// health it leaves. A fight ends when one of them falls, and prints whether the goblin stands, the winner's health,
+// and how long the fight was.
+
+func main() {
+    let goblin = Enemy(stats: Stats(hp: 38, maxHp: 38, armor: 5), strength: 6, enraged: false)
+    let troll = Enemy(stats: Stats(hp: 34, maxHp: 34, armor: 8), strength: 5, enraged: false)
+
+    // The goblin sizes the troll up on copies, which leave the troll as it is: the troll's health after one blow,
+    // how many such blows it can take, and how many once its armor is cracked.
+    let blow = hit(from: goblin, on: troll, in: 1)
+    var left = copy troll.stats.hp
+    left -= blow
+    print(left)
+    print(hitsToFell(troll.stats.hp, by: blow))
+    var cracked = copy troll
+    cracked.stats.armor /= 2
+    print(hitsToFell(troll.stats.hp, by: hit(from: goblin, on: cracked, in: 1)))
+
+    // Lighter armor lets the troll's hits land harder, so the copy falls where the goblin won.
+    var light = copy goblin
+    light.stats.armor = 4
+    print(fight(between: goblin, and: troll))
+    print(fight(between: light, and: troll))
+}
+
+// Fights `goblin` and `troll` until one of them falls, and gives the number of rounds the fight took.
+func fight(between goblin: Enemy, and troll: Enemy) -> Int {
+    // The fight changes copies of its fighters, and leaves the ones it is given as they are.
+    var g = copy goblin
+    var t = copy troll
+
+    // The fight goes on while the goblin stands, and ends early once the troll falls.
+    var round = 0
+    var fatigue = 0
+    while g.stats.hp > 0 {
+        round += 1
+        print(round)
+
+        // The troll tires by the damage it deals. Once that comes to 6 or more, it rests a round, which sheds its
+        // tiredness 6 at a time, and regenerates, giving up its worn stats for healed ones. An enraged goblin gives
+        // it no rest.
+        if fatigue >= 6 && !g.enraged {
+            fatigue %= 6
+            let worn = t.stats
+            t.stats = Stats(hp: worn.hp + 5, maxHp: worn.maxHp, armor: worn.armor)
+            print(t.stats.hp)
+            continue
+        }
+
+        // The goblin hits first, and a troll it fells ends the fight without hitting back.
+        let byGoblin = hit(from: g, on: t, in: round)
+        print(-byGoblin)
+        t.stats.hp -= byGoblin
+        print(t.stats.hp)
+        if t.stats.hp <= 0 { break }
+
+        let byTroll = hit(from: t, on: g, in: round)
+        print(-byTroll)
+        fatigue += byTroll
+        g.stats.hp -= byTroll
+        print(g.stats.hp)
+
+        // The goblin is enraged on the round its health falls below half, and its fury cracks the troll's armor.
+        let raging = g.stats.hp * 2 < g.stats.maxHp
+        if raging != g.enraged {
+            g.enraged = raging
+            t.stats.armor /= 2
+            print(g.enraged)
+        }
+    }
+
+    // Whether the goblin stands, the winner's health, and the winner's boast of a fight twice as long as it was.
+    print(g.stats.hp > 0)
+    if g.stats.hp > 0 { print(g.stats.hp) } else { print(t.stats.hp) }
+    var boast = copy round
+    boast *= 2
+    print(boast)
+    return round
+}
+
+// Gives the damage that `attacker`'s hit in `round` deals `defender`.
+func hit(from attacker: Enemy, on defender: Enemy, in round: Int) -> Int {
+    // The hit lands twice as hard on every third round, and on every round once the attacker is enraged.
+    var damage = copy attacker.strength
+    if round % 3 == 0 || attacker.enraged { damage *= 2 }
+
+    // Armor at least as strong as the hit leaves it a scratch, and weaker armor takes off half its own strength.
+    if defender.stats.armor >= damage { damage = 1 } else { damage -= defender.stats.armor / 2 }
+    return damage
+}
+
+// Gives how many hits of `damage` it takes to bring `hp` to 0 or below.
+func hitsToFell(_ hp: Int, by damage: Int) -> Int {
+    if hp <= 0 { return 0 }
+    return 1 + hitsToFell(hp - damage, by: damage)
+}
+
+struct Enemy(var stats: Stats, let strength: Int, var enraged: Bool)
+struct Stats(var hp: Int, let maxHp: Int, var armor: Int)
