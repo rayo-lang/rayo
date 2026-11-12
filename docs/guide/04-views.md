@@ -88,7 +88,15 @@ struct Banner(var text: static StringView)                  // fine: a static vi
 
 **A type that holds a scoped value is scoped too.** A struct with a field of a scoped type says so with `: Scoped` ([02](../spec/02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
-**A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected, but never the other way, since a plain view may borrow memory that can be freed. Only the compiler and the runtime make static views, as the compiler makes one for each literal, and `static Span<T>` is the same thing for elements ([09](../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+**A view of a literal can go anywhere, because nothing ever frees a literal's bytes.** Its type says so: a string literal is a `static StringView`, a **static view** of data that lasts for the whole run, so it isn't scoped. `Banner` above can store one in a plain struct, and a global can hold one too. A `static StringView` turns into a plain `StringView` wherever one is expected. The other way works only for a view of something that also lasts for the whole run, such as a global `let`: a view borrowed from a parameter never becomes static, since that memory may be freed.
+
+**`static` works on any type that holds shared views**, such as a `static Span<Float>` of elements or a struct of views like `Token` above. A global that holds views is static without `static` written:
+
+```swift
+let keywords: [2 of Token] = [Token(text: "if", line: 0), Token(text: "else", line: 0)]   // static: every view is of a literal
+```
+
+Each `keywords[i]` is a `static Token`, which can go anywhere ([02](../spec/02-views-and-dependencies/scoped-values.md#static-values)).
 
 **A literal under `alloc` is a `String` instead.** `alloc "grunt"` makes a `String` that owns its text, and `alloc "wave \(n)"` formats into a new one, so owned text shows its allocation as a `List` does ([04](../spec/04-types/collections.md#strings)).
 
@@ -309,4 +317,4 @@ use(names)                                                     // fine: the loop
 - [04 Collections and strings](../spec/04-types/collections.md#collections-and-strings): the views beside the owning collections, the two text types, and how strings are indexed.
 - [05 Implicit conversions](../spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions): a `String` or a `List` passed where its view is expected, and a static view passed as a plain one.
 - [06 Long-lived views](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers): `Slice<T>` and the buffers it views.
-- [09 Static views](../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data): views of immortal data, which can be stored anywhere, and who may make one.
+- [02 Static values](../spec/02-views-and-dependencies/scoped-values.md#static-values): values that view only data lasting the whole run, which types take `static`, and which values convert to one.

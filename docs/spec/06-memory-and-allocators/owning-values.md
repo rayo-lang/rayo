@@ -78,14 +78,14 @@ log.value.lock { $0.append(m) }
 - nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
 - nothing at all writes a value of the type frozen into read-only data ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
-**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for the static views, `static Span` and `static StringView`, and std for `Name`, which point into immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for a static type whose data is `Frozen`, such as `static StringView`, and std for `Name`, which points into immortal data ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 
 **Some types hide what they hold, or hold it through a raw pointer, yet are `Frozen` according to what they hold:**
 
 - **Existentials.** An existential has no fields to check, so `any P` and `mutable any P` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names one of these:
   - a buffer the container owns alone, written only by its `mutating` methods, apart from a `StablePool`'s pin counts (below). Those methods need exclusive access, which no shared borrow of a `Frozen` value that holds the container grants;
-  - in a `String` made from a literal, immortal bytes that nothing writes ([04](../04-types/collections.md#literals)).
+  - in a `String` made from a literal or a `static StringView`, bytes that live as long as the program and that nothing writes ([04](../04-types/collections.md#strings)).
 - **`Shared<T>` and `LocalShared<T>`.** Each is `Frozen` when its `T` is: its count is bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](../03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
 
 ## Long-lived views into long-lived buffers
