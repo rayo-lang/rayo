@@ -161,8 +161,10 @@ let saved = save(level)           // error if no code reads 'saved': its error w
 - an expression written as a statement;
 - the value of a `when` or `if` arm, where the `when` or `if` is a statement ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if));
 - the single expression of a body whose result type is `Void`;
-- held in a local or an `owned` parameter that no code reads after its declaration;
-- overwritten by an assignment before any code reads it, as the first `r` is in `var r = save(a); r = save(b)`.
+- held in an `owned` parameter that no code reads;
+- assigned to a local, by its declaration or a later assignment, where no path from there reads it before an assignment overwrites it or the local's scope ends, as the first `r` is in `var r = save(a); r = save(b)`.
+
+**A value that one path reads is used, though another path overwrites it**, since the compiler can't tell which path a run takes. So is a value that a loop's next pass reads, though the last pass leaves it unread.
 
 **`_ = x` drops a value on purpose.** It takes `x` as a value, and destroys it at the end of its statement. `let _ = x` is a compile error ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
 

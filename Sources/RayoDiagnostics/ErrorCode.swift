@@ -246,6 +246,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(307, error: "'{name}' is a 'let', and may have been assigned already")
     case letMaybeAssignedTwice(name: String)
+
+    @Code(308, error: "the value assigned to '{name}' is never read")
+    case unreadValue(name: String)
 }
 
 extension ErrorCode {

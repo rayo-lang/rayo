@@ -10,7 +10,7 @@ struct MoveTests {
                 var a = 1
                 let b = a
                 a = 2
-                var c = 0
+                var c: Int
                 c = b
                 print(a)
                 print(c)
@@ -39,7 +39,7 @@ struct MoveTests {
             func f(_ c: Bool) {
                 let x = 1
                 if c {
-                    let y = x
+                    _ = x
                     return
                 }
                 print(x)
