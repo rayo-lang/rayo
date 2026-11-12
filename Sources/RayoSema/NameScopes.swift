@@ -76,7 +76,7 @@ final class NameScopes {
 
         // A call finds the functions, so a function whose name a struct took still answers its calls; any other use
         // finds the struct first where the struct declares the name first.
-        let findsStructFirst = use == .ordinary && file.names.kind(of: name) == .structure
+        let findsStructFirst = use == .ordinary && file.declarations.kind(of: name) == .structure
         return findsStructFirst ? structMatch ?? functionMatch : functionMatch ?? structMatch
     }
 

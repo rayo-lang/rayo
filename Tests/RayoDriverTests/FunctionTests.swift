@@ -112,4 +112,15 @@ struct FunctionTests {
         #expect(run(source) == CommandResult(exitCode: 0, output: declaration.contains("print") ? "1\n" : "",
                                              errors: ""))
     }
+
+    @Test func `a function shadows the prelude's type of its name, so a type that names it is an error`() {
+        let source = "func main() {\n    let x: Bool = true\n    print(x)\n}\nfunc Bool() {}"
+        #expect(run(source) == CommandResult(exitCode: 1, output: "",
+                                             errors: "main.rayo:2:12: error[E0205]: 'Bool' isn't a type\n"))
+    }
+
+    @Test func `a function whose name no prelude type has leaves every type as it was`() {
+        let source = "func main() {\n    let x: Bool = Flag()\n    print(x)\n}\nfunc Flag() -> Bool { true }"
+        #expect(run(source) == CommandResult(exitCode: 0, output: "true\n", errors: ""))
+    }
 }
