@@ -3,14 +3,21 @@ import RayoSource
 import RayoSyntax
 
 /// The names a function body sees beyond its own locals: the file's own structs, with their fields, and functions,
-/// the prelude's functions that none of them shadows, and the prelude's types that no struct shadows.
+/// and the prelude's functions and types that none of them shadows.
 struct Declarations {
+    /// The file's top-level names, known before any of its declarations is declared.
+    private let names: TopLevelNames
     private var functions: [String: [Signature]] = [:]
     private var structs: [String: StructID] = [:]
     /// Each struct's fields, in the order the struct declares them.
     private var fields: [StructID: [DeclaredField]] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
     private static let preludeFunctions: [Signature] = [.printInt, .printBool]
+
+    /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
+    init(names: TopLevelNames) {
+        self.names = names
+    }
 
     /// Declares `signature`, unless a function with its name, labels and parameter types is declared already, and
     /// returns whether it did.
@@ -34,10 +41,13 @@ struct Declarations {
 
     /// Declares the prelude's functions whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
-        // A struct or a function of the file shadows every prelude function of its name, so the names are tested
-        // before any of the prelude's is declared.
-        let unshadowed = Self.preludeFunctions.filter { functions[$0.name] == nil && structs[$0.name] == nil }
-        for signature in unshadowed { _ = declare(signature) }
+        // A struct or a function of the file shadows every prelude function of its name.
+        for signature in Self.preludeFunctions where kind(of: signature.name) == nil { _ = declare(signature) }
+    }
+
+    /// The kind of the file's declarations that `name` belongs to, nil when no struct or function of the file has it.
+    func kind(of name: String) -> TopLevelNames.Kind? {
+        names.kind(of: name)
     }
 
     func functions(named name: String) -> [Signature] {
@@ -60,18 +70,21 @@ struct Declarations {
         switch type {
         // `()` is Void.
         case .void: .void
-        // A name names one of the file's structs, or one of the prelude's types.
+        // A name names one of the file's structs, or one of the prelude's types that no function shadows.
         case .named(let name, let range): resolve(named: name, at: range, reporting: errors)
         }
     }
 
-    /// Resolves `name` to one of the file's structs or one of the prelude's types, or reports that `name`, written
-    /// at `range`, names neither, and returns nil.
+    /// Resolves `name` to one of the file's structs or one of the prelude's types that no function shadows, or
+    /// reports that `name`, written at `range`, names neither, and returns nil.
     private func resolve(named name: String, at range: SourceRange, reporting errors: ErrorList) -> RayoType? {
         // A struct shadows the prelude's type of its name.
         if let id = structs[name] { return .structure(id) }
-        // A name that is neither names no type.
-        guard let resolved = Self.preludeTypes[name] else {
+        // A function shadows it too, though it names no type. The file's names are known before any is declared, so
+        // a type written before the function is declared, such as a field's, is shadowed as well.
+        let isShadowedByFunction = kind(of: name) == .functions
+        // Such a name, and one that no prelude type has, names no type, and is reported where it is written.
+        guard !isShadowedByFunction, let resolved = Self.preludeTypes[name] else {
             errors.report(.notAType(name: name), at: range)
             return nil
         }
