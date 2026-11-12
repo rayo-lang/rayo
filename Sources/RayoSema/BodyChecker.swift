@@ -26,6 +26,7 @@ struct BodyChecker {
     var locals: [CheckedLocal] { expressions.names.locals }
 
     private var errors: ErrorList { expressions.file.errors }
+    private var jumps: JumpTargets { expressions.jumps }
     private var bindingChecker: BindingChecker { BindingChecker(expressions: expressions) }
     private var assignmentChecker: AssignmentChecker { AssignmentChecker(expressions: expressions) }
 
@@ -45,7 +46,7 @@ struct BodyChecker {
     func returned(_ expr: Expr) -> CheckedExpr? {
         // A function whose result type isn't known takes any value: its body gives the type, or its written type
         // failed and was reported.
-        let expected = expressions.jumps.result.map { Expectation($0) }
+        let expected = jumps.result.map { Expectation($0) }
         return expressions.check(expr, as: .take, expecting: expected)
     }
 
@@ -78,6 +79,7 @@ struct BodyChecker {
 
     /// Checks `ifExpr`, the `if` that `range` covers, as a statement, whose branches give no value.
     private func checkIf(_ ifExpr: IfExpr, in range: SourceRange) -> CheckedStmt? {
+        // Check the condition, and each branch as a block of statements.
         let condition = expressions.check(ifExpr.condition, expecting: .bool)
         let then = CheckedBranch(statements: check(ifExpr.then), value: nil)
         let otherwise = CheckedBranch(statements: ifExpr.otherwise.map { check($0) } ?? [], value: nil)
@@ -102,7 +104,7 @@ struct BodyChecker {
     /// Checks a `return` without a value, reporting it in a function that returns a value.
     private func checkEmptyReturn(at range: SourceRange) -> CheckedStmt? {
         // A Void function, or one whose result type isn't known, may return without a value.
-        guard let result = expressions.jumps.result, result != .void else { return .returnStmt(nil) }
+        guard let result = jumps.result, result != .void else { return .returnStmt(nil) }
         errors.report(.missingReturnValue(type: expressions.typeName(of: result)), at: range)
         return nil
     }
@@ -122,7 +124,7 @@ struct BodyChecker {
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.
     private func isInsideLoop(_ keyword: String, at range: SourceRange) -> Bool {
         // Inside a loop, `break` and `continue` have a loop to leave or go on with.
-        if expressions.jumps.loops > 0 { return true }
+        if jumps.loops > 0 { return true }
         errors.report(.outsideLoop(keyword: keyword), at: range)
         return false
     }

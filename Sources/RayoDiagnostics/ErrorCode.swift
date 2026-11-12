@@ -258,6 +258,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(254, error: "the 'if' gives {first} in one branch and {second} in another")
     case branchTypesDiffer(first: TypeName, second: TypeName)
 
+    @Code(255, error: "no branch of the 'if' runs to its end, so the 'if' has no value")
+    case valueIfLeavesEveryBranch
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

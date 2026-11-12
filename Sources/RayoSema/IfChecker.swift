@@ -17,6 +17,7 @@ struct IfChecker {
     /// `expected` of it where it expects a type.
     func check(_ ifExpr: IfExpr, in range: SourceRange, as use: ValueUse,
                expecting expected: Expectation?) -> CheckedExpr? {
+        // Check the condition, and `then` as the position's own value.
         let condition = expressions.check(ifExpr.condition, expecting: .bool)
         let then = branch(ifExpr.then, as: use, expecting: expected)
 
@@ -30,9 +31,13 @@ struct IfChecker {
 
         // A condition or a branch that failed was reported.
         guard let condition, let then, let otherwise else { return nil }
-        // The `if` has the type its position expects, or else the one its branches give; where none does, since no run
-        // gets through any, it is Void.
-        let type = expected?.type ?? then.type ?? otherwise.type ?? .void
+        // The `if` has the type its position expects, or else the one its branches give. Where neither branch gives
+        // one, since no run gets through either, and the position expects none, the `if` has no type, which is
+        // reported.
+        guard let type = expected?.type ?? then.type ?? otherwise.type else {
+            errors.report(.valueIfLeavesEveryBranch, at: range)
+            return nil
+        }
         let kind = CheckedExprKind.if(condition: condition, then: then.checked, otherwise: otherwise.checked)
         return CheckedExpr(kind: kind, type: type, range: range)
     }
@@ -48,7 +53,9 @@ struct IfChecker {
     /// `expected` of it where it expects a type.
     private func branch(_ block: Block, as use: ValueUse, expecting expected: Expectation?) -> Branch? {
         // A branch that no run gets through gives no value, and fits any type; it is checked as a statement's branch.
-        guard block.canComplete else { return (CheckedBranch(statements: bodyChecker.check(block), value: nil), nil) }
+        guard Reachability.canComplete(block) else {
+            return (CheckedBranch(statements: bodyChecker.check(block), value: nil), nil)
+        }
 
         // The branch's statements and its value share a scope of their own.
         expressions.names.enterBlock()
@@ -64,6 +71,7 @@ struct IfChecker {
         // A branch that ends in another statement, or holds none, gives Void, which the position must expect.
         let checked = bodyChecker.check(block.statements[...])
         let end = block.statements.last?.range ?? block.closingBrace
+        // A position that expects another type was reported at the branch's end.
         if let expected, !expressions.expect(.void, at: end, expected) { return nil }
         return (CheckedBranch(statements: checked, value: nil), .void)
     }

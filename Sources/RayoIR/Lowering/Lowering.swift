@@ -7,13 +7,10 @@ public enum Lowering {
     }
 
     static func lower(_ function: CheckedFunction) -> IRFunction {
-        // Lower the body's statements into the function's blocks.
-        var builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
-        StatementLowering.lower(function.body, in: &builder)
-
-        // End the last block, which a run reaches only in a Void function: the checker makes others return first.
-        builder.end(with: function.result == .void ? .return(nil) : .unreachable)
-        return builder.function(of: function)
+        let builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
+        var lowering = FunctionLowering(builder: builder)
+        lowering.lower(function.body)
+        return lowering.function(of: function)
     }
 }
 

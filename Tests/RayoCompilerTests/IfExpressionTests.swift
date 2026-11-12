@@ -50,20 +50,30 @@ struct IfExpressionTests {
         "while true {\nlet y = if c { break } else { 1 }\nprint(y)\n}",
         "while c {\nprint(if c { continue } else { true })\n}",
         "let y = if c { if !c { return } else { return } } else { 1 }\nprint(y)",
+        "let y = if c { let z: Int = if !c { return } else { return } } else { 1 }\nprint(y)",
+        "show(if c { return } else { return })",
     ])
     func leavingBranches(body: String) {
-        #expect(errorLines(inMain: "let c = true\n\(body)") == [])
+        #expect(errors("func main() {\nlet c = true\n\(body)\n}\nfunc show(_ n: Int) {}") == [])
     }
 
-    @Test("an 'if' that every branch leaves has no value, where the position expects no type")
-    func everyBranchLeaves() {
-        #expect(errorLines(inMain: "let c = true\nlet y = if c { return } else { return }") == [
-            "3:9: error[E0219]: a local can't have type Void",
+    @Test("an 'if' that every branch leaves has no value where the position expects no type", arguments: [
+        ("let y = if c { return } else { return }", "3:9"),
+        ("print(if c { return } else { return })", "3:7"),
+        ("while true {\nprint(if c { break } else { break })\n}", "4:7"),
+    ])
+    func everyBranchLeaves(body: String, position: String) {
+        #expect(errorLines(inMain: "let c = true\n\(body)") == [
+            "\(position): error[E0255]: no branch of the 'if' runs to its end, so the 'if' has no value",
         ])
     }
 
-    @Test("a 'break' in a branch of an 'if' leaves the loop, so code after the loop can run")
-    func breakInValue() {
+    @Test func `code after an 'if' that every branch leaves can't run, so it needs no 'return'`() {
+        let function = "func f(_ c: Bool) -> Int {\nprint(0)\nshow(if c { return 1 } else { return 2 })\n}"
+        #expect(errors("func main() {}\n\(function)\nfunc show(_ n: Int) {}") == [])
+    }
+
+    @Test func `a 'break' in a branch of an 'if' leaves the loop, so code after the loop can run`() {
         let source = "func main() {}\nfunc f(_ c: Bool) -> Int {\nwhile true {\nlet y = if c { break } else { 1 }\n}\n}"
         #expect(diagnostics(source).map(\.description) == [
             "6:1: error[E0226]: 'f(_: Bool)' can reach its end without returning a value",
@@ -81,15 +91,13 @@ struct IfExpressionTests {
         #expect(errorLines(inMain: "let c = true\nlet x = 1\n\(body)") == expected)
     }
 
-    @Test("a local that takes an 'if' is assigned once, so a value no code reads is one error")
-    func assignedOnce() {
+    @Test func `a local that takes an 'if' is assigned once, so a value no code reads is one error`() {
         #expect(errorLines(inMain: "let c = true\nlet y = if c { 1 } else { 2 }") == [
             "3:5: error[E0308]: the value assigned to 'y' is never read",
         ])
     }
 
-    @Test("as a statement, an 'if''s branches needn't agree, and each value they leave unused is reported")
-    func statement() {
+    @Test func `as a statement, an 'if''s branches needn't agree, and each value they leave unused is reported`() {
         #expect(errorLines(inMain: "let c = true\nif c { 1 } else { true }") == [
             "3:8: error[E0235]: the Int value isn't used", "3:19: error[E0235]: the Bool value isn't used",
         ])

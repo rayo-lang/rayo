@@ -52,12 +52,13 @@ struct IfExpressionTests {
             """) == expected)
     }
 
-    @Test("a branch that ends in 'return', 'break' or 'continue' leaves, and the other gives the value")
-    func leavingBranches() {
+    @Test func `a branch that ends in 'return', 'break' or 'continue' leaves, and the other gives the value`() {
         let source = """
             func main() {
                 print(half(8))
                 print(half(7))
+                print(pick(true))
+                print(pick(false))
                 var i = 0
                 var sum = 0
                 while true {
@@ -72,8 +73,27 @@ struct IfExpressionTests {
                 let even = if n % 2 == 0 { copy n } else { return -1 }
                 return even / 2
             }
+            func pick(_ c: Bool) -> Int {
+                print(0)
+                show(if c { return 1 } else { return 2 })
+            }
+            func show(_ n: Int) {}
             """
-        #expect(run(source) == CommandResult(exitCode: 0, output: "4\n-1\n16\n", errors: ""))
+        #expect(run(source) == CommandResult(exitCode: 0, output: "4\n-1\n0\n1\n0\n2\n16\n", errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]], [
+        ("let y = if c { 1 }", "4:9: error[E0253]: an 'if' used for its value needs an 'else'"),
+        ("let y = if c { 1 } else { true }",
+         "4:27: error[E0254]: the 'if' gives Int in one branch and Bool in another"),
+        ("let y = if c { x } else { 2 }\nprint(y)\nprint(x)", "6:7: error[E0303]: 'x' may have been moved"),
+    ])
+    func `an 'if' used for its value is checked in either build`(
+        mode: [String], failure: (body: String, error: String),
+    ) {
+        let source = "func main() {\nlet c = true\nlet x = 1\n\(failure.body)\n}"
+        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
+        #expect(run(source, options: mode) == expected)
     }
 
     @Test("a branch that ends in a local gives the local's value whole, and an argument only borrows it",

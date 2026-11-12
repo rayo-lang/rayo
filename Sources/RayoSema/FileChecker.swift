@@ -201,7 +201,9 @@ final class FileChecker {
     private func reportMissingReturn(from function: FuncDecl, as signature: Signature) {
         // A function that returns Void, or whose result type failed and was reported, needs no `return`; nor does a
         // body that can't run to its end.
-        guard let result = signature.result.type, result != .void, function.body.canComplete else { return }
+        guard let result = signature.result.type, result != .void, Reachability.canComplete(function.body) else {
+            return
+        }
         errors.report(.missingReturn(signature: "\(signature)"), at: function.body.closingBrace)
     }
 }

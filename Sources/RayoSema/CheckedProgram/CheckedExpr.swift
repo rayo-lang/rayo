@@ -30,7 +30,9 @@ public indirect enum CheckedExprKind: Sendable {
 /// A branch of an `if`: the statements it runs, then the value it ends in.
 public struct CheckedBranch: Sendable {
     public var statements: [CheckedStmt]
-    /// The value the `if` gives when the branch runs; nil where the branch gives none, since the `if` is a statement,
-    /// or the branch is Void and ends in a statement, or no run reaches its end.
+    /// The value the `if` gives when the branch runs. It is nil where the branch gives none:
+    /// - in an `if` that is a statement
+    /// - in a Void branch that ends in a statement
+    /// - in a branch no run reaches the end of
     public var value: CheckedExpr?
 }

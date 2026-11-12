@@ -9,7 +9,7 @@ struct ExpressionChecker {
 
     let file: FileChecker
     let names: NameScopes
-    /// Where a `return`, a `break` and a `continue` in a branch of an `if` among the expressions leave for.
+    /// Where a `return`, a `break` and a `continue` in the code being checked leave for.
     let jumps: JumpTargets
 
     private var errors: ErrorList { file.errors }
@@ -73,8 +73,8 @@ struct ExpressionChecker {
             return check(place).map { CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range) }
 
         // An `if` read for its value gives the value of the branch that runs.
-        case .if(let ifExpr):
-            return IfChecker(expressions: self).check(ifExpr, in: expr.range, as: .read, expecting: nil)
+        case .if:
+            return check(expr, as: .read, expecting: nil)
         }
     }
 
