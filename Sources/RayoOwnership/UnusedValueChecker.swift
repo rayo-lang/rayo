@@ -28,12 +28,12 @@ public enum UnusedValueChecker {
     /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where it lies in a temporary.
     private static func sourceName(of place: Place, in places: PlaceTypes) -> String? {
         // A temporary has no name in the source.
-        guard case .source(let local, _, _) = places.function.locals[place.local.index] else { return nil }
+        guard case .source(let name, _, _) = places.function.locals[place.local.index] else { return nil }
 
         // Each field takes its name from the struct that holds it.
         let fields = place.fields.indices.map { depth in
             places.fields(ofStructIn: place.local, at: place.fields.prefix(depth))[place.fields[depth]].name
         }
-        return ([local] + fields).joined(separator: ".")
+        return ([name] + fields).joined(separator: ".")
     }
 }

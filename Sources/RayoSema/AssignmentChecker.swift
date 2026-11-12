@@ -63,10 +63,10 @@ struct AssignmentChecker {
     /// Checks `target` as the place an assignment changes, a local or a field of one, and returns the read of its
     /// current value, or nil when it can't be assigned, which was reported.
     private func assignedPlace(_ target: Expr) -> CheckedExpr? {
-        // A local's name assigns the whole local, and a member a field of a struct; nothing else, `_` included,
-        // names a place.
+        // A local's name assigns the whole local; `_`, and anything but a name or a member, names no place.
         switch target.kind {
         case .name(let name) where name != "_": assignableLocal(named: name, at: target.range)
+        // A member assigns a field of a struct whose fields may change.
         case .member(let base, let name, let nameRange):
             assignedField(named: name, at: nameRange, of: base, in: target.range)
         default: refuse(.assignToNonLocal, at: target.range)
@@ -76,10 +76,11 @@ struct AssignmentChecker {
     /// Checks `base`, the struct whose field an assignment's target names, as a local, or a field of one, whose
     /// fields may change, and returns the read of its current value, or nil when they can't, which was reported.
     private func changedStructure(_ base: Expr) -> CheckedExpr? {
-        // A local's name names a local whose own fields must be able to change, and a member a field that must
-        // itself be one an assignment may change; nothing else, `_` included, names a place.
+        // A local's name names a local whose own fields must be able to change; `_`, and anything but a name or a
+        // member, names no place.
         switch base.kind {
         case .name(let name) where name != "_": localWithChangeableFields(named: name, at: base.range)
+        // A member names a field that must itself be one an assignment may change.
         case .member(let structure, let name, let nameRange):
             assignedField(named: name, at: nameRange, of: structure, in: base.range)
         default: refuse(.assignToNonLocal, at: base.range)
