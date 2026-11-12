@@ -146,7 +146,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 
 ## Type parameters with no known size: `@opaque`
 
-A wrapper around a C handle needs only a pointer to the C type, so one generic wrapper can serve C types whose layout Rayo doesn't know, and keep them apart. Here `CHandle` is user code, which frees each handle with the C function it was made with:
+A wrapper around a C handle needs only a pointer to the C type, so one generic wrapper can serve C types whose layout Rayo doesn't know, and keep them apart. Here `CHandle` is user code, which frees each handle with the C function it was given:
 
 ```swift
 struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt) {
@@ -168,7 +168,7 @@ let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_
 - a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
 - a function type that takes or gives a `T`, a `@c` one included;
 - `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
-- every reflective query of `T` except `T.name`, `T.baseName`, `T.module`, `T.id`, `T == U` and `T != U`, so `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, the kind queries, `T.conforms`, `T.isConstructible`, `T.construct` and `T`'s attributes are errors ([09](../09-compile-time/reflection.md#what-reflection-can-read));
+- a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible` and `T.construct`. Its name, module and id, the kind queries, its attributes and `T == U` stay readable ([09](../09-compile-time/reflection.md#what-reflection-can-read));
 - `T` as the argument for a type parameter that isn't `@opaque`.
 
 **Compile-time code in that body treats `T` as `@opaque` too**, so it is checked at the definition, as the rest of the body is, and a `static if` branch can't use what only some types allow.
@@ -237,7 +237,7 @@ func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any 
 
 ## Conformances
 
-**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
+**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-with-no-known-size-opaque)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
 ```swift
 protocol HasHp { var hp: Float { get set } }
