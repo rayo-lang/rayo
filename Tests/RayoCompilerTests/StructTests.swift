@@ -251,3 +251,58 @@ struct FieldReadTests {
         #expect(errors("func main() {}\nfunc f(s: S) { print(s.a) }\nstruct S(var a: Q)") == [.notAType(name: "Q")])
     }
 }
+
+/// A struct that holds a struct that holds a struct.
+private let bossEnemyAndStats = """
+
+    struct Boss(var minion: Enemy)
+    struct Enemy(var stats: Stats, let armor: Int)
+    struct Stats(var hp: Int, var speed: Int)
+    """
+
+struct NestedStructTests {
+    @Test(arguments: [
+        "let made = Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)\nreturn made.stats.hp > made.stats.speed",
+        "let s = Stats(hp: 1, speed: 2)\nlet made = Enemy(stats: s, armor: 3)\nreturn made.stats.hp - made.armor > 0",
+        "return b.minion.stats.hp > b.minion.armor && f(b: b, e: e)",
+        "return fast(e.stats)",
+        "return Boss(minion: Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)).minion.stats.speed > 0",
+    ])
+    func `a field may be a struct, made by a nested call or from a local, and read through where a borrow suffices`(
+        body: String,
+    ) {
+        let functions = "func main() {}\nfunc f(b: Boss, e: Enemy) -> Bool {\n\(body)\n}\n"
+        let fast = "func fast(_ s: Stats) -> Bool { s.speed > 1 }"
+        #expect(errors(functions + fast + bossEnemyAndStats) == [])
+    }
+
+    @Test(arguments: [
+        ("print(e.stats.mana)", ErrorCode.noSuchField(type: "Stats", field: "mana"), "mana"),
+        ("print(b.minion.stats.mana)", .noSuchField(type: "Stats", field: "mana"), "mana"),
+        ("print(e.stats.hp.mana)", .noSuchField(type: "Int", field: "mana"), "mana"),
+        ("let h = e.stats.hp", .fieldMove, "e.stats.hp"),
+        ("_ = Enemy(stats: e.stats, armor: 1)", .fieldMove, "e.stats"),
+        ("_ = Enemy(stats: e, armor: 1)", .fieldTypeMismatch(field: "stats", expected: "Stats", found: "Enemy"), "e"),
+        ("_ = Enemy(stats: Stats(hp: 1), armor: 1)", .fieldLeftOut(field: "speed"), "Stats(hp: 1)"),
+        (
+            "let s = Stats(hp: 1, speed: 2)\n_ = Enemy(stats: s, armor: 1)\nprint(s.hp)",
+            .usedAfterMove(name: "s"), "s.hp",
+        ),
+    ])
+    func `a read through a field the inner struct lacks, or a field or moved struct as a field's value, is an error`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let enemy = "let e = Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)"
+        let source = "func main() {}\nfunc f(b: Boss) {\n\(enemy)\n\(body)\n}" + bossEnemyAndStats
+
+        // The one error names the inner struct where the field is missing, and covers what is wrong.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test func `the initializer can't take a borrowed parameter of a struct type as a field's value`() {
+        let source = "func main() {}\nfunc f(s: Stats) -> Enemy { Enemy(stats: s, armor: 1) }" + bossEnemyAndStats
+        #expect(errors(source) == [.moveFromParameter(name: "s")])
+    }
+}

@@ -82,3 +82,89 @@ struct StructTests {
         #expect(run(source, options: mode) == expected)
     }
 }
+
+/// A struct that holds a struct that holds a struct. `Stats` lays `alive` out after its Ints, and `Boss` lays `alive`
+/// out after `minion`, so a read that steps into the wrong element at any level reads another field.
+private let bossEnemyAndStats = """
+
+    struct Boss(let alive: Bool, var minion: Enemy)
+    struct Enemy(var stats: Stats, let armor: Int)
+    struct Stats(let alive: Bool, var hp: Int, var speed: Int)
+    """
+
+struct NestedStructTests {
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a field read through the fields that hold it gives the value it was made with, in debug and in release`(
+        mode: [String],
+    ) {
+        // `e` is made from a nested initializer call, and `b` from a local that the call moves in. Each read leaves
+        // its struct whole, so it is read again after.
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                print(e.stats.hp)
+                print(e.stats.speed)
+                print(e.stats.alive)
+                print(e.armor - e.stats.speed)
+                let stats = Stats(alive: false, hp: 40, speed: 7)
+                let b = Boss(alive: true, minion: Enemy(stats: stats, armor: 9))
+                print(b.minion.stats.hp)
+                print(b.minion.stats.speed)
+                print(b.minion.stats.alive)
+                print(b.minion.armor)
+                print(b.alive)
+            }
+            """ + bossEnemyAndStats
+        let output = "100\n3\ntrue\n2\n40\n7\nfalse\n9\ntrue\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a field read through the fields of a borrowed parameter decides the result, in debug and in release`(
+        mode: [String],
+    ) {
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                print(left(in: e, after: 30))
+                print(left(in: e, after: 200))
+                let b = Boss(alive: true, minion: Enemy(stats: Stats(alive: true, hp: 1, speed: 8), armor: 2))
+                print(reach(of: b))
+            }
+            func left(in e: Enemy, after hit: Int) -> Int {
+                if hit >= e.stats.hp + e.armor { return 0 }
+                return e.stats.hp + e.armor - hit
+            }
+            func reach(of b: Boss) -> Int { b.minion.stats.speed * b.minion.armor }
+            """ + bossEnemyAndStats
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "75\n0\n16\n", errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]], [
+        ("print(e.stats.mana)", "4:19: error[E0244]: Stats has no field 'mana'"),
+        ("print(b.minion.stats.mana)", "4:26: error[E0244]: Stats has no field 'mana'"),
+        ("print(b.minion.mana)", "4:20: error[E0244]: Enemy has no field 'mana'"),
+        ("let f = Enemy(stats: 3, armor: 1)", "4:26: error[E0248]: the field 'stats' takes Stats, found Int"),
+        (
+            "let f = Enemy(stats: e.stats, armor: 1)",
+            "4:26: error[E0250]: moving a field out of a struct isn't supported",
+        ),
+        (
+            "let s = Stats(alive: true, hp: 1, speed: 2)\n    let f = Enemy(stats: s, armor: 1)\n    print(s.hp)",
+            "6:11: error[E0302]: 's' was moved",
+        ),
+    ])
+    func `a read of a field that the inner struct lacks, or of a moved struct, is an error, in debug and release`(
+        mode: [String], failure: (body: String, error: String),
+    ) {
+        let source = """
+            func main() {
+                let e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                let b = Boss(alive: true, minion: Enemy(stats: Stats(alive: true, hp: 1, speed: 8), armor: 2))
+                \(failure.body)
+            }
+            """ + bossEnemyAndStats
+        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
+        #expect(run(source, options: mode) == expected)
+    }
+}
