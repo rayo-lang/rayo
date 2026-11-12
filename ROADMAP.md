@@ -10,7 +10,7 @@ Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` build
 
 **A half version, such as v0.1.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
 
-**A finished version is tagged**, as `v0.1.0`, with short release notes, so its tag is what shows it done. A version ships no binaries, and is built from source as [TOOLCHAIN.md](TOOLCHAIN.md) says.
+**A finished version is tagged**, as `v0.1.0`, with short release notes, and the tag marks it done. A version ships no binaries, and is built from source as [TOOLCHAIN.md](TOOLCHAIN.md) says.
 
 ## v0.1: functions, integers and structs
 
