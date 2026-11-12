@@ -22,10 +22,13 @@ func builtProduct(_ name: String) -> URL {
 func rayo(_ arguments: [String], in directory: URL) -> CommandResult {
     do {
         // Give each output stream a file, so that neither fills up and stalls the run while the other is read.
+        // Each call names its files afresh: Windows won't rewrite a file while another process, such as a child of an
+        // earlier call or a virus scanner, holds it open.
+        let runID = UUID().uuidString
+        let outputFile = directory.appendingPathComponent(".rayo-\(runID)-stdout")
+        let errorFile = directory.appendingPathComponent(".rayo-\(runID)-stderr")
         // `FileManager.createFile` renames a temporary file into place, and returns false unreported where Windows
         // refuses the rename, so each file is written in place.
-        let outputFile = directory.appendingPathComponent(".rayo-stdout")
-        let errorFile = directory.appendingPathComponent(".rayo-stderr")
         try Data().write(to: outputFile)
         try Data().write(to: errorFile)
 
