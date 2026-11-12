@@ -60,7 +60,9 @@ struct StructTests {
 
     @Test(arguments: [
         ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
-        ("1", .unusedValue(value: TypedValue(type: .shadowedPrelude("Int")))),
+        ("1", .unusedValue(type: .shadowedPrelude("Int"))),
+        ("let a = 9223372036854775808", .literalExceedsInt(type: .shadowedPrelude("Int"))),
+        ("let y: () = g()", .voidLocal(type: .shadowedPrelude("Void"))),
         ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
         ("let t = true + true", .operandTypes(op: "+", needs: .shadowedPrelude("Int"), left: "Bool", right: "Bool")),
         ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
@@ -73,13 +75,24 @@ struct StructTests {
         let functions = "func f(_ b: Bool) {}\nfunc f(_ s: S) {}\nfunc g() {}"
         #expect(errors("func main() {\n\(body)\n}\n\(structs)\n\(functions)") == [expected])
     }
+
+    @Test(arguments: [
+        ("func main() -> Void {}", ErrorCode.mainReturnsNonVoid(type: .shadowedPrelude("Void"))),
+        ("func main() {}\nfunc h(_ v: ()) {}", .voidParameter(type: .shadowedPrelude("Void"))),
+        ("func main() {}\nstruct T(var v: ())", .voidField(type: .shadowedPrelude("Void"))),
+    ])
+    func `an error about a declaration names a prelude type that a struct shadows as the prelude's`(
+        declarations: String, expected: ErrorCode,
+    ) {
+        #expect(errors(declarations + "\nstruct Void") == [expected])
+    }
 }
 
 struct StructDeclarationTests {
     @Test(arguments: [
         ("struct S(var a: Q)", ErrorCode.notAType(name: "Q"), "Q"),
-        ("struct S(var a: Void)", .voidField, "Void"),
-        ("struct S(var a: ())", .voidField, "()"),
+        ("struct S(var a: Void)", .voidField(type: "Void"), "Void"),
+        ("struct S(var a: ())", .voidField(type: "Void"), "()"),
         ("struct S(var a)", .missingFieldType(name: "a"), "a"),
         ("struct S(var a: Int, let a: Bool)", .alreadyDeclared(name: "a"), "a"),
         ("struct S(var _: Int)", .underscoreDeclared, "_"),
@@ -285,7 +298,7 @@ struct FieldCopyTests {
         ("let h = copy e.speed", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
         ("let h = copy e.hp.armor", .noSuchField(type: "Int", field: "armor"), "armor"),
         ("let b: Bool = copy e.hp", .typeMismatch(expected: "Bool", found: "Int"), "copy e.hp"),
-        ("copy e.hp", .unusedValue(value: TypedValue(type: "Int")), "copy e.hp"),
+        ("copy e.hp", .unusedValue(type: "Int"), "copy e.hp"),
         ("let f = e\nlet h = copy e.hp\nprint(h + f.hp)", .usedAfterMove(name: "e"), "copy e.hp"),
     ])
     func `a copy of a field the value doesn't have, of a moved struct, or left unused, is an error`(

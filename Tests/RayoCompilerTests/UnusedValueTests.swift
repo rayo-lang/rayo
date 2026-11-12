@@ -10,7 +10,7 @@ struct UnusedValueTests {
     func unusedStatement(body: String, expression: String, type: String) {
         let source = "func main() {\n\(body)\n}\nfunc g() -> Int { 3 }"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.unusedValue(value: TypedValue(type: .named(type)))])
+        #expect(reported.map(\.code) == [.unusedValue(type: .named(type))])
         #expect(coveredText(reported, in: source) == [expression])
     }
 
@@ -22,7 +22,7 @@ struct UnusedValueTests {
     func voidBody(declarations: String, expression: String, type: String) {
         let source = declarations + "\nfunc g() -> Int { 3 }"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.unusedValue(value: TypedValue(type: .named(type)))])
+        #expect(reported.map(\.code) == [.unusedValue(type: .named(type))])
         #expect(coveredText(reported, in: source) == [expression])
     }
 

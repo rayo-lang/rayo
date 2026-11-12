@@ -151,7 +151,7 @@ struct CallChecker {
     private func spelling(of arguments: [TypedArgument]) -> String {
         let written = arguments.map { argument in
             let label = argument.label.map { "\($0): " } ?? ""
-            return label + "\(expressions.name(of: argument.type))"
+            return label + "\(expressions.typeName(of: argument.type))"
         }
         return written.joined(separator: ", ")
     }

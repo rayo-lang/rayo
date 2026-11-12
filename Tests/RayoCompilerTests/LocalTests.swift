@@ -18,7 +18,7 @@ struct LocalTests {
         ("var x = true\nx += 1", .operandTypes(op: "+=", needs: "Int", left: "Bool", right: "Int")),
         ("1 = 2", .assignToNonLocal),
         ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
-        ("let x = print(1)", .voidLocal),
+        ("let x = print(1)", .voidLocal(type: "Void")),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),

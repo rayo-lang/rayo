@@ -166,7 +166,7 @@ struct StructChecker {
         let type = declarations.resolve(written, reporting: errors)
         // A field of type Void would hold no value.
         guard type != .void else {
-            errors.report(.voidField, at: written.range)
+            errors.report(.voidField(type: declarations.typeName(of: .void)), at: written.range)
             return nil
         }
         return type

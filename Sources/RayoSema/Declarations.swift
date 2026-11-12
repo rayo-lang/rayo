@@ -66,7 +66,7 @@ struct Declarations {
     }
 
     /// The name an error gives `type`, which tells a prelude type apart from the file's declaration of its name.
-    func name(of type: RayoType) -> TypeName {
+    func typeName(of type: RayoType) -> TypeName {
         let name = type.description
 
         return switch type {
