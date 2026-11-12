@@ -96,23 +96,27 @@ struct ErrorCodeTests {
     }
 
     @Test(arguments: [
-        (TypeName.named("Int"), "the Int", "an Int"),
-        ("Bool", "the Bool", "a Bool"),
-        (.shadowedPrelude("Int"), "the prelude's Int", "the prelude's Int"),
+        (TypeName.named("Int"), "the Int", "type Int"),
+        (.shadowedPrelude("Int"), "the prelude's Int", "the prelude's type Int"),
     ])
-    func `a type's name takes 'the' or 'a', except a shadowed prelude type's, which has its own`(
-        type: TypeName, definite: String, indefinite: String,
+    func `a type's name takes 'the' or the word 'type', which a shadowed prelude type's puts after 'the prelude's'`(
+        type: TypeName, definite: String, typePhrase: String,
     ) {
         #expect(type.definite == definite)
-        #expect(type.indefinite == indefinite)
+        #expect(type.typePhrase == typePhrase)
     }
 
     @Test(arguments: [
         (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used"),
         (.unusedValue(type: .shadowedPrelude("Int")), "the prelude's Int value isn't used"),
-        (.literalExceedsInt(type: "Int"), "the literal doesn't fit in an Int"),
+        (.literalExceedsInt(type: "Int"), "the literal doesn't fit in Int"),
         (.literalExceedsInt(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
-        (.voidLocal(type: .shadowedPrelude("Void")), "a local can't have type the prelude's Void"),
+        (.voidLocal(type: "Void"), "a local can't have type Void"),
+        (.voidLocal(type: .shadowedPrelude("Void")), "a local can't have the prelude's type Void"),
+        (.voidParameter(type: .shadowedPrelude("Void")), "a parameter can't have the prelude's type Void"),
+        (.voidField(type: .shadowedPrelude("Void")), "a field can't have the prelude's type Void"),
+        (.missingReturnValue(type: "Int"), "'return' needs a value of type Int"),
+        (.missingReturnValue(type: .shadowedPrelude("Int")), "'return' needs a value of the prelude's type Int"),
     ])
     func `a message names a type in the form its sentence needs`(code: ErrorCode, message: String) {
         #expect(code.message == message)

@@ -148,13 +148,13 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(216, error: "'{op}' can't compare {type} values")
     case incomparable(op: String, type: TypeName)
 
-    @Code(217, error: "the literal doesn't fit in {type.indefinite}")
+    @Code(217, error: "the literal doesn't fit in {type}")
     case literalExceedsInt(type: TypeName)
 
     @Code(218, error: "'_' can't be declared")
     case underscoreDeclared
 
-    @Code(219, error: "a local can't have type {type}")
+    @Code(219, error: "a local can't have {type.typePhrase}")
     case voidLocal(type: TypeName)
 
     // 220 is unused, and stays so.
@@ -170,7 +170,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(224, error: "'{keyword}' is only allowed inside a loop")
     case outsideLoop(keyword: String)
 
-    @Code(225, error: "'return' needs a value of type {type}")
+    @Code(225, error: "'return' needs a value of {type.typePhrase}")
     case missingReturnValue(type: TypeName)
 
     @Code(226, error: "'{signature}' can reach its end without returning a value")
@@ -197,7 +197,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(233, error: "default arguments aren't supported")
     case defaultArgument
 
-    @Code(234, error: "a parameter can't have type {type}")
+    @Code(234, error: "a parameter can't have {type.typePhrase}")
     case voidParameter(type: TypeName)
 
     @Code(235, error: "{type.definite} value isn't used")
@@ -209,7 +209,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(237, error: "'{name}' needs a type")
     case missingFieldType(name: String)
 
-    @Code(238, error: "a field can't have type {type}")
+    @Code(238, error: "a field can't have {type.typePhrase}")
     case voidField(type: TypeName)
 
     @Code(239, error: "'{name}' contains itself")
@@ -346,20 +346,13 @@ public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStri
         }
     }
 
-    /// The name with `a` or `an` before it, as in `an Int`. A shadowed prelude type's, `the prelude's Int`, has
-    /// its own.
-    public var indefinite: String {
+    /// The name with the word `type` before it, as in `a local can't have type Void`, or, for a shadowed prelude
+    /// type, `the prelude's type Void`.
+    public var typePhrase: String {
         switch self {
-        case .named(let name): "\(Self.indefiniteArticle(before: name)) \(name)"
-        case .shadowedPrelude: description
+        case .named(let name): "type \(name)"
+        case .shadowedPrelude(let name): "the prelude's type \(name)"
         }
-    }
-
-    /// The indefinite article that goes before `name`.
-    private static func indefiniteArticle(before name: String) -> String {
-        // A name that starts with anything but a vowel takes `a`, and one that starts with a vowel `an`.
-        guard let first = name.first, "AEIOUaeiou".contains(first) else { return "a" }
-        return "an"
     }
 }
 
