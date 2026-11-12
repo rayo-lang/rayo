@@ -14,8 +14,8 @@ struct ProgramModule: ~Copyable {
         // Make the build's machine, the program's emitter for it, and the runtime's functions in the emitter's
         // module. Each can throw, so all come before any field is set: Swift can't track a field that isn't
         // copyable set on one path only.
-        let target = try TargetMachine(optimizes: build == .release)
-        let emitter = ProgramEmitter(sourcePath: "main.rayo", for: target, checksOverflow: build == .debug)
+        let target = try TargetMachine(optimizes: build.optimizes)
+        let emitter = ProgramEmitter(sourcePath: "main.rayo", for: target, build: build)
         let runtime = try Runtime(for: emitter)
 
         // Keep the runtime's functions, which outlive the runtime's own module.
