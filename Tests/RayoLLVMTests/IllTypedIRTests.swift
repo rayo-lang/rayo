@@ -90,13 +90,18 @@ private let illTypedIR = [
         error: "the IR passes 'rayo.print_int' an argument of type i1, where it takes i64",
     ),
     IllTypedIR(
+        testDescription: "a call of the Bool print given an Int",
+        executable: callingPrint(.printBool, with: [.constant(.int(1))]),
+        error: "the IR passes 'rayo.print_bool' an argument of type i64, where it takes i1",
+    ),
+    IllTypedIR(
         testDescription: "a call given too few arguments",
-        executable: callingPrint(with: []),
+        executable: callingPrint(.printInt, with: []),
         error: "the IR passes 'rayo.print_int' 0 arguments, where it takes 1",
     ),
     IllTypedIR(
         testDescription: "a call given too many arguments",
-        executable: callingPrint(with: [.constant(.int(1)), .constant(.int(2))]),
+        executable: callingPrint(.printInt, with: [.constant(.int(1)), .constant(.int(2))]),
         error: "the IR passes 'rayo.print_int' 2 arguments, where it takes 1",
     ),
     IllTypedIR(
@@ -175,11 +180,11 @@ private func calling(
     return program(of: [main, function])
 }
 
-/// A program whose `main` passes `arguments` to the prelude's `print`, which takes one Int.
-private func callingPrint(with arguments: [Operand]) -> IRExecutable {
+/// A program whose `main` passes `arguments` to `print`, one of the prelude's, each of which takes one argument.
+private func callingPrint(_ print: Callee, with arguments: [Operand]) -> IRExecutable {
     program(locals: [], [
         BasicBlock(
-            statements: [.compute(destination: nil, value: .call(.printInt, arguments: arguments), range: nowhere)],
+            statements: [.compute(destination: nil, value: .call(print, arguments: arguments), range: nowhere)],
             terminator: .return(nil),
         ),
     ])
