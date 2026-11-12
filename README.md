@@ -90,7 +90,7 @@ The spec starts with an [Introduction](docs/spec/introduction.md), then has one 
 | [`docs/validation/`](docs/validation/) | The safety argument and hard cases used to check the design |
 | [`docs/`](docs/) | [Why Rayo](docs/why-rayo.md), and the [agent docs](docs/agents/) the project rules point to |
 | [`GLOSSARY.md`](GLOSSARY.md) | The spec's terms, each with a one-sentence description and a link to its definition |
-| [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system |
+| [`examples/`](examples/) | [A gameplay module](examples/gameplay/gameplay.rayo), [a platform module](examples/platform/bindings.rayo) that binds a platform SDK's C header and runs the game from `main`, and [a job-parallel simulation](examples/jobs/jobs.rayo) on std's job system, which show the whole language; and each version's [proof program](ROADMAP.md#what-a-version-is), such as v0.1's [combat simulation](examples/v0.1/combat.rayo), which `rayoc` compiles and runs |
 | `Sources/`, `Tests/` | `rayo`, `rayoc` and their tests. [TOOLCHAIN.md](TOOLCHAIN.md#layout) says what each module does |
 | [`AGENTS.md`](AGENTS.md), [`.agents/skills/`](.agents/skills/) | The project rules, and the workflows that AI coding agents follow in this repository |
 
