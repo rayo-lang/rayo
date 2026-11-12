@@ -29,7 +29,7 @@ extension Parser {
             advance()
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        // A `copy` takes the local it copies, or a field of it.
+        // A `copy` takes the local it copies, or a field of it at any depth.
         if consume(.copy) {
             let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingCopiedName)
             let place = try parseMembers(of: Expr(kind: .name(name), range: nameRange))

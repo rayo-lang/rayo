@@ -77,21 +77,23 @@ struct ExpressionChecker {
         // An expression that failed was reported already.
         guard let value = check(expr) else { return nil }
 
-        // A `copy` checks to a read of the place it copies, so only the place written bare is taken from.
-        switch (expr.kind, value.kind) {
+        // A `copy` checks to a read of the place it copies, so only a place written bare is moved, or rejected as a
+        // field move.
+        return switch (expr.kind, value.kind) {
         // A local written bare is moved.
-        case (.name(let name), .local(let local)):
-            return move(local, named: name, readBy: value)
-
-        // Taking a field would move it out of its struct, which rayoc doesn't support.
-        case (.member, _):
-            errors.report(.fieldMove, at: value.range)
-            return nil
-
+        case (.name(let name), .local(let local)): move(local, named: name, readBy: value)
+        // A field written bare would be moved out of its struct.
+        case (.member, _): rejectFieldMove(value)
         // Any other value, a copy included, is a new one, which is taken as it is.
-        default:
-            return value
+        default: value
         }
+    }
+
+    /// Reports `value`, a field that a statement takes, as a move out of its struct, which rayoc doesn't support,
+    /// and returns nil.
+    private func rejectFieldMove(_ value: CheckedExpr) -> CheckedExpr? {
+        errors.report(.fieldMove, at: value.range)
+        return nil
     }
 
     /// Turns `value`, which reads `local`, into a move of its value, reporting it when `local` is a borrowed

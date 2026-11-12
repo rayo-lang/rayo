@@ -255,9 +255,10 @@ struct FieldReadTests {
 
 struct FieldCopyTests {
     @Test(arguments: [
-        "let h = copy e.hp\nprint(h)", "_ = copy e.armor", "var h = 0\nprint(h)\nh = copy e.hp\nprint(h)", "return copy e.hp",
-        "return (copy e.hp)", "return copy e.hp + copy e.armor", "_ = Enemy(hp: copy e.hp, armor: 1)",
-        "let h = copy e.hp\nlet k = copy e\nprint(h + k.armor + e.hp)",
+        "let h = copy e.hp\nprint(h)", "_ = copy e.armor", "var h = 0\nprint(h)\nh = copy e.hp\nprint(h)",
+        "return copy e.hp", "return (copy e.hp)", "return copy e.hp + copy e.armor",
+        "_ = Enemy(hp: copy e.hp, armor: 1)", "let h = copy e.hp\nlet k = copy e\nprint(h + k.armor + e.hp)",
+        "let h = copy e.hp\nreturn f(e: e) + h",
     ])
     func `a copy of a field of a borrowed parameter may be taken, and leaves the struct whole`(body: String) {
         #expect(errors("func main() {}\nfunc f(e: Enemy) -> Int {\n\(body)\nreturn 0\n}" + enemy) == [])
