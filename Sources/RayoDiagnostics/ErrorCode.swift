@@ -137,16 +137,16 @@ public enum ErrorCode: Sendable, Hashable {
     case underscoreValue
 
     @Code(213, error: "expected {expected}, found {found}")
-    case typeMismatch(expected: String, found: String)
+    case typeMismatch(expected: TypeName, found: TypeName)
 
     @Code(214, error: "'{op}' needs operands of one type, found {left} and {right}")
-    case operandsDiffer(op: String, left: String, right: String)
+    case operandsDiffer(op: String, left: TypeName, right: TypeName)
 
     @Code(215, error: "'{op}' needs {needs} operands, found {left} and {right}")
-    case operandTypes(op: String, needs: String, left: String, right: String)
+    case operandTypes(op: String, needs: TypeName, left: TypeName, right: TypeName)
 
     @Code(216, error: "'{op}' can't compare {type} values")
-    case incomparable(op: String, type: String)
+    case incomparable(op: String, type: TypeName)
 
     @Code(217, error: "the literal doesn't fit in an Int")
     case literalExceedsInt
@@ -171,7 +171,7 @@ public enum ErrorCode: Sendable, Hashable {
     case outsideLoop(keyword: String)
 
     @Code(225, error: "'return' needs a value of type {type}")
-    case missingReturnValue(type: String)
+    case missingReturnValue(type: TypeName)
 
     @Code(226, error: "'{signature}' can reach its end without returning a value")
     case missingReturn(signature: String)
@@ -200,8 +200,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(234, error: "a parameter can't have type Void")
     case voidParameter
 
-    @Code(235, error: "the {type} value isn't used")
-    case unusedValue(type: String)
+    @Code(235, error: "{value} isn't used")
+    case unusedValue(value: TypedValue)
 
     @Code(236, error: "'{name}' needs a type or a value")
     case missingLocalType(name: String)
@@ -227,7 +227,7 @@ public enum ErrorCode: Sendable, Hashable {
     case assignToType(name: String)
 
     @Code(244, error: "{type} has no field '{field}'")
-    case noSuchField(type: String, field: String)
+    case noSuchField(type: TypeName, field: String)
 
     @Code(245, error: "the call leaves out the field '{field}'")
     case fieldLeftOut(field: String)
@@ -239,10 +239,10 @@ public enum ErrorCode: Sendable, Hashable {
     case fieldOutOfOrder(field: String, after: String)
 
     @Code(248, error: "the field '{field}' takes {expected}, found {found}")
-    case fieldTypeMismatch(field: String, expected: String, found: String)
+    case fieldTypeMismatch(field: String, expected: TypeName, found: TypeName)
 
     @Code(249, error: "the argument names no field of {type}")
-    case argumentNamesNoField(type: String)
+    case argumentNamesNoField(type: TypeName)
 
     @Code(250, error: "moving a field out of a struct isn't supported")
     case fieldMove
@@ -311,6 +311,37 @@ public enum ArgumentLabel: Sendable, Hashable, CustomStringConvertible {
         switch self {
         case .label(let label): return "'\(label):'"
         case .none: return "no label"
+        }
+    }
+}
+
+/// A type as an error names it: `Int`, or `the prelude's Int` where a declaration of the file takes its name.
+public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStringConvertible {
+    /// A type that its name alone tells apart.
+    case named(String)
+    /// A prelude type whose name a declaration of the file takes.
+    case shadowedPrelude(String)
+
+    public init(stringLiteral name: String) { self = .named(name) }
+
+    public var description: String {
+        switch self {
+        case .named(let name): name
+        case .shadowedPrelude(let name): "the prelude's \(name)"
+        }
+    }
+}
+
+/// A value as an error names it by its type: `the Int value`, or `the prelude's Int value`.
+public struct TypedValue: Sendable, Hashable, CustomStringConvertible {
+    public var type: TypeName
+
+    public init(type: TypeName) { self.type = type }
+
+    public var description: String {
+        switch type {
+        case .named(let name): "the \(name) value"
+        case .shadowedPrelude(let name): "the prelude's \(name) value"
         }
     }
 }

@@ -101,8 +101,8 @@ struct InitializerChecker {
     /// Reports `argument`, which gives no field of the struct `id`, by its label where it has one.
     private func reportNoField(for argument: Argument, of id: StructID) {
         let code: ErrorCode = switch argument.label {
-        case let label?: .noSuchField(type: id.name, field: label)
-        case nil: .argumentNamesNoField(type: id.name)
+        case let label?: .noSuchField(type: expressions.name(of: .structure(id)), field: label)
+        case nil: .argumentNamesNoField(type: expressions.name(of: .structure(id)))
         }
         errors.report(code, at: argument.range)
     }
@@ -120,8 +120,9 @@ struct InitializerChecker {
             guard let value, let field = given.field else { continue }
             // A value of another type than the field's is reported.
             guard value.type == types[field] else {
-                let code = ErrorCode.fieldTypeMismatch(field: fields[field].name, expected: "\(types[field])",
-                                                       found: "\(value.type)")
+                let code = ErrorCode.fieldTypeMismatch(field: fields[field].name,
+                                                       expected: expressions.name(of: types[field]),
+                                                       found: expressions.name(of: value.type))
                 errors.report(code, at: value.range)
                 continue
             }

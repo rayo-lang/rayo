@@ -65,6 +65,18 @@ struct Declarations {
         return fields
     }
 
+    /// The name an error gives `type`, which tells a prelude type apart from the file's declaration of its name.
+    func name(of type: RayoType) -> TypeName {
+        let name = type.description
+
+        return switch type {
+        // A struct is the file's own, so its name alone tells it apart.
+        case .structure: .named(name)
+        // A prelude type is shadowed where a struct or a function of the file has its name.
+        case .int, .bool, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
+        }
+    }
+
     /// The type that `type` names, or nil after reporting a name that names no type.
     func resolve(_ type: TypeExpr, reporting errors: ErrorList) -> RayoType? {
         switch type {

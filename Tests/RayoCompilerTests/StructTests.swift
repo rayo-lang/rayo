@@ -48,13 +48,30 @@ struct StructTests {
     }
 
     @Test(arguments: [
-        ("let x: Int = 1", "struct Int(var big: Bool)", [ErrorCode.typeMismatch(expected: "Int", found: "Int")]),
+        ("let x: Int = 1", "struct Int(var big: Bool)",
+         [ErrorCode.typeMismatch(expected: "Int", found: .shadowedPrelude("Int"))]),
         ("print(1)", "struct print", [.argumentNamesNoField(type: "print")]),
     ])
     func `a struct's name shadows the prelude's type or function of that name`(
         body: String, declaration: String, expected: [ErrorCode],
     ) {
         #expect(errors("func main() {\n\(body)\n}\n\(declaration)") == expected)
+    }
+
+    @Test(arguments: [
+        ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
+        ("1", .unusedValue(value: TypedValue(type: .shadowedPrelude("Int")))),
+        ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
+        ("let t = true + true", .operandTypes(op: "+", needs: .shadowedPrelude("Int"), left: "Bool", right: "Bool")),
+        ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
+        ("let y = (1).big", .noSuchField(type: .shadowedPrelude("Int"), field: "big")),
+        ("f(1)", .noMatchingFunction(name: "f", arguments: "the prelude's Int")),
+        ("let s = S(a: 1)", .fieldTypeMismatch(field: "a", expected: "Bool", found: .shadowedPrelude("Int"))),
+    ])
+    func `an error names a prelude type that a struct shadows as the prelude's`(body: String, expected: ErrorCode) {
+        let structs = "struct Int(var big: Bool)\nstruct Void\nstruct S(var a: Bool)"
+        let functions = "func f(_ b: Bool) {}\nfunc f(_ s: S) {}\nfunc g() {}"
+        #expect(errors("func main() {\n\(body)\n}\n\(structs)\n\(functions)") == [expected])
     }
 }
 
@@ -171,7 +188,7 @@ struct StructInitializerTests {
             "_ = Enemy(armor: 2, hq: 1)",
             [.fieldLeftOut(field: "hp"), .noSuchField(type: "Enemy", field: "hq")], ["Enemy(armor: 2, hq: 1)", "hq: 1"],
         ),
-    ])
+    ] as [(String, [ErrorCode], [String])])
     func `a call that doesn't give each field once, labeled and in order, is an error that names the field`(
         body: String, expected: [ErrorCode], covered: [String],
     ) {
@@ -268,7 +285,7 @@ struct FieldCopyTests {
         ("let h = copy e.speed", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
         ("let h = copy e.hp.armor", .noSuchField(type: "Int", field: "armor"), "armor"),
         ("let b: Bool = copy e.hp", .typeMismatch(expected: "Bool", found: "Int"), "copy e.hp"),
-        ("copy e.hp", .unusedValue(type: "Int"), "copy e.hp"),
+        ("copy e.hp", .unusedValue(value: TypedValue(type: "Int")), "copy e.hp"),
         ("let f = e\nlet h = copy e.hp\nprint(h + f.hp)", .usedAfterMove(name: "e"), "copy e.hp"),
     ])
     func `a copy of a field the value doesn't have, of a moved struct, or left unused, is an error`(

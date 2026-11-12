@@ -82,4 +82,18 @@ struct ErrorCodeTests {
     func foundTokens(found: FoundToken, text: String) {
         #expect(found.description == text)
     }
+
+    @Test(arguments: [(TypeName.named("Int"), "Int"), ("Shot", "Shot"), (.shadowedPrelude("Int"), "the prelude's Int")])
+    func `a type is named by its name, or as the prelude's when a declaration of the file shadows it`(
+        type: TypeName, text: String,
+    ) {
+        #expect(type.description == text)
+    }
+
+    @Test(arguments: [(TypeName.named("Int"), "the Int value"), (.shadowedPrelude("Int"), "the prelude's Int value")])
+    func `a value is named by its type, as the prelude's when a declaration of the file shadows it`(
+        type: TypeName, text: String,
+    ) {
+        #expect(TypedValue(type: type).description == text)
+    }
 }

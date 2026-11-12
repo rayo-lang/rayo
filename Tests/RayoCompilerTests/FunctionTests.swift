@@ -33,7 +33,7 @@ struct FunctionTests {
     func inferredResult() {
         #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
-            [.voidLocal, .unusedValue(type: "Int")])
+            [.voidLocal, .unusedValue(value: TypedValue(type: "Int"))])
     }
 
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [
@@ -84,6 +84,11 @@ struct FunctionTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.notAType(name: type)])
         #expect(coveredText(reported, in: source) == [type])
+    }
+
+    @Test func `an error names a prelude type that a function shadows as the prelude's`() {
+        #expect(errors("func main() {\n    let b: Bool = 1\n}\nfunc Int() {}") ==
+            [.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))])
     }
 
     @Test("a function is called, not used as a value or assigned", arguments: [
