@@ -203,6 +203,50 @@ struct FieldCopyTests {
     }
 
     @Test(arguments: [["--debug"], ["--release"]])
+    func `assigning a field of a copy leaves the original's field as it was, and the other way round, in both builds`(
+        mode: [String],
+    ) {
+        // The copies are of a field, of a whole struct, of a struct-typed field that holds a struct, and of a field of
+        // a borrowed parameter. A copy and its original each assign a field after the copy is made, and both are
+        // printed, so a copy that shared its original's storage would print the other's value. The borrowed parameter
+        // can't be assigned, so that copy shows only that assigning it leaves the caller's struct as it was.
+        let source = """
+            func main() {
+                var e = Enemy(stats: Stats(alive: true, hp: 100, speed: 3), armor: 5)
+                var stats = copy e.stats
+                stats.hp = 1
+                stats.speed += 4
+                var kept = copy e
+                kept.stats.speed = 2
+                e.stats.hp = 50
+                print(stats.hp)
+                print(stats.speed)
+                print(kept.stats.hp)
+                print(kept.stats.speed)
+                print(e.stats.hp)
+                print(e.stats.speed)
+                var b = Boss(alive: true, minion: Enemy(stats: Stats(alive: true, hp: 30, speed: 6), armor: 2))
+                var minion = copy b.minion
+                minion.stats.hp = 9
+                b.minion.stats.speed = 8
+                print(minion.stats.hp)
+                print(minion.stats.speed)
+                print(b.minion.stats.hp)
+                print(b.minion.stats.speed)
+                print(weakened(e).hp)
+                print(e.stats.hp)
+            }
+            func weakened(_ e: Enemy) -> Stats {
+                var s = copy e.stats
+                s.hp -= 45
+                return s
+            }
+            """ + bossEnemyAndStats
+        let output = "1\n7\n100\n2\n50\n3\n9\n6\n30\n8\n5\n50\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
     func `a function returns a copy of a field of what it borrows, in debug and in release`(mode: [String]) {
         let source = """
             func main() {
