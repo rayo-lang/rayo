@@ -149,7 +149,7 @@ private let enemy = "\nstruct Enemy(var hp: Int, let armor: Int)"
 
 struct StructInitializerTests {
     @Test(arguments: [
-        "_ = Enemy(hp: 1, armor: 2)", "let e = Enemy(\n    hp: 1,\n    armor: 2,\n)", "_ = Empty()",
+        "_ = Enemy(hp: 1, armor: 2)", "_ = Enemy(\n    hp: 1,\n    armor: 2,\n)", "_ = Empty()",
         "let hp = 1\n_ = Enemy(hp: copy hp, armor: 2)\nprint(hp)",
     ])
     func `a call of a struct's name gives each field's value, labeled, in order, and makes the struct`(body: String) {
