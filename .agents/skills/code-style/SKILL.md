@@ -5,7 +5,7 @@ description: Read before writing, changing or reviewing any code in this repo, e
 
 # Code style
 
-These rules decide which stage of the compiler the repo's code goes in, how its code and tests are split into files, types and functions, and how a function's body is laid out. The aim is code a reader takes in at a glance: each stage its own questions, each file one concept, each type one job, and each function a few blocks whose steps a reader can see.
+These rules decide which stage a change to the compiler goes in, how the repo's code and tests are split into files, types and functions, and how a function's body is laid out. The aim is code a reader takes in at a glance: each stage its own questions, each file one concept, each type one job, and each function a few blocks whose steps a reader can see.
 
 ## Stages
 
@@ -253,7 +253,7 @@ struct OwnedModule: ~Copyable {
 
 Audit every file, type and function you add or change against this list, and fix what falls short:
 
-- **Every change** lies in the stage that owns the question it decides, and no stage answers a question another stage owns.
+- **Every file, type and function** lies in the stage that owns the questions it decides, so no stage answers a question another stage owns.
 - **Every file** holds one primary type and its parts and is named after it (an extension file holds one area of its type's job and is named `Type+Area.swift`, with the type's stored properties in `Type.swift`; a test file is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
