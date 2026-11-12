@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import RayoDriver
 
-/// The repository's `examples` directory, three levels above this file.
+/// The repository's `examples` directory, found from this file's place in `Tests/RayoDriverTests/`.
 private let examples = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
     .deletingLastPathComponent()
@@ -20,6 +20,10 @@ private func proofPrograms() throws -> [URL] {
 }
 
 struct ProofProgramTests {
+    @Test func `the proof programs are found, so the test that runs them has cases to run`() throws {
+        #expect(try !proofPrograms().isEmpty)
+    }
+
     @Test(arguments: try proofPrograms(), [["--debug"], ["--release"]])
     func `a version's proof program prints the output beside it, in debug and in release`(
         program: URL, mode: [String],

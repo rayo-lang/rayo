@@ -19,7 +19,7 @@ func main() {
     cracked.stats.armor /= 2
     print(hitsToFell(troll.stats.hp, by: hit(from: goblin, on: cracked, in: 1)))
 
-    // The goblin fights the troll, and then a copy of the goblin in lighter armor fights it.
+    // Lighter armor lets the troll's hits land harder, so the copy falls where the goblin won.
     var light = copy goblin
     light.stats.armor = 4
     print(fight(between: goblin, and: troll))
