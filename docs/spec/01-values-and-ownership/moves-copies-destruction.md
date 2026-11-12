@@ -45,7 +45,8 @@ Taking a copyable `const` also makes a new value ([Constants](moving-values-out.
 - all its fields and payloads are copyable;
 - it declares no `deinit`, since each copy would run it, and two copies would release one resource twice;
 - it doesn't opt out with `~Copyable`;
-- it isn't one of the types that are always move-only ([below](#types-that-are-always-move-only)).
+- it isn't one of the types that are always move-only ([below](#types-that-are-always-move-only));
+- it isn't an `@opaque` C type, which has no values to copy and conforms to no protocol ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
 
 So a copyable type owns no heap memory, and `copy` never allocates. Every other type is **move-only**, including every type that owns memory, such as `List`, `String`, `Box` or `Pool`, and copying one of those takes `clone()`.
 

@@ -109,7 +109,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | anonymous `union`/`struct` members | Their fields are accessible directly on the enclosing struct, as in C |
 | flexible array member `T data[]` | The struct without the member, as a `TrailingArray` header (below) |
 | `__attribute__((packed))` / `#pragma pack(n)` / `__attribute__((aligned(n)))` | `@packed` / `@packed(n)` / `@align(n)`, with identical layout ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)) |
-| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S` |
+| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S`, and only an `@opaque` type parameter may stand for it ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)) |
 | a struct or union whose layout Rayo can't reproduce, or whose members don't all map (below) | `@opaque` too |
 | `typedef T N;` | `typealias N = T`, with the exceptions below |
 | `union U` | `@c union U` |
@@ -151,7 +151,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
 
   Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
-- **Structs and unions that import as `@opaque`.** A struct or union imports as `@opaque` when Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported, since an `@opaque` type is usable only behind a pointer.
+- **Structs and unions that import as `@opaque`.** An **`@opaque` type** is an imported struct or union that Rayo uses only behind a pointer, since it doesn't know or can't map its layout. A struct the reading only declares imports as one (above). A struct or union also imports as one when Rayo's layout rules, with `@packed(n)` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported, since an `@opaque` type is usable only behind a pointer.
 - **Typedefs.** A typedef of a type `T` imports as a `typealias` of `T`, except for these:
     - a typedef that names a tagged type by its own tag, which adds nothing;
     - the first typedef that names an untagged type, which names the type itself ([above](#the-identity-of-an-imported-type));

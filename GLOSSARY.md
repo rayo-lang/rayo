@@ -247,6 +247,10 @@ _Avoid_: function pointer (a `@c` type)
 A protocol with no requirements that states a property of a type, such as `Copyable`, `Scoped` or `Sendable`; the compiler derives some, such as `Copyable` and `Sendable`, from what a type holds ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#conformances)).
 _Avoid_: marker trait, tag protocol
 
+**Opaque type parameter**:
+A type parameter marked `@opaque`, which may stand for any type, an opaque type included, since its body uses the type only behind a pointer ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+_Avoid_: unsized parameter, `?Sized`
+
 **Type value**:
 `T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 _Avoid_: metatype
@@ -422,6 +426,10 @@ The `unsafe { … }` block that may end an `import c`, holding rules about the h
 
 **Memory location**:
 A maximal run of adjacent nonzero-width C bitfields, which counts as one place for exclusivity ([08](docs/spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+
+**Opaque type**:
+An imported C type marked `@opaque`, whose layout Rayo doesn't know or whose members it can't map, so Rayo uses it only behind a pointer ([08](docs/spec/08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+_Avoid_: incomplete type
 
 **Open enum**:
 An imported C enum, which may hold any value of its underlying type unless its header declares it closed ([08](docs/spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).

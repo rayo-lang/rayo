@@ -88,6 +88,8 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | `T.isConstructible` | Whether `T.construct` applies here ([below](#constructing-values-reflectively)) |
 | `T.conforms(P.self)`, `T == U`, `T != U` | Protocol conformance and type equality, for use in `static if` |
 
+**An `@opaque` type parameter's body reads none of `T`'s layout, fields, cases or conformances**, since an `@opaque` type has no layout Rayo can use and conforms to no protocol. Its name, module and id, the kind queries, its attributes and type equality stay readable ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+
 **Reaching into a value:**
 
 | Expression | Meaning |
@@ -107,9 +109,10 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
 - a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
-- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`.
+- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`;
+- an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
-For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout.
+For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout, and on an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
 
 **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type. The identity holds what tells the type apart from every other, built as follows:
 
@@ -232,7 +235,6 @@ func rebuild<T>(_ old: owned T) -> T {
 
 **`T.construct` calls `T`'s primary initializer with every field, in header order, and runs no secondary `init`** ([04](../04-types/structs.md#initializers)), so the use site must be able to call it. `T.isConstructible` (`const`) says whether it can. It is true only for a struct with a primary initializer, an imported C struct's included ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), or a tuple type. Even then it is false when the type:
 
-- is marked `@opaque`, as an imported C type is when a header only declares it, or when Rayo can't reproduce its layout or map its members ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - has stored fields the use site can't see (`private` ones, without `@reflect(private)`);
 - has an `unsafe` stored field, or an `unsafe` primary initializer, and the use isn't inside `unsafe`, since `T.construct` would call it with no `unsafe` written ([10](../10-errors-and-safety/unsafe-code.md#what-needs-unsafe));
 - has a primary initializer the use site can't call: a `private init` one, from another module, whatever `@reflect(private)` shows, since a `private init` guards the type's invariants ([above](#reflection-and-access-control)). The private fields `@reflect(private)` shows count as `public` here, so they don't stop the call.

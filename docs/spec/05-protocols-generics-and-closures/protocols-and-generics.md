@@ -116,7 +116,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 }
 ```
 
-**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things. So a body that passes is sound for every instantiation.
+**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things, though it has a size unless it is marked `@opaque` ([below](#type-parameters-with-no-known-size-opaque)). So a body that passes is sound for every instantiation.
 
 **So a generic fails at an instantiation only in these cases, where the arguments decide the outcome:**
 
@@ -126,7 +126,7 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 - where a shuffle's index is out of range for a generic `N`, or its result's count isn't a lane count ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles));
 - where a swizzle names a lane that a vector of a generic `N` lacks ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
-**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation.** Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
+**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation**, except where it uses an `@opaque` type parameter ([below](#type-parameters-with-no-known-size-opaque)). Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
 
 - `static if` branches, checked only when their condition holds;
 - `static for` bodies and static closures, checked per element;
@@ -143,6 +143,37 @@ func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
 - a reflective projection: `value[f]`, `value[fields:]` or `value[case:]`.
 
 **The checks that run on the expanded body are those of moves, initialization, borrows, dependencies, the places that place properties hand out, and `self.init` calls.** So a move in a `static for` body moves once per element ([09](../09-compile-time/reflection.md#static-reflection)).
+
+## Type parameters with no known size: `@opaque`
+
+A wrapper around a C handle needs only a pointer to the C type, so one generic wrapper can serve C types whose layout Rayo doesn't know, and keep them apart. Here `CHandle` is user code, which frees each handle with the C function it was given:
+
+```swift
+struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt) {
+    deinit { unsafe { _ = release(raw) } }         // the body uses T only behind a pointer
+}
+
+let db = CHandle(raw: conn, release: sqlite3_close)        // conn: the *sqlite3 that sqlite3_open gave
+let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
+```
+
+**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type were `@opaque`. Only such a parameter stands for an `@opaque` type, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). An unmarked type parameter, an associated type and the `Self` of a protocol extension never do.
+
+**An `@opaque` type conforms to no protocol, and an `@opaque` type parameter takes no constraints.** A protocol extension is generic code over an unmarked `Self`, which may hold a `Self` by value, so no conformance could keep it sound.
+
+**The language's own type parameters that need no layout are `@opaque` too:** the pointee of `*T` and `*T?`, the `T` of a type value `Type<T>`, so `T.self` names any type, and the target `U` of `p.cast(to: U.self)` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). `*T` and `*T?` are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`.
+
+**In an `@opaque` type parameter's body, anything that needs `T`'s layout or a `T` value is a compile error:**
+
+- a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
+- a function type that takes or gives a `T`, a `@c` one included;
+- `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
+- a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible`, `T.construct` and `T.makeCase` ([09](../09-compile-time/reflection.md#what-reflection-can-read));
+- `T` as the argument for a type parameter that isn't `@opaque`.
+
+**`T.name`, `T.baseName`, `T.module`, `T.id`, the kind queries, `T`'s attributes, `T == U` and `T != U` stay readable**, since none needs a layout or a conformance.
+
+**Compile-time code in that body treats `T` as `@opaque` too**, so it is checked at the definition, as the rest of the body is, and a `static if` branch can't use what only some types allow.
 
 ## Instantiation
 
@@ -172,7 +203,7 @@ func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an er
 
 **A generic parameter declared `let` takes a `const` value** of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>`. Such a parameter is a **value parameter**. Two arguments are the same exactly when they are the same value: the same integer, the same `Bool` or the same case, whatever `==` the type declares.
 
-**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a span's `reinterpret` does:
+**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` one included ([above](#type-parameters-with-no-known-size-opaque)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a span's `reinterpret` does:
 
 ```swift
 func reinterpret<U: Pod>(as _: Type<U>) -> Span<U>?   // binds U from the type value it is passed
@@ -208,7 +239,7 @@ func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any 
 
 ## Conformances
 
-**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
+**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-with-no-known-size-opaque)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
 ```swift
 protocol HasHp { var hp: Float { get set } }

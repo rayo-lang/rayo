@@ -98,6 +98,7 @@ conformance   = 'unsafe'? type                                    (* struct Queu
               | '~' type ;                                        (* only ~Copyable and ~Sendable: opt out of the derived conformance (01, 07) *)
 generic-params= '<' generic-param (',' generic-param)* ','? '>' ;
 generic-param = identifier (':' constraint ('&' constraint)*)? ('=' type)?                      (* a default only in a struct's, enum's or union's header (05) *)
+              | '@opaque' identifier ('=' type)?                                               (* may stand for a type with no known size; takes no constraints; a default as above (05) *)
               | 'let' identifier ':' type ;                                                    (* value parameter: Simd<Float, 4> *)
 where-clause  = 'where' requirement (',' requirement)* ;
 requirement   = type ':' constraint ('&' constraint)* | type ('==' | '!=') type   (* where A != B: two distinct types *)
