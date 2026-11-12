@@ -26,8 +26,8 @@ A change that builds on an open pull request is **stacked** on it: its base is t
 
 - **Start:** `gh stack init <branch> …`, bottom to top, adopts the branches, and `gh stack add <branch>` starts the next. Each pull request opens as `create-pr` says, within the limit above, and `gh stack link <pr> <pr> …` then links them. `gh stack submit` would open them past the limit, with generated titles and bodies, not create-pr's.
 - **Change:** after a commit to one branch, `gh stack rebase --no-trunk` rebases the branches above it without moving the stack onto a newer `main`, and `gh stack push` pushes them.
-- **Merge:** only the bottom pull request merges, as [Merging](#merging) says for a stacked one, since merging one higher up merges every one below it too. Once it has, GitHub retargets the next onto `main` and rebases the rest, and `gh stack sync` brings the local branches level and pushes them. Where it stops on a conflict, `gh stack rebase` and `gh stack push` finish the job; `gh stack sync --help` lists the other ways it stops. `main` takes only a branch that is up to date with it, so a bottom that `main` has moved past merges only once `gh stack rebase` and `gh stack push` have moved the stack onto it.
-- **Rebase rounds:** note each pull request's head and base before the bottom merges, and before `rebase` or `sync` rewrites them, for the review round each rebase is ([below](#reviewing)); CI then runs again on each new head.
+- **Merge:** the bottom pull request merges as [Merging](#merging) says for a stacked one. Once it has, GitHub retargets the next onto `main` and rebases the rest, and `gh stack sync` then brings the local branches level and pushes them. Where it stops on a conflict, `gh stack rebase` and `gh stack push` finish the job; `gh stack sync --help` lists the other ways it stops.
+- **Rebase rounds:** note each pull request's head and base before the bottom merges, and before `rebase` or `sync` rewrites them, then take the new ones from GitHub once the branches are pushed, for the review round each rebase is ([below](#reviewing)).
 
 ## Reviewing
 
@@ -53,8 +53,8 @@ gh pr merge <N> -R rayo-lang/rayo --auto --squash --match-head-commit <approved 
 - **The message file** is a plain paragraph, wrapped at 72 columns, that says what the change does, written from the diff as the pull request body is, with no section headings and no attribution.
 - **If GitHub refuses auto-merge because the pull request can already merge**, run the same command without `--auto`: it merges at once.
 - **Before you push to a pull request whose auto-merge is on, or edit its title or body**, turn it off with `gh pr merge <N> -R rayo-lang/rayo --disable-auto`, so nothing the next round hasn't approved can merge, whether a new head or the old subject and message. Turn it on again, with the subject and message that round's head and title call for, once that round approves.
-- **A pull request behind `main` doesn't merge**, since `main` takes only a branch that is up to date with it. Once `main` moves ahead of it, rebase it onto `main` and send it to the reviewer as a round; CI runs again on the new head, and auto-merge goes back on once that round approves.
-- **A stacked pull request merges by hand, through GitHub's asynchronous merge API**: GitHub refuses `gh pr merge` for one and has no auto-merge for it. Once it is the bottom of its stack, its review has approved its head, and CI has passed on that head, send the API the same head, subject and message as above, then poll the `uuid` it returns at `…/merge-async/<uuid>` until its `status` is no longer `pending`:
+- **Once `main` moves ahead of a pull request, rebase it onto `main`** and send it to the reviewer as a round, since `main` takes only a branch that is up to date with it; CI runs again on the new head. The bottom of a stack moves only with the branches above it, through `gh stack rebase` and `gh stack push`, a round for each pull request that moves.
+- **A stacked pull request merges by hand, through GitHub's asynchronous merge API**: GitHub refuses `gh pr merge` for one and has no auto-merge for it. Only the bottom of a stack merges, since GitHub merges every pull request below the one it is given along with it. Once its review has approved its head and CI has passed on that head, send the API the same head, subject and message as above:
 
   ```sh
   gh api --method PUT repos/rayo-lang/rayo/pulls/<N>/merge-async -f merge_method=squash \
@@ -62,5 +62,5 @@ gh pr merge <N> -R rayo-lang/rayo --auto --squash --match-head-commit <approved 
     -f commit_title="<pull request title> (#<N>)" -F commit_message=@<message file>
   ```
 
-  `gh stack merge` sends none of the three, so its squash commit would carry GitHub's default message, the pull request's commit messages one after another.
+  It answers with a `uuid` in `details`; poll `gh api repos/rayo-lang/rayo/pulls/<N>/merge-async/<uuid> --jq .status` until it says `merged`. `failed` means nothing merged, and `details.message` says why. `gh stack merge` sends none of the head, subject and message, so its squash commit would carry GitHub's default message, the pull request's commit messages one after another.
 - **A pull request whose CI fails doesn't merge.** Fix the failure in a new commit, and send it to the reviewer as a round.
