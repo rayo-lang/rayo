@@ -57,7 +57,8 @@ struct LocalTests {
          [ErrorCode.notDeclared(name: "nope"), .typeMismatch(expected: "Bool", found: "Int"),
           .typeMismatch(expected: "Int", found: "Bool")], ["nope", "sum(3)", "true"]),
         ("func main() {}\nfunc f(print: Int8) { print(1, 2) }",
-         [.notAType(name: "Int8"), .argumentCount(name: "print", takes: 1, passes: 2)], ["Int8", "print(1, 2)"]),
+         [.notAType(name: "Int8"), .noMatchingFunction(name: "print", arguments: "Int, Int")],
+         ["Int8", "print(1, 2)"]),
         ("func main() {\n    let x = 1\n    let x = 2\n    x(1)\n    x(true)\n}\nfunc x(_ a: Int) {}",
          [.alreadyDeclared(name: "x"), .typeMismatch(expected: "Int", found: "Bool")], ["x", "true"]),
     ])

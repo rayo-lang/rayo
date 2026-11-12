@@ -8,6 +8,7 @@ struct Declarations {
     private var functions: [String: [Signature]] = [:]
     private var structs: [String: StructID] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
+    private static let preludeFunctions: [Signature] = [.printInt, .printBool]
 
     /// Declares `signature`, unless a function with its name, labels and parameter types is declared already, and
     /// returns whether it did.
@@ -26,8 +27,10 @@ struct Declarations {
 
     /// Declares the prelude's functions whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
-        // A struct or a function of the file named `print` shadows the prelude's.
-        if functions[Signature.print.name] == nil && structs[Signature.print.name] == nil { _ = declare(.print) }
+        // A struct or a function of the file shadows every prelude function of its name, so the names are tested
+        // before any of the prelude's is declared.
+        let unshadowed = Self.preludeFunctions.filter { functions[$0.name] == nil && structs[$0.name] == nil }
+        for signature in unshadowed { _ = declare(signature) }
     }
 
     func functions(named name: String) -> [Signature] {

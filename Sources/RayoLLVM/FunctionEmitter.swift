@@ -231,10 +231,11 @@ struct FunctionEmitter {
         return builder.call(function, arguments)
     }
 
-    /// The LLVM function that `callee` names: the prelude's `print` is the runtime's.
+    /// The LLVM function that `callee` names: each of the prelude's `print`s is the runtime's.
     private func calledFunction(_ callee: Callee) -> Function {
         switch callee {
         case .printInt: runtime.printInt
+        case .printBool: runtime.printBool
         case .function(let id): functions[id.index]
         }
     }

@@ -27,6 +27,7 @@ struct Runtime: ~Copyable {
         // Declare the functions the program calls, and define the constant the runtime reads, in the program.
         functions = RuntimeFunctions(
             printInt: try Self.declare("rayo.print_int", from: runtime, in: program.module),
+            printBool: try Self.declare("rayo.print_bool", from: runtime, in: program.module),
             panic: try Self.declare("rayo.panic", from: runtime, in: program.module),
         )
         let exitCode = program.context.integerType(I32.self).constant(Int64(ProgramRuntime.panicExitCode))
