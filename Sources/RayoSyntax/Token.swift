@@ -8,7 +8,7 @@ public enum Keyword: String, Sendable {
 /// Punctuation and operators. The lexer takes the longest match.
 public enum Punct: String, Sendable, CaseIterable {
     case lparen = "(", rparen = ")", lbrace = "{", rbrace = "}"
-    case comma = ",", colon = ":", semicolon = ";", bang = "!"
+    case comma = ",", colon = ":", semicolon = ";", bang = "!", dot = "."
     case arrow = "->", assign = "="
     case plus = "+", minus = "-", star = "*", slash = "/", percent = "%"
     case less = "<", greater = ">", lessEqual = "<=", greaterEqual = ">="
@@ -68,6 +68,15 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
         case .identifier(let name): name
         case .keyword(let keyword): keyword.rawValue
         default: nil
+        }
+    }
+
+    /// How the token is spelled as a member's name after a `.`, when it can be one: any identifier, keyword or
+    /// integer literal is one.
+    var memberSpelling: String? {
+        switch kind {
+        case .intLiteral(let value): String(value)
+        default: labelSpelling
         }
     }
 }

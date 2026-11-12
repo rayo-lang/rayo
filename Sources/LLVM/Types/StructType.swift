@@ -10,6 +10,9 @@ public struct StructType: TypeHandle, Equatable {
 
     public var anyType: AnyType { AnyType(ref) }
 
+    /// The value of the struct whose fields hold no particular bits, which `insertValue` gives its fields one by one.
+    public var poison: AggregateValue { AggregateValue(unchecked: LLVMGetPoison(ref)) }
+
     /// Gives the struct `fields`, in order. A packed struct has no padding between its fields.
     public func setFields(_ fields: [any TypeHandle], packed: Bool) {
         var fields = fields.map { Optional($0.anyType.ref) }

@@ -2,7 +2,7 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks a call of a function by name: which function it reaches, and its arguments against that function's
+/// Checks a call by name: which function or struct's initializer it reaches, and a function's arguments against its
 /// parameters.
 struct CallChecker {
     /// A function that a call reaches, and the call's arguments, checked against its parameters.
@@ -15,35 +15,21 @@ struct CallChecker {
 
     private var errors: ErrorList { expressions.file.errors }
 
-    /// Checks `name(arguments)`. Every argument is checked, whether or not the call matches a function.
+    /// Checks `name(arguments)`. Every argument is checked, whether or not the call reaches a function or a struct.
     func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
               in range: SourceRange) -> CheckedExpr? {
-        // Find the function the call reaches, with its arguments checked against it.
-        let candidates = functions(named: name, at: nameRange)
-        // A call that reaches no function, or whose arguments fit none, was reported.
-        guard let match = match(arguments, among: candidates, in: range) else { return nil }
-
-        // A result type that isn't known was reported in the function that gives it, or here as a cycle.
-        guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
-        let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
-        return CheckedExpr(kind: kind, type: result, range: range)
-    }
-
-    /// The functions a call of `name` reaches, reporting it when it reaches none, unless a declaration of the name
-    /// failed.
-    private func functions(named name: String, at range: SourceRange) -> [Signature] {
         switch expressions.names.lookUp(name, for: .call) {
+        // A struct's name calls the struct's primary initializer.
+        case .structure(let id):
+            return InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
+
         // The name's functions are the call's candidates.
         case .functions(let functions):
-            return functions
-
-        // A call of a struct's name would make the struct's value, through an initializer rayoc doesn't support.
-        case .structure:
-            errors.report(.structInitializer, at: range)
+            return call(among: functions, passing: arguments, in: range)
 
         // A local can't be called.
         case .inScope(.local):
-            errors.report(.notAFunction(name: name), at: range)
+            errors.report(.notAFunction(name: name), at: nameRange)
 
         // A local whose declaration failed was reported there.
         case .inScope(.failed):
@@ -51,9 +37,24 @@ struct CallChecker {
 
         // Nothing has the name.
         case nil:
-            errors.report(.notDeclared(name: name), at: range)
+            errors.report(.notDeclared(name: name), at: nameRange)
         }
-        return []
+
+        // A call that reaches neither still has each argument's own errors reported.
+        checkValues(of: arguments)
+        return nil
+    }
+
+    /// Checks a call of one of `candidates`, the functions of one name, that passes `arguments`.
+    private func call(among candidates: [Signature], passing arguments: [Argument],
+                      in range: SourceRange) -> CheckedExpr? {
+        // A call whose arguments fit no candidate was reported.
+        guard let match = match(arguments, among: candidates, in: range) else { return nil }
+
+        // A result type that isn't known was reported in the function that gives it, or here as a cycle.
+        guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
+        let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
+        return CheckedExpr(kind: kind, type: result, range: range)
     }
 
     /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters.

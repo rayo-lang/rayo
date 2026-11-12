@@ -2,11 +2,13 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// The names a function body sees beyond its own locals: the file's own structs and functions, the prelude's
-/// functions that none of them shadows, and the prelude's types that no struct shadows.
+/// The names a function body sees beyond its own locals: the file's own structs, with their fields, and functions,
+/// the prelude's functions that none of them shadows, and the prelude's types that no struct shadows.
 struct Declarations {
     private var functions: [String: [Signature]] = [:]
     private var structs: [String: StructID] = [:]
+    /// Each struct's fields, in the order the struct declares them.
+    private var fields: [StructID: [DeclaredField]] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
 
     /// Declares `signature`, unless a function with its name, labels and parameter types is declared already, and
@@ -24,6 +26,11 @@ struct Declarations {
         structs[id.name] = id
     }
 
+    /// Declares `fields` as the fields of the struct `id`, in the order it declares them.
+    mutating func declare(_ fields: [DeclaredField], of id: StructID) {
+        self.fields[id] = fields
+    }
+
     /// Declares the prelude's functions whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
         // A struct or a function of the file named `print` shadows the prelude's.
@@ -36,6 +43,13 @@ struct Declarations {
 
     func structure(named name: String) -> StructID? {
         structs[name]
+    }
+
+    /// The fields of the struct `id`, whose fields must be declared already.
+    func fields(of id: StructID) -> [DeclaredField] {
+        // The checker declares every struct's fields before it checks a body, which alone asks for them.
+        guard let fields = fields[id] else { preconditionFailure("'\(id.name)' has no fields declared") }
+        return fields
     }
 
     /// The type that `type` names, or nil after reporting a name that names no type.

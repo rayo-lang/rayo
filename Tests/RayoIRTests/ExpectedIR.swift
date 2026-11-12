@@ -15,6 +15,11 @@ func read(_ index: Int) -> Operand {
     .read(local(index))
 }
 
+/// An operand that reads the field that `fields` lead to, outermost first, inside the local at `index`.
+func read(_ index: Int, fields: Int...) -> Operand {
+    .read(Place(local: LocalID(index: index), fields: fields, range: nowhere))
+}
+
 /// An operand that takes the value of the local at `index`.
 func move(_ index: Int) -> Operand {
     .move(local(index))

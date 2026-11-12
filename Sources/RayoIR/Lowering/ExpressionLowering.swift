@@ -12,7 +12,7 @@ enum ExpressionLowering {
     }
 
     /// Lowers `expr` to an operand that holds its value, computing it into a new temporary of `builder` unless it is
-    /// a constant or a local.
+    /// a constant, a local or a field of one.
     static func operand(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Operand {
         switch expr.kind {
         // An integer is a constant operand.
@@ -29,17 +29,39 @@ enum ExpressionLowering {
         // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range, in: &builder)
-        // Any other operation, and a call, is computed into a temporary.
-        case .unary, .binary, .call:
-            lowerIntoTemporary(expr, in: &builder)
+        // A field is read where it lies, in its struct's place.
+        case .field:
+            .read(place(of: expr, in: &builder))
+        // Any other operation, a call, and a struct's value, is computed into a temporary.
+        case .unary, .binary, .call, .structure:
+            .read(lowerIntoTemporary(expr, in: &builder))
+        }
+    }
+
+    /// Lowers `expr` to the place that holds its value: a local, a field inside the place of its struct, or else a
+    /// new temporary of `builder` that `expr` is computed into.
+    private static func place(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Place {
+        switch expr.kind {
+        // A local that the checker reads is its own place.
+        case .local(let local):
+            return Place(local: local, range: expr.range)
+
+        // A field lies inside the place of the struct that holds it.
+        case .field(let structure, let index):
+            let outer = place(of: structure, in: &builder)
+            return Place(local: outer.local, fields: outer.fields + [index], range: expr.range)
+
+        // Any other value is held in a temporary.
+        default:
+            return lowerIntoTemporary(expr, in: &builder)
         }
     }
 
     /// Lowers `expr` to the operation that computes its value, computing its operands into `builder` first.
     private static func rvalue(of expr: CheckedExpr, in builder: inout FunctionBuilder) -> Rvalue {
         switch expr.kind {
-        // A constant or a local is an operand as it is, and so is `&&` or `||`, which lowers to branches.
-        case .intLiteral, .boolLiteral, .local, .move, .binary(.and, _, _), .binary(.or, _, _):
+        // A constant, a local or a field is an operand as it is, and so is `&&` or `||`, which lowers to branches.
+        case .intLiteral, .boolLiteral, .local, .move, .field, .binary(.and, _, _), .binary(.or, _, _):
             .use(operand(of: expr, in: &builder))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
@@ -50,14 +72,17 @@ enum ExpressionLowering {
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
             .call(callee, arguments: arguments.map { operand(of: $0, in: &builder) })
+        // And the values of a struct's fields, in the order the struct declares them.
+        case .structure(let id, let fields):
+            .structure(id, fields: fields.map { operand(of: $0, in: &builder) })
         }
     }
 
-    /// Computes `expr` into a new temporary of `builder`, and returns an operand that reads it.
-    private static func lowerIntoTemporary(_ expr: CheckedExpr, in builder: inout FunctionBuilder) -> Operand {
+    /// Computes `expr` into a new temporary of `builder`, and returns the temporary's place.
+    private static func lowerIntoTemporary(_ expr: CheckedExpr, in builder: inout FunctionBuilder) -> Place {
         let temporary = builder.newTemporary(expr.type, at: expr.range)
         compute(expr, into: temporary, in: &builder)
-        return .read(temporary)
+        return temporary
     }
 
     /// Lowers `left && right` or `left || right` into branches, and returns an operand that holds the result: `left`

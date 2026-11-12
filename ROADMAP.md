@@ -18,8 +18,7 @@ The first version proves the language end to end with the smallest set of featur
 
 These are still to do:
 
-- **Making structs.** A struct is made with its primary initializer, as `Enemy(hp: 100, armor: 5)`. Field defaults wait.
-- **Fields.** A program reads a field, nested ones included, and assigns a field of a `var` local. Moving a field out leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
+- **Fields.** A program reads nested fields, and assigns a field of a `var` local. Moving a field out leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
 - **`print(Bool)`.** It prints `true` or `false`.
 - **Issues.**
   - [#149](https://github.com/rayo-lang/rayo/issues/149), [#178](https://github.com/rayo-lang/rayo/issues/178) and [#179](https://github.com/rayo-lang/rayo/issues/179) in the compiler;
@@ -35,6 +34,7 @@ These features already run:
 - `if`, `else`, `while`, `break` and `continue`;
 - moves and `copy`, with the checks that a local is assigned before it is used;
 - struct declarations, whose names are the types of locals, parameters and results, and `copy` of a struct;
+- making a struct with its primary initializer, as `Enemy(hp: 100, armor: 5)`, which takes its arguments owned, and reading a field of a struct where a borrow of the field suffices, as `e.hp - 5` or `print(e.hp)`;
 - `print(Int)`.
 
 ## v0.1.5: Float

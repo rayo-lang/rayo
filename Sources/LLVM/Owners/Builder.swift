@@ -91,6 +91,14 @@ public struct Builder: ~Copyable {
         AnyValue(LLVMBuildExtractValue(ref, aggregate.ref, UInt32(index), ""))
     }
 
+    /// Builds `insertvalue`, which gives `aggregate` with `value` in place of its field at `index`. `value` must be of
+    /// that field's type.
+    public func insertValue(
+        _ value: some ValueHandle, into aggregate: AggregateValue, at index: Int,
+    ) -> AggregateValue {
+        AggregateValue(unchecked: LLVMBuildInsertValue(ref, aggregate.ref, value.anyValue.ref, UInt32(index), ""))
+    }
+
     /// Builds `call`, which calls `function` with `arguments`, and gives its result, or nil where it returns
     /// nothing.
     @discardableResult
@@ -118,6 +126,12 @@ public struct Builder: ~Copyable {
         let load = LLVMBuildLoad2(ref, type.anyType.ref, pointer.ref, "")!
         LLVMSetAlignment(load, UInt32(alignment))
         return AnyValue(load)
+    }
+
+    /// Builds `getelementptr`, which gives a pointer to the field at `index` of the value of `type` that `pointer`
+    /// points to.
+    public func fieldPointer(to index: Int, of type: StructType, at pointer: PointerValue) -> PointerValue {
+        PointerValue(LLVMBuildStructGEP2(ref, type.ref, pointer.ref, UInt32(index), "")!)
     }
 
     /// Builds `store`, which stores `value` where `pointer` points, aligned to `alignment` bytes.

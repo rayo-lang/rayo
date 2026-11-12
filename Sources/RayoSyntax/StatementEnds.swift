@@ -20,8 +20,8 @@ enum StatementEnds {
                 if brackets.last == .lparen { continue }
                 // A line that ends in a binary or assignment operator, `->`, `(` or `{` runs on into the next.
                 if let previous = result.last, continuesLine(previous) { continue }
-                // A line that starts with `->`, `{`, `else`, or a binary operator other than `-` joins the line above;
-                // a `-` there starts a negation.
+                // A line that starts with `.`, `->`, `{`, `else`, or a binary operator other than `-` joins the line
+                // above; a `-` there starts a negation.
                 if index + 1 < raw.count, joinsLine(raw[index + 1]) { continue }
                 // A blank line, or a newline before the first statement, ends nothing.
                 if result.isEmpty || result.last?.kind == .newline { continue }
@@ -51,10 +51,11 @@ enum StatementEnds {
         case .punct(.minus):
             return false
 
-        // A binary operator, `->` or `{` can't begin a statement, so it joins the line above, where a `{` opens that
-        // line's block; other punctuation, such as `(` or `!`, can begin one.
+        // A `.`, a binary operator, `->` or `{` can't begin a statement, so it joins the line above, where a `.` takes
+        // a member of that line's value and a `{` opens its block; other punctuation, such as `(` or `!`, can begin
+        // one.
         case .punct(let punct):
-            return punct.binaryOperator != nil || punct == .arrow || punct == .lbrace
+            return punct.binaryOperator != nil || [.dot, .arrow, .lbrace].contains(punct)
 
         // An `else` goes on from the `if` above it.
         case .keyword(.else):

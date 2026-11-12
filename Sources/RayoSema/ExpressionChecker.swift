@@ -43,9 +43,13 @@ struct ExpressionChecker {
             guard let left, let right else { return nil }
             return binary(op, left, right, spelled: op.rawValue, in: expr.range)
 
-        // A call reaches one of the functions its name names.
+        // A call reaches one of the functions its name names, or the initializer of the struct it names.
         case .call(let name, let nameRange, let arguments):
             return CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range)
+
+        // A member of a struct value is one of its fields.
+        case .member(let base, let name, let nameRange):
+            return field(named: name, at: nameRange, of: base, in: expr.range)
 
         // A `copy` reads the local and leaves its value in it, and it covers the whole `copy name`.
         case .copy(let name, let nameRange):
@@ -69,11 +73,16 @@ struct ExpressionChecker {
         return false
     }
 
-    /// Checks `expr` as the value a declaration, an assignment, a `return` or `_ =` takes, which moves a local's
-    /// value out of it.
+    /// Checks `expr` as the value a declaration, an assignment, a `return`, `_ =` or a struct's initializer takes,
+    /// which moves a local's value out of it.
     func checkTaken(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported already.
         guard let value = check(expr) else { return nil }
+        // Taking a field would move it out of its struct, which rayoc doesn't support.
+        if case .field = value.kind {
+            errors.report(.fieldMove, at: value.range)
+            return nil
+        }
         // A `copy` of a local checks to a read of it too, so only a bare name moves.
         guard case .name(let name) = expr.kind, case .local(let local) = value.kind else { return value }
         return move(local, named: name, readBy: value)
@@ -120,6 +129,27 @@ struct ExpressionChecker {
             errors.report(.notDeclared(name: name), at: range)
             return nil
         }
+    }
+
+    /// Checks `base.name`, where the source writes `name` at `nameRange`, as a read of the field `name` of the struct
+    /// value `base`, which keeps the field.
+    private func field(named name: String, at nameRange: SourceRange, of base: Expr,
+                       in range: SourceRange) -> CheckedExpr? {
+        // A value that failed was reported already.
+        guard let value = check(base) else { return nil }
+
+        // Find the field among the struct's; a value of any other type has none.
+        let fields: [DeclaredField] =
+            if case .structure(let id) = value.type { file.declarations.fields(of: id) } else { [] }
+        // A name that names no field of the value's type is reported.
+        guard let index = fields.firstIndex(where: { $0.name == name }) else {
+            errors.report(.noSuchField(type: "\(value.type)", field: name), at: nameRange)
+            return nil
+        }
+
+        // A field whose declaration failed was reported there.
+        guard let type = fields[index].type else { return nil }
+        return CheckedExpr(kind: .field(value, index: index), type: type, range: range)
     }
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a

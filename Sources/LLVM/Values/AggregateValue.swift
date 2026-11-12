@@ -4,6 +4,11 @@ package import CLLVM
 public struct AggregateValue: ValueHandle, Equatable {
     package let ref: LLVMValueRef
 
+    /// Takes `ref` as an aggregate, which it must be.
+    package init(unchecked ref: LLVMValueRef) {
+        self.ref = ref
+    }
+
     /// Returns `value` as an aggregate, or nil where it is neither a struct nor an array.
     public init?(_ value: some ValueHandle) {
         // A value of any other kind has no fields.

@@ -62,6 +62,7 @@ private extension Rvalue {
         case .unary(let op, let operand): .unary(op, operand.erasingRange)
         case .binary(let op, let left, let right): .binary(op, left.erasingRange, right.erasingRange)
         case .call(let callee, let arguments): .call(callee, arguments: arguments.map(\.erasingRange))
+        case .structure(let id, let fields): .structure(id, fields: fields.map(\.erasingRange))
         }
     }
 }
@@ -89,6 +90,6 @@ private extension Operand {
 
 private extension Place {
     var erasingRange: Place {
-        Place(local: local, range: nowhere)
+        Place(local: local, fields: fields, range: nowhere)
     }
 }

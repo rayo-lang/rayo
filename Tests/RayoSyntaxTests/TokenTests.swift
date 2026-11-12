@@ -21,6 +21,10 @@ struct TokenTests {
         #expect(tokens("a>b") == ["a", ">", "b"])
     }
 
+    @Test func `a '.' is a token of its own, between a value and its member`() {
+        #expect(tokens("e.hp.max") == ["e", ".", "hp", ".", "max"])
+    }
+
     @Test func `keywords and identifiers`() {
         let (lexed, _) = Lexer.tokenize("let keep copy struct")
         #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
@@ -43,7 +47,7 @@ struct TokenTests {
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [
-        "#", ".", "[", "?", "$", "`", "é",
+        "#", "[", "?", "$", "`", "é",
     ])
     func unexpected(character: String) {
         let (lexed, diagnostics) = Lexer.tokenize("a \(character) b")

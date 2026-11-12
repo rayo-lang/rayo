@@ -3,19 +3,21 @@ import RayoSource
 import RayoSyntax
 
 /// Checks a file's structs: that each has a name of its own, that its fields have names of their own and types that
-/// hold values, and that none contains itself. It declares each struct's type.
+/// hold values, and that none contains itself. It declares each struct's type and fields.
 struct StructChecker {
     /// A struct whose declaration took its name, with the types of its fields, nil where one isn't known.
     private struct DeclaredStruct {
         var id: StructID
         var declaration: StructDecl
         var fieldTypes: [RayoType?]
+        /// The fields as a function body sees them, each without a type where its name or its type failed.
+        var fields: [DeclaredField]
     }
 
     let errors: ErrorList
 
-    /// Declares the types of `structs` in `declarations`, and returns the types they make, or nil when they can't be
-    /// laid out. A struct whose name `names` gives to functions is reported, and still declared.
+    /// Declares the types and fields of `structs` in `declarations`, and returns the types they make, or nil when
+    /// they can't be laid out. A struct whose name `names` gives to functions is reported, and still declared.
     func declare(
         _ structs: [StructDecl], among names: TopLevelNames, in declarations: inout Declarations,
     ) -> TypeTable? {
@@ -23,6 +25,7 @@ struct StructChecker {
 
         // A field may name any struct, so every name is declared before a field is checked.
         let declared = checkStructs(structs, withIDs: ids, in: declarations)
+        declareFields(of: declared, in: &declarations)
 
         guard !reportSelfContaining(among: declared) else { return nil }
 
@@ -90,26 +93,40 @@ struct StructChecker {
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
         for (declaration, id) in zip(structs, ids) {
-            let fieldTypes = checkFields(of: declaration, in: declarations)
+            let (fieldTypes, fields) = checkFields(of: declaration, in: declarations)
             // A struct with no ID has its fields checked, and is declared no further.
             guard let id else { continue }
             // IDs number the structs that have them in order, so each struct lies at its ID's index.
             precondition(id.index == declared.count, "a declared struct lies at its ID's index")
-            declared.append(DeclaredStruct(id: id, declaration: declaration, fieldTypes: fieldTypes))
+            declared.append(DeclaredStruct(id: id, declaration: declaration, fieldTypes: fieldTypes, fields: fields))
         }
         return declared
     }
 
-    /// Checks the fields of `declaration`, and returns their types, nil for each whose type isn't known.
-    private func checkFields(of declaration: StructDecl, in declarations: Declarations) -> [RayoType?] {
+    /// Checks the fields of `declaration`, and returns their types, nil for each whose type isn't known, and the
+    /// fields as a function body sees them.
+    private func checkFields(
+        of declaration: StructDecl, in declarations: Declarations,
+    ) -> (types: [RayoType?], fields: [DeclaredField]) {
         var names: Set<String> = []
         var types: [RayoType?] = []
+        var fields: [DeclaredField] = []
         for field in declaration.fields {
-            checkName(of: field, besides: &names)
+            let hasOwnName = checkName(of: field, besides: &names)
             reportDefault(of: field)
-            types.append(checkType(of: field, in: declarations))
+            let type = checkType(of: field, in: declarations)
+            types.append(type)
+            // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.
+            fields.append(DeclaredField(name: field.name, type: hasOwnName ? type : nil))
         }
-        return types
+        return (types, fields)
+    }
+
+    /// Declares the fields of each of `structs`, so that a function body can make the struct and read its fields.
+    private func declareFields(of structs: [DeclaredStruct], in declarations: inout Declarations) {
+        for structure in structs {
+            declarations.declare(structure.fields, of: structure.id)
+        }
     }
 
     /// Reports `field`'s default value, if it has one, since rayoc doesn't support a field's default.
@@ -118,15 +135,17 @@ struct StructChecker {
         if let defaultValue = field.defaultValue { errors.report(.fieldDefault, at: defaultValue.range) }
     }
 
-    /// Checks that `field`'s name is neither `_` nor one of `names`, the names of the fields before it, reporting
-    /// it when it is, and adds the name to `names`.
-    private func checkName(of field: FieldDecl, besides names: inout Set<String>) {
+    /// Whether `field`'s name is neither `_` nor one of `names`, the names of the fields before it, reporting it
+    /// when it is. Adds the name to `names`.
+    private func checkName(of field: FieldDecl, besides names: inout Set<String>) -> Bool {
         // A field named `_` is reported, and its name is checked no further.
-        guard isNaming(field.name, at: field.nameRange) else { return }
+        guard isNaming(field.name, at: field.nameRange) else { return false }
         // A field before it has the name already.
-        if !names.insert(field.name).inserted {
+        guard names.insert(field.name).inserted else {
             errors.report(.alreadyDeclared(name: field.name), at: field.nameRange)
+            return false
         }
+        return true
     }
 
     /// Checks `field`'s type, and returns it, nil where it isn't known. Reports a field with neither a type nor a

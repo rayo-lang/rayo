@@ -19,7 +19,7 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `'copy' identifier`, `('-' | '!') unary`, or a primary expression.
+    /// `'-' int-literal`, `'copy' identifier`, `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -34,15 +34,29 @@ extension Parser {
             let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingCopiedName)
             return Expr(kind: .copy(name: name, nameRange: nameRange), range: range(from: start))
         }
-        // An expression without a `-` or `!` in front is a primary one.
+        // An expression without a `-` or `!` in front is a postfix one.
         guard case .punct(let punct) = current.kind, let op = punct.unaryOperator else {
-            return try parsePrimary()
+            return try parsePostfix()
         }
 
         // A `-` or `!` applies to the unary expression after it.
         advance()
         let operand = try parseUnary()
         return Expr(kind: .unary(op, operand), range: range(from: start))
+    }
+
+    /// `primary ('.' member)*`.
+    private mutating func parsePostfix() throws(ParseFailure) -> Expr {
+        var value = try parsePrimary()
+
+        // Each `.` takes a member of the value before it, so `a.b.c` is the `c` of `a.b`.
+        while consume(.dot) {
+            // A member's name is an identifier, a keyword or an integer literal; any other token is reported.
+            guard let name = current.memberSpelling else { throw fail(ErrorCode.missingMemberName) }
+            let nameRange = advance().range
+            value = Expr(kind: .member(value, name: name, nameRange: nameRange), range: value.range.to(nameRange))
+        }
+        return value
     }
 
     private mutating func parsePrimary() throws(ParseFailure) -> Expr {
