@@ -16,8 +16,11 @@ public enum CheckedStmt: Sendable {
     case returnStmt(CheckedExpr?)
 }
 
-/// A place that a statement writes, and where the source names it.
+/// A place that a statement writes, a local or a field inside it, and where the source names it.
 public struct CheckedPlace: Sendable {
     public var local: LocalID
+    /// The fields that lead from the local to the place, outermost first, each by its place in its struct's
+    /// declaration; none where the place is the whole local.
+    public var fields: [Int] = []
     public var range: SourceRange
 }

@@ -20,8 +20,9 @@ struct InitializationState: Equatable {
         return joined
     }
 
-    /// Applies what `block` does to the locals. It hands `use` each operand that names a local, and `store` each
-    /// statement's destination.
+    /// Applies what `block` does to the locals. It hands `use` each operand that names a local, and each statement's
+    /// destination inside a local, which needs the rest of the local's value there; it hands `store` each destination
+    /// that is a whole local.
     mutating func apply(_ block: BasicBlock, use: PlaceVisitor = { _, _ in }, store: PlaceVisitor = { _, _ in }) {
         for statement in block.statements {
             apply(statement, use: use, store: store)
@@ -37,8 +38,15 @@ struct InitializationState: Equatable {
         // A computation uses its operands, in order, before it stores to its destination.
         case .compute(let destination, let value, _):
             value.operands.forEach { apply($0, use: use) }
-            // A computation with a destination gives its local a value.
-            if let destination { assign(destination, store: store) }
+            // A computation with no destination drops its value.
+            guard let destination else { return }
+            if destination.fields.isEmpty {
+                // A store to a whole local gives it a value.
+                assign(destination, store: store)
+            } else {
+                // A store to a field changes part of a value the local must already hold, and leaves it holding one.
+                use(destination, locals[destination.local.index])
+            }
 
         // A declaration leaves the local without a value, even one an earlier pass of a loop gave it.
         case .declare(let local):

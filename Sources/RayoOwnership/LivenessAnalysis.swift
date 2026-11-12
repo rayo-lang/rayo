@@ -1,20 +1,24 @@
 import RayoIR
 
-/// The backward data flow of which locals of a function hold a value that some code reads later, through the
-/// function's control-flow graph.
+/// The backward data flow of which locals of a function, and which fields inside them, hold a value that some code
+/// reads later, through the function's control-flow graph.
 struct LivenessAnalysis {
     /// The state at the exit of each block, indexed by `BlockID`; nil for a block that no path from the function's
     /// entry reaches.
     private(set) var exitStates: [LivenessState?]
 
-    init(_ function: IRFunction) {
-        let exitStates = Self.exitStates(of: function)
-        let reached = Self.reachedBlocks(of: function)
+    /// The analysis of the function whose places `places` gives the types of.
+    init(of places: PlaceTypes) {
+        let exitStates = Self.exitStates(in: places)
+        let reached = Self.reachedBlocks(of: places.function)
         self.exitStates = exitStates.indices.map { reached.contains($0) ? exitStates[$0] : nil }
     }
 
-    /// Solves the state at the exit of each block of `function`, indexed by `BlockID`.
-    private static func exitStates(of function: IRFunction) -> [LivenessState] {
+    /// Solves the state at the exit of each block of the function whose places `places` gives the types of, indexed
+    /// by `BlockID`.
+    private static func exitStates(in places: PlaceTypes) -> [LivenessState] {
+        let function = places.function
+
         // No block starts out reading any local, and the passes below add each read they find.
         var entryStates = Array(repeating: LivenessState(), count: function.blocks.count)
         var exitStates = entryStates
@@ -29,7 +33,7 @@ struct LivenessAnalysis {
                     $0.union(entryStates[$1.index])
                 }
                 entryStates[index] = exitStates[index]
-                entryStates[index].apply(backwardsThrough: block)
+                entryStates[index].apply(backwardsThrough: block, in: places)
             }
         } while entryStates != previousEntryStates
         return exitStates

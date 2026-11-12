@@ -71,6 +71,54 @@ struct StructLoweringTests {
         #expect(main == expected)
     }
 
+    @Test func `an assignment to a field computes its value into the field's place, and a compound one reads it there`()
+        throws(RejectedSource) {
+        let main = try loweredMain(withEnemy: "var e = Enemy(hp: 1, armor: 2)\ne.hp = 3\ne.hp -= e.armor\nprint(e.hp)")
+        let expected = mainFunction(
+            locals: [varLocal("e", .structure(enemy))],
+            block(
+                declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
+                compute(0, fields: 0, value: .use(int(3))),
+                compute(0, fields: 0, value: .binary(.subtract, read(0, fields: 0), read(0, fields: 1))),
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
+    @Test func `an assignment to a field inside a field computes its value into the place its fields lead to`()
+        throws(RejectedSource) {
+        let source = """
+            func main() {
+                var s = Shot(range: 4, hit: Hit(damage: 7))
+                s.hit.damage = 9
+                print(s.range)
+                print(s.hit.damage)
+            }
+            struct Shot(let range: Int, var hit: Hit)
+            struct Hit(var damage: Int)
+            """
+        let main = try lowered(source).functions[0]
+
+        let shot = StructID(index: 0, name: "Shot")
+        let hit = StructID(index: 1, name: "Hit")
+        let expected = mainFunction(
+            locals: [varLocal("s", .structure(shot)), .temporary(.structure(hit))],
+            block(
+                declare(0),
+                compute(1, .structure(hit, fields: [int(7)])),
+                compute(0, .structure(shot, fields: [int(4), read(1)])),
+                // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
+                compute(0, fields: 1, 0, value: .use(int(9))),
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                compute(nil, .call(.printInt, arguments: [read(0, fields: 1, 0)])),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
     @Test func `a struct made inside another is computed into a temporary, and a field is read through its fields`()
         throws(RejectedSource) {
         let source = """

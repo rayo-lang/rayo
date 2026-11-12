@@ -122,7 +122,9 @@ struct StructChecker {
         for structure in structs {
             // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.
             let fields = zip(structure.declaration.fields, structure.fields).map { declaration, checked in
-                DeclaredField(name: declaration.name, type: checked.hasOwnName ? checked.type : nil)
+                DeclaredField(
+                    name: declaration.name, kind: declaration.kind, type: checked.hasOwnName ? checked.type : nil,
+                )
             }
             declarations.declare(fields, of: structure.id)
         }

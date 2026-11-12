@@ -139,6 +139,54 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `a field is stored in the element that its struct's layout puts it in, aligned as its type is`() throws {
+        // `main` stores its Bool in the Pair's Bool, which the Pair declares first.
+        let flag = Place(local: LocalID(index: 0), fields: [0], range: nowhere)
+        let main = mainFunction(locals: [pairType, .bool], [
+            BasicBlock(
+                statements: [.compute(destination: flag, value: .use(read(1)), range: nowhere)],
+                terminator: .return(nil),
+            ),
+        ])
+
+        // The store writes one byte to the Pair's second element, after the value is computed.
+        try withEmitted(program(of: [main], types: pairTable)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %2 = load i1, ptr %1, align 1
+                  %3 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
+                  store i1 %2, ptr %3, align 1
+                """))
+        }
+    }
+
+    @Test func `a field inside a field is stored by stepping into each struct's element that holds the next`() throws {
+        // `main` stores its Int in the Int of the Pair that a Holder declares second.
+        let holderTable = TypeTable(structs: pairTable.structs + [
+            StructType(name: "Holder", fields: [Field(name: "flag", type: .bool), Field(name: "pair", type: pairType)]),
+        ])
+        let holderType = RayoType.structure(StructID(index: 1, name: "Holder"))
+        let count = Place(local: LocalID(index: 0), fields: [1, 1], range: nowhere)
+        let main = mainFunction(locals: [holderType, .int], [
+            BasicBlock(
+                statements: [.compute(destination: count, value: .use(read(1)), range: nowhere)],
+                terminator: .return(nil),
+            ),
+        ])
+
+        // The Holder lays its Pair out first, and the Pair its Int first too, so the store steps into the first
+        // element of each.
+        try withEmitted(program(of: [main], types: holderTable)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %2 = load i64, ptr %1, align 8
+                  %3 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
+                  %4 = getelementptr inbounds nuw %Pair, ptr %3, i32 0, i32 0
+                  store i64 %2, ptr %4, align 8
+                """))
+        }
+    }
+
     /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding.
     private let pairTable = TypeTable(structs: [
         StructType(name: "Pair", fields: [Field(name: "flag", type: .bool), Field(name: "count", type: .int)]),
