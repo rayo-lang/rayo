@@ -9,6 +9,11 @@ struct ExpressionChecker {
 
     private var errors: ErrorList { file.errors }
 
+    /// The name an error gives `type`.
+    func typeName(of type: RayoType) -> TypeName {
+        file.declarations.typeName(of: type)
+    }
+
     func check(_ expr: Expr) -> CheckedExpr? {
         switch expr.kind {
         // An integer literal is an Int, if it fits in one.
@@ -69,7 +74,7 @@ struct ExpressionChecker {
     func expect(_ expr: CheckedExpr, _ type: RayoType) -> Bool {
         // A value of the type passes.
         if expr.type == type { return true }
-        errors.report(.typeMismatch(expected: "\(type)", found: "\(expr.type)"), at: expr.range)
+        errors.report(.typeMismatch(expected: typeName(of: type), found: typeName(of: expr.type)), at: expr.range)
         return false
     }
 
@@ -150,7 +155,7 @@ struct ExpressionChecker {
             if case .structure(let id) = value.type { file.declarations.fields(of: id) } else { [] }
         // A name that names no field of the value's type is reported.
         guard let index = fields.firstIndex(where: { $0.name == name }) else {
-            errors.report(.noSuchField(type: "\(value.type)", field: name), at: nameRange)
+            errors.report(.noSuchField(type: typeName(of: value.type), field: name), at: nameRange)
             return nil
         }
 
@@ -187,12 +192,15 @@ struct ExpressionChecker {
         case .equal, .notEqual:
             // Comparing values of two types is reported.
             guard left.type == right.type else {
-                errors.report(.operandsDiffer(op: spelled, left: "\(left.type)", right: "\(right.type)"), at: range)
+                let code = ErrorCode.operandsDiffer(
+                    op: spelled, left: typeName(of: left.type), right: typeName(of: right.type),
+                )
+                errors.report(code, at: range)
                 return nil
             }
             // Comparing values of a type that doesn't compare is reported.
             guard isComparable(left.type) else {
-                errors.report(.incomparable(op: spelled, type: "\(left.type)"), at: range)
+                errors.report(.incomparable(op: spelled, type: typeName(of: left.type)), at: range)
                 return nil
             }
             result = .bool
@@ -215,7 +223,9 @@ struct ExpressionChecker {
                           are type: RayoType, in range: SourceRange) -> Bool {
         // Two operands of the type pass.
         if left.type == type && right.type == type { return true }
-        let code = ErrorCode.operandTypes(op: spelled, needs: "\(type)", left: "\(left.type)", right: "\(right.type)")
+        let code = ErrorCode.operandTypes(
+            op: spelled, needs: typeName(of: type), left: typeName(of: left.type), right: typeName(of: right.type),
+        )
         errors.report(code, at: range)
         return false
     }
@@ -224,7 +234,7 @@ struct ExpressionChecker {
     private func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
         // A literal that doesn't fit is reported.
         guard let value else {
-            errors.report(.literalExceedsInt, at: range)
+            errors.report(.literalExceedsInt(type: typeName(of: .int)), at: range)
             return nil
         }
         return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)

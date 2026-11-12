@@ -12,7 +12,7 @@ struct ProgramTests {
     }
 
     @Test("a 'main' returns Void", arguments: [
-        ("func main() -> Int { 0 }", ErrorCode.mainReturnsNonVoid),
+        ("func main() -> Int { 0 }", ErrorCode.mainReturnsNonVoid(type: "Void")),
         ("func main() -> Int32 {}", .notAType(name: "Int32")),
     ])
     func main(source: String, expected: ErrorCode) {
@@ -46,7 +46,7 @@ struct ProgramTests {
     func literals(body: String, literal: String) {
         let source = "func main() { \(body) }"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.literalExceedsInt])
+        #expect(reported.map(\.code) == [.literalExceedsInt(type: "Int")])
         #expect(coveredText(reported, in: source) == [literal])
     }
 
@@ -117,7 +117,7 @@ struct ProgramTests {
     @Test("'main' is declared once, and a second 'main' is still checked")
     func mainOnce() {
         #expect(errors("func f() {}\nfunc main() {}\nfunc main() -> Bool { print(a) }") == [
-            .functionDeclaredTwice(signature: "main()"), .mainReturnsNonVoid, .notDeclared(name: "a"),
+            .functionDeclaredTwice(signature: "main()"), .mainReturnsNonVoid(type: "Void"), .notDeclared(name: "a"),
         ])
     }
 }

@@ -29,6 +29,9 @@ enum SampleCode: Equatable {
 
     @Code(1_003, error: "expected a block '{…}'")
     case ellipsis
+
+    @Code(1_004, error: "'{name}' has {name.count} letters, and '{name.}' and '{name.count.x}' are text")
+    case letters(name: String)
 }
 
 struct DiagnosticsTests {
@@ -41,6 +44,7 @@ struct DiagnosticsTests {
         (.qualified, "qualified"),
         (.edges(name: "n", café: "c"), "a backslash, then '\\un', and 'c'"),
         (.ellipsis, "expected a block '{…}'"),
+        (.letters(name: "abc"), "'abc' has 3 letters, and '{name.}' and '{name.count.x}' are text"),
     ])
     func messages(code: SampleCode, message: String) {
         #expect(code.message == message)
@@ -55,6 +59,7 @@ struct DiagnosticsTests {
         (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.typeMismatch(expected: "", found: ""), 3),
         (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
         (.braces(name: ""), 1000), (.qualified, 1001), (.edges(name: "", café: ""), 1002), (.ellipsis, 1003),
+        (.letters(name: ""), 1004),
     ])
     func numbers(code: SampleCode, number: Int) {
         #expect(code.number == number)
@@ -81,5 +86,40 @@ struct ErrorCodeTests {
     ])
     func foundTokens(found: FoundToken, text: String) {
         #expect(found.description == text)
+    }
+
+    @Test(arguments: [(TypeName.named("Int"), "Int"), ("Shot", "Shot"), (.shadowedPrelude("Int"), "the prelude's Int")])
+    func `a type is named by its name, or as the prelude's when a declaration of the file shadows it`(
+        type: TypeName, text: String,
+    ) {
+        #expect(type.description == text)
+    }
+
+    @Test(arguments: [
+        (TypeName.named("Int"), "the Int", "an Int", "type Int"),
+        (.shadowedPrelude("Int"), "the prelude's Int", "the prelude's Int", "the prelude's type Int"),
+    ])
+    func `a type's name takes 'the', 'an' or the word 'type', each of which a shadowed prelude type's fits to its own`(
+        type: TypeName, definite: String, withAn: String, typePhrase: String,
+    ) {
+        #expect(type.definite == definite)
+        #expect(type.withAn == withAn)
+        #expect(type.typePhrase == typePhrase)
+    }
+
+    @Test(arguments: [
+        (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used"),
+        (.unusedValue(type: .shadowedPrelude("Int")), "the prelude's Int value isn't used"),
+        (.literalExceedsInt(type: "Int"), "the literal doesn't fit in an Int"),
+        (.literalExceedsInt(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
+        (.voidLocal(type: "Void"), "a local can't have type Void"),
+        (.voidLocal(type: .shadowedPrelude("Void")), "a local can't have the prelude's type Void"),
+        (.voidParameter(type: .shadowedPrelude("Void")), "a parameter can't have the prelude's type Void"),
+        (.voidField(type: .shadowedPrelude("Void")), "a field can't have the prelude's type Void"),
+        (.missingReturnValue(type: "Int"), "'return' needs a value of type Int"),
+        (.missingReturnValue(type: .shadowedPrelude("Int")), "'return' needs a value of the prelude's type Int"),
+    ])
+    func `a message names a type in the form its sentence needs`(code: ErrorCode, message: String) {
+        #expect(code.message == message)
     }
 }

@@ -94,7 +94,7 @@ struct BodyChecker {
     private func checkEmptyReturn(at range: SourceRange) -> CheckedStmt? {
         // A Void function, or one whose result type isn't known, may return without a value.
         guard let result, result != .void else { return .returnStmt(nil) }
-        errors.report(.missingReturnValue(type: "\(result)"), at: range)
+        errors.report(.missingReturnValue(type: expressions.typeName(of: result)), at: range)
         return nil
     }
 
@@ -104,7 +104,7 @@ struct BodyChecker {
         guard let value = expressions.check(expr) else { return nil }
         // A value that no code uses is a mistake, unless `_ =` drops it on purpose.
         guard value.type == .void else {
-            errors.report(.unusedValue(type: "\(value.type)"), at: value.range)
+            errors.report(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
             return nil
         }
         return value

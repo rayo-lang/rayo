@@ -71,6 +71,22 @@ struct DiagnosticsMacroTests {
             """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21), error(.unusedValue("name"), 4, 22)])
     }
 
+    @Test func `a placeholder that reads a property names one of its case's values too`() {
+        expect("""
+            @Diagnostics
+            enum E {
+                @Code(1, error: "'{name}' has {nmae.count} letters")
+                case letters(name: String)
+            }
+            """, expandsTo: """
+            enum E {
+                case letters(name: String)
+
+            \(placeholderMembers)
+            }
+            """, reporting: [error(.unknownPlaceholder("nmae"), 3, 21)])
+    }
+
     @Test("every case has one code, and every value a label for its message to name it, before its placeholders are checked")
     func caseShape() {
         expect("""
