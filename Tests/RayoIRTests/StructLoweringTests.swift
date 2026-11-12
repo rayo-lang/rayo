@@ -57,6 +57,23 @@ struct StructLoweringTests {
         #expect(main == expected)
     }
 
+    @Test func `a field that a statement takes is moved out of where it lies, in its local or in a temporary`()
+        throws(RejectedSource) {
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = e.armor\n_ = Enemy(hp: 3, armor: 4).hp"
+        let main = try loweredMain(withEnemy: body)
+        let expected = mainFunction(
+            locals: [letLocal("e", .structure(enemy)), letLocal("a", .int), .temporary(.structure(enemy))],
+            block(
+                declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
+                declare(1), compute(1, .use(move(0, fields: 1))),
+                compute(2, .structure(enemy, fields: [int(3), int(4)])),
+                compute(nil, .use(move(2, fields: 0))),
+                then: .return(nil),
+            ),
+        )
+        #expect(main == expected)
+    }
+
     @Test func `a field of a value that no local holds is read from a temporary that holds the value`()
         throws(RejectedSource) {
         let main = try loweredMain(withEnemy: "print(Enemy(hp: 1, armor: 2).hp)")

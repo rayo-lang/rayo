@@ -21,8 +21,8 @@ enum ExpressionLowering {
         case .boolLiteral(let value): .constant(.bool(value))
         // A local that the checker reads is read, keeping its value.
         case .local(let local): .read(Place(local: local, range: expr.range))
-        // A local that the checker moves gives its value up.
-        case .move(let local): .move(Place(local: local, range: expr.range))
+        // A local, or a field, that the checker moves gives its value up.
+        case .move(let moved): .move(place(of: moved, in: &builder))
         // `&&` evaluates its right operand only when its left one is true.
         case .binary(.and, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range, in: &builder)

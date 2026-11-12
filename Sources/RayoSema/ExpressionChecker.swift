@@ -4,6 +4,9 @@ import RayoSyntax
 
 /// Checks expressions: the names they use, their operators' operands, and the types they give.
 struct ExpressionChecker {
+    /// A borrowed parameter's name, and the name of a place inside it as the source writes it, such as `e.stats.hp`.
+    private typealias ParameterPath = (parameter: String, spelling: String)
+
     let file: FileChecker
     let names: NameScopes
 
@@ -84,23 +87,15 @@ struct ExpressionChecker {
         // An expression that failed was reported already.
         guard let value = check(expr) else { return nil }
 
-        // A `copy` checks to a read of the place it copies, so only a place written bare is moved, or rejected as a
-        // field move.
+        // A `copy` checks to a read of the place it copies, so only a place written bare is moved.
         return switch (expr.kind, value.kind) {
         // A local written bare is moved.
         case (.name(let name), .local(let local)): move(local, named: name, readBy: value)
-        // A field written bare would be moved out of its struct.
-        case (.member, _): rejectFieldMove(value)
+        // A field written bare is moved out of the struct that holds it.
+        case (.member, _): moveField(readBy: value)
         // Any other value, a copy included, is a new one, which is taken as it is.
         default: value
         }
-    }
-
-    /// Reports `value`, a field that a statement takes, as a move out of its struct, which rayoc doesn't support,
-    /// and returns nil.
-    private func rejectFieldMove(_ value: CheckedExpr) -> CheckedExpr? {
-        errors.report(.fieldMove, at: value.range)
-        return nil
     }
 
     /// Turns `value`, which reads `local`, into a move of its value, reporting it when `local` is a borrowed
@@ -111,7 +106,42 @@ struct ExpressionChecker {
             errors.report(.moveFromParameter(name: name), at: value.range)
             return nil
         }
-        return CheckedExpr(kind: .move(local), type: value.type, range: value.range)
+        return CheckedExpr(kind: .move(value), type: value.type, range: value.range)
+    }
+
+    /// Turns `value`, which reads a field, into a move of the field out of the struct that holds it, reporting it
+    /// when a borrowed parameter holds the struct.
+    private func moveField(readBy value: CheckedExpr) -> CheckedExpr? {
+        // A borrowed parameter's field can't be moved out, since its caller still owns the whole value.
+        if let path = parameterPath(to: value) {
+            errors.report(.moveFieldFromParameter(field: path.spelling, parameter: path.parameter), at: value.range)
+            return nil
+        }
+        return CheckedExpr(kind: .move(value), type: value.type, range: value.range)
+    }
+
+    /// The borrowed parameter that `place`, a local or a field read through one, lies in, and the place as the source
+    /// names it; or nil where the place lies in a `let`, a `var` or a temporary.
+    private func parameterPath(to place: CheckedExpr) -> ParameterPath? {
+        switch place.kind {
+        // A field lies in whatever holds its struct.
+        case .field(let structure, let index): parameterPath(toField: index, of: structure)
+        // A local is the place's own, which may be a borrowed parameter.
+        case .local(let local): names[local].kind == .parameter ? (names[local].name, names[local].name) : nil
+        // Any other value is a temporary, which no parameter holds.
+        default: nil
+        }
+    }
+
+    /// The borrowed parameter that the field at `index` of `structure` lies in, and the field as the source names it;
+    /// or nil where `structure` lies in no borrowed parameter.
+    private func parameterPath(toField index: Int, of structure: CheckedExpr) -> ParameterPath? {
+        // A struct that lies in no parameter holds its fields there too.
+        guard let holder = parameterPath(to: structure) else { return nil }
+
+        // The field takes its name from the declaration of the struct that holds it.
+        guard case .structure(let id) = structure.type else { preconditionFailure("only a struct has fields") }
+        return (holder.parameter, holder.spelling + "." + file.declarations.fields(of: id)[index].name)
     }
 
     private func reference(to name: String, at range: SourceRange) -> CheckedExpr? {

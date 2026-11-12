@@ -25,6 +25,11 @@ func move(_ index: Int) -> Operand {
     .move(local(index))
 }
 
+/// An operand that takes the value of the field that `fields` lead to, outermost first, inside the local at `index`.
+func move(_ index: Int, fields: Int...) -> Operand {
+    .move(Place(local: LocalID(index: index), fields: fields, range: nowhere))
+}
+
 func int(_ value: Int64) -> Operand {
     .constant(.int(value))
 }

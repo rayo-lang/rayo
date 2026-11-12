@@ -264,6 +264,96 @@ struct InitializationCheckerTests {
     }
 }
 
+struct FieldMoveTests {
+    @Test func `a field moved out of a local leaves its other fields readable, and itself unreadable`() {
+        let blocks = [
+            BasicBlock(statements: storeShot() + [
+                store(move(s, fields: shotHit, at: 1), in: h), printing(read(s, fields: shotRange, at: 2)),
+                printing(read(s, fields: shotDamage, at: 3)), printing(read(h, at: 4)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3))])
+    }
+
+    @Test(arguments: [
+        (shotHit, read(s, at: 2), ErrorCode.usedPartlyMoved(name: "s", field: "s.hit")),
+        (shotHit, move(s, at: 2), .usedPartlyMoved(name: "s", field: "s.hit")),
+        (shotDamage, read(s, fields: shotHit, at: 2), .usedPartlyMoved(name: "s.hit", field: "s.hit.damage")),
+        (shotDamage, read(s, at: 2), .usedPartlyMoved(name: "s", field: "s.hit.damage")),
+    ])
+    func `a place that a field was moved out of can't be read or moved whole, and the error names the field`(
+        moved: [Int], use: Operand, expected: ErrorCode,
+    ) {
+        let blocks = [
+            BasicBlock(statements: storeShot() + [dropping(move(s, fields: moved, at: 1)), dropping(use)],
+                       terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(expected, at: at(2))])
+    }
+
+    @Test(arguments: [(shotHit, shotHit), (shotDamage, shotDamage), (shotDamage, shotHit)])
+    func `assigning a moved field, or a field that holds it, makes the local whole again`(
+        moved: [Int], assigned: [Int],
+    ) {
+        // A `Hit` replaces a moved `hit`, and an Int its `damage`.
+        let newValue: Rvalue =
+            assigned == shotHit ? .structure(hit, fields: [.constant(.int(3))]) : .use(.constant(.int(3)))
+        let blocks = [
+            BasicBlock(statements: storeShot() + [
+                dropping(move(s, fields: moved, at: 1)), store(newValue, in: s, fields: assigned, at: 2),
+                dropping(move(s, at: 3)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [])
+    }
+
+    @Test func `a field is assigned only where the field that holds it holds a value`() {
+        let blocks = [
+            BasicBlock(statements: storeShot() + [
+                dropping(move(s, fields: shotHit, at: 1)), store(3, in: s, fields: shotDamage, at: 2),
+                printing(read(s, fields: shotDamage, at: 3)),
+            ], terminator: .return(nil)),
+        ]
+        // The read has the same cause as the store, so the store alone is reported.
+        #expect(errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(2))])
+    }
+
+    @Test func `assigning the whole local after a field was moved out of it makes it whole again`() {
+        let blocks = [
+            BasicBlock(statements: storeShot() + [dropping(move(s, fields: shotHit, at: 1))] + storeShot(at: 2) + [
+                printing(read(s, fields: shotDamage, at: 3)),
+            ], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [])
+    }
+
+    @Test(arguments: [
+        (read(s, at: 2), ErrorCode.usedMaybePartlyMoved(name: "s", field: "s.hit")),
+        (read(s, fields: shotDamage, at: 2), .usedAfterMaybeMove(name: "s.hit")),
+        (read(s, fields: shotRange, at: 2), nil),
+    ])
+    func `a field moved on some of the paths that join may have been moved, and so its local may be partly moved`(
+        use: Operand, expected: ErrorCode?,
+    ) {
+        let blocks = [
+            BasicBlock(statements: storeShot(), terminator: branch(then: 1, otherwise: 2)),
+            BasicBlock(statements: [dropping(move(s, fields: shotHit, at: 1))], terminator: goto(2)),
+            BasicBlock(statements: [dropping(use)], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == expected.map { [Diagnostic($0, at: at(2))] } ?? [])
+    }
+
+    @Test func `a field moved on every path that joins was moved`() {
+        let blocks = [
+            BasicBlock(statements: storeShot(), terminator: branch(then: 1, otherwise: 2)),
+            BasicBlock(statements: [dropping(move(s, fields: shotHit, at: 1))], terminator: goto(3)),
+            BasicBlock(statements: [dropping(move(s, fields: shotHit, at: 2))], terminator: goto(3)),
+            BasicBlock(statements: [printing(read(s, fields: shotDamage, at: 3))], terminator: .return(nil)),
+        ]
+        #expect(errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3))])
+    }
+}
+
 /// The errors the checker reports in a program of one function made of `blocks`, whose first `parameterCount` locals
 /// are its parameters.
 private func errors(in blocks: [BasicBlock], parameterCount: Int = 0) -> [Diagnostic] {

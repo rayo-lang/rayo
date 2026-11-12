@@ -64,8 +64,10 @@ func read(_ local: Int, fields: [Int] = [], at offset: Int) -> Operand {
     .read(Place(local: LocalID(index: local), fields: fields, range: at(offset)))
 }
 
-func move(_ local: Int, at offset: Int) -> Operand {
-    .move(Place(local: LocalID(index: local), range: at(offset)))
+/// Moves the field that `fields` lead to inside `local`, or the whole local where there are none, which the source
+/// names at `offset`.
+func move(_ local: Int, fields: [Int] = [], at offset: Int) -> Operand {
+    .move(Place(local: LocalID(index: local), fields: fields, range: at(offset)))
 }
 
 /// Stores what `value` computes in the field that `fields` lead to inside `local`, or in the whole local where there

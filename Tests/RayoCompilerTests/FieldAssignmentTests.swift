@@ -50,8 +50,9 @@ struct FieldAssignmentTests {
         #expect(errors(source(running: "l.armor = nope")) == expected)
     }
 
-    @Test func `taking a field to assign it to another moves it out, which isn't supported`() {
-        #expect(errors(source(running: "e.stats = l.stats")) == [.fieldMove])
+    @Test func `taking a field to assign it to another moves it out of its struct`() {
+        let expected: [ErrorCode] = [.usedAfterMove(name: "l.stats")]
+        #expect(errors(source(running: "e.stats = l.stats\nprint(e.stats.hp + l.stats.hp)")) == expected)
     }
 
     @Test(arguments: [
