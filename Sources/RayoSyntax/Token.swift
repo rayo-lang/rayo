@@ -69,14 +69,4 @@ public struct Token: Sendable, Hashable, CustomStringConvertible {
         case .keyword(let keyword): keyword.rawValue
         default: nil
         }
-    }
-
-    /// How the token is spelled as a member's name after a `.`, when it can be one: any identifier, keyword or
-    /// integer literal is one.
-    var memberSpelling: String? {
-        switch kind {
-        case .intLiteral(let value): String(value)
-        default: labelSpelling
-        }
-    }
-}
+    }}

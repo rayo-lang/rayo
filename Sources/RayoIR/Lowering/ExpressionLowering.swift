@@ -44,16 +44,15 @@ enum ExpressionLowering {
         switch expr.kind {
         // A local that the checker reads is its own place.
         case .local(let local):
-            return Place(local: local, range: expr.range)
+            Place(local: local, range: expr.range)
 
         // A field lies inside the place of the struct that holds it.
         case .field(let structure, let index):
-            let outer = place(of: structure, in: &builder)
-            return Place(local: outer.local, fields: outer.fields + [index], range: expr.range)
+            place(of: structure, in: &builder).appending(field: index, at: expr.range)
 
         // Any other value is held in a temporary.
         default:
-            return lowerIntoTemporary(expr, in: &builder)
+            lowerIntoTemporary(expr, in: &builder)
         }
     }
 

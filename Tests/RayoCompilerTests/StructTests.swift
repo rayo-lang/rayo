@@ -216,6 +216,7 @@ struct FieldReadTests {
     @Test(arguments: [
         ("print(e.speed)", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
         ("print(e.0)", .noSuchField(type: "Enemy", field: "0"), "0"),
+        ("print(e.0_07)", .noSuchField(type: "Enemy", field: "0_07"), "0_07"),
         ("print(e.hp.armor)", .noSuchField(type: "Int", field: "armor"), "armor"),
         ("let b: Bool = e.hp + 1", .typeMismatch(expected: "Bool", found: "Int"), "e.hp + 1"),
         ("let f = e\nprint(e.hp)", .usedAfterMove(name: "e"), "e.hp"),

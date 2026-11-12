@@ -52,11 +52,20 @@ extension Parser {
         // Each `.` takes a member of the value before it, so `a.b.c` is the `c` of `a.b`.
         while consume(.dot) {
             // A member's name is an identifier, a keyword or an integer literal; any other token is reported.
-            guard let name = current.memberSpelling else { throw fail(ErrorCode.missingMemberName) }
+            guard let name = memberSpelling else { throw fail(ErrorCode.missingMemberName) }
             let nameRange = advance().range
             value = Expr(kind: .member(value, name: name, nameRange: nameRange), range: value.range.to(nameRange))
         }
         return value
+    }
+
+    /// How the current token is spelled as a member's name after a `.`, when it can be one: an identifier, a keyword,
+    /// or an integer literal as the source writes it.
+    private var memberSpelling: String? {
+        switch current.kind {
+        case .intLiteral: text(of: current.range)
+        default: current.labelSpelling
+        }
     }
 
     private mutating func parsePrimary() throws(ParseFailure) -> Expr {

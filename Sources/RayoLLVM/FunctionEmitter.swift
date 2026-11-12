@@ -95,14 +95,19 @@ struct FunctionEmitter {
         to field: Int, of type: RayoType, at pointer: PointerValue, with builder: borrowing Builder,
     ) throws(LLVMError) -> (PointerValue, RayoType) {
         // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
-        // with, would point outside the value, so it fails here.
-        guard case .structure(let id) = type, types.fields(of: id).indices.contains(field) else {
-            throw LLVMError(message: "the IR reads field \(field) of a value of type \(types.llvmType(type).text)")
-        }
+        // with, would point outside the value, so each fails here.
+        guard case .structure(let id) = type else { throw noField(field, of: type) }
+        let fields = types.fields(of: id)
+        guard fields.indices.contains(field) else { throw noField(field, of: type) }
 
         // Point at the element of the struct's LLVM type that holds the field.
-        let (fieldType, element) = types.fields(of: id)[field]
+        let (fieldType, element) = fields[field]
         return (builder.fieldPointer(to: element, of: types.llvmStruct(id), at: pointer), fieldType)
+    }
+
+    /// The error that says the IR reads the field at `field` of a value of `type`, which has no such field.
+    private func noField(_ field: Int, of type: RayoType) -> LLVMError {
+        LLVMError(message: "the IR reads field \(field) of a value of type \(types.llvmType(type).text)")
     }
 
     /// Emits the instruction that stores `value` in `local`'s slot. Throws where `value` is of another type than

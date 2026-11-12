@@ -5,13 +5,19 @@ import RayoSyntax
 /// Checks a file's structs: that each has a name of its own, that its fields have names of their own and types that
 /// hold values, and that none contains itself. It declares each struct's type and fields.
 struct StructChecker {
-    /// A struct whose declaration took its name, with the types of its fields, nil where one isn't known.
+    /// A struct whose declaration took its name, with what checking each of its fields found, in declaration order.
     private struct DeclaredStruct {
         var id: StructID
         var declaration: StructDecl
-        var fieldTypes: [RayoType?]
-        /// The fields as a function body sees them, each without a type where its name or its type failed.
-        var fields: [DeclaredField]
+        var fields: [CheckedField]
+    }
+
+    /// What checking a field's declaration found.
+    private struct CheckedField {
+        /// The type, or nil where it isn't known.
+        var type: RayoType?
+        /// Whether the name is neither `_` nor another field's.
+        var hasOwnName: Bool
     }
 
     let errors: ErrorList
@@ -93,39 +99,36 @@ struct StructChecker {
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
         for (declaration, id) in zip(structs, ids) {
-            let (fieldTypes, fields) = checkFields(of: declaration, in: declarations)
+            let fields = checkFields(of: declaration, in: declarations)
             // A struct with no ID has its fields checked, and is declared no further.
             guard let id else { continue }
             // IDs number the structs that have them in order, so each struct lies at its ID's index.
             precondition(id.index == declared.count, "a declared struct lies at its ID's index")
-            declared.append(DeclaredStruct(id: id, declaration: declaration, fieldTypes: fieldTypes, fields: fields))
+            declared.append(DeclaredStruct(id: id, declaration: declaration, fields: fields))
         }
         return declared
     }
 
-    /// Checks the fields of `declaration`, and returns their types, nil for each whose type isn't known, and the
-    /// fields as a function body sees them.
-    private func checkFields(
-        of declaration: StructDecl, in declarations: Declarations,
-    ) -> (types: [RayoType?], fields: [DeclaredField]) {
+    /// Checks the fields of `declaration`, and returns what checking each found.
+    private func checkFields(of declaration: StructDecl, in declarations: Declarations) -> [CheckedField] {
         var names: Set<String> = []
-        var types: [RayoType?] = []
-        var fields: [DeclaredField] = []
+        var fields: [CheckedField] = []
         for field in declaration.fields {
             let hasOwnName = checkName(of: field, besides: &names)
             reportDefault(of: field)
-            let type = checkType(of: field, in: declarations)
-            types.append(type)
-            // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.
-            fields.append(DeclaredField(name: field.name, type: hasOwnName ? type : nil))
+            fields.append(CheckedField(type: checkType(of: field, in: declarations), hasOwnName: hasOwnName))
         }
-        return (types, fields)
+        return fields
     }
 
-    /// Declares the fields of each of `structs`, so that a function body can make the struct and read its fields.
+    /// Declares the fields of each of `structs`, as a function body sees them.
     private func declareFields(of structs: [DeclaredStruct], in declarations: inout Declarations) {
         for structure in structs {
-            declarations.declare(structure.fields, of: structure.id)
+            // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.
+            let fields = zip(structure.declaration.fields, structure.fields).map { declaration, checked in
+                DeclaredField(name: declaration.name, type: checked.hasOwnName ? checked.type : nil)
+            }
+            declarations.declare(fields, of: structure.id)
         }
     }
 
@@ -187,7 +190,7 @@ struct StructChecker {
         var found: Set<Int> = []
         var unvisited = [structure]
         while let next = unvisited.popLast() {
-            for case .structure(let id)? in next.fieldTypes {
+            for case .structure(let id)? in next.fields.map(\.type) {
                 // A struct found for the first time has its own fields searched in turn.
                 if found.insert(id.index).inserted { unvisited.append(structs[id.index]) }
             }
@@ -200,9 +203,9 @@ struct StructChecker {
         var types: [StructType] = []
         for structure in structs {
             var fields: [Field] = []
-            for (field, type) in zip(structure.declaration.fields, structure.fieldTypes) {
+            for (field, checked) in zip(structure.declaration.fields, structure.fields) {
                 // A field whose type isn't known was reported.
-                guard let type else { return nil }
+                guard let type = checked.type else { return nil }
                 fields.append(Field(name: field.name, type: type))
             }
             types.append(StructType(name: structure.id.name, fields: fields))

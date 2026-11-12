@@ -21,26 +21,35 @@ struct CallChecker {
         switch expressions.names.lookUp(name, for: .call) {
         // A struct's name calls the struct's primary initializer.
         case .structure(let id):
-            return InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
+            InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
 
         // The name's functions are the call's candidates.
         case .functions(let functions):
-            return call(among: functions, passing: arguments, in: range)
+            call(among: functions, passing: arguments, in: range)
 
         // A local can't be called.
         case .inScope(.local):
-            errors.report(.notAFunction(name: name), at: nameRange)
+            reachingNothing(reporting: .notAFunction(name: name), at: nameRange, passing: arguments)
 
         // A local whose declaration failed was reported there.
         case .inScope(.failed):
-            break
+            reachingNothing(reporting: nil, at: nameRange, passing: arguments)
 
         // Nothing has the name.
         case nil:
-            errors.report(.notDeclared(name: name), at: nameRange)
+            reachingNothing(reporting: .notDeclared(name: name), at: nameRange, passing: arguments)
         }
+    }
 
-        // A call that reaches neither still has each argument's own errors reported.
+    /// Checks a call that reaches no function or struct: reports `error`, where there is one, at `range`, and the
+    /// errors of each of `arguments`, and returns nil.
+    private func reachingNothing(
+        reporting error: ErrorCode?, at range: SourceRange, passing arguments: [Argument],
+    ) -> CheckedExpr? {
+        // A name whose declaration failed comes with no error, since its error was reported there.
+        if let error { errors.report(error, at: range) }
+
+        // The arguments' values are still checked, with no parameter to take them.
         checkValues(of: arguments)
         return nil
     }

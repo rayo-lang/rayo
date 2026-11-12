@@ -15,4 +15,10 @@ public struct Place: Equatable, Sendable {
         self.fields = fields
         self.range = range
     }
+
+    /// The place of the field at `field`, its place in its struct's declaration, of the struct at this place, where
+    /// the source names it at `range`.
+    func appending(field: Int, at range: SourceRange) -> Place {
+        Place(local: local, fields: fields + [field], range: range)
+    }
 }
