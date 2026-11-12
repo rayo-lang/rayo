@@ -81,6 +81,12 @@ struct StructTests {
         let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
         #expect(run(source, options: mode) == expected)
     }
+
+    @Test func `a type mismatch names a prelude type that a struct shadows as the prelude's`() {
+        let source = "func main() {\n    let x: Int = 1\n}\nstruct Int(var big: Bool)"
+        let error = "main.rayo:2:18: error[E0213]: expected Int, found the prelude's Int\n"
+        #expect(run(source) == CommandResult(exitCode: 1, output: "", errors: error))
+    }
 }
 
 /// A struct that holds a struct that holds a struct. `Stats` lays `alive` out after its Ints, and `Boss` lays `alive`

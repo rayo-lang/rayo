@@ -10,7 +10,7 @@ struct FunctionTests {
         ("func f() { return 1 }", [.typeMismatch(expected: "Void", found: "Int")]),
         ("func f() -> Void { return 1 }", [.typeMismatch(expected: "Void", found: "Int")]),
         ("func f() -> Int8 { return true }", [.notAType(name: "Int8")]),
-        ("func main() -> Int { return 1 }", [.mainReturnsNonVoid]),
+        ("func main() -> Int { return 1 }", [.mainReturnsNonVoid(type: "Void")]),
     ])
     func returnedValues(declaration: String, expected: [ErrorCode]) {
         let source = declaration.hasPrefix("func main") ? declaration : "func main() {}\n" + declaration
@@ -31,9 +31,9 @@ struct FunctionTests {
 
     @Test("a function without '->' returns Void when its body is a Void expression, or more than one statement")
     func inferredResult() {
-        #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal])
+        #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal(type: "Void")])
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
-            [.voidLocal, .unusedValue(type: "Int")])
+            [.voidLocal(type: "Void"), .unusedValue(type: "Int")])
     }
 
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [
@@ -84,6 +84,11 @@ struct FunctionTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.notAType(name: type)])
         #expect(coveredText(reported, in: source) == [type])
+    }
+
+    @Test func `an error names a prelude type that a function shadows as the prelude's`() {
+        #expect(errors("func main() {\n    let b: Bool = 1\n}\nfunc Int() {}") ==
+            [.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))])
     }
 
     @Test("a function is called, not used as a value or assigned", arguments: [

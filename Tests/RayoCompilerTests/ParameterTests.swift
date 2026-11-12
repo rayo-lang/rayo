@@ -86,7 +86,7 @@ struct ParameterTests {
     ])
     func voidParameter(source: String, covered: String) {
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.voidParameter])
+        #expect(reported.map(\.code) == [.voidParameter(type: "Void")])
         #expect(coveredText(reported, in: source) == [covered])
     }
 

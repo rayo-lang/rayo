@@ -106,7 +106,7 @@ struct BindingChecker {
         switch declared {
         // No local holds a Void value.
         case .typed(.void, let typeRange, _):
-            errors.report(.voidLocal, at: typeRange)
+            errors.report(.voidLocal(type: expressions.typeName(of: .void)), at: typeRange)
             return nil
 
         // Any other type is the local's.

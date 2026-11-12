@@ -48,7 +48,8 @@ struct StructTests {
     }
 
     @Test(arguments: [
-        ("let x: Int = 1", "struct Int(var big: Bool)", [ErrorCode.typeMismatch(expected: "Int", found: "Int")]),
+        ("let x: Int = 1", "struct Int(var big: Bool)",
+         [ErrorCode.typeMismatch(expected: "Int", found: .shadowedPrelude("Int"))]),
         ("print(1)", "struct print", [.argumentNamesNoField(type: "print")]),
     ])
     func `a struct's name shadows the prelude's type or function of that name`(
@@ -56,13 +57,42 @@ struct StructTests {
     ) {
         #expect(errors("func main() {\n\(body)\n}\n\(declaration)") == expected)
     }
+
+    @Test(arguments: [
+        ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
+        ("1", .unusedValue(type: .shadowedPrelude("Int"))),
+        ("let a = 9223372036854775808", .literalExceedsInt(type: .shadowedPrelude("Int"))),
+        ("let y: () = g()", .voidLocal(type: .shadowedPrelude("Void"))),
+        ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
+        ("let t = true + true", .operandTypes(op: "+", needs: .shadowedPrelude("Int"), left: "Bool", right: "Bool")),
+        ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
+        ("let y = (1).big", .noSuchField(type: .shadowedPrelude("Int"), field: "big")),
+        ("f(1)", .noMatchingFunction(name: "f", arguments: "the prelude's Int")),
+        ("let s = S(a: 1)", .fieldTypeMismatch(field: "a", expected: "Bool", found: .shadowedPrelude("Int"))),
+    ])
+    func `an error names a prelude type that a struct shadows as the prelude's`(body: String, expected: ErrorCode) {
+        let structs = "struct Int(var big: Bool)\nstruct Void\nstruct S(var a: Bool)"
+        let functions = "func f(_ b: Bool) {}\nfunc f(_ s: S) {}\nfunc g() {}"
+        #expect(errors("func main() {\n\(body)\n}\n\(structs)\n\(functions)") == [expected])
+    }
+
+    @Test(arguments: [
+        ("func main() -> Void {}", ErrorCode.mainReturnsNonVoid(type: .shadowedPrelude("Void"))),
+        ("func main() {}\nfunc h(_ v: ()) {}", .voidParameter(type: .shadowedPrelude("Void"))),
+        ("func main() {}\nstruct T(var v: ())", .voidField(type: .shadowedPrelude("Void"))),
+    ])
+    func `an error about a declaration names a prelude type that a struct shadows as the prelude's`(
+        declarations: String, expected: ErrorCode,
+    ) {
+        #expect(errors(declarations + "\nstruct Void") == [expected])
+    }
 }
 
 struct StructDeclarationTests {
     @Test(arguments: [
         ("struct S(var a: Q)", ErrorCode.notAType(name: "Q"), "Q"),
-        ("struct S(var a: Void)", .voidField, "Void"),
-        ("struct S(var a: ())", .voidField, "()"),
+        ("struct S(var a: Void)", .voidField(type: "Void"), "Void"),
+        ("struct S(var a: ())", .voidField(type: "Void"), "()"),
         ("struct S(var a)", .missingFieldType(name: "a"), "a"),
         ("struct S(var a: Int, let a: Bool)", .alreadyDeclared(name: "a"), "a"),
         ("struct S(var _: Int)", .underscoreDeclared, "_"),
@@ -171,7 +201,7 @@ struct StructInitializerTests {
             "_ = Enemy(armor: 2, hq: 1)",
             [.fieldLeftOut(field: "hp"), .noSuchField(type: "Enemy", field: "hq")], ["Enemy(armor: 2, hq: 1)", "hq: 1"],
         ),
-    ])
+    ] as [(String, [ErrorCode], [String])])
     func `a call that doesn't give each field once, labeled and in order, is an error that names the field`(
         body: String, expected: [ErrorCode], covered: [String],
     ) {

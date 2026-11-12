@@ -119,7 +119,7 @@ final class FileChecker {
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
-            errors.report(.voidParameter, at: parameter.type.range)
+            errors.report(.voidParameter(type: declarations.typeName(of: .void)), at: parameter.type.range)
             type = nil
         }
         return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling)
@@ -137,7 +137,7 @@ final class FileChecker {
         guard let type = declarations.resolve(written, reporting: errors) else { return .failed }
         // A `main` that returns a value is reported.
         if isMain && type != .void {
-            errors.report(.mainReturnsNonVoid, at: written.range)
+            errors.report(.mainReturnsNonVoid(type: declarations.typeName(of: .void)), at: written.range)
             return .failed
         }
         return .type(type)

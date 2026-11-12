@@ -110,8 +110,8 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 203 is unused, and stays so.
 
-    @Code(204, error: "'main' returns Void")
-    case mainReturnsNonVoid
+    @Code(204, error: "'main' returns {type}")
+    case mainReturnsNonVoid(type: TypeName)
 
     @Code(205, error: "'{name}' isn't a type")
     case notAType(name: String)
@@ -137,25 +137,25 @@ public enum ErrorCode: Sendable, Hashable {
     case underscoreValue
 
     @Code(213, error: "expected {expected}, found {found}")
-    case typeMismatch(expected: String, found: String)
+    case typeMismatch(expected: TypeName, found: TypeName)
 
     @Code(214, error: "'{op}' needs operands of one type, found {left} and {right}")
-    case operandsDiffer(op: String, left: String, right: String)
+    case operandsDiffer(op: String, left: TypeName, right: TypeName)
 
     @Code(215, error: "'{op}' needs {needs} operands, found {left} and {right}")
-    case operandTypes(op: String, needs: String, left: String, right: String)
+    case operandTypes(op: String, needs: TypeName, left: TypeName, right: TypeName)
 
     @Code(216, error: "'{op}' can't compare {type} values")
-    case incomparable(op: String, type: String)
+    case incomparable(op: String, type: TypeName)
 
-    @Code(217, error: "the literal doesn't fit in an Int")
-    case literalExceedsInt
+    @Code(217, error: "the literal doesn't fit in {type.withAn}")
+    case literalExceedsInt(type: TypeName)
 
     @Code(218, error: "'_' can't be declared")
     case underscoreDeclared
 
-    @Code(219, error: "a local can't have type Void")
-    case voidLocal
+    @Code(219, error: "a local can't have {type.typePhrase}")
+    case voidLocal(type: TypeName)
 
     // 220 is unused, and stays so.
 
@@ -170,8 +170,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(224, error: "'{keyword}' is only allowed inside a loop")
     case outsideLoop(keyword: String)
 
-    @Code(225, error: "'return' needs a value of type {type}")
-    case missingReturnValue(type: String)
+    @Code(225, error: "'return' needs a value of {type.typePhrase}")
+    case missingReturnValue(type: TypeName)
 
     @Code(226, error: "'{signature}' can reach its end without returning a value")
     case missingReturn(signature: String)
@@ -197,11 +197,11 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(233, error: "default arguments aren't supported")
     case defaultArgument
 
-    @Code(234, error: "a parameter can't have type Void")
-    case voidParameter
+    @Code(234, error: "a parameter can't have {type.typePhrase}")
+    case voidParameter(type: TypeName)
 
-    @Code(235, error: "the {type} value isn't used")
-    case unusedValue(type: String)
+    @Code(235, error: "{type.definite} value isn't used")
+    case unusedValue(type: TypeName)
 
     @Code(236, error: "'{name}' needs a type or a value")
     case missingLocalType(name: String)
@@ -209,8 +209,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(237, error: "'{name}' needs a type")
     case missingFieldType(name: String)
 
-    @Code(238, error: "a field can't have type Void")
-    case voidField
+    @Code(238, error: "a field can't have {type.typePhrase}")
+    case voidField(type: TypeName)
 
     @Code(239, error: "'{name}' contains itself")
     case containsItself(name: String)
@@ -227,7 +227,7 @@ public enum ErrorCode: Sendable, Hashable {
     case assignToType(name: String)
 
     @Code(244, error: "{type} has no field '{field}'")
-    case noSuchField(type: String, field: String)
+    case noSuchField(type: TypeName, field: String)
 
     @Code(245, error: "the call leaves out the field '{field}'")
     case fieldLeftOut(field: String)
@@ -239,10 +239,10 @@ public enum ErrorCode: Sendable, Hashable {
     case fieldOutOfOrder(field: String, after: String)
 
     @Code(248, error: "the field '{field}' takes {expected}, found {found}")
-    case fieldTypeMismatch(field: String, expected: String, found: String)
+    case fieldTypeMismatch(field: String, expected: TypeName, found: TypeName)
 
     @Code(249, error: "the argument names no field of {type}")
-    case argumentNamesNoField(type: String)
+    case argumentNamesNoField(type: TypeName)
 
     // 250 is unused, and stays so.
 
@@ -326,6 +326,50 @@ public enum ArgumentLabel: Sendable, Hashable, CustomStringConvertible {
         switch self {
         case .label(let label): return "'\(label):'"
         case .none: return "no label"
+        }
+    }
+}
+
+/// A type as an error names it: `Int`, or `the prelude's Int` where a struct or a function of the file has its name.
+public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStringConvertible {
+    /// A type whose name alone identifies it.
+    case named(String)
+    /// A prelude type whose name a struct or a function of the file also has.
+    case shadowedPrelude(String)
+
+    public init(stringLiteral name: String) { self = .named(name) }
+
+    public var description: String {
+        switch self {
+        case .named(let name): name
+        case .shadowedPrelude(let name): "the prelude's \(name)"
+        }
+    }
+
+    /// The name with `the` before it, as in `the Int value`. A shadowed prelude type's, `the prelude's Int`, has
+    /// its own.
+    public var definite: String {
+        switch self {
+        case .named(let name): "the \(name)"
+        case .shadowedPrelude: description
+        }
+    }
+
+    /// The name with `an` before it, as in `an Int`, for a message that names a type whose name takes `an`. A
+    /// shadowed prelude type's, `the prelude's Int`, has its own.
+    public var withAn: String {
+        switch self {
+        case .named(let name): "an \(name)"
+        case .shadowedPrelude: description
+        }
+    }
+
+    /// The name with the word `type` before it, as in `a local can't have type Void`, or, for a shadowed prelude
+    /// type, `the prelude's type Void`.
+    public var typePhrase: String {
+        switch self {
+        case .named(let name): "type \(name)"
+        case .shadowedPrelude(let name): "the prelude's type \(name)"
         }
     }
 }
