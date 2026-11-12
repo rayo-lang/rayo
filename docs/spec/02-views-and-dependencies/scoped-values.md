@@ -132,8 +132,7 @@ func show(_ hint: Hint, _ token: Token) {
 **`static` qualifies a scoped type whose scoped parts are all shared views:**
 
 - the shared views `StringView`, `Span<T>`, `Borrow<T>` and `any P`;
-- a type whose scoped fields, payloads and elements all take `static`, a field of raw pointer type `*U` counting as one of type `U`, as `Token`, `[2 of Token]`, `(StringView, Int)` and `List<StringView>` do;
-- a type parameter. Its argument must be unscoped or take `static`, which is checked where the parameter is bound, as a constraint is, and `static T` is `T` itself for an unscoped argument.
+- a type whose scoped fields, payloads and elements all take `static`, a field of raw pointer type `*U` counting as one of type `U`, as `Token`, `[2 of Token]`, `(StringView, Int)` and `List<StringView>` do.
 
 **No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
 
@@ -143,6 +142,8 @@ func show(_ hint: Hint, _ token: Token) {
 - a type declared `Scoped` with no scoped field, such as a profiling zone.
 
 **`static` on a concrete unscoped type is a compile error**, as `static Int` is, since it would change nothing.
+
+**A type parameter takes no `static`**, since generic code is checked once, at its definition, and the parameter may stand for a type that can't take it ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). Generic code that keeps a value requires `T: ~Scoped` instead, which a static type meets, so the caller writes `static` in the argument, as `Mutex<static Token>` does. An associated type, or a type that depends on a parameter, takes none either.
 
 ### What a static type is
 
