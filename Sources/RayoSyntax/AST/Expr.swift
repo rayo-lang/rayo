@@ -19,8 +19,9 @@ public indirect enum ExprKind: Sendable {
     case member(Expr, name: String, nameRange: SourceRange)
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
-    /// `copy name`: the value of a local, which the local keeps.
-    case copy(name: String, nameRange: SourceRange)
+    /// `copy place`: the value of a local, or of a field of one at any depth, which the place keeps. `place` is a
+    /// name, or a member of a place.
+    case copy(Expr)
 }
 
 /// `label: value`, or the value alone.

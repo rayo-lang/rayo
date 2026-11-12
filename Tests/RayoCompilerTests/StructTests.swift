@@ -253,6 +253,36 @@ struct FieldReadTests {
     }
 }
 
+struct FieldCopyTests {
+    @Test(arguments: [
+        "let h = copy e.hp\nprint(h)", "_ = copy e.armor", "var h = 0\nprint(h)\nh = copy e.hp\nprint(h)",
+        "return copy e.hp", "return (copy e.hp)", "return copy e.hp + copy e.armor",
+        "_ = Enemy(hp: copy e.hp, armor: 1)", "let h = copy e.hp\nlet k = copy e\nprint(h + k.armor + e.hp)",
+        "let h = copy e.hp\nreturn f(e: e) + h",
+    ])
+    func `a copy of a field of a borrowed parameter may be taken, and leaves the struct whole`(body: String) {
+        #expect(errors("func main() {}\nfunc f(e: Enemy) -> Int {\n\(body)\nreturn 0\n}" + enemy) == [])
+    }
+
+    @Test(arguments: [
+        ("let h = copy e.speed", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
+        ("let h = copy e.hp.armor", .noSuchField(type: "Int", field: "armor"), "armor"),
+        ("let b: Bool = copy e.hp", .typeMismatch(expected: "Bool", found: "Int"), "copy e.hp"),
+        ("copy e.hp", .unusedValue(type: "Int"), "copy e.hp"),
+        ("let f = e\nlet h = copy e.hp\nprint(h + f.hp)", .usedAfterMove(name: "e"), "copy e.hp"),
+    ])
+    func `a copy of a field the value doesn't have, of a moved struct, or left unused, is an error`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = "func main() {\nlet e = Enemy(hp: 1, armor: 2)\nprint(e.armor)\n\(body)\n}" + enemy
+
+        // The one error names the type and the field where the field is missing, and covers what is wrong.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+}
+
 /// A struct that holds a struct that holds a struct.
 private let bossEnemyAndStats = """
 

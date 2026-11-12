@@ -35,6 +35,7 @@ These features already run:
 - struct declarations, whose names are the types of locals, parameters and results, and `copy` of a struct;
 - making a struct with its primary initializer, as `Enemy(hp: 100, armor: 5)`, which takes its arguments owned, and reading a field of a struct where a borrow of the field suffices, as `e.hp - 5` or `print(e.hp)`;
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
+- `copy` of a field of a local or a borrowed parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - `print(Int)`, and `print(Bool)`, which prints `true` or `false`.
 
 ## v0.1.5: Float

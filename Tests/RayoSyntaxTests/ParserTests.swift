@@ -158,6 +158,22 @@ struct ParserErrorTests {
         #expect(errors(source) == [expected])
     }
 
+    @Test(arguments: [
+        "func f() { print(copy e.hp) }", "func f() { print(copy e.stats.hp + copy e.0) }",
+        "func f() { print(copy e.if) }", "func f() {\n    let a = copy e\n        .hp\n}",
+    ])
+    func `'copy' takes a name and the members after it`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { print(copy e.) }", ErrorCode.missingMemberName(found: .token(")"))),
+        ("func f() { print(copy (e).hp) }", .missingCopiedName(found: .token("("))),
+    ])
+    func `'copy' needs a name first, and a member's name after each '.'`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
     @Test func `a struct's body that the file ends inside is reported at the file's end`() {
         #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
     }

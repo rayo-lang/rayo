@@ -51,11 +51,9 @@ struct ExpressionChecker {
         case .member(let base, let name, let nameRange):
             return field(named: name, at: nameRange, of: base, in: expr.range)
 
-        // A `copy` reads the local and leaves its value in it, and it covers the whole `copy name`.
-        case .copy(let name, let nameRange):
-            return reference(to: name, at: nameRange).map {
-                CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range)
-            }
+        // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
+        case .copy(let place):
+            return check(place).map { CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range) }
         }
     }
 
@@ -78,14 +76,24 @@ struct ExpressionChecker {
     func checkTaken(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported already.
         guard let value = check(expr) else { return nil }
-        // Taking a field would move it out of its struct, which rayoc doesn't support.
-        if case .field = value.kind {
-            errors.report(.fieldMove, at: value.range)
-            return nil
+
+        // A `copy` checks to a read of the place it copies, so only a place written bare is moved, or rejected as a
+        // field move.
+        return switch (expr.kind, value.kind) {
+        // A local written bare is moved.
+        case (.name(let name), .local(let local)): move(local, named: name, readBy: value)
+        // A field written bare would be moved out of its struct.
+        case (.member, _): rejectFieldMove(value)
+        // Any other value, a copy included, is a new one, which is taken as it is.
+        default: value
         }
-        // A `copy` of a local checks to a read of it too, so only a bare name moves.
-        guard case .name(let name) = expr.kind, case .local(let local) = value.kind else { return value }
-        return move(local, named: name, readBy: value)
+    }
+
+    /// Reports `value`, a field that a statement takes, as a move out of its struct, which rayoc doesn't support,
+    /// and returns nil.
+    private func rejectFieldMove(_ value: CheckedExpr) -> CheckedExpr? {
+        errors.report(.fieldMove, at: value.range)
+        return nil
     }
 
     /// Turns `value`, which reads `local`, into a move of its value, reporting it when `local` is a borrowed
