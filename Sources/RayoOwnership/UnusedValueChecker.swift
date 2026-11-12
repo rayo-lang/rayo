@@ -18,22 +18,10 @@ public enum UnusedValueChecker {
                 // A store that some code reads leaves nothing to report.
                 guard !isRead else { return }
                 // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
-                guard let name = sourceName(of: destination, in: places) else { return }
+                guard let name = places.sourceName(of: destination.local, fields: destination.fields) else { return }
                 errors.append(Diagnostic(.unreadValue(name: name), at: destination.range))
             }
         }
         return errors
-    }
-
-    /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where it lies in a temporary.
-    private static func sourceName(of place: Place, in places: PlaceTypes) -> String? {
-        // A temporary has no name in the source.
-        guard case .source(let name, _, _) = places.function.locals[place.local.index] else { return nil }
-
-        // Each field takes its name from the struct that holds it.
-        let fields = place.fields.indices.map { depth in
-            places.fields(ofStructIn: place.local, at: place.fields.prefix(depth))[place.fields[depth]].name
-        }
-        return ([name] + fields).joined(separator: ".")
     }
 }

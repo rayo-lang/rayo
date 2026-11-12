@@ -146,8 +146,8 @@ struct NestedStructTests {
         ("print(b.minion.mana)", "4:20: error[E0244]: Enemy has no field 'mana'"),
         ("let f = Enemy(stats: e, armor: 1)", "4:26: error[E0248]: the field 'stats' takes Stats, found Enemy"),
         (
-            "let f = Enemy(stats: e.stats, armor: 1)",
-            "4:26: error[E0250]: moving a field out of a struct isn't supported",
+            "let f = Enemy(stats: e.stats, armor: 1)\n    print(e.stats.hp)",
+            "5:11: error[E0302]: 'e.stats' was moved",
         ),
         (
             "let s = Stats(alive: true, hp: 1, speed: 2)\n    let f = Enemy(stats: s, armor: 1)\n    print(s.hp)",

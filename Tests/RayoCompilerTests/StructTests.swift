@@ -186,9 +186,12 @@ struct StructInitializerTests {
     @Test(arguments: [
         ("func main() {\nlet hp = 1\n_ = Enemy(hp: hp, armor: 2)\nprint(hp)\n}", ErrorCode.usedAfterMove(name: "hp")),
         ("func main() {}\nfunc f(hp: Int) -> Enemy { Enemy(hp: hp, armor: 2) }", .moveFromParameter(name: "hp")),
-        ("func main() {}\nfunc f(e: Enemy) -> Enemy { Enemy(hp: e.hp, armor: 2) }", .fieldMove),
+        (
+            "func main() {}\nfunc f(e: Enemy) -> Enemy { Enemy(hp: e.hp, armor: 2) }",
+            .moveFieldFromParameter(field: "e.hp", parameter: "e"),
+        ),
     ])
-    func `the initializer takes each argument owned, so it moves a local, and can't take a parameter or a field`(
+    func `the initializer takes each argument owned, so it moves a local, and can't take a parameter or its field`(
         source: String, expected: ErrorCode,
     ) {
         #expect(errors(source + enemy) == [expected])
@@ -237,14 +240,14 @@ struct FieldReadTests {
         ("let h = e.hp", "e.hp"), ("_ = e.hp", "e.hp"), ("var h = 0\nh = e.hp", "e.hp"), ("return e.hp", "e.hp"),
         ("return (e.hp)", "(e.hp)"),
     ])
-    func `a declaration, an assignment, a 'return' or '_ =' can't take a field, which would move it`(
+    func `a declaration, an assignment, a 'return' or '_ =' can't take a borrowed parameter's field, which it moves`(
         body: String, covered: String,
     ) {
         let source = "func main() {}\nfunc f(e: Enemy) -> Int {\n\(body)\nreturn 0\n}" + enemy
 
         // The one error covers the field the statement takes.
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.fieldMove])
+        #expect(reported.map(\.code) == [.moveFieldFromParameter(field: "e.hp", parameter: "e")])
         #expect(coveredText(reported, in: source) == [covered])
     }
 
@@ -311,8 +314,14 @@ struct NestedStructTests {
         ("print(e.stats.mana)", ErrorCode.noSuchField(type: "Stats", field: "mana"), "mana"),
         ("print(b.minion.stats.mana)", .noSuchField(type: "Stats", field: "mana"), "mana"),
         ("print(e.stats.hp.mana)", .noSuchField(type: "Int", field: "mana"), "mana"),
-        ("let h = e.stats.hp", .fieldMove, "e.stats.hp"),
-        ("_ = Enemy(stats: e.stats, armor: 1)", .fieldMove, "e.stats"),
+        (
+            "let h = b.minion.stats.hp", .moveFieldFromParameter(field: "b.minion.stats.hp", parameter: "b"),
+            "b.minion.stats.hp",
+        ),
+        (
+            "_ = Enemy(stats: b.minion.stats, armor: 1)",
+            .moveFieldFromParameter(field: "b.minion.stats", parameter: "b"), "b.minion.stats",
+        ),
         ("_ = Enemy(stats: e, armor: 1)", .fieldTypeMismatch(field: "stats", expected: "Stats", found: "Enemy"), "e"),
         ("_ = Enemy(stats: Stats(hp: 1), armor: 1)", .fieldLeftOut(field: "speed"), "Stats(hp: 1)"),
         (

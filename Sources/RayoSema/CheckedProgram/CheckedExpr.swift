@@ -12,8 +12,9 @@ public indirect enum CheckedExprKind: Sendable {
     case boolLiteral(Bool)
     /// Reads the local's value, which the local keeps.
     case local(LocalID)
-    /// Takes the local's value, which leaves the local without one until it is assigned again.
-    case move(LocalID)
+    /// Takes the value of a place: a local, or a field read through a local or a temporary, which leaves the place
+    /// without one until it is assigned again.
+    case move(CheckedExpr)
     case unary(UnaryOperator, CheckedExpr)
     case binary(BinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])

@@ -17,6 +17,19 @@ struct PlaceTypes {
         return structFields
     }
 
+    /// The name of the place that `fields`, outermost first, lead to inside `local`, as the source writes it, such as
+    /// `e.stats.hp`, or nil where `local` is a temporary.
+    func sourceName(of local: LocalID, fields: [Int]) -> String? {
+        // A temporary has no name in the source.
+        guard case .source(let name, _, _) = function.locals[local.index] else { return nil }
+
+        // Each field takes its name from the struct that holds it.
+        let fieldNames = fields.indices.map { depth in
+            self.fields(ofStructIn: local, at: fields.prefix(depth))[fields[depth]].name
+        }
+        return ([name] + fieldNames).joined(separator: ".")
+    }
+
     /// The fields of `type`, which must be a struct.
     private func fields(of type: RayoType) -> [Field] {
         // Only a struct has fields, and lowering steps into nothing else.

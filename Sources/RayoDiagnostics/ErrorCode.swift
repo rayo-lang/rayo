@@ -244,8 +244,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(249, error: "the argument names no field of {type}")
     case argumentNamesNoField(type: String)
 
-    @Code(250, error: "moving a field out of a struct isn't supported")
-    case fieldMove
+    // 250 is unused, and stays so.
 
     @Code(251, error: "'{name}' is a 'let', so its fields can't change")
     case assignToFieldOfLet(name: String)
@@ -278,6 +277,16 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(308, error: "the value assigned to '{name}' is never read")
     case unreadValue(name: String)
+
+    @Code(309, error: "'{field}' was moved out of '{name}', so '{name}' can't be used whole")
+    case usedPartlyMoved(name: String, field: String)
+
+    @Code(310, error: "'{field}' may have been moved out of '{name}', so '{name}' can't be used whole")
+    case usedMaybePartlyMoved(name: String, field: String)
+
+    @Code(311, error:
+        "'{field}' is in the borrowed parameter '{parameter}', so it can't be moved; 'copy' makes an owned copy")
+    case moveFieldFromParameter(field: String, parameter: String)
 }
 
 extension ErrorCode {

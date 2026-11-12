@@ -1,9 +1,12 @@
 import RayoIR
 
-/// What each local of a function holds at a point.
+/// What each local of a function, and each field moved out of one, holds at a point.
 struct InitializationState: Equatable {
-    /// Called with a place that a block uses or stores to, and its local's state just before the block does.
-    typealias PlaceVisitor = (Place, LocalState) -> Void
+    /// Called with a place that a block uses, or a field it stores to, and why the place, or the value around the
+    /// field, may hold no value just before the block does.
+    typealias UseVisitor = (Place, MissingValue) -> Void
+    /// Called with a whole local that a block stores to, and what the local holds just before the block does.
+    typealias StoreVisitor = (Place, PlaceState) -> Void
 
     /// Indexed by `LocalID`.
     private var locals: [LocalState]
@@ -20,10 +23,10 @@ struct InitializationState: Equatable {
         return joined
     }
 
-    /// Applies what `block` does to the locals. It hands `use` each operand that names a local, and each statement's
-    /// destination inside a local, which needs the rest of the local's value there; it hands `store` each destination
-    /// that is a whole local.
-    mutating func apply(_ block: BasicBlock, use: PlaceVisitor = { _, _ in }, store: PlaceVisitor = { _, _ in }) {
+    /// Applies what `block` does to the locals. It hands `use` each operand that names a place that may hold no
+    /// value, and each statement's destination inside a local that may not hold the rest of its value; it hands
+    /// `store` each destination that is a whole local.
+    mutating func apply(_ block: BasicBlock, use: UseVisitor = { _, _ in }, store: StoreVisitor = { _, _ in }) {
         for statement in block.statements {
             apply(statement, use: use, store: store)
         }
@@ -33,20 +36,14 @@ struct InitializationState: Equatable {
         }
     }
 
-    private mutating func apply(_ statement: Statement, use: PlaceVisitor, store: PlaceVisitor) {
+    private mutating func apply(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
         switch statement {
         // A computation uses its operands, in order, before it stores to its destination.
         case .compute(let destination, let value, _):
             value.operands.forEach { apply($0, use: use) }
             // A computation with no destination drops its value.
             guard let destination else { return }
-            if destination.fields.isEmpty {
-                // A store to a whole local gives it a value.
-                assign(destination, store: store)
-            } else {
-                // A store to a field changes part of a value the local must already hold, and leaves it holding one.
-                use(destination, locals[destination.local.index])
-            }
+            assign(destination, use: use, store: store)
 
         // A declaration leaves the local without a value, even one an earlier pass of a loop gave it.
         case .declare(let local):
@@ -54,26 +51,41 @@ struct InitializationState: Equatable {
         }
     }
 
-    /// Hands `store` the state of `destination`'s local, then gives the local a value.
-    private mutating func assign(_ destination: Place, store: PlaceVisitor) {
-        store(destination, locals[destination.local.index])
-        locals[destination.local.index] = .initialized
+    /// Hands `store` the state of `destination` where it is a whole local, or `use` what the field's store may miss
+    /// around it, then gives the place a value.
+    private mutating func assign(_ destination: Place, use: UseVisitor, store: StoreVisitor) {
+        let local = locals[destination.local.index]
+        if destination.fields.isEmpty {
+            // A store to a whole local gives it a value, whatever it held.
+            store(destination, local.whole)
+        } else if let missing = local.missingValue(forStoreTo: destination.fields) {
+            // A store to a field changes part of a value that the local must already hold around it.
+            use(destination, missing)
+        }
+        locals[destination.local.index].assign(destination.fields)
     }
 
-    private mutating func apply(_ operand: Operand, use: PlaceVisitor) {
+    private mutating func apply(_ operand: Operand, use: UseVisitor) {
         switch operand {
         // A constant names no local.
         case .constant:
             break
 
-        // A read uses the local and leaves its value in it.
+        // A read uses the place and leaves its value in it.
         case .read(let place):
-            use(place, locals[place.local.index])
+            visitUse(of: place, use: use)
 
-        // A move uses the local and takes its value.
+        // A move uses the place and takes its value.
         case .move(let place):
-            use(place, locals[place.local.index])
-            locals[place.local.index] = locals[place.local.index].moved(at: place.range)
+            visitUse(of: place, use: use)
+            locals[place.local.index].move(place.fields, at: place.range)
         }
+    }
+
+    /// Hands `use` the place an operand names, where it may hold no value.
+    private func visitUse(of place: Place, use: UseVisitor) {
+        // A place that holds its whole value on every path leaves nothing to hand on.
+        guard let missing = locals[place.local.index].missingValue(forUseOf: place.fields) else { return }
+        use(place, missing)
     }
 }
