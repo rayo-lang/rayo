@@ -96,20 +96,21 @@ struct ErrorCodeTests {
     }
 
     @Test(arguments: [
-        (TypeName.named("Int"), "the Int", "type Int"),
-        (.shadowedPrelude("Int"), "the prelude's Int", "the prelude's type Int"),
+        (TypeName.named("Int"), "the Int", "an Int", "type Int"),
+        (.shadowedPrelude("Int"), "the prelude's Int", "the prelude's Int", "the prelude's type Int"),
     ])
-    func `a type's name takes 'the' or the word 'type', which a shadowed prelude type's puts after 'the prelude's'`(
-        type: TypeName, definite: String, typePhrase: String,
+    func `a type's name takes 'the', 'an' or the word 'type', each of which a shadowed prelude type's fits to its own`(
+        type: TypeName, definite: String, withAn: String, typePhrase: String,
     ) {
         #expect(type.definite == definite)
+        #expect(type.withAn == withAn)
         #expect(type.typePhrase == typePhrase)
     }
 
     @Test(arguments: [
         (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used"),
         (.unusedValue(type: .shadowedPrelude("Int")), "the prelude's Int value isn't used"),
-        (.literalExceedsInt(type: "Int"), "the literal doesn't fit in Int"),
+        (.literalExceedsInt(type: "Int"), "the literal doesn't fit in an Int"),
         (.literalExceedsInt(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
         (.voidLocal(type: "Void"), "a local can't have type Void"),
         (.voidLocal(type: .shadowedPrelude("Void")), "a local can't have the prelude's type Void"),

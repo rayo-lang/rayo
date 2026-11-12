@@ -148,7 +148,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(216, error: "'{op}' can't compare {type} values")
     case incomparable(op: String, type: TypeName)
 
-    @Code(217, error: "the literal doesn't fit in {type}")
+    @Code(217, error: "the literal doesn't fit in {type.withAn}")
     case literalExceedsInt(type: TypeName)
 
     @Code(218, error: "'_' can't be declared")
@@ -342,6 +342,15 @@ public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStri
     public var definite: String {
         switch self {
         case .named(let name): "the \(name)"
+        case .shadowedPrelude: description
+        }
+    }
+
+    /// The name with `an` before it, as in `an Int`, for a message that names a type whose name takes `an`. A
+    /// shadowed prelude type's, `the prelude's Int`, has its own.
+    public var withAn: String {
+        switch self {
+        case .named(let name): "an \(name)"
         case .shadowedPrelude: description
         }
     }
