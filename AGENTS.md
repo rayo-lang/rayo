@@ -18,7 +18,7 @@ GitHub Issues on `rayo-lang/rayo` (public); pass `-R rayo-lang/rayo` to `gh`. Se
 
 ### Roadmap
 
-`ROADMAP.md` says which features each version adds, and which are done. Read it before you choose or scope work, and in the pull request that finishes a feature, move it to its version's list of features that already run.
+`ROADMAP.md` gives each version's feature set, and says what the list holds and how a version is done. Read it before you choose or scope work, or edit it. A pull request that finishes a feature leaves the roadmap as it is. The README's `[!NOTE]` names no features and points to the roadmap for them, because a list of features in the README would churn with every change.
 
 ### Triage labels
 

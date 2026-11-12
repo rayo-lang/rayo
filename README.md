@@ -5,7 +5,7 @@ Rayo is a general-purpose systems programming language. It gives the same contro
 Game development is one of Rayo's priorities: engines and gameplay code, of the kind written in C++ today and shipped on consoles.
 
 > [!NOTE]
-> **Rayo is in design.** The [language spec](#read-the-spec) is written and under review. The [toolchain](TOOLCHAIN.md) parses a first subset of the language, and checks and runs programs of functions that take borrowed parameters, which compute with `Int` and `Bool` locals, branches and loops, and print integers. Programs may make structs and read their fields. It moves a local's value where a declaration, an assignment, a `return`, `_ =` or an initializer takes it. It checks that a local declared without a value, or moved, isn't used until it is assigned, and that a `let` is assigned at most once on each path. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
+> **Rayo is in design.** The language is changing, and its features aren't complete yet. The [language spec](#read-the-spec) describes the whole language, the [toolchain](TOOLCHAIN.md) builds it a version at a time, and the [roadmap](ROADMAP.md) says which features each version builds. This is a good time to question the design and to help build the compiler: see [Contribute](#contribute).
 
 Source files use the `.rayo` extension.
 
