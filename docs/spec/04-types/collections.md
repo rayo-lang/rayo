@@ -47,7 +47,7 @@ let firstTwo = names[0..<2]               // also a Span
 **The table below mixes language types and std's. These rows are language types:**
 
 - the scoped views `Span`, `MutableSpan` and `StringView`;
-- the static views `static Span` and `static StringView`, which view immortal data;
+- the static types, such as `static Span` and `static StringView`, which view only data that lives as long as the program;
 - the object pointers;
 - `Slice`, whose `read()` and `lock()` begin the dynamic accesses the spans they return hold ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
@@ -59,7 +59,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | --- | --- | --- |
 | `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)); lent as a `Span<T>` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) |
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
-| `static Span<T>` | no (immortal) | ptr + count into immortal data, copyable and unscoped ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)) |
+| `static Span<T>` | no (static) | ptr + count into data that lives as long as the program, copyable and unscoped ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
 | `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
@@ -70,7 +70,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([Struct of arrays: `SoA<T>`](data-layout.md#struct-of-arrays-soat)) |
 | `String` | yes | UTF-8 bytes, allocator; made only with `alloc`, and lent as a `StringView` ([below](#strings)) |
 | `StringView` | no (scoped) | ptr + byte count |
-| `static StringView` | no (immortal) | ptr + byte count into immortal data, copyable and unscoped: a literal, a `Name`'s text, or a `const` `String`'s `.view` ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)) |
+| `static StringView` | no (static) | ptr + byte count into text that lives as long as the program, copyable and unscoped: a literal, a `Name`'s text, or a view of a `const`'s or a global `let`'s `String` ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
 | `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by its entry or by a hash stored with it (below) |
 
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
@@ -96,7 +96,7 @@ std's `Name` tells the two apart by `hasher.startsFromProcessSeed`, the one prop
 
 **`Name(s)` interns `s` at run time, from any thread.** It returns the `Name` that `s`'s text already has, or copies the text into `.heap` memory, whatever the ambient allocator is, and makes a new one. The interner's storage takes no `alloc`, since no value the code makes owns it ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). `Name(s)` ends the program when that copy can't be allocated, as a plain allocating operation does, and `Name(interning: s)` returns `nil` instead ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
 
-**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `static StringView` ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
+**Interned text lives for the rest of the program**, since every copy of a `Name`, wherever it was stored, must still resolve to its text. So a `Name`'s `text` is a `static StringView` ([02](../02-views-and-dependencies/scoped-values.md#static-values)). That suits identifiers drawn from a set the program defines, such as a compiler's keywords, the keys a config schema declares or the actions a game binds. It doesn't suit text from outside the program, such as user input or a file, where each new text would grow the interner for good.
 
 **`Name(existing: s)` looks `s` up and never interns it.** It returns the `Name` that `s`'s text already has, or `nil` for text never interned. So a program matches outside text against the names it defines without growing the interner:
 
@@ -185,7 +185,7 @@ A program may declare its own, such as one that holds a secret seed it read at s
 
 **A value's size is fixed when the program is built, whatever the length of the text it holds or views** ([Sizes fixed when the program is built](data-layout.md#sizes-fixed-when-the-program-is-built)). So text whose length has no bound fixed when the program is built lies outside the value, and where it lives follows from where it comes from:
 
-- **Text written in the program**, such as a plain literal's, is a view of read-only data, a `static StringView`, and so is any range of one ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+- **Text written in the program**, such as a plain literal's, is a view of read-only data, a `static StringView`, and so is any range of one ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 - **Text made at run time lives in storage made at run time.** A `String` owns that storage, so keeping such text takes `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)), unless the text is interned as a `Name`, whose interner keeps it for the rest of the run ([above](#collections-and-strings)).
 - **An interpolated literal is never text by itself**, since its length depends on the values it formats. It is a `Formattable` that writes its pieces into a sink, which needs no storage for the whole text (below), and keeping its text is `alloc "…"` ([below](#literals)). A buffer that bounds the length, such as std's `FixedString`, holds such text without the heap.
 
@@ -202,7 +202,7 @@ for g in label.graphemes { … }            // user-perceived characters, throug
 
 **Rayo has two text types: `String` owns text, and `StringView` borrows it.** Each kind of text has its own form, and only text that arrives at run time needs a `String`:
 
-- **Fixed text is a literal**, a `static StringView`, which views the literal's immortal bytes. It never allocates, can be stored anywhere, and goes wherever a `StringView` is expected ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+- **Fixed text is a literal**, a `static StringView`, which views the literal's immortal bytes. It never allocates, can be stored anywhere, and goes wherever a `StringView` is expected ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 - **Formatted output goes straight to its destination**, as `log("hp \(hp)")` formats into the log's sink with no `String` in between (below).
 - **Text that is passed around is a `StringView`**, which borrows the text from whatever owns it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)).
 - **A `String` owns text that arrives at run time**, such as a name loaded from a file, a player's input or a message off the network. It allocates, so it is made with `alloc` ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
@@ -228,7 +228,7 @@ let bare = String("grunt")                // error: making a 'String' needs 'all
 
 **`alloc "…"` makes a `String` from a literal** ([below](#literals)), and `alloc String(…)` makes one from text that a literal can't spell out, such as a `StringView` the code was lent.
 
-**A `String` made from a plain literal or a `static StringView` copies its bytes only when it must**, whether by `alloc "…"` or by `alloc String(…)`. The `String` records the allocator `alloc` gives it, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the view's immortal bytes until the first call that writes or grows it, which copies them into a buffer from that allocator.
+**A `String` made from a plain literal or a `static StringView` copies its bytes only when it must**, whether by `alloc "…"` or by `alloc String(…)`. The `String` records the allocator `alloc` gives it, as every `String` records its allocator, and is checked against it at each open like any other ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). But it uses the view's bytes, which live as long as the program and which nothing writes, until the first call that writes or grows it, which copies them into a buffer from that allocator.
 
 **A bare `String("…")` is a compile error**, as every `Allocating` initializer without `alloc` is ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Its diagnostic points to the literal itself, which needs no `String`, to `alloc "…"`, and to std's `FixedString`, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
 
@@ -314,7 +314,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no object;
 - no `Synchronized` value;
 - no `Allocator` id but `.heap`;
-- no pointer but one into immortal data, as a static view or a `Name` holds.
+- no pointer but one into immortal data, as a literal's `static StringView` or a `Name` holds.
 
 `Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
 

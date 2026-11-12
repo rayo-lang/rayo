@@ -88,6 +88,9 @@ _Avoid_: full-expression
 A type declared `@guard`, whose values hold a lock for as long as they live, as `MutexGuard` does ([02](docs/spec/02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)).
 _Avoid_: lock token
 
+**Immortal data**:
+Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes or the runtime's tables, which a static value may view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
+
 **Mutable view**:
 A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 _Avoid_: exclusive reference
@@ -117,6 +120,10 @@ A place, or what a place borrows, that a place property's place may lie in: `sel
 
 **Static storage**:
 Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+
+**Static type**:
+`static T`: a `T` whose every view views data that lives as long as the program, static storage or immortal data, so its values, **static values**, are unscoped and convert implicitly to `T`. A static value of a view type, such as a string literal's `static StringView`, is a **static view** ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
+_Avoid_: static string, static span, `'static`
 
 **Value property**:
 A computed property or subscript whose `get` returns a value and whose optional `set` takes one back, so a change works on a copy that `set` writes back ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
@@ -439,18 +446,11 @@ An imported C enum, which may hold any value of its underlying type unless its h
 **Freezable**:
 Said of a value that can be frozen: copied into read-only data, where it stays unchanged for the whole run, as a `const` that reaches run time must be ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
-**Immortal data**:
-Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes, which a static view points at ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
-
 **Reaches run time**:
 Said of a `const` named anywhere but in a `const` initializer, a `static if` or `static for` condition or list, an attribute argument or a `const` argument; the compiler copies it into read-only data ([09](docs/spec/09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
 **Static closure**:
 A closure whose body is instantiated once per field, as the argument of `T.construct` or `T.makeCase` ([09](docs/spec/09-compile-time/reflection.md#constructing-values-reflectively)).
-
-**Static view**:
-A `static StringView` or a `static Span<T>`: a view of immortal data only, such as a string literal, which is unscoped and converts implicitly to the plain view ([09](docs/spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
-_Avoid_: static string, static span
 
 ### Errors and safety
 

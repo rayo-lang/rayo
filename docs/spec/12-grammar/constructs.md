@@ -16,7 +16,7 @@ type-primary  = type-name
               | '(' type ('|' type)+ ')'                           (* error union (10): (IoError | ParseError)? *)
               | '[' (expression | '_') 'of' type ']'               (* Array<T, N>, the inline array; '_' infers the count from the initializer *)
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
-              | 'static' type-name                                 (* a static view (09): static StringView, static Span<T>, and no other type;
+              | 'static' type-primary                              (* a static type (02): static StringView, static Token, static any Logger;
                                                                       static Span<T>? is an optional static view *)
               | 'any' composition | 'some' composition | 'mutable' 'any' composition   (* mutable any P: the exclusive existential view *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type

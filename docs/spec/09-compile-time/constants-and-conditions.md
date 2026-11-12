@@ -71,12 +71,12 @@ alloc func makePresets() -> List<Preset> {
     return a
 }
 
-func presets() -> Span<Preset> { enemyPresets.span }   // a static view, converted to the plain one: any function may return it
+func presets() -> Span<Preset> { enemyPresets.span }   // a view of a const: any function may return it
 
 struct World(var presets: static Span<Preset>, …)
 
 func setUp(_ world: mutable World) {
-    world.presets = enemyPresets.span                  // a static view by itself, so a field can keep it
+    world.presets = enemyPresets.span                  // converts to a static view, since it views a const
     var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
     edited.append(Preset(name: alloc "boss", hp: 900))
     enemyPresets.append(Preset(name: alloc "boss", hp: 900))   // error: a const is never mutated
@@ -91,7 +91,7 @@ func setUp(_ world: mutable World) {
 - **Pointers.** It points each pointer into a copied allocation at the same offset in its copy. Evaluation never turns a pointer into an integer (above), so no integer in the value is an address that freezing would leave stale.
 - **Allocator words.** It makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none.
 
-**A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)), so its views are static views. For a `List` or an `[N of T]` reached from a `const` through stored fields and place properties, `.span` is a `static Span<T>`. For a `String` reached that way, as `enemyPresets[i].name` is, `.view` is a `static StringView`. Either may be kept anywhere, since what it views is never freed ([Static views: views of immortal data](attributes-and-runtime-data.md#static-views-views-of-immortal-data)), and converts to the plain view wherever one is expected ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+**A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)), so a view of it depends only on static storage, and converts to its static type wherever one is expected ([02](../02-views-and-dependencies/scoped-values.md#static-values)). For a `List` or an `[N of T]` reached from a `const` through stored fields and place properties, `.span` converts to a `static Span<T>`. For a `String` reached that way, as `enemyPresets[i].name` is, `.view` converts to a `static StringView`. Either may then be kept anywhere, since what it views is never freed.
 
 **What can be frozen.** A `const` that reaches run time must be **freezable**, or it is a compile error. A frozen value lies in read-only data, where nothing consumes, mutates or destroys it ([06](../06-memory-and-allocators/allocator-basics.md#the-static-allocator)), and every thread may read it. It is built at compile time and read at run time, so it reaches nothing that exists only at run time, and nothing from compile time but what freezing copies. So a freezable value meets each of these:
 
@@ -101,7 +101,7 @@ func setUp(_ world: mutable World) {
 - **No weak pointers or weak links.** It holds none at any depth, since the objects and `Shared` values they name exist only at run time ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)). So a `Slice` or a `Waker`, which holds a weak link, isn't freezable either.
 - **No allocator ids but `.heap`.** It holds no `Allocator` id but `.heap`, since an allocator registered at compile time doesn't exist at run time. So a global `let` that registers one, such as `frameArena` below, is initialized at startup.
 - **No stale values.** It holds no stale owning value: every owning value in it would pass an open when evaluation ends ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
-- **Pointers only into memory that lasts.** Through its raw pointers it reaches only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, the data behind any static view, another `const`'s frozen data, type metadata and code. It reaches no freed memory. A pointer made from an integer, such as a device register's, is frozen as it is, since evaluation never got that integer from a pointer (above).
+- **Pointers only into memory that lasts.** Through its raw pointers it reaches only live compile-time heap memory, which freezing copies (above), or immortal data: a literal's bytes, the names and lists that reflection gives, another `const`'s frozen data, type metadata and code. It reaches no freed memory. A pointer made from an integer, such as a device register's, is frozen as it is, since evaluation never got that integer from a pointer (above).
 - **Unscoped.** It is unscoped ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), unless every view it holds depends on nothing, as a function value made from a named function does ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)). Freezing follows only raw pointers, so any other view would still point at compile-time memory. A frozen value views frozen data through a static view (above).
 - **Readable from any thread.** It has a `Sendable` type, as every global that safe code reaches does ([07](../07-concurrency/global-state.md#global-state)).
 

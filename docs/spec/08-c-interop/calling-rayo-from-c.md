@@ -50,7 +50,7 @@ A C or C++ program uses a library written in Rayo:
 | `MutableSpan<T>` | `struct { T* ptr; rayo_int_t count; }` |
 | `mutable T` parameter | `T*` |
 | `Void` or `Never` as a result | `void`, and `_Noreturn` for `Never` |
-| `static Span<T>`, `static StringView` | as `Span<T>` and `StringView`: immortal data, which C may keep |
+| `static Span<T>`, `static StringView` | as `Span<T>` and `StringView`: data that lives as long as the program, which C may keep |
 | struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), each in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | a C struct whose member `_i` is element `i`, declared in layout order ([04](../04-types/collections.md#tuples-ranges-and-arrays)), each in its representation |
@@ -69,7 +69,7 @@ A C or C++ program uses a library written in Rayo:
 | `TrailingArray<H, E>` | `struct { H* ptr; rayo_int_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)), which the generated header names |
 
 - **The `nil` value of a niche** is the one 04 gives ([04](../04-types/enums.md#optionals)), and the generated header names it.
-- **A `String` that still uses a static view's immortal bytes** ([04](../04-types/collections.md#strings)) has `cap` 0 and a non-null `ptr`.
+- **A `String` that still uses a static view's bytes** ([04](../04-types/collections.md#strings)) has `cap` 0 and a non-null `ptr`.
 - **The builtins in the table are laid out as their C structs**, interior padding included. So on a 32-bit target, a `Span<T>` has 4 bytes of padding after its `ptr`, and it isn't padding-free there, nor is a type that holds one ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
 **Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes:

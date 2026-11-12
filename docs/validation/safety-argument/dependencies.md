@@ -89,7 +89,7 @@ use(a)                           // 'a' is still live here
 
 **Static storage is always allowed**, since it is never moved or destroyed ([07](../../spec/07-concurrency/global-state.md#shutdown)). The views a `Synchronized` global lends stay valid by its contract: a guard by its lock, and `Once.get()` by data never written again, which the global never frees ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)).
 
-**A static view depends on nothing, since nothing frees or writes what it views** ([09](../../spec/09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). Only the compiler and the runtime make one safely, from immortal data, and no plain view converts to one. So a view of memory that can be freed never sheds its dependencies by becoming static.
+**A static value depends on nothing, since nothing frees what it views** ([02](../../spec/02-views-and-dependencies/scoped-values.md#static-values)). A value converts to one only where its dependencies are static storage and immortal data, which no code moves or frees, and a lock guard or an exclusive view never does. So a view of memory that can be freed never sheds its dependencies by becoming static.
 
 **What a C entry hands back to C may depend only on its parameters, `const`s and places in a global `let`'s own storage** ([08](../../spec/08-c-interop/calling-rayo-from-c.md#what-a-c-entry-hands-back-to-c)). Once it returns, nothing in Rayo holds what it borrowed: a lock guard is released, and an open no longer counts as a use of its allocator. So a reset or an unregistration could free an owning value's storage while C still holds a view of it.
 

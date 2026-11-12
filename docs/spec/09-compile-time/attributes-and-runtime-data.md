@@ -65,29 +65,6 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 
 **An `AttributeInfo` gives its value only as the attribute's own type**, never as bytes, which would include its padding, and padding bytes are uninitialized ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `a[as: Tooltip.self]` is an optional place property that hands out the `Tooltip` it holds, or `nil` for another attribute type ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
 
-### Static views: views of immortal data
-
-**A view of immortal data needn't stay in a scope, so it can be stored anywhere.** **Immortal data** is memory that is never freed, and that nothing writes once a value names it: the program image, or runtime tables. A view needn't be scoped when nothing can free its memory while it reads it ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). The qualifier `static` marks such a view in its type:
-
-```swift
-let title: static StringView = "Rayo"                        // a literal is a static view
-let modes: [2 of static StringView] = ["easy", "hard"]       // so an array of literals can be a global
-struct Hint(let text: static StringView, let delay: Float)   // and a plain struct can store one
-
-func show(_ hint: Hint) {
-    let shown: StringView = hint.text                        // fine: it converts to the plain view
-    let kept: static StringView = shown                      // error: a plain view never converts to a static one
-}
-```
-
-**A static view is a `static StringView` or a `static Span<T>`, a shared view that views only immortal data, so unlike the plain view it is unscoped.** It is copyable, as the plain view is. Only these two views take `static`. Its conversion to the plain view is one of the implicit conversions ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). It meets `where return borrows static`, since it depends on nothing, while a view of a global `let` borrows static storage but isn't a static view ([02](../02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)). A range of a static view, such as `title[0..<2]`, is a static view too, since it views the same immortal data.
-
-These rules keep a static view's data immortal, or follow from it:
-
-- **Its elements.** A `static Span<T>`'s `T` is `~Scoped`, as an unscoped type's contents are ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)), and has only values that could be frozen ([Consts that reach run time](constants-and-conditions.md#consts-that-reach-run-time)): it is `Frozen` and `TrivialFree`, and holds no `StablePool`, weak pointer or weak link. So no safe code writes the data behind a static view, as it could through an `Atomic`, a `Shared` count or a pin count.
-- **Who makes one.** Only the compiler and the runtime create static views safely, such as a literal, a frozen `const`'s `.view` and `.span`, a `Name`'s text, and the names and lists that reflection and `typeInfo` give. `unsafe` code that makes one, and C that passes one to Rayo, promise the same of its data ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
-- **Its own conformance.** The data is never written either, so a static view is `Frozen`, through the `unsafe Frozen` conformance the language declares for it ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
-
 ## What a build declares
 
 **A build declares the settings that change what code means.** Two builds of one program with the same build declarations disagree about a safe program only where the language leaves it open ([11](../11-compilation-model.md#what-the-language-leaves-open)). A build declares these:

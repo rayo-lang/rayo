@@ -20,7 +20,7 @@ var hot = &heat.span                          // a MutableSpan<Float>: borrows t
 
 **An iterator that borrows nothing is unscoped**, such as a `Range`'s. So a task may `await` inside `for i in 0..<n`: a scoped value can't live across an `await` ([below](#where-a-scoped-value-can-go)), but this loop's iterator isn't one.
 
-**A view needn't be scoped when nothing can free its memory while it reads it.** A static view, a `static StringView` or a `static Span<T>`, is unscoped, since it views only immortal data ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)). So is a `Slice<T>`, which reads its buffer only through a scoped span it hands out for each use ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped.
+**A view needn't be scoped when nothing can free its memory while it reads it.** A static value, such as a `static StringView`, is unscoped, since it views only data that lives as long as the program ([below](#static-values)). So is a `Slice<T>`, which reads its buffer only through a scoped span it hands out for each use ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)). Any other view of memory that can be freed is scoped.
 
 **Making a view from a raw pointer requires `unsafe`.** Safe code gets views only from what owns the memory, since a view built from a raw pointer carries no dependencies for the compiler to verify ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
 
@@ -90,14 +90,15 @@ The closure can compute any unscoped result from the protected data. It can't sm
 
 **`~Scoped` is required implicitly in these places, where a value can outlive the function that stores it, or be reached without its borrows:**
 
-- globals, `@threadlocal var`s included;
+- globals, `@threadlocal var`s included, so a global whose type would be scoped takes its static type ([below](#static-values));
 - objects' values;
 - a leaked `Box`'s value, which a `RawAllocation` holds with no borrows ([06](../06-memory-and-allocators/owning-values.md#owning-boxes));
 - unscoped closures' captures;
 - the contents of every `Synchronized` generic, such as `Mutex<T>` or a queue, whose methods take a shared `self`, so absorption (rule 4, [Rule 4: Absorption](dependency-absorption-and-accesses.md#rule-4-absorption)) can't track what goes in ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
 - the concrete type in every conversion to an unscoped existential (`Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`), since erasure would hide what the value borrows;
-- task parameters and a `task func` method's `self`, which a task keeps in its state ([07](../07-concurrency/tasks.md#semantics));
-- the elements of a `static Span`, which outlive every scope ([09](../09-compile-time/attributes-and-runtime-data.md#static-views-views-of-immortal-data)).
+- task parameters and a `task func` method's `self`, which a task keeps in its state ([07](../07-concurrency/tasks.md#semantics)).
+
+**A static type meets `~Scoped`**, so a static value can go in each of these places, as a `Mutex<static Token>` or a `Box<any P>` of a `static Token` can.
 
 **In a type, `~` means "not", and comes only before `Copyable`, `Sendable` and `Scoped`** ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 
@@ -105,3 +106,65 @@ The closure can compute any unscoped result from the protected data. It can't sm
 - In a constraint, `T: ~Scoped` requires that `T` isn't scoped.
 
 **An unconstrained type parameter may be move-only, scoped and not `Sendable`, so none of those needs a `~`.**
+
+## Static values
+
+```swift
+struct Token(let kind: TokenKind, let text: StringView): Scoped
+
+let keywords: [2 of Token] = [Token(kind: .kIf, text: "if"), Token(kind: .kElse, text: "else")]   // a global: [2 of static Token]
+struct Hint(let text: static StringView, let delay: Float)    // a plain struct can store a static view
+
+let fileLog = FileLogger(path: "game.log")                    // a global let, with a Mutex inside
+struct AudioMixer(let log: static any Logger)                 // a view of a logger that lives as long as the program
+let mixer = AudioMixer(log: fileLog)
+
+func show(_ hint: Hint, _ token: Token) {
+    let shown: StringView = hint.text                         // fine: a static value converts to its plain type
+    let kept: static StringView = token.text                  // error: 'token' is borrowed, so its text may be freed
+}
+```
+
+**A static value views only data that lives as long as the program, so unlike a value of its plain type it is unscoped.** That data is one of two kinds:
+
+- static storage: the global `let`s and `const`s, which no code moves or destroys ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side));
+- **immortal data**: memory that is never freed, and that nothing writes once a value names it, such as the program image or the runtime's tables.
+
+The qualifier `static` marks such a value in its type: `static T` is the **static type** of `T`, a `T` whose every view views such data. A static value of a view type, such as a `static StringView`, is a **static view**.
+
+**`static` qualifies a scoped type whose scoped parts are all shared views:**
+
+- the shared views `StringView`, `Span<T>`, `Borrow<T>` and `any P`;
+- a type whose scoped fields, payloads and elements all take `static`, a field of raw pointer type `*U` counting as one of type `U`, as `Token`, `[2 of Token]`, `(StringView, Int)` and `List<StringView>` do;
+- a type parameter. Its argument must be unscoped or take `static`, which is checked where the parameter is bound, as a constraint is, and `static T` is `T` itself for an unscoped argument.
+
+**No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
+
+- an exclusive view, such as `MutableSpan<T>`, `MutableRef<T>` or `mutable any P`;
+- a lock guard ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
+- a function value or closure literal;
+- a type declared `Scoped` with no scoped field, such as a profiling zone.
+
+**`static` on a concrete unscoped type is a compile error**, as `static Int` is, since it would change nothing.
+
+**A static value's parts are static too**, since they view the same data. So `keywords[0]` is a `static Token`, `keywords[0].text` a `static StringView`, and a range of a static view, such as `keywords[1].text[0..<2]`, a static view.
+
+**A value converts to its static type where its dependencies are only static storage and immortal data** ([Dependencies](../02-views-and-dependencies.md#dependencies)). So these convert wherever a static type is expected:
+
+- a literal, which views the program image ([04](../04-types/collections.md#literals));
+- a value built only from static and unscoped values, such as `keywords[0]` above;
+- a view of a global `let` or a `const`, such as the `any Logger` view of `fileLog` above, which converts as a place does to `any P` and then to its static type ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
+- the result of a function declared `where return borrows static` ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)).
+
+A value that depends on anything else, such as a borrowed parameter, never converts, since that memory may be freed. A static value converts to its plain type wherever that is expected, and depends on nothing, so it meets `where return borrows static`. Besides these conversions, only the runtime makes static values, such as a `Name`'s text and the names and lists that reflection and `typeInfo` give ([09](../09-compile-time/reflection.md#what-reflection-can-read)). `unsafe` code that makes one, and C that passes one to Rayo, promise that its data lives as long as the program ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)).
+
+**A global whose type would be scoped has its static type, with nothing written.** That covers a global `let`, `var` or `@threadlocal var`, a `const`, and a type's static stored property ([07](../07-concurrency/global-state.md#global-state)). So `keywords` above is a `[2 of static Token]`, and its initializer converts to it.
+
+**A static type is copyable, `Sendable` and `TrivialFree` exactly when its plain type is, and `Frozen` when what it views is.** The language declares its `Frozen` conformance ([06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)):
+
+- a `static StringView` is always `Frozen`, since the text it views is never written: a literal's bytes, interned text, or a `String` in a global `let` or a `const`;
+- a static `Span<U>` or `Borrow<U>` is `Frozen` when `U` is;
+- a static `any P` is `Frozen` when `P` refines `Frozen`;
+- any other static type is `Frozen` when each of its fields, taken as static, is.
+
+So `static any Logger` above isn't `Frozen`, since a logger writes through its `Mutex`. It can be a global `let`'s or a field's type, but a `const` can't hold one ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).

@@ -20,7 +20,7 @@ func scan() {
 }
 ```
 
-**Every global that safe code reaches has a `Sendable` type, except a `@threadlocal var`** ([What may cross threads: `Sendable`](race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Every thread reaches such a global, while each thread has its own copy of a thread-local. A bare global `var` and an imported C variable may have any unscoped type, since every access to one is `unsafe` and answers for which threads touch it. Safe code can use:
+**Every global that safe code reaches has a `Sendable` type, except a `@threadlocal var`** ([What may cross threads: `Sendable`](race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Every thread reaches such a global, while each thread has its own copy of a thread-local. A bare global `var` and an imported C variable may have any unscoped type, since every access to one is `unsafe` and answers for which threads touch it. A global whose type would be scoped has its static type instead, whose views view only data that lives as long as the program ([02](../02-views-and-dependencies/scoped-values.md#static-values)). Safe code can use:
 
 - **`const`s, and `let`s of any `Sendable` type.** Code reaches one only through shared borrows, with no access checks, only the check that its initializer has run where the compiler can't prove it ([below](#initialization-at-startup)). What it holds changes only through its own synchronization: a `Synchronized` value's, such as an `Atomic`, `Mutex`, `Published` or `Once`, or a `Shared`'s count and its value's own ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - **`@threadlocal var`s**: each thread has its own copy ([below](#thread-locals)). `@threadlocal` marks only a `var`.
