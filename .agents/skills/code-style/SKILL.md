@@ -1,11 +1,17 @@
 ---
 name: code-style
-description: Read before writing, changing or reviewing any code in this repo, every time. Says how code is split into files, types and functions, how a body is laid out in blocks, which forms of current Swift it uses, and the audit every pull request passes.
+description: Read before writing, changing or reviewing any code in this repo, every time. Says which compiler stage code goes in, how it is split into files, types and functions, how a body is laid out in blocks, which forms of current Swift it uses, and the audit every pull request passes.
 ---
 
 # Code style
 
-These rules decide how the repo's code and tests are split into files, types and functions, and how a function's body is laid out. The aim is code a reader takes in at a glance: each file one concept, each type one job, and each function a few blocks whose steps a reader can see.
+These rules decide which stage of the compiler the repo's code goes in, how its code and tests are split into files, types and functions, and how a function's body is laid out. The aim is code a reader takes in at a glance: each stage its own questions, each file one concept, each type one job, and each function a few blocks whose steps a reader can see.
+
+## Stages
+
+**A compiler runs in stages, and each stage owns a set of questions about the program**, such as what the text says, what it means, or what each place holds on each path through a function. **A change goes in the stage that owns the question it decides.** That stage answers the question whole and reports every error the answer gives. A later stage takes an earlier stage's answers as given, and an earlier stage leaves a later stage's questions to it, even where it holds all it would take to answer them.
+
+A type checker that reports a move out of a borrowed parameter answers the ownership pass's question, however little code the rule takes there, so the rule is in the wrong stage. The project says, in its own docs, which of its stages owns which questions.
 
 ## Files
 
@@ -247,6 +253,7 @@ struct OwnedModule: ~Copyable {
 
 Audit every file, type and function you add or change against this list, and fix what falls short:
 
+- **Every change** lies in the stage that owns the question it decides, and no stage answers a question another stage owns.
 - **Every file** holds one primary type and its parts and is named after it (an extension file holds one area of its type's job and is named `Type+Area.swift`, with the type's stored properties in `Type.swift`; a test file is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
