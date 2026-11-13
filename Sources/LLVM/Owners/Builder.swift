@@ -114,7 +114,7 @@ public struct Builder: ~Copyable {
         var arguments = arguments.map { Optional($0.anyValue.ref) }
         let count = UInt32(arguments.count)
         let call = LLVMBuildCall2(ref, function.type.ref, function.ref, &arguments, count, "")!
-        parameterAttributes.forEachAttribute(in: context.ref) { LLVMAddCallSiteAttribute(call, $0, $1) }
+        Attribute.forEach(of: parameterAttributes, in: context.ref) { LLVMAddCallSiteAttribute(call, $0, $1) }
 
         // A call of a function that returns nothing gives no value.
         let result = AnyValue(call)

@@ -20,12 +20,10 @@ extension FunctionEmitter {
         switch target.signature.result {
         case .direct:
             let result = try emitCall(of: target, passing: arguments, resultSlot: nil, with: builder)
-            try store(result, in: destinationAddress, with: builder)
-        case .resultSlot:
+            try storeResult(result, in: destinationAddress, with: builder)
+        case .slot:
             try callWritingSlot(of: target, passing: arguments, from: operands, into: destination,
                                 at: destinationAddress, with: builder)
-        case .callerPlace, .filledSlot:
-            preconditionFailure("a result is returned directly or written to a slot")
         }
     }
 
@@ -59,43 +57,45 @@ extension FunctionEmitter {
     ) throws(LLVMError) -> AnyValue? {
         // The result's slot comes ahead of the arguments, which each pass in their mode.
         var llvmArguments: [AnyValue] = resultSlot.map { [$0.pointer.anyValue] } ?? []
-        for (argument, mode) in zip(arguments, target.signature.parameters) {
-            llvmArguments += try pass(argument, in: mode, with: builder)
+        for (argument, passing) in zip(arguments, target.signature.parameters) {
+            llvmArguments += try pass(argument, as: passing, with: builder)
         }
         return builder.call(target.function, llvmArguments, parameterAttributes: target.signature.parameterAttributes)
     }
 
-    /// Emits the instructions that pass `argument` in `mode`, and returns the LLVM arguments that pass it.
+    /// Emits the instructions that pass `argument` as `passing` says, and returns the LLVM arguments that pass it.
     private func pass(
-        _ argument: OperandValue, in mode: PassMode, with builder: borrowing Builder,
+        _ argument: OperandValue, as passing: ParameterPassing, with builder: borrowing Builder,
     ) throws(LLVMError) -> [AnyValue] {
-        switch mode {
-        // A value passed directly is passed in its scalars.
-        case .direct:
-            return try scalars(of: argument, with: builder)
-
-        // A value passed in the caller's place is passed a pointer to it.
-        case .callerPlace:
-            guard case .place(let address) = argument else {
-                preconditionFailure("a constant is an Int or a Bool, which passes directly but to a mutable parameter")
-            }
-            return [address.pointer.anyValue]
-
-        // A value passed in a slot the caller fills is copied to a new one.
-        case .filledSlot:
-            let slot = newSlot(of: argument.type, with: builder)
-            try copy(argument, to: slot, with: builder)
-            return [slot.pointer.anyValue]
-
-        // A result's slot is passed ahead of the arguments, never as one.
-        case .resultSlot:
-            preconditionFailure("a parameter is never passed in a result's slot")
+        switch passing {
+        case .direct: try scalars(of: argument, with: builder)
+        case .callerPlace: [placePointer(of: argument)]
+        case .filledSlot: [try filledSlot(holding: argument, with: builder)]
         }
+    }
+
+    /// The pointer to the place that holds `argument`.
+    private func placePointer(of argument: OperandValue) -> AnyValue {
+        // A constant is an Int or a Bool, which passes directly to any parameter but a mutable one, and no mutable
+        // parameter takes a constant.
+        guard case .place(let address) = argument else {
+            preconditionFailure("a constant is never passed in the caller's place")
+        }
+        return address.pointer.anyValue
+    }
+
+    /// Emits the copy of `argument` into a new slot, and returns the pointer to the slot.
+    private func filledSlot(
+        holding argument: OperandValue, with builder: borrowing Builder,
+    ) throws(LLVMError) -> AnyValue {
+        let slot = newSlot(of: argument.type, with: builder)
+        try copy(argument, to: slot, with: builder)
+        return slot.pointer.anyValue
     }
 
     /// Emits the stores of `result`, which a call returns directly, in the place at `destination`, where there is
     /// one.
-    private func store(
+    private func storeResult(
         _ result: AnyValue?, in destination: Address?, with builder: borrowing Builder,
     ) throws(LLVMError) {
         // A result that no place takes is dropped.
@@ -103,11 +103,11 @@ extension FunctionEmitter {
 
         // A result of one scalar returns it, and one of more returns them in a struct.
         guard let returnedStruct = AggregateValue(result) else {
-            return try store([result], splitAt: destination, with: builder)
+            return try storeScalars([result], at: destination, with: builder)
         }
         let count = types.scalars(of: destination.type).count
         let scalars = (0..<count).map { builder.extractValue(from: returnedStruct, at: $0) }
-        try store(scalars, splitAt: destination, with: builder)
+        try storeScalars(scalars, at: destination, with: builder)
     }
 
     /// Throws where `arguments` aren't as many as `target` takes, or of the types it takes them as.

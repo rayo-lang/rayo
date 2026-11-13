@@ -30,16 +30,17 @@ struct FunctionEmitter {
     /// How the function's parameters and result are passed.
     let signature: LoweredSignature
     let callees: Callees
-    /// The LLVM types of the program's values.
-    let types: LLVMTypes
-    /// How values are passed, which also says which values move between places whole.
+    /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
     let operators: OperatorEmitter
     /// The block that holds every stack slot, and goes on to the first IR block.
     let entry: LLVM.BasicBlock
     /// The pointer to each local's place, indexed by `LocalID`.
-    var slots: [PointerValue] = []
+    var places: [PointerValue] = []
     var blocks: [LLVM.BasicBlock] = []
+
+    /// The LLVM types of the program's values.
+    var types: LLVMTypes { lowering.types }
 
     init(
         function: IRFunction, into declared: DeclaredFunction, callees: Callees, lowering: SignatureLowering,
@@ -49,7 +50,6 @@ struct FunctionEmitter {
         llvmFunction = declared.function
         signature = declared.signature
         self.callees = callees
-        types = lowering.types
         self.lowering = lowering
         operators = OperatorEmitter(into: declared.function, types: lowering.types, panic: panic)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
@@ -59,7 +59,7 @@ struct FunctionEmitter {
     /// type it doesn't take.
     mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
         program.builder.position(atEndOf: entry)
-        slots = try makePlaces(with: program.builder)
+        places = try makePlaces(with: program.builder)
         blocks = function.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 
         for (block, llvmBlock) in zip(function.blocks, blocks) {
@@ -110,11 +110,11 @@ struct FunctionEmitter {
         // An operator computes on its operands' values.
         case .unary(let op, let operand):
             let value = try operators.emit(op, on: read(operand, with: program.builder), at: range, in: program)
-            try store(value, in: destination, with: program.builder)
+            try keep(value, in: destination, with: program.builder)
         case .binary(let op, let left, let right):
             let operands = try (read(left, with: program.builder), read(right, with: program.builder))
             let value = try operators.emit(op, operands.0, operands.1, at: range, in: program)
-            try store(value, in: destination, with: program.builder)
+            try keep(value, in: destination, with: program.builder)
 
         // A call passes its arguments as its function's signature says.
         case .call(let callee, let arguments):
@@ -137,7 +137,7 @@ struct FunctionEmitter {
     }
 
     /// Emits the store of `value`, an operator's result, in `destination`, where there is one.
-    private func store(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
+    private func keep(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
         // A value that no place takes is dropped.
         guard let destination else { return }
         try store(value, at: address(of: destination, with: builder), with: builder)

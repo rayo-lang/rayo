@@ -26,12 +26,12 @@ extension FunctionEmitter {
         }
 
         switch signature.result {
+        // A result passed directly returns its scalars.
         case .direct:
             try returnDirectly(value, with: builder)
-        case .resultSlot:
+        // One written to a slot is copied there.
+        case .slot:
             try returnInSlot(value, with: builder)
-        case .callerPlace, .filledSlot:
-            preconditionFailure("a result is returned directly or written to a slot")
         }
     }
 
@@ -71,7 +71,7 @@ extension FunctionEmitter {
     /// different values.
     func returnedLocal() -> LocalID? {
         // A result returned directly has no slot to build it in.
-        guard case .resultSlot = signature.result else { return nil }
+        guard case .slot = signature.result else { return nil }
 
         // Gather what each `return` gives the whole of: a local, or nil for anything else.
         var returned: Set<LocalID?> = []

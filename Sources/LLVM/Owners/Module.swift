@@ -84,7 +84,7 @@ public struct Module: ~Copyable {
         named name: String, type: FunctionType, parameterAttributes: [[Attribute]] = [],
     ) -> Function {
         let function = LLVMAddFunction(ref, name, type.ref)!
-        parameterAttributes.forEachAttribute(in: context.ref) { LLVMAddAttributeAtIndex(function, $0, $1) }
+        Attribute.forEach(of: parameterAttributes, in: context.ref) { LLVMAddAttributeAtIndex(function, $0, $1) }
         return Function(function, type: type)
     }
 

@@ -55,15 +55,15 @@ struct LLVMTypes {
         switch type {
         // An Int or a Bool is a scalar of its own.
         case .int, .bool:
-            return [Scalar(fields: [], type: type)]
+            [Scalar(fields: [], type: type)]
 
         // Void holds nothing.
         case .void:
-            return []
+            []
 
         // A struct is the scalars of each field in turn, each lying inside its field.
         case .structure(let id):
-            return table[id].fields.enumerated().flatMap { index, field in
+            table[id].fields.enumerated().flatMap { index, field in
                 scalars(of: field.type).map { Scalar(fields: [index] + $0.fields, type: $0.type) }
             }
         }

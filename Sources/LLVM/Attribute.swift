@@ -51,13 +51,14 @@ public enum Attribute: Equatable {
     private static func kind(named name: String) -> UInt32 {
         LLVMGetEnumAttributeKindForName(name, name.utf8.count)
     }
-}
 
-extension [[Attribute]] {
-    /// Calls `apply` with each attribute, made in `context`, and the index LLVM gives the parameter it holds of: one
-    /// list of attributes for each parameter, in order.
-    func forEachAttribute(in context: LLVMContextRef, _ apply: (LLVMAttributeIndex, LLVMAttributeRef) -> Void) {
-        for (parameter, attributes) in enumerated() {
+    /// Calls `apply` with each of `parameterAttributes`, one list for each parameter in order, made in `context`,
+    /// and the index LLVM gives the parameter it holds of.
+    static func forEach(
+        of parameterAttributes: [[Attribute]], in context: LLVMContextRef,
+        _ apply: (LLVMAttributeIndex, LLVMAttributeRef) -> Void,
+    ) {
+        for (parameter, attributes) in parameterAttributes.enumerated() {
             // LLVM numbers the parameters from 1, after the result.
             let index = LLVMAttributeIndex(parameter + 1)
             for attribute in attributes { apply(index, attribute.ref(in: context)) }

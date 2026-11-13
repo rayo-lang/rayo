@@ -26,21 +26,25 @@ extension FunctionEmitter {
     /// otherwise a slot that its scalars are stored in.
     private func parameterPlace(of index: Int, with builder: borrowing Builder) throws(LLVMError) -> PointerValue {
         let llvmParameters = signature.llvmParameters(of: index)
-        switch signature.parameters[index] {
+        return switch signature.parameters[index] {
         // A value passed directly is put back together from its scalars, in a slot of its own.
-        case .direct(let scalars):
-            let slot = newSlot(of: function.locals[index].type, with: builder)
-            for (scalar, llvmIndex) in zip(scalars, llvmParameters) {
-                let address = try address(of: scalar, in: slot, with: builder)
-                builder.store(llvmFunction.parameter(at: llvmIndex), to: address.pointer,
-                              alignment: types.alignment(of: scalar.type))
-            }
-            return slot.pointer
-
+        case .direct:
+            try slot(of: function.locals[index].type, holdingParameters: llvmParameters, with: builder).pointer
         // A value passed in a pointer lies where it points.
-        case .callerPlace, .filledSlot, .resultSlot:
-            return pointerParameter(at: llvmParameters.lowerBound)
+        case .callerPlace, .filledSlot:
+            pointerParameter(at: llvmParameters.lowerBound)
         }
+    }
+
+    /// Emits a new slot for a value of `type`, and the stores in it of the scalars the LLVM parameters at
+    /// `llvmParameters` pass, and returns its address.
+    private func slot(
+        of type: RayoType, holdingParameters llvmParameters: Range<Int>, with builder: borrowing Builder,
+    ) throws(LLVMError) -> Address {
+        let slot = newSlot(of: type, with: builder)
+        let scalars = llvmParameters.map { llvmFunction.parameter(at: $0) }
+        try storeScalars(scalars, at: slot, with: builder)
+        return slot
     }
 
     /// The function's LLVM parameter at `index`, which the function's signature makes a pointer.
@@ -65,20 +69,17 @@ extension FunctionEmitter {
     /// Emits the instructions that point at `place`, a local's place or a field inside it, and returns its address.
     /// Throws where the place names a field that the value holding it doesn't have.
     func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
-        // Start at the local's place, and step into each field in turn.
-        var address = Address(pointer: slots[place.local.index], type: function.locals[place.local.index].type)
-        for field in place.fields {
-            address = try fieldAddress(of: field, in: address, with: builder)
-        }
-        return address
+        let local = Address(pointer: places[place.local.index], type: function.locals[place.local.index].type)
+        return try address(following: place.fields, from: local, with: builder)
     }
 
-    /// Emits the instructions that point at `scalar`, which lies inside the value at `address`.
+    /// Emits the instructions that step from the value at `address` into each of `fields` in turn, each by its place
+    /// in its struct's declaration, and returns the address of the last.
     private func address(
-        of scalar: Scalar, in address: Address, with builder: borrowing Builder,
+        following fields: [Int], from address: Address, with builder: borrowing Builder,
     ) throws(LLVMError) -> Address {
         var address = address
-        for field in scalar.fields {
+        for field in fields {
             address = try fieldAddress(of: field, in: address, with: builder)
         }
         return address
@@ -156,25 +157,27 @@ extension FunctionEmitter {
     func scalars(of value: OperandValue, with builder: borrowing Builder) throws(LLVMError) -> [AnyValue] {
         switch value {
         // A constant is an Int or a Bool, each one scalar.
-        case .constant(let constant, _):
-            return [constant]
-
+        case .constant(let constant, _): [constant]
         // A value in a place is read one scalar at a time, from where each lies.
-        case .place(let address):
-            var loaded: [AnyValue] = []
-            for scalar in types.scalars(of: address.type) {
-                let scalarAddress = try self.address(of: scalar, in: address, with: builder)
-                let (type, alignment) = (types.llvmType(scalar.type), types.alignment(of: scalar.type))
-                loaded.append(builder.load(type, from: scalarAddress.pointer, alignment: alignment))
-            }
-            return loaded
+        case .place(let address): try loadScalars(at: address, with: builder)
         }
     }
 
+    /// Emits the loads of the scalars that the value at `address` splits into, and returns them in order.
+    private func loadScalars(at address: Address, with builder: borrowing Builder) throws(LLVMError) -> [AnyValue] {
+        var loaded: [AnyValue] = []
+        for scalar in types.scalars(of: address.type) {
+            let scalarAddress = try self.address(following: scalar.fields, from: address, with: builder)
+            let (type, alignment) = (types.llvmType(scalar.type), types.alignment(of: scalar.type))
+            loaded.append(builder.load(type, from: scalarAddress.pointer, alignment: alignment))
+        }
+        return loaded
+    }
+
     /// Emits the stores of `scalars`, the scalars a value splits into, in order, in the place at `address`.
-    func store(_ scalars: [AnyValue], splitAt address: Address, with builder: borrowing Builder) throws(LLVMError) {
+    func storeScalars(_ scalars: [AnyValue], at address: Address, with builder: borrowing Builder) throws(LLVMError) {
         for (scalar, value) in zip(types.scalars(of: address.type), scalars) {
-            let scalarAddress = try self.address(of: scalar, in: address, with: builder)
+            let scalarAddress = try self.address(following: scalar.fields, from: address, with: builder)
             builder.store(value, to: scalarAddress.pointer, alignment: types.alignment(of: scalar.type))
         }
     }

@@ -260,7 +260,7 @@ struct SignatureLoweringTests {
 
     /// Runs `body` with a function that says how a parameter of a convention and a type passes, under Rayo's
     /// convention, in a program whose structs are `table`'s.
-    private func withModes(_ body: ((ParameterConvention, RayoType) -> PassMode) throws -> Void) throws {
+    private func withModes(_ body: ((ParameterConvention, RayoType) -> ParameterPassing) throws -> Void) throws {
         try withProgramModule(for: .debug) { programModule in
             let lowering = SignatureLowering(types: LLVMTypes(table, in: programModule.emitter.context))
             try body { convention, type in

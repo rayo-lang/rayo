@@ -6,8 +6,8 @@ struct LoweredSignature {
     /// The signature lowered.
     let source: FunctionSignature
     /// How each parameter of `source` is passed, in order.
-    let parameters: [PassMode]
-    let result: PassMode
+    let parameters: [ParameterPassing]
+    let result: ResultPassing
     let type: FunctionType
     /// The attributes of each LLVM parameter, in order.
     let parameterAttributes: [[Attribute]]
@@ -17,16 +17,16 @@ struct LoweredSignature {
     private let firstParameters: [Int]
 
     init(
-        _ source: FunctionSignature, parameters: [PassMode], result: PassMode, type: FunctionType,
+        _ source: FunctionSignature, parameters: [ParameterPassing], result: ResultPassing, type: FunctionType,
         returnedStruct: LLVM.StructType?,
     ) {
-        // A result slot is passed ahead of the parameters, and each parameter is passed in as many LLVM parameters
-        // as it has scalars where it is passed directly, and in one pointer otherwise.
-        var attributes = result.passesSlot ? [result.attributes] : []
+        // A result's slot is passed ahead of the parameters, and each parameter in as many LLVM parameters as its
+        // passing takes.
+        var attributes: [[Attribute]] = if case .slot(let slotAttributes) = result { [slotAttributes] } else { [] }
         var firstParameters: [Int] = []
-        for mode in parameters {
+        for parameter in parameters {
             firstParameters.append(attributes.count)
-            attributes += mode.llvmParameterAttributes
+            attributes += parameter.llvmParameterAttributes
         }
         firstParameters.append(attributes.count)
 
@@ -42,20 +42,5 @@ struct LoweredSignature {
     /// The indices of the LLVM parameters that pass the parameter at `index` of `source`.
     func llvmParameters(of index: Int) -> Range<Int> {
         firstParameters[index]..<firstParameters[index + 1]
-    }
-}
-
-private extension PassMode {
-    /// Whether the mode passes a result in a slot, whose pointer comes ahead of the parameters.
-    var passesSlot: Bool {
-        if case .resultSlot = self { true } else { false }
-    }
-
-    /// The attributes of each LLVM parameter that a parameter passed in this mode takes.
-    var llvmParameterAttributes: [[Attribute]] {
-        switch self {
-        case .direct(let scalars): Array(repeating: [], count: scalars.count)
-        case .callerPlace(let attributes), .filledSlot(let attributes), .resultSlot(let attributes): [attributes]
-        }
     }
 }

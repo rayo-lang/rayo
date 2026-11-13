@@ -21,11 +21,12 @@ struct FunctionSignature {
         convention = .rayo
     }
 
-    /// The signature of a function of the runtime that takes one borrowed argument of `type` and returns nothing,
-    /// which C's convention and Rayo's pass alike, since each passes a lone Int or Bool directly.
+    /// The signature of a function of the runtime that takes one borrowed argument of `type`, an Int or a Bool, and
+    /// returns nothing.
     init(runtimeTaking type: RayoType) {
         parameters = [Parameter(convention: .borrowed, type: type)]
         result = .void
+        // The runtime's functions follow C's convention, which passes a lone Int or Bool directly, as Rayo's does.
         convention = .rayo
     }
 
