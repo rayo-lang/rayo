@@ -6,7 +6,7 @@ This page names each stage's kind of question, not each question. A new feature 
 
 | Stage | Modules | Owns |
 |---|---|---|
-| Source and diagnostics | `RayoSource`, `RayoDiagnostics`, `RayoDiagnosticsMacros` | Positions in the source text, and the errors the compiler can report. The stage that finds an error decides when and where it is reported. |
+| Source and diagnostics | `RayoSource`, `RayoDiagnostics`, `RayoDiagnosticsMacros` | Positions in the source text, and the errors the compiler can report. The stage that finds an error decides where it is reported. |
 | Syntax | `RayoSyntax` | What the text says: its tokens and its syntax tree. It knows no names and no types, and reports text that doesn't read as a program. |
 | Semantic checking | `RayoSema` | What the program means: what names refer to, the types of expressions, what each expression does, and how each type lies in memory. It produces the checked program. |
 | Lowering | `RayoIR` | How the checked program runs as control flow. It reports no errors. |

@@ -4,7 +4,7 @@ import RayoDiagnostics
 /// ends a compile for the program's errors.
 struct StopOnErrors<Value>: CompilationStep {
     func run(_ input: Value, errors: inout [Diagnostic]) throws(CompilationError) -> Value? {
-        if !errors.isEmpty { try skip(errors: errors) }
+        guard errors.isEmpty else { throw .rejected(errors.inSourceOrder) }
         return input
     }
 

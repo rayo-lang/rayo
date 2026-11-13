@@ -150,9 +150,9 @@ public enum Compiler {
             StopOnErrors<CheckedProgram>()
             Lower()
             VerifyIR()
+            CheckParameterMoves()
             // Only a program that moves out of no borrowed parameter is checked for where its locals hold a value, so
             // a use of a parameter after such a move isn't reported again as a use after a move.
-            CheckParameterMoves()
             StopOnErrors<IRProgram>()
             CheckOwnership()
             // Only a program whose locals hold a value at each use is checked for values no code reads, so a
