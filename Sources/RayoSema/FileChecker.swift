@@ -148,6 +148,7 @@ final class FileChecker {
 
     /// The checked program of `definitions`, which are in the order of their functions' IDs.
     private func program(of definitions: [Definition], types: TypeTable, main: FunctionID?) -> CheckedProgram {
+        // Declare each function in the program's table, with its body under its ID.
         var table = FunctionTable()
         var bodies: [FunctionID: CheckedBody] = [:]
         for (index, definition) in definitions.enumerated() {
@@ -157,6 +158,7 @@ final class FileChecker {
             precondition(id == FunctionID(index: index), "a checked function keeps its ID")
             bodies[id] = definition.body
         }
+
         return CheckedProgram(types: types, functions: table, bodies: bodies, main: main)
     }
 
