@@ -20,14 +20,32 @@ public enum InitializationChecker {
 
     /// Checks `places.body`, whose first `parameterCount` locals are its function's parameters.
     private static func check(_ places: PlaceTypes, parameterCount: Int) -> [Diagnostic] {
-        var errors = FunctionErrors(places: places)
         let analysis = InitializationAnalysis(places.body, parameterCount: parameterCount)
-        for case (let block, var state?) in zip(places.body.blocks, analysis.entryStates) {
-            state.apply(
-                block, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
-            )
+        var results = DataflowSolver.solve(analysis, in: places.body)
+        var errors = FunctionErrors(places: places)
+        for index in places.body.blocks.indices {
+            check(BlockID(index: index), of: places.body, results: &results, into: &errors)
         }
         return errors.diagnostics
+    }
+
+    /// Hands `errors` what each statement of `block`, and its terminator, may find missing, where `results` say what
+    /// the locals hold just before it.
+    private static func check(
+        _ block: BlockID, of body: IRBody, results: inout DataflowResults<InitializationAnalysis>,
+        into errors: inout FunctionErrors,
+    ) {
+        let basicBlock = body.blocks[block.index]
+        for (index, statement) in basicBlock.statements.enumerated() {
+            // A block that no path reaches has no state, and nothing in it is checked.
+            guard let state = results.state(before: index, in: block) else { return }
+            state.inspect(
+                statement, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
+            )
+        }
+
+        guard let state = results.state(before: basicBlock.statements.count, in: block) else { return }
+        state.inspect(basicBlock.terminator) { errors.use($0, at: $1, missing: $2) }
     }
 }
 
