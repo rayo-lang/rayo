@@ -15,7 +15,6 @@ struct Declarations {
     /// Each struct's fields, in the order the struct declares them.
     private var fields: [StructID: [DeclaredField]] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
-    private static let preludeFunctions: [Signature] = [.printInt, .printBool]
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
     init(names: TopLevelNames) {
@@ -42,10 +41,11 @@ struct Declarations {
         self.fields[id] = fields
     }
 
-    /// Declares the prelude's functions whose names the file's own structs and functions leave free.
+    /// Declares the prelude's built-ins whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
-        // A struct or a function of the file shadows every prelude function of its name.
-        for signature in Self.preludeFunctions where kind(of: signature.name) == nil { _ = declare(signature) }
+        // A struct or a function of the file shadows every built-in that a call reaches by its name.
+        let signatures = Builtin.allCases.map(Signature.init(of:))
+        for signature in signatures where kind(of: signature.name) == nil { _ = declare(signature) }
     }
 
     /// The kind of the file's declarations that `name` belongs to, nil when no struct or function of the file has it.

@@ -8,13 +8,10 @@ struct OperatorEmitter {
     /// The function that a panic's blocks are appended to.
     private let llvmFunction: Function
     private let types: LLVMTypes
-    /// The runtime's function that a panic calls.
-    private let panic: Function
 
-    init(into llvmFunction: Function, types: LLVMTypes, panic: Function) {
+    init(into llvmFunction: Function, types: LLVMTypes) {
         self.llvmFunction = llvmFunction
         self.types = types
-        self.panic = panic
     }
 
     /// Emits `op` on `operand` at the builder's position and returns its value. An operator that can panic leaves the
@@ -25,7 +22,7 @@ struct OperatorEmitter {
         // Negation subtracts an Int from 0.
         case .negate:
             let negated = try int(operand, op)
-            return emitArithmetic(.subtract, types.int64.constant(0), negated, at: range, in: program).anyValue
+            return try emitArithmetic(.subtract, types.int64.constant(0), negated, at: range, in: program).anyValue
 
         // `!` flips a Bool's one bit.
         case .not:
@@ -55,8 +52,10 @@ struct OperatorEmitter {
     }
 
     /// Emits `left op right`, which panics on overflow where overflow is checked and wraps where it isn't.
-    private func emitArithmetic(_ op: OverflowingOperation, _ left: IntValue<I64>, _ right: IntValue<I64>,
-                                at range: SourceRange, in program: borrowing ProgramEmitter) -> IntValue<I64> {
+    private func emitArithmetic(
+        _ op: OverflowingOperation, _ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
+        in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) -> IntValue<I64> {
         // Where overflow isn't checked, the plain instruction wraps.
         guard program.build.checksOverflow else { return emitWrapping(op, left, right, with: program.builder) }
 
@@ -66,7 +65,7 @@ struct OperatorEmitter {
         let call = program.builder.call(intrinsic, [left, right])!
         let pair = AggregateValue(call)!
         let overflowed = IntValue<I1>(program.builder.extractValue(from: pair, at: 1))!
-        panic(if: overflowed, .overflow, at: range, in: program)
+        try panic(if: overflowed, .overflow, at: range, in: program)
         return IntValue<I64>(program.builder.extractValue(from: pair, at: 0))!
     }
 
@@ -82,15 +81,15 @@ struct OperatorEmitter {
     /// Emits `left / right`, which panics on a zero divisor, and on Int.min / -1 where overflow is checked; where it
     /// isn't, Int.min / -1 wraps.
     private func emitDivision(_ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
-                              in program: borrowing ProgramEmitter) -> IntValue<I64> {
-        panic(ifZero: right, .divisionByZero, at: range, in: program)
+                              in program: borrowing ProgramEmitter) throws(LLVMError) -> IntValue<I64> {
+        try panic(ifZero: right, .divisionByZero, at: range, in: program)
 
         let isMinusOne = program.builder.compare(.equal, right, types.int64.constant(-1))
 
         // Where overflow is checked, Int.min / -1, the one quotient that overflows, panics.
         if program.build.checksOverflow {
             let isMin = program.builder.compare(.equal, left, types.int64.constant(.min))
-            panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
+            try panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
         }
 
         // LLVM leaves Int.min / -1 undefined, so divide by -1 as by 1 and negate, which wraps Int.min to itself.
@@ -102,8 +101,8 @@ struct OperatorEmitter {
 
     /// Emits `left % right`, which panics on a zero divisor.
     private func emitRemainder(_ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
-                               in program: borrowing ProgramEmitter) -> IntValue<I64> {
-        panic(ifZero: right, .remainderByZero, at: range, in: program)
+                               in program: borrowing ProgramEmitter) throws(LLVMError) -> IntValue<I64> {
+        try panic(ifZero: right, .remainderByZero, at: range, in: program)
 
         // Every remainder by -1 is 0, but LLVM leaves Int.min % -1 undefined, so a divisor of -1 becomes 1.
         let isMinusOne = program.builder.compare(.equal, right, types.int64.constant(-1))
@@ -129,13 +128,14 @@ struct OperatorEmitter {
     }
 
     private func panic(ifZero value: IntValue<I64>, _ reason: PanicReason, at range: SourceRange,
-                       in program: borrowing ProgramEmitter) {
-        panic(if: program.builder.compare(.equal, value, types.int64.constant(0)), reason, at: range, in: program)
+                       in program: borrowing ProgramEmitter) throws(LLVMError) {
+        let isZero = program.builder.compare(.equal, value, types.int64.constant(0))
+        try panic(if: isZero, reason, at: range, in: program)
     }
 
     /// Branches to a panic for `reason` when `condition` holds, and continues in a new block otherwise.
     private func panic(if condition: IntValue<I1>, _ reason: PanicReason, at range: SourceRange,
-                       in program: borrowing ProgramEmitter) {
+                       in program: borrowing ProgramEmitter) throws(LLVMError) {
         // Split on the condition into two blocks appended at the function's end.
         let panics = program.context.appendBlock(named: "panic", to: llvmFunction)
         let continues = program.context.appendBlock(named: "continue", to: llvmFunction)
@@ -148,6 +148,7 @@ struct OperatorEmitter {
         let text = program.module.addGlobal(named: "rayo.panic_message", initializer: bytes)
         text.setConstant()
         text.setUnnamedAddress()
+        let panic = try program.runtimeFunction(named: "rayo.panic")
         program.builder.call(panic, [text.pointer, types.int64.constant(Int64(message.count))])
         program.builder.unreachable()
 

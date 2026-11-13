@@ -34,8 +34,8 @@ struct StructLoweringTests {
             block(
                 declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
                 compute(1, .unary(.negate, read(0, fields: 1))),
-                compute(nil, .call(.printInt, arguments: [read(1)])),
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(1)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 0)])),
                 then: .return(nil),
             ),
         )
@@ -50,7 +50,7 @@ struct StructLoweringTests {
                 declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
                 declare(1), compute(1, .use(read(0, fields: 1))),
                 compute(2, .binary(.add, read(1), read(0, fields: 0))),
-                compute(nil, .call(.printInt, arguments: [read(2)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(2)])),
                 then: .return(nil),
             ),
         )
@@ -81,7 +81,7 @@ struct StructLoweringTests {
             locals: [.temporary(.structure(enemy))],
             block(
                 compute(0, .structure(enemy, fields: [int(1), int(2)])),
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 0)])),
                 then: .return(nil),
             ),
         )
@@ -97,7 +97,7 @@ struct StructLoweringTests {
                 declare(0), compute(0, .structure(enemy, fields: [int(1), int(2)])),
                 compute(0, fields: 0, value: .use(int(3))),
                 compute(0, fields: 0, value: .binary(.subtract, read(0, fields: 0), read(0, fields: 1))),
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 0)])),
                 then: .return(nil),
             ),
         )
@@ -128,8 +128,8 @@ struct StructLoweringTests {
                 compute(0, .structure(shot, fields: [int(4), read(1)])),
                 // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
                 compute(0, fields: 1, 0, value: .use(int(9))),
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 0)])),
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 1, 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 1, 0)])),
                 then: .return(nil),
             ),
         )
@@ -157,7 +157,7 @@ struct StructLoweringTests {
                 compute(1, .structure(hit, fields: [int(7)])),
                 compute(0, .structure(shot, fields: [int(4), read(1)])),
                 // `Shot` declares its `Hit` second, and `Hit` its `damage` first.
-                compute(nil, .call(.printInt, arguments: [read(0, fields: 1, 0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0, fields: 1, 0)])),
                 then: .return(nil),
             ),
         )

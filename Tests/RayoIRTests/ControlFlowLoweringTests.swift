@@ -10,8 +10,8 @@ struct ControlFlowLoweringTests {
         let expected = mainFunction(
             locals: [letLocal("c", .bool)],
             block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: goto(3)),
-            block(compute(nil, .call(.printInt, arguments: [int(2)])), then: goto(3)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: goto(3)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(2)])), then: goto(3)),
             block(then: .return(nil)),
         )
         #expect(main == expected)
@@ -22,7 +22,7 @@ struct ControlFlowLoweringTests {
         let expected = mainFunction(
             locals: [letLocal("c", .bool)],
             block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: goto(3)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: goto(3)),
             block(then: goto(3)),
             block(then: .return(nil)),
         )
@@ -43,7 +43,7 @@ struct ControlFlowLoweringTests {
             block(compute(2, .use(read(1))), then: goto(2)),
             // The `if` starts where the `&&` joins.
             block(then: branch(read(2), then: 3, otherwise: 4)),
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: goto(5)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: goto(5)),
             block(then: goto(5)),
             block(then: .return(nil)),
         )
@@ -58,7 +58,7 @@ struct ControlFlowLoweringTests {
             block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
             block(then: .return(nil)),
             block(then: goto(3)),
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: .return(nil)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: .return(nil)),
             // The code after the `return`, which no path reaches, ends the branch.
             block(then: goto(3)),
         )
@@ -87,8 +87,8 @@ struct ControlFlowLoweringTests {
         let expected = mainFunction(
             locals: [letLocal("c", .bool)],
             block(declare(0), compute(0, .use(bool(true))), then: branch(read(0), then: 1, otherwise: 2)),
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: goto(3)),
-            block(compute(nil, .call(.printInt, arguments: [int(2)])), then: goto(3)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: goto(3)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(2)])), then: goto(3)),
             block(then: .return(nil)),
         )
         #expect(main == expected)
@@ -209,8 +209,8 @@ struct ControlFlowLoweringTests {
     func returnFromVoid() throws(RejectedSource) {
         let main = try loweredMain("print(1)\nreturn\nprint(2)")
         let expected = mainFunction(
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: .return(nil)),
-            block(compute(nil, .call(.printInt, arguments: [int(2)])), then: .return(nil)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: .return(nil)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(2)])), then: .return(nil)),
         )
         #expect(main == expected)
     }

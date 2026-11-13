@@ -19,7 +19,7 @@ struct StatementLoweringTests {
             locals: [.temporary(.int)],
             block(
                 compute(0, .binary(.add, int(1), int(2))),
-                compute(nil, .call(.printInt, arguments: [read(0)])),
+                compute(nil, .call(.builtin(.printInt), arguments: [read(0)])),
                 then: .return(nil),
             ),
         )

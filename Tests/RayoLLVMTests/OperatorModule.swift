@@ -48,7 +48,7 @@ struct OperatorModule: ~Copyable {
     ) rethrows -> (function: Function, givesBool: Bool) {
         // Make the function, and its operators.
         let function = beginFunction(name, taking: [types.int64, types.int64])
-        operators = OperatorEmitter(into: function, types: types, panic: programModule.runtime.panic)
+        operators = OperatorEmitter(into: function, types: types)
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are. The function takes Ints, so
         // each parameter is one.

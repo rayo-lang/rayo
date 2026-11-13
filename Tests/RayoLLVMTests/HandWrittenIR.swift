@@ -65,7 +65,7 @@ func statement(storingIn local: Int, _ value: Rvalue) -> Statement {
 
 /// A statement that prints the Int `operand` holds.
 func statement(printing operand: Operand) -> Statement {
-    .compute(destination: nil, value: .call(.printInt, arguments: [operand]), range: nowhere)
+    .compute(destination: nil, value: .call(.builtin(.printInt), arguments: [operand]), range: nowhere)
 }
 
 /// The range of an operation no source file wrote.

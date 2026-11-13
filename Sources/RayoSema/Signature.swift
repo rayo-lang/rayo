@@ -5,14 +5,6 @@ struct Signature: CustomStringConvertible {
     var parameters: [Parameter]
     var result: DeclaredResult
 
-    static let printInt = Signature(name: "print", callee: .printInt,
-                                    parameters: [Parameter(label: nil, type: .int, spelledType: "Int")],
-                                    result: .type(.void))
-
-    static let printBool = Signature(name: "print", callee: .printBool,
-                                     parameters: [Parameter(label: nil, type: .bool, spelledType: "Bool")],
-                                     result: .type(.void))
-
     /// The name and the parameters, such as `f(_: Int, by: Bool)`, which tell the function apart from every other.
     var description: String {
         let parameterList = parameters.map { "\($0.label ?? "_"): \($0.spelledType)" }.joined(separator: ", ")
@@ -39,5 +31,14 @@ struct Signature: CustomStringConvertible {
             guard isConsidered(argument), let type = parameter.type else { return true }
             return argument.fits(type)
         }
+    }
+}
+
+extension Signature {
+    /// The signature of `builtin`, under the name a call writes to reach it.
+    init(of builtin: Builtin) {
+        let parameters = builtin.parameters.map { Parameter(label: $0.label, type: $0.type, spelledType: "\($0.type)") }
+        self.init(name: builtin.name.spelling, callee: .builtin(builtin), parameters: parameters,
+                  result: .type(builtin.result))
     }
 }

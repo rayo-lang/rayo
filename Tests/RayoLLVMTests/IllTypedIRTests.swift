@@ -230,13 +230,9 @@ private func calling(
 }
 
 /// A program whose `main` passes `arguments` to `print`, one of the prelude's, each of which takes one argument.
-private func callingPrint(_ print: Callee, with arguments: [Operand]) -> IRExecutable {
-    program(locals: [], [
-        BasicBlock(
-            statements: [.compute(destination: nil, value: .call(print, arguments: arguments), range: nowhere)],
-            terminator: .return(nil),
-        ),
-    ])
+private func callingPrint(_ print: Builtin, with arguments: [Operand]) -> IRExecutable {
+    let call = Statement.compute(destination: nil, value: .call(.builtin(print), arguments: arguments), range: nowhere)
+    return program(locals: [], [BasicBlock(statements: [call], terminator: .return(nil))])
 }
 
 /// A struct of one Int.

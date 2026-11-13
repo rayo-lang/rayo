@@ -7,9 +7,22 @@ extension FunctionEmitter {
     /// Emits a call of `callee` with `operands`, and stores its result in `destination` when there is one. Throws
     /// where the arguments aren't of the types `callee` takes, or the result isn't of the destination's.
     func call(
-        _ callee: Callee, passing operands: [Operand], into destination: Place?, with builder: borrowing Builder,
+        _ callee: Callee, passing operands: [Operand], into destination: Place?, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
-        let target = callees[callee]
+        switch callee {
+        case .builtin(let builtin):
+            try call(builtin, passing: operands, into: destination, in: program)
+        case .function(let id):
+            try call(functions[id.index], passing: operands, into: destination, with: program.builder)
+        }
+    }
+
+    /// Emits a call of `target` with `operands`, and stores its result in `destination` when there is one. Throws
+    /// where the arguments aren't of the types `target` takes, or the result isn't of the destination's.
+    func call(
+        _ target: DeclaredFunction, passing operands: [Operand], into destination: Place?,
+        with builder: borrowing Builder,
+    ) throws(LLVMError) {
         let arguments = try values(of: operands, with: builder)
         try check(arguments, of: target)
         let destinationAddress = try destination.map { place throws(LLVMError) in

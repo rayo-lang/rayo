@@ -2,24 +2,18 @@ import LLVM
 import RayoIR
 @testable import RayoLLVM
 
-/// A program's emitter for the host, with the runtime's functions declared in its module, made as a debug or a
-/// release build makes them.
+/// A program's emitter for the host, which declares in its module the runtime's functions that its code calls, made
+/// as a debug or a release build makes them. The runtime itself is never linked in.
 struct ProgramModule: ~Copyable {
     let target: TargetMachine
     let emitter: ProgramEmitter
-    /// The functions of the runtime that the program calls. The runtime itself is never linked in.
-    let runtime: RuntimeFunctions
 
     init(for build: Build) throws(LLVMError) {
-        // Make the build's machine, the program's emitter for it, and the runtime's functions in the emitter's
-        // module. Each can throw, so all come before any field is set: Swift can't track a field that isn't
-        // copyable set on one path only.
+        // Make the build's machine and the program's emitter for it. Each can throw, so both come before any field is
+        // set: Swift can't track a field that isn't copyable set on one path only.
         let target = try TargetMachine(optimizes: build.optimizes)
-        let emitter = ProgramEmitter(sourcePath: "main.rayo", for: target, build: build)
-        let runtime = try Runtime(for: emitter)
+        let emitter = try ProgramEmitter(sourcePath: "main.rayo", for: target, build: build)
 
-        // Keep the runtime's functions, which outlive the runtime's own module.
-        self.runtime = runtime.functions
         self.emitter = emitter
         self.target = target
     }
@@ -31,7 +25,7 @@ struct ProgramModule: ~Copyable {
 
     /// Emits `executable` into the module, as the build does.
     func emit(_ executable: IRExecutable) throws(LLVMError) {
-        try emitter.emit(executable, calling: runtime)
+        try emitter.emit(executable)
     }
 }
 

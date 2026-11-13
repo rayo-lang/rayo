@@ -31,7 +31,8 @@ struct FunctionEmitter {
     let llvmFunction: Function
     /// How the function's parameters and result are passed.
     let signature: LoweredSignature
-    let callees: Callees
+    /// The program's functions, indexed by `FunctionID`.
+    let functions: [DeclaredFunction]
     /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
     let operators: OperatorEmitter
@@ -45,16 +46,16 @@ struct FunctionEmitter {
     var types: LLVMTypes { lowering.types }
 
     init(
-        body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction, callees: Callees,
-        lowering: SignatureLowering, panic: Function, in program: borrowing ProgramEmitter,
+        body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction,
+        functions: [DeclaredFunction], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
     ) {
         self.body = body
         self.declaration = declaration
         llvmFunction = declared.function
         signature = declared.signature
-        self.callees = callees
+        self.functions = functions
         self.lowering = lowering
-        operators = OperatorEmitter(into: declared.function, types: lowering.types, panic: panic)
+        operators = OperatorEmitter(into: declared.function, types: lowering.types)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
     }
 
@@ -121,7 +122,7 @@ struct FunctionEmitter {
 
         // A call passes its arguments as its function's signature says.
         case .call(let callee, let arguments):
-            try call(callee, passing: arguments, into: destination, with: program.builder)
+            try call(callee, passing: arguments, into: destination, in: program)
 
         // A struct is built in its place, one field at a time.
         case .structure(let id, let fields):
