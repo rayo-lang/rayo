@@ -32,7 +32,8 @@ struct BuiltinTests {
     }
 }
 
-/// An initializer of Int that takes a Bool, which a built-in that is `Int(_: Bool)` would declare.
+/// An initializer of Int that takes a Bool, as a built-in `Int(_: Bool)` would declare it. No built-in is one, so it
+/// borrows another's callee, which declaring never reads.
 private let intInitializer = Signature(
     name: BuiltinName.initializer(of: .int).spelling, callee: .builtin(.printBool),
     parameters: [Parameter(label: nil, type: .bool, spelledType: "Bool")], result: .type(.int),

@@ -10,14 +10,23 @@ extension FunctionEmitter {
         _ builtin: Builtin, passing operands: [Operand], into destination: Place?,
         in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
-        // Each built-in is the runtime's function of a symbol, called in a convention. The runtime's prints are C
-        // functions, whose convention passes a lone Int or Bool directly, as Rayo's does.
-        let (symbol, convention): (String, CallingConvention) = switch builtin {
-        case .printInt: ("rayo.print_int", .rayo)
-        case .printBool: ("rayo.print_bool", .rayo)
+        switch builtin {
+        // The runtime's prints are C functions, whose convention passes a lone Int or Bool directly, as Rayo's does.
+        case .printInt:
+            try callRuntime("rayo.print_int", in: .rayo, for: builtin, passing: operands, into: destination,
+                            in: program)
+        case .printBool:
+            try callRuntime("rayo.print_bool", in: .rayo, for: builtin, passing: operands, into: destination,
+                            in: program)
         }
+    }
 
-        // Call the runtime's function as the built-in's signature says, in that convention.
+    /// Emits a call, in `convention`, of the runtime's function `symbol`, which takes `builtin`'s parameters and gives
+    /// its result.
+    private func callRuntime(
+        _ symbol: String, in convention: CallingConvention, for builtin: Builtin, passing operands: [Operand],
+        into destination: Place?, in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) {
         let function = try program.runtimeFunction(named: symbol)
         let signature = FunctionSignature(of: builtin, convention: convention)
         let target = DeclaredFunction(function: function, signature: lowering.lower(signature, in: program.context))
