@@ -18,7 +18,7 @@ public enum UnusedValueChecker {
                 // A store that some code reads leaves nothing to report.
                 guard !isRead else { return }
                 // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
-                guard let name = places.sourceName(of: destination.local, fields: destination.fields) else { return }
+                guard let name = places.sourceName(of: destination.place) else { return }
                 errors.append(Diagnostic(.unreadValue(name: name), at: destination.range))
             }
         }

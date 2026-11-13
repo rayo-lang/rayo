@@ -10,7 +10,7 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).functions[0]
 
         // The division is the third statement, after the declaration and its value, and computes into a temporary.
-        guard case .compute(let temporary?, .binary(.divide, .read(let dividend), _), let range)
+        guard case .compute(let temporary?, .binary(.divide, .read(_, let dividend), _), let range)
             = main.blocks[0].statements[2]
         else {
             Issue.record("the division isn't the third statement of \(main.blocks[0])")
@@ -18,7 +18,7 @@ struct SourceRangeTests {
         }
         #expect(text(of: range, in: source) == "a / 0")
         #expect(text(of: temporary.range, in: source) == "a / 0")
-        #expect(text(of: dividend.range, in: source) == "a")
+        #expect(text(of: dividend, in: source) == "a")
     }
 
     @Test func `a declaration and an assignment keep the range of their value`() throws(RejectedSource) {
@@ -43,7 +43,7 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).functions[0]
 
         // The compound assignment is the third statement, after the declaration and its value.
-        guard case .compute(let destination?, .binary(.add, .read(let operand), _), let range)
+        guard case .compute(let destination?, .binary(.add, .read(_, let operand), _), let range)
             = main.blocks[0].statements[2]
         else {
             Issue.record("the compound assignment isn't the third statement of \(main.blocks[0])")
@@ -51,7 +51,7 @@ struct SourceRangeTests {
         }
         #expect(text(of: range, in: source) == "x")
         #expect(text(of: destination.range, in: source) == "x")
-        #expect(text(of: operand.range, in: source) == "x")
+        #expect(text(of: operand, in: source) == "x")
     }
 
     @Test func `a '&&' and its temporary keep the range of the whole '&&'`() throws(RejectedSource) {
@@ -71,6 +71,32 @@ struct SourceRangeTests {
         #expect(text(of: rightRange, in: source) == "a && false")
     }
 
+    @Test func `two uses of one place name one place, each at the range of its own use`() throws(RejectedSource) {
+        let source = """
+            func main() {
+                let e = Enemy(hp: 1)
+                print(e.hp)
+                print(e.hp)
+            }
+            struct Enemy(let hp: Int)
+            """
+        let main = try loweredWithRanges(source).functions[0]
+
+        // The two prints follow the declaration and its value, and each reads `e.hp` where it lies.
+        guard case .compute(nil, .call(_, let firstArguments), _) = main.blocks[0].statements[2],
+              case .compute(nil, .call(_, let secondArguments), _) = main.blocks[0].statements[3],
+              case .read(let first, let firstRange) = firstArguments.first,
+              case .read(let second, let secondRange) = secondArguments.first
+        else {
+            Issue.record("the two prints don't read a place as statements 3 and 4 of \(main.blocks[0])")
+            return
+        }
+        #expect(first == second)
+        #expect(Set([first, second]).count == 1)
+        #expect(text(of: firstRange, in: source) == "e.hp")
+        #expect(firstRange != secondRange)
+    }
+
     @Test(
         "a branch tests an operand with the range of its condition, whether a temporary or a local holds it",
         arguments: [
@@ -83,11 +109,11 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).functions[0]
 
         // The first block branches on the condition, which it reads from a temporary or from the local itself.
-        guard case .branch(.read(let place), _, _) = main.blocks[0].terminator else {
+        guard case .branch(.read(_, let range), _, _) = main.blocks[0].terminator else {
             Issue.record("the first block of \(main) doesn't branch on a local")
             return
         }
-        #expect(text(of: place.range, in: source) == condition)
+        #expect(text(of: range, in: source) == condition)
     }
 
     @Test(
@@ -102,11 +128,11 @@ struct SourceRangeTests {
         let result = try loweredWithRanges(source).functions[1]
 
         // The first block returns the value, which it reads from a temporary or moves out of the local.
-        guard case .return(let operand?) = result.blocks[0].terminator, let place = operand.place else {
+        guard case .return(let operand?) = result.blocks[0].terminator, let range = operand.range else {
             Issue.record("the first block of \(result) doesn't return a local")
             return
         }
-        #expect(text(of: place.range, in: source) == value)
+        #expect(text(of: range, in: source) == value)
     }
 }
 
@@ -117,10 +143,10 @@ private func text(of range: SourceRange, in source: String) -> String {
 }
 
 private extension Operand {
-    /// The place of the local the operand reads or moves, or nil for a constant.
-    var place: Place? {
+    /// Where the source names the place the operand reads or moves, or nil for a constant.
+    var range: SourceRange? {
         switch self {
-        case .read(let place), .move(let place): place
+        case .read(_, let range), .move(_, let range): range
         case .constant: nil
         }
     }

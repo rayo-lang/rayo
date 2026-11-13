@@ -48,7 +48,7 @@ struct FunctionBuilder: ~Copyable {
         current = next
     }
 
-    mutating func emit(_ value: Rvalue, into destination: Place?, range: SourceRange) {
+    mutating func emit(_ value: Rvalue, into destination: Destination?, range: SourceRange) {
         emit(.compute(destination: destination, value: value, range: range))
     }
 
@@ -56,9 +56,9 @@ struct FunctionBuilder: ~Copyable {
         blocks[current.index].statements.append(statement)
     }
 
-    /// Adds a temporary of `type` to the function, and returns its place at `range`.
-    mutating func newTemporary(_ type: RayoType, at range: SourceRange) -> Place {
+    /// Adds a temporary of `type` to the function, and returns its place.
+    mutating func newTemporary(_ type: RayoType) -> Place {
         locals.append(.temporary(type))
-        return Place(local: LocalID(index: locals.count - 1), range: range)
+        return Place(root: LocalID(index: locals.count - 1))
     }
 }

@@ -67,7 +67,7 @@ struct BindingChecker {
         guard bindsName(binding.name, at: binding.nameRange) else { return nil }
         let type = checkLocalType(declared, of: binding)
         let local = names.declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
-        return local.map { .binding(CheckedPlace(local: $0, range: binding.nameRange), declared.value) }
+        return local.map { .binding($0, at: binding.nameRange, declared.value) }
     }
 
     /// Checks `binding`'s type annotation and value, and the value against the annotation when it has both.

@@ -1,24 +1,29 @@
 import RayoSema
-import RayoSource
 
-/// A local, or a field inside it, that an operand or a statement's destination names, and where the source names it,
-/// which is where an error about it points.
-public struct Place: Equatable, Sendable {
-    public var local: LocalID
-    /// The fields that lead from the local to the place, outermost first, each by its place in its struct's
-    /// declaration; none where the place is the whole local.
-    public var fields: [Int]
-    public var range: SourceRange
+/// A local, or a part of one that steps from the local lead to. Two places are equal where they name the same part of
+/// the same local, wherever the source names each.
+public struct Place: Hashable, Sendable {
+    public var root: LocalID
+    /// The steps from the root to the place, outermost first; none where the place is the whole local.
+    public var steps: [PlaceStep]
 
-    public init(local: LocalID, fields: [Int] = [], range: SourceRange) {
-        self.local = local
-        self.fields = fields
-        self.range = range
+    public init(root: LocalID, steps: [PlaceStep] = []) {
+        self.root = root
+        self.steps = steps
     }
 
-    /// The place of the field at `field`, its place in its struct's declaration, of the struct at this place, where
-    /// the source names it at `range`.
-    func appending(field: Int, at range: SourceRange) -> Place {
-        Place(local: local, fields: fields + [field], range: range)
+    /// The place that `step` leads to from this one.
+    public func appending(_ step: PlaceStep) -> Place {
+        Place(root: root, steps: steps + [step])
+    }
+
+    /// The place that the first `count` steps lead to, which holds this one.
+    public func prefix(_ count: Int) -> Place {
+        Place(root: root, steps: Array(steps.prefix(count)))
+    }
+
+    /// Whether `other` is this place or lies inside it.
+    public func contains(_ other: Place) -> Bool {
+        root == other.root && other.steps.starts(with: steps)
     }
 }

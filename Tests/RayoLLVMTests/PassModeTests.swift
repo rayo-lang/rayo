@@ -50,8 +50,7 @@ struct PassModeTests {
             name: "first(_: Trio)", parameterCount: 1, result: .int,
             locals: [.source(name: "t", kind: .parameter, type: trioType), .temporary(.int)],
             blocks: [BasicBlock(
-                statements: [statement(storingIn: 1, .use(.read(Place(local: LocalID(index: 0), fields: [0],
-                                                                      range: nowhere))))],
+                statements: [statement(storingIn: 1, .use(field(0, of: 0)))],
                 terminator: .return(read(1)),
             )],
         )
@@ -215,7 +214,7 @@ struct PassModeTests {
 
     /// An operand that reads the field at `field` of the local `local`.
     private func field(_ field: Int, of local: Int) -> Operand {
-        .read(Place(local: LocalID(index: local), fields: [field], range: nowhere))
+        .read(Place(root: LocalID(index: local), steps: [.field(field)]), at: nowhere)
     }
 }
 
@@ -223,8 +222,8 @@ struct PassModeTests {
 struct SignatureLoweringTests {
     @Test func `a small argument passes directly, but a mutable one, which passes as its place`() throws {
         try withModes { mode in
-            #expect(mode(.borrowed, .int) == .direct([Scalar(fields: [], type: .int)]))
-            #expect(mode(.owned, .int) == .direct([Scalar(fields: [], type: .int)]))
+            #expect(mode(.borrowed, .int) == .direct([Scalar(steps: [], type: .int)]))
+            #expect(mode(.owned, .int) == .direct([Scalar(steps: [], type: .int)]))
             #expect(mode(.mutable, .int) ==
                 .callerPlace([.noAlias, .capturesNone, .noUndef, .nonNull, .dereferenceable(8), .align(8)]))
         }

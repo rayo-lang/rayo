@@ -22,12 +22,12 @@ func program(of functions: [IRFunction], types: TypeTable = .empty) -> IRExecuta
 
 /// An operand that reads the local `index`.
 func read(_ index: Int) -> Operand {
-    .read(Place(local: LocalID(index: index), range: nowhere))
+    .read(Place(root: LocalID(index: index)), at: nowhere)
 }
 
 /// An operand that moves the local `index`'s value out of it.
 func move(_ index: Int) -> Operand {
-    .move(Place(local: LocalID(index: index), range: nowhere))
+    .move(Place(root: LocalID(index: index)), at: nowhere)
 }
 
 /// A program that prints what `value` computes.
@@ -42,7 +42,7 @@ func printing(_ value: Rvalue) -> IRExecutable {
 
 /// A statement that stores what `value` computes in the local `local`.
 func statement(storingIn local: Int, _ value: Rvalue) -> Statement {
-    .compute(destination: Place(local: LocalID(index: local), range: nowhere), value: value, range: nowhere)
+    .compute(destination: Destination(Place(root: LocalID(index: local)), at: nowhere), value: value, range: nowhere)
 }
 
 /// A statement that prints the Int `operand` holds.

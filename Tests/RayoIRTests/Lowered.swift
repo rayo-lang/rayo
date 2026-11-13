@@ -81,15 +81,15 @@ private extension Terminator {
 private extension Operand {
     var erasingRange: Operand {
         switch self {
-        case .read(let place): .read(place.erasingRange)
-        case .move(let place): .move(place.erasingRange)
+        case .read(let place, _): .read(place, at: nowhere)
+        case .move(let place, _): .move(place, at: nowhere)
         case .constant: self
         }
     }
 }
 
-private extension Place {
-    var erasingRange: Place {
-        Place(local: local, fields: fields, range: nowhere)
+private extension Destination {
+    var erasingRange: Destination {
+        Destination(place, at: nowhere)
     }
 }

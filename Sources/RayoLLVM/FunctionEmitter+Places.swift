@@ -66,21 +66,25 @@ extension FunctionEmitter {
         return Address(pointer: slot, type: type)
     }
 
-    /// Emits the instructions that point at `place`, a local's place or a field inside it, and returns its address.
+    /// Emits the instructions that point at `place`, a local's place or a part inside it, and returns its address.
     /// Throws where the place names a field that the value holding it doesn't have.
     func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
-        let local = Address(pointer: places[place.local.index], type: function.locals[place.local.index].type)
-        return try address(following: place.fields, from: local, with: builder)
+        let local = Address(pointer: places[place.root.index], type: function.locals[place.root.index].type)
+        return try address(following: place.steps, from: local, with: builder)
     }
 
-    /// Emits the instructions that step from the value at `address` into each of `fields` in turn, each by its place
-    /// in its struct's declaration, and returns the address of the last.
+    /// Emits the instructions that take each of `steps` in turn from the value at `address`, and returns the address
+    /// of the last.
     private func address(
-        following fields: [Int], from address: Address, with builder: borrowing Builder,
+        following steps: [PlaceStep], from address: Address, with builder: borrowing Builder,
     ) throws(LLVMError) -> Address {
         var address = address
-        for field in fields {
-            address = try fieldAddress(of: field, in: address, with: builder)
+        for step in steps {
+            switch step {
+            // A field lies inside the value that holds it.
+            case .field(let field):
+                address = try fieldAddress(of: field, in: address, with: builder)
+            }
         }
         return address
     }
@@ -120,7 +124,7 @@ extension FunctionEmitter {
             .constant(types.bool.constant(value ? 1 : 0).anyValue, .bool)
 
         // A read or a move finds the place; a move leaves it as it is, unread until assigned again.
-        case .read(let place), .move(let place):
+        case .read(let place, _), .move(let place, _):
             .place(try address(of: place, with: builder))
         }
     }
@@ -167,7 +171,7 @@ extension FunctionEmitter {
     private func loadScalars(at address: Address, with builder: borrowing Builder) throws(LLVMError) -> [AnyValue] {
         var loaded: [AnyValue] = []
         for scalar in types.scalars(of: address.type) {
-            let scalarAddress = try self.address(following: scalar.fields, from: address, with: builder)
+            let scalarAddress = try self.address(following: scalar.steps, from: address, with: builder)
             let (type, alignment) = (types.llvmType(scalar.type), types.alignment(of: scalar.type))
             loaded.append(builder.load(type, from: scalarAddress.pointer, alignment: alignment))
         }
@@ -177,7 +181,7 @@ extension FunctionEmitter {
     /// Emits the stores of `scalars`, the scalars a value splits into, in order, in the place at `address`.
     func storeScalars(_ scalars: [AnyValue], at address: Address, with builder: borrowing Builder) throws(LLVMError) {
         for (scalar, value) in zip(types.scalars(of: address.type), scalars) {
-            let scalarAddress = try self.address(following: scalar.fields, from: address, with: builder)
+            let scalarAddress = try self.address(following: scalar.steps, from: address, with: builder)
             builder.store(value, to: scalarAddress.pointer, alignment: types.alignment(of: scalar.type))
         }
     }
@@ -227,9 +231,9 @@ extension FunctionEmitter {
 }
 
 private extension Place {
-    /// Whether this place and `other` share memory: whether they are of one local, and one lies inside the other.
+    /// Whether this place and `other` share memory: whether one lies inside the other.
     func overlaps(_ other: Place) -> Bool {
-        local == other.local && (fields.starts(with: other.fields) || other.fields.starts(with: fields))
+        contains(other) || other.contains(self)
     }
 }
 
@@ -237,7 +241,7 @@ private extension Operand {
     /// The place the operand reads or moves, or nil for a constant.
     var place: Place? {
         switch self {
-        case .read(let place), .move(let place): place
+        case .read(let place, _), .move(let place, _): place
         case .constant: nil
         }
     }

@@ -1,4 +1,5 @@
 import LLVM
+import RayoIR
 import RayoSema
 
 /// The LLVM types of a program's values, and of a function's result, laid out as the program's type table says.
@@ -55,7 +56,7 @@ struct LLVMTypes {
         switch type {
         // An Int or a Bool is a scalar of its own.
         case .int, .bool:
-            [Scalar(fields: [], type: type)]
+            [Scalar(steps: [], type: type)]
 
         // Void holds nothing.
         case .void:
@@ -64,7 +65,7 @@ struct LLVMTypes {
         // A struct is the scalars of each field in turn, each lying inside its field.
         case .structure(let id):
             table[id].fields.enumerated().flatMap { index, field in
-                scalars(of: field.type).map { Scalar(fields: [index] + $0.fields, type: $0.type) }
+                scalars(of: field.type).map { Scalar(steps: [.field(index)] + $0.steps, type: $0.type) }
             }
         }
     }

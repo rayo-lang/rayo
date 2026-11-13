@@ -89,7 +89,7 @@ extension FunctionEmitter {
     /// The local `operand` reads or moves the whole of, or nil where it is a constant or a field.
     private static func wholeLocal(of operand: Operand) -> LocalID? {
         switch operand {
-        case .read(let place), .move(let place): place.fields.isEmpty ? place.local : nil
+        case .read(let place, _), .move(let place, _): place.steps.isEmpty ? place.root : nil
         case .constant: nil
         }
     }

@@ -1,11 +1,13 @@
 import RayoSema
+import RayoSource
 
 public enum Operand: Equatable, Sendable {
     case constant(Constant)
-    /// Reads the value of the local, or of the field inside it, which keeps the value.
-    case read(Place)
-    /// Takes the local's value, which leaves the local without one until it is assigned again.
-    case move(Place)
+    /// Reads the value of the place, which keeps it, where the source names the place at the range.
+    case read(Place, at: SourceRange)
+    /// Takes the value of the place, which leaves it without one until it is assigned again, where the source names
+    /// the place at the range.
+    case move(Place, at: SourceRange)
 }
 
 public enum Constant: Equatable, Sendable {

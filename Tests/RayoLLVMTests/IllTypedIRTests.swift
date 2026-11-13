@@ -174,7 +174,7 @@ private func computing(_ rvalue: Rvalue, on operands: [RayoType], into result: R
 /// A program whose `main` holds temporaries of `operands`' types and then of `holder`'s, and stores what `rvalue`
 /// computes in the first field of the last. Its structs are `pairTable`'s.
 private func computing(_ rvalue: Rvalue, on operands: [RayoType], intoFieldOf holder: RayoType) -> IRExecutable {
-    let field = Place(local: LocalID(index: operands.count), fields: [0], range: nowhere)
+    let field = Destination(Place(root: LocalID(index: operands.count), steps: [.field(0)]), at: nowhere)
     let main = mainFunction(locals: operands + [holder], [
         BasicBlock(
             statements: [.compute(destination: field, value: rvalue, range: nowhere)], terminator: .return(nil),
@@ -185,7 +185,7 @@ private func computing(_ rvalue: Rvalue, on operands: [RayoType], intoFieldOf ho
 
 /// An operand that reads the field at `field` of the value of the local `index`.
 private func read(_ index: Int, field: Int) -> Operand {
-    .read(Place(local: LocalID(index: index), fields: [field], range: nowhere))
+    .read(Place(root: LocalID(index: index), steps: [.field(field)]), at: nowhere)
 }
 
 /// A program whose `main` returns nothing, and whose `f()`, which returns `result`, holds a temporary of `local`'s

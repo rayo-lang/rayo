@@ -5,7 +5,7 @@ import RayoSyntax
 public enum Statement: Equatable, Sendable {
     /// Computes `value`, and stores it in `destination` when there is one. `range` is the source of the
     /// operation, where it reports a panic.
-    case compute(destination: Place?, value: Rvalue, range: SourceRange)
+    case compute(destination: Destination?, value: Rvalue, range: SourceRange)
     /// Starts the life of a local where the source declares it. The local holds no value until a statement
     /// stores one, whatever an earlier pass of a loop stored in it.
     case declare(LocalID)

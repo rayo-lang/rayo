@@ -5,29 +5,30 @@ import RayoSource
 /// The range of every place and computation in the IR a test expects.
 let nowhere = SourceRange(SourceLocation(line: 1, column: 1, offset: 0), SourceLocation(line: 1, column: 1, offset: 0))
 
-/// The place of the local at `index`.
-func local(_ index: Int) -> Place {
-    Place(local: LocalID(index: index), range: nowhere)
+/// The place of the field that `fields` lead to, outermost first, inside the local at `index`, or of the whole local
+/// where there are none.
+func place(_ index: Int, fields: [Int] = []) -> Place {
+    Place(root: LocalID(index: index), steps: fields.map(PlaceStep.field))
 }
 
 /// An operand that reads the local at `index`, which keeps its value.
 func read(_ index: Int) -> Operand {
-    .read(local(index))
+    .read(place(index), at: nowhere)
 }
 
 /// An operand that reads the field that `fields` lead to, outermost first, inside the local at `index`.
 func read(_ index: Int, fields: Int...) -> Operand {
-    .read(Place(local: LocalID(index: index), fields: fields, range: nowhere))
+    .read(place(index, fields: fields), at: nowhere)
 }
 
 /// An operand that takes the value of the local at `index`.
 func move(_ index: Int) -> Operand {
-    .move(local(index))
+    .move(place(index), at: nowhere)
 }
 
 /// An operand that takes the value of the field that `fields` lead to, outermost first, inside the local at `index`.
 func move(_ index: Int, fields: Int...) -> Operand {
-    .move(Place(local: LocalID(index: index), fields: fields, range: nowhere))
+    .move(place(index, fields: fields), at: nowhere)
 }
 
 func int(_ value: Int64) -> Operand {
@@ -40,13 +41,12 @@ func bool(_ value: Bool) -> Operand {
 
 /// Computes `value` into the local at `destination`, or computes it and drops it where `destination` is nil.
 func compute(_ destination: Int?, _ value: Rvalue) -> Statement {
-    .compute(destination: destination.map(local), value: value, range: nowhere)
+    .compute(destination: destination.map { Destination(place($0), at: nowhere) }, value: value, range: nowhere)
 }
 
 /// Computes `value` into the field that `fields` lead to, outermost first, inside the local at `index`.
 func compute(_ index: Int, fields: Int..., value: Rvalue) -> Statement {
-    .compute(destination: Place(local: LocalID(index: index), fields: fields, range: nowhere), value: value,
-             range: nowhere)
+    .compute(destination: Destination(place(index, fields: fields), at: nowhere), value: value, range: nowhere)
 }
 
 func declare(_ index: Int) -> Statement {
