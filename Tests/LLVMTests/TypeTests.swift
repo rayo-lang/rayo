@@ -20,7 +20,7 @@ struct TypeTests {
 
     @Test func `a struct or an array converts to an aggregate, and an integer doesn't`() {
         let bench = Workbench()
-        let pair = bench.context.makeStructType(named: "Pair")
+        let pair = bench.context.typeMaker.makeStructType(named: "Pair")
         pair.setFields([bench.int64, bench.bool], packed: false)
         let function = bench.function(named: "f", returning: bench.context.voidType, taking: [pair])
 
@@ -31,12 +31,12 @@ struct TypeTests {
 
     @Test func `a type says what LLVM IR writes it as`() {
         let bench = Workbench()
-        let pair = bench.context.makeStructType(named: "Pair")
+        let pair = bench.context.typeMaker.makeStructType(named: "Pair")
         pair.setFields([bench.int64, bench.bool], packed: true)
 
         #expect(bench.int64.anyType.text == "i64")
         #expect(bench.context.voidType.isVoid)
-        #expect(bench.context.arrayType(of: bench.context.integerType(I8.self), count: 3).text == "[3 x i8]")
+        #expect(bench.context.typeMaker.arrayType(of: bench.context.integerType(I8.self), count: 3).text == "[3 x i8]")
         #expect(pair.anyType.text == "%Pair = type <{ i64, i1 }>")
         #expect(bench.context.functionType(returning: pair, taking: [bench.int64]).parameters == [bench.int64.anyType])
         #expect(bench.context.functionType(returning: pair, taking: [bench.int64]).result == pair.anyType)
@@ -44,9 +44,9 @@ struct TypeTests {
 
     @Test func `a struct's fields are laid out packed or padded, as it is given them`() throws {
         let bench = Workbench()
-        let packed = bench.context.makeStructType(named: "Packed")
+        let packed = bench.context.typeMaker.makeStructType(named: "Packed")
         packed.setFields([bench.int64, bench.bool], packed: true)
-        let padded = bench.context.makeStructType(named: "Padded")
+        let padded = bench.context.typeMaker.makeStructType(named: "Padded")
         padded.setFields([bench.int64, bench.bool], packed: false)
         _ = bench.function(named: "f", returning: bench.context.voidType, taking: [packed, padded])
         bench.builder.returnVoid()
@@ -64,6 +64,13 @@ struct TypeTests {
 
         try bench.module.verify()
         #expect(pair.anyType.text == "{ i1, i64 }")
+    }
+
+    @Test func `a type maker keeps its context alive while it is held`() {
+        // The context the maker came from is out of reach by the time the maker is used.
+        let maker = Context().typeMaker
+        let pair = maker.makeStructType(named: "Pair")
+        #expect(pair.anyType.text == "%Pair = type opaque")
     }
 
     @Test func `a pointer's type is LLVM's one opaque pointer type`() {

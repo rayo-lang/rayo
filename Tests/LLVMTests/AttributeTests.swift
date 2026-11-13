@@ -4,7 +4,7 @@ import Testing
 struct AttributeTests {
     @Test func `a function's parameters carry the attributes it is declared with, each as LLVM IR writes it`() throws {
         let bench = Workbench()
-        let big = bench.context.makeStructType(named: "Big")
+        let big = bench.context.typeMaker.makeStructType(named: "Big")
         big.setFields([bench.int64, bench.int64, bench.int64], packed: true)
         let pointer = bench.context.pointerType
         let type = bench.context.functionType(

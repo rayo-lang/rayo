@@ -1,63 +1,80 @@
+internal import Synchronization
+
 /// A program's structs, and how a value of each of its types lies in memory.
+///
+/// A type's layout is worked out the first time it's asked for, and kept for every later ask, so the stages from
+/// checking on lay out only the types they use.
 public struct TypeTable: Equatable, Sendable {
     /// The structs, indexed by `StructID`.
     public let structs: [StructType]
-    /// The layout of each struct, indexed by `StructID`.
-    private let layouts: [StructLayout]
+    /// The layout of each struct laid out so far, which every copy of the table shares.
+    private let layouts = StructLayouts()
 
-    /// The table of `structs`, none of which contains itself through its fields, at any depth.
     public init(structs: [StructType]) {
         self.structs = structs
-
-        // Lay out each struct once, those its fields hold before it.
-        var laidOut: [StructLayout?] = Array(repeating: nil, count: structs.count)
-        layouts = structs.indices.map { Self.layout(ofStruct: $0, in: structs, laidOut: &laidOut) }
     }
 
     /// The table of a program that declares no struct.
     public static let empty = TypeTable(structs: [])
 
-    /// The ID of each struct, in the order of `structs`.
-    public var ids: [StructID] {
-        structs.indices.map { StructID(index: $0, name: structs[$0].name) }
-    }
-
     public subscript(id: StructID) -> StructType {
         structs[id.index]
     }
 
-    public func structLayout(of id: StructID) -> StructLayout {
-        layouts[id.index]
+    /// The fields of `type`, which must be a struct, in the order it declares them.
+    public func fields(of type: RayoType) -> [Field] {
+        guard case .structure(let id) = type else { preconditionFailure("only a struct holds fields") }
+        return structs[id.index].fields
     }
 
     /// How a value of `type`, which isn't Void, lies in memory.
     public func layout(of type: RayoType) -> Layout {
-        Self.layout(of: type) { layouts[$0.index].layout }
+        layout(of: type, inside: [])
     }
 
-    /// The layout of `type`, given that of each struct.
-    private static func layout(of type: RayoType, structLayout: (StructID) -> Layout) -> Layout {
+    /// How the fields of `type`, which must be a struct, lie in its memory.
+    public func structLayout(of type: RayoType) -> StructLayout {
+        structLayout(of: type, inside: [])
+    }
+
+    /// The structs laid out so far.
+    var laidOut: Set<RayoType> {
+        layouts.cache.withLock { Set($0.keys) }
+    }
+
+    /// Whether `left` and `right` declare the same structs, which decide every layout.
+    public static func == (left: TypeTable, right: TypeTable) -> Bool {
+        left.structs == right.structs
+    }
+
+    /// The layout of `type`, which lies inside each struct of `enclosing`.
+    private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout {
         switch type {
         case .int: .int
         case .bool: .bool
-        case .structure(let id): structLayout(id)
+        case .structure: structLayout(of: type, inside: enclosing).layout
         case .void: preconditionFailure("no value of type Void lies in memory")
         }
     }
 
-    /// The layout of the struct at `index` in `structs`. `laidOut` keeps it, with the layout of each struct it holds.
-    private static func layout(
-        ofStruct index: Int, in structs: [StructType], laidOut: inout [StructLayout?],
-    ) -> StructLayout {
+    /// The layout of the struct `type`, which lies inside each struct of `enclosing`.
+    private func structLayout(of type: RayoType, inside enclosing: [RayoType]) -> StructLayout {
         // A struct laid out already keeps its layout.
-        if let layout = laidOut[index] { return layout }
+        if let known = layouts.cache.withLock({ $0[type] }) { return known }
 
-        // Lay out the structs the fields hold first, since a field's layout is its struct's.
-        let fields = structs[index].fields.map { field in
-            layout(of: field.type) { layout(ofStruct: $0.index, in: structs, laidOut: &laidOut).layout }
-        }
+        // Lay out the fields first, since a field's layout is its type's. Checking reports a struct that contains
+        // itself, so none reaches a layout.
+        precondition(!enclosing.contains(type), "a struct that contains itself has no layout")
+        let fields = fields(of: type).map { layout(of: $0.type, inside: enclosing + [type]) }
+
+        // Two threads that lay out one struct at once work out the same layout, so either may keep it.
         let layout = StructLayout(fields: fields)
-        laidOut[index] = layout
+        layouts.cache.withLock { $0[type] = layout }
         return layout
     }
+}
+
+/// The struct layouts a `TypeTable` has worked out, shared by the threads that ask it.
+private final class StructLayouts: Sendable {
+    let cache = Mutex<[RayoType: StructLayout]>([:])
 }

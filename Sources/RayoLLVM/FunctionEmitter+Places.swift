@@ -96,13 +96,13 @@ extension FunctionEmitter {
     ) throws(LLVMError) -> Address {
         // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
         // with, would point outside the value, so each fails here.
-        guard case .structure(let id) = address.type else { throw noField(field, of: address.type) }
-        let fields = types.fields(of: id)
+        guard case .structure = address.type else { throw noField(field, of: address.type) }
+        let fields = types.fields(of: address.type)
         guard fields.indices.contains(field) else { throw noField(field, of: address.type) }
 
         // Point at the element of the struct's LLVM type that holds the field.
         let (fieldType, element) = fields[field]
-        let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(id), at: address.pointer)
+        let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(address.type), at: address.pointer)
         return Address(pointer: pointer, type: fieldType)
     }
 

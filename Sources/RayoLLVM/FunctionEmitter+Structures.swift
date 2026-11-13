@@ -30,7 +30,7 @@ extension FunctionEmitter {
     /// Throws where `fields` aren't as many as the struct `id`'s, or of their types.
     private func check(_ fields: [OperandValue], of id: StructID) throws(LLVMError) {
         // Values for more or fewer fields than the struct has fail.
-        let declared = types.fields(of: id)
+        let declared = types.fields(of: .structure(id))
         guard fields.count == declared.count else {
             let counts = "\(fields.count) fields, where it has \(declared.count)"
             throw LLVMError(message: "the IR makes '\(id.name)' of \(counts)")

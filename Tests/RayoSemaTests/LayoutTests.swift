@@ -1,4 +1,4 @@
-import RayoSema
+@testable import RayoSema
 import RayoSyntax
 import Testing
 
@@ -37,7 +37,38 @@ struct LayoutTests {
         #expect(table.layout(of: .int) == Layout(size: 8, alignment: 8))
         #expect(table.layout(of: .bool) == Layout(size: 1, alignment: 1))
     }
+
+    @Test func `a struct is laid out only when its layout is asked for`() {
+        // `Loop` contains itself, so it has no layout, but asking for `Hit`'s never asks for `Loop`'s.
+        let table = TypeTable(structs: [loop, hit])
+        #expect(table.layout(of: .structure(StructID(index: 1, name: "Hit"))) == Layout(size: 16, alignment: 8))
+    }
+
+    @Test func `a struct's layout is kept once it is worked out, with those of the structs its fields hold`() throws {
+        let table = try types("struct Outer(var hit: Hit)\nstruct Hit(var crit: Bool, var damage: Int, let team: Bool)")
+        let outer = RayoType.structure(StructID(index: 0, name: "Outer"))
+        let hit = RayoType.structure(StructID(index: 1, name: "Hit"))
+
+        _ = table.layout(of: outer)
+        #expect(table.laidOut == [outer, hit])
+    }
+
+    @Test func `asking for the layout of a struct that contains itself stops the compiler`() async {
+        await #expect(processExitsWith: .failure) {
+            _ = TypeTable(structs: [loop, hit]).layout(of: .structure(StructID(index: 0, name: "Loop")))
+        }
+    }
 }
+
+/// A struct that contains itself, which checking reports, so it never reaches a layout.
+private let loop = StructType(name: "Loop", fields: [
+    Field(name: "next", type: .structure(StructID(index: 0, name: "Loop"))),
+])
+
+/// A struct of a Bool, an Int and a Bool, which lie as the Int, then the Bools, padded to 16 bytes.
+private let hit = StructType(name: "Hit", fields: [
+    Field(name: "crit", type: .bool), Field(name: "damage", type: .int), Field(name: "team", type: .bool),
+])
 
 /// The types of the program `declarations` make, after an empty `main`.
 private func types(_ declarations: String) throws -> TypeTable {
@@ -49,5 +80,5 @@ private func types(_ declarations: String) throws -> TypeTable {
 /// The layout of the struct `name` among `table`'s structs.
 private func layout(of name: String, in table: TypeTable) throws -> StructLayout {
     let index = try #require(table.structs.firstIndex { $0.name == name })
-    return table.structLayout(of: StructID(index: index, name: name))
+    return table.structLayout(of: .structure(StructID(index: index, name: name)))
 }
