@@ -32,9 +32,9 @@ Five **state** roles:
 
 For a PR, the same states read against the attached code: `ready-for-agent` means a brief is attached and an agent should take the next step on the diff; `ready-for-human` means it's ready for a human to merge.
 
-One or more **area** roles: the parts of the project the work changes. The tracker config lists them.
+One or two **area** roles: the area that owns the question the issue decides, and at most one other it changes most. The triage-label mapping lists them.
 
-Every triaged issue should carry exactly one category role, one state role, and at least one area role. If state roles conflict, flag it and ask the maintainer before doing anything else.
+Every triaged issue should carry exactly one category role, one state role, and one or two area roles; an epic takes no area role, since its sub-issues carry theirs. If state roles conflict, flag it and ask the maintainer before doing anything else.
 
 These are canonical role names. The actual label strings used in the issue tracker may differ. The mapping should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
 
