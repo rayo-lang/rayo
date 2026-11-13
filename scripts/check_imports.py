@@ -23,7 +23,9 @@ RULES = [
     # LLVM's C API is called only by the module that wraps it, and the one that finds LLVM's install.
     ImportRule('CLLVM', allowed=['Sources/LLVM', 'Sources/RayoLLVMInstall']),
     # Nothing after semantic checking sees syntax: the checked program, and every stage that reads it, take only what
-    # the checker resolved.
+    # the checker resolved. The manifest gives none of those stages' modules `RayoSyntax` as a dependency, and this
+    # rule stops them reaching it through `RayoSema`. Lowering's tests may import it, since they parse the programs
+    # they lower.
     ImportRule('RayoSyntax', allowed=['Sources', 'Tests'], excepted=[
         'Sources/RayoSema/CheckedProgram', 'Sources/RayoIR', 'Sources/RayoOwnership', 'Sources/RayoLLVM',
         'Sources/RayoRuntime', 'Sources/LLVM', 'Sources/CLLVM', 'Tests/RayoOwnershipTests', 'Tests/RayoLLVMTests',
