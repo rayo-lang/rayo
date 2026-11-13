@@ -4,10 +4,10 @@ import os
 import tempfile
 import unittest
 
-from check_llvm_imports import findings, main
+from check_imports import ImportRule, findings, main
 
 
-class CheckLLVMImportsTests(unittest.TestCase):
+class CheckImportsTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -22,12 +22,12 @@ class CheckLLVMImportsTests(unittest.TestCase):
     def test_an_allowed_directory_may_import_llvms_c_module(self):
         self.write('Sources/LLVM/Context.swift', 'import CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [])
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [])
 
     def test_an_import_outside_the_allowed_directories_is_reported_by_file_and_line(self):
         self.write('Sources/RayoIR/Lowering.swift', 'import Foundation\nimport RayoSema\nimport CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [
             'Sources/RayoIR/Lowering.swift:3: imports CLLVM, which only Sources/LLVM may import',
         ])
 
@@ -39,12 +39,12 @@ class CheckLLVMImportsTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.write('Tests/RayoIRTests/Lowered.swift', source + '\n')
 
-                self.assertEqual(len(findings(self.root, allowed=['Sources/LLVM'])), 1)
+                self.assertEqual(len(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])])), 1)
 
     def test_an_import_after_another_on_the_same_line_is_reported_on_that_line(self):
         self.write('Sources/RayoIR/Lowering.swift', '\nimport Foundation; import CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [
             'Sources/RayoIR/Lowering.swift:2: imports CLLVM, which only Sources/LLVM may import',
         ])
 
@@ -57,7 +57,7 @@ class CheckLLVMImportsTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.write('Sources/RayoIR/Lowering.swift', source + '\n')
 
-                self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [])
+                self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [])
 
     def test_a_comment_marker_inside_a_string_or_a_line_comment_hides_no_import(self):
         for source in ['let pattern = "Sources/*"\nimport CLLVM\nlet end = "*/"',
@@ -65,21 +65,21 @@ class CheckLLVMImportsTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.write('Sources/RayoIR/Lowering.swift', source + '\n')
 
-                self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [
+                self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [
                     'Sources/RayoIR/Lowering.swift:2: imports CLLVM, which only Sources/LLVM may import',
                 ])
 
     def test_a_reexport_is_reported_even_from_an_allowed_directory(self):
         self.write('Sources/LLVM/Context.swift', '@_exported import CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [
             'Sources/LLVM/Context.swift:1: re-exports CLLVM, which hands it to every module that imports this one',
         ])
 
     def test_a_reexport_is_reported_with_its_attribute_on_a_line_of_its_own(self):
         self.write('Sources/LLVM/Context.swift', '@_exported\nimport CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [
             'Sources/LLVM/Context.swift:2: re-exports CLLVM, which hands it to every module that imports this one',
         ])
 
@@ -87,7 +87,9 @@ class CheckLLVMImportsTests(unittest.TestCase):
         self.write('Tests/RayoIRTests/Lowered.swift', 'import CLLVM\n')
         self.write('Sources/RayoIR/Lowering.swift', '\nimport CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM', 'Sources/RayoLLVM']), [
+        rule = ImportRule('CLLVM', allowed=['Sources/LLVM', 'Sources/RayoLLVM'])
+
+        self.assertEqual(findings(self.root, rules=[rule]), [
             'Sources/RayoIR/Lowering.swift:2: imports CLLVM, which only Sources/LLVM and Sources/RayoLLVM may import',
             'Tests/RayoIRTests/Lowered.swift:1: imports CLLVM, which only Sources/LLVM and Sources/RayoLLVM may '
             'import',
@@ -96,15 +98,49 @@ class CheckLLVMImportsTests(unittest.TestCase):
     def test_a_directory_named_like_an_allowed_one_is_not_allowed(self):
         self.write('Sources/LLVMExtras/A.swift', 'import CLLVM\n')
 
-        self.assertEqual(len(findings(self.root, allowed=['Sources/LLVM'])), 1)
+        self.assertEqual(len(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])])), 1)
+
+    def test_a_directory_a_rule_excepts_may_not_import_its_module_inside_one_it_allows(self):
+        rule = ImportRule('RayoSyntax', allowed=['Sources'], excepted=['Sources/RayoIR', 'Sources/RayoLLVM'])
+        self.write('Sources/RayoSema/Checker.swift', 'import RayoSyntax\n')
+        self.write('Sources/RayoIR/Lowering.swift', 'import RayoSema\nimport RayoSyntax\n')
+
+        self.assertEqual(findings(self.root, rules=[rule]), [
+            'Sources/RayoIR/Lowering.swift:2: imports RayoSyntax, which no file under Sources/RayoIR or '
+            'Sources/RayoLLVM may import',
+        ])
+
+    def test_each_rule_limits_the_imports_of_its_own_module(self):
+        rules = [ImportRule('CLLVM', allowed=['Sources/LLVM']),
+                 ImportRule('RayoSyntax', allowed=['Sources'], excepted=['Sources/LLVM'])]
+        self.write('Sources/LLVM/Context.swift', 'import CLLVM\nimport RayoSyntax\n')
+        self.write('Sources/RayoSema/Checker.swift', 'import CLLVM\nimport RayoSyntax\n')
+
+        self.assertEqual(findings(self.root, rules=rules), [
+            'Sources/LLVM/Context.swift:2: imports RayoSyntax, which no file under Sources/LLVM may import',
+            'Sources/RayoSema/Checker.swift:1: imports CLLVM, which only Sources/LLVM may import',
+        ])
+
+    def test_a_reexport_of_any_module_a_rule_limits_is_reported(self):
+        self.write('Sources/RayoSema/Checker.swift', '@_exported import RayoSyntax\n')
+
+        self.assertEqual(findings(self.root, rules=[ImportRule('RayoSyntax', allowed=['Sources'])]), [
+            'Sources/RayoSema/Checker.swift:1: re-exports RayoSyntax, which hands it to every module that imports '
+            'this one',
+        ])
+
+    def test_a_module_no_rule_limits_may_be_imported_anywhere(self):
+        self.write('Sources/RayoIR/Lowering.swift', 'import RayoSema\n@_exported import Foundation\n')
+
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [])
 
     def test_files_outside_sources_and_tests_are_not_checked(self):
         self.write('scripts/generate.swift', 'import CLLVM\n')
 
-        self.assertEqual(findings(self.root, allowed=['Sources/LLVM']), [])
+        self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [])
 
 
-class CheckLLVMImportsMainTests(unittest.TestCase):
+class CheckImportsMainTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)

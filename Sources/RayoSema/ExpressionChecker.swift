@@ -176,8 +176,9 @@ struct ExpressionChecker {
         }
 
         // Arithmetic on two untyped operands gives a value of their type, so it is untyped too.
-        if case .untyped(let untypedLeft) = left, case .untyped(let untypedRight) = right, op.isArithmetic {
-            return .untyped(.arithmetic(op, untypedLeft, untypedRight, range: range))
+        let checkedOp = CheckedBinaryOperator(op)
+        if case .untyped(let untypedLeft) = left, case .untyped(let untypedRight) = right, checkedOp.isArithmetic {
+            return .untyped(.arithmetic(checkedOp, untypedLeft, untypedRight, range: range))
         }
 
         // Otherwise an untyped operand takes the type of the typed one beside it, which every operator takes on both
@@ -186,7 +187,7 @@ struct ExpressionChecker {
         let settledRight = settled(right, toward: left.type)
         // An operand that failed was reported.
         guard let settledLeft, let settledRight else { return nil }
-        return binary(op, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
+        return binary(checkedOp, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
     }
 
     /// Turns `value`, which `expr` gives, into the value its position takes, which moves a place's value out of it.
@@ -278,7 +279,7 @@ struct ExpressionChecker {
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a
     /// compound assignment's `+`.
-    func binary(_ op: BinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
+    func binary(_ op: CheckedBinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
                 in range: SourceRange) -> CheckedExpr? {
         let result: RayoType
         switch op {
@@ -343,7 +344,7 @@ struct ExpressionChecker {
     }
 }
 
-private extension BinaryOperator {
+private extension CheckedBinaryOperator {
     /// Whether the operator gives a value of its operands' type.
     var isArithmetic: Bool {
         switch self {

@@ -1,22 +1,40 @@
-"""Checks that only the directories in `ALLOWED` import LLVM's C module, `CLLVM`, and that no file re-exports it.
-A target can import a module it reaches only through another dependency, so the package manifest can't enforce
-this.
+"""Checks that each module a rule in `RULES` limits is imported only where the rule allows, and that no file
+re-exports it. A target can import a module it reaches only through another dependency, so the package manifest
+can't enforce this.
 
-    python3 scripts/check_llvm_imports.py   # writes each import that breaks the rule, and fails if there is any
+    python3 scripts/check_imports.py   # writes each import that breaks a rule, and fails if there is any
 """
 
 import os
 import re
 import sys
+from typing import NamedTuple, Sequence
 
-# The directories whose Swift files may import LLVM's C module.
-ALLOWED = ['Sources/LLVM', 'Sources/RayoLLVMInstall']
 
-# An import declaration of the C module, or of a submodule or a declaration of it, where a statement starts: at the
-# start of a line or after a `;`, behind any attributes and access level. Its groups are the attributes, the `import`
+class ImportRule(NamedTuple):
+    """The directories whose Swift files may import `module`: those under one of `allowed` and under none of
+    `excepted`."""
+    module: str
+    allowed: Sequence[str]
+    excepted: Sequence[str] = ()
+
+
+RULES = [
+    # LLVM's C API is called only by the module that wraps it, and the one that finds LLVM's install.
+    ImportRule('CLLVM', allowed=['Sources/LLVM', 'Sources/RayoLLVMInstall']),
+    # Nothing after semantic checking sees syntax: the checked program, and every stage that reads it, take only what
+    # the checker resolved.
+    ImportRule('RayoSyntax', allowed=['Sources', 'Tests'], excepted=[
+        'Sources/RayoSema/CheckedProgram', 'Sources/RayoIR', 'Sources/RayoOwnership', 'Sources/RayoLLVM',
+        'Sources/RayoRuntime', 'Sources/LLVM',
+    ]),
+]
+
+# An import declaration of a module, or of a submodule or a declaration of it, where a statement starts: at the start
+# of a line or after a `;`, behind any attributes and access level. Its groups are the attributes, the `import`
 # keyword and the module.
 IMPORT = re.compile(r'(?:^|;)\s*((?:@\w+(?:\([^)]*\))?\s+)*)(?:(?:public|package|internal|fileprivate|private)\s+)?'
-                    r'(import)\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(CLLVM)\b',
+                    r'(import)\s+(?:(?:typealias|struct|class|enum|protocol|let|var|func)\s+)?(\w+)\b',
                     re.MULTILINE)
 # The opening of a string literal: a raw string's `#`s, then one quote or three.
 STRING_OPENING = re.compile(r'(#*)("""|")')
@@ -139,30 +157,42 @@ def interpolation_end(text, start):
     return len(text)
 
 
-def listed(names):
-    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+def listed(names, conjunction='and'):
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + f' {conjunction} ' + names[-1]
 
 
-def file_findings(path, text, allowed):
-    is_allowed = any(path.startswith(directory + '/') for directory in allowed)
+def is_under(path, directories):
+    return any(path.startswith(directory + '/') for directory in directories)
+
+
+def file_findings(path, text, rules):
+    rule_of = {rule.module: rule for rule in rules}
     found = []
     for match in IMPORT.finditer(code(text)):
         attributes, module = match.group(1), match.group(3)
+        # A module no rule limits may be imported anywhere.
+        rule = rule_of.get(module)
+        if rule is None:
+            continue
         number = text.count('\n', 0, match.start(2)) + 1
-        # A re-export hands the C module to every module that imports this one, so no file may make one.
+        # A re-export hands the module to every module that imports this one, so no file may make one.
         if '@_exported' in attributes:
             found.append(f'{path}:{number}: re-exports {module}, which hands it to every module that imports this one')
-        # Any other import is a finding outside the allowed directories.
-        elif not is_allowed:
-            found.append(f'{path}:{number}: imports {module}, which only {listed(allowed)} may import')
+        # Any other import is a finding outside the directories the rule allows.
+        elif not is_under(path, rule.allowed):
+            found.append(f'{path}:{number}: imports {module}, which only {listed(rule.allowed)} may import')
+        # And inside one the rule excepts from them.
+        elif is_under(path, rule.excepted):
+            excepted = listed(rule.excepted, 'or')
+            found.append(f'{path}:{number}: imports {module}, which no file under {excepted} may import')
     return found
 
 
-def findings(root, allowed=ALLOWED):
+def findings(root, rules=RULES):
     found = []
     for path in sorted(swift_files(root)):
         with open(os.path.join(root, path), encoding='utf-8') as f:
-            found += file_findings(path, f.read(), allowed)
+            found += file_findings(path, f.read(), rules)
     return found
 
 

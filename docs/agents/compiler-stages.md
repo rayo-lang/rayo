@@ -14,4 +14,6 @@ This page names each stage's kind of question, not each question. A new feature 
 | Emitting | `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM` | How the program becomes LLVM code, taking each type's layout from semantic checking, and the runtime it links. It reports no errors in the program. |
 | Pipeline | `RayoCompiler`, `rayoc` | Which stages run, in what order, and what the output asks of a program, such as a `main`. A stage that reports errors stops the compile, so each stage sees only a program the ones before it accepted. It also decides what `rayoc` reads, writes and prints. |
 
+Nothing after semantic checking sees syntax. The checked program holds only what the checker resolved, such as each operator's meaning, and lowering, ownership and emitting read only it. `Package.swift` gives none of their modules `RayoSyntax` as a dependency, and since a module can still import one it reaches through another, `scripts/check_imports.py` fails CI on any file under `Sources/RayoSema/CheckedProgram` or a later stage's module that imports it.
+
 The driver, `rayo`, in `RayoDriver` and `RayoLLVMInstall`, runs `rayoc` and links what it writes: it lies outside `rayoc`'s stages.

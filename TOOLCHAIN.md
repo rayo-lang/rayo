@@ -42,10 +42,10 @@ A file without a `main` function is a library. `rayo check` checks it as it chec
 swift test
 ```
 
-Only the directories that `scripts/check_llvm_imports.py` lists may import LLVM's C module, `CLLVM`, and no file may re-export it. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. The script reads every Swift file's imports instead, and names each import that breaks the rule. CI runs it on every change to code, and you can run it from anywhere:
+Only the directories that `scripts/check_imports.py` allows may import LLVM's C module, `CLLVM`, and no source after semantic checking may import `RayoSyntax`. No file may re-export either. A target can import a module it reaches only through another dependency, so the manifest can't enforce this. The script reads every Swift file's imports instead, and names each import that breaks a rule. CI runs it on every change to code, and you can run it from anywhere:
 
 ```sh
-python3 scripts/check_llvm_imports.py
+python3 scripts/check_imports.py
 ```
 
 ## How rayo and rayoc work together

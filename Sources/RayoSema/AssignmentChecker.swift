@@ -19,7 +19,8 @@ struct AssignmentChecker {
         case nil:
             return .assign(current.place, value)
         case let binaryOp?:
-            return compoundAssign(value, binaryOp, spelled: op.rawValue, to: current, in: range)
+            let checkedOp = CheckedBinaryOperator(binaryOp)
+            return compoundAssign(value, checkedOp, spelled: op.rawValue, to: current, in: range)
         }
     }
 
@@ -37,7 +38,7 @@ struct AssignmentChecker {
     }
 
     /// Checks `place op= value`, where the source spells the operator `spelled`, as `place op value`.
-    private func compoundAssign(_ value: CheckedExpr, _ op: BinaryOperator, spelled: String,
+    private func compoundAssign(_ value: CheckedExpr, _ op: CheckedBinaryOperator, spelled: String,
                                 to place: TypedPlace, in range: SourceRange) -> CheckedStmt? {
         let current = CheckedExpr(kind: .place(place.place), type: place.type, range: place.place.range)
         // Operands the operator doesn't take were reported.
