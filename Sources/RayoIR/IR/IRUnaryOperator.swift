@@ -13,6 +13,14 @@ public enum IRUnaryOperator: Hashable, Sendable, CustomStringConvertible {
         }
     }
 
+    /// The types of the operands the operator takes.
+    public var operandTypes: [RayoType] {
+        switch self {
+        case .negate: [.int]
+        case .not: [.bool]
+        }
+    }
+
     /// The type of the value the operator gives on an operand of `type`.
     public func resultType(on type: RayoType) -> RayoType {
         switch self {

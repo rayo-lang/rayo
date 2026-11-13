@@ -32,7 +32,7 @@ extension FunctionEmitter {
             storeResult(result, in: destinationAddress, with: builder)
         case .slot:
             callWritingSlot(of: target, passing: arguments, from: operands, into: destination,
-                                at: destinationAddress, with: builder)
+                            at: destinationAddress, with: builder)
         }
     }
 

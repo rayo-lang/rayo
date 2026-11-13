@@ -1,7 +1,7 @@
 import RayoSema
 
-/// An operator that computes a value from two operands of one type, which says how it computes it, such as whether
-/// it orders them as signed.
+/// An operator that computes a value from two operands of one type. Arithmetic carries its overflow mode, and the
+/// operands' type says the rest of how the operator computes, such as whether it orders them as signed.
 public enum IRBinaryOperator: Hashable, Sendable, CustomStringConvertible {
     case add(OverflowMode)
     case subtract(OverflowMode)
@@ -26,6 +26,14 @@ public enum IRBinaryOperator: Hashable, Sendable, CustomStringConvertible {
         case .lessEqual: "<="
         case .greater: ">"
         case .greaterEqual: ">="
+        }
+    }
+
+    /// The types of the operands the operator takes, both of one of them.
+    public var operandTypes: [RayoType] {
+        switch self {
+        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual: [.int]
+        case .equal, .notEqual: [.int, .bool]
         }
     }
 

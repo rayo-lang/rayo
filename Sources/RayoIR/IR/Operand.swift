@@ -13,8 +13,17 @@ public enum Operand: Equatable, Sendable {
     /// operand names must step only into fields its values have.
     public func type(in body: IRBody, types: TypeTable) -> RayoType {
         switch self {
-        case .constant(let constant): constant.type
-        case .read(let place, _), .move(let place, _): place.type(in: body, types: types)
+        // A constant's value is of the constant's type.
+        case .constant(let constant):
+            return constant.type
+
+        // A place's value is of the type its steps lead to, which, in IR that keeps its types, they always do.
+        case .read(let place, _), .move(let place, _):
+            do {
+                return try place.type(in: body, types: types)
+            } catch {
+                preconditionFailure("the IR names \(error.step) of a value of type \(error.holder)")
+            }
         }
     }
 }

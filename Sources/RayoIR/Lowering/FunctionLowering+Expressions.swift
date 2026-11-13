@@ -1,6 +1,5 @@
 import RayoSema
 import RayoSource
-import RayoSyntax
 
 /// Lowers expressions, from the current block on, as the operations that compute them and the operands that hold
 /// their values.
@@ -154,20 +153,10 @@ extension FunctionLowering {
     }
 }
 
-private extension IRUnaryOperator {
-    /// The IR operator that the source's `op` lowers to, whose arithmetic checks overflow.
-    init(_ op: UnaryOperator) {
-        self = switch op {
-        case .negate: .negate(.checked)
-        case .not: .not
-        }
-    }
-}
-
 private extension PlaceStep {
     init(_ step: CheckedPlaceStep) {
-        self = switch step {
-        case .field(let index, _): .field(index)
+        switch step {
+        case .field(let index, _): self = .field(index)
         }
     }
 }

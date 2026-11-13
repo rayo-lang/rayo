@@ -98,7 +98,7 @@ struct FunctionVerifier {
     /// The type of `operand`, which `op` must take.
     private func operandType(of op: IRUnaryOperator, _ operand: Operand) throws(IRViolation) -> RayoType {
         let operandType = try type(of: operand)
-        let taken = op.takenTypes
+        let taken = op.operandTypes
         guard taken.contains(operandType) else { throw unfit(op, given: operandType, taking: taken) }
         return operandType
     }
@@ -108,7 +108,7 @@ struct FunctionVerifier {
         -> RayoType {
         // The left operand must be of a type `op` takes.
         let leftType = try type(of: left)
-        let taken = op.takenTypes
+        let taken = op.operandTypes
         guard taken.contains(leftType) else { throw unfit(op, given: leftType, taking: taken) }
 
         // The right one must be of the same type.
@@ -167,7 +167,8 @@ struct FunctionVerifier {
         return .structure(id)
     }
 
-    /// The type of `operand`'s value. Throws where it names a place that isn't there.
+    /// The type of `operand`'s value, whose root, where it names a place, must be one of the body's locals. Throws
+    /// where a step of the place leads into a field that the value it steps from doesn't have.
     private func type(of operand: Operand) throws(IRViolation) -> RayoType {
         switch operand {
         case .constant(let constant): constant.type
@@ -175,43 +176,19 @@ struct FunctionVerifier {
         }
     }
 
-    /// The type of the value at `place`. Throws where a step leads into a field that the value it steps from doesn't
-    /// have.
+    /// The type of the value at `place`, whose root must be one of the body's locals. Throws where a step leads into a
+    /// field that the value it steps from doesn't have.
     private func type(of place: Place) throws(IRViolation) -> RayoType {
-        var type = body.locals[place.root.index].type
-        for step in place.steps {
-            // A step must lead into a field of the value it steps from.
-            guard let field = step.field(of: type, in: types) else {
-                throw violation("the IR names \(step.name) of a value of type \(type)")
-            }
-            type = field.type
+        do {
+            return try place.type(in: body, types: types)
+        } catch {
+            throw violation("the IR names \(error.step.name) of a value of type \(error.holder)")
         }
-        return type
     }
 
     /// The violation that `message` says, in this function.
     private func violation(_ message: String) -> IRViolation {
         IRViolation(function: declaration.name, message: message)
-    }
-}
-
-private extension IRUnaryOperator {
-    /// The types of the operands the operator takes.
-    var takenTypes: [RayoType] {
-        switch self {
-        case .negate: [.int]
-        case .not: [.bool]
-        }
-    }
-}
-
-private extension IRBinaryOperator {
-    /// The types of the operands the operator takes, both of one of them.
-    var takenTypes: [RayoType] {
-        switch self {
-        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual: [.int]
-        case .equal, .notEqual: [.int, .bool]
-        }
     }
 }
 

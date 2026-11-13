@@ -135,7 +135,7 @@ public enum Compiler {
     }
 
     /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR.
-    private static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
+    static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
             ReadSource(readFile: readFile)
             Parse()

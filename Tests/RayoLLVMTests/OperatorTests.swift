@@ -43,6 +43,11 @@ struct OperatorTests {
     }
 
     @Test(arguments: Build.allCases)
+    func `a wrapping '/' still panics on a zero divisor, in every build`(build: Build) throws {
+        #expect(try outcome(of: .divide(.wrapping), 1, 0, in: build) == .panics("division by zero"))
+    }
+
+    @Test(arguments: Build.allCases)
     func `wrapping negation wraps Int.min to itself, in every build`(build: Build) throws {
         #expect(try outcome(of: .negate(.wrapping), .min, in: build) == .int(.min))
     }

@@ -22,15 +22,13 @@ public struct Place: Hashable, Sendable {
         Place(root: root, steps: Array(steps.prefix(count)))
     }
 
-    /// The type of the value at the place in `body`, a body of a program whose structs `types` holds. Each step must
-    /// lead into a field that the value it steps from has.
-    public func type(in body: IRBody, types: TypeTable) -> RayoType {
+    /// The type of the value at the place in `body`, a body of a program whose structs `types` holds, and which holds
+    /// the place's root. Throws the first step that leads into a field the value it steps from doesn't have.
+    public func type(in body: IRBody, types: TypeTable) throws(UnfitStep) -> RayoType {
         var type = body.locals[root.index].type
         for step in steps {
-            // A step that leads nowhere breaks the precondition.
-            guard let field = step.field(of: type, in: types) else {
-                preconditionFailure("\(step) leads into no field of a value of type \(type)")
-            }
+            // A step must lead into a field of the value it steps from.
+            guard let field = step.field(of: type, in: types) else { throw UnfitStep(step, from: type) }
             type = field.type
         }
         return type
