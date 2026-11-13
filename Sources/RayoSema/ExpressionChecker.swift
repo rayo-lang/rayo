@@ -75,9 +75,13 @@ struct ExpressionChecker {
                 .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
             }
 
-        // A call reaches one of the functions its name names, or the initializer of the struct it names.
-        case .call(let name, let nameRange, let arguments):
-            CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range).map { .typed($0) }
+        // A call reaches one of the functions its callee names, or makes the struct it names.
+        case .call(let callee, let arguments):
+            CallChecker(expressions: self).call(callee, arguments, in: expr.range).map { .typed($0) }
+
+        // An implicit member names a member of the type its position expects, which no position gives yet.
+        case .implicitMember:
+            unsupportedImplicitMember(at: expr.range)
 
         // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
         case .copy(let place):
@@ -126,6 +130,12 @@ struct ExpressionChecker {
     private func settled(_ untyped: UntypedValue, toward type: RayoType?) -> CheckedExpr? {
         let settledType = if let type, untyped.fits(type) { type } else { untyped.defaultType }
         return untyped.settled(to: settledType, named: typeName(of: settledType), reporting: errors)
+    }
+
+    /// Reports the implicit member at `range`, which isn't supported, and returns nil.
+    private func unsupportedImplicitMember(at range: SourceRange) -> CheckedValue? {
+        errors.report(.unsupportedImplicitMember, at: range)
+        return nil
     }
 
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.

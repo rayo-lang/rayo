@@ -13,10 +13,12 @@ public indirect enum ExprKind: Sendable {
     case negativeIntLiteral(UInt64)
     case boolLiteral(Bool)
     case name(String)
-    /// `name(arguments)`.
-    case call(name: String, nameRange: SourceRange, arguments: [Argument])
+    /// `callee(arguments)`, where the callee is a name, a member or an implicit member.
+    case call(callee: Expr, arguments: [Argument])
     /// `value.name`: the member `name` of the value.
     case member(Expr, name: String, nameRange: SourceRange)
+    /// `.name`: the member `name` of the type its position expects.
+    case implicitMember(name: String)
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
     /// `copy place`: the value of a local, or of a field of one at any depth, which the place keeps. `place` is a

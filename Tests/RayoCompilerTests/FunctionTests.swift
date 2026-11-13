@@ -100,4 +100,22 @@ struct FunctionTests {
     func notAValue(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}\nfunc f() -> Int { 1 }") == [expected])
     }
+
+    @Test(arguments: [
+        ("e.hit(by: 2)", [ErrorCode.unsupportedMemberCall], ["e.hit"]),
+        ("print(e.hp.total())", [.unsupportedMemberCall], ["e.hp.total"]),
+        ("nope.hit(by: missing)", [.notDeclared(name: "nope"), .unsupportedMemberCall, .notDeclared(name: "missing")],
+         ["nope", "nope.hit", "missing"]),
+        ("print(.make(1))", [.unsupportedImplicitMember], [".make"]),
+        ("let x: Int = .zero", [.unsupportedImplicitMember], [".zero"]),
+        ("print(.zero + 1)", [.unsupportedImplicitMember], [".zero"]),
+    ])
+    func `a member call and an implicit member aren't supported, and the error covers the callee or the member`(
+        body: String, expected: [ErrorCode], covered: [String],
+    ) {
+        let source = "func main() {\nlet e = Enemy(hp: 1)\n\(body)\n}\nstruct Enemy(var hp: Int)"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == expected)
+        #expect(coveredText(reported, in: source) == covered)
+    }
 }

@@ -46,9 +46,27 @@ extension Parser {
         return Expr(kind: .unary(op, operand), range: range(from: start))
     }
 
-    /// `primary ('.' member)*`.
+    /// `primary postfix*`, where a postfix is `'.' member`, or `'(' arguments ')'` after a name, a member or an
+    /// implicit member.
     private mutating func parsePostfix() throws(ParseFailure) -> Expr {
-        try parseMembers(of: parsePrimary())
+        var value = try parsePrimary()
+
+        // Each postfix applies to the value before it, so `a.b(1).c` is the `c` of the call `a.b(1)`.
+        while true {
+            switch current.kind {
+            // A `.` takes a member of the value.
+            case .punct(.dot):
+                value = try parseMembers(of: value)
+
+            // A `(` calls the value, where it is a name, a member or an implicit member.
+            case .punct(.lparen) where value.isCallable:
+                value = try parseCall(to: value)
+
+            // Anything else ends the expression.
+            default:
+                return value
+            }
+        }
     }
 
     /// After `base`: the members taken of it, each after a `.`.
@@ -57,12 +75,17 @@ extension Parser {
 
         // Each `.` takes a member of the value before it, so `a.b.c` is the `c` of `a.b`.
         while consume(.dot) {
-            // A member's name is an identifier, a keyword or an integer literal; any other token is reported.
-            guard let name = memberSpelling else { throw fail(ErrorCode.missingMemberName) }
-            let nameRange = advance().range
+            let (name, nameRange) = try parseMemberName()
             value = Expr(kind: .member(value, name: name, nameRange: nameRange), range: value.range.to(nameRange))
         }
         return value
+    }
+
+    /// The member's name after a `.`, and its range.
+    private mutating func parseMemberName() throws(ParseFailure) -> (String, SourceRange) {
+        // A member's name is an identifier, a keyword or an integer literal; any other token is reported.
+        guard let name = memberSpelling else { throw fail(ErrorCode.missingMemberName) }
+        return (name, advance().range)
     }
 
     /// How the current token is spelled as a member's name after a `.`, when it can be one: an identifier, a keyword,
@@ -84,9 +107,13 @@ extension Parser {
         case .keyword(let keyword) where keyword == .true || keyword == .false:
             Expr(kind: .boolLiteral(keyword == .true), range: advance().range)
 
-        // A name is a value's, or a call's when a `(` comes after it.
+        // A name is a value's, or a callee where a `(` comes after it.
         case .identifier(let name):
-            try parseNameOrCall(name, at: advance().range)
+            Expr(kind: .name(name), range: advance().range)
+
+        // A `.` with no value before it starts an implicit member.
+        case .punct(.dot):
+            try parseImplicitMember(from: advance().range)
 
         // A `(` groups the expression inside it.
         case .punct(.lparen):
@@ -102,20 +129,19 @@ extension Parser {
         }
     }
 
-    /// After a name: a call to it when a `(` comes next, and otherwise the name's value.
-    private mutating func parseNameOrCall(_ name: String, at nameRange: SourceRange) throws(ParseFailure) -> Expr {
-        // Without a `(`, the name is a value's.
-        guard consume(.lparen) else { return Expr(kind: .name(name), range: nameRange) }
-        return try parseCall(to: name, at: nameRange)
+    /// After the `.` at `start`: the implicit member's name.
+    private mutating func parseImplicitMember(from start: SourceRange) throws(ParseFailure) -> Expr {
+        let (name, _) = try parseMemberName()
+        return Expr(kind: .implicitMember(name: name), range: range(from: start))
     }
 
-    /// After the `(` that follows a name: the arguments and the `)`.
-    private mutating func parseCall(to name: String, at nameRange: SourceRange) throws(ParseFailure) -> Expr {
+    /// At the `(` that follows `callee`: the `(`, the arguments and the `)`.
+    private mutating func parseCall(to callee: Expr) throws(ParseFailure) -> Expr {
+        advance()
         let arguments = try parseList(ifUnclosed: ErrorCode.unclosedArguments) { parser throws(ParseFailure) in
             try parser.parseArgument()
         }
-        let kind = ExprKind.call(name: name, nameRange: nameRange, arguments: arguments)
-        return Expr(kind: kind, range: range(from: nameRange))
+        return Expr(kind: .call(callee: callee, arguments: arguments), range: range(from: callee.range))
     }
 
     /// `(label ':')? expression`, where a label may be a keyword.
@@ -164,6 +190,16 @@ extension Parser {
         let inner = try parseExpression()
         try expect(.rparen, else: ErrorCode.unclosedParenthesizedExpression)
         return Expr(kind: inner.kind, range: range(from: start))
+    }
+}
+
+private extension Expr {
+    /// Whether a `(` after the expression calls it: a name, a member and an implicit member can be called.
+    var isCallable: Bool {
+        switch kind {
+        case .name, .member, .implicitMember: true
+        default: false
+        }
     }
 }
 

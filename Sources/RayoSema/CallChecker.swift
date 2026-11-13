@@ -2,7 +2,7 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks a call by name: which function or struct's initializer it reaches, and a function's arguments against its
+/// Checks a call: which function or struct's initializer its callee reaches, and a function's arguments against its
 /// parameters.
 struct CallChecker {
     /// A function that a call reaches, and the call's arguments, checked against its parameters.
@@ -15,13 +15,34 @@ struct CallChecker {
 
     private var errors: ErrorList { expressions.file.errors }
 
-    /// Checks `name(arguments)`. Every argument is checked, whether or not the call reaches a function or a struct.
-    func call(_ name: String, at nameRange: SourceRange, _ arguments: [Argument],
-              in range: SourceRange) -> CheckedExpr? {
+    /// Checks `callee(arguments)`. Every argument is checked, whether or not the call reaches a function or a struct.
+    func call(_ callee: Expr, _ arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+        switch callee.kind {
+        // A name calls the functions it names, or the initializers of the type it names.
+        case .name(let name):
+            call(named: name, at: callee.range, arguments, in: range)
+
+        // A member names a method, which no type has.
+        case .member(let base, _, _):
+            memberCall(of: base, at: callee.range, passing: arguments)
+
+        // An implicit member names a member of the type the call's position expects, which no position gives yet.
+        case .implicitMember:
+            reachingNothing(reporting: .unsupportedImplicitMember, at: callee.range, passing: arguments)
+
+        // The parser calls nothing else.
+        default:
+            preconditionFailure("only a name, a member or an implicit member is called")
+        }
+    }
+
+    /// Checks `name(arguments)`, where the source writes `name` at `nameRange`.
+    private func call(named name: String, at nameRange: SourceRange, _ arguments: [Argument],
+                      in range: SourceRange) -> CheckedExpr? {
         switch expressions.names.lookUp(name, for: .call) {
-        // A struct's name calls the struct's primary initializer.
+        // A struct's name calls one of the struct's initializers.
         case .structure(let id):
-            InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
+            initializerCall(of: id, passing: arguments, in: range)
 
         // The name's functions are the call's candidates.
         case .functions(let functions):
@@ -39,6 +60,25 @@ struct CallChecker {
         case nil:
             reachingNothing(reporting: .notDeclared(name: name), at: nameRange, passing: arguments)
         }
+    }
+
+    /// Checks a call of one of the initializers of the struct `id`, or, where the struct declares none, makes the
+    /// struct from its fields' values.
+    private func initializerCall(of id: StructID, passing arguments: [Argument],
+                                 in range: SourceRange) -> CheckedExpr? {
+        let initializers = expressions.file.declarations.initializers(of: id)
+        // A struct without initializers is made from its fields' values, which the arguments give.
+        guard !initializers.isEmpty else {
+            return InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
+        }
+        return call(among: initializers, passing: arguments, in: range)
+    }
+
+    /// Checks a call of the member of `base` that the source writes at `range`, which isn't supported: reports it, and
+    /// the errors of `base` and of each of `arguments`, and returns nil.
+    private func memberCall(of base: Expr, at range: SourceRange, passing arguments: [Argument]) -> CheckedExpr? {
+        _ = expressions.check(base)
+        return reachingNothing(reporting: .unsupportedMemberCall, at: range, passing: arguments)
     }
 
     /// Checks a call that reaches no function or struct: reports `error`, where there is one, at `range`, and the
