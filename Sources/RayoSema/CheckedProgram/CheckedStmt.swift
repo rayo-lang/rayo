@@ -8,7 +8,6 @@ public enum CheckedStmt: Sendable {
     case binding(CheckedPlace, CheckedExpr?)
     case assign(CheckedPlace, CheckedExpr)
     case compoundAssign(CheckedPlace, BinaryOperator, CheckedExpr)
-    case ifStmt(condition: CheckedExpr, then: [CheckedStmt], otherwise: [CheckedStmt])
     case whileStmt(condition: CheckedExpr, body: [CheckedStmt])
     case breakStmt
     case continueStmt

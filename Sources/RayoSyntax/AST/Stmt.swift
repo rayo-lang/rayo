@@ -12,7 +12,8 @@ public indirect enum StmtKind: Sendable {
     /// `_ = value`, which drops a value on purpose.
     case drop(Expr)
     case expression(Expr)
-    case ifStmt(condition: Expr, then: Block, otherwise: Block?)
+    /// An `if` that starts a statement, whose branches' values go unused.
+    case ifStmt(IfExpr)
     case whileStmt(condition: Expr, body: Block)
     case breakStmt
     case continueStmt

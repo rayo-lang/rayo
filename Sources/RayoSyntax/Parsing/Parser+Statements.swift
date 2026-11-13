@@ -25,7 +25,7 @@ extension Parser {
             .declaration(.var, try parseBindings())
         } else if consume(.if) {
             // An `if` takes a condition, a block, and maybe an `else`.
-            try parseIf()
+            .ifStmt(try parseIf())
         } else if consume(.while) {
             // A `while` takes a condition and the loop's body.
             .whileStmt(condition: try parseExpression(), body: try parseBlock())
@@ -66,24 +66,6 @@ extension Parser {
         }
         advance()
         return .assign(target: target, op: op, value: try parseExpression())
-    }
-
-    /// After the `if`: the condition, the block, and the `else` part, when there is one.
-    private mutating func parseIf() throws(ParseFailure) -> StmtKind {
-        let condition = try parseExpression()
-        let then = try parseBlock()
-        let otherwise = consume(.else) ? try parseElse() : nil
-        return .ifStmt(condition: condition, then: then, otherwise: otherwise)
-    }
-
-    /// After the `else`: a block, or an `if` that is the one statement of the block it stands for.
-    private mutating func parseElse() throws(ParseFailure) -> Block {
-        // An `else` without an `if` after it takes a block of its own.
-        guard current.isKeyword(.if) else { return try parseBlock() }
-        let start = advance().range
-        let nested = Stmt(kind: try parseIf(), range: range(from: start))
-        // The nested `if` ends with the `}` of its last block, which ends this one too.
-        return Block(statements: [nested], closingBrace: previousRange)
     }
 
     /// After the `let` or `var`: `binding (',' binding)*`.

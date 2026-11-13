@@ -77,13 +77,13 @@ struct ProgramTests {
         #expect(errors("func main() { \(body) }") == [expected])
     }
 
-    @Test("an expression is a literal, a name, a call, 'copy', an operator or parentheses", arguments: [
+    @Test("an expression is a literal, a name, a call, 'copy', an operator, parentheses or an 'if'", arguments: [
         ("print(1 2)", ErrorCode.unclosedArguments(found: .token("2"))),
         ("print(copy 1)", .missingCopiedName(found: .token("1"))),
         ("print(1)(2)", .unendedStatement(found: .token("("))),
         ("let t = (1, 2)", .unclosedParenthesizedExpression(found: .token(","))),
         ("let t = ()", .missingExpression(found: .token(")"))),
-        ("let y = if true { 1 } else { 2 }", .missingExpression(found: .token("if"))),
+        ("let y = if true { 1 } { 2 }", .unendedStatement(found: .token("{"))),
     ])
     func expressions(body: String, expected: ErrorCode) {
         #expect(errors("func main() { \(body) }") == [expected])

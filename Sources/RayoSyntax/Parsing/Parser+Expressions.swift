@@ -92,6 +92,10 @@ extension Parser {
         case .punct(.lparen):
             try parseParenthesized(from: advance().range)
 
+        // An `if` gives the value of the branch that runs.
+        case .keyword(.if):
+            try parseIfExpression(from: advance().range)
+
         // Any other token starts no expression.
         default:
             throw fail(ErrorCode.missingExpression)
@@ -129,6 +133,30 @@ extension Parser {
         advance()
         advance()
         return spelling
+    }
+
+    /// After the `if` at `start`: the `if` as an expression.
+    private mutating func parseIfExpression(from start: SourceRange) throws(ParseFailure) -> Expr {
+        let ifExpr = try parseIf()
+        return Expr(kind: .if(ifExpr), range: range(from: start))
+    }
+
+    /// After the `if`: the condition, the block, and the `else` part, when there is one.
+    mutating func parseIf() throws(ParseFailure) -> IfExpr {
+        let condition = try parseExpression()
+        let then = try parseBlock()
+        let otherwise = consume(.else) ? try parseElse() : nil
+        return IfExpr(condition: condition, then: then, otherwise: otherwise)
+    }
+
+    /// After the `else`: a block, or an `if` that is the one statement of the block it stands for.
+    private mutating func parseElse() throws(ParseFailure) -> Block {
+        // An `else` without an `if` after it takes a block of its own.
+        guard current.isKeyword(.if) else { return try parseBlock() }
+        let start = advance().range
+        let nested = Stmt(kind: .ifStmt(try parseIf()), range: range(from: start))
+        // The nested `if` ends with the `}` of its last block, which ends this one too.
+        return Block(statements: [nested], closingBrace: previousRange)
     }
 
     /// After the `(`: an expression in parentheses and the `)`.

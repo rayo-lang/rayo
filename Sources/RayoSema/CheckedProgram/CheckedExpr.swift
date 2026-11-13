@@ -22,4 +22,17 @@ public indirect enum CheckedExprKind: Sendable {
     case structure(StructID, fields: [CheckedExpr])
     /// Reads a field of the struct value, which keeps it. `index` is the field's place in the struct's declaration.
     case field(CheckedExpr, index: Int)
+    /// Runs `then` when the Bool `condition` is true, and `otherwise` when it is false, and gives the value of the
+    /// branch that runs.
+    case `if`(condition: CheckedExpr, then: CheckedBranch, otherwise: CheckedBranch)
+}
+
+/// A branch of an `if`: the statements it runs, then the value it ends in.
+public struct CheckedBranch: Sendable {
+    public var statements: [CheckedStmt]
+    /// The value the `if` gives when the branch runs. It is nil where the branch gives none:
+    /// - in an `if` that is a statement
+    /// - in a Void branch that ends in a statement
+    /// - in a branch no run reaches the end of
+    public var value: CheckedExpr?
 }

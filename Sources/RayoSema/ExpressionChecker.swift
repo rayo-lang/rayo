@@ -9,8 +9,15 @@ struct ExpressionChecker {
 
     let file: FileChecker
     let names: NameScopes
+    /// Where a `return`, a `break` and a `continue` in the code being checked leave for.
+    let jumps: JumpTargets
 
     private var errors: ErrorList { file.errors }
+
+    /// A checker of the expressions in the body of a loop that the code being checked holds.
+    var insideLoop: ExpressionChecker {
+        ExpressionChecker(file: file, names: names, jumps: jumps.insideLoop)
+    }
 
     /// The name an error gives `type`.
     func typeName(of type: RayoType) -> TypeName {
@@ -64,26 +71,51 @@ struct ExpressionChecker {
         // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
         case .copy(let place):
             return check(place).map { CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range) }
+
+        // An `if` read for its value gives the value of the branch that runs.
+        case .if:
+            return check(expr, as: .read, expecting: nil)
         }
     }
 
     func check(_ expr: Expr, expecting type: RayoType) -> CheckedExpr? {
-        // An expression that failed, or that has another type, was reported.
-        guard let checked = check(expr), expect(checked, type) else { return nil }
-        return checked
+        check(expr, as: .read, expecting: Expectation(type))
     }
 
-    /// Whether `expr` has `type`, reporting it when it doesn't.
-    func expect(_ expr: CheckedExpr, _ type: RayoType) -> Bool {
+    /// Checks `expr` as a value that its position takes, which moves a local's value out of it.
+    func checkTaken(_ expr: Expr) -> CheckedExpr? {
+        check(expr, as: .take, expecting: nil)
+    }
+
+    /// Checks `expr` as the value of a position that `use`s it, and that expects `expected` of it where it expects a
+    /// type.
+    func check(_ expr: Expr, as use: ValueUse, expecting expected: Expectation?) -> CheckedExpr? {
+        // An `if` hands its position to the branch that runs, so each branch's value is checked as the position's.
+        if case .if(let ifExpr) = expr.kind {
+            return IfChecker(expressions: self).check(ifExpr, in: expr.range, as: use, expecting: expected)
+        }
+
+        // Any other value is checked on its own, then against the type the position expects.
+        let value = switch use {
+        case .read: check(expr)
+        case .take: taken(expr)
+        }
+        // A value that failed was reported, and a value passes where the position expects no type.
+        guard let value, let expected else { return value }
+        return expect(value.type, at: value.range, expected) ? value : nil
+    }
+
+    /// Whether a value of `type`, which the source gives at `range`, has the type `expected` names, reporting its
+    /// mismatch when it doesn't.
+    func expect(_ type: RayoType, at range: SourceRange, _ expected: Expectation) -> Bool {
         // A value of the type passes.
-        if expr.type == type { return true }
-        errors.report(.typeMismatch(expected: typeName(of: type), found: typeName(of: expr.type)), at: expr.range)
+        if type == expected.type { return true }
+        errors.report(expected.mismatch(typeName(of: expected.type), typeName(of: type)), at: range)
         return false
     }
 
-    /// Checks `expr` as the value a declaration, an assignment, a `return`, `_ =` or a struct's initializer takes,
-    /// which moves a local's value out of it.
-    func checkTaken(_ expr: Expr) -> CheckedExpr? {
+    /// Checks `expr`, which isn't an `if`, as a value that its position takes, which moves a local's value out of it.
+    private func taken(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported already.
         guard let value = check(expr) else { return nil }
 
