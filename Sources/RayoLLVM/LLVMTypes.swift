@@ -38,10 +38,9 @@ struct LLVMTypes {
         // A struct whose type was made already keeps it.
         if let made = structs.made[type] { return made }
 
-        // Keep the type before it gets its fields, which make their own types in turn.
         let made = maker.makeStructType(named: type.description)
-        structs.made[type] = made
         made.setFields(elements(of: type), packed: true)
+        structs.made[type] = made
         return made
     }
 

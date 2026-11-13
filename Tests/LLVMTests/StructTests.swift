@@ -4,7 +4,7 @@ import Testing
 struct StructTests {
     @Test func `a struct's value is made from poison, one field inserted at a time`() throws {
         let bench = Workbench()
-        let pair = bench.context.makeStructType(named: "Pair")
+        let pair = bench.context.typeMaker.makeStructType(named: "Pair")
         pair.setFields([bench.int64, bench.bool], packed: true)
         let function = bench.function(named: "f", returning: pair, taking: [bench.int64, bench.bool])
 
@@ -23,7 +23,7 @@ struct StructTests {
 
     @Test func `a field's pointer points into the struct that a pointer points to`() throws {
         let bench = Workbench()
-        let pair = bench.context.makeStructType(named: "Pair")
+        let pair = bench.context.typeMaker.makeStructType(named: "Pair")
         pair.setFields([bench.int64, bench.bool], packed: true)
         let function = bench.function(named: "f", returning: bench.bool, taking: [pair])
         let slot = bench.builder.allocate(pair, alignment: 8)

@@ -1,4 +1,4 @@
-import RayoSema
+@testable import RayoSema
 import RayoSyntax
 import Testing
 
@@ -42,6 +42,15 @@ struct LayoutTests {
         // `Loop` contains itself, so it has no layout, but asking for `Hit`'s never asks for `Loop`'s.
         let table = TypeTable(structs: [loop, hit])
         #expect(table.layout(of: .structure(StructID(index: 1, name: "Hit"))) == Layout(size: 16, alignment: 8))
+    }
+
+    @Test func `a struct's layout is kept once it is worked out, with those of the structs its fields hold`() throws {
+        let table = try types("struct Outer(var hit: Hit)\nstruct Hit(var crit: Bool, var damage: Int, let team: Bool)")
+        let outer = RayoType.structure(StructID(index: 0, name: "Outer"))
+        let hit = RayoType.structure(StructID(index: 1, name: "Hit"))
+
+        _ = table.layout(of: outer)
+        #expect(table.laidOut == [outer, hit])
     }
 
     @Test func `asking for the layout of a struct that contains itself stops the compiler`() async {

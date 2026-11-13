@@ -37,6 +37,11 @@ public struct TypeTable: Equatable, Sendable {
         structLayout(of: type, inside: [])
     }
 
+    /// The structs laid out so far.
+    var laidOut: Set<RayoType> {
+        layouts.cache.withLock { Set($0.keys) }
+    }
+
     /// Whether `left` and `right` declare the same structs, which decide every layout.
     public static func == (left: TypeTable, right: TypeTable) -> Bool {
         left.structs == right.structs
