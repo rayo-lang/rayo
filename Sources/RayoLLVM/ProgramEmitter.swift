@@ -33,9 +33,7 @@ struct ProgramEmitter: ~Copyable {
     func emit(_ executable: IRExecutable, calling runtime: RuntimeFunctions) throws(LLVMError) {
         let program = executable.program
         let lowering = SignatureLowering(types: LLVMTypes(program.types, in: context))
-        let functions = program.functions.indices.map { index in
-            declare(FunctionID(index: index), of: executable, using: lowering)
-        }
+        let functions = program.functions.ids.map { declare($0, of: executable, using: lowering) }
         let callees = Callees(
             functions: functions,
             printInt: runtimeFunction(runtime.printInt, taking: .int, using: lowering),
@@ -43,9 +41,9 @@ struct ProgramEmitter: ~Copyable {
         )
 
         // Emit the bodies once every function is declared, so a body can call a function that comes after it.
-        for (function, declared) in zip(program.functions, functions) {
-            var emitter = FunctionEmitter(function: function, into: declared, callees: callees, lowering: lowering,
-                                          panic: runtime.panic, in: self)
+        for (id, body) in program.definedFunctions {
+            var emitter = FunctionEmitter(body: body, of: program.functions[id], into: functions[id.index],
+                                          callees: callees, lowering: lowering, panic: runtime.panic, in: self)
             try emitter.emit(in: self)
         }
     }
@@ -55,7 +53,7 @@ struct ProgramEmitter: ~Copyable {
     private func declare(
         _ id: FunctionID, of executable: IRExecutable, using lowering: SignatureLowering,
     ) -> DeclaredFunction {
-        let function = executable.program.functions[id.index]
+        let function = executable.program.functions[id]
         // A name with parentheses is none that the runtime or the C library defines or calls.
         let name = id == executable.main ? "rayo.main" : function.name
         let signature = lowering.lower(FunctionSignature(of: function), in: context)

@@ -25,7 +25,9 @@ struct FunctionEmitter {
         }
     }
 
-    let function: IRFunction
+    let body: IRBody
+    /// The function whose body this emits.
+    let declaration: FunctionDeclaration
     let llvmFunction: Function
     /// How the function's parameters and result are passed.
     let signature: LoweredSignature
@@ -43,10 +45,11 @@ struct FunctionEmitter {
     var types: LLVMTypes { lowering.types }
 
     init(
-        function: IRFunction, into declared: DeclaredFunction, callees: Callees, lowering: SignatureLowering,
-        panic: Function, in program: borrowing ProgramEmitter,
+        body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction, callees: Callees,
+        lowering: SignatureLowering, panic: Function, in program: borrowing ProgramEmitter,
     ) {
-        self.function = function
+        self.body = body
+        self.declaration = declaration
         llvmFunction = declared.function
         signature = declared.signature
         self.callees = callees
@@ -60,9 +63,9 @@ struct FunctionEmitter {
     mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
         program.builder.position(atEndOf: entry)
         places = try makePlaces(with: program.builder)
-        blocks = function.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
+        blocks = body.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 
-        for (block, llvmBlock) in zip(function.blocks, blocks) {
+        for (block, llvmBlock) in zip(body.blocks, blocks) {
             try emit(block, into: llvmBlock, in: program)
         }
 

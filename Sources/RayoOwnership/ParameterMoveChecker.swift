@@ -5,19 +5,19 @@ import RayoIR
 public enum ParameterMoveChecker {
     /// Reports each move out of a borrowed parameter, or out of a field inside one, in source order.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
-        program.functions.flatMap { check(PlaceTypes(function: $0, types: program.types)) }.inSourceOrder
+        program.definedFunctions.flatMap { check(PlaceTypes(body: $0.body, types: program.types)) }.inSourceOrder
     }
 
-    /// Checks every block of the function whose places `places` gives the types of, whether or not a path reaches it.
+    /// Checks every block of the body whose places `places` gives the types of, whether or not a path reaches it.
     private static func check(_ places: PlaceTypes) -> [Diagnostic] {
-        places.function.blocks.flatMap(\.operands).compactMap { error(at: $0, in: places) }
+        places.body.blocks.flatMap(\.operands).compactMap { error(at: $0, in: places) }
     }
 
     /// The error at `operand` where it moves a value out of a borrowed parameter, or nil where it doesn't.
     private static func error(at operand: Operand, in places: PlaceTypes) -> Diagnostic? {
         // Only a move out of a borrowed parameter takes a value its caller owns.
         guard case .move(let place, let range) = operand,
-              case .source(let parameter, .parameter, _) = places.function.locals[place.root.index]
+              case .source(let parameter, .parameter, _) = places.body.locals[place.root.index]
         else { return nil }
 
         // A parameter is a local of the source, which names each place inside it.

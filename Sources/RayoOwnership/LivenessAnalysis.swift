@@ -10,17 +10,17 @@ struct LivenessAnalysis {
     /// The analysis of the function whose places `places` gives the types of.
     init(of places: PlaceTypes) {
         let exitStates = Self.exitStates(in: places)
-        let reached = Self.reachedBlocks(of: places.function)
+        let reached = Self.reachedBlocks(of: places.body)
         self.exitStates = exitStates.indices.map { reached.contains($0) ? exitStates[$0] : nil }
     }
 
     /// Solves the state at the exit of each block of the function whose places `places` gives the types of, indexed
     /// by `BlockID`.
     private static func exitStates(in places: PlaceTypes) -> [LivenessState] {
-        let function = places.function
+        let body = places.body
 
         // No block starts out reading any local, and the passes below add each read they find.
-        var entryStates = Array(repeating: LivenessState(), count: function.blocks.count)
+        var entryStates = Array(repeating: LivenessState(), count: body.blocks.count)
         var exitStates = entryStates
 
         // Each pass gives every block the reads its successors make, until a pass adds none. A block's successors
@@ -28,7 +28,7 @@ struct LivenessAnalysis {
         var previousEntryStates: [LivenessState]
         repeat {
             previousEntryStates = entryStates
-            for (index, block) in function.blocks.enumerated().reversed() {
+            for (index, block) in body.blocks.enumerated().reversed() {
                 exitStates[index] = block.terminator.successors.reduce(LivenessState()) {
                     $0.union(entryStates[$1.index])
                 }
@@ -39,13 +39,13 @@ struct LivenessAnalysis {
         return exitStates
     }
 
-    /// Walks the blocks of `function` that some path from its entry reaches, and returns their indices.
-    private static func reachedBlocks(of function: IRFunction) -> Set<Int> {
+    /// Walks the blocks of `body` that some path from its entry reaches, and returns their indices.
+    private static func reachedBlocks(of body: IRBody) -> Set<Int> {
         var reached: Set<Int> = [0]
         var pending = [BlockID(index: 0)]
         while let block = pending.popLast() {
             // Each successor not reached before is reached through `block`, and so are its own successors.
-            for successor in function.blocks[block.index].terminator.successors
+            for successor in body.blocks[block.index].terminator.successors
             where reached.insert(successor.index).inserted {
                 pending.append(successor)
             }

@@ -18,20 +18,32 @@ let hit = StructID(index: 1, name: "Hit")
 /// The paths of fields to a `Shot`'s `range`, its `hit`, and the `damage` of its `hit`.
 let shotRange = [0], shotHit = [1], shotDamage = [1, 0]
 
+/// A function a test writes by hand: its declaration and its body.
+typealias HandWrittenFunction = (declaration: FunctionDeclaration, body: IRBody)
+
 /// A program of `functions`, the first of them its `main`, which declares `Shot` and `Hit`.
-func program(of functions: [IRFunction]) -> IRProgram {
-    IRProgram(types: shotAndHit, functions: functions, main: FunctionID(index: 0))
+func program(of functions: [HandWrittenFunction]) -> IRProgram {
+    // Declare each function, with its body under its ID.
+    var table = FunctionTable()
+    var bodies: [FunctionID: IRBody] = [:]
+    for function in functions {
+        bodies[table.declare(function.declaration)] = function.body
+    }
+
+    return IRProgram(types: shotAndHit, functions: table, bodies: bodies, main: FunctionID(index: 0))
 }
 
 /// A function made of `blocks`, whose locals are `x`, `y`, `k`, `t`, `h` and `s`, the first `parameterCount` of them
 /// its parameters.
-func function(_ blocks: [BasicBlock], parameterCount: Int = 0) -> IRFunction {
+func function(_ blocks: [BasicBlock], parameterCount: Int = 0) -> HandWrittenFunction {
     let locals = [
         IRLocal.source(name: "x", kind: .var, type: .int), .source(name: "y", kind: .var, type: .int),
         .source(name: "k", kind: .let, type: .int), .temporary(.int),
         .source(name: "h", kind: .var, type: .structure(hit)), .source(name: "s", kind: .var, type: .structure(shot)),
     ]
-    return IRFunction(name: "f()", parameterCount: parameterCount, result: .void, locals: locals, blocks: blocks)
+    let parameters = locals.prefix(parameterCount).map(\.type)
+    let declaration = FunctionDeclaration(name: "f()", parameters: parameters, result: .void, kind: .written)
+    return (declaration, IRBody(locals: locals, blocks: blocks))
 }
 
 /// Stores a new `Hit` in `h`, then a new `Shot` that takes it in `s`, which the source names at `offset`.

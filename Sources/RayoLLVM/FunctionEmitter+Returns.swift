@@ -7,12 +7,12 @@ extension FunctionEmitter {
     /// Emits the return of `result`'s value, or of nothing where there is no `result`. Throws where that isn't of
     /// the type the function returns.
     func emitReturn(_ result: Operand?, with builder: borrowing Builder) throws(LLVMError) {
-        let resultType = types.llvmType(function.result)
+        let resultType = types.llvmType(declaration.result)
 
         // A `return` without an operand ends a function that returns nothing in `ret void`.
         guard let result else {
             // A function that returns a value, which the checker makes end in a `return` of it, fails here.
-            guard function.result == .void else {
+            guard declaration.result == .void else {
                 throw LLVMError(message: "the IR returns nothing from a function that returns \(resultType.text)")
             }
             return builder.returnVoid()
@@ -20,7 +20,7 @@ extension FunctionEmitter {
 
         // A value of another type than the function's result, which the checker passes no IR with, fails here.
         let value = try value(of: result, with: builder)
-        guard value.type == function.result else {
+        guard value.type == declaration.result else {
             let returned = "a value of type \(types.llvmType(value.type).text)"
             throw LLVMError(message: "the IR returns \(returned) from a function that returns \(resultType.text)")
         }
@@ -58,7 +58,7 @@ extension FunctionEmitter {
     /// the return of nothing.
     private func returnInSlot(_ value: OperandValue, with builder: borrowing Builder) throws(LLVMError) {
         // The slot is the first LLVM parameter, ahead of the arguments.
-        let slot = Address(pointer: pointerParameter(at: 0), type: function.result)
+        let slot = Address(pointer: pointerParameter(at: 0), type: declaration.result)
         // A value built in the slot is there already.
         if case .place(let address) = value, address.pointer == slot.pointer { return builder.returnVoid() }
 
@@ -75,15 +75,15 @@ extension FunctionEmitter {
 
         // Gather what each `return` gives the whole of: a local, or nil for anything else.
         var returned: Set<LocalID?> = []
-        for block in function.blocks {
+        for block in body.blocks {
             if case .return(let operand) = block.terminator { returned.insert(operand.flatMap(Self.wholeLocal)) }
         }
 
         // Every `return` must give the whole of one local of the result's type, which isn't a parameter, whose
         // place is the caller's.
         guard returned.count == 1, let local = returned.first ?? nil else { return nil }
-        let isResult = function.locals[local.index].type == function.result
-        return local.index >= function.parameterCount && isResult ? local : nil
+        let isResult = body.locals[local.index].type == declaration.result
+        return local.index >= declaration.parameters.count && isResult ? local : nil
     }
 
     /// The local `operand` reads or moves the whole of, or nil where it is a constant or a field.

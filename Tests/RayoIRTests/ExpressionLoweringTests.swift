@@ -156,6 +156,6 @@ struct ExpressionLoweringTests {
             block(compute(1, .use(bool(false))), then: goto(2)),
             block(compute(nil, .call(.function(FunctionID(index: 1)), arguments: [read(1)])), then: .return(nil)),
         )
-        #expect(program.functions[0] == expected)
+        #expect(program.body(at: 0) == expected)
     }
 }

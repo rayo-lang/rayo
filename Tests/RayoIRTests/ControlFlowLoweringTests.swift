@@ -103,7 +103,7 @@ struct ControlFlowLoweringTests {
             block(compute(1, .use(int(2))), then: goto(3)),
             block(compute(nil, .call(.function(FunctionID(index: 1)), arguments: [read(1)])), then: .return(nil)),
         )
-        #expect(program.functions[0] == expected)
+        #expect(program.body(at: 0) == expected)
     }
 
     @Test("a 'while' tests its condition in a header, whose body goes back to it, and whose exit goes on")

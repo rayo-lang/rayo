@@ -1,4 +1,4 @@
-/// Identifies a function of a program.
+/// Identifies a function of a program by its entry in the program's `FunctionTable`.
 public struct FunctionID: Hashable, Sendable {
     public var index: Int
 

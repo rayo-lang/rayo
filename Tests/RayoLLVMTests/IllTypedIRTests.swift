@@ -192,7 +192,7 @@ private func read(_ index: Int, field: Int) -> Operand {
 /// type and ends in `terminator`.
 private func returning(_ terminator: Terminator, of local: RayoType, from result: RayoType) -> IRExecutable {
     let main = mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
-    let function = IRFunction(
+    let function = handWritten(
         name: "f()", parameterCount: 0, result: result, locals: [.temporary(local)],
         blocks: [BasicBlock(statements: [], terminator: terminator)],
     )
@@ -221,7 +221,7 @@ private func calling(
     }
 
     // The function returns as soon as it is called.
-    let function = IRFunction(
+    let function = handWritten(
         name: name, parameterCount: parameterCount, result: .void,
         locals: Array(repeating: .temporary(.int), count: parameterCount),
         blocks: [BasicBlock(statements: [], terminator: .return(nil))],

@@ -21,7 +21,7 @@ struct RuntimeTests {
 
     @Test func `a program's own functions are defined in its object, and none is exported`() throws {
         // `main` prints what `answer()` returns, so the object needs `answer()`.
-        let answer = IRFunction(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
+        let answer = handWritten(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
             BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
         ])
         let main = mainFunction(locals: [.int], [

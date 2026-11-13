@@ -1,7 +1,7 @@
 import RayoSema
 import RayoSource
 
-/// Builds one IR function's blocks and locals.
+/// Builds one IR body's blocks and locals.
 struct FunctionBuilder: ~Copyable {
     /// A block as lowering builds it, which has no terminator until lowering leaves it.
     private struct PendingBlock {
@@ -17,19 +17,14 @@ struct FunctionBuilder: ~Copyable {
         self.locals = locals
     }
 
-    /// Makes the IR function of `checked` from the blocks and locals built so far, every block of which has ended.
-    consuming func function(of checked: CheckedFunction) -> IRFunction {
+    /// Makes the IR body of the blocks and locals built so far, every block of which has ended.
+    consuming func body() -> IRBody {
         // Each pending block becomes the block it was built as, with its terminator.
         let blocks = blocks.map { block in
             guard let terminator = block.terminator else { preconditionFailure("a block was left unterminated") }
             return BasicBlock(statements: block.statements, terminator: terminator)
         }
-
-        // Put those blocks and the locals under `checked`'s header.
-        return IRFunction(
-            name: checked.name, parameterCount: checked.parameterCount, result: checked.result,
-            locals: locals, blocks: blocks,
-        )
+        return IRBody(locals: locals, blocks: blocks)
     }
 
     mutating func newBlock() -> BlockID {

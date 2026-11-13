@@ -14,7 +14,7 @@ struct EmittedTypeTests {
 
         // The emitted signature takes an i64 and an i1, and returns the LLVM type of `result`.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
-            let signature = try signature(of: irFunction.name, in: module)
+            let signature = try signature(of: irFunction.declaration.name, in: module)
             #expect(signature.parameters.map(\.text) == ["i64", "i1"])
             #expect(signature.result.text == resultText)
         }
@@ -33,7 +33,7 @@ struct EmittedTypeTests {
 
         // The emitted function allocates a slot of each local's LLVM type, its parameters' first.
         try withEmitted(program(of: [emptyMain, irFunction])) { module in
-            let llvmFunction = try function(named: irFunction.name, in: module)
+            let llvmFunction = try function(named: irFunction.declaration.name, in: module)
             let slotTypes = instructions(.allocate, in: llvmFunction).map(\.allocatedType?.text)
             #expect(slotTypes == ["i64", "i1", "i1", "i64"])
         }
@@ -186,18 +186,18 @@ struct EmittedTypeTests {
     private var pairType: RayoType { .structure(pairID) }
 
     /// A `main` that takes nothing, returns nothing and does nothing.
-    private var emptyMain: IRFunction {
+    private var emptyMain: HandWrittenFunction {
         mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
     }
 
     /// A function that takes an Int and a Bool, holds `temporaries` besides them, and returns the parameter of type
     /// `result`.
-    private func pick(returning result: RayoType, _ temporaries: [IRLocal]) throws -> IRFunction {
+    private func pick(returning result: RayoType, _ temporaries: [IRLocal]) throws -> HandWrittenFunction {
         let parameters: [IRLocal] = [
             .source(name: "n", kind: .parameter, type: .int), .source(name: "b", kind: .parameter, type: .bool),
         ]
         let returned = try #require(parameters.firstIndex { $0.type == result })
-        return IRFunction(
+        return handWritten(
             name: "pick(_: Int, _: Bool)", parameterCount: 2, result: result, locals: parameters + temporaries,
             blocks: [BasicBlock(statements: [], terminator: .return(read(returned)))],
         )

@@ -11,7 +11,7 @@ struct PassModeTests {
 
         // A Pair's Bool and Int are two LLVM parameters, in the order the Pair declares them.
         try withEmitted(program(of: [emptyMain, relay], types: table)) { module in
-            let type = try function(named: relay.name, in: module).type
+            let type = try function(named: relay.declaration.name, in: module).type
             #expect(type.parameters.map(\.text) == ["i1", "i64"])
             #expect(type.result.text == "{ i1, i64 }")
         }
@@ -22,7 +22,7 @@ struct PassModeTests {
 
         // A Nested holds a Bool, then a Flags of two Bools, which is more than two scalars in all.
         try withEmitted(program(of: [emptyMain, relay], types: table)) { module in
-            let type = try function(named: relay.name, in: module).type
+            let type = try function(named: relay.declaration.name, in: module).type
             #expect(type.parameters.map(\.text) == ["ptr", "ptr"])
             #expect(type.result.text == "void")
         }
@@ -33,7 +33,7 @@ struct PassModeTests {
 
         // The result's slot comes first, and the argument's place after it, each marked with what holds of it.
         try withEmitted(program(of: [emptyMain, relay], types: table)) { module in
-            let text = try function(named: relay.name, in: module).text
+            let text = try function(named: relay.declaration.name, in: module).text
             #expect(text.contains("(\(resultSlot) %0, \(borrowedPlace) %1)"))
         }
     }
@@ -46,7 +46,7 @@ struct PassModeTests {
                 terminator: .return(nil),
             ),
         ])
-        let first = IRFunction(
+        let first = handWritten(
             name: "first(_: Trio)", parameterCount: 1, result: .int,
             locals: [.source(name: "t", kind: .parameter, type: trioType), .temporary(.int)],
             blocks: [BasicBlock(
@@ -59,7 +59,7 @@ struct PassModeTests {
         try withEmitted(program(of: [main, first], types: table)) { module in
             let llvmMain = try function(named: "rayo.main", in: module)
             #expect(llvmMain.text.contains("call i64 @\"first(_: Trio)\"(\(borrowedPlace) %0)"))
-            let llvmFirst = try function(named: first.name, in: module)
+            let llvmFirst = try function(named: first.declaration.name, in: module)
             #expect(instructions(.allocate, in: llvmFirst).map(\.allocatedType?.text) == ["i64"])
             #expect(llvmFirst.text.contains("getelementptr inbounds nuw %Trio, ptr %0, i32 0, i32 0"))
             #expect(!llvmFirst.text.contains("memcpy"))
@@ -86,7 +86,7 @@ struct PassModeTests {
     @Test func `a function that returns the local it builds its result in builds it in the caller's slot`() throws {
         // `make` builds its Trio through the slot's pointer, holding nothing of its own.
         try withEmitted(program(of: [emptyMain, making], types: table)) { module in
-            let llvmMake = try function(named: making.name, in: module)
+            let llvmMake = try function(named: making.declaration.name, in: module)
             #expect(instructions(.allocate, in: llvmMake).isEmpty)
             #expect(llvmMake.text.contains("getelementptr inbounds nuw %Trio, ptr %0, i32 0, i32 0"))
             #expect(!llvmMake.text.contains("memcpy"))
@@ -105,7 +105,9 @@ struct PassModeTests {
 
         // Each copy is a memcpy of the Trio's 24 bytes, and no load or store is of a Trio or a Holder.
         try withEmitted(program(of: [main, relay], types: table)) { module in
-            let functions = try [function(named: "rayo.main", in: module), function(named: relay.name, in: module)]
+            let functions = try [
+                function(named: "rayo.main", in: module), function(named: relay.declaration.name, in: module),
+            ]
             let copy = "call void @llvm.memcpy.p0.p0.i64(ptr align 8 %0, ptr align 8 %1, i64 24, i1 false)"
             #expect(functions[1].text.contains(copy))
             #expect(functions[0].text.components(separatedBy: "@llvm.memcpy").count == 3)
@@ -187,13 +189,13 @@ struct PassModeTests {
     private let borrowedPlace = "ptr noalias noundef nonnull readonly align 8 captures(none) dereferenceable(24)"
 
     /// A `main` that takes nothing, returns nothing and does nothing.
-    private var emptyMain: IRFunction {
+    private var emptyMain: HandWrittenFunction {
         mainFunction(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
     }
 
     /// `relay(_:)`, which returns the borrowed argument of `type` it is passed.
-    private func relaying(_ type: RayoType) -> IRFunction {
-        IRFunction(
+    private func relaying(_ type: RayoType) -> HandWrittenFunction {
+        handWritten(
             name: "relay(_: \(type))", parameterCount: 1, result: type,
             locals: [.source(name: "value", kind: .parameter, type: type)],
             blocks: [BasicBlock(statements: [], terminator: .return(read(0)))],
@@ -201,9 +203,9 @@ struct PassModeTests {
     }
 
     /// `make()`, which builds a Trio in a local and returns it.
-    private var making: IRFunction {
+    private var making: HandWrittenFunction {
         let fields: [Operand] = [.constant(.int(1)), .constant(.int(2)), .constant(.bool(true))]
-        return IRFunction(
+        return handWritten(
             name: "make()", parameterCount: 0, result: trioType, locals: [.temporary(trioType)],
             blocks: [BasicBlock(
                 statements: [statement(storingIn: 0, .structure(trioID, fields: fields))],
