@@ -13,10 +13,10 @@ struct PlaceTypes {
         for step in place.steps {
             switch step {
             // A field has the type its struct declares it with.
-            case .field(let index): type = fields(of: type)[index].type
+            case .field(let index): type = types.fields(of: type)[index].type
             }
         }
-        return fields(of: type)
+        return types.fields(of: type)
     }
 
     /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where its local is a temporary.
@@ -31,12 +31,5 @@ struct PlaceTypes {
             }
         }
         return ([name] + stepNames).joined(separator: ".")
-    }
-
-    /// The fields of `type`, which must be a struct.
-    private func fields(of type: RayoType) -> [Field] {
-        // Only a struct has fields, and lowering steps into nothing else.
-        guard case .structure(let id) = type else { preconditionFailure("only a struct holds fields") }
-        return types[id].fields
     }
 }

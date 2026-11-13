@@ -66,6 +66,18 @@ struct TypeTests {
         #expect(pair.anyType.text == "{ i1, i64 }")
     }
 
+    @Test func `a type maker makes types in its context, which it keeps alive while it is held`() {
+        // The context the maker came from is out of reach by the time the maker is used.
+        let maker = Context().typeMaker
+        let pair = maker.makeStructType(named: "Pair")
+        #expect(pair.anyType.text == "%Pair = type opaque")
+
+        let bench = Workbench()
+        let flags = bench.context.typeMaker.makeStructType(named: "Flags")
+        flags.setFields([bench.context.typeMaker.arrayType(of: bench.bool, count: 2)], packed: true)
+        #expect(flags.anyType.text == "%Flags = type <{ [2 x i1] }>")
+    }
+
     @Test func `a pointer's type is LLVM's one opaque pointer type`() {
         #expect(Workbench().context.pointerType.text == "ptr")
     }

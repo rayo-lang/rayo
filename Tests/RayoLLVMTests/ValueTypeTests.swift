@@ -41,6 +41,20 @@ struct ValueTypeTests {
         }
     }
 
+    @Test func `a struct's LLVM type is made once, when it is first needed`() throws {
+        // `Loop` contains itself, so it has no LLVM type, but asking for `Pair`'s never asks for `Loop`'s.
+        let loop = StructType(name: "Loop", fields: [
+            Field(name: "next", type: .structure(StructID(index: 0, name: "Loop"))),
+        ])
+        let pair = StructType(name: "Pair", fields: [Field(name: "count", type: .int)])
+
+        try withTypes(of: [loop, pair]) { types in
+            let pairType = RayoType.structure(StructID(index: 1, name: "Pair"))
+            #expect(types.llvmType(pairType).text == "%Pair = type <{ i64 }>")
+            #expect(types.llvmType(pairType) == types.llvmType(pairType))
+        }
+    }
+
     @Test func `a value is aligned as its type is, a struct as its most-aligned field`() throws {
         let pair = StructType(name: "Pair", fields: [
             Field(name: "flag", type: .bool), Field(name: "count", type: .int),
