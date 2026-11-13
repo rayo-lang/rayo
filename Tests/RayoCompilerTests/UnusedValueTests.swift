@@ -35,6 +35,10 @@ struct UnusedValueTests {
             "3:14: error[E0308]: the value assigned to 'k' is never read",
             "3:29: error[E0308]: the value assigned to 'k' is never read",
         ]),
+        ("var x = 1\nwhile true {\nx = 2\n}", [
+            "2:5: error[E0308]: the value assigned to 'x' is never read",
+            "4:1: error[E0308]: the value assigned to 'x' is never read",
+        ]),
     ])
     func `a value that no code reads is an error at the local it is assigned to`(body: String, expected: [String]) {
         #expect(diagnostics("func main() {\n\(body)\n}\nfunc g() -> Int { 3 }").map(\.description) == expected)

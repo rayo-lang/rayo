@@ -2,11 +2,11 @@ import RayoIR
 import RayoSource
 
 /// What each local of a function, and each place moved out of one, holds at a point.
-struct InitializationState: Equatable {
-    /// Called with a place that a block uses, or a part of a local it stores to, where the source names it, and why
-    /// the place, or the value around the part, may hold no value just before the block does.
+struct InitializationState: DataflowState {
+    /// Called with a place that a statement or terminator uses, or a part of a local it stores to, where the source
+    /// names it, and why the place, or the value around the part, may hold no value just before it does.
     typealias UseVisitor = (Place, SourceRange, MissingValue) -> Void
-    /// Called with a whole local that a block stores to, and what the local holds just before the block does.
+    /// Called with a whole local that a statement stores to, and what the local holds just before it does.
     typealias StoreVisitor = (Destination, PlaceState) -> Void
 
     /// Indexed by `LocalID`.
@@ -18,23 +18,41 @@ struct InitializationState: Equatable {
         locals = body.locals.indices.map { $0 < parameterCount ? .initialized : .declared }
     }
 
-    func joined(with other: InitializationState) -> InitializationState {
-        var joined = self
-        joined.locals = zip(locals, other.locals).map { $0.joined(with: $1) }
-        return joined
+    func merged(with other: InitializationState) -> InitializationState {
+        var merged = self
+        merged.locals = zip(locals, other.locals).map { $0.joined(with: $1) }
+        return merged
     }
 
-    /// Applies what `block` does to the locals. It hands `use` each operand that names a place that may hold no
-    /// value, and each statement's destination inside a local that may not hold the rest of its value; it hands
-    /// `store` each destination that is a whole local.
-    mutating func apply(_ block: BasicBlock, use: UseVisitor = { _, _, _ in }, store: StoreVisitor = { _, _ in }) {
-        for statement in block.statements {
-            apply(statement, use: use, store: store)
-        }
-        // The terminator's operand is the block's last use.
-        if let operand = block.terminator.operand {
-            apply(operand, use: use)
-        }
+    /// Applies what `statement` does to the locals.
+    mutating func apply(_ statement: Statement) {
+        apply(statement, use: { _, _, _ in }, store: { _, _ in })
+    }
+
+    /// Applies what `terminator` does to the locals.
+    mutating func apply(_ terminator: Terminator) {
+        apply(terminator, use: { _, _, _ in })
+    }
+
+    /// Hands `use` each operand of `statement` that names a place that may hold no value, and its destination where
+    /// that lies inside a local that may not hold the rest of its value; hands `store` its destination where that is
+    /// a whole local. `statement` runs just after this state, and each operand sees the moves of those before it.
+    func inspect(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
+        var state = self
+        state.apply(statement, use: use, store: store)
+    }
+
+    /// Hands `use` the operand of `terminator`, which runs just after this state, where it names a place that may
+    /// hold no value.
+    func inspect(_ terminator: Terminator, use: UseVisitor) {
+        var state = self
+        state.apply(terminator, use: use)
+    }
+
+    private mutating func apply(_ terminator: Terminator, use: UseVisitor) {
+        // A terminator without an operand uses no place.
+        guard let operand = terminator.operand else { return }
+        apply(operand, use: use)
     }
 
     private mutating func apply(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {

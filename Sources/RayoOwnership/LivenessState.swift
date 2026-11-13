@@ -2,44 +2,41 @@ import RayoIR
 import RayoSema
 
 /// Which locals, and which parts inside them, hold a value that some code reads later, at a point.
-struct LivenessState: Equatable {
-    /// Called with a statement's destination, and whether some code reads the value it stores there.
-    typealias StoreVisitor = (Destination, _ isRead: Bool) -> Void
-
+struct LivenessState: DataflowState {
     /// The places whose values some code reads later; a read of a place reads every part inside it too.
     private var live: Set<Place> = []
 
     /// The state at the end of a function, after which no code reads any local.
     init() {}
 
-    /// The state where a path on which `self` holds meets one on which `other` does.
-    func union(_ other: LivenessState) -> LivenessState {
-        var union = self
-        union.live.formUnion(other.live)
-        return union
+    func merged(with other: LivenessState) -> LivenessState {
+        var merged = self
+        merged.live.formUnion(other.live)
+        return merged
     }
 
-    /// Takes the state after `block`, a block of the function whose places `places` gives the types of, back to the
-    /// state before it, handing `store` each statement's destination.
-    mutating func apply(
-        backwardsThrough block: BasicBlock, in places: PlaceTypes, store: StoreVisitor = { _, _ in },
-    ) {
-        // The terminator's operand is the block's last read, so it comes first going backwards.
-        if let operand = block.terminator.operand {
-            apply(operand)
-        }
-        for statement in block.statements.reversed() {
-            apply(statement, in: places, store: store)
-        }
+    /// Whether some code reads the value that a store to `place` just before this state leaves there: a later read
+    /// of the place, of a part inside it, or of a value that holds it.
+    func reads(_ place: Place) -> Bool {
+        live.contains { place.contains($0) || $0.contains(place) }
     }
 
-    private mutating func apply(_ statement: Statement, in places: PlaceTypes, store: StoreVisitor) {
+    /// Takes the state after `terminator` back to the state before it.
+    mutating func apply(backwardsThrough terminator: Terminator) {
+        // A terminator without an operand reads no place.
+        guard let operand = terminator.operand else { return }
+        apply(operand)
+    }
+
+    /// Takes the state after `statement`, a statement of the function whose places `places` gives the types of, back
+    /// to the state before it.
+    mutating func apply(backwardsThrough statement: Statement, in places: PlaceTypes) {
         switch statement {
         // A computation reads its operands before it stores to its destination, so going backwards it stores
         // first.
         case .compute(let destination, let value, _):
             // A computation with a destination stores a value in its place.
-            if let destination { assign(destination, in: places, store: store) }
+            if let destination { assign(destination.place, in: places) }
             value.operands.forEach { apply($0) }
 
         // A declaration starts its local's life, so no code before it reads a value the local holds after it.
@@ -48,14 +45,8 @@ struct LivenessState: Equatable {
         }
     }
 
-    /// Hands `store` `destination` and whether some code reads the value stored there, then leaves what the place
-    /// held before the store unread by any code after it.
-    private mutating func assign(_ destination: Destination, in places: PlaceTypes, store: StoreVisitor) {
-        // A later read of the place, of a part inside it, or of a value that holds it reads the stored value.
-        let stored = destination.place
-        let isRead = live.contains { stored.contains($0) || $0.contains(stored) }
-        store(destination, isRead)
-
+    /// Leaves what `stored` held before a store to it unread by any code after the store.
+    private mutating func assign(_ stored: Place, in places: PlaceTypes) {
         // The store replaces the place's value, and the values of the parts inside it.
         live = live.filter { !stored.contains($0) }
         narrowHolders(of: stored, in: places)
