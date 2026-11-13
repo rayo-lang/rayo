@@ -54,4 +54,19 @@ struct TypeTests {
         try bench.module.verify()
         #expect(bench.module.text.contains("%Packed = type <{ i64, i1 }>\n%Padded = type { i64, i1 }\n"))
     }
+
+    @Test func `a literal struct has no name, and is written by its fields`() throws {
+        let bench = Workbench()
+        let pair = bench.context.structType(of: [bench.bool, bench.int64])
+        let function = bench.function(named: "f", returning: pair, taking: [bench.bool, bench.int64])
+        let withFlag = bench.builder.insertValue(function.parameter(at: 0), into: pair.poison, at: 0)
+        bench.builder.return(bench.builder.insertValue(function.parameter(at: 1), into: withFlag, at: 1))
+
+        try bench.module.verify()
+        #expect(pair.anyType.text == "{ i1, i64 }")
+    }
+
+    @Test func `a pointer's type is LLVM's one opaque pointer type`() {
+        #expect(Workbench().context.pointerType.text == "ptr")
+    }
 }

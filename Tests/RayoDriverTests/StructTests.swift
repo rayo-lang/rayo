@@ -82,6 +82,46 @@ struct StructTests {
         #expect(run(source, options: mode) == expected)
     }
 
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a struct too large to pass in its scalars is passed, returned and rebuilt whole, in debug and in release`(
+        mode: [String],
+    ) {
+        // A Trio splits into three scalars, more than pass directly. `t` and `h.trio` are passed to the call whose
+        // result replaces them, and `t` is rebuilt from its own fields; `made` returns the local it builds, and
+        // `picked` the result of either of two calls.
+        let source = """
+            func main() {
+                var t = Trio(a: 1, b: 2, c: true)
+                t = bumped(t)
+                print(t.a)
+                print(t.b)
+                t = Trio(a: t.b, b: t.a, c: t.c)
+                print(t.a)
+                print(t.b)
+                print(t.c)
+                var h = Holder(trio: made(5), flag: false)
+                print(h.trio.b)
+                h.trio = bumped(h.trio)
+                print(h.trio.a)
+                print(sum(of: h.trio))
+                print(picked(true).a)
+                print(picked(false).b)
+                print(h.flag)
+            }
+            func bumped(_ t: Trio) -> Trio { Trio(a: t.a + 10, b: t.b + 10, c: copy t.c) }
+            func made(_ n: Int) -> Trio {
+                let t = Trio(a: copy n, b: n * 2, c: false)
+                return t
+            }
+            func picked(_ first: Bool) -> Trio { return if first { made(1) } else { made(2) } }
+            func sum(of t: Trio) -> Int { t.a + t.b }
+            struct Trio(var a: Int, var b: Int, let c: Bool)
+            struct Holder(var trio: Trio, let flag: Bool)
+            """
+        let output = "11\n12\n12\n11\ntrue\n10\n15\n35\n1\n4\nfalse\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
+    }
+
     @Test func `a type mismatch names a prelude type that a struct shadows as the prelude's`() {
         let source = "func main() {\n    let x: Int = 1\n}\nstruct Int(var big: Bool)"
         let error = "main.rayo:2:18: error[E0213]: expected Int, found the prelude's Int\n"

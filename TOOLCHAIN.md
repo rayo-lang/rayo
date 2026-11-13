@@ -172,5 +172,5 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
 | `Tests/RayoOwnershipTests` | The initialization checker's tests, over Rayo IR written by hand |
-| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through the binding's JIT; and of the LLVM types a program's values, functions and stack slots get |
+| `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through the binding's JIT; of the LLVM types a program's values, functions and stack slots get; and of how each argument and result is passed |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |

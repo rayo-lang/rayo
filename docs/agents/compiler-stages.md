@@ -36,7 +36,7 @@
 
 ## Emitting: `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM`
 
-**Decides:** how the program is written as LLVM code: the LLVM type of each Rayo type, which maps the layout semantic checking decides onto LLVM's types, how the build mode changes the code, such as overflow that panics in a debug build, and the runtime each program links.
+**Decides:** how the program is written as LLVM code: the LLVM type of each Rayo type, which maps the layout semantic checking decides onto LLVM's types, how each function's arguments and result are passed, and how values move between places, how the build mode changes the code, such as overflow that panics in a debug build, and the runtime each program links.
 
 **Leaves to the others:** every rule of the language, how each type lies in memory among them. It reports no error in a program, since every program that reaches it was accepted.
 

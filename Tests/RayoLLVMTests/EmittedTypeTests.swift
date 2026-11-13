@@ -20,23 +20,6 @@ struct EmittedTypeTests {
         }
     }
 
-    @Test func `a struct is passed and returned by value, as its named LLVM type`() throws {
-        let parameter = IRLocal.source(name: "p", kind: .parameter, type: pairType)
-        let relay = IRFunction(
-            name: "relay(_: Pair)", parameterCount: 1, result: pairType, locals: [parameter],
-            blocks: [BasicBlock(statements: [], terminator: .return(read(0)))],
-        )
-
-        // The emitted signature takes a Pair and returns one, neither through a pointer. LLVM writes a named struct
-        // type with its body.
-        let pairText = "%Pair = type <{ i64, i1, [7 x i8] }>"
-        try withEmitted(program(of: [emptyMain, relay], types: pairTable)) { module in
-            let signature = try signature(of: relay.name, in: module)
-            #expect(signature.parameters.map(\.text) == [pairText])
-            #expect(signature.result.text == pairText)
-        }
-    }
-
     @Test func `a function that returns nothing is declared returning void`() throws {
         try withEmitted(program(of: [emptyMain])) { module in
             let signature = try signature(of: "rayo.main", in: module)
@@ -80,7 +63,7 @@ struct EmittedTypeTests {
         }
     }
 
-    @Test func `a struct's value holds each field's value in the element that its layout puts the field in`() throws {
+    @Test func `a struct is built in its place, each field stored in the element its layout puts it in`() throws {
         // `main` makes a Pair of its Bool and its Int, which the Pair declares in that order.
         let main = mainFunction(locals: [.bool, .int, pairType], [
             BasicBlock(
@@ -89,12 +72,16 @@ struct EmittedTypeTests {
             ),
         ])
 
-        // The Bool goes in the second element and the Int in the first.
+        // The Bool goes in the second element and the Int in the first, each stored in the Pair's slot.
         try withEmitted(program(of: [main], types: pairTable)) { module in
             let text = try function(named: "rayo.main", in: module).text
             #expect(text.contains("""
-                  %5 = insertvalue %Pair poison, i1 %3, 1
-                  %6 = insertvalue %Pair %5, i64 %4, 0
+                  %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 1
+                  %4 = load i1, ptr %0, align 1
+                  store i1 %4, ptr %3, align 1
+                  %5 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 0
+                  %6 = load i64, ptr %1, align 8
+                  store i64 %6, ptr %5, align 8
                 """))
         }
     }
@@ -149,13 +136,13 @@ struct EmittedTypeTests {
             ),
         ])
 
-        // The store writes one byte to the Pair's second element, after the value is computed.
+        // The store writes one byte to the Pair's second element.
         try withEmitted(program(of: [main], types: pairTable)) { module in
             let text = try function(named: "rayo.main", in: module).text
             #expect(text.contains("""
-                  %2 = load i1, ptr %1, align 1
-                  %3 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
-                  store i1 %2, ptr %3, align 1
+                  %2 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
+                  %3 = load i1, ptr %1, align 1
+                  store i1 %3, ptr %2, align 1
                 """))
         }
     }
@@ -179,10 +166,10 @@ struct EmittedTypeTests {
         try withEmitted(program(of: [main], types: holderTable)) { module in
             let text = try function(named: "rayo.main", in: module).text
             #expect(text.contains("""
-                  %2 = load i64, ptr %1, align 8
-                  %3 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
-                  %4 = getelementptr inbounds nuw %Pair, ptr %3, i32 0, i32 0
-                  store i64 %2, ptr %4, align 8
+                  %2 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
+                  %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 0
+                  %4 = load i64, ptr %1, align 8
+                  store i64 %4, ptr %3, align 8
                 """))
         }
     }
@@ -216,27 +203,8 @@ struct EmittedTypeTests {
         )
     }
 
-    /// Emits `executable` into a new module for the host, as a debug build does, and runs `checks` on the module.
-    private func withEmitted(_ executable: IRExecutable, _ checks: (borrowing Module) throws -> Void) throws {
-        try withProgramModule(for: .debug) { programModule in
-            try programModule.emit(executable)
-            try checks(programModule.emitter.module)
-        }
-    }
-
-    /// The function named `name` in `module`.
-    private func function(named name: String, in module: borrowing Module) throws -> Function {
-        let found = module.function(named: name)
-        return try #require(found)
-    }
-
     /// The type of the function named `name` in `module`: its parameters and its result.
     private func signature(of name: String, in module: borrowing Module) throws -> FunctionType {
         try function(named: name, in: module).type
-    }
-
-    /// The instructions of `function` that `opcode` names, in the order its blocks hold them.
-    private func instructions(_ opcode: Opcode, in function: Function) -> [Instruction] {
-        function.blocks.flatMap(\.instructions).filter { $0.opcode == opcode }
     }
 }

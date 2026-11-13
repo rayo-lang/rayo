@@ -27,4 +27,37 @@ struct MemoryTests {
         try bench.module.verify()
         #expect(function.text.contains("%0 = load i64, ptr @limit, align 8\n"))
     }
+
+    @Test func `memory is copied between two pointers by a call of memcpy, of a constant size`() throws {
+        let bench = Workbench()
+        let pointer = bench.context.pointerType
+        let function = bench.function(named: "f", returning: bench.context.voidType, taking: [pointer, pointer])
+        let destination = try #require(PointerValue(function.parameter(at: 0)))
+        let source = try #require(PointerValue(function.parameter(at: 1)))
+        bench.builder.copyMemory(to: destination, from: source, size: 24, alignment: 8)
+        bench.builder.returnVoid()
+
+        try bench.module.verify()
+        let copy = "call void @llvm.memcpy.p0.p0.i64(ptr align 8 %0, ptr align 8 %1, i64 24, i1 false)"
+        #expect(function.text.contains(copy))
+    }
+
+    @Test func `a pointer converts to a pointer value, and an integer doesn't`() {
+        let bench = Workbench()
+        let function = bench.function(
+            named: "f", returning: bench.context.voidType, taking: [bench.context.pointerType, bench.int64],
+        )
+
+        #expect(PointerValue(function.parameter(at: 0)) != nil)
+        #expect(PointerValue(function.parameter(at: 1)) == nil)
+    }
+
+    @Test func `the builder says which block it adds instructions to`() {
+        let bench = Workbench()
+        let function = bench.function(named: "f", returning: bench.context.voidType)
+        let next = bench.context.appendBlock(named: "next", to: function)
+        bench.builder.position(atEndOf: next)
+
+        #expect(bench.builder.insertionBlock == next)
+    }
 }
