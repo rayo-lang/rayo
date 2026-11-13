@@ -1,5 +1,4 @@
 import RayoSource
-import RayoSyntax
 
 public struct CheckedExpr: Sendable {
     public var kind: CheckedExprKind
@@ -14,8 +13,8 @@ public indirect enum CheckedExprKind: Sendable {
     case place(CheckedPlace)
     /// Takes the value of a place, which leaves the place without one until it is assigned again.
     case move(CheckedPlace)
-    case unary(UnaryOperator, CheckedExpr)
-    case binary(BinaryOperator, CheckedExpr, CheckedExpr)
+    case unary(CheckedUnaryOperator, CheckedExpr)
+    case binary(CheckedBinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])
     /// Makes a value of the struct from its fields' values, in the order the struct declares its fields.
     case structure(StructID, fields: [CheckedExpr])

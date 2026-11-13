@@ -4,7 +4,6 @@ import LLVM
 import RayoIR
 import RayoLLVM
 import RayoSema
-import RayoSyntax
 
 struct ObjectCodeTests {
     @Test(arguments: Build.allCases)

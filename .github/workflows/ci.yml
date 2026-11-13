@@ -68,7 +68,7 @@ jobs:
           # link.
           test_paths='^(Sources|Tests)/|^Package\.(swift|resolved)$|^\.github/(workflows/ci\.yml$|actions/)'
           test_paths+='|^examples/v[0-9.]+/|^\.gitattributes$'
-          code_paths="$test_paths|^scripts/(select_tests|check_llvm_imports)\.py$"
+          code_paths="$test_paths|^scripts/(select_tests|check_imports)\.py$"
           docs_paths='\.md$|^scripts/|^\.github/workflows/ci\.yml$'
           if grep -q -E "$code_paths" <<< "$changed"; then code=true; else code=false; fi
           if grep -q -E "$docs_paths" <<< "$changed" || [ -n "$deleted" ]; then docs=true; else docs=false; fi
@@ -172,12 +172,13 @@ jobs:
           platform: linux
           llvm-version: ${{ steps.llvm.outputs.version }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
-      # A target can import LLVM's C modules through a dependency it doesn't name, so the check reads the imports
-      # themselves. They are the same on every platform, so it runs here alone, whether or not the tests passed.
-      # It runs once LLVM is installed, since LLVM's packages bring the `python3` it runs with.
-      - name: Check the imports of LLVM's C modules
+      # A target can import a module through a dependency it doesn't name, so the check reads the imports
+      # themselves: of LLVM's C module, and of syntax after semantic checking. They are the same on every platform,
+      # so it runs here alone, whether or not the tests passed. It runs once LLVM is installed, since LLVM's
+      # packages bring the `python3` it runs with.
+      - name: Check the imports that the manifest can't limit
         if: ${{ !cancelled() && steps.llvm.outcome == 'success' }}
-        run: python3 scripts/check_llvm_imports.py
+        run: python3 scripts/check_imports.py
 
   macos:
     name: Test on macOS

@@ -1,6 +1,5 @@
 import RayoDiagnostics
 import RayoSource
-import RayoSyntax
 
 /// What checking an expression gives before its position is known: a typed value, or an untyped one that waits for a
 /// type to settle it.
@@ -33,7 +32,7 @@ indirect enum UntypedValue {
     /// `-operand`.
     case negation(UntypedValue, range: SourceRange)
     /// `left op right`, where `op` gives a value of its operands' type.
-    case arithmetic(BinaryOperator, UntypedValue, UntypedValue, range: SourceRange)
+    case arithmetic(CheckedBinaryOperator, UntypedValue, UntypedValue, range: SourceRange)
 
     var range: SourceRange {
         switch self {
@@ -92,8 +91,8 @@ indirect enum UntypedValue {
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
     private static func arithmetic(
-        _ op: BinaryOperator, _ left: UntypedValue, _ right: UntypedValue, as type: RayoType, named typeName: TypeName,
-        at range: SourceRange, reporting errors: ErrorList,
+        _ op: CheckedBinaryOperator, _ left: UntypedValue, _ right: UntypedValue, as type: RayoType,
+        named typeName: TypeName, at range: SourceRange, reporting errors: ErrorList,
     ) -> CheckedExpr? {
         // Both operands settle, so each one's errors are reported.
         let left = left.settled(to: type, named: typeName, reporting: errors)
