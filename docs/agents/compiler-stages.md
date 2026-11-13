@@ -18,7 +18,7 @@
 
 ## Semantic checking: `RayoSema`
 
-**Decides:** what the program means: what each name refers to, each expression's type, and what each expression does, including which uses of a value are moves and which are reads, which places the code may change, that an expression standing as a statement is Void, and what the syntax alone says about where a function can run, such as a body that reaches its end without a `return`. It also decides how each type lies in memory: its size and alignment, and a struct's field order and each field's offset. Layout is a query on a concrete type, worked out the first time it's asked for and kept, keyed by the type, so every stage from checking on, compile-time reflection among them, asks it rather than reading a table laid out up front; no stage gives a type parameter a layout. It reports a program that means nothing or the wrong thing, and produces the checked program.
+**Decides:** what the program means: what each name refers to, each expression's type, and what each expression does, including which uses of a value are moves and which are reads, which places the code may change, that an expression standing as a statement is Void, and what the syntax alone says about where a function can run, such as a body that reaches its end without a `return`. It also decides how each type lies in memory: its size and alignment, and a struct's field order and each field's offset. It reports a program that means nothing or the wrong thing, and produces the checked program.
 
 **Leaves to the others:** what a function's places hold over its paths, and every rule about it: it marks each move, and the ownership pass decides whether the move is allowed.
 
@@ -33,14 +33,6 @@
 **Decides:** every rule about values over the paths of a function: whether a value is there when it's used, whether a move is allowed, such as one out of a borrowed parameter, a use after a move, a `let` assigned again, and a value stored in a place that no path then reads.
 
 **Leaves to the others:** which uses are moves, which semantic checking decides and lowering writes out, and what the program means.
-
-## Instantiation: planned
-
-Not built until generics are. Semantic checking and ownership check a generic function's body once, where it's defined, so the stages up to here see generic functions as they're written.
-
-**Decides:** which concrete copies of each generic function the program needs. It starts from `main`, and later from each exported function, and collects every copy of a generic function they reach, with the types it's called with, and every copy those copies reach in turn. Emitting then receives only concrete functions. Checking that needs a copy before this stage runs, such as a `static if` or compile-time reflection, makes it through the same memoised instantiation, so each copy is made once.
-
-**Leaves to the others:** every rule of the language, which semantic checking and ownership decide on the generic bodies, and how each type lies in memory, which the layout query decides.
 
 ## Emitting: `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM`
 
