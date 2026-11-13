@@ -101,6 +101,7 @@ struct FieldMoveTests {
 
     @Test(arguments: [
         ("let s = p.stats\nprint(s.hp)", "p.stats"), ("_ = p.stats.hp", "p.stats.hp"),
+        ("let s = p.stats\nprint(s.hp)\nprint(p.stats.hp)", "p.stats"),
         ("_ = Boss(minion: Enemy(stats: p.stats, armor: 1))", "p.stats"),
     ])
     func `a field of a borrowed parameter can't be moved out, and the error names the field and the parameter`(

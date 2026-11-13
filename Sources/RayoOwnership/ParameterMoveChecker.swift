@@ -15,29 +15,19 @@ public enum ParameterMoveChecker {
 
     /// The error at `operand` where it moves a value out of a borrowed parameter, or nil where it doesn't.
     private static func error(at operand: Operand, in places: PlaceTypes) -> Diagnostic? {
-        // Only a move out of a borrowed parameter takes a value its caller owns, and a parameter, a local of the
-        // source, names each place inside it.
+        // Only a move out of a borrowed parameter takes a value its caller owns.
         guard case .move(let place) = operand,
-              case .source(let parameter, .parameter, _) = places.function.locals[place.local.index],
-              let name = places.sourceName(of: place.local, fields: place.fields)
+              case .source(let parameter, .parameter, _) = places.function.locals[place.local.index]
         else { return nil }
+
+        // A parameter is a local of the source, which names each place inside it.
+        guard let name = places.sourceName(of: place.local, fields: place.fields) else {
+            preconditionFailure("a parameter is a local of the source")
+        }
 
         // The error names the whole parameter, or the field moved out of it as the source writes it.
         let code: ErrorCode = place.fields.isEmpty
             ? .moveFromParameter(name: parameter) : .moveFieldFromParameter(field: name, parameter: parameter)
         return Diagnostic(code, at: place.range)
-    }
-}
-
-private extension BasicBlock {
-    /// The operands the block uses, its statements' in order and then its terminator's.
-    var operands: [Operand] {
-        let statementOperands = statements.flatMap { statement in
-            switch statement {
-            case .compute(_, let value, _): value.operands
-            case .declare: [Operand]()
-            }
-        }
-        return statementOperands + [terminator.operand].compactMap { $0 }
     }
 }
