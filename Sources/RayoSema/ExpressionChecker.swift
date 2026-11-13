@@ -69,17 +69,15 @@ struct ExpressionChecker {
         case .boolLiteral(let value):
             .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
 
-        // A name reads the local it names.
-        case .name(let name):
-            reference(to: name, at: expr.range).map { .typed($0) }
+        // A name reads the local it names, and a member a field of the place its base names.
+        case .name, .member:
+            place(expr, under: self).map {
+                .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
+            }
 
         // A call reaches one of the functions its name names, or the initializer of the struct it names.
         case .call(let name, let nameRange, let arguments):
             CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range).map { .typed($0) }
-
-        // A member of a struct value is one of its fields.
-        case .member(let base, let name, let nameRange):
-            member(named: name, at: nameRange, of: base, in: expr.range).map { .typed($0) }
 
         // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
         case .copy(let place):
@@ -128,14 +126,6 @@ struct ExpressionChecker {
     private func settled(_ untyped: UntypedValue, toward type: RayoType?) -> CheckedExpr? {
         let settledType = if let type, untyped.fits(type) { type } else { untyped.defaultType }
         return untyped.settled(to: settledType, named: typeName(of: settledType), reporting: errors)
-    }
-
-    /// Checks `base.name`, where the source writes `name` at `nameRange`, as a read of the field `name`.
-    private func member(named name: String, at nameRange: SourceRange, of base: Expr,
-                        in range: SourceRange) -> CheckedExpr? {
-        // A value that failed was reported already.
-        guard let value = check(base) else { return nil }
-        return field(named: name, at: nameRange, of: value, in: range)?.read
     }
 
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
@@ -194,22 +184,66 @@ struct ExpressionChecker {
         // A `copy` checks to a read of the place it copies, so only a place written bare is moved.
         switch (expr.kind, value.kind) {
         // A local, or a field, written bare is moved.
-        case (.name, .local), (.member, _): CheckedExpr(kind: .move(value), type: value.type, range: value.range)
+        case (.name, .place(let place)), (.member, .place(let place)):
+            CheckedExpr(kind: .move(place), type: value.type, range: value.range)
         // Any other value, a copy included, is a new one, which is taken as it is.
         default: value
         }
     }
 
-    private func reference(to name: String, at range: SourceRange) -> CheckedExpr? {
+    /// Checks `expr` as a place that `rules` admit: a root they check, then each field the source steps into from it.
+    /// Returns nil where the root or a field fails, which was reported.
+    func place(_ expr: Expr, under rules: some PlaceRules) -> TypedPlace? {
+        place(expr, under: rules, holdsFields: false)
+    }
+
+    /// Checks `expr` as a place that `rules` admit, which holds the fields the source steps into when `holdsFields`
+    /// is true.
+    private func place(_ expr: Expr, under rules: some PlaceRules, holdsFields: Bool) -> TypedPlace? {
+        // Anything but a member is the place's root.
+        guard case .member(let base, let name, let nameRange) = expr.kind else {
+            return rules.root(expr, holdsFields: holdsFields)
+        }
+
+        // A member steps into a field of the place its base names; a base that failed was reported.
+        guard let holder = place(base, under: rules, holdsFields: true) else { return nil }
+        // So was a field that the holder doesn't have, or that the rules don't admit.
+        guard let (index, field, type) = field(named: name, at: nameRange, of: holder.type),
+              rules.admits(field, at: nameRange)
+        else { return nil }
+        return (holder.place.appending(.field(index, range: expr.range)), type)
+    }
+
+    /// The field called `name` of a value of `type`, which the source names at `nameRange`: its place in its struct's
+    /// declaration, the field, and its type. Reports it where `type` has no such field.
+    private func field(named name: String, at nameRange: SourceRange,
+                       of type: RayoType) -> (index: Int, field: DeclaredField, type: RayoType)? {
+        // Find the field among the struct's; a value of any other type has none.
+        let fields: [DeclaredField] =
+            if case .structure(let id) = type { file.declarations.fields(of: id) } else { [] }
+        // A name that names no field of the type is reported.
+        guard let index = fields.firstIndex(where: { $0.name == name }) else {
+            errors.report(.noSuchField(type: typeName(of: type), field: name), at: nameRange)
+            return nil
+        }
+
+        // A field whose declaration failed was reported there.
+        guard let fieldType = fields[index].type else { return nil }
+        return (index, fields[index], fieldType)
+    }
+
+    /// The whole local called `name`, which the source names at `range`, as a place an expression reads. Reports it
+    /// where no local has the name.
+    private func local(named name: String, at range: SourceRange) -> TypedPlace? {
         // `_` names no value; it only drops one, or leaves a parameter unnamed.
         if name == "_" {
             errors.report(.underscoreValue, at: range)
             return nil
         }
         switch names.lookUp(name, for: .ordinary) {
-        // A local reads its value.
+        // A local is the place.
         case .inScope(.local(let local)):
-            return CheckedExpr(kind: .local(local), type: names[local].type, range: range)
+            return (CheckedPlace(root: .local(local, range: range)), names[local].type)
 
         // A local whose declaration failed was reported there.
         case .inScope(.failed):
@@ -230,24 +264,6 @@ struct ExpressionChecker {
             errors.report(.notDeclared(name: name), at: range)
             return nil
         }
-    }
-
-    /// Checks `value.name`, where the source writes `name` at `nameRange`, as a read of the field `name` of the struct
-    /// value `value`, which keeps the field. Returns the read, and whether the field is a `var` or a `let`.
-    func field(named name: String, at nameRange: SourceRange, of value: CheckedExpr,
-               in range: SourceRange) -> (read: CheckedExpr, kind: BindingKind)? {
-        // Find the field among the struct's; a value of any other type has none.
-        let fields: [DeclaredField] =
-            if case .structure(let id) = value.type { file.declarations.fields(of: id) } else { [] }
-        // A name that names no field of the value's type is reported.
-        guard let index = fields.firstIndex(where: { $0.name == name }) else {
-            errors.report(.noSuchField(type: typeName(of: value.type), field: name), at: nameRange)
-            return nil
-        }
-
-        // A field whose declaration failed was reported there.
-        guard let type = fields[index].type else { return nil }
-        return (CheckedExpr(kind: .field(value, index: index), type: type, range: range), fields[index].kind)
     }
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a
@@ -324,5 +340,23 @@ private extension BinaryOperator {
         case .add, .subtract, .multiply, .divide, .remainder: true
         case .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual, .and, .or: false
         }
+    }
+}
+
+/// The rules of a place that an expression reads, which may start from any value and step into any field.
+extension ExpressionChecker: PlaceRules {
+    func root(_ expr: Expr, holdsFields: Bool) -> TypedPlace? {
+        // A name roots the place in the local it names.
+        if case .name(let name) = expr.kind { return local(named: name, at: expr.range) }
+
+        // Any other value roots it in a temporary that holds the value, unless the value is a place itself, such as a
+        // `copy` of one. A value that failed was reported.
+        guard let value = check(expr) else { return nil }
+        if case .place(let place) = value.kind { return (place, value.type) }
+        return (CheckedPlace(root: .temporary(value)), value.type)
+    }
+
+    func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
+        true
     }
 }

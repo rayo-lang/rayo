@@ -58,22 +58,27 @@ func at(_ offset: Int) -> SourceRange {
     return SourceRange(location, location)
 }
 
+/// The field that `fields` lead to inside `local`, outermost first, or the whole local where there are none.
+func place(_ local: Int, fields: [Int]) -> Place {
+    Place(root: LocalID(index: local), steps: fields.map(PlaceStep.field))
+}
+
 /// Reads the field that `fields` lead to inside `local`, or the whole local where there are none, which the source
 /// names at `offset`.
 func read(_ local: Int, fields: [Int] = [], at offset: Int) -> Operand {
-    .read(Place(local: LocalID(index: local), fields: fields, range: at(offset)))
+    .read(place(local, fields: fields), at: at(offset))
 }
 
 /// Moves the field that `fields` lead to inside `local`, or the whole local where there are none, which the source
 /// names at `offset`.
 func move(_ local: Int, fields: [Int] = [], at offset: Int) -> Operand {
-    .move(Place(local: LocalID(index: local), fields: fields, range: at(offset)))
+    .move(place(local, fields: fields), at: at(offset))
 }
 
 /// Stores what `value` computes in the field that `fields` lead to inside `local`, or in the whole local where there
 /// are none, which the source names at `offset`.
 func store(_ value: Rvalue, in local: Int, fields: [Int] = [], at offset: Int = 0) -> Statement {
-    let destination = Place(local: LocalID(index: local), fields: fields, range: at(offset))
+    let destination = Destination(place(local, fields: fields), at: at(offset))
     return .compute(destination: destination, value: value, range: at(0))
 }
 

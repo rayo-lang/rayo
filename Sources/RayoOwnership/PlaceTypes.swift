@@ -1,33 +1,36 @@
 import RayoIR
 import RayoSema
 
-/// The types of the places in one function: each local's, and each field's inside it.
+/// The types of the places in one function: each local's, and each part's inside it.
 struct PlaceTypes {
     let function: IRFunction
     let types: TypeTable
 
-    /// The fields of the struct that `fields`, outermost first, lead to inside `local`. Lowering names a path of
-    /// fields only through structs, so that place must hold one.
-    func fields(ofStructIn local: LocalID, at fields: some Sequence<Int>) -> [Field] {
-        // Step from the local's struct into each field's in turn.
-        var structFields = self.fields(of: function.locals[local.index].type)
-        for field in fields {
-            structFields = self.fields(of: structFields[field].type)
+    /// The fields of the struct at `place`. Lowering steps into a field only of a struct, so the place must hold one.
+    func fields(ofStructAt place: Place) -> [Field] {
+        // Step from the local's type into each part's in turn.
+        var type = function.locals[place.root.index].type
+        for step in place.steps {
+            switch step {
+            // A field has the type its struct declares it with.
+            case .field(let index): type = fields(of: type)[index].type
+            }
         }
-        return structFields
+        return fields(of: type)
     }
 
-    /// The name of the place that `fields`, outermost first, lead to inside `local`, as the source writes it, such as
-    /// `e.stats.hp`, or nil where `local` is a temporary.
-    func sourceName(of local: LocalID, fields: [Int]) -> String? {
+    /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where its local is a temporary.
+    func sourceName(of place: Place) -> String? {
         // A temporary has no name in the source.
-        guard case .source(let name, _, _) = function.locals[local.index] else { return nil }
+        guard case .source(let name, _, _) = function.locals[place.root.index] else { return nil }
 
         // Each field takes its name from the struct that holds it.
-        let fieldNames = fields.indices.map { depth in
-            self.fields(ofStructIn: local, at: fields.prefix(depth))[fields[depth]].name
+        let stepNames = place.steps.indices.map { depth in
+            switch place.steps[depth] {
+            case .field(let index): fields(ofStructAt: place.prefix(depth))[index].name
+            }
         }
-        return ([name] + fieldNames).joined(separator: ".")
+        return ([name] + stepNames).joined(separator: ".")
     }
 
     /// The fields of `type`, which must be a struct.

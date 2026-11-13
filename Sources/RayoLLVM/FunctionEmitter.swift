@@ -90,7 +90,7 @@ struct FunctionEmitter {
     private func emit(_ statement: Statement, in program: borrowing ProgramEmitter) throws(LLVMError) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
-            try emit(rvalue, into: destination, at: range, in: program)
+            try emit(rvalue, into: destination?.place, at: range, in: program)
 
         // A declaration emits nothing: the program reads a place only once a statement has stored to it.
         case .declare:

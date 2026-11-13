@@ -1,4 +1,5 @@
 import RayoSema
+import RayoSource
 import RayoSyntax
 
 /// Lowers statements, the loops and jumps among them included.
@@ -14,16 +15,16 @@ extension FunctionLowering {
             compute(expr, into: nil)
 
         // A declaration starts its local's life.
-        case .binding(let place, let value):
-            lowerDeclaration(of: place, givenBy: value)
+        case .binding(let local, let range, let value):
+            lowerDeclaration(of: local, at: range, givenBy: value)
 
         // An assignment computes its value into its place.
-        case .assign(let place, let value):
-            compute(value, into: Place(place))
+        case .assign(let target, let value):
+            compute(value, into: Destination(place(of: target), at: target.range))
 
         // A compound assignment applies its operator to its place and the value.
-        case .compoundAssign(let place, let op, let value):
-            lowerCompoundAssign(place, op, value)
+        case .compoundAssign(let target, let op, let value):
+            lowerCompoundAssign(target, op, value)
 
         // A `while` loops through blocks of its own.
         case .whileStmt(let condition, let body):
@@ -43,19 +44,21 @@ extension FunctionLowering {
         }
     }
 
-    /// Lowers `place op= value` as `place = place op value`.
-    private mutating func lowerCompoundAssign(_ place: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
+    /// Lowers `target op= value` as `target = target op value`.
+    private mutating func lowerCompoundAssign(_ target: CheckedPlace, _ op: BinaryOperator, _ value: CheckedExpr) {
         let operand = operand(of: value)
-        builder.emit(.binary(op, .read(Place(place)), operand), into: Place(place), range: place.range)
+        let place = place(of: target)
+        let destination = Destination(place, at: target.range)
+        builder.emit(.binary(op, .read(place, at: target.range), operand), into: destination, range: target.range)
     }
 
-    /// Starts the life of `place`'s local, and stores `value` in it when there is one.
-    private mutating func lowerDeclaration(of place: CheckedPlace, givenBy value: CheckedExpr?) {
-        builder.emit(.declare(place.local))
+    /// Starts the life of `local`, which the source declares at `range`, and stores `value` in it when there is one.
+    private mutating func lowerDeclaration(of local: LocalID, at range: SourceRange, givenBy value: CheckedExpr?) {
+        builder.emit(.declare(local))
 
         // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        compute(value, into: Place(place))
+        compute(value, into: Destination(Place(root: local), at: range))
     }
 
     /// Leaves the function with `value`.
@@ -111,11 +114,5 @@ extension FunctionLowering {
         // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
         return .branch(operand(of: condition), then: body, otherwise: exit)
-    }
-}
-
-private extension Place {
-    init(_ place: CheckedPlace) {
-        self.init(local: place.local, fields: place.fields, range: place.range)
     }
 }

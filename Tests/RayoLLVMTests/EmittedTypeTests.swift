@@ -88,7 +88,7 @@ struct EmittedTypeTests {
 
     @Test func `a field is read from the element that its struct's layout puts it in, aligned as its type is`() throws {
         // `main` reads the Pair's Bool, which it declares first.
-        let flag = Operand.read(Place(local: LocalID(index: 0), fields: [0], range: nowhere))
+        let flag = Operand.read(Place(root: LocalID(index: 0), steps: [.field(0)]), at: nowhere)
         let main = mainFunction(locals: [pairType, .bool], [
             BasicBlock(statements: [statement(storingIn: 1, .use(flag))], terminator: .return(nil)),
         ])
@@ -109,7 +109,7 @@ struct EmittedTypeTests {
             StructType(name: "Holder", fields: [Field(name: "flag", type: .bool), Field(name: "pair", type: pairType)]),
         ])
         let holderType = RayoType.structure(StructID(index: 1, name: "Holder"))
-        let flag = Operand.read(Place(local: LocalID(index: 0), fields: [1, 0], range: nowhere))
+        let flag = Operand.read(Place(root: LocalID(index: 0), steps: [.field(1), .field(0)]), at: nowhere)
         let main = mainFunction(locals: [holderType, .bool], [
             BasicBlock(statements: [statement(storingIn: 1, .use(flag))], terminator: .return(nil)),
         ])
@@ -128,7 +128,7 @@ struct EmittedTypeTests {
 
     @Test func `a field is stored in the element that its struct's layout puts it in, aligned as its type is`() throws {
         // `main` stores its Bool in the Pair's Bool, which the Pair declares first.
-        let flag = Place(local: LocalID(index: 0), fields: [0], range: nowhere)
+        let flag = Destination(Place(root: LocalID(index: 0), steps: [.field(0)]), at: nowhere)
         let main = mainFunction(locals: [pairType, .bool], [
             BasicBlock(
                 statements: [.compute(destination: flag, value: .use(read(1)), range: nowhere)],
@@ -153,7 +153,7 @@ struct EmittedTypeTests {
             StructType(name: "Holder", fields: [Field(name: "flag", type: .bool), Field(name: "pair", type: pairType)]),
         ])
         let holderType = RayoType.structure(StructID(index: 1, name: "Holder"))
-        let count = Place(local: LocalID(index: 0), fields: [1, 1], range: nowhere)
+        let count = Destination(Place(root: LocalID(index: 0), steps: [.field(1), .field(1)]), at: nowhere)
         let main = mainFunction(locals: [holderType, .int], [
             BasicBlock(
                 statements: [.compute(destination: count, value: .use(read(1)), range: nowhere)],
