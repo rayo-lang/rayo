@@ -123,22 +123,31 @@ struct CallChecker {
     /// The one of `candidates` whose labels and parameter types `arguments` fit, with the arguments settled to its
     /// parameters' types.
     private func pick(among candidates: [Signature], for arguments: [Argument], in range: SourceRange) -> Match? {
-        // Check the arguments on their own, since the candidate that takes them isn't known yet, so an untyped one
-        // stays untyped.
-        let labels = arguments.map(\.label)
-        let values = arguments.compactMap { expressions.value(of: $0.value) }
-        // An argument that failed was reported, and without it no candidate can be picked.
-        guard values.count == arguments.count else { return nil }
+        // Check each argument on its own, since the candidate that takes it isn't known yet, so an untyped one stays
+        // untyped.
+        let checked = arguments.map { expressions.value(of: $0.value) }
+        let values = checked.compactMap { $0 }
+        // An argument that failed was reported, and without it no candidate can be picked. The other arguments'
+        // literals are settled to their default types, for their own errors.
+        guard values.count == arguments.count else {
+            expressions.reportSettlingErrors(of: checked)
+            return nil
+        }
 
-        let fitting = fitting(candidates, labels: labels, values: values)
+        // Pick the one candidate that the arguments' labels and values fit.
+        let labels = arguments.map(\.label)
+        let remaining = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
-        guard let chosen = fitting.first else {
+        guard let chosen = remaining.first else {
             reportNoMatch(of: candidates[0].name, labels: labels, values: values, in: range)
             return nil
         }
-        // No candidate needs a conversion, so exactly one must fit. Two fit only when one names a type that isn't
-        // one, which was reported there.
-        guard fitting.count == 1 else { return nil }
+        // No candidate needs a conversion, so exactly one must remain. Two remain only when one names a type that
+        // isn't one, which was reported there; the arguments' literals are settled for their own errors.
+        guard remaining.count == 1 else {
+            expressions.reportSettlingErrors(of: values)
+            return nil
+        }
 
         // The chosen candidate's parameters settle the untyped arguments.
         let settled = zip(values, chosen.parameters).compactMap { expressions.settled($0, toward: $1.type) }
@@ -147,11 +156,13 @@ struct CallChecker {
         return (chosen, settled)
     }
 
-    /// The candidates that arguments with `labels` and `values` fit, by the steps that choose among overloads.
-    private func fitting(_ candidates: [Signature], labels: [String?], values: [CheckedValue]) -> [Signature] {
+    /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach.
+    private func remaining(of candidates: [Signature], passing labels: [String?],
+                           _ values: [CheckedValue]) -> [Signature] {
         // Keep the candidates whose labels the arguments match, in order.
         let labeled = candidates.filter { $0.takesLabels(labels) }
-        // Keep those that the typed arguments fit.
+        // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
+        // candidates the typed ones leave.
         let typedFit = labeled.filter { $0.takes(values, where: { $0.type != nil }) }
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.

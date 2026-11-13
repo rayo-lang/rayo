@@ -35,7 +35,7 @@ struct Signature: CustomStringConvertible {
     /// Whether each of `arguments`, in order, that `isConsidered` picks fits its parameter. A parameter whose type
     /// isn't known takes any argument, so a declaration's error doesn't spread to its calls.
     func takes(_ arguments: [CheckedValue], where isConsidered: (CheckedValue) -> Bool) -> Bool {
-        zip(parameters, arguments).allSatisfy { parameter, argument in
+        parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
             guard isConsidered(argument), let type = parameter.type else { return true }
             return argument.fits(type)
         }

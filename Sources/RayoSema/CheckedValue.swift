@@ -58,26 +58,49 @@ indirect enum UntypedValue {
         switch self {
         // A literal keeps its value, if the type holds it.
         case .integer(let magnitude, let isNegative, let range):
-            // A literal the type can't hold is reported.
-            guard let value = Self.int(magnitude, isNegative: isNegative) else {
-                errors.report(.literalExceedsInt(type: typeName), at: range)
-                return nil
-            }
-            return CheckedExpr(kind: .intLiteral(value), type: type, range: range)
+            Self.literal(magnitude, isNegative: isNegative, as: type, named: typeName, at: range, reporting: errors)
 
         // A negation's operand settles to the negation's type.
         case .negation(let operand, let range):
-            let settled = operand.settled(to: type, named: typeName, reporting: errors)
-            return settled.map { CheckedExpr(kind: .unary(.negate, $0), type: type, range: range) }
+            operand.settled(to: type, named: typeName, reporting: errors).map {
+                CheckedExpr(kind: .unary(.negate, $0), type: type, range: range)
+            }
 
-        // Both operands settle to the operator's type, so each one's errors are reported.
+        // Both operands settle to the operator's type.
         case .arithmetic(let op, let left, let right, let range):
-            let left = left.settled(to: type, named: typeName, reporting: errors)
-            let right = right.settled(to: type, named: typeName, reporting: errors)
-            // An operand that failed was reported.
-            guard let left, let right else { return nil }
-            return CheckedExpr(kind: .binary(op, left, right), type: type, range: range)
+            Self.arithmetic(op, left, right, as: type, named: typeName, at: range, reporting: errors)
         }
+    }
+
+    /// Settles the integer literal of `magnitude`, negated where `isNegative`, which the source gives at `range`, to
+    /// `type`, reporting it where `type` can't hold its value.
+    private static func literal(_ magnitude: UInt64, isNegative: Bool, as type: RayoType, named typeName: TypeName,
+                                at range: SourceRange, reporting errors: ErrorList) -> CheckedExpr? {
+        // Find the literal's value among the type's values.
+        let value: Int64? = switch type {
+        case .int: int(magnitude, isNegative: isNegative)
+        case .bool, .void, .structure: preconditionFailure("an integer literal settles only to an integer type")
+        }
+
+        // A literal the type can't hold is reported.
+        guard let value else {
+            errors.report(.literalExceedsInt(type: typeName), at: range)
+            return nil
+        }
+        return CheckedExpr(kind: .intLiteral(value), type: type, range: range)
+    }
+
+    /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
+    private static func arithmetic(
+        _ op: BinaryOperator, _ left: UntypedValue, _ right: UntypedValue, as type: RayoType, named typeName: TypeName,
+        at range: SourceRange, reporting errors: ErrorList,
+    ) -> CheckedExpr? {
+        // Both operands settle, so each one's errors are reported.
+        let left = left.settled(to: type, named: typeName, reporting: errors)
+        let right = right.settled(to: type, named: typeName, reporting: errors)
+        // An operand that failed was reported.
+        guard let left, let right else { return nil }
+        return CheckedExpr(kind: .binary(op, left, right), type: type, range: range)
     }
 
     /// The Int that a literal of `magnitude`, negated where `isNegative`, has, or nil where no Int holds it.

@@ -17,8 +17,8 @@ private let declarations = """
 /// The errors that `body`, as `main`'s body beside `declarations`, reports, and the text each covers.
 private func reported(inMain body: String) -> (codes: [ErrorCode], covered: [String]) {
     let source = "func main() {\n\(body)\n}\n\(declarations)"
-    let reported = diagnostics(source)
-    return (reported.map(\.code), coveredText(reported, in: source))
+    let found = diagnostics(source)
+    return (found.map(\.code), coveredText(found, in: source))
 }
 
 struct LiteralTypeTests {
@@ -63,6 +63,22 @@ struct LiteralTypeTests {
         let (codes, covered) = reported(inMain: body)
         #expect(codes == [.literalExceedsInt(type: "Int")])
         #expect(covered == [literal])
+    }
+
+    @Test(arguments: [
+        ("print(9223372036854775808 + nope)", [ErrorCode.literalExceedsInt(type: "Int"), .notDeclared(name: "nope")]),
+        ("print(nope + 9223372036854775808)", [.notDeclared(name: "nope"), .literalExceedsInt(type: "Int")]),
+        ("f(9223372036854775808, nope)", [.literalExceedsInt(type: "Int"), .notDeclared(name: "nope")]),
+    ])
+    func `a literal its default type can't hold is reported beside an operand or argument that fails`(
+        body: String, expected: [ErrorCode],
+    ) {
+        #expect(reported(inMain: body).codes == expected)
+    }
+
+    @Test func `a literal its default type can't hold is reported in a call that two overloads fit`() {
+        let source = "func main() { k(9223372036854775808) }\nfunc k(_ a: Int) {}\nfunc k(_ a: Nope) {}"
+        #expect(errors(source) == [.literalExceedsInt(type: "Int"), .notAType(name: "Nope")])
     }
 
     @Test(arguments: [
