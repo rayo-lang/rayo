@@ -167,7 +167,7 @@ struct ParserErrorTests {
 
     @Test(arguments: [
         "func f() { g(1) }", "func f() { e.hit(by: 2) }", "func f() { .make(1) }", "func f() { e.stats.reset() }",
-        "func f() { print(a.b(1).c(2)) }", "func f() {\n    e\n        .hit(by: 2)\n}",
+        "func f() { print(a.b(1).c(2)) }", "func f() { (e).hit(2) }", "func f() {\n    e\n        .hit(by: 2)\n}",
     ])
     func `a call follows a name, a member or an implicit member`(source: String) {
         #expect(errors(source) == [])
@@ -177,6 +177,8 @@ struct ParserErrorTests {
         ("func f() { g(1)(2) }", ErrorCode.unendedStatement(found: .token("("))),
         ("func f() { 1(2) }", .unendedStatement(found: .token("("))),
         ("func f() { (1 + g)(2) }", .unendedStatement(found: .token("("))),
+        ("func f() { (g)(2) }", .unendedStatement(found: .token("("))),
+        ("func f() { (e.hit)(2) }", .unendedStatement(found: .token("("))),
     ])
     func `a call follows nothing but a name, a member or an implicit member`(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])

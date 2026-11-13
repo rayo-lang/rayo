@@ -9,6 +9,7 @@ public enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in source order.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
+        // Check each body, whose first locals are its function's parameters.
         let errors = program.definedFunctions.flatMap { id, body in
             check(PlaceTypes(body: body, types: program.types), parameterCount: program.functions[id].parameters.count)
         }

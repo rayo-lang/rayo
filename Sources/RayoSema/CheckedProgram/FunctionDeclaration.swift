@@ -15,8 +15,8 @@ public struct FunctionDeclaration: Equatable, Sendable {
     }
 }
 
-/// What kind of function a declaration declares, which says where its body comes from.
+/// What kind of function a declaration declares.
 public enum FunctionKind: Equatable, Sendable {
-    /// A function the source writes, with the body it writes.
+    /// A function the source writes.
     case written
 }

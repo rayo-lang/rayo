@@ -107,6 +107,7 @@ struct FunctionTests {
         ("nope.hit(by: missing)", [.notDeclared(name: "nope"), .unsupportedMemberCall, .notDeclared(name: "missing")],
          ["nope", "nope.hit", "missing"]),
         ("print(.make(1))", [.unsupportedImplicitMember], [".make"]),
+        ("print(.make(missing))", [.unsupportedImplicitMember, .notDeclared(name: "missing")], [".make", "missing"]),
         ("let x: Int = .zero", [.unsupportedImplicitMember], [".zero"]),
         ("print(.zero + 1)", [.unsupportedImplicitMember], [".zero"]),
     ])

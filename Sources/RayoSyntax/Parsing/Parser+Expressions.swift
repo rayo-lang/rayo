@@ -49,6 +49,9 @@ extension Parser {
     /// `primary postfix*`, where a postfix is `'.' member`, or `'(' arguments ')'` after a name, a member or an
     /// implicit member.
     private mutating func parsePostfix() throws(ParseFailure) -> Expr {
+        // A parenthesized expression keeps the kind of the expression inside it, so `(f)` reads as the name `f`, but
+        // it is no name or member, and nothing calls it until a member is taken of it.
+        var isParenthesized = current.isPunct(.lparen)
         var value = try parsePrimary()
 
         // Each postfix applies to the value before it, so `a.b(1).c` is the `c` of the call `a.b(1)`.
@@ -57,9 +60,10 @@ extension Parser {
             // A `.` takes a member of the value.
             case .punct(.dot):
                 value = try parseMembers(of: value)
+                isParenthesized = false
 
-            // A `(` calls the value, where it is a name, a member or an implicit member.
-            case .punct(.lparen) where value.isCallable:
+            // A `(` calls the value, where it is a name, a member or an implicit member written bare.
+            case .punct(.lparen) where value.isCallable && !isParenthesized:
                 value = try parseCall(to: value)
 
             // Anything else ends the expression.
