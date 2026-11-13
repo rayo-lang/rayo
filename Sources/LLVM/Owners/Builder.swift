@@ -19,6 +19,11 @@ public struct Builder: ~Copyable {
         LLVMPositionBuilderAtEnd(ref, block.ref)
     }
 
+    /// The block the builder adds instructions to, which it must have been positioned at.
+    public var insertionBlock: BasicBlock {
+        BasicBlock(LLVMGetInsertBlock(ref))
+    }
+
     // MARK: Integer arithmetic
 
     /// Builds `add`, which wraps on overflow.
@@ -100,16 +105,20 @@ public struct Builder: ~Copyable {
     }
 
     /// Builds `call`, which calls `function` with `arguments`, and gives its result, or nil where it returns
-    /// nothing.
+    /// nothing. The arguments carry `parameterAttributes`, a list for each in order, which may stop short of the last.
     @discardableResult
-    public func call(_ function: Function, _ arguments: [any ValueHandle]) -> AnyValue? {
-        // Build the call, whose instruction is its result.
+    public func call(
+        _ function: Function, _ arguments: [any ValueHandle], parameterAttributes: [[Attribute]] = [],
+    ) -> AnyValue? {
+        // Build the call, whose instruction is its result, and give its arguments their attributes.
         var arguments = arguments.map { Optional($0.anyValue.ref) }
         let count = UInt32(arguments.count)
-        let call = AnyValue(LLVMBuildCall2(ref, function.type.ref, function.ref, &arguments, count, ""))
+        let call = LLVMBuildCall2(ref, function.type.ref, function.ref, &arguments, count, "")!
+        parameterAttributes.forEachAttribute(in: context.ref) { LLVMAddCallSiteAttribute(call, $0, $1) }
 
         // A call of a function that returns nothing gives no value.
-        return call.type.isVoid ? nil : call
+        let result = AnyValue(call)
+        return result.type.isVoid ? nil : result
     }
 
     // MARK: Memory
@@ -138,6 +147,14 @@ public struct Builder: ~Copyable {
     public func store(_ value: some ValueHandle, to pointer: PointerValue, alignment: Int) {
         let store = LLVMBuildStore(ref, value.anyValue.ref, pointer.ref)!
         LLVMSetAlignment(store, UInt32(alignment))
+    }
+
+    /// Builds a call of `llvm.memcpy`, which copies `size` bytes from where `source` points to where `destination`
+    /// points, both aligned to `alignment` bytes. The two must be the same memory or share none of it.
+    public func copyMemory(to destination: PointerValue, from source: PointerValue, size: Int, alignment: Int) {
+        let size = LLVMConstInt(LLVMInt64TypeInContext(context.ref), UInt64(size), 0)
+        let align = UInt32(alignment)
+        LLVMBuildMemCpy(ref, destination.ref, align, source.ref, align, size)
     }
 
     // MARK: Terminators

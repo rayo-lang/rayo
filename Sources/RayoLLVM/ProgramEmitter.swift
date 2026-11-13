@@ -32,25 +32,43 @@ struct ProgramEmitter: ~Copyable {
     /// doesn't take.
     func emit(_ executable: IRExecutable, calling runtime: RuntimeFunctions) throws(LLVMError) {
         let program = executable.program
-        let types = LLVMTypes(program.types, in: context)
-        let functions = program.functions.indices.map { declare(FunctionID(index: $0), of: executable, using: types) }
+        let lowering = SignatureLowering(types: LLVMTypes(program.types, in: context))
+        let functions = program.functions.indices.map { index in
+            declare(FunctionID(index: index), of: executable, using: lowering)
+        }
+        let callees = Callees(
+            functions: functions,
+            printInt: runtimeFunction(runtime.printInt, taking: .int, using: lowering),
+            printBool: runtimeFunction(runtime.printBool, taking: .bool, using: lowering),
+        )
 
         // Emit the bodies once every function is declared, so a body can call a function that comes after it.
-        for (function, llvmFunction) in zip(program.functions, functions) {
-            var emitter = FunctionEmitter(function: function, into: llvmFunction, functions: functions, types: types,
-                                          runtime: runtime)
+        for (function, declared) in zip(program.functions, functions) {
+            var emitter = FunctionEmitter(function: function, into: declared, callees: callees, lowering: lowering,
+                                          panic: runtime.panic, in: self)
             try emitter.emit(in: self)
         }
     }
 
     /// Declares the function `id`: the program's `main` as `rayo.main`, which the runtime's C entry point runs, and
     /// any other function by its name and parameters, such as `f(_: Int)`.
-    private func declare(_ id: FunctionID, of executable: IRExecutable, using types: LLVMTypes) -> Function {
+    private func declare(
+        _ id: FunctionID, of executable: IRExecutable, using lowering: SignatureLowering,
+    ) -> DeclaredFunction {
         let function = executable.program.functions[id.index]
         // A name with parentheses is none that the runtime or the C library defines or calls.
         let name = id == executable.main ? "rayo.main" : function.name
-        let parameters = function.locals.prefix(function.parameterCount).map { types.llvmType($0.type) }
-        let type = context.functionType(returning: types.llvmType(function.result), taking: parameters)
-        return module.addFunction(named: name, type: type)
+        let signature = lowering.lower(FunctionSignature(of: function), in: context)
+        let llvmFunction = module.addFunction(named: name, type: signature.type,
+                                              parameterAttributes: signature.parameterAttributes)
+        return DeclaredFunction(function: llvmFunction, signature: signature)
+    }
+
+    /// The runtime's `function`, which takes one argument of `type` and returns nothing, as a call passes it.
+    private func runtimeFunction(
+        _ function: Function, taking type: RayoType, using lowering: SignatureLowering,
+    ) -> DeclaredFunction {
+        let signature = lowering.lower(FunctionSignature(runtimeTaking: type), in: context)
+        return DeclaredFunction(function: function, signature: signature)
     }
 }

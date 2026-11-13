@@ -44,6 +44,31 @@ struct LLVMTypes {
         table.layout(of: type).alignment
     }
 
+    /// How a value of `type`, which isn't Void, lies in memory.
+    func layout(of type: RayoType) -> Layout {
+        table.layout(of: type)
+    }
+
+    /// The scalars a value of `type` splits into: an Int or a Bool is one, a struct is its fields' scalars in the
+    /// order it declares the fields, and Void is none.
+    func scalars(of type: RayoType) -> [Scalar] {
+        switch type {
+        // An Int or a Bool is a scalar of its own.
+        case .int, .bool:
+            return [Scalar(fields: [], type: type)]
+
+        // Void holds nothing.
+        case .void:
+            return []
+
+        // A struct is the scalars of each field in turn, each lying inside its field.
+        case .structure(let id):
+            return table[id].fields.enumerated().flatMap { index, field in
+                scalars(of: field.type).map { Scalar(fields: [index] + $0.fields, type: $0.type) }
+            }
+        }
+    }
+
     /// The type of each field of the struct `id`, in the order the struct declares them, and the index of the element
     /// of the struct's LLVM type that holds it.
     func fields(of id: StructID) -> [(type: RayoType, element: Int)] {

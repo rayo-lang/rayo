@@ -1,0 +1,37 @@
+import RayoIR
+import RayoSema
+
+/// What a call needs to know of a function to pass its arguments and take its result: each parameter's convention and
+/// type, the result's type, and the calling convention.
+struct FunctionSignature {
+    struct Parameter {
+        var convention: ParameterConvention
+        var type: RayoType
+    }
+
+    var parameters: [Parameter]
+    var result: RayoType
+    var convention: CallingConvention
+
+    /// The signature of `function`, whose parameters are all borrowed, the one convention the IR has.
+    init(of function: IRFunction) {
+        let parameters = function.locals.prefix(function.parameterCount)
+        self.parameters = parameters.map { Parameter(convention: .borrowed, type: $0.type) }
+        result = function.result
+        convention = .rayo
+    }
+
+    /// The signature of a function of the runtime that takes one borrowed argument of `type` and returns nothing,
+    /// which C's convention and Rayo's pass alike, since each passes a lone Int or Bool directly.
+    init(runtimeTaking type: RayoType) {
+        parameters = [Parameter(convention: .borrowed, type: type)]
+        result = .void
+        convention = .rayo
+    }
+
+    init(parameters: [Parameter], result: RayoType, convention: CallingConvention) {
+        self.parameters = parameters
+        self.result = result
+        self.convention = convention
+    }
+}

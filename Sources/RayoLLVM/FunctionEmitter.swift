@@ -3,141 +3,77 @@ import RayoIR
 import RayoSema
 import RayoSource
 
-/// Emits one function's body into an LLVM function, holding each local in a stack slot.
+/// Emits one function's body into an LLVM function. Each local lies in a place of its own: a stack slot, or the
+/// memory a pointer the function is passed points to.
 struct FunctionEmitter {
-    /// A pointer to a place, a local's slot or a field inside it, and the type of the value there.
-    private struct Address {
+    /// A pointer to a place, a local's or a field inside it, and the type of the value there.
+    struct Address {
         var pointer: PointerValue
         var type: RayoType
     }
 
-    private let function: IRFunction
-    private let llvmFunction: Function
-    /// The program's functions, indexed by `FunctionID`, that calls go to.
-    private let functions: [Function]
+    /// The value an operand gives: a constant, or the place that holds it, which is read only where it is used.
+    enum OperandValue {
+        case constant(AnyValue, RayoType)
+        case place(Address)
+
+        var type: RayoType {
+            switch self {
+            case .constant(_, let type): type
+            case .place(let address): address.type
+            }
+        }
+    }
+
+    let function: IRFunction
+    let llvmFunction: Function
+    /// How the function's parameters and result are passed.
+    let signature: LoweredSignature
+    let callees: Callees
     /// The LLVM types of the program's values.
-    private let types: LLVMTypes
-    private let runtime: RuntimeFunctions
-    private let operators: OperatorEmitter
-    private var slots: [PointerValue] = []
-    private var blocks: [LLVM.BasicBlock] = []
+    let types: LLVMTypes
+    /// How values are passed, which also says which values move between places whole.
+    let lowering: SignatureLowering
+    let operators: OperatorEmitter
+    /// The block that holds every stack slot, and goes on to the first IR block.
+    let entry: LLVM.BasicBlock
+    /// The pointer to each local's place, indexed by `LocalID`.
+    var slots: [PointerValue] = []
+    var blocks: [LLVM.BasicBlock] = []
 
     init(
-        function: IRFunction, into llvmFunction: Function, functions: [Function], types: LLVMTypes,
-        runtime: RuntimeFunctions,
+        function: IRFunction, into declared: DeclaredFunction, callees: Callees, lowering: SignatureLowering,
+        panic: Function, in program: borrowing ProgramEmitter,
     ) {
         self.function = function
-        self.llvmFunction = llvmFunction
-        self.functions = functions
-        self.types = types
-        self.runtime = runtime
-        self.operators = OperatorEmitter(into: llvmFunction, types: types, panic: runtime.panic)
+        llvmFunction = declared.function
+        signature = declared.signature
+        self.callees = callees
+        types = lowering.types
+        self.lowering = lowering
+        operators = OperatorEmitter(into: declared.function, types: lowering.types, panic: panic)
+        entry = program.context.appendBlock(named: "entry", to: declared.function)
     }
 
     /// Emits the body into the function, in `program`'s module. Throws where the IR gives an instruction a value of a
     /// type it doesn't take.
     mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
-        // Make the entry block, and hold each local in a slot there, the parameters holding the arguments.
-        program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: llvmFunction))
-        slots = allocateSlots(with: program.builder)
-        try storeArguments(with: program.builder)
-
-        // Make an LLVM block for each IR block, and go on from the entry block to the first.
+        program.builder.position(atEndOf: entry)
+        slots = try makePlaces(with: program.builder)
         blocks = function.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
-        program.builder.branch(to: blocks[0])
 
-        // Emit each IR block into the LLVM block made for it.
         for (block, llvmBlock) in zip(function.blocks, blocks) {
             try emit(block, into: llvmBlock, in: program)
         }
+
+        enterFirstBlock(with: program.builder)
     }
 
-    /// Allocates a stack slot for each local, and returns the slots in the locals' order.
-    private func allocateSlots(with builder: borrowing Builder) -> [PointerValue] {
-        function.locals.indices.map { index in
-            let local = LocalID(index: index)
-            return builder.allocate(slotType(of: local), alignment: alignment(of: local))
-        }
-    }
-
-    /// Stores each argument in its parameter's slot.
-    private func storeArguments(with builder: borrowing Builder) throws(LLVMError) {
-        // The parameters are the first locals, in order.
-        for index in 0..<function.parameterCount {
-            try store(llvmFunction.parameter(at: index), at: slot(of: LocalID(index: index)), with: builder)
-        }
-    }
-
-    /// Lowers `local`'s type to the LLVM type of its stack slot.
-    private func slotType(of local: LocalID) -> AnyType {
-        let type = function.locals[local.index].type
-        precondition(type != .void, "lowering makes no local of type Void")
-        return types.llvmType(type)
-    }
-
-    /// The alignment, in bytes, of `local`'s slot, which is its type's.
-    private func alignment(of local: LocalID) -> Int {
-        types.alignment(of: function.locals[local.index].type)
-    }
-
-    /// Emits the instructions that load the value at `place`, a local's slot or a field inside it, and returns the
-    /// value. Throws where the place names a field that the value holding it doesn't have.
-    private func load(_ place: Place, with builder: borrowing Builder) throws(LLVMError) -> AnyValue {
-        let address = try address(of: place, with: builder)
-        // A value lies in memory aligned as its type is, a field too, since its struct's layout keeps it so.
-        let alignment = types.alignment(of: address.type)
-        return builder.load(types.llvmType(address.type), from: address.pointer, alignment: alignment)
-    }
-
-    /// Emits the instructions that point at `place`, a local's slot or a field inside it, and returns its address.
-    /// Throws where the place names a field that the value holding it doesn't have.
-    private func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
-        // Start at the local's slot, and step into each field in turn.
-        var address = slot(of: place.local)
-        for field in place.fields {
-            address = try fieldAddress(of: field, in: address, with: builder)
-        }
-        return address
-    }
-
-    /// The address of `local`'s slot.
-    private func slot(of local: LocalID) -> Address {
-        Address(pointer: slots[local.index], type: function.locals[local.index].type)
-    }
-
-    /// Emits the instruction that points at the field at `field`, its place in its struct's declaration, of the
-    /// value at `address`, and returns the field's address. Throws where the value has no such field.
-    private func fieldAddress(
-        of field: Int, in address: Address, with builder: borrowing Builder,
-    ) throws(LLVMError) -> Address {
-        // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
-        // with, would point outside the value, so each fails here.
-        guard case .structure(let id) = address.type else { throw noField(field, of: address.type) }
-        let fields = types.fields(of: id)
-        guard fields.indices.contains(field) else { throw noField(field, of: address.type) }
-
-        // Point at the element of the struct's LLVM type that holds the field.
-        let (fieldType, element) = fields[field]
-        let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(id), at: address.pointer)
-        return Address(pointer: pointer, type: fieldType)
-    }
-
-    /// The error that says the IR names the field at `field` of a value of `type`, which has no such field.
-    private func noField(_ field: Int, of type: RayoType) -> LLVMError {
-        LLVMError(message: "the IR names field \(field) of a value of type \(types.llvmType(type).text)")
-    }
-
-    /// Emits the instruction that stores `value` at `address`. Throws where `value` is of another type than the
-    /// place's.
-    private func store(_ value: AnyValue, at address: Address, with builder: borrowing Builder) throws(LLVMError) {
-        // A value of another type, which the checker passes no IR with, would pass LLVM's verifier, since a pointer
-        // has no type, and run as bits of the wrong type, so it fails here.
-        let placeType = types.llvmType(address.type)
-        guard value.type == placeType else {
-            let stored = "a value of type \(value.type.text)"
-            throw LLVMError(message: "the IR stores \(stored) in a place of type \(placeType.text)")
-        }
-        builder.store(value, to: address.pointer, alignment: types.alignment(of: address.type))
+    /// Ends the entry block, once the body has allocated every slot it needs there, by going on to the first IR
+    /// block.
+    private func enterFirstBlock(with builder: borrowing Builder) {
+        builder.position(atEndOf: entry)
+        builder.branch(to: blocks[0])
     }
 
     private func emit(
@@ -156,7 +92,7 @@ struct FunctionEmitter {
         case .compute(let destination, let rvalue, let range):
             try emit(rvalue, into: destination, at: range, in: program)
 
-        // A declaration emits nothing: the program reads a slot only once a statement has stored to it.
+        // A declaration emits nothing: the program reads a place only once a statement has stored to it.
         case .declare:
             break
         }
@@ -166,22 +102,45 @@ struct FunctionEmitter {
     private func emit(
         _ rvalue: Rvalue, into destination: Place?, at range: SourceRange, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
-        let value = try compute(rvalue, at: range, in: program)
+        switch rvalue {
+        // A use copies its operand's value.
+        case .use(let operand):
+            try use(operand, into: destination, with: program.builder)
+
+        // An operator computes on its operands' values.
+        case .unary(let op, let operand):
+            let value = try operators.emit(op, on: read(operand, with: program.builder), at: range, in: program)
+            try store(value, in: destination, with: program.builder)
+        case .binary(let op, let left, let right):
+            let operands = try (read(left, with: program.builder), read(right, with: program.builder))
+            let value = try operators.emit(op, operands.0, operands.1, at: range, in: program)
+            try store(value, in: destination, with: program.builder)
+
+        // A call passes its arguments as its function's signature says.
+        case .call(let callee, let arguments):
+            try call(callee, passing: arguments, into: destination, with: program.builder)
+
+        // A struct is built in its place, one field at a time.
+        case .structure(let id, let fields):
+            try build(id, from: fields, into: destination, with: program.builder)
+        }
+    }
+
+    /// Emits the copy of `operand`'s value into `destination`, or nothing where there is no destination, since
+    /// reading a place changes nothing.
+    private func use(_ operand: Operand, into destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
+        let value = try value(of: operand, with: builder)
 
         // A value that no place takes is dropped.
         guard let destination else { return }
-        let address = try address(of: destination, with: program.builder)
-        // A call that returns nothing gives no value to store, and lowering stores none, so its store fails here.
-        guard let value else { throw storeOfNothing(from: rvalue, in: address.type) }
-        try store(value, at: address, with: program.builder)
+        try copy(value, to: address(of: destination, with: builder), with: builder)
     }
 
-    /// The error that says the IR stores the result of `rvalue`, a call that returns nothing, in a place of `type`.
-    private func storeOfNothing(from rvalue: Rvalue, in type: RayoType) -> LLVMError {
-        // Only a call gives no value.
-        guard case .call(let callee, _) = rvalue else { preconditionFailure("only a call gives no value") }
-        let result = "the result of '\(calledFunction(callee).name)', which returns nothing,"
-        return LLVMError(message: "the IR stores \(result) in a place of type \(types.llvmType(type).text)")
+    /// Emits the store of `value`, an operator's result, in `destination`, where there is one.
+    private func store(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
+        // A value that no place takes is dropped.
+        guard let destination else { return }
+        try store(value, at: address(of: destination, with: builder), with: builder)
     }
 
     private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
@@ -192,7 +151,7 @@ struct FunctionEmitter {
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let operand, let then, let otherwise):
-            let value = try read(operand, in: program)
+            let value = try read(operand, with: program.builder)
             // A condition that isn't a Bool, which the checker passes no IR with, fails here, saying what it is.
             guard let condition = IntValue<I1>(value) else {
                 throw LLVMError(message: "the IR branches on a value of type \(value.type.text), where it takes i1")
@@ -201,153 +160,11 @@ struct FunctionEmitter {
 
         // A `return` returns its operand's value, or nothing where it has none.
         case .return(let result):
-            try emitReturn(result, in: program)
+            try emitReturn(result, with: program.builder)
 
         // A block that no path reaches ends in LLVM's `unreachable`.
         case .unreachable:
             program.builder.unreachable()
-        }
-    }
-
-    /// Emits the return of `result`'s value, or of nothing where there is no `result`. Throws where that isn't of
-    /// the type the function returns.
-    private func emitReturn(_ result: Operand?, in program: borrowing ProgramEmitter) throws(LLVMError) {
-        let resultType = types.llvmType(function.result)
-
-        // A `return` without an operand ends a function that returns nothing in `ret void`.
-        guard let result else {
-            // A function that returns a value, which the checker makes end in a `return` of it, fails here.
-            guard function.result == .void else {
-                throw LLVMError(message: "the IR returns nothing from a function that returns \(resultType.text)")
-            }
-            return program.builder.returnVoid()
-        }
-
-        // A value of another type than the function's result, which the checker passes no IR with, fails here.
-        let value = try read(result, in: program)
-        guard value.type == resultType else {
-            let returned = "a value of type \(value.type.text)"
-            throw LLVMError(message: "the IR returns \(returned) from a function that returns \(resultType.text)")
-        }
-        program.builder.return(value)
-    }
-
-    /// Emits the instructions that read `operand`'s value, and returns the value. Throws where it names a field that
-    /// the value holding it doesn't have.
-    private func read(_ operand: Operand, in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
-        switch operand {
-        // An Int constant needs no instruction: it is an `i64` holding the Int's bits.
-        case .constant(.int(let value)):
-            types.int64.constant(value).anyValue
-
-        // A Bool constant needs no instruction either: it is an `i1`, 1 for true and 0 for false.
-        case .constant(.bool(let value)):
-            types.bool.constant(value ? 1 : 0).anyValue
-
-        // A read or a move loads the place from its slot; a move leaves the slot as it is, unread until assigned again.
-        case .read(let place), .move(let place):
-            try load(place, with: program.builder)
-        }
-    }
-
-    /// Emits the instructions that compute `rvalue`, and returns the LLVM value holding its result, or nil
-    /// when it has none.
-    private func compute(
-        _ rvalue: Rvalue, at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) -> AnyValue? {
-        switch rvalue {
-        // A use is its operand's value.
-        case .use(let operand):
-            try read(operand, in: program)
-
-        // An operator computes on its operands' values.
-        case .unary(let op, let operand):
-            try operators.emit(op, on: read(operand, in: program), at: range, in: program)
-        case .binary(let op, let left, let right):
-            try operators.emit(op, read(left, in: program), read(right, in: program), at: range, in: program)
-
-        // A call passes its arguments' values.
-        case .call(let callee, let arguments):
-            try call(callee, passing: read(arguments, in: program), with: program.builder)
-
-        // A struct's value is made of its fields' values.
-        case .structure(let id, let fields):
-            try structure(id, from: read(fields, in: program), with: program.builder)
-        }
-    }
-
-    /// Emits the instructions that read each of `operands`, in order, and returns their values.
-    private func read(_ operands: [Operand], in program: borrowing ProgramEmitter) throws(LLVMError) -> [AnyValue] {
-        var values: [AnyValue] = []
-        for operand in operands {
-            values.append(try read(operand, in: program))
-        }
-        return values
-    }
-
-    /// Emits the instructions that make a value of the struct `id` from `fields`, the values of its fields in the order
-    /// it declares them, and returns the value. Throws where `fields` aren't as many as the struct's, or of their
-    /// types.
-    private func structure(
-        _ id: StructID, from fields: [AnyValue], with builder: borrowing Builder,
-    ) throws(LLVMError) -> AnyValue {
-        // LLVM stops the process on an `insertvalue` of the wrong type, where it checks its own invariants, so IR that
-        // the checker passes no program with fails here.
-        let declared = types.fields(of: id)
-        // Values for more or fewer fields than the struct has fail.
-        guard fields.count == declared.count else {
-            let counts = "\(fields.count) fields, where it has \(declared.count)"
-            throw LLVMError(message: "the IR makes '\(id.name)' of \(counts)")
-        }
-
-        // Insert each field's value into the element that holds the field, starting from a value of no particular bits.
-        var value = types.llvmStruct(id).poison
-        for (index, (field, declaredField)) in zip(fields, declared).enumerated() {
-            // A value of another type than its field's fails.
-            let fieldType = types.llvmType(declaredField.type)
-            guard field.type == fieldType else {
-                let given = "a value of type \(field.type.text), where it takes \(fieldType.text)"
-                throw LLVMError(message: "the IR gives field \(index) of '\(id.name)' \(given)")
-            }
-            value = builder.insertValue(field, into: value, at: declaredField.element)
-        }
-        return value.anyValue
-    }
-
-    /// Emits a call of `callee` with `arguments`, and returns its result, or nil when it returns nothing. Throws where
-    /// `arguments` aren't of the types `callee` takes.
-    private func call(
-        _ callee: Callee, passing arguments: [AnyValue], with builder: borrowing Builder,
-    ) throws(LLVMError) -> AnyValue? {
-        let function = calledFunction(callee)
-        try check(arguments, of: function)
-        return builder.call(function, arguments)
-    }
-
-    /// The LLVM function that `callee` names: each of the prelude's `print`s is the runtime's.
-    private func calledFunction(_ callee: Callee) -> Function {
-        switch callee {
-        case .printInt: runtime.printInt
-        case .printBool: runtime.printBool
-        case .function(let id): functions[id.index]
-        }
-    }
-
-    /// Throws where `arguments` aren't as many as `function` takes, or of the types it takes them as.
-    private func check(_ arguments: [AnyValue], of function: Function) throws(LLVMError) {
-        // LLVM stops the process on a call that doesn't match its function's type, where it checks its own
-        // invariants, so a call the checker passes no IR with fails here.
-        let parameters = function.type.parameters
-        // A call passes as many arguments as the function has parameters.
-        guard arguments.count == parameters.count else {
-            let counts = "\(arguments.count) \(arguments.count == 1 ? "argument" : "arguments")"
-            throw LLVMError(message: "the IR passes '\(function.name)' \(counts), where it takes \(parameters.count)")
-        }
-
-        // Each argument is of its parameter's type.
-        for (argument, parameter) in zip(arguments, parameters) where argument.type != parameter {
-            let passed = "an argument of type \(argument.type.text), where it takes \(parameter.text)"
-            throw LLVMError(message: "the IR passes '\(function.name)' \(passed)")
         }
     }
 }

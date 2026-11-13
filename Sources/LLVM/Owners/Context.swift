@@ -61,6 +61,15 @@ public struct Context: ~Copyable {
         StructType(LLVMStructCreateNamed(ref, name))
     }
 
+    /// The struct type of no name that holds `fields`, in order, each padded to its alignment as the target pads it.
+    public func structType(of fields: [any TypeHandle]) -> StructType {
+        var fields = fields.map { Optional($0.anyType.ref) }
+        return StructType(LLVMStructTypeInContext(ref, &fields, UInt32(fields.count), 0))
+    }
+
+    /// The type of every pointer, whatever it points to.
+    public var pointerType: AnyType { AnyType(LLVMPointerTypeInContext(ref, 0)) }
+
     public func arrayType(of element: some TypeHandle, count: Int) -> AnyType {
         AnyType(LLVMArrayType2(element.anyType.ref, UInt64(count)))
     }
