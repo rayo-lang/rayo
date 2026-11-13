@@ -74,8 +74,10 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
         // A merge that dropped part of either state could swing back and forth forever, so it stops the solver
         // here, in debug builds, rather than there.
         let merged = previous.merged(with: state)
-        assert(merged.merged(with: previous) == merged && merged.merged(with: state) == merged,
-               "a dataflow merge must only grow a block's state")
+        assert(
+            merged.merged(with: previous) == merged && merged.merged(with: state) == merged,
+            "a dataflow merge must only grow a block's state",
+        )
 
         guard merged != previous else { return false }
         boundaryStates[block.index] = merged

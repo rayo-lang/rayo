@@ -73,8 +73,10 @@ struct DataflowTests {
     ])
     func anyOrder(direction: DataflowDirection, expected: [Set<Int>]) {
         let blocks = [
-            BasicBlock(statements: [printing(read(x, at: 1)), printing(read(x, at: 2))],
-                       terminator: .return(read(x, at: 3))),
+            BasicBlock(
+                statements: [printing(read(x, at: 1)), printing(read(x, at: 2))],
+                terminator: .return(read(x, at: 3)),
+            ),
         ]
         var results = solve(EvaluatedOperands(direction: direction), blocks)
         let states = [
