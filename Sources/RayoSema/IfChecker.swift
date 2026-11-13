@@ -18,7 +18,7 @@ struct IfChecker {
     func check(_ ifExpr: IfExpr, in range: SourceRange, as use: ValueUse,
                expecting expected: Expectation?) -> CheckedExpr? {
         // Check the condition, and `then` as the position's own value.
-        let condition = expressions.check(ifExpr.condition, expecting: .bool)
+        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool))
         let then = branch(ifExpr.then, as: use, expecting: expected)
 
         // An `if` without an `else` has no value to give where its condition fails, which is reported.
