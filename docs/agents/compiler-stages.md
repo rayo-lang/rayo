@@ -30,7 +30,7 @@
 
 ## Ownership: `RayoOwnership`
 
-**Decides:** every rule about values over the paths of a function: whether a value is there when it's used, whether a move is allowed, a use after a move, a `let` assigned again, and a value stored in a place that no path then reads.
+**Decides:** every rule about values over the paths of a function: whether a value is there when it's used, whether a move is allowed, such as one out of a borrowed parameter, a use after a move, a `let` assigned again, and a value stored in a place that no path then reads.
 
 **Leaves to the others:** which uses are moves, which semantic checking decides and lowering writes out, and what the program means.
 
@@ -52,4 +52,4 @@ The driver, `rayo`, in `RayoDriver` and `RayoLLVMInstall`, runs `rayoc` and link
 
 Code that answers another stage's question today. A change that touches it moves it to its stage first, and takes it off this list.
 
-- **A move out of a borrowed parameter, or out of a field of one,** is reported by semantic checking, though whether a move is allowed is ownership's.
+None today.
