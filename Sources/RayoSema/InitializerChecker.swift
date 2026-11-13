@@ -45,7 +45,7 @@ struct InitializerChecker {
         // A struct with a field whose declaration failed, which was reported there, takes its arguments' values on
         // their own, so the failure doesn't spread to its calls.
         guard types.count == fields.count else {
-            for argument in arguments { _ = expressions.checkTaken(argument.value) }
+            for argument in arguments { _ = expressions.check(argument.value, as: .take) }
             return nil
         }
 
