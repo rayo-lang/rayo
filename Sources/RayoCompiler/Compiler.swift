@@ -141,6 +141,9 @@ public enum Compiler {
             Parse()
             Check()
             Lower()
+            // Only a program that moves out of no borrowed parameter is checked for where its locals hold a value, so
+            // a use of a parameter after such a move isn't reported again as a use after a move.
+            CheckParameterMoves()
             CheckOwnership()
             // Only a program whose locals hold a value at each use is checked for values no code reads, so a
             // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.

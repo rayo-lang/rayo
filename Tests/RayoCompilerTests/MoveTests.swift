@@ -92,6 +92,8 @@ struct MoveTests {
         ("func f(x: Int) { let y = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) { _ = x }", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) {\n    var y = 0\n    y = x\n}", [.moveFromParameter(name: "x")], ["x"]),
+        ("func f(x: Int) {\n    let y = x\n    print(x)\n}", [.moveFromParameter(name: "x")], ["x"]),
+        ("func f(x: Int) -> Int {\n    return 0\n    let y = x\n}", [.moveFromParameter(name: "x")], ["x"]),
         ("func f(x: Int) -> Int {\n    let y = copy x\n    print(x + y)\n    return copy x\n}", [], []),
     ])
     func borrowedParameter(declaration: String, expected: [ErrorCode], covered: [String]) {
@@ -99,5 +101,10 @@ struct MoveTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == expected)
         #expect(coveredText(reported, in: source) == covered)
+    }
+
+    @Test func `a move out of a borrowed parameter waits to be reported until the program checks`() {
+        let source = "func main() {}\nfunc f(x: Int) {\n    let y = x\n    let z: Bool = 1\n}"
+        #expect(diagnostics(source).map(\.code) == [.typeMismatch(expected: "Bool", found: "Int")])
     }
 }
