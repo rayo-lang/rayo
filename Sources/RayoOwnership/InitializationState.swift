@@ -12,10 +12,10 @@ struct InitializationState: Equatable {
     /// Indexed by `LocalID`.
     private var locals: [LocalState]
 
-    /// The state on entry to `function`, where its parameters hold their arguments and its other locals hold
-    /// nothing yet.
-    init(enteringFunction function: IRFunction) {
-        locals = function.locals.indices.map { $0 < function.parameterCount ? .initialized : .declared }
+    /// The state on entry to `body`, where its first `parameterCount` locals, its function's parameters, hold their
+    /// arguments, and its other locals hold nothing yet.
+    init(entering body: IRBody, parameterCount: Int) {
+        locals = body.locals.indices.map { $0 < parameterCount ? .initialized : .declared }
     }
 
     func joined(with other: InitializationState) -> InitializationState {

@@ -56,6 +56,7 @@ private func errors(in blocks: [BasicBlock]) -> [Diagnostic] {
         .source(name: "p", kind: .parameter, type: .structure(shot)),
         .source(name: "v", kind: .var, type: .int),
     ]
-    let function = IRFunction(name: "f()", parameterCount: 2, result: .void, locals: locals, blocks: blocks)
-    return ParameterMoveChecker.check(program(of: [function]))
+    let declaration = FunctionDeclaration(name: "f(_: Int, _: Shot)", parameters: [.int, .structure(shot)],
+                                          result: .void, kind: .written)
+    return ParameterMoveChecker.check(program(of: [(declaration, IRBody(locals: locals, blocks: blocks))]))
 }

@@ -9,8 +9,8 @@ extension FunctionEmitter {
     func makePlaces(with builder: borrowing Builder) throws(LLVMError) -> [PointerValue] {
         let returned = returnedLocal()
         var places: [PointerValue] = []
-        for (index, local) in function.locals.enumerated() {
-            let place = if index < function.parameterCount {
+        for (index, local) in body.locals.enumerated() {
+            let place = if index < declaration.parameters.count {
                 try parameterPlace(of: index, with: builder)
             } else if LocalID(index: index) == returned {
                 pointerParameter(at: 0)
@@ -29,7 +29,7 @@ extension FunctionEmitter {
         return switch signature.parameters[index] {
         // A value passed directly is put back together from its scalars, in a slot of its own.
         case .direct:
-            try slot(of: function.locals[index].type, holdingParameters: llvmParameters, with: builder).pointer
+            try slot(of: body.locals[index].type, holdingParameters: llvmParameters, with: builder).pointer
         // A value passed in a pointer lies where it points.
         case .callerPlace, .filledSlot:
             pointerParameter(at: llvmParameters.lowerBound)
@@ -69,7 +69,7 @@ extension FunctionEmitter {
     /// Emits the instructions that point at `place`, a local's place or a part inside it, and returns its address.
     /// Throws where the place names a field that the value holding it doesn't have.
     func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
-        let local = Address(pointer: places[place.root.index], type: function.locals[place.root.index].type)
+        let local = Address(pointer: places[place.root.index], type: body.locals[place.root.index].type)
         return try address(following: place.steps, from: local, with: builder)
     }
 

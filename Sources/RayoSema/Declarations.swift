@@ -9,6 +9,9 @@ struct Declarations {
     private let names: TopLevelNames
     private var functions: [String: [Signature]] = [:]
     private var structs: [String: StructID] = [:]
+    /// Each struct's initializers, which a call of the struct's name reaches. A struct without one is made from its
+    /// fields' values.
+    private var initializers: [StructID: [Signature]] = [:]
     /// Each struct's fields, in the order the struct declares them.
     private var fields: [StructID: [DeclaredField]] = [:]
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
@@ -52,6 +55,10 @@ struct Declarations {
 
     func functions(named name: String) -> [Signature] {
         functions[name, default: []]
+    }
+
+    func initializers(of id: StructID) -> [Signature] {
+        initializers[id, default: []]
     }
 
     func structure(named name: String) -> StructID? {

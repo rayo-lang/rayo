@@ -65,9 +65,9 @@ func branch(_ condition: Operand, then: Int, otherwise: Int) -> Terminator {
     .branch(condition, then: BlockID(index: then), otherwise: BlockID(index: otherwise))
 }
 
-/// `main`, which takes no parameters and gives no result, with `locals` and `blocks`.
-func mainFunction(locals: [IRLocal] = [], _ blocks: BasicBlock...) -> IRFunction {
-    IRFunction(name: "main()", parameterCount: 0, result: .void, locals: locals, blocks: blocks)
+/// The body of `main`, with `locals` and `blocks`.
+func mainFunction(locals: [IRLocal] = [], _ blocks: BasicBlock...) -> IRBody {
+    IRBody(locals: locals, blocks: blocks)
 }
 
 func letLocal(_ name: String, _ type: RayoType) -> IRLocal {

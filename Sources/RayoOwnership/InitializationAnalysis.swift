@@ -9,20 +9,22 @@ struct InitializationAnalysis {
     /// A state that reaches the entry of `block`, from the function's entry or along an edge.
     private typealias Arrival = (block: BlockID, state: InitializationState)
 
-    init(_ function: IRFunction) {
-        entryStates = Array(repeating: nil, count: function.blocks.count)
-        var pending: [Arrival] = [(BlockID(index: 0), InitializationState(enteringFunction: function))]
+    /// The analysis of `body`, whose first `parameterCount` locals are its function's parameters.
+    init(_ body: IRBody, parameterCount: Int) {
+        entryStates = Array(repeating: nil, count: body.blocks.count)
+        let entry = InitializationState(entering: body, parameterCount: parameterCount)
+        var pending: [Arrival] = [(BlockID(index: 0), entry)]
         while let arrival = pending.popLast() {
-            pending += flow(arrival, through: function)
+            pending += flow(arrival, through: body)
         }
     }
 
     /// Joins `arrival`'s state into the state on entry to its block. When that changes it, returns what the block
     /// hands each of its successors; otherwise none.
-    private mutating func flow(_ arrival: Arrival, through function: IRFunction) -> [Arrival] {
+    private mutating func flow(_ arrival: Arrival, through body: IRBody) -> [Arrival] {
         // A state that adds nothing to what the block was entered with already changes nothing after it.
         guard let entryState = join(arrival.state, intoEntryOf: arrival.block) else { return [] }
-        let block = function.blocks[arrival.block.index]
+        let block = body.blocks[arrival.block.index]
         var exitState = entryState
         exitState.apply(block)
         return block.terminator.successors.map { ($0, exitState) }

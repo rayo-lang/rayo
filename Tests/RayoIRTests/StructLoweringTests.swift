@@ -6,9 +6,9 @@ import Testing
 private let enemy = StructID(index: 0, name: "Enemy")
 
 /// The IR of a `main` that runs `body`, in a program that declares `Enemy` after it.
-private func loweredMain(withEnemy body: String) throws(RejectedSource) -> IRFunction {
+private func loweredMain(withEnemy body: String) throws(RejectedSource) -> IRBody {
     // `main` is the program's one function.
-    try lowered("func main() {\n\(body)\n}\nstruct Enemy(var hp: Int, let armor: Int)").functions[0]
+    try lowered("func main() {\n\(body)\n}\nstruct Enemy(var hp: Int, let armor: Int)").body(at: 0)
 }
 
 @Suite("Lowering structs")
@@ -116,7 +116,7 @@ struct StructLoweringTests {
             struct Shot(let range: Int, var hit: Hit)
             struct Hit(var damage: Int)
             """
-        let main = try lowered(source).functions[0]
+        let main = try lowered(source).body(at: 0)
 
         let shot = StructID(index: 0, name: "Shot")
         let hit = StructID(index: 1, name: "Hit")
@@ -146,7 +146,7 @@ struct StructLoweringTests {
             struct Shot(let range: Int, var hit: Hit)
             struct Hit(var damage: Int)
             """
-        let main = try lowered(source).functions[0]
+        let main = try lowered(source).body(at: 0)
 
         let shot = StructID(index: 0, name: "Shot")
         let hit = StructID(index: 1, name: "Hit")

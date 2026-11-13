@@ -24,24 +24,33 @@ func loweredWithRanges(_ source: String) throws(RejectedSource) -> IRProgram {
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
 func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
     var program = try loweredWithRanges(source)
-    program.functions = program.functions.map(\.erasingRanges)
+    program.bodies = program.bodies.mapValues(\.erasingRanges)
     return program
+}
+
+extension IRProgram {
+    /// The body of the function whose ID is at `index`.
+    func body(at index: Int) -> IRBody {
+        // A test asks only for the body of a function its source writes, which has one.
+        guard let body = bodies[FunctionID(index: index)] else { preconditionFailure("function \(index) has no body") }
+        return body
+    }
 }
 
 /// Parses, checks and lowers a `main` whose body is `body`, and gives its IR with every source range in it `nowhere`.
 /// Throws a `RejectedSource` where the parser or the checker rejects the source.
-func loweredMain(_ body: String) throws(RejectedSource) -> IRFunction {
+func loweredMain(_ body: String) throws(RejectedSource) -> IRBody {
     let program = try lowered("func main() {\n\(body)\n}")
     // The source declares `main`, so the program has one.
-    return program.functions[program.main!.index]
+    return program.body(at: program.main!.index)
 }
 
-private extension IRFunction {
-    var erasingRanges: IRFunction {
+private extension IRBody {
+    var erasingRanges: IRBody {
         let blocks = blocks.map { block in
             BasicBlock(statements: block.statements.map(\.erasingRanges), terminator: block.terminator.erasingRanges)
         }
-        return IRFunction(name: name, parameterCount: parameterCount, result: result, locals: locals, blocks: blocks)
+        return IRBody(locals: locals, blocks: blocks)
     }
 }
 

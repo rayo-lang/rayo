@@ -1,16 +1,23 @@
 import RayoSema
 
-/// Lowers a checked program to Rayo IR, one function at a time.
+/// Lowers a checked program to Rayo IR, one function body at a time.
 public enum Lowering {
     public static func lower(_ program: CheckedProgram) -> IRProgram {
-        IRProgram(types: program.types, functions: program.functions.map(lower), main: program.main)
+        // Lower each body, which ends as the result type of its function says.
+        var bodies: [FunctionID: IRBody] = [:]
+        for (id, body) in program.bodies {
+            bodies[id] = lower(body, returning: program.functions[id].result)
+        }
+
+        return IRProgram(types: program.types, functions: program.functions, bodies: bodies, main: program.main)
     }
 
-    static func lower(_ function: CheckedFunction) -> IRFunction {
-        let builder = FunctionBuilder(locals: function.locals.map(IRLocal.init))
+    /// Lowers `body`, the body of a function whose result type is `result`.
+    static func lower(_ body: CheckedBody, returning result: RayoType) -> IRBody {
+        let builder = FunctionBuilder(locals: body.locals.map(IRLocal.init))
         var lowering = FunctionLowering(builder: builder)
-        lowering.lower(function.body)
-        return lowering.function(of: function)
+        lowering.lower(body.statements)
+        return lowering.body(returning: result)
     }
 }
 

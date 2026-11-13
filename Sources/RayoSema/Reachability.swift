@@ -54,10 +54,10 @@ enum Reachability {
         // Every other operation evaluates each of its operands.
         case .binary(_, let left, let right): canComplete(left) && canComplete(right)
         case .unary(_, let operand): canComplete(operand)
-        case .call(_, _, let arguments): arguments.allSatisfy { canComplete($0.value) }
+        case .call(let callee, let arguments): canComplete(callee) && arguments.allSatisfy { canComplete($0.value) }
         case .member(let base, _, _), .copy(let base): canComplete(base)
         // A literal or a name evaluates nothing.
-        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name: true
+        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember: true
         }
     }
 
@@ -94,9 +94,9 @@ enum Reachability {
         case .if(let ifExpr): breaks(ifExpr)
         case .unary(_, let operand): breaks(operand)
         case .binary(_, let left, let right): breaks(left) || breaks(right)
-        case .call(_, _, let arguments): arguments.contains { breaks($0.value) }
+        case .call(let callee, let arguments): breaks(callee) || arguments.contains { breaks($0.value) }
         case .member(let base, _, _), .copy(let base): breaks(base)
-        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name: false
+        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember: false
         }
     }
 }

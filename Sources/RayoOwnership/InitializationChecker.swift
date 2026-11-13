@@ -9,16 +9,20 @@ public enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in source order.
     public static func check(_ program: IRProgram) -> [Diagnostic] {
+        // Check each body, whose first locals are its function's parameters.
+        let errors = program.definedFunctions.flatMap { id, body in
+            check(PlaceTypes(body: body, types: program.types), parameterCount: program.functions[id].parameters.count)
+        }
         // A use and a store share a place in a compound assignment, which uses the local before it stores to it,
         // so errors at one place keep the order each function gives them.
-        program.functions.flatMap { check(PlaceTypes(function: $0, types: program.types)) }.inSourceOrder
+        return errors.inSourceOrder
     }
 
-    /// Checks `places.function`.
-    private static func check(_ places: PlaceTypes) -> [Diagnostic] {
+    /// Checks `places.body`, whose first `parameterCount` locals are its function's parameters.
+    private static func check(_ places: PlaceTypes, parameterCount: Int) -> [Diagnostic] {
         var errors = FunctionErrors(places: places)
-        let analysis = InitializationAnalysis(places.function)
-        for case (let block, var state?) in zip(places.function.blocks, analysis.entryStates) {
+        let analysis = InitializationAnalysis(places.body, parameterCount: parameterCount)
+        for case (let block, var state?) in zip(places.body.blocks, analysis.entryStates) {
             state.apply(
                 block, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
             )
@@ -68,7 +72,7 @@ private struct FunctionErrors {
     }
 
     mutating func store(to destination: Destination, holding state: PlaceState) {
-        guard case .source(let name, .let, _) = places.function.locals[destination.place.root.index] else { return }
+        guard case .source(let name, .let, _) = places.body.locals[destination.place.root.index] else { return }
         guard state.isAssignedOnSomePath else { return }
         stores.append(Diagnostic(storeError(naming: name, holding: state), at: destination.range))
     }

@@ -13,11 +13,11 @@ struct FunctionSignature {
     var result: RayoType
     var convention: CallingConvention
 
-    /// The signature of `function`, whose parameters are all borrowed, the one convention the IR has.
-    init(of function: IRFunction) {
-        let parameters = function.locals.prefix(function.parameterCount)
-        self.parameters = parameters.map { Parameter(convention: .borrowed, type: $0.type) }
-        result = function.result
+    /// The signature of the function `declaration` declares, whose parameters are all borrowed, the one convention
+    /// the IR has.
+    init(of declaration: FunctionDeclaration) {
+        parameters = declaration.parameters.map { Parameter(convention: .borrowed, type: $0) }
+        result = declaration.result
         convention = .rayo
     }
 

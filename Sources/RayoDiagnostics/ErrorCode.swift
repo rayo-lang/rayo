@@ -261,6 +261,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(255, error: "no branch of the 'if' runs to its end, so the 'if' has no value")
     case valueIfLeavesEveryBranch
 
+    @Code(256, error: "member calls aren't supported")
+    case unsupportedMemberCall
+
+    @Code(257, error: "implicit members aren't supported")
+    case unsupportedImplicitMember
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

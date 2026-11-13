@@ -7,17 +7,35 @@ func program(locals: [RayoType], _ blocks: [BasicBlock]) -> IRExecutable {
     program(of: [mainFunction(locals: locals, blocks)])
 }
 
+/// A function a test writes by hand: its declaration and its body.
+typealias HandWrittenFunction = (declaration: FunctionDeclaration, body: IRBody)
+
+/// The function `name`, which returns `result`, holds `locals` and is made of `blocks`, and whose first
+/// `parameterCount` locals are its parameters.
+func handWritten(
+    name: String, parameterCount: Int, result: RayoType, locals: [IRLocal], blocks: [BasicBlock],
+) -> HandWrittenFunction {
+    let parameters = locals.prefix(parameterCount).map(\.type)
+    let declaration = FunctionDeclaration(name: name, parameters: parameters, result: result, kind: .written)
+    return (declaration, IRBody(locals: locals, blocks: blocks))
+}
+
 /// A `main` that holds temporaries of `locals`' types and is made of `blocks`.
-func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> IRFunction {
-    IRFunction(
-        name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary), blocks: blocks,
-    )
+func mainFunction(locals: [RayoType], _ blocks: [BasicBlock]) -> HandWrittenFunction {
+    handWritten(name: "main()", parameterCount: 0, result: .void, locals: locals.map(IRLocal.temporary), blocks: blocks)
 }
 
 /// A program of `functions`, the first of them its `main`, whose structs `types` holds, none by default.
-func program(of functions: [IRFunction], types: TypeTable = .empty) -> IRExecutable {
+func program(of functions: [HandWrittenFunction], types: TypeTable = .empty) -> IRExecutable {
+    // Declare each function, with its body under its ID.
+    var table = FunctionTable()
+    var bodies: [FunctionID: IRBody] = [:]
+    for function in functions {
+        bodies[table.declare(function.declaration)] = function.body
+    }
+
     // A program with a `main` is always an executable.
-    IRExecutable(IRProgram(types: types, functions: functions, main: FunctionID(index: 0)))!
+    return IRExecutable(IRProgram(types: types, functions: table, bodies: bodies, main: FunctionID(index: 0)))!
 }
 
 /// An operand that reads the local `index`.
