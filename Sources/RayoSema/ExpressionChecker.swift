@@ -144,20 +144,26 @@ struct ExpressionChecker {
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
     private func unary(_ op: UnaryOperator, _ operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         switch op {
-        // `-` negates an untyped operand to an untyped value, and a typed one only where it is an Int.
-        case .negate:
-            // An operand that failed was reported already.
-            guard let operand = value(of: operandExpr) else { return nil }
-            // An untyped operand gives an untyped negation.
-            if case .untyped(let untyped) = operand { return .untyped(.negation(untyped, range: range)) }
-            let negated = settled(operand, expecting: Expectation(.int))
-            return negated.map { .typed(CheckedExpr(kind: .unary(op, $0), type: .int, range: range)) }
-
-        // `!` takes a Bool, which no untyped value fits.
-        case .not:
-            let operand = check(operandExpr, expecting: Expectation(.bool))
-            return operand.map { .typed(CheckedExpr(kind: .unary(op, $0), type: .bool, range: range)) }
+        case .negate: negation(of: operandExpr, in: range)
+        case .not: not(operandExpr, in: range)
         }
+    }
+
+    /// Checks `-operandExpr`, which negates an untyped operand to an untyped value, and a typed one only where it is
+    /// an Int.
+    private func negation(of operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
+        // An operand that failed was reported already.
+        guard let operand = value(of: operandExpr) else { return nil }
+        // An untyped operand gives an untyped negation.
+        if case .untyped(let untyped) = operand { return .untyped(.negation(untyped, range: range)) }
+        let negated = settled(operand, expecting: Expectation(.int))
+        return negated.map { .typed(CheckedExpr(kind: .unary(.negate, $0), type: .int, range: range)) }
+    }
+
+    /// Checks `!operandExpr`, which takes a Bool, a type no untyped value fits.
+    private func not(_ operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
+        let operand = check(operandExpr, expecting: Expectation(.bool))
+        return operand.map { .typed(CheckedExpr(kind: .unary(.not, $0), type: .bool, range: range)) }
     }
 
     /// Checks `leftExpr op rightExpr`, which is untyped where it is arithmetic on two untyped operands.
