@@ -44,7 +44,9 @@ extension FunctionLowering {
     }
 
     /// Lowers `target op= value` as `target = target op value`.
-    private mutating func lowerCompoundAssign(_ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr) {
+    private mutating func lowerCompoundAssign(
+        _ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr,
+    ) {
         let operand = operand(of: value)
         let place = place(of: target)
         let destination = Destination(place, at: target.range)

@@ -175,8 +175,10 @@ struct ExpressionChecker {
             return nil
         }
 
-        // Arithmetic on two untyped operands gives a value of their type, so it is untyped too.
+        // The operator is checked as what it means, and an error names it as the source spells it.
         let checkedOp = CheckedBinaryOperator(op)
+
+        // Arithmetic on two untyped operands gives a value of their type, so it is untyped too.
         if case .untyped(let untypedLeft) = left, case .untyped(let untypedRight) = right, checkedOp.isArithmetic {
             return .untyped(.arithmetic(checkedOp, untypedLeft, untypedRight, range: range))
         }

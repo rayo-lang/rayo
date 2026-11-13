@@ -26,7 +26,8 @@ RULES = [
     # the checker resolved.
     ImportRule('RayoSyntax', allowed=['Sources', 'Tests'], excepted=[
         'Sources/RayoSema/CheckedProgram', 'Sources/RayoIR', 'Sources/RayoOwnership', 'Sources/RayoLLVM',
-        'Sources/RayoRuntime', 'Sources/LLVM',
+        'Sources/RayoRuntime', 'Sources/LLVM', 'Sources/CLLVM', 'Tests/RayoOwnershipTests', 'Tests/RayoLLVMTests',
+        'Tests/RayoLLVMTestSupport', 'Tests/LLVMTests',
     ]),
 ]
 

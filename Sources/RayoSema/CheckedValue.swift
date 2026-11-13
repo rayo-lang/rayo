@@ -91,8 +91,8 @@ indirect enum UntypedValue {
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
     private static func arithmetic(
-        _ op: CheckedBinaryOperator, _ left: UntypedValue, _ right: UntypedValue, as type: RayoType, named typeName: TypeName,
-        at range: SourceRange, reporting errors: ErrorList,
+        _ op: CheckedBinaryOperator, _ left: UntypedValue, _ right: UntypedValue, as type: RayoType,
+        named typeName: TypeName, at range: SourceRange, reporting errors: ErrorList,
     ) -> CheckedExpr? {
         // Both operands settle, so each one's errors are reported.
         let left = left.settled(to: type, named: typeName, reporting: errors)

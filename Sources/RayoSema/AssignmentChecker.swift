@@ -15,12 +15,10 @@ struct AssignmentChecker {
         let value = checkAssigned(valueExpr, by: op, to: current?.type)
         guard let current, let value else { return nil }
 
-        switch op.binary {
-        case nil:
-            return .assign(current.place, value)
+        return switch op.binary {
+        case nil: .assign(current.place, value)
         case let binaryOp?:
-            let checkedOp = CheckedBinaryOperator(binaryOp)
-            return compoundAssign(value, checkedOp, spelled: op.rawValue, to: current, in: range)
+            compoundAssign(value, CheckedBinaryOperator(binaryOp), spelled: op.rawValue, to: current, in: range)
         }
     }
 
