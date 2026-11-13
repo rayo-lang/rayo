@@ -175,7 +175,7 @@ struct ExpressionChecker {
             return nil
         }
 
-        // The operator is checked as what it means, and an error names it as the source spells it.
+        // The operator is checked as what it means.
         let checkedOp = CheckedBinaryOperator(op)
 
         // Arithmetic on two untyped operands gives a value of their type, so it is untyped too.
