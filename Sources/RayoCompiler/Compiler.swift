@@ -135,12 +135,13 @@ public enum Compiler {
     }
 
     /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR.
-    private static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
+    static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
             ReadSource(readFile: readFile)
             Parse()
             Check()
             Lower()
+            VerifyIR()
             // Only a program that moves out of no borrowed parameter is checked for where its locals hold a value, so
             // a use of a parameter after such a move isn't reported again as a use after a move.
             CheckParameterMoves()

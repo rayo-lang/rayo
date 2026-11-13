@@ -150,7 +150,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoDiagnosticsMacros` | Those macros' implementation |
 | `Sources/RayoSyntax` | The lexer, the parser and the syntax tree |
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program, and the type table, which says how a value of each type lies in memory |
-| `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, and the lowering to it |
+| `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, the lowering to it, and the verifier that checks it keeps its types |
 | `Sources/RayoOwnership` | The initialization checker, which follows what each local holds through Rayo IR's control flow, and reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been assigned; and the checker that reports each move out of a borrowed parameter |
 | `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
 | `Sources/LLVM` | The Swift binding of LLVM's C API: the context, modules, builders, target machine and JIT that own LLVM's handles, and the types and values they make, each integer typed by its width |
@@ -170,7 +170,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
 | `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |
-| `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks |
+| `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, over programs the front end parses and checks, and of the verifier, over Rayo IR written by hand |
 | `Tests/RayoOwnershipTests` | The ownership checkers' tests, over Rayo IR written by hand |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through the binding's JIT; of the LLVM types a program's values, functions and stack slots get; and of how each argument and result is passed |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |

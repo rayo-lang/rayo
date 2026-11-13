@@ -10,8 +10,8 @@ struct ExpressionLoweringTests {
             locals: [letLocal("x", .int), .temporary(.int)],
             block(
                 declare(0),
-                compute(1, .binary(.multiply, int(2), int(3))),
-                compute(0, .binary(.add, int(1), read(1))),
+                compute(1, .binary(.multiply(.checked), int(2), int(3))),
+                compute(0, .binary(.add(.checked), int(1), read(1))),
                 then: .return(nil),
             ),
         )
@@ -25,7 +25,7 @@ struct ExpressionLoweringTests {
             locals: [letLocal("a", .int), letLocal("b", .int), letLocal("c", .int)],
             block(
                 declare(0), compute(0, .use(int(1))),
-                declare(1), compute(1, .unary(.negate, read(0))),
+                declare(1), compute(1, .unary(.negate(.checked), read(0))),
                 declare(2), compute(2, .use(move(0))),
                 then: .return(nil),
             ),

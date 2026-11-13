@@ -59,11 +59,11 @@ struct FunctionEmitter {
         entry = program.context.appendBlock(named: "entry", to: declared.function)
     }
 
-    /// Emits the body into the function, in `program`'s module. Throws where the IR gives an instruction a value of a
-    /// type it doesn't take.
+    /// Emits the body into the function, in `program`'s module. Throws where the runtime lacks a function the body
+    /// calls.
     mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
         program.builder.position(atEndOf: entry)
-        places = try makePlaces(with: program.builder)
+        places = makePlaces(with: program.builder)
         blocks = body.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 
         for (block, llvmBlock) in zip(body.blocks, blocks) {
@@ -109,16 +109,19 @@ struct FunctionEmitter {
         switch rvalue {
         // A use copies its operand's value.
         case .use(let operand):
-            try use(operand, into: destination, with: program.builder)
+            use(operand, into: destination, with: program.builder)
 
-        // An operator computes on its operands' values.
+        // An operator computes on its operands' values, as their type says.
         case .unary(let op, let operand):
-            let value = try operators.emit(op, on: read(operand, with: program.builder), at: range, in: program)
-            try keep(value, in: destination, with: program.builder)
+            let type = operand.type(in: body, types: types.table)
+            let value = try operators.emit(op, on: read(operand, with: program.builder), of: type, at: range,
+                                           in: program)
+            keep(value, in: destination, with: program.builder)
         case .binary(let op, let left, let right):
-            let operands = try (read(left, with: program.builder), read(right, with: program.builder))
-            let value = try operators.emit(op, operands.0, operands.1, at: range, in: program)
-            try keep(value, in: destination, with: program.builder)
+            let type = left.type(in: body, types: types.table)
+            let operands = (read(left, with: program.builder), read(right, with: program.builder))
+            let value = try operators.emit(op, operands.0, operands.1, of: type, at: range, in: program)
+            keep(value, in: destination, with: program.builder)
 
         // A call passes its arguments as its function's signature says.
         case .call(let callee, let arguments):
@@ -126,25 +129,25 @@ struct FunctionEmitter {
 
         // A struct is built in its place, one field at a time.
         case .structure(let id, let fields):
-            try build(id, from: fields, into: destination, with: program.builder)
+            build(id, from: fields, into: destination, with: program.builder)
         }
     }
 
     /// Emits the copy of `operand`'s value into `destination`, or nothing where there is no destination, since
     /// reading a place changes nothing.
-    private func use(_ operand: Operand, into destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
-        let value = try value(of: operand, with: builder)
+    private func use(_ operand: Operand, into destination: Place?, with builder: borrowing Builder) {
+        let value = value(of: operand, with: builder)
 
         // A value that no place takes is dropped.
         guard let destination else { return }
-        try copy(value, to: address(of: destination, with: builder), with: builder)
+        copy(value, to: address(of: destination, with: builder), with: builder)
     }
 
     /// Emits the store of `value`, an operator's result, in `destination`, where there is one.
-    private func keep(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) throws(LLVMError) {
+    private func keep(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) {
         // A value that no place takes is dropped.
         guard let destination else { return }
-        try store(value, at: address(of: destination, with: builder), with: builder)
+        store(value, at: address(of: destination, with: builder), with: builder)
     }
 
     private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
@@ -155,16 +158,14 @@ struct FunctionEmitter {
 
         // A branch picks, on the condition's value, between the LLVM blocks made for its two targets.
         case .branch(let operand, let then, let otherwise):
-            let value = try read(operand, with: program.builder)
-            // A condition that isn't a Bool, which the checker passes no IR with, fails here, saying what it is.
-            guard let condition = IntValue<I1>(value) else {
-                throw LLVMError(message: "the IR branches on a value of type \(value.type.text), where it takes i1")
-            }
+            let value = read(operand, with: program.builder)
+            // The verifier passes no IR that branches on a value that isn't a Bool.
+            guard let condition = IntValue<I1>(value) else { preconditionFailure("the IR branches on a non-Bool") }
             program.builder.branch(if: condition, then: blocks[then.index], else: blocks[otherwise.index])
 
         // A `return` returns its operand's value, or nothing where it has none.
         case .return(let result):
-            try emitReturn(result, with: program.builder)
+            emitReturn(result, with: program.builder)
 
         // A block that no path reaches ends in LLVM's `unreachable`.
         case .unreachable:

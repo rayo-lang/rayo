@@ -45,7 +45,7 @@ struct ObjectCodeTests {
     }
 
     @Test func `a debug build checks integer arithmetic for overflow, and a release build emits no check`() throws {
-        let overflows = printing(.binary(.add, .constant(.int(.max)), .constant(.int(1))))
+        let overflows = printing(.binary(.add(.checked), .constant(.int(.max)), .constant(.int(1))))
         let report = Array("panic: integer overflow".utf8)
         #expect(try compile(overflows, for: .debug).firstRange(of: report) != nil)
         #expect(try compile(overflows, for: .release).firstRange(of: report) == nil)

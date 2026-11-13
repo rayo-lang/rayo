@@ -1,9 +1,10 @@
 import LLVM
+import RayoIR
+import RayoSema
 import RayoSource
-import RayoSyntax
 
-/// Emits the unary operators, and every binary operator but `&&` and `||`, on Int and Bool values into a function.
-/// Integer operations panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
+/// Emits the IR's operators on Int and Bool values into a function, each as its operands' type says. Integer
+/// operations panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
 struct OperatorEmitter {
     /// The function that a panic's blocks are appended to.
     private let llvmFunction: Function
@@ -14,50 +15,65 @@ struct OperatorEmitter {
         self.types = types
     }
 
-    /// Emits `op` on `operand` at the builder's position and returns its value. An operator that can panic leaves the
-    /// builder in a new block. Throws where the IR gives `op` an operand of a type it doesn't take.
-    func emit(_ op: UnaryOperator, on operand: AnyValue, at range: SourceRange,
+    /// Emits `op` on `operand`, a value of `type`, at the builder's position and returns its value. An operator that
+    /// can panic leaves the builder in a new block. `op` must take an operand of `type`.
+    func emit(_ op: IRUnaryOperator, on operand: AnyValue, of type: RayoType, at range: SourceRange,
               in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
-        switch op {
+        switch (op, type) {
         // Negation subtracts an Int from 0.
-        case .negate:
-            let negated = try int(operand, op)
-            return try emitArithmetic(.subtract, types.int64.constant(0), negated, at: range, in: program).anyValue
+        case (.negate(let mode), .int):
+            try emitArithmetic(.subtract, mode, types.int64.constant(0), int(operand), at: range, in: program).anyValue
 
         // `!` flips a Bool's one bit.
-        case .not:
-            let flipped = try bool(operand, op)
-            return program.builder.xor(flipped, types.bool.constant(1)).anyValue
+        case (.not, .bool):
+            program.builder.xor(bool(operand), types.bool.constant(1)).anyValue
+
+        // The verifier passes no IR that gives an operator an operand of another type.
+        default:
+            preconditionFailure("the IR gives '\(op)' an operand of type \(type)")
         }
     }
 
-    /// Emits `left op right` at the builder's position and returns its value. An operator that can panic leaves the
-    /// builder in a new block. Throws where the IR gives `op` an operand of a type it doesn't take.
-    func emit(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue, at range: SourceRange,
+    /// Emits `left op right`, two values of `type`, at the builder's position and returns its value. An operator that
+    /// can panic leaves the builder in a new block. `op` must take operands of `type`.
+    func emit(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue, of type: RayoType, at range: SourceRange,
               in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
-        switch op {
-        case .add: try emitArithmetic(.add, int(left, op), int(right, op), at: range, in: program).anyValue
-        case .subtract: try emitArithmetic(.subtract, int(left, op), int(right, op), at: range, in: program).anyValue
-        case .multiply: try emitArithmetic(.multiply, int(left, op), int(right, op), at: range, in: program).anyValue
-        case .divide: try emitDivision(int(left, op), int(right, op), at: range, in: program).anyValue
-        case .remainder: try emitRemainder(int(left, op), int(right, op), at: range, in: program).anyValue
-        case .equal: try compare(.equal, op, left, right, with: program.builder).anyValue
-        case .notEqual: try compare(.notEqual, op, left, right, with: program.builder).anyValue
-        case .less: try compare(.signedLess, op, left, right, with: program.builder).anyValue
-        case .lessEqual: try compare(.signedLessEqual, op, left, right, with: program.builder).anyValue
-        case .greater: try compare(.signedGreater, op, left, right, with: program.builder).anyValue
-        case .greaterEqual: try compare(.signedGreaterEqual, op, left, right, with: program.builder).anyValue
-        case .and, .or: preconditionFailure("lowering turns '\(op.rawValue)' into branches")
+        switch (op, type) {
+        // Arithmetic computes on two Ints, and panics where Rayo says it does.
+        case (.add(let mode), .int):
+            try emitArithmetic(.add, mode, int(left), int(right), at: range, in: program).anyValue
+        case (.subtract(let mode), .int):
+            try emitArithmetic(.subtract, mode, int(left), int(right), at: range, in: program).anyValue
+        case (.multiply(let mode), .int):
+            try emitArithmetic(.multiply, mode, int(left), int(right), at: range, in: program).anyValue
+        case (.divide(let mode), .int):
+            try emitDivision(mode, int(left), int(right), at: range, in: program).anyValue
+        case (.remainder, .int):
+            try emitRemainder(int(left), int(right), at: range, in: program).anyValue
+
+        // Two Ints compare as signed integers, and two Bools as bits.
+        case (.equal, .int): compare(.equal, int(left), int(right), with: program.builder)
+        case (.notEqual, .int): compare(.notEqual, int(left), int(right), with: program.builder)
+        case (.less, .int): compare(.signedLess, int(left), int(right), with: program.builder)
+        case (.lessEqual, .int): compare(.signedLessEqual, int(left), int(right), with: program.builder)
+        case (.greater, .int): compare(.signedGreater, int(left), int(right), with: program.builder)
+        case (.greaterEqual, .int): compare(.signedGreaterEqual, int(left), int(right), with: program.builder)
+        case (.equal, .bool): compare(.equal, bool(left), bool(right), with: program.builder)
+        case (.notEqual, .bool): compare(.notEqual, bool(left), bool(right), with: program.builder)
+
+        // The verifier passes no IR that gives an operator operands of another type.
+        default:
+            preconditionFailure("the IR gives '\(op)' operands of type \(type)")
         }
     }
 
-    /// Emits `left op right`, which panics on overflow where overflow is checked and wraps where it isn't.
+    /// Emits `left op right`, which panics on overflow where `mode` and the build check it, and wraps elsewhere.
     private func emitArithmetic(
-        _ op: OverflowingOperation, _ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
-        in program: borrowing ProgramEmitter,
+        _ op: OverflowingOperation, _ mode: OverflowMode, _ left: IntValue<I64>, _ right: IntValue<I64>,
+        at range: SourceRange, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) -> IntValue<I64> {
         // Where overflow isn't checked, the plain instruction wraps.
-        guard program.build.checksOverflow else { return emitWrapping(op, left, right, with: program.builder) }
+        guard mode.panics(in: program.build) else { return emitWrapping(op, left, right, with: program.builder) }
 
         // Where it is, the intrinsic flags an overflow beside the result, and an overflow panics. The intrinsic
         // returns a pair of an Int and a Bool, so its call always gives one.
@@ -78,16 +94,18 @@ struct OperatorEmitter {
         }
     }
 
-    /// Emits `left / right`, which panics on a zero divisor, and on Int.min / -1 where overflow is checked; where it
-    /// isn't, Int.min / -1 wraps.
-    private func emitDivision(_ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
-                              in program: borrowing ProgramEmitter) throws(LLVMError) -> IntValue<I64> {
+    /// Emits `left / right`, which panics on a zero divisor, and on Int.min / -1 where `mode` and the build check
+    /// overflow; elsewhere, Int.min / -1 wraps.
+    private func emitDivision(
+        _ mode: OverflowMode, _ left: IntValue<I64>, _ right: IntValue<I64>, at range: SourceRange,
+        in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) -> IntValue<I64> {
         try panic(ifZero: right, .divisionByZero, at: range, in: program)
 
         let isMinusOne = program.builder.compare(.equal, right, types.int64.constant(-1))
 
         // Where overflow is checked, Int.min / -1, the one quotient that overflows, panics.
-        if program.build.checksOverflow {
+        if mode.panics(in: program.build) {
             let isMin = program.builder.compare(.equal, left, types.int64.constant(.min))
             try panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
         }
@@ -116,15 +134,10 @@ struct OperatorEmitter {
         builder.select(isMinusOne, types.int64.constant(1), right)
     }
 
-    /// Emits the comparison of `left` and `right`, two Bools or two Ints, for `op`.
-    private func compare(_ predicate: IntegerPredicate, _ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue,
-                         with builder: borrowing Builder) throws(LLVMError) -> IntValue<I1> {
-        // A Bool compares as an `i1` with another Bool.
-        if let left = IntValue<I1>(left) { return builder.compare(predicate, left, try bool(right, op)) }
-        // An Int compares as an `i64` with another Int.
-        if let left = IntValue<I64>(left) { return builder.compare(predicate, left, try int(right, op)) }
-        // A value of any other type is neither, and compares with nothing.
-        throw mismatch(op, given: left, takes: "i1 or i64")
+    /// Emits the comparison of `left` and `right` for `predicate`, and returns the Bool it gives.
+    private func compare<Width>(_ predicate: IntegerPredicate, _ left: IntValue<Width>, _ right: IntValue<Width>,
+                                with builder: borrowing Builder) -> AnyValue {
+        builder.compare(predicate, left, right).anyValue
     }
 
     private func panic(ifZero value: IntValue<I64>, _ reason: PanicReason, at range: SourceRange,
@@ -155,33 +168,25 @@ struct OperatorEmitter {
         program.builder.position(atEndOf: continues)
     }
 
-    /// `value`, an operand of `op`, as an integer of `Width`. Throws where it is of another type, which the checker
-    /// passes no IR with.
-    private func operand<Width, Operator: RawRepresentable<String>>(
-        _ value: AnyValue, of op: Operator, as width: Width.Type,
-    ) throws(LLVMError) -> IntValue<Width> {
-        // An operand of another type would reach LLVM only to be rejected, so it fails here, saying what it is.
-        guard let operand = IntValue<Width>(value) else {
-            throw mismatch(op, given: value, takes: "i\(Width.bitWidth)")
-        }
-        return operand
+    /// `value`, an Int, as LLVM holds one.
+    private func int(_ value: AnyValue) -> IntValue<I64> {
+        // The verifier passes no IR that gives an Int's operator a value of another type.
+        guard let int = IntValue<I64>(value) else { preconditionFailure("an Int is held as an i64") }
+        return int
     }
 
-    /// The error that says the IR gives `op` the operand `value`, where it takes a value of the type `expected`
-    /// names.
-    private func mismatch(
-        _ op: some RawRepresentable<String>, given value: AnyValue, takes expected: String,
-    ) -> LLVMError {
-        let given = "an operand of type \(value.type.text)"
-        return LLVMError(message: "the IR gives '\(op.rawValue)' \(given), where it takes \(expected)")
+    /// `value`, a Bool, as LLVM holds one.
+    private func bool(_ value: AnyValue) -> IntValue<I1> {
+        // The verifier passes no IR that gives a Bool's operator a value of another type.
+        guard let bool = IntValue<I1>(value) else { preconditionFailure("a Bool is held as an i1") }
+        return bool
     }
+}
 
-    private func int(_ value: AnyValue, _ op: some RawRepresentable<String>) throws(LLVMError) -> IntValue<I64> {
-        try operand(value, of: op, as: I64.self)
-    }
-
-    private func bool(_ value: AnyValue, _ op: some RawRepresentable<String>) throws(LLVMError) -> IntValue<I1> {
-        try operand(value, of: op, as: I1.self)
+private extension OverflowMode {
+    /// Whether an operation in this mode panics on overflow in `build`, where otherwise it wraps.
+    func panics(in build: Build) -> Bool {
+        self == .checked && build.checksOverflow
     }
 }
 

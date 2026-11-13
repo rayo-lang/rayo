@@ -10,7 +10,7 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).body(at: 0)
 
         // The division is the third statement, after the declaration and its value, and computes into a temporary.
-        guard case .compute(let temporary?, .binary(.divide, .read(_, let dividend), _), let range)
+        guard case .compute(let temporary?, .binary(.divide(.checked), .read(_, let dividend), _), let range)
             = main.blocks[0].statements[2]
         else {
             Issue.record("the division isn't the third statement of \(main.blocks[0])")
@@ -26,8 +26,9 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).body(at: 0)
 
         // The declaration's value follows its `declare`, and the assignment follows that.
-        guard case .compute(let declared?, .binary(.add, _, _), let declarationRange) = main.blocks[0].statements[1],
-              case .compute(let assigned?, .use, let assignmentRange) = main.blocks[0].statements[2]
+        let statements = main.blocks[0].statements
+        guard case .compute(let declared?, .binary(.add(.checked), _, _), let declarationRange) = statements[1],
+              case .compute(let assigned?, .use, let assignmentRange) = statements[2]
         else {
             Issue.record("the declaration and the assignment aren't statements 2 and 3 of \(main.blocks[0])")
             return
@@ -43,7 +44,7 @@ struct SourceRangeTests {
         let main = try loweredWithRanges(source).body(at: 0)
 
         // The compound assignment is the third statement, after the declaration and its value.
-        guard case .compute(let destination?, .binary(.add, .read(_, let operand), _), let range)
+        guard case .compute(let destination?, .binary(.add(.checked), .read(_, let operand), _), let range)
             = main.blocks[0].statements[2]
         else {
             Issue.record("the compound assignment isn't the third statement of \(main.blocks[0])")

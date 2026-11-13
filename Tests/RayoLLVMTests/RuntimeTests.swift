@@ -6,7 +6,8 @@ import RayoSema
 struct RuntimeTests {
     @Test
     func `a program that panics defines the runtime's panic once and leaves no runtime symbol undefined`() throws {
-        let dividesByZero = try compile(printing(.binary(.divide, .constant(.int(1)), .constant(.int(0)))), for: .debug)
+        let division = Rvalue.binary(.divide(.checked), .constant(.int(1)), .constant(.int(0)))
+        let dividesByZero = try compile(printing(division), for: .debug)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
         // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
         // counted.
@@ -54,8 +55,8 @@ struct RuntimeTests {
     @Test func `a module declares the runtime's panic once, however many operators can panic`() throws {
         let dividesTwice = program(locals: [.int], [
             BasicBlock(statements: [
-                statement(storingIn: 0, .binary(.divide, .constant(.int(1)), .constant(.int(0)))),
-                statement(storingIn: 0, .binary(.divide, .constant(.int(2)), .constant(.int(0)))),
+                statement(storingIn: 0, .binary(.divide(.checked), .constant(.int(1)), .constant(.int(0)))),
+                statement(storingIn: 0, .binary(.divide(.checked), .constant(.int(2)), .constant(.int(0)))),
             ], terminator: .return(nil)),
         ])
 

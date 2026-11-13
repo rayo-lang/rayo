@@ -41,8 +41,8 @@ struct ProgramEmitter: ~Copyable {
         try runtime.function(named: symbol, in: module)
     }
 
-    /// Defines the program's functions in the module, its structs as named LLVM types. Throws where the IR gives an
-    /// instruction a value of a type it doesn't take.
+    /// Defines the program's functions in the module, its structs as named LLVM types. `executable` must keep the
+    /// IR's types. Throws where the runtime defines no function that the program calls.
     func emit(_ executable: IRExecutable) throws(LLVMError) {
         let program = executable.program
         let lowering = SignatureLowering(types: LLVMTypes(program.types, in: context))

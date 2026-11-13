@@ -22,6 +22,18 @@ public struct Place: Hashable, Sendable {
         Place(root: root, steps: Array(steps.prefix(count)))
     }
 
+    /// The type of the value at the place in `body`, a body of a program whose structs `types` holds, and which holds
+    /// the place's root. Throws the first step that leads into a field the value it steps from doesn't have.
+    public func type(in body: IRBody, types: TypeTable) throws(UnfitStep) -> RayoType {
+        var type = body.locals[root.index].type
+        for step in steps {
+            // A step must lead into a field of the value it steps from.
+            guard let field = step.field(of: type, in: types) else { throw UnfitStep(step, from: type) }
+            type = field.type
+        }
+        return type
+    }
+
     /// Whether `other` is this place or lies inside it.
     public func contains(_ other: Place) -> Bool {
         root == other.root && other.steps.starts(with: steps)

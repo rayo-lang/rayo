@@ -1,6 +1,6 @@
 import LLVM
 @testable import RayoLLVM
-import RayoSyntax
+import RayoIR
 
 /// What an operator came to when its emitted code ran: the value it gave, or the message of the panic it reported.
 enum OperatorOutcome: Equatable {
@@ -16,22 +16,22 @@ enum OperatorOutcome: Equatable {
 }
 
 /// What `left op right` comes to on two Ints, emitted as `build` does, and run in this process.
-func outcome(of op: BinaryOperator, _ left: Int64, _ right: Int64, in build: Build) throws -> OperatorOutcome {
+func outcome(of op: IRBinaryOperator, _ left: Int64, _ right: Int64, in build: Build) throws -> OperatorOutcome {
     try outcome(left, right, on: .ints, in: build) { emit, a, b in try emit(op, a, b) }
 }
 
 /// What `left op right` comes to on two Bools, run in this process.
-func outcome(of op: BinaryOperator, _ left: Bool, _ right: Bool) throws -> OperatorOutcome {
+func outcome(of op: IRBinaryOperator, _ left: Bool, _ right: Bool) throws -> OperatorOutcome {
     try outcome(left ? 1 : 0, right ? 1 : 0, on: .bools, in: .debug) { emit, a, b in try emit(op, a, b) }
 }
 
 /// What `op operand` comes to on an Int, emitted as `build` does, and run in this process.
-func outcome(of op: UnaryOperator, _ operand: Int64, in build: Build) throws -> OperatorOutcome {
+func outcome(of op: IRUnaryOperator, _ operand: Int64, in build: Build) throws -> OperatorOutcome {
     try outcome(operand, 0, on: .ints, in: build) { emit, a, _ in try emit(op, a) }
 }
 
 /// What `op operand` comes to on a Bool, run in this process.
-func outcome(of op: UnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
+func outcome(of op: IRUnaryOperator, _ operand: Bool) throws -> OperatorOutcome {
     try outcome(operand ? 1 : 0, 0, on: .bools, in: .debug) { emit, a, _ in try emit(op, a) }
 }
 

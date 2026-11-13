@@ -5,7 +5,7 @@ import RayoSema
 /// Calls of the prelude's built-ins.
 extension FunctionEmitter {
     /// Emits a call of `builtin` with `operands`, and stores its result in `destination` when there is one. Throws
-    /// where the arguments aren't of the types `builtin` takes, or the result isn't of the destination's.
+    /// where the runtime lacks the function that the built-in calls.
     func call(
         _ builtin: Builtin, passing operands: [Operand], into destination: Place?,
         in program: borrowing ProgramEmitter,
@@ -30,6 +30,6 @@ extension FunctionEmitter {
         let function = try program.runtimeFunction(named: symbol)
         let signature = FunctionSignature(of: builtin, convention: convention)
         let target = DeclaredFunction(function: function, signature: lowering.lower(signature, in: program.context))
-        try call(target, passing: operands, into: destination, with: program.builder)
+        call(target, passing: operands, into: destination, with: program.builder)
     }
 }

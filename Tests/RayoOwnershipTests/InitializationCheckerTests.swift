@@ -103,7 +103,7 @@ struct InitializationCheckerTests {
 
     @Test("the uses that the same moves reach are reported once, at the first of them in the source")
     func sameMovesReportedOnce() {
-        let readsTwice = store(.binary(.add, read(x, at: 3), read(x, at: 2)), in: y)
+        let readsTwice = store(.binary(.add(.checked), read(x, at: 3), read(x, at: 2)), in: y)
         let blocks = [
             BasicBlock(statements: [
                 store(1, in: x), store(move(x, at: 1), in: y), readsTwice, printing(read(x, at: 4)),

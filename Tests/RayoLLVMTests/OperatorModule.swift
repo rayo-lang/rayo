@@ -1,8 +1,8 @@
 import LLVM
 @testable import RayoLLVM
+import RayoIR
 import RayoSema
 import RayoSource
-import RayoSyntax
 
 /// A module for the host, into which a debug or a release build's operators are emitted in functions of their own,
 /// each operator at `range`. An expression that `define` takes emits its operators by calling the module.
@@ -79,19 +79,24 @@ struct OperatorModule: ~Copyable {
         try LLVMEmitter.ready(program.module, for: programModule.target, exporting: exported)
     }
 
-    /// Emits `left op right`.
-    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, left, right, at: Self.range, in: program)
+    /// Emits `left op right`, on two Ints or two Bools.
+    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue) throws(LLVMError) -> AnyValue {
+        try operators!.emit(op, left, right, of: Self.type(of: left), at: Self.range, in: program)
     }
 
     /// Emits `left op right`, where `right` is an Int constant.
-    func callAsFunction(_ op: BinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
+    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
         try self(op, left, types.int64.constant(right).anyValue)
     }
 
-    /// Emits `op operand`.
-    func callAsFunction(_ op: UnaryOperator, _ operand: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, on: operand, at: Self.range, in: program)
+    /// Emits `op operand`, on an Int or a Bool.
+    func callAsFunction(_ op: IRUnaryOperator, _ operand: AnyValue) throws(LLVMError) -> AnyValue {
+        try operators!.emit(op, on: operand, of: Self.type(of: operand), at: Self.range, in: program)
+    }
+
+    /// The Rayo type of `value`, an Int or a Bool.
+    private static func type(of value: AnyValue) -> RayoType {
+        IntValue<I1>(value) == nil ? .int : .bool
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.

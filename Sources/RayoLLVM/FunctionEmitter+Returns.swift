@@ -4,41 +4,27 @@ import RayoSema
 
 /// Returns, which give the function's result back as its signature says.
 extension FunctionEmitter {
-    /// Emits the return of `result`'s value, or of nothing where there is no `result`. Throws where that isn't of
-    /// the type the function returns.
-    func emitReturn(_ result: Operand?, with builder: borrowing Builder) throws(LLVMError) {
-        let resultType = types.llvmType(declaration.result)
-
+    /// Emits the return of `result`'s value, a value of the type the function returns, or of nothing where there is
+    /// no `result`, which the function then returns.
+    func emitReturn(_ result: Operand?, with builder: borrowing Builder) {
         // A `return` without an operand ends a function that returns nothing in `ret void`.
-        guard let result else {
-            // A function that returns a value, which the checker makes end in a `return` of it, fails here.
-            guard declaration.result == .void else {
-                throw LLVMError(message: "the IR returns nothing from a function that returns \(resultType.text)")
-            }
-            return builder.returnVoid()
-        }
+        guard let result else { return builder.returnVoid() }
 
-        // A value of another type than the function's result, which the checker passes no IR with, fails here.
-        let value = try value(of: result, with: builder)
-        guard value.type == declaration.result else {
-            let returned = "a value of type \(types.llvmType(value.type).text)"
-            throw LLVMError(message: "the IR returns \(returned) from a function that returns \(resultType.text)")
-        }
-
+        let value = value(of: result, with: builder)
         switch signature.result {
         // A result passed directly returns its scalars.
         case .direct:
-            try returnDirectly(value, with: builder)
+            returnDirectly(value, with: builder)
         // One written to a slot is copied there.
         case .slot:
-            try returnInSlot(value, with: builder)
+            returnInSlot(value, with: builder)
         }
     }
 
     /// Emits the return of `value`'s scalars: of nothing where it has none, of its one scalar, or of a struct of
     /// them all.
-    private func returnDirectly(_ value: OperandValue, with builder: borrowing Builder) throws(LLVMError) {
-        let scalars = try scalars(of: value, with: builder)
+    private func returnDirectly(_ value: OperandValue, with builder: borrowing Builder) {
+        let scalars = scalars(of: value, with: builder)
 
         // A value of more than one scalar returns them in the signature's struct.
         if let returnedStruct = signature.returnedStruct {
@@ -56,13 +42,13 @@ extension FunctionEmitter {
 
     /// Emits the copy of `value` into the slot the caller passes for the result, unless it lies there already, and
     /// the return of nothing.
-    private func returnInSlot(_ value: OperandValue, with builder: borrowing Builder) throws(LLVMError) {
+    private func returnInSlot(_ value: OperandValue, with builder: borrowing Builder) {
         // The slot is the first LLVM parameter, ahead of the arguments.
         let slot = Address(pointer: pointerParameter(at: 0), type: declaration.result)
         // A value built in the slot is there already.
         if case .place(let address) = value, address.pointer == slot.pointer { return builder.returnVoid() }
 
-        try copy(value, to: slot, with: builder)
+        copy(value, to: slot, with: builder)
         builder.returnVoid()
     }
 
