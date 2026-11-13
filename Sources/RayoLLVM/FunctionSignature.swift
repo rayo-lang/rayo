@@ -21,12 +21,12 @@ struct FunctionSignature {
         convention = .rayo
     }
 
-    /// The signature of the runtime's function that a call of `builtin` goes to, whose parameters are all borrowed.
-    init(of builtin: Builtin) {
+    /// The signature of the runtime's function that a call of `builtin` goes to in `convention`, whose parameters
+    /// are all borrowed.
+    init(of builtin: Builtin, convention: CallingConvention) {
         parameters = builtin.parameterTypes.map { Parameter(convention: .borrowed, type: $0) }
         result = builtin.result
-        // The runtime's functions follow C's convention, which passes a lone Int or Bool directly, as Rayo's does.
-        convention = .rayo
+        self.convention = convention
     }
 
     init(parameters: [Parameter], result: RayoType, convention: CallingConvention) {

@@ -36,7 +36,7 @@ struct Runtime: ~Copyable {
     /// Declares the runtime's function `symbol` in `program`, unless it is declared there already, and returns it.
     /// Throws where the runtime defines no such function.
     func function(named symbol: String, in program: borrowing Module) throws(LLVMError) -> Function {
-        // A function the program calls already is declared there once.
+        // A function that an earlier call declared is returned as it is, so each is declared once.
         if let declared = program.function(named: symbol) { return declared }
 
         // A function the runtime doesn't define is a fault in the runtime rayoc carries.

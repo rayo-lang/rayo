@@ -43,8 +43,12 @@ struct Declarations {
 
     /// Declares the prelude's built-ins whose names the file's own structs and functions leave free.
     mutating func declarePrelude() {
-        // A struct or a function of the file shadows every built-in that a call reaches by its name.
-        let signatures = Builtin.allCases.map(Signature.init(of:))
+        declarePrelude(Builtin.allCases.map(Signature.init(of:)))
+    }
+
+    /// Declares each of `signatures`, the prelude's, whose name the file's own structs and functions leave free.
+    mutating func declarePrelude(_ signatures: [Signature]) {
+        // A struct or a function of the file shadows every prelude function that a call reaches by its name.
         for signature in signatures where kind(of: signature.name) == nil { _ = declare(signature) }
     }
 

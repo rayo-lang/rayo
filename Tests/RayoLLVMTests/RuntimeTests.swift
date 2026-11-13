@@ -51,6 +51,20 @@ struct RuntimeTests {
         }
     }
 
+    @Test func `a module declares the runtime's panic once, however many operators can panic`() throws {
+        let dividesTwice = program(locals: [.int], [
+            BasicBlock(statements: [
+                statement(storingIn: 0, .binary(.divide, .constant(.int(1)), .constant(.int(0)))),
+                statement(storingIn: 0, .binary(.divide, .constant(.int(2)), .constant(.int(0)))),
+            ], terminator: .return(nil)),
+        ])
+
+        try withEmitted(dividesTwice) { module in
+            let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
+            #expect(runtimeFunctions == ["rayo.panic"])
+        }
+    }
+
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
         let empty = program(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
 
