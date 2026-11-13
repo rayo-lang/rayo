@@ -72,7 +72,7 @@ A tidy function also has:
 
 **A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A leaf's block of more than one line opens with a comment**, worded as the `code-comments` skill says, so a reader skims the steps without rebuilding each from its lines. An orchestrator's blocks take no comment, since its call names say its steps. A body of one step is one block, and takes no opening comment of its own.
+**A leaf's block opens with a comment when its step isn't plain from its lines**, so a reader skims the steps without rebuilding each one. An orchestrator's blocks rarely need one, since its call names say its steps.
 
 This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
@@ -113,15 +113,9 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 }
 ```
 
-**A leaf explains its algorithm in its body, case by case**, since the `code-comments` skill keeps its doc comment to what it does, not how. Each case the body tells apart opens with a comment, worded as the `code-comments` skill says:
+**A leaf explains its algorithm in its body**, since its doc comment says what it does, not how. Where a case it tells apart — a `switch` case, a branch, an early exit — carries a rule the reader couldn't read off its condition, a comment on it says the rule.
 
-- each case of a `switch`;
-- each `if`, and each of its `else` branches;
-- each test that leaves early: a `guard`, a `continue`, a `break` out of a loop, an early `return`, or a `throw`.
-
-This holds in a body of one block as much as in one of several. When a block opens with a case, the case's comment opens the block too. The one exception is a `switch` or `if` that only maps each case to a value, one line per case: its patterns, conditions and values say it all. An orchestrator's cases take no comment either, since the step each one calls names it.
-
-This leaf drops the newlines that only break a line. Its doc comment says that much, and each case and each test of a newline says which rule it applies:
+This leaf drops the newlines that only break a line. Its doc comment says that much, and the cases whose rules aren't plain from their code say them:
 
 ```swift
 /// Keeps the newlines that end a statement, and drops those that only break a line.
@@ -150,12 +144,10 @@ static func significantNewlines(_ raw: [Token]) -> [Token] {
             // A blank line, or a newline before the first statement, ends nothing.
             if result.isEmpty || result.last?.kind == .newline { continue }
 
-        // Every other token needs no bookkeeping.
         default:
             break
         }
 
-        // Keep every token that no test above dropped.
         result.append(token)
     }
     return result
@@ -257,8 +249,7 @@ Audit every file, type and function you add or change against this list, and fix
 - **Every file** holds one primary type and its parts and is named after it (an extension file holds one area of its type's job and is named `Type+Area.swift`, with the type's stored properties in `Type.swift`; a test file is named for the behaviour its suites cover), and is within the limits.
 - **Every type** does one job.
 - **Every function** is an orchestrator or a leaf, with each property under [Functions](#functions), and is within the limits.
-- **Every body** with more than one step runs its steps as blocks separated by a blank line, and each leaf block of more than one line opens with its comment.
-- **Every case** a leaf tells apart — a `switch` case, an `if` or `else` branch, a test that leaves early — opens with its comment, unless it is a `switch` or `if` that only maps each case to a value, one line per case.
+- **Every body** with more than one step runs its steps as blocks separated by a blank line, and a reader can follow each leaf's steps and cases, with a comment wherever the lines alone don't say them.
 - **Every line** does one thing and fits in 120 columns.
 - **Every construct** is the form a rule under [Swift](#swift) names, in place of the one it replaces, and no target enables a language feature (`enableExperimentalFeature`, `enableUpcomingFeature`).
 - **Every comment and name** passes the `code-comments` skill's audit.
