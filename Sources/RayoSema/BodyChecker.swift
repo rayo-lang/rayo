@@ -59,7 +59,7 @@ struct BodyChecker {
         case .expression(let expr):
             return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
-            return [expressions.checkTaken(value).map { .expression($0) }]
+            return [expressions.check(value, as: .take).map { .expression($0) }]
         case .assign(let target, let op, let value):
             return [assignmentChecker.assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let ifExpr):
@@ -80,7 +80,7 @@ struct BodyChecker {
     /// Checks `ifExpr`, the `if` that `range` covers, as a statement, whose branches give no value.
     private func checkIf(_ ifExpr: IfExpr, in range: SourceRange) -> CheckedStmt? {
         // Check the condition, and each branch as a block of statements.
-        let condition = expressions.check(ifExpr.condition, expecting: .bool)
+        let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool))
         let then = CheckedBranch(statements: check(ifExpr.then), value: nil)
         let otherwise = CheckedBranch(statements: ifExpr.otherwise.map { check($0) } ?? [], value: nil)
 
@@ -91,7 +91,7 @@ struct BodyChecker {
     }
 
     private func checkWhile(_ condition: Expr, body: Block) -> CheckedStmt? {
-        let condition = expressions.check(condition, expecting: .bool)
+        let condition = expressions.check(condition, expecting: Expectation(.bool))
         let body = checkLoopBody(body)
         return condition.map { .whileStmt(condition: $0, body: body) }
     }

@@ -12,7 +12,7 @@ struct ExpressionChecker {
     /// Where a `return`, a `break` and a `continue` in the code being checked leave for.
     let jumps: JumpTargets
 
-    private var errors: ErrorList { file.errors }
+    var errors: ErrorList { file.errors }
 
     /// A checker of the expressions in the body of a loop that the code being checked holds.
     var insideLoop: ExpressionChecker {
@@ -24,85 +24,97 @@ struct ExpressionChecker {
         file.declarations.typeName(of: type)
     }
 
-    func check(_ expr: Expr) -> CheckedExpr? {
-        switch expr.kind {
-        // An integer literal is an Int, if it fits in one.
-        case .intLiteral(let digits):
-            return literal(Int64(exactly: digits), in: expr.range)
-
-        // A negative literal fits one value more than a positive one: `Int.min`, whose magnitude no Int holds.
-        case .negativeIntLiteral(let digits):
-            let value = digits == Int64.min.magnitude ? Int64.min : Int64(exactly: digits).map { -$0 }
-            return literal(value, in: expr.range)
-
-        // `true` and `false` are Bools.
-        case .boolLiteral(let value):
-            return CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range)
-
-        // A name reads the local it names.
-        case .name(let name):
-            return reference(to: name, at: expr.range)
-
-        // `-` negates an Int, and `!` a Bool.
-        case .unary(let op, let operand):
-            let type: RayoType = op == .negate ? .int : .bool
-            return check(operand, expecting: type).map {
-                CheckedExpr(kind: .unary(op, $0), type: type, range: expr.range)
-            }
-
-        // Both operands are checked, so each one's errors are reported, before the operator is.
-        case .binary(let op, let left, let right):
-            let left = check(left)
-            let right = check(right)
-            // An operand that failed was reported already.
-            guard let left, let right else { return nil }
-            return binary(op, left, right, spelled: op.rawValue, in: expr.range)
-
-        // A call reaches one of the functions its name names, or the initializer of the struct it names.
-        case .call(let name, let nameRange, let arguments):
-            return CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range)
-
-        // A member of a struct value is one of its fields.
-        case .member(let base, let name, let nameRange):
-            // A value that failed was reported already.
-            guard let value = check(base) else { return nil }
-            return field(named: name, at: nameRange, of: value, in: expr.range)?.read
-
-        // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
-        case .copy(let place):
-            return check(place).map { CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range) }
-
-        // An `if` read for its value gives the value of the branch that runs.
-        case .if:
-            return check(expr, as: .read, expecting: nil)
-        }
-    }
-
-    func check(_ expr: Expr, expecting type: RayoType) -> CheckedExpr? {
-        check(expr, as: .read, expecting: Expectation(type))
-    }
-
-    /// Checks `expr` as a value that its position takes, which moves a local's value out of it.
-    func checkTaken(_ expr: Expr) -> CheckedExpr? {
-        check(expr, as: .take, expecting: nil)
-    }
-
     /// Checks `expr` as the value of a position that `use`s it, and that expects `expected` of it where it expects a
-    /// type.
-    func check(_ expr: Expr, as use: ValueUse, expecting expected: Expectation?) -> CheckedExpr? {
+    /// type. An untyped value takes the expected type where it fits it, and its default type where it doesn't.
+    func check(_ expr: Expr, as use: ValueUse = .read, expecting expected: Expectation? = nil) -> CheckedExpr? {
         // An `if` hands its position to the branch that runs, so each branch's value is checked as the position's.
         if case .if(let ifExpr) = expr.kind {
             return IfChecker(expressions: self).check(ifExpr, in: expr.range, as: use, expecting: expected)
         }
 
-        // Any other value is checked on its own, then against the type the position expects.
-        let value = switch use {
-        case .read: check(expr)
-        case .take: taken(expr)
+        // Any other value is checked on its own, settled toward the type the position expects, and used as the
+        // position uses it.
+        guard let value = value(of: expr) else { return nil }
+        guard let settled = settled(value, toward: expected?.type) else { return nil }
+        let used = switch use {
+        case .read: settled
+        case .take: taken(settled, writtenAs: expr)
         }
+
         // A value that failed was reported, and a value passes where the position expects no type.
-        guard let value, let expected else { return value }
-        return expect(value.type, at: value.range, expected) ? value : nil
+        guard let used, let expected else { return used }
+        return expect(used.type, at: used.range, expected) ? used : nil
+    }
+
+    /// Checks `expr` on its own, leaving it untyped where it is a literal, or a negation or arithmetic on untyped
+    /// values.
+    func value(of expr: Expr) -> CheckedValue? {
+        switch expr.kind {
+        // An integer literal is untyped until its position settles it.
+        case .intLiteral(let digits):
+            return .untyped(.integer(magnitude: digits, isNegative: false, range: expr.range))
+
+        // So is a negative one, which keeps its sign until the type that holds it is known.
+        case .negativeIntLiteral(let digits):
+            return .untyped(.integer(magnitude: digits, isNegative: true, range: expr.range))
+
+        // `-` is untyped where its operand is, and `!` is a Bool.
+        case .unary(let op, let operand):
+            return unary(op, operand, in: expr.range)
+
+        // A binary operator is untyped where it is arithmetic and both its operands are.
+        case .binary(let op, let left, let right):
+            return binary(op, left, right, in: expr.range)
+
+        // `true` and `false` are Bools.
+        case .boolLiteral(let value):
+            return .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
+
+        // A name reads the local it names.
+        case .name(let name):
+            return reference(to: name, at: expr.range).map { .typed($0) }
+
+        // A call reaches one of the functions its name names, or the initializer of the struct it names.
+        case .call(let name, let nameRange, let arguments):
+            let call = CallChecker(expressions: self).call(name, at: nameRange, arguments, in: expr.range)
+            return call.map { .typed($0) }
+
+        // A member of a struct value is one of its fields.
+        case .member(let base, let name, let nameRange):
+            // A value that failed was reported already.
+            guard let value = check(base) else { return nil }
+            return field(named: name, at: nameRange, of: value, in: expr.range).map { .typed($0.read) }
+
+        // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
+        case .copy(let place):
+            return check(place).map { .typed(CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range)) }
+
+        // An `if` read for its value gives the value of the branch that runs.
+        case .if:
+            return check(expr).map { .typed($0) }
+        }
+    }
+
+    /// Settles `value` to `type` where it is untyped and fits `type`, and to its default type where it is untyped
+    /// otherwise. A typed value is given back as it is.
+    func settled(_ value: CheckedValue, toward type: RayoType?) -> CheckedExpr? {
+        switch value {
+        // A typed value keeps its type.
+        case .typed(let typed):
+            return typed
+
+        // An untyped value takes `type` where it fits it, and its default type where nothing it fits is offered.
+        case .untyped(let untyped):
+            let settledType = if let type, untyped.fits(type) { type } else { untyped.defaultType }
+            return untyped.settled(to: settledType, named: typeName(of: settledType), reporting: errors)
+        }
+    }
+
+    /// Settles `value` toward the type `expected` names, and checks it against that type.
+    func settled(_ value: CheckedValue, expecting expected: Expectation) -> CheckedExpr? {
+        // A value that failed was reported.
+        guard let settled = settled(value, toward: expected.type) else { return nil }
+        return expect(settled.type, at: settled.range, expected) ? settled : nil
     }
 
     /// Whether a value of `type`, which the source gives at `range`, has the type `expected` names, reporting its
@@ -114,13 +126,10 @@ struct ExpressionChecker {
         return false
     }
 
-    /// Checks `expr`, which isn't an `if`, as a value that its position takes, which moves a local's value out of it.
-    private func taken(_ expr: Expr) -> CheckedExpr? {
-        // An expression that failed was reported already.
-        guard let value = check(expr) else { return nil }
-
+    /// Turns `value`, which `expr` gives, into the value its position takes, which moves a local's value out of it.
+    private func taken(_ value: CheckedExpr, writtenAs expr: Expr) -> CheckedExpr? {
         // A `copy` checks to a read of the place it copies, so only a place written bare is moved.
-        return switch (expr.kind, value.kind) {
+        switch (expr.kind, value.kind) {
         // A local written bare is moved.
         case (.name(let name), .local(let local)): move(local, named: name, readBy: value)
         // A field written bare is moved out of the struct that holds it.
@@ -224,81 +233,5 @@ struct ExpressionChecker {
         // A field whose declaration failed was reported there.
         guard let type = fields[index].type else { return nil }
         return (CheckedExpr(kind: .field(value, index: index), type: type, range: range), fields[index].kind)
-    }
-
-    /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a
-    /// compound assignment's `+`.
-    func binary(_ op: BinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
-                in range: SourceRange) -> CheckedExpr? {
-        let result: RayoType
-        switch op {
-        // Arithmetic takes two Ints, and gives an Int.
-        case .add, .subtract, .multiply, .divide, .remainder:
-            // Operands of another type were reported.
-            guard operands(of: spelled, left, right, are: .int, in: range) else { return nil }
-            result = .int
-
-        // An ordering takes two Ints, and gives a Bool.
-        case .less, .lessEqual, .greater, .greaterEqual:
-            // Operands of another type were reported.
-            guard operands(of: spelled, left, right, are: .int, in: range) else { return nil }
-            result = .bool
-
-        // `&&` and `||` take two Bools, and give a Bool.
-        case .and, .or:
-            // Operands of another type were reported.
-            guard operands(of: spelled, left, right, are: .bool, in: range) else { return nil }
-            result = .bool
-
-        // `==` and `!=` take two values of one type, and give a Bool.
-        case .equal, .notEqual:
-            // Comparing values of two types is reported.
-            guard left.type == right.type else {
-                let code = ErrorCode.operandsDiffer(
-                    op: spelled, left: typeName(of: left.type), right: typeName(of: right.type),
-                )
-                errors.report(code, at: range)
-                return nil
-            }
-            // Comparing values of a type that doesn't compare is reported.
-            guard isComparable(left.type) else {
-                errors.report(.incomparable(op: spelled, type: typeName(of: left.type)), at: range)
-                return nil
-            }
-            result = .bool
-        }
-        return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
-    }
-
-    /// Whether `==` and `!=` compare values of `type`.
-    private func isComparable(_ type: RayoType) -> Bool {
-        switch type {
-        // Ints and Bools compare.
-        case .int, .bool: true
-        // A Void value holds nothing to compare, and a struct has no `==`.
-        case .void, .structure: false
-        }
-    }
-
-    /// Whether `left` and `right` both have `type`, reporting it when they don't.
-    private func operands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
-                          are type: RayoType, in range: SourceRange) -> Bool {
-        // Two operands of the type pass.
-        if left.type == type && right.type == type { return true }
-        let code = ErrorCode.operandTypes(
-            op: spelled, needs: typeName(of: type), left: typeName(of: left.type), right: typeName(of: right.type),
-        )
-        errors.report(code, at: range)
-        return false
-    }
-
-    /// Checks an integer literal, whose `value` is nil when the literal doesn't fit in an `Int`.
-    private func literal(_ value: Int64?, in range: SourceRange) -> CheckedExpr? {
-        // A literal that doesn't fit is reported.
-        guard let value else {
-            errors.report(.literalExceedsInt(type: typeName(of: .int)), at: range)
-            return nil
-        }
-        return CheckedExpr(kind: .intLiteral(value), type: .int, range: range)
     }
 }

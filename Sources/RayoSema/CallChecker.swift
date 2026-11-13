@@ -116,28 +116,57 @@ struct CallChecker {
             _ = expressions.check(argument.value)
             return nil
         }
-        let value = expressions.check(argument.value, expecting: type)
+        let value = expressions.check(argument.value, expecting: Expectation(type))
         return isLabeledRight ? value : nil
     }
 
-    /// The one of `candidates` whose labels and parameter types `arguments` fit, with the checked arguments.
+    /// The one of `candidates` whose labels and parameter types `arguments` fit, with the arguments settled to its
+    /// parameters' types.
     private func pick(among candidates: [Signature], for arguments: [Argument], in range: SourceRange) -> Match? {
-        // Check the arguments on their own, since the candidate that takes them isn't known yet; an Int or a Bool
-        // needs nothing from the parameter it is passed to.
-        let values = arguments.compactMap { expressions.check($0.value) }
-        // An argument that failed was reported, and without its type no candidate can be picked.
+        // Check the arguments on their own, since the candidate that takes them isn't known yet, so an untyped one
+        // stays untyped.
+        let labels = arguments.map(\.label)
+        let values = arguments.compactMap { expressions.value(of: $0.value) }
+        // An argument that failed was reported, and without it no candidate can be picked.
         guard values.count == arguments.count else { return nil }
 
-        // Pick the one candidate that takes the arguments' labels and types.
-        let typed = zip(arguments, values).map { (label: $0.label, type: $1.type) }
-        let fitting = candidates.filter { $0.takes(typed) }
+        let fitting = fitting(candidates, labels: labels, values: values)
         // No candidate fits, which is reported with the arguments' types.
-        if fitting.isEmpty {
-            errors.report(.noMatchingFunction(name: candidates[0].name, arguments: spelling(of: typed)), at: range)
+        guard let chosen = fitting.first else {
+            reportNoMatch(of: candidates[0].name, labels: labels, values: values, in: range)
+            return nil
         }
-        // None fit, which was reported; two fit only when one names a type that isn't one, which was reported there.
+        // No candidate needs a conversion, so exactly one must fit. Two fit only when one names a type that isn't
+        // one, which was reported there.
         guard fitting.count == 1 else { return nil }
-        return (fitting[0], values)
+
+        // The chosen candidate's parameters settle the untyped arguments.
+        let settled = zip(values, chosen.parameters).compactMap { expressions.settled($0, toward: $1.type) }
+        // An argument whose literal its parameter's type can't hold was reported.
+        guard settled.count == values.count else { return nil }
+        return (chosen, settled)
+    }
+
+    /// The candidates that arguments with `labels` and `values` fit, by the steps that choose among overloads.
+    private func fitting(_ candidates: [Signature], labels: [String?], values: [CheckedValue]) -> [Signature] {
+        // Keep the candidates whose labels the arguments match, in order.
+        let labeled = candidates.filter { $0.takesLabels(labels) }
+        // Keep those that the typed arguments fit.
+        let typedFit = labeled.filter { $0.takes(values, where: { $0.type != nil }) }
+        // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
+        // out.
+        return typedFit.filter { $0.takes(values, where: { $0.type == nil }) }
+    }
+
+    /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an
+    /// untyped argument fails to settle to its default type, which is reported in its place.
+    private func reportNoMatch(of name: String, labels: [String?], values: [CheckedValue], in range: SourceRange) {
+        // Each untyped argument takes its default type, which the error names it by.
+        let settled = values.compactMap { expressions.settled($0, toward: nil) }
+        // A literal its default type can't hold was reported.
+        guard settled.count == values.count else { return }
+        let typed = zip(labels, settled).map { (label: $0, type: $1.type) }
+        errors.report(.noMatchingFunction(name: name, arguments: spelling(of: typed)), at: range)
     }
 
     /// Checks the values of `arguments` for their own errors, where no function's parameters take them.

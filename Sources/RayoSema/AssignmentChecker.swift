@@ -30,8 +30,9 @@ struct AssignmentChecker {
         if op.binary == nil {
             expressions.check(expr, as: .take, expecting: current.map { Expectation($0.type) })
         } else {
-            // A compound one reads it, as its operator's right operand.
-            expressions.check(expr)
+            // A compound one reads it, as its operator's right operand, so an untyped value takes the place's type
+            // as the other operand's.
+            expressions.value(of: expr).flatMap { expressions.settled($0, toward: current?.type) }
         }
     }
 

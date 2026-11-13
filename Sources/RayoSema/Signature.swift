@@ -27,11 +27,17 @@ struct Signature: CustomStringConvertible {
         }
     }
 
-    /// Whether a call may pass `arguments`, in order. A parameter whose type isn't known takes any argument, so a
-    /// declaration's error doesn't spread to its calls.
-    func takes(_ arguments: [(label: String?, type: RayoType)]) -> Bool {
-        parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
-            parameter.label == argument.label && (parameter.type == nil || parameter.type == argument.type)
+    /// Whether a call may pass arguments with `labels`, in order.
+    func takesLabels(_ labels: [String?]) -> Bool {
+        parameters.count == labels.count && zip(parameters, labels).allSatisfy { $0.label == $1 }
+    }
+
+    /// Whether each of `arguments`, in order, that `isConsidered` picks fits its parameter. A parameter whose type
+    /// isn't known takes any argument, so a declaration's error doesn't spread to its calls.
+    func takes(_ arguments: [CheckedValue], where isConsidered: (CheckedValue) -> Bool) -> Bool {
+        zip(parameters, arguments).allSatisfy { parameter, argument in
+            guard isConsidered(argument), let type = parameter.type else { return true }
+            return argument.fits(type)
         }
     }
 }
