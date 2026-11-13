@@ -182,21 +182,12 @@ struct FunctionVerifier {
         do {
             return try place.type(in: body, types: types)
         } catch {
-            throw violation("the IR names \(error.step.name) of a value of type \(error.holder)")
+            throw violation("the IR names \(error.step) of a value of type \(error.holder)")
         }
     }
 
     /// The violation that `message` says, in this function.
     private func violation(_ message: String) -> IRViolation {
         IRViolation(function: declaration.name, message: message)
-    }
-}
-
-private extension PlaceStep {
-    /// The step as an error names it, such as `field 0`.
-    var name: String {
-        switch self {
-        case .field(let index): "field \(index)"
-        }
     }
 }

@@ -155,8 +155,8 @@ extension FunctionLowering {
 
 private extension PlaceStep {
     init(_ step: CheckedPlaceStep) {
-        switch step {
-        case .field(let index, _): self = .field(index)
+        self = switch step {
+        case .field(let index, _): .field(index)
         }
     }
 }
