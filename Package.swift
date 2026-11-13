@@ -175,7 +175,9 @@ let package = Package(
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .testTarget(name: "RayoSemaTests", dependencies: ["RayoSema", "RayoSyntax"]),
-        .testTarget(name: "RayoCompilerTests", dependencies: ["RayoCompiler", "RayoDiagnostics", "RayoSource"]),
+        .testTarget(name: "RayoCompilerTests", dependencies: [
+            "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource",
+        ]),
         .target(name: "ToolStandIn", path: "Tests/ToolStandIn"),
         .executableTarget(name: "tool-stand-in", dependencies: ["ToolStandIn"], path: "Tests/tool-stand-in"),
         // The driver's tests run the built `rayo`, `rayoc` and `tool-stand-in`, so they depend on all three.

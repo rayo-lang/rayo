@@ -6,12 +6,12 @@ import RayoSema
 extension FunctionEmitter {
     /// Emits, in the entry block, the place of each local, and returns the pointers to them in the locals' order. A
     /// parameter's place holds its argument.
-    func makePlaces(with builder: borrowing Builder) throws(LLVMError) -> [PointerValue] {
+    func makePlaces(with builder: borrowing Builder) -> [PointerValue] {
         let returned = returnedLocal()
         var places: [PointerValue] = []
         for (index, local) in body.locals.enumerated() {
             let place = if index < declaration.parameters.count {
-                try parameterPlace(of: index, with: builder)
+                parameterPlace(of: index, with: builder)
             } else if LocalID(index: index) == returned {
                 pointerParameter(at: 0)
             } else {
@@ -24,12 +24,12 @@ extension FunctionEmitter {
 
     /// Emits the place of the parameter at `index`: the memory its pointer points to where it is passed one, and
     /// otherwise a slot that its scalars are stored in.
-    private func parameterPlace(of index: Int, with builder: borrowing Builder) throws(LLVMError) -> PointerValue {
+    private func parameterPlace(of index: Int, with builder: borrowing Builder) -> PointerValue {
         let llvmParameters = signature.llvmParameters(of: index)
         return switch signature.parameters[index] {
         // A value passed directly is put back together from its scalars, in a slot of its own.
         case .direct:
-            try slot(of: body.locals[index].type, holdingParameters: llvmParameters, with: builder).pointer
+            slot(of: body.locals[index].type, holdingParameters: llvmParameters, with: builder).pointer
         // A value passed in a pointer lies where it points.
         case .callerPlace, .filledSlot:
             pointerParameter(at: llvmParameters.lowerBound)
@@ -40,10 +40,10 @@ extension FunctionEmitter {
     /// `llvmParameters` pass, and returns its address.
     private func slot(
         of type: RayoType, holdingParameters llvmParameters: Range<Int>, with builder: borrowing Builder,
-    ) throws(LLVMError) -> Address {
+    ) -> Address {
         let slot = newSlot(of: type, with: builder)
         let scalars = llvmParameters.map { llvmFunction.parameter(at: $0) }
-        try storeScalars(scalars, at: slot, with: builder)
+        storeScalars(scalars, at: slot, with: builder)
         return slot
     }
 
@@ -67,53 +67,39 @@ extension FunctionEmitter {
     }
 
     /// Emits the instructions that point at `place`, a local's place or a part inside it, and returns its address.
-    /// Throws where the place names a field that the value holding it doesn't have.
-    func address(of place: Place, with builder: borrowing Builder) throws(LLVMError) -> Address {
+    func address(of place: Place, with builder: borrowing Builder) -> Address {
         let local = Address(pointer: places[place.root.index], type: body.locals[place.root.index].type)
-        return try address(following: place.steps, from: local, with: builder)
+        return address(following: place.steps, from: local, with: builder)
     }
 
     /// Emits the instructions that take each of `steps` in turn from the value at `address`, and returns the address
     /// of the last.
     private func address(
         following steps: [PlaceStep], from address: Address, with builder: borrowing Builder,
-    ) throws(LLVMError) -> Address {
+    ) -> Address {
         var address = address
         for step in steps {
             switch step {
             // A field lies inside the value that holds it.
             case .field(let field):
-                address = try fieldAddress(of: field, in: address, with: builder)
+                address = fieldAddress(of: field, in: address, with: builder)
             }
         }
         return address
     }
 
     /// Emits the instruction that points at the field at `field`, its place in its struct's declaration, of the
-    /// value at `address`, and returns the field's address. Throws where the value has no such field.
-    func fieldAddress(
-        of field: Int, in address: Address, with builder: borrowing Builder,
-    ) throws(LLVMError) -> Address {
-        // A field of a value that isn't a struct, or that its struct doesn't have, which the checker passes no IR
-        // with, would point outside the value, so each fails here.
-        guard case .structure = address.type else { throw noField(field, of: address.type) }
-        let fields = types.fields(of: address.type)
-        guard fields.indices.contains(field) else { throw noField(field, of: address.type) }
-
-        // Point at the element of the struct's LLVM type that holds the field.
-        let (fieldType, element) = fields[field]
+    /// struct at `address`, and returns the field's address.
+    func fieldAddress(of field: Int, in address: Address, with builder: borrowing Builder) -> Address {
+        // Point at the element of the struct's LLVM type that holds the field. The verifier passes no IR that steps
+        // into a field of a value that isn't a struct.
+        let (fieldType, element) = types.fields(of: address.type)[field]
         let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(address.type), at: address.pointer)
         return Address(pointer: pointer, type: fieldType)
     }
 
-    /// The error that says the IR names the field at `field` of a value of `type`, which has no such field.
-    private func noField(_ field: Int, of type: RayoType) -> LLVMError {
-        LLVMError(message: "the IR names field \(field) of a value of type \(types.llvmType(type).text)")
-    }
-
-    /// Emits the instructions that find the value `operand` gives, and returns it. Throws where it names a field that
-    /// the value holding it doesn't have.
-    func value(of operand: Operand, with builder: borrowing Builder) throws(LLVMError) -> OperandValue {
+    /// Emits the instructions that find the value `operand` gives, and returns it.
+    func value(of operand: Operand, with builder: borrowing Builder) -> OperandValue {
         switch operand {
         // An Int constant is an `i64` holding the Int's bits.
         case .constant(.int(let value)):
@@ -125,22 +111,18 @@ extension FunctionEmitter {
 
         // A read or a move finds the place; a move leaves it as it is, unread until assigned again.
         case .read(let place, _), .move(let place, _):
-            .place(try address(of: place, with: builder))
+            .place(address(of: place, with: builder))
         }
     }
 
     /// Emits the instructions that find each of `operands`' values, in order, and returns them.
-    func values(of operands: [Operand], with builder: borrowing Builder) throws(LLVMError) -> [OperandValue] {
-        var values: [OperandValue] = []
-        for operand in operands {
-            values.append(try value(of: operand, with: builder))
-        }
-        return values
+    func values(of operands: [Operand], with builder: borrowing Builder) -> [OperandValue] {
+        operands.map { value(of: $0, with: builder) }
     }
 
     /// Emits the instructions that read `operand`'s value whole, and returns it.
-    func read(_ operand: Operand, with builder: borrowing Builder) throws(LLVMError) -> AnyValue {
-        whole(try value(of: operand, with: builder), with: builder)
+    func read(_ operand: Operand, with builder: borrowing Builder) -> AnyValue {
+        whole(value(of: operand, with: builder), with: builder)
     }
 
     /// Emits the load of `value` whole, where it lies in a place, and returns it.
@@ -158,20 +140,20 @@ extension FunctionEmitter {
     }
 
     /// Emits the loads of the scalars `value` splits into, and returns them in order.
-    func scalars(of value: OperandValue, with builder: borrowing Builder) throws(LLVMError) -> [AnyValue] {
+    func scalars(of value: OperandValue, with builder: borrowing Builder) -> [AnyValue] {
         switch value {
         // A constant is an Int or a Bool, each one scalar.
         case .constant(let constant, _): [constant]
         // A value in a place is read one scalar at a time, from where each lies.
-        case .place(let address): try loadScalars(at: address, with: builder)
+        case .place(let address): loadScalars(at: address, with: builder)
         }
     }
 
     /// Emits the loads of the scalars that the value at `address` splits into, and returns them in order.
-    private func loadScalars(at address: Address, with builder: borrowing Builder) throws(LLVMError) -> [AnyValue] {
+    private func loadScalars(at address: Address, with builder: borrowing Builder) -> [AnyValue] {
         var loaded: [AnyValue] = []
         for scalar in types.scalars(of: address.type) {
-            let scalarAddress = try self.address(following: scalar.steps, from: address, with: builder)
+            let scalarAddress = self.address(following: scalar.steps, from: address, with: builder)
             let (type, alignment) = (types.llvmType(scalar.type), types.alignment(of: scalar.type))
             loaded.append(builder.load(type, from: scalarAddress.pointer, alignment: alignment))
         }
@@ -179,21 +161,16 @@ extension FunctionEmitter {
     }
 
     /// Emits the stores of `scalars`, the scalars a value splits into, in order, in the place at `address`.
-    func storeScalars(_ scalars: [AnyValue], at address: Address, with builder: borrowing Builder) throws(LLVMError) {
+    func storeScalars(_ scalars: [AnyValue], at address: Address, with builder: borrowing Builder) {
         for (scalar, value) in zip(types.scalars(of: address.type), scalars) {
-            let scalarAddress = try self.address(following: scalar.steps, from: address, with: builder)
+            let scalarAddress = self.address(following: scalar.steps, from: address, with: builder)
             builder.store(value, to: scalarAddress.pointer, alignment: types.alignment(of: scalar.type))
         }
     }
 
-    /// Emits the copy of `value` into the place at `destination`: whole where it is small, and with `memcpy` where
-    /// it is large. Throws where `value` is of another type than the place's.
-    func copy(_ value: OperandValue, to destination: Address, with builder: borrowing Builder) throws(LLVMError) {
-        // A value of another type, which the checker passes no IR with, would run as bits of the wrong type.
-        guard value.type == destination.type else {
-            throw mismatch(storing: types.llvmType(value.type), in: types.llvmType(destination.type))
-        }
-
+    /// Emits the copy of `value` into the place at `destination`, which holds a value of its type: whole where it is
+    /// small, and with `memcpy` where it is large.
+    func copy(_ value: OperandValue, to destination: Address, with builder: borrowing Builder) {
         switch value {
         // A large value in a place is copied byte for byte, never loaded whole.
         case .place(let source) where !lowering.isSmall(source.type):
@@ -208,19 +185,9 @@ extension FunctionEmitter {
         }
     }
 
-    /// Emits the instruction that stores `value`, a scalar, at `address`. Throws where `value` is of another type
-    /// than the place's.
-    func store(_ value: AnyValue, at address: Address, with builder: borrowing Builder) throws(LLVMError) {
-        // A value of another type, which the checker passes no IR with, would pass LLVM's verifier, since a pointer
-        // has no type, and run as bits of the wrong type, so it fails here.
-        let placeType = types.llvmType(address.type)
-        guard value.type == placeType else { throw mismatch(storing: value.type, in: placeType) }
+    /// Emits the instruction that stores `value`, a scalar of the type of the place at `address`, there.
+    func store(_ value: AnyValue, at address: Address, with builder: borrowing Builder) {
         builder.store(value, to: address.pointer, alignment: types.alignment(of: address.type))
-    }
-
-    /// The error that says the IR stores a value of `stored` in a place of `place`.
-    func mismatch(storing stored: AnyType, in place: AnyType) -> LLVMError {
-        LLVMError(message: "the IR stores a value of type \(stored.text) in a place of type \(place.text)")
     }
 
     /// Whether any of `operands` reads or moves a place that shares memory with `destination`, which a write to

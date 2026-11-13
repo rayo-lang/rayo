@@ -18,7 +18,7 @@ struct StatementLoweringTests {
         let expected = mainFunction(
             locals: [.temporary(.int)],
             block(
-                compute(0, .binary(.add, int(1), int(2))),
+                compute(0, .binary(.add(.checked), int(1), int(2))),
                 compute(nil, .call(.builtin(.printInt), arguments: [read(0)])),
                 then: .return(nil),
             ),
@@ -48,7 +48,10 @@ struct StatementLoweringTests {
         let main = try loweredMain("var x = 1\nx += 3")
         let expected = mainFunction(
             locals: [varLocal("x", .int)],
-            block(declare(0), compute(0, .use(int(1))), compute(0, .binary(.add, read(0), int(3))), then: .return(nil)),
+            block(
+                declare(0), compute(0, .use(int(1))), compute(0, .binary(.add(.checked), read(0), int(3))),
+                then: .return(nil),
+            ),
         )
         #expect(main == expected)
     }
@@ -60,8 +63,8 @@ struct StatementLoweringTests {
             locals: [varLocal("x", .int), .temporary(.int)],
             block(
                 declare(0), compute(0, .use(int(1))),
-                compute(1, .binary(.multiply, int(2), int(3))),
-                compute(0, .binary(.add, read(0), read(1))),
+                compute(1, .binary(.multiply(.checked), int(2), int(3))),
+                compute(0, .binary(.add(.checked), read(0), read(1))),
                 then: .return(nil),
             ),
         )

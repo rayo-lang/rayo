@@ -1,5 +1,6 @@
 import RayoSema
 import RayoSource
+import RayoSyntax
 
 /// Lowers expressions, from the current block on, as the operations that compute them and the operands that hold
 /// their values.
@@ -70,10 +71,10 @@ extension FunctionLowering {
             .use(operand(of: expr))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
-            .unary(op, operand(of: value))
+            .unary(IRUnaryOperator(op), operand(of: value))
         // The left operand is computed before the right one, in the order the source reads.
         case .binary(let op, let left, let right):
-            .binary(op, operand(of: left), operand(of: right))
+            .binary(IRBinaryOperator(op), operand(of: left), operand(of: right))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
             .call(callee, arguments: arguments.map { operand(of: $0) })
@@ -153,10 +154,20 @@ extension FunctionLowering {
     }
 }
 
+private extension IRUnaryOperator {
+    /// The IR operator that the source's `op` lowers to, whose arithmetic checks overflow.
+    init(_ op: UnaryOperator) {
+        self = switch op {
+        case .negate: .negate(.checked)
+        case .not: .not
+        }
+    }
+}
+
 private extension PlaceStep {
     init(_ step: CheckedPlaceStep) {
-        switch step {
-        case .field(let index, _): self = .field(index)
+        self = switch step {
+        case .field(let index, _): .field(index)
         }
     }
 }

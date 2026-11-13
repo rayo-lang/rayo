@@ -49,7 +49,7 @@ struct FunctionLoweringTests {
         let expected = IRBody(
             locals: [parameter("n", .int), .temporary(.int)],
             blocks: [
-                block(compute(1, .binary(.multiply, read(0), int(2))), then: .return(read(1))),
+                block(compute(1, .binary(.multiply(.checked), read(0), int(2))), then: .return(read(1))),
                 block(then: .unreachable),
             ],
         )

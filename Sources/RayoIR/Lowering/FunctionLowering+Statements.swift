@@ -49,7 +49,8 @@ extension FunctionLowering {
         let operand = operand(of: value)
         let place = place(of: target)
         let destination = Destination(place, at: target.range)
-        builder.emit(.binary(op, .read(place, at: target.range), operand), into: destination, range: target.range)
+        let value = Rvalue.binary(IRBinaryOperator(op), .read(place, at: target.range), operand)
+        builder.emit(value, into: destination, range: target.range)
     }
 
     /// Starts the life of `local`, which the source declares at `range`, and stores `value` in it when there is one.

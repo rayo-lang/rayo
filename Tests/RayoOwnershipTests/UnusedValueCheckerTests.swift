@@ -32,7 +32,8 @@ struct UnusedValueCheckerTests {
         (false, [Diagnostic(.unreadValue(name: "x"), at: at(1)), Diagnostic(.unreadValue(name: "x"), at: at(2))]),
     ])
     func loop(bodyReads: Bool, expected: [Diagnostic]) {
-        let value: Rvalue = bodyReads ? .binary(.add, read(x, at: 3), .constant(.int(1))) : .use(.constant(.int(1)))
+        let one = Operand.constant(.int(1))
+        let value: Rvalue = bodyReads ? .binary(.add(.checked), read(x, at: 3), one) : .use(one)
         let blocks = [
             BasicBlock(statements: [store(0, in: x, at: 1)], terminator: goto(1)),
             BasicBlock(statements: [], terminator: branch(then: 2, otherwise: 3)),

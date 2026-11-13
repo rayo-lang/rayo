@@ -1,6 +1,6 @@
 import LLVM
 @testable import RayoLLVM
-import RayoSyntax
+import RayoIR
 
 /// What a release build's optimiser made of an operation on two Ints it knows: the Int it gave, a result LLVM
 /// leaves undefined, or none it could compute.
@@ -11,7 +11,7 @@ enum Folding: Equatable {
 }
 
 /// What a release build's optimiser folds `left op right` to.
-func folding(of op: BinaryOperator, _ left: Int64, _ right: Int64) throws -> Folding {
+func folding(of op: IRBinaryOperator, _ left: Int64, _ right: Int64) throws -> Folding {
     // Have the optimiser compute the operator, emitted in `g` on parameters, once it inlines `f`'s call of `g`.
     var module = try OperatorModule(for: .release)
     let (operation, _) = try module.define("g", on: .ints) { emit, a, b in try emit(op, a, b) }

@@ -4,7 +4,8 @@ import RayoSema
 
 /// The LLVM types of a program's values, and of a function's result, laid out as the program's type table says.
 struct LLVMTypes {
-    private let table: TypeTable
+    /// The program's structs, which the types follow.
+    let table: TypeTable
     let int64: IntegerType<I64>
     let bool: IntegerType<I1>
     private let int8: IntegerType<I8>

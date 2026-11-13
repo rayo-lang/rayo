@@ -113,7 +113,7 @@ struct ControlFlowLoweringTests {
             locals: [varLocal("i", .int), .temporary(.bool)],
             block(declare(0), compute(0, .use(int(0))), then: goto(1)),
             block(compute(1, .binary(.less, read(0), int(3))), then: branch(read(1), then: 2, otherwise: 3)),
-            block(compute(0, .binary(.add, read(0), int(1))), then: goto(1)),
+            block(compute(0, .binary(.add(.checked), read(0), int(1))), then: goto(1)),
             block(then: .return(nil)),
         )
         #expect(main == expected)
@@ -157,7 +157,7 @@ struct ControlFlowLoweringTests {
             locals: [varLocal("i", .int), .temporary(.bool)],
             block(declare(0), compute(0, .use(int(0))), then: goto(1)),
             block(compute(1, .binary(.less, read(0), int(2))), then: branch(read(1), then: 2, otherwise: 3)),
-            block(compute(0, .binary(.add, read(0), int(1))), then: goto(1)),
+            block(compute(0, .binary(.add(.checked), read(0), int(1))), then: goto(1)),
             block(then: .return(nil)),
             block(then: goto(1)),
         )
@@ -171,7 +171,7 @@ struct ControlFlowLoweringTests {
             block(declare(0), compute(0, .use(int(0))), then: goto(1)),
             // The outer loop's header, body and exit.
             block(compute(1, .binary(.less, read(0), int(2))), then: branch(read(1), then: 2, otherwise: 3)),
-            block(compute(0, .binary(.add, read(0), int(1))), then: goto(4)),
+            block(compute(0, .binary(.add(.checked), read(0), int(1))), then: goto(4)),
             block(then: .return(nil)),
             // The inner loop's header and body, whose `continue` goes to the inner header.
             block(then: goto(5)),
