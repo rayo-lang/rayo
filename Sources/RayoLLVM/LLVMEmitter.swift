@@ -8,13 +8,12 @@ package enum LLVMEmitter {
     package static func objectCode(for executable: IRExecutable, sourcePath: String, build: Build) throws(LLVMError)
         -> [UInt8] {
         let target = try TargetMachine(optimizes: build.optimizes)
-        let program = ProgramEmitter(sourcePath: sourcePath, for: target, build: build)
-        let runtime = try Runtime(for: program)
+        let program = try ProgramEmitter(sourcePath: sourcePath, for: target, build: build)
 
-        try program.emit(executable, calling: runtime.functions)
-        try runtime.link(into: program.module)
-        try ready(program.module, for: target, exporting: [Runtime.entryPoint])
-        return try writeObjectCode(of: program.module, for: target)
+        try program.emit(executable)
+        let module = try program.linkedModule()
+        try ready(module, for: target, exporting: [Runtime.entryPoint])
+        return try writeObjectCode(of: module, for: target)
     }
 
     /// Readies `module` to compile as `target`'s build: hides every definition but the functions `exported` names

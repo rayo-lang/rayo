@@ -37,6 +37,34 @@ struct RuntimeTests {
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
+    @Test func `a module declares each runtime function its code calls once, and none that it doesn't call`() throws {
+        let printsTwice = program(locals: [], [
+            BasicBlock(statements: [
+                statement(printing: .constant(.int(1))),
+                statement(printing: .constant(.int(2))),
+            ], terminator: .return(nil)),
+        ])
+
+        try withEmitted(printsTwice) { module in
+            let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
+            #expect(runtimeFunctions == ["rayo.print_int"])
+        }
+    }
+
+    @Test func `a module declares the runtime's panic once, however many operators can panic`() throws {
+        let dividesTwice = program(locals: [.int], [
+            BasicBlock(statements: [
+                statement(storingIn: 0, .binary(.divide, .constant(.int(1)), .constant(.int(0)))),
+                statement(storingIn: 0, .binary(.divide, .constant(.int(2)), .constant(.int(0)))),
+            ], terminator: .return(nil)),
+        ])
+
+        try withEmitted(dividesTwice) { module in
+            let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
+            #expect(runtimeFunctions == ["rayo.panic"])
+        }
+    }
+
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
         let empty = program(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
 

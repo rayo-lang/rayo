@@ -112,5 +112,5 @@ func declare(_ local: Int) -> Statement {
 }
 
 func printing(_ operand: Operand) -> Statement {
-    .compute(destination: nil, value: .call(.printInt, arguments: [operand]), range: at(0))
+    .compute(destination: nil, value: .call(.builtin(.printInt), arguments: [operand]), range: at(0))
 }

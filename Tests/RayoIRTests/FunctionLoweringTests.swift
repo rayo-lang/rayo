@@ -83,7 +83,7 @@ struct FunctionLoweringTests {
     @Test func `a 'return' of a Void value computes it, and returns nothing`() throws(RejectedSource) {
         let main = try loweredMain("return print(1)")
         let expected = mainFunction(
-            block(compute(nil, .call(.printInt, arguments: [int(1)])), then: .return(nil)),
+            block(compute(nil, .call(.builtin(.printInt), arguments: [int(1)])), then: .return(nil)),
             block(then: .return(nil)),
         )
         #expect(main == expected)
