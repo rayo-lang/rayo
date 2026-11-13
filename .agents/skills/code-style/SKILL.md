@@ -72,7 +72,7 @@ A tidy function also has:
 
 **A body with more than one step runs its steps as blocks, separated by one blank line.** A block is one step: every line in it serves that step. A reader skims the blocks to see the steps, then reads the one they need.
 
-**A leaf's block opens with a comment when its step isn't plain from its lines**, so a reader skims the steps without rebuilding each one. An orchestrator's blocks rarely need one, since its call names say its steps.
+**A leaf's block opens with a comment when its step isn't plain from its lines**, so a reader skims the steps without rebuilding each one. An orchestrator's blocks and cases rarely need a comment, since its call names say its steps.
 
 This leaf builds a loop in four steps, and runs them as one block, so a reader rebuilds the steps from the lines:
 
@@ -90,11 +90,10 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
 }
 ```
 
-The same leaf, with its steps set apart and said:
+The same leaf, with its steps set apart, and the steps that aren't plain from their lines said:
 
 ```swift
 private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]) {
-    // Make the loop's blocks: its header, its body, and its exit.
     let header = newBlock()
     let bodyBlock = newBlock()
     let exit = newBlock()

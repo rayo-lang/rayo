@@ -20,7 +20,7 @@ Names follow the same aim: spelled out in full, and named for what they hold or 
 A comment tells the reader something they need and the code doesn't already show.
 
 - **Above a declaration**, it says what the declaration is or does, as a caller sees it. When the name and the signature already say that, write none.
-- **A block's or a case's opening comment**, where the `code-style` skill calls for one, says that step or case in the terms of the function's job, so a reader can skim the body by its comments.
+- **A block's opening comment**, where the `code-style` skill calls for one, says its step in the terms of the function's job, so a reader can skim the body by its comments.
 - **Any other comment in a body** explains what the lines can't show: why it's done this way, an ordering that matters, a trap. A comment that only restates the line is noise.
 - **Code that confuses** is made clearer before a comment is reached for: a better name, a smaller function, a tighter type. A comment is for what remains.
 - **A comment stays true.** A comment in code you change is yours too: update it, or delete it if it no longer helps.
@@ -31,4 +31,4 @@ Comments and names describe the code as it is, in the present tense, and state a
 
 ## Before you open a pull request
 
-Audit every comment and name you added or changed, and every comment in code you touched. Each one reads at first glance, tells the reader something the code doesn't (for a block's or case's opening comment, its step or case), is true of the code as it stands, and cites no record of a decision. A reviewer audits the same.
+Audit every comment and name you added or changed, and every comment in code you touched. Each one reads at first glance, tells the reader something the code doesn't (for a block's opening comment, its step), is true of the code as it stands, and cites no record of a decision. A reviewer audits the same.
