@@ -5,7 +5,6 @@ import RayoIR
 struct LivenessAnalysis: DataflowAnalysis {
     let direction = DataflowDirection.backward
     let startState = LivenessState()
-    /// The types of the function's places.
     let places: PlaceTypes
 
     func apply(_ statement: Statement, to state: inout LivenessState) {

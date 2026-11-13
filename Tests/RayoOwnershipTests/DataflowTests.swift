@@ -45,6 +45,16 @@ struct DataflowTests {
         #expect(results.state(before: statement, in: BlockID(index: 1)) == EvaluatedOperands.State(expected))
     }
 
+    @Test func `going backward, a loop that no path leaves starts from the start state`() {
+        let blocks = [
+            BasicBlock(statements: [printing(read(x, at: 1))], terminator: goto(1)),
+            BasicBlock(statements: [printing(read(x, at: 2))], terminator: goto(1)),
+        ]
+        var results = solve(EvaluatedOperands(direction: .backward), blocks)
+        #expect(results.state(before: 0, in: BlockID(index: 1)) == EvaluatedOperands.State([2]))
+        #expect(results.state(before: 0, in: BlockID(index: 0)) == EvaluatedOperands.State([1, 2]))
+    }
+
     @Test("a block that no path from the entry reaches has no state, in either direction", arguments: [
         DataflowDirection.forward, .backward,
     ])
@@ -57,17 +67,25 @@ struct DataflowTests {
         #expect(results.state(before: 0, in: BlockID(index: 1)) == nil)
     }
 
-    @Test func `the states asked about a block in any order are those of its points`() {
+    @Test("the states asked about a block in any order are those of its points, in either direction", arguments: [
+        (DataflowDirection.forward, [Set([1, 2]), Set([1]), Set([1])]),
+        (DataflowDirection.backward, [Set([3]), Set([2, 3]), Set([2, 3])]),
+    ])
+    func anyOrder(direction: DataflowDirection, expected: [Set<Int>]) {
         let blocks = [
-            BasicBlock(statements: [printing(read(x, at: 1)), printing(read(x, at: 2))], terminator: .return(nil)),
+            BasicBlock(statements: [printing(read(x, at: 1)), printing(read(x, at: 2))],
+                       terminator: .return(read(x, at: 3))),
         ]
-        var results = solve(EvaluatedOperands(direction: .forward), blocks)
-        #expect(results.state(after: 1, in: BlockID(index: 0)) == EvaluatedOperands.State([1, 2]))
-        #expect(results.state(before: 1, in: BlockID(index: 0)) == EvaluatedOperands.State([1]))
-        #expect(results.state(after: 0, in: BlockID(index: 0)) == EvaluatedOperands.State([1]))
+        var results = solve(EvaluatedOperands(direction: direction), blocks)
+        let states = [
+            results.state(after: 1, in: BlockID(index: 0)), results.state(before: 1, in: BlockID(index: 0)),
+            results.state(after: 0, in: BlockID(index: 0)),
+        ]
+        #expect(states == expected.map { EvaluatedOperands.State($0) })
     }
 
-    @Test func `a merge that shrinks a block's state stops the solver`() async {
+    // The solver checks its merges only in a debug build, which is how the tests run.
+    @Test func `in a debug build, a merge that shrinks a block's state stops the solver`() async {
         await #expect(processExitsWith: .failure) {
             let blocks = [
                 BasicBlock(statements: [printing(read(x, at: 1))], terminator: goto(1)),
@@ -122,7 +140,9 @@ private struct EvaluatedOperands: DataflowAnalysis {
     }
 
     func apply(_ terminator: Terminator, to state: inout State) {
-        state.offsets.formUnion([terminator.operand].compactMap { $0.flatMap(Self.offset) })
+        if let operand = terminator.operand, let offset = Self.offset(of: operand) {
+            state.offsets.insert(offset)
+        }
     }
 
     /// The offset that the source names the place an operand reads at, or nil for a constant.

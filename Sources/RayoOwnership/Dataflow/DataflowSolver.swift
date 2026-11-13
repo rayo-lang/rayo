@@ -6,7 +6,8 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
     private let analysis: Analysis
     private let body: IRBody
     private let order: BlockOrder
-    /// The state at each block's boundary so far, indexed by `BlockID`; nil for a block that no state has reached yet.
+    /// The state at each block's boundary so far, indexed by `BlockID`; nil for a block that no state has reached yet,
+    /// or that no path from the entry reaches.
     private var boundaryStates: [Analysis.State?]
     /// The blocks whose boundary state has changed since the solver last carried it through them.
     private var pending: WorkQueue
@@ -24,15 +25,16 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
         order = BlockOrder(body)
         boundaryStates = Array(repeating: nil, count: body.blocks.count)
 
-        // The walk begins at the function's entry going forward, and at each reached exit going backward. Going
-        // forward, reverse postorder visits each block after the blocks that lead to it, outside loops; going
-        // backward, postorder visits each block after those it leads to.
+        // The walk begins at the function's entry going forward, and at the exit of each reached block going
+        // backward, so that a loop that no path leaves has a state too. Going forward, reverse postorder visits each
+        // block after the blocks that lead to it, outside loops; going backward, postorder visits each block after
+        // those it leads to.
         switch analysis.direction {
         case .forward:
             boundaryStates[0] = analysis.startState
             pending = WorkQueue(order.postorder.reversed(), blockCount: body.blocks.count)
         case .backward:
-            for block in order.postorder where body.blocks[block.index].terminator.successors.isEmpty {
+            for block in order.postorder {
                 boundaryStates[block.index] = analysis.startState
             }
             pending = WorkQueue(order.postorder, blockCount: body.blocks.count)
@@ -69,10 +71,11 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
             return true
         }
 
-        // A merge that dropped part of the previous state could swing back and forth forever, so it stops the
-        // solver here, in debug builds, rather than there.
+        // A merge that dropped part of either state could swing back and forth forever, so it stops the solver
+        // here, in debug builds, rather than there.
         let merged = previous.merged(with: state)
-        assert(merged.merged(with: previous) == merged, "a dataflow merge must only grow a block's state")
+        assert(merged.merged(with: previous) == merged && merged.merged(with: state) == merged,
+               "a dataflow merge must only grow a block's state")
 
         guard merged != previous else { return false }
         boundaryStates[block.index] = merged
@@ -117,5 +120,40 @@ private struct WorkQueue {
             head = 0
         }
         return block
+    }
+}
+
+/// The blocks of a function that some path from its entry reaches, in the orders a dataflow solver visits them.
+private struct BlockOrder {
+    /// The reached blocks, each after the blocks it leads to, except along an edge back to a block whose walk is
+    /// still under way, such as a loop's header.
+    private(set) var postorder: [BlockID] = []
+    /// The reached blocks that lead to each block, indexed by `BlockID`.
+    private(set) var predecessors: [[BlockID]]
+
+    init(_ body: IRBody) {
+        predecessors = Array(repeating: [], count: body.blocks.count)
+        var isReached = Array(repeating: false, count: body.blocks.count)
+
+        // Walk depth first from the entry, holding the path walked so far and how many of each block's successors
+        // it has followed. A block joins the postorder once all its successors are followed.
+        var path: [(block: BlockID, followed: Int)] = [(BlockID(index: 0), 0)]
+        isReached[0] = true
+        while let (block, followed) = path.last {
+            let successors = body.blocks[block.index].terminator.successors
+            guard followed < successors.count else {
+                postorder.append(block)
+                path.removeLast()
+                continue
+            }
+
+            // Follow the next successor, and walk on from it the first time it is reached.
+            path[path.count - 1].followed += 1
+            let successor = successors[followed]
+            predecessors[successor.index].append(block)
+            guard !isReached[successor.index] else { continue }
+            isReached[successor.index] = true
+            path.append((successor, 0))
+        }
     }
 }

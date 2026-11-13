@@ -20,17 +20,25 @@ public enum UnusedValueChecker {
         in block: BlockID, of places: PlaceTypes, results: inout DataflowResults<LivenessAnalysis>,
     ) -> [Diagnostic] {
         // Asking from the last statement back walks the block once, the way liveness flows.
-        let statements = places.body.blocks[block.index].statements
-        return statements.indices.reversed().compactMap { index -> Diagnostic? in
-            // Only a computation with a destination stores a value.
-            guard case .compute(let destination?, _, _) = statements[index] else { return nil }
-            // A block that no path reaches has no state, and nothing in it is checked.
-            guard let state = results.state(after: index, in: block) else { return nil }
-            // A store that some code reads leaves nothing to report.
-            guard !state.reads(destination.place) else { return nil }
-            // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
-            guard let name = places.sourceName(of: destination.place) else { return nil }
-            return Diagnostic(.unreadValue(name: name), at: destination.range)
+        let indices = places.body.blocks[block.index].statements.indices.reversed()
+        return indices.compactMap { error(at: $0, in: block, of: places, results: &results) }
+    }
+
+    /// The error at the statement at `index` in `block`, where it stores a value that no code reads, or nil where it
+    /// doesn't.
+    private static func error(
+        at index: Int, in block: BlockID, of places: PlaceTypes, results: inout DataflowResults<LivenessAnalysis>,
+    ) -> Diagnostic? {
+        // Only a computation with a destination stores a value.
+        guard case .compute(let destination?, _, _) = places.body.blocks[block.index].statements[index] else {
+            return nil
         }
+        // A block that no path reaches has no state, and nothing in it is checked.
+        guard let state = results.state(after: index, in: block) else { return nil }
+        // A store that some code reads leaves nothing to report.
+        guard !state.reads(destination.place) else { return nil }
+        // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
+        guard let name = places.sourceName(of: destination.place) else { return nil }
+        return Diagnostic(.unreadValue(name: name), at: destination.range)
     }
 }

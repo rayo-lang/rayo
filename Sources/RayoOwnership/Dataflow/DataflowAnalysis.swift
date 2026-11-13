@@ -8,8 +8,9 @@ protocol DataflowAnalysis {
 
     var direction: DataflowDirection { get }
 
-    /// The state where the walk begins: on entry to the function going forward, and at each of its exits going
-    /// backward.
+    /// The state where the walk begins: on entry to the function going forward. Going backward, it is the state at
+    /// the exit of every block, which the states of the paths out of the block merge into. So it is the state at the
+    /// function's exits, and it must add nothing to a merge.
     var startState: State { get }
 
     /// Takes `state` across `statement` in the analysis's direction: from just before it to just after it going

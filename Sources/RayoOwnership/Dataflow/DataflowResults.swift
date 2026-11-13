@@ -1,13 +1,13 @@
 import RayoIR
 
-/// The settled states of a dataflow analysis through a function, which answer what the state is at any point of a
-/// block: just before or just after one of its statements, or its terminator, which an index equal to the number of
-/// statements names.
+/// The settled states of a dataflow analysis through a function. They answer what the state is just before or just
+/// after any statement of a block. The terminator counts as the block's last statement, at the index one past the
+/// others.
 struct DataflowResults<Analysis: DataflowAnalysis> {
     /// A point of a block, and the state there.
     private struct Position {
         var block: BlockID
-        /// The number of the block's statements, its terminator last among them, that run before the point.
+        /// How many of the block's statements run before the point. The terminator counts as the last statement.
         var point: Int
         var state: Analysis.State
     }
@@ -15,8 +15,7 @@ struct DataflowResults<Analysis: DataflowAnalysis> {
     private let analysis: Analysis
     private let body: IRBody
     /// The settled state at each block's boundary, indexed by `BlockID`: at its entry going forward, and at its exit
-    /// going backward. It is nil for a block that no state reaches: one that no path from the entry reaches, and,
-    /// going backward, one from which no path reaches an exit.
+    /// going backward. It is nil for a block that no path from the entry reaches.
     private let boundaryStates: [Analysis.State?]
     /// The point asked about last, which the next question about the same block moves on from.
     private var position: Position?
