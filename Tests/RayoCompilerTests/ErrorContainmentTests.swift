@@ -72,6 +72,9 @@ struct ErrorContainmentTests {
         ("func broken( {\n}", [ErrorCode.missingParameterName(found: .token("{"))]),
         // A function whose parameter's type names no type.
         ("func broken(_ n: Nope) {}", [.notAType(name: "Nope")]),
+        // A function whose parameter's type, or whose result type, is a struct that can't be laid out.
+        ("struct Loop(let next: Loop)\nfunc broken(_ n: Loop) {}", [.containsItself(name: "Loop")]),
+        ("struct Loop(let next: Loop)\nfunc broken(_ n: Int) -> Loop { broken(n) }", [.containsItself(name: "Loop")]),
         // A function whose body gives its result type, and fails.
         ("func broken(_ n: Int) { true + 1 }", [
             .operandTypes(op: "+", needs: .named("Int"), left: .named("Bool"), right: .named("Int")),

@@ -133,7 +133,11 @@ struct Declarations {
         // A type of the file shadows the prelude's type of its name. One that failed names no type, and taints the body
         // that names it, which reports nothing more.
         if let declared = types[name] {
-            if hasFailedType(named: name) { errors.taints.taint() }
+            // A struct that can't be laid out has a type, which no stage after checking can use, so it names none.
+            guard !hasFailedType(named: name) else {
+                errors.taints.taint()
+                return nil
+            }
             return declared.type
         }
         // A function shadows it too, though it names no type. The file's names are known before any is declared, so

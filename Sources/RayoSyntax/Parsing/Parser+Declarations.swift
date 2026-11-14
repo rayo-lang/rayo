@@ -42,7 +42,7 @@ extension Parser {
     /// After the `func`: `identifier '(' parameters ')' ('->' type)? block`. A function that fails throws its name,
     /// where it read it.
     private mutating func parseFunction() throws(DeclarationFailure) -> FuncDecl {
-        var name: (String, SourceRange)?
+        var name: (text: String, range: SourceRange)?
         do throws(ParseFailure) {
             let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
             name = (readName, nameRange)
@@ -54,7 +54,7 @@ extension Parser {
             let body = try parseBlock()
             return FuncDecl(name: readName, nameRange: nameRange, parameters: parameters, result: result, body: body)
         } catch {
-            throw DeclarationFailure(kind: .function, name: name?.0, nameRange: name?.1)
+            throw DeclarationFailure(kind: .function, name: name?.text, nameRange: name?.range)
         }
     }
 
@@ -105,7 +105,7 @@ extension Parser {
     /// After the `struct`: `identifier ('(' fields ')')? ('{' '}')?`. A struct that fails throws its name, where it
     /// read it.
     private mutating func parseStruct() throws(DeclarationFailure) -> StructDecl {
-        var name: (String, SourceRange)?
+        var name: (text: String, range: SourceRange)?
         do throws(ParseFailure) {
             // Read the name, and the fields where the header has them.
             let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingStructName)
@@ -116,7 +116,7 @@ extension Parser {
             if consume(.lbrace) { try parseEmptyBody() }
             return StructDecl(name: readName, nameRange: nameRange, fields: fields)
         } catch {
-            throw DeclarationFailure(kind: .structure, name: name?.0, nameRange: name?.1)
+            throw DeclarationFailure(kind: .structure, name: name?.text, nameRange: name?.range)
         }
     }
 
