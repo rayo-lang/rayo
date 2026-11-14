@@ -422,7 +422,7 @@ struct FieldMoveTests {
         moved: String, assigned: String,
     ) throws {
         // A `Hit` replaces a moved `hit`, and an Int its `damage`.
-        let newValue = assigned == "%5.1" ? "struct Hit(3)" : "use 3"
+        let newValue = assigned == "%5.1" ? "call \"Hit(damage: Int)\"(3)" : "use 3"
         let blocks = """
             bb0:
             \(storeShot())

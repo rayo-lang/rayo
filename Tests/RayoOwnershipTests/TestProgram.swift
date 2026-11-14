@@ -18,7 +18,7 @@ func parsedIR(_ text: String) throws -> IRProgram {
 }
 
 /// A program of `functions`, the first of them the one a run starts at, which declares a `Shot` of an Int `range` and
-/// a `Hit`, and a `Hit` of an Int `damage`.
+/// a `Hit`, and a `Hit` of an Int `damage`, with the primary initializer of each after the functions.
 func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
     try parsedIR("""
         struct Shot {
@@ -30,6 +30,8 @@ func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
         }
         main "\(functions[0].name)"
         \(functions.map(\.text).joined(separator: "\n"))
+        init "Shot(range: Int, hit: Hit)"(Int, Hit) -> Shot
+        init "Hit(damage: Int)"(Int) -> Hit
         """)
 }
 
@@ -59,7 +61,7 @@ func function(
 func storeShot(at column: Int? = nil) -> String {
     let range = column.map { "@2:\($0)-2:\($0)" } ?? "@1:1-1:1"
     return """
-          %4 @1:1-1:1 = struct Hit(7) @1:1-1:1
-          %5 \(range) = struct Shot(4, move %4 \(range)) @1:1-1:1
+          %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+          %5 \(range) = call "Shot(range: Int, hit: Hit)"(4, move %4 \(range)) @1:1-1:1
         """
 }

@@ -9,32 +9,40 @@ struct Hit {
 
 main "main()"
 
+init "Shot(range: Int, hit: Hit)"(Int, Hit) -> Shot
+
+init "Hit(damage: Int)"(Int) -> Hit
+
 func "main()"() -> Void {
-  var %0 s: Shot
-  let %1 h: Hit
-  bind %0 @4:9-4:10
-    struct Shot: Shot @4:13-4:48
-      int 4: Int @4:25-4:26
-      struct Hit: Hit @4:33-4:47
-        int 7: Int @4:45-4:46
+  let %0 damage: Int
+  var %1 s: Shot
+  let %2 h: Hit
+  bind %0 @4:9-4:15
+    int 7: Int @4:18-4:19
+  bind %1 @5:9-5:10
+    call "Shot(range: Int, hit: Hit)": Shot @5:13-5:53
+      int 4: Int @5:25-5:26
+      call "Hit(damage: Int)": Hit @5:33-5:52
+        value: Int @5:45-5:51
+          place %0 @5:45-5:51
   assign
-    place %0 @5:5-5:6 .1 @5:5-5:10 .0 @5:5-5:17
-    int 9: Int @5:20-5:21
+    place %1 @6:5-6:6 .1 @6:5-6:10 .0 @6:5-6:17
+    int 9: Int @6:20-6:21
   expression
-    call builtin "print(_: Int)": Void @6:5-6:19
-      value: Int @6:11-6:18
-        place %0 @6:11-6:12 .0 @6:11-6:18
-  bind %1 @7:9-7:10
-    value: Hit @7:13-7:18
-      place %0 @7:13-7:14 .1 @7:13-7:18
+    call builtin "print(_: Int)": Void @7:5-7:19
+      value: Int @7:11-7:18
+        place %1 @7:11-7:12 .0 @7:11-7:18
+  bind %2 @8:9-8:10
+    value: Hit @8:13-8:18
+      place %1 @8:13-8:14 .1 @8:13-8:18
   expression
-    call builtin "print(_: Int)": Void @8:5-8:20
-      value: Int @8:11-8:19
-        place %1 @8:11-8:12 .0 @8:11-8:19
+    call builtin "print(_: Int)": Void @9:5-9:20
+      value: Int @9:11-9:19
+        place %2 @9:11-9:12 .0 @9:11-9:19
   expression
-    call builtin "print(_: Int)": Void @9:5-9:33
-      value: Int @9:11-9:32
-        place temporary .0 @9:11-9:32
-          struct Hit: Hit @9:11-9:25
-            int 3: Int @9:23-9:24
+    call builtin "print(_: Int)": Void @10:5-10:33
+      value: Int @10:11-10:32
+        place temporary .0 @10:11-10:32
+          call "Hit(damage: Int)": Hit @10:11-10:25
+            int 3: Int @10:23-10:24
 }

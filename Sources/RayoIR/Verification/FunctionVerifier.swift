@@ -91,7 +91,6 @@ struct FunctionVerifier {
         case .unary(let op, let operand): op.resultType(on: try operandType(of: op, operand))
         case .binary(let op, let left, let right): op.resultType(on: try operandType(of: op, left, right))
         case .call(let callee, let arguments): try resultType(of: callee, passing: arguments)
-        case .structure(let id, let fields): try structureType(of: id, from: fields)
         }
     }
 
@@ -144,27 +143,6 @@ struct FunctionVerifier {
             }
         }
         return callee.result(in: functions)
-    }
-
-    /// The type of the struct `id`, made of `fields`. Throws where they aren't as many as its fields, or of their
-    /// types.
-    private func structureType(of id: StructID, from fields: [Operand]) throws(IRViolation) -> RayoType {
-        let declared = types[id].fields
-
-        // A struct is made of a value for each of its fields.
-        guard fields.count == declared.count else {
-            throw violation("the IR makes '\(id.name)' of \(fields.count) fields, where it has \(declared.count)")
-        }
-
-        // Each value is of its field's type.
-        for (index, (field, declaredField)) in zip(fields, declared).enumerated() {
-            let fieldType = try type(of: field)
-            guard fieldType == declaredField.type else {
-                let given = "field \(index) of '\(id.name)' a value of type \(fieldType)"
-                throw violation("the IR gives \(given), where it takes \(declaredField.type)")
-            }
-        }
-        return .structure(id)
     }
 
     /// The type of `operand`'s value, whose root, where it names a place, must be one of the body's locals. Throws

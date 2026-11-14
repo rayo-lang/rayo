@@ -17,6 +17,18 @@ extension FunctionEmitter {
         }
     }
 
+    /// Emits a call that reaches `target` with `operands`, and stores its result in `destination` when there is one.
+    private func call(
+        _ target: CallTarget, passing operands: [Operand], into destination: Place?, with builder: borrowing Builder,
+    ) {
+        switch target {
+        case .function(let function):
+            call(function, passing: operands, into: destination, with: builder)
+        case .primaryInitializer(let id):
+            build(id, from: operands, into: destination, with: builder)
+        }
+    }
+
     /// Emits a call of `target` with `operands`, of the types it takes, and stores its result in `destination`, a
     /// place of the result's type, when there is one.
     func call(

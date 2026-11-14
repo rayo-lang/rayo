@@ -19,4 +19,7 @@ public struct FunctionDeclaration: Equatable, Sendable {
 public enum FunctionKind: Equatable, Sendable {
     /// A function the source writes.
     case written
+    /// A struct's primary initializer, which the struct declares with no body: it takes each field's value, owned,
+    /// in the order the struct declares its fields, and makes the struct of them.
+    case primaryInitializer(StructID)
 }

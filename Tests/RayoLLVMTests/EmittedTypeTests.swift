@@ -84,7 +84,7 @@ struct EmittedTypeTests {
               temp %1: Int
               temp %2: Pair
             bb0:
-              %2 @1:1-1:2 = struct Pair(read %0 @1:1-1:2, read %1 @1:1-1:2) @1:1-1:2
+              %2 @1:1-1:2 = call "Pair(flag: Bool, count: Int)"(read %0 @1:1-1:2, read %1 @1:1-1:2) @1:1-1:2
               return
             }
             """
@@ -201,12 +201,14 @@ struct EmittedTypeTests {
         }
     }
 
-    /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding.
+    /// A struct of a Bool and an Int, which lies as the Int, then the Bool, then 7 bytes of padding, with its
+    /// primary initializer.
     private let pair = """
         struct Pair {
           flag: Bool
           count: Int
         }
+        init "Pair(flag: Bool, count: Int)"(Bool, Int) -> Pair
 
         """
 

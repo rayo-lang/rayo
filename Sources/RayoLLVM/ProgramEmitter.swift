@@ -46,13 +46,28 @@ struct ProgramEmitter: ~Copyable {
     func emit(_ executable: IRExecutable) throws(LLVMError) {
         let program = executable.program
         let lowering = SignatureLowering(types: LLVMTypes(program.types, in: context))
-        let functions = program.functions.ids.map { declare($0, of: executable, using: lowering) }
+        let functions = program.functions.ids.map { target(of: $0, in: executable, using: lowering) }
 
         // Emit the bodies once every function is declared, so a body can call a function that comes after it.
         for (id, body) in program.definedFunctions {
-            var emitter = FunctionEmitter(body: body, of: program.functions[id], into: functions[id.index],
+            // Only a function the source writes has a body, and the module declares each such function.
+            guard case .function(let declared) = functions[id.index] else {
+                preconditionFailure("a primary initializer has no body")
+            }
+            var emitter = FunctionEmitter(body: body, of: program.functions[id], into: declared,
                                           functions: functions, lowering: lowering, in: self)
             try emitter.emit(in: self)
+        }
+    }
+
+    /// What a call of the function `id` reaches: a function the module declares for it, or, for a primary
+    /// initializer, the struct its calls build in place.
+    private func target(
+        of id: FunctionID, in executable: IRExecutable, using lowering: SignatureLowering,
+    ) -> CallTarget {
+        switch executable.program.functions[id].kind {
+        case .written: .function(declare(id, of: executable, using: lowering))
+        case .primaryInitializer(let structID): .primaryInitializer(structID)
         }
     }
 
