@@ -28,7 +28,7 @@ angle.degrees += 45                     // calls get, then set with the sum
 - **A place property** hands out a place in storage, as `hp` does. It declares a `borrow`, which lends the place for reading, and may add a `mutate`, which lends it for change. Code uses the place as it would use a stored field, except to move out of it, and no accessor code runs once the caller has it.
 - **A value property** computes a value and takes one back, as `degrees` does. It declares a `get`, which returns a value, and may add a `set`, which takes a new one. A change works on a copy, which `set` writes back.
 
-A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property. A subscript may declare generic parameters, as a function does, so `a[as: Tooltip.self]` picks the type it hands out ([09](../09-compile-time/attributes-and-runtime-data.md#runtime-type-info)).
+A subscript counts as a property here, and wherever the spec names the two kinds: `list[i]` is a place property. An inline array's `a[i]` is neither kind, since it runs no accessor: it is a place inside `a`, as a stored field is ([04](../04-types/collections.md#inline-array-elements)). A subscript may declare generic parameters, as a function does, so `a[as: Tooltip.self]` picks the type it hands out ([09](../09-compile-time/attributes-and-runtime-data.md#runtime-type-info)).
 
 **A declaration's accessors are one of these:**
 
@@ -124,7 +124,7 @@ extension Inventory {
 
 ```swift
 struct Inventory(var items: List<Item>) {
-    subscript(i: Int) -> Item { borrow { items[i] } mutate { &items[i] } }
+    subscript(i: UInt) -> Item { borrow { items[i] } mutate { &items[i] } }
 }
 func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: the view depends on 'inv', not on '0'
 ```
@@ -148,7 +148,7 @@ func leak() -> any Equatable {
 **On an exclusive view type, a view of the place depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views:
 
 ```swift
-func label(_ s: mutable MutableSpan<Item>, _ i: Int) -> StringView { s[i].name.view }
+func label(_ s: mutable MutableSpan<Item>, _ i: UInt) -> StringView { s[i].name.view }
 ```
 
 **On a view type that `outlives` accepts, `where return outlives self` says the place is reached through what the view carries** ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So a view of a span's element depends on what the span views, not on the variable that holds the span.

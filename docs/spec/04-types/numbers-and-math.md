@@ -28,7 +28,7 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 | `Half` | 16-bit | |
 | `Bool` | 1 byte | |
 
-**`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size and count fits in an `Int`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+**`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size fits in an `Int`, and every count and index in a `UInt`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
 **A number literal takes its type from its context**, whether it is written in decimal, hexadecimal, octal or binary, or with an exponent: `1_000`, `0xFF`, `0o17`, `0b1010`, `1e-3` ([Literals](collections.md#literals)).
 
@@ -92,7 +92,7 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
 
 **An integer operation that the target's processor has no instruction for is computed another way: by a sequence of instructions, or by a software routine where none serves, with the result this section gives.** A 64-bit addition on a 32-bit processor takes a few instructions, where `Int` and `UInt` are still 64 bits ([Numbers](#numbers)). Any division on a Cortex-M0, and a 64-bit division on many 32-bit processors, take a software routine. So the hardware changes how long an integer operation takes, never its result, as it does for a floating-point one ([below](#floating-point)).
 
-**`x.trailingZeroCount` is the number of zero bits below `x`'s lowest set bit, as an `Int`**, for every integer type. When `x` is 0 it is the bit width, so `UInt64(0).trailingZeroCount` is 64.
+**`x.trailingZeroCount` is the number of zero bits below `x`'s lowest set bit, as a `UInt`**, for every integer type. When `x` is 0 it is the bit width, so `UInt64(0).trailingZeroCount` is 64.
 
 ### Floating point
 
@@ -166,7 +166,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 
 **A `Simd<T, N>` is `N` lanes of one type, which its operators work on lane by lane:**
 
-- **Lane types.** `Simd` is the builtin `Simd<T: SimdLane, let N: Int>`. Its lanes are of a number type, or of `Bool` for [masks](#masks), the types that conform to `SimdLane` (below).
+- **Lane types.** `Simd` is the builtin `Simd<T: SimdLane, let N: UInt>`. Its lanes are of a number type, or of `Bool` for [masks](#masks), the types that conform to `SimdLane` (below).
 - **Lane counts.** `N` is any power of two from 1 to 64, or 3. Masks set the limit of 64 ([below](#masks)). `std.math`'s `Vec2`, `Vec4` and `IVec2` are aliases of `Simd<Float, 2>`, `Simd<Float, 4>` and `Simd<Int32, 2>`.
 - **In generic code.** Generic code that names `Simd<T, N>` for its own `T` states `T: SimdLane`, as `reversed` does ([below](#shuffles-and-swizzles)). A lane count it doesn't fix is checked at each instantiation ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
 - **Moving lanes.** Any operation that only moves lanes works for every `T: SimdLane`, generic or not: indexing and lane assignment, array literals, the initializers from lanes and `repeating:`, loads and stores, `select`, shuffles and swizzles. Operations that compute with lanes, such as arithmetic, comparisons, conversions and [reductions](#reductions), need a concrete `T`.
@@ -179,7 +179,7 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 - **Truncating and clamping.** `Simd<U, N>(truncating: v)` and `Simd<U, N>(clamping: v)` apply `U(truncating: x)` and `U(clamping: x)` to each lane, with the scalar rules. So they exist where those forms do: truncating between integer types, and clamping to an integer type from an integer or floating-point one.
 - **Masks don't convert.** A mask has no numeric lanes to convert, so code that wants numbers writes `select(mask, ones, zeros)`.
 - **Loads and stores.** `Simd<T, N>(loading: span, at: i)` reads `N` lanes from a `Span<T>`, starting at element `i`, and `v.store(into: &out, at: i)` writes them into a `MutableSpan<T>` there. Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
-- **Bounds.** A load or a store panics when `i` is negative or `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
+- **Bounds.** A load or a store panics when `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
 **Packing lanes into a narrower type says what happens to a lane that doesn't fit**, as a scalar conversion does:
 
@@ -233,7 +233,7 @@ let z = shuffle(v, w, [0, 8, 1, 9, 2, 10, 3, 11])     // [10, 20, 11, 21, 12, 22
 let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-lane vector doesn't exist
 ```
 
-**`shuffle(a, indices)` and `shuffle(a, b, indices)` take vectors of one type `Simd<T, N>` and an index list of type `[K of Int]`:**
+**`shuffle(a, indices)` and `shuffle(a, b, indices)` take vectors of one type `Simd<T, N>` and an index list of type `[K of UInt]`:**
 
 - **Picking lanes.** Lane `i` of the result is lane `indices[i]` of `a` followed by `b`. An index `j` below `N` picks lane `j` of `a`, and an index from `N` to `2N - 1` picks lane `j - N` of `b`, as `8` and up do in `z` above.
 - **The result.** It is a `Simd<T, K>`, so `K` must be a lane count. It may differ from `N`, so a shuffle also takes some of a vector's lanes, or repeats them into a wider vector.
@@ -242,13 +242,13 @@ let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-
 **Any function that can run at compile time can compute an index list.** In generic code the list is evaluated at each instantiation, since it may depend on that instantiation's `N`. So an index out of range, or a count `K` that isn't a lane count, fails there ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A shuffle only moves lanes, so `reversed` works for every `T: SimdLane` ([above](#simd-and-math)):
 
 ```swift
-func reversedLanes<let N: Int>() -> [N of Int] {      // ordinary code, run by the compiler
-    var lanes: [N of Int] = .init(repeating: 0)
+func reversedLanes<let N: UInt>() -> [N of UInt] {    // ordinary code, run by the compiler
+    var lanes: [N of UInt] = .init(all: 0)
     for i in 0..<N { lanes[i] = N - 1 - i }
     return lanes
 }
 
-func reversed<T: SimdLane, let N: Int>(_ v: Simd<T, N>) -> Simd<T, N> {
+func reversed<T: SimdLane, let N: UInt>(_ v: Simd<T, N>) -> Simd<T, N> {
     shuffle(v, reversedLanes<N>())                    // the list is computed for each N
 }
 ```
@@ -264,8 +264,8 @@ func reversed<T: SimdLane, let N: Int>(_ v: Simd<T, N>) -> Simd<T, N> {
 A **mask** is a `Simd<Bool, N>`, one `Bool` per lane. A comparison of vectors gives one, whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
 
 ```swift
-func firstNewline(in bytes: Span<UInt8>) -> Int? {
-    var i = 0
+func firstNewline(in bytes: Span<UInt8>) -> UInt? {
+    var i: UInt = 0
     while i + 64 <= bytes.count {
         let chunk = Simd<UInt8, 64>(loading: bytes, at: i)    // any offset: no alignment needed
         let hits = (chunk == 10).bits                         // a UInt64: bit k is set where byte i + k is a newline
@@ -342,7 +342,7 @@ struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the ve
 public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral {
     @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: copy x, y: copy y, z: copy z) }
 
-    @inline @noalloc public init<let N: Int>(arrayLiteral e: owned [N of Float]) {   // @noalloc: literals work anywhere
+    @inline @noalloc public init<let N: UInt>(arrayLiteral e: owned [N of Float]) {   // @noalloc: literals work anywhere
         static if N == 3 { self.init(x: copy e[0], y: copy e[1], z: copy e[2]) }
         else { static error("a Vec3 literal needs 3 elements") }
     }

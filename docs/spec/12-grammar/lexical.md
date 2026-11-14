@@ -59,7 +59,7 @@ associatedtype subscript`.
 **Argument labels may be keywords.** A parameter's argument label ([01](../01-values-and-ownership/parameters.md#argument-labels)), and the label a call writes before an argument, can be any keyword:
 
 ```swift
-func index<T: Equatable>(of x: T, in s: Span<T>) -> Int?    // 'of' and 'in' as the parameters' labels
+func index<T: Equatable>(of x: T, in s: Span<T>) -> UInt?   // 'of' and 'in' as the parameters' labels
 let i = index(of: h, in: handles.span)                      // and before the arguments
 ```
 

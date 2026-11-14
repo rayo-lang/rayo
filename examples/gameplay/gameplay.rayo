@@ -115,7 +115,7 @@ func applyCommands(_ world: mutable World) {
 
 // MARK: - A scripted sequence spanning frames
 
-task func waveSpawner(count: owned Int, every interval: owned Duration, around center: owned Vec3) with (world: mutable World) {
+task func waveSpawner(count: owned UInt, every interval: owned Duration, around center: owned Vec3) with (world: mutable World) {
     for i in 0..<count {
         let angle = Float(i) / Float(count) * 2 * .pi
         let pos = center + Vec3(cos(angle), 0, sin(angle)) * 12

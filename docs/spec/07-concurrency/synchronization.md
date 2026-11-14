@@ -427,7 +427,7 @@ static func sleep(for d: Duration) { … }        // Thread's
 
 ```swift
 unsafe static func park(on word: *UInt32, expected: UInt32, timeout: Duration?) -> Bool { … }   // Runtime's: parks the calling thread on 'word'
-unsafe static func wake(on word: *UInt32, count: Int) { … }                                      // Runtime's: wakes threads parked on 'word'
+unsafe static func wake(on word: *UInt32, count: UInt) { … }                                     // Runtime's: wakes threads parked on 'word'
 ```
 
 **`park` parks the calling thread on `word` if it still holds `expected`**, until another thread wakes it or `timeout` passes on `MonotonicClock` ([above](#time-duration-and-instant)). It returns `false` only when the timeout passed. It may also return early, so its caller checks its condition again. Its caller promises that `word` stays live and is accessed only atomically meanwhile.

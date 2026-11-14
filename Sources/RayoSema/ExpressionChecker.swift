@@ -281,44 +281,52 @@ struct ExpressionChecker {
     /// compound assignment's `+`.
     func binary(_ op: CheckedBinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr, spelled: String,
                 in range: SourceRange) -> CheckedExpr? {
-        let result: RayoType
+        // Operands the operator doesn't take were reported.
+        guard let result = resultType(of: op, left, right, spelled: spelled, in: range) else { return nil }
+        return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
+    }
+
+    /// The type `left op right` gives, or nil after reporting operands that `op`, which the source `spelled` as
+    /// written, doesn't take.
+    private func resultType(of op: CheckedBinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr,
+                            spelled: String, in range: SourceRange) -> RayoType? {
         switch op {
         // Arithmetic takes two integers of one type, and gives a value of that type.
         case .add, .subtract, .multiply, .divide, .remainder:
-            // Operands of other types were reported.
-            guard integerOperands(of: spelled, left, right, in: range) else { return nil }
-            result = left.type
+            integerOperands(of: spelled, left, right, in: range) ? left.type : nil
 
         // An ordering takes two integers of one type, and gives a Bool.
         case .less, .lessEqual, .greater, .greaterEqual:
-            // Operands of other types were reported.
-            guard integerOperands(of: spelled, left, right, in: range) else { return nil }
-            result = .bool
+            integerOperands(of: spelled, left, right, in: range) ? .bool : nil
 
         // `&&` and `||` take two Bools, and give a Bool.
         case .and, .or:
-            // Operands of another type were reported.
-            guard operands(of: spelled, left, right, are: .bool, in: range) else { return nil }
-            result = .bool
+            operands(of: spelled, left, right, are: .bool, in: range) ? .bool : nil
 
-        // `==` and `!=` take two values of one type, and give a Bool.
+        // `==` and `!=` take two values of one type that compares, and give a Bool.
         case .equal, .notEqual:
-            // Comparing values of two types is reported.
-            guard left.type == right.type else {
-                let code = ErrorCode.operandsDiffer(
-                    op: spelled, left: typeName(of: left.type), right: typeName(of: right.type),
-                )
-                errors.report(code, at: range)
-                return nil
-            }
-            // Comparing values of a type that doesn't compare is reported.
-            guard isComparable(left.type) else {
-                errors.report(.incomparable(op: spelled, type: typeName(of: left.type)), at: range)
-                return nil
-            }
-            result = .bool
+            comparable(spelled, left, right, in: range) ? .bool : nil
         }
-        return CheckedExpr(kind: .binary(op, left, right), type: result, range: range)
+    }
+
+    /// Whether `==` or `!=`, as the source `spelled` it, compares `left` with `right`, reporting it when it doesn't.
+    private func comparable(_ spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
+                            in range: SourceRange) -> Bool {
+        // Comparing values of two types is reported.
+        guard left.type == right.type else {
+            let code = ErrorCode.operandsDiffer(
+                op: spelled, left: typeName(of: left.type), right: typeName(of: right.type),
+            )
+            errors.report(code, at: range)
+            return false
+        }
+
+        // Comparing values of a type that doesn't compare is reported.
+        guard isComparable(left.type) else {
+            errors.report(.incomparable(op: spelled, type: typeName(of: left.type)), at: range)
+            return false
+        }
+        return true
     }
 
     /// Whether `==` and `!=` compare values of `type`.

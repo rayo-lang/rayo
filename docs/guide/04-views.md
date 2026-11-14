@@ -156,7 +156,7 @@ splitLines(source.view, into: &lines)     // 'lines' takes on what 'source.view'
 var names = alloc List<StringView>()
 names.append(banner.view)                 // 'self' absorbs too: 'names' takes on 'banner'
 
-struct Scanner(var text: StringView, var pos: Int = 0): Scoped {
+struct Scanner(var text: StringView, var pos: UInt = 0): Scoped {
     mutating func scan(into out: mutable List<Token>) { ... }
 }
 
@@ -206,7 +206,7 @@ func addDefault(into out: mutable List<StringView>) {
 **By default a result borrows what every argument lends, even one the function only reads.** That gets in a parser's way when it looks a token up in a symbol table, then moves its lexer on. Here the lexer owns the script's text, so a token's text borrows the lexer itself:
 
 ```swift
-struct Lexer(var text: String, var pos: Int = 0)
+struct Lexer(var text: String, var pos: UInt = 0)
 
 extension SymbolTable {
     func find(_ key: StringView) -> Span<Symbol>? { ... }

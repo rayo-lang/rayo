@@ -77,7 +77,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 - **Ranges.** A range operator borrows its operands and copies them in, so `0..<count` leaves `count` usable ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **Vectors.** A `Simd` initializer, a load included, copies the lanes it borrows, a store copies its lanes into the span, and a lane read, a swizzle or a shuffle copies the lanes it reads, since no lane is ever viewed ([04](../04-types/numbers-and-math.md#simd-and-math)).
-- **Inline arrays.** An inline array's `.init(repeating:)` copies the value it repeats ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
+- **Inline arrays.** An inline array's `.init(all:)` copies the value it is given into every element ([04](../04-types/collections.md#tuples-ranges-and-arrays)).
 - **Allocations.** `a.alloc` reads the id in `a` once, and holds no borrow of `a`, and the value it makes keeps a copy of the id ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)).
 - **Widening.** A widening conversion reads its operand and makes a new value ([Conversions](bindings.md#conversions)).
 - **Static values.** Converting a copyable value to or from its [static type](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type) reads its operand and makes a new value that views the same data ([Conversions](bindings.md#conversions)).
