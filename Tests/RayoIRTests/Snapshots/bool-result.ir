@@ -1,0 +1,16 @@
+main "main()"
+
+func "main()"() -> Void {
+bb0:
+  return
+}
+
+func "isZero(_: Int)"(Int) -> Bool {
+  param %0 n: Int
+  temp %1: Bool
+bb0:
+  %1 @2:33-2:39 = equal read %0 @2:33-2:34, 0 @2:33-2:39
+  return read %1 @2:33-2:39
+bb1:
+  unreachable
+}

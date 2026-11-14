@@ -1,0 +1,40 @@
+struct Shot {
+  range: Int
+  hit: Hit
+}
+
+struct Hit {
+  damage: Int
+}
+
+main "main()"
+
+func "main()"() -> Void {
+  var %0 s: Shot
+  let %1 h: Hit
+  bind %0 @4:9-4:10
+    struct Shot: Shot @4:13-4:48
+      int 4: Int @4:25-4:26
+      struct Hit: Hit @4:33-4:47
+        int 7: Int @4:45-4:46
+  assign
+    place %0 @5:5-5:6 .1 @5:5-5:10 .0 @5:5-5:17
+    int 9: Int @5:20-5:21
+  expression
+    call builtin "print(_: Int)": Void @6:5-6:19
+      read: Int @6:11-6:18
+        place %0 @6:11-6:12 .0 @6:11-6:18
+  bind %1 @7:9-7:10
+    move: Hit @7:13-7:18
+      place %0 @7:13-7:14 .1 @7:13-7:18
+  expression
+    call builtin "print(_: Int)": Void @8:5-8:20
+      read: Int @8:11-8:19
+        place %1 @8:11-8:12 .0 @8:11-8:19
+  expression
+    call builtin "print(_: Int)": Void @9:5-9:33
+      read: Int @9:11-9:32
+        place temporary .0 @9:11-9:32
+          struct Hit: Hit @9:11-9:25
+            int 3: Int @9:23-9:24
+}

@@ -1,0 +1,12 @@
+main "main()"
+
+func "main()"() -> Void {
+  var %0 x: Int
+  temp %1: Int
+bb0:
+  declare %0
+  %0 @2:5-2:6 = use 1 @2:9-2:10
+  %1 @3:6-3:11 = multiply checked 2, 3 @3:6-3:11
+  %0 @3:1-3:2 = add checked read %0 @3:1-3:2, read %1 @3:6-3:11 @3:1-3:2
+  return
+}

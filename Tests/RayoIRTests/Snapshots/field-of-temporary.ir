@@ -1,0 +1,14 @@
+struct Enemy {
+  hp: Int
+  armor: Int
+}
+
+main "main()"
+
+func "main()"() -> Void {
+  temp %0: Enemy
+bb0:
+  %0 @2:7-2:29 = struct Enemy(1, 2) @2:7-2:29
+  _ = call builtin "print(_: Int)"(read %0.0 @2:7-2:32) @2:1-2:33
+  return
+}

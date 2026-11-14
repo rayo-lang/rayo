@@ -4,21 +4,25 @@ import RayoLLVM
 import RayoSema
 import RayoSyntax
 
-/// The compiler, `rayoc`, which checks a source file or compiles it to object code for the host.
+/// The compiler, `rayoc`, which checks a source file, prints what a stage makes of it, or compiles it to object code
+/// for the host.
 public enum Compiler {
     static let usage = """
         usage: rayoc --check [--] <file>
+               rayoc --emit=checked|ir [--] <file>
                rayoc [--debug | --release] -o <object file> [--] <file>
 
         options:
-          --check    check the file and report its errors, writing nothing
-          -o         compile the file to object code for the host, and write it to the object file
-          --         end the options, so that the file may be named like one
+          --check         check the file and report its errors, writing nothing
+          --emit=checked  check the file, and print its checked program
+          --emit=ir       check the file, and print its Rayo IR
+          -o              compile the file to object code for the host, and write it to the object file
+          --              end the options, so that the file may be named like one
 
         build modes, with -o:
-          --debug    integer overflow panics, and the object code isn't optimised
-          --release  integer overflow wraps, and the object code is optimised; a compile that names no mode is a
-                     release compile
+          --debug         integer overflow panics, and the object code isn't optimised
+          --release       integer overflow wraps, and the object code is optimised; a compile that names no mode is
+                          a release compile
 
         """
 
@@ -28,8 +32,27 @@ public enum Compiler {
         enum Output {
             /// Nothing: the file is only checked.
             case check
+            /// What a stage makes of the file, printed once the file checks.
+            case dump(Dump)
             /// Object code, written to the file at `path`, as `build` makes it.
             case objectFile(path: String, build: Build)
+        }
+
+        /// What a stage makes of a file, as `rayoc` prints it.
+        enum Dump {
+            /// The checked program, which checking makes.
+            case checked
+            /// The Rayo IR, which lowering makes.
+            case ir
+
+            /// The dump `option` asks for, as `rayoc`'s command line spells it, or nil where it asks for none.
+            init?(option: String) {
+                switch option {
+                case "--emit=checked": self = .checked
+                case "--emit=ir": self = .ir
+                default: return nil
+                }
+            }
         }
 
         /// Why the arguments don't make a compile `rayoc` can run.
@@ -41,6 +64,7 @@ public enum Compiler {
         init(_ arguments: [String]) throws(UsageError) {
             // Read each option before the file, each at most once.
             var checks = false
+            var dump: Dump?
             var objectFile: String?
             var build: Build?
             var optionsEnded = false
@@ -52,6 +76,9 @@ public enum Compiler {
                 } else if option == "--check", !checks {
                     // `--check` asks for the file to be checked only.
                     checks = true
+                } else if let newDump = Dump(option: option), dump == nil {
+                    // `--emit` asks for what a stage makes of the file to be printed.
+                    dump = newDump
                 } else if let newBuild = Build(option: option), build == nil {
                     // A build mode says how the object code is built.
                     build = newBuild
@@ -74,14 +101,17 @@ public enum Compiler {
             self.path = path
 
             // Decide what the run makes of the file.
-            switch (checks, objectFile) {
+            switch (checks, dump, objectFile) {
             // `--check` alone checks the file; a build mode would change no check.
-            case (true, nil) where build == nil:
+            case (true, nil, nil) where build == nil:
                 output = .check
+            // `--emit` alone prints a dump; a build mode would change no dump.
+            case (false, let dump?, nil) where build == nil:
+                output = .dump(dump)
             // `-o` alone writes the file's object code, in release mode unless a mode is named.
-            case (false, let objectFile?):
+            case (false, nil, let objectFile?):
                 output = .objectFile(path: objectFile, build: build ?? .release)
-            // Both, or neither, or a mode with `--check`, ask for no one compile.
+            // More than one of them, or none, or a mode without `-o`, ask for no one compile.
             default:
                 throw UsageError()
             }
@@ -89,7 +119,8 @@ public enum Compiler {
 
         /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
-            operand == "--check" || operand == "-o" || operand == "--" || Build(option: operand) != nil
+            operand == "--check" || operand == "-o" || operand == "--" || Dump(option: operand) != nil
+                || Build(option: operand) != nil
         }
     }
 
@@ -111,23 +142,35 @@ public enum Compiler {
 
         // Compile the file as the arguments ask.
         do {
-            try compile(invocation, readFile: readFile, writeFile: writeFile)
-            return CompilerResult(exitCode: 0, errors: "")
+            let output = try compile(invocation, readFile: readFile, writeFile: writeFile)
+            return CompilerResult(exitCode: 0, errors: "", output: output)
         } catch {
             // A compile that stops is reported with why.
             return result(of: error, in: invocation.path)
         }
     }
 
-    /// Checks the source file `invocation` names, and writes its object code when it asks for that.
+    /// Checks the source file `invocation` names, and writes its object code when it asks for that. Returns what
+    /// `rayoc` prints to its standard output: the dump `invocation` asks for, or nothing.
     private static func compile(
         _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
         writeFile: @escaping (String, [UInt8]) -> Bool,
-    ) throws(CompilationError) {
+    ) throws(CompilationError) -> String {
+        // Each pipeline ends in a step that ends the compile on the program's errors, so a pipeline gives nothing only
+        // where the compile has already ended, and nothing is printed there.
         var errors: [Diagnostic] = []
         switch invocation.output {
         case .check:
             _ = try frontEnd(readFile: readFile).run(invocation.path, errors: &errors)
+            return ""
+        case .dump(.checked):
+            // The checked program is printed only once the stages after checking accept it too.
+            let checked = try checking(readFile: readFile).run(invocation.path, errors: &errors)
+            guard let checked, try lowering.run(checked, errors: &errors) != nil else { return "" }
+            return CheckedPrinter.text(of: checked)
+        case .dump(.ir):
+            let program = try frontEnd(readFile: readFile).run(invocation.path, errors: &errors)
+            return program.map(IRPrinter.text(of:)) ?? ""
         case .objectFile(let path, let build):
             _ = try pipeline {
                 frontEnd(readFile: readFile)
@@ -136,6 +179,7 @@ public enum Compiler {
                 Emit(build: build, sourcePath: invocation.path)
                 WriteObject(path: path, writeFile: writeFile)
             }.run(invocation.path, errors: &errors)
+            return ""
         }
     }
 
@@ -143,11 +187,29 @@ public enum Compiler {
     /// ends the compile when the program has errors.
     static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
+            checking(readFile: readFile)
+            lowering
+        }
+    }
+
+    /// The step that reads the source file at a path through `readFile`, and checks it. It ends the compile when the
+    /// program has errors.
+    private static func checking(
+        readFile: @escaping (String) -> [UInt8]?,
+    ) -> some CompilationStep<String, CheckedProgram> {
+        pipeline {
             ReadSource(readFile: readFile)
             Parse()
             StopOnErrors<SourceFile>()
             Check()
             StopOnErrors<CheckedProgram>()
+        }
+    }
+
+    /// The step that lowers a checked program to Rayo IR, and checks what its functions do with their locals. It ends
+    /// the compile when the program has errors.
+    private static var lowering: some CompilationStep<CheckedProgram, IRProgram> {
+        pipeline {
             Lower()
             VerifyIR()
             CheckParameterMoves()

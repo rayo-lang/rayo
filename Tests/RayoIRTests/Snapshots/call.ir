@@ -1,0 +1,19 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 x: Int
+bb0:
+  declare %0
+  %0 @2:5-2:6 = call "double(_: Int)"(3) @2:9-2:18
+  return
+}
+
+func "double(_: Int)"(Int) -> Int {
+  param %0 n: Int
+  temp %1: Int
+bb0:
+  %1 @4:32-4:37 = multiply checked read %0 @4:32-4:33, 2 @4:32-4:37
+  return read %1 @4:32-4:37
+bb1:
+  unreachable
+}

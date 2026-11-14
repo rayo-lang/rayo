@@ -9,11 +9,13 @@ import CRT
 #endif
 import RayoCompiler
 
-/// The C library's descriptor for standard error.
+/// The C library's descriptors for standard output and standard error.
 #if os(Windows)
 // The Windows C runtime numbers its standard descriptors as POSIX does.
+let standardOutput: Int32 = 1
 let standardError: Int32 = 2
 #else
+let standardOutput = STDOUT_FILENO
 let standardError = STDERR_FILENO
 #endif
 
@@ -74,9 +76,11 @@ func writeSome(to descriptor: Int32, _ bytes: UnsafeRawBufferPointer) -> Int {
 
 #if os(Windows)
 // The Windows C runtime writes a newline to a descriptor in text mode as "\r\n"; binary mode writes it as itself.
+_ = _setmode(standardOutput, _O_BINARY)
 _ = _setmode(standardError, _O_BINARY)
 #endif
 
 let result = Compiler.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile, writeFile: writeFile)
+writeAll(result.output, to: standardOutput)
 writeAll(result.errors, to: standardError)
 exit(result.exitCode)

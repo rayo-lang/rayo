@@ -1,0 +1,18 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 c: Bool
+bb0:
+  declare %0
+  %0 @2:5-2:6 = use true @2:9-2:13
+  branch read %0 @3:4-3:5, bb1, bb2
+bb1:
+  return
+bb2:
+  goto bb3
+bb3:
+  _ = call builtin "print(_: Int)"(1) @4:1-4:9
+  return
+bb4:
+  goto bb3
+}

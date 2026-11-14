@@ -2,61 +2,68 @@ import Testing
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
-import RayoSema
 
 struct ParameterMoveCheckerTests {
-    @Test func `a move out of a borrowed parameter is reported at the move`() {
-        let blocks = [BasicBlock(statements: [dropping(move(n, at: 1))], terminator: .return(nil))]
-        #expect(errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
+    @Test func `a move out of a borrowed parameter is reported at the move`() throws {
+        let blocks = "bb0:\n  _ = use move %0 @2:1-2:1 @1:1-1:1\n  return"
+        #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
     @Test("a move of a field out of a borrowed parameter is reported with the field's name", arguments: [
-        (shotHit, "p.hit"),
-        (shotDamage, "p.hit.damage"),
+        ("%1.1", "p.hit"),
+        ("%1.1.0", "p.hit.damage"),
     ])
-    func fieldMove(fields: [Int], name: String) {
-        let blocks = [BasicBlock(statements: [dropping(move(p, fields: fields, at: 1))], terminator: .return(nil))]
-        #expect(errors(in: blocks) == [Diagnostic(.moveFieldFromParameter(field: name, parameter: "p"), at: at(1))])
+    func fieldMove(field: String, name: String) throws {
+        let blocks = "bb0:\n  _ = use move \(field) @2:1-2:1 @1:1-1:1\n  return"
+        #expect(try errors(in: blocks) == [
+            Diagnostic(.moveFieldFromParameter(field: name, parameter: "p"), at: at(1)),
+        ])
     }
 
-    @Test func `a read of a borrowed parameter, and a move out of a local it was copied into, are allowed`() {
-        let blocks = [
-            BasicBlock(statements: [
-                store(read(n, at: 1), in: v), dropping(move(v, at: 2)), printing(read(p, fields: shotRange, at: 3)),
-            ], terminator: .return(nil)),
-        ]
-        #expect(errors(in: blocks) == [])
+    @Test func `a read of a borrowed parameter, and a move out of a local it was copied into, are allowed`() throws {
+        let blocks = """
+            bb0:
+              %2 @1:1-1:1 = use read %0 @2:1-2:1 @1:1-1:1
+              _ = use move %2 @2:2-2:2 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %1.0 @2:3-2:3) @1:1-1:1
+              return
+            """
+        #expect(try errors(in: blocks) == [])
     }
 
-    @Test func `a move out of a parameter in a block that no path reaches is reported too`() {
-        let blocks = [
-            BasicBlock(statements: [], terminator: .return(nil)),
-            BasicBlock(statements: [dropping(move(n, at: 1))], terminator: .return(nil)),
-        ]
-        #expect(errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
+    @Test func `a move out of a parameter in a block that no path reaches is reported too`() throws {
+        let blocks = """
+            bb0:
+              return
+            bb1:
+              _ = use move %0 @2:1-2:1 @1:1-1:1
+              return
+            """
+        #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
-    @Test func `moves out of parameters are reported in source order, a terminator's among them`() {
-        let blocks = [
-            BasicBlock(statements: [dropping(move(n, at: 2))], terminator: .return(move(p, at: 1))),
-        ]
-        let reported = errors(in: blocks)
-        #expect(reported.map(\.range.start.offset) == [1, 2])
+    @Test func `moves out of parameters are reported in source order, a terminator's among them`() throws {
+        let blocks = """
+            bb0:
+              _ = use move %0 @2:2-2:2 @1:1-1:1
+              return move %1 @2:1-2:1
+            """
+        let reported = try errors(in: blocks, result: "Shot")
+        #expect(reported.map(\.range.start.column) == [1, 2])
     }
 }
 
-/// The locals of the function each test checks: `n` is a borrowed Int parameter, `p` a borrowed `Shot` parameter,
-/// and `v` a `var` that holds an Int.
-private let n = 0, p = 1, v = 2
-
-/// The errors the checker reports in a program of one function, made of `blocks`, whose locals are `n`, `p` and `v`.
-private func errors(in blocks: [BasicBlock]) -> [Diagnostic] {
-    let locals = [
-        IRLocal.source(name: "n", kind: .parameter, type: .int),
-        .source(name: "p", kind: .parameter, type: .structure(shot)),
-        .source(name: "v", kind: .var, type: .int),
-    ]
-    let declaration = FunctionDeclaration(name: "f(_: Int, _: Shot)", parameters: [.int, .structure(shot)],
-                                          result: .void, kind: .written)
-    return ParameterMoveChecker.check(program(of: [(declaration, IRBody(locals: locals, blocks: blocks))]))
+/// The errors the checker reports in a program of one function, which returns `result` and is made of `blocks`, and
+/// whose locals are `n` (`%0`), a borrowed Int parameter, `p` (`%1`), a borrowed `Shot` parameter, and `v` (`%2`), a
+/// `var` that holds an Int.
+private func errors(in blocks: String, result: String = "Void") throws -> [Diagnostic] {
+    let function = """
+        func "f(_: Int, _: Shot)"(Int, Shot) -> \(result) {
+          param %0 n: Int
+          param %1 p: Shot
+          var %2 v: Int
+        \(blocks)
+        }
+        """
+    return ParameterMoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))
 }

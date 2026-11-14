@@ -1,13 +1,10 @@
 import Testing
-import RayoIR
 import RayoLLVM
-import RayoSema
 
 struct RuntimeTests {
     @Test
     func `a program that panics defines the runtime's panic once and leaves no runtime symbol undefined`() throws {
-        let division = Rvalue.binary(.divide(.checked), .constant(.int(1)), .constant(.int(0)))
-        let dividesByZero = try compile(printing(division), for: .debug)
+        let dividesByZero = try compile(printing("divide checked 1, 0"), for: .debug)
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
         // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
         // counted.
@@ -16,35 +13,43 @@ struct RuntimeTests {
 
     @Test(arguments: Build.allCases)
     func `an object exports only the C entry point, in debug and in release`(build: Build) throws {
-        let objectCode = try compile(printing(.use(.constant(.int(42)))), for: build)
+        let objectCode = try compile(printing("use 42"), for: build)
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
     @Test func `a program's own functions are defined in its object, and none is exported`() throws {
         // `main` prints what `answer()` returns, so the object needs `answer()`.
-        let answer = handWritten(name: "answer()", parameterCount: 0, result: .int, locals: [], blocks: [
-            BasicBlock(statements: [], terminator: .return(.constant(.int(42)))),
-        ])
-        let main = mainFunction(locals: [.int], [
-            BasicBlock(statements: [
-                statement(storingIn: 0, .call(.function(FunctionID(index: 1)), arguments: [])),
-                statement(printing: read(0)),
-            ], terminator: .return(nil)),
-        ])
+        let program = try executable("""
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: Int
+            bb0:
+              %0 @1:1-1:2 = call "answer()"() @1:1-1:2
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              return
+            }
+            func "answer()"() -> Int {
+            bb0:
+              return 42
+            }
+            """)
 
         // The object defines `answer()`, and exports only the C entry point.
-        let objectCode = try compile(program(of: [main, answer]), for: .debug)
+        let objectCode = try compile(program, for: .debug)
         #expect(try symbols(["--defined-only"], in: objectCode).contains { $0.hasSuffix("answer()") })
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 
     @Test func `a module declares each runtime function its code calls once, and none that it doesn't call`() throws {
-        let printsTwice = program(locals: [], [
-            BasicBlock(statements: [
-                statement(printing: .constant(.int(1))),
-                statement(printing: .constant(.int(2))),
-            ], terminator: .return(nil)),
-        ])
+        let printsTwice = try executable("""
+            main "main()"
+            func "main()"() -> Void {
+            bb0:
+              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              return
+            }
+            """)
 
         try withEmitted(printsTwice) { module in
             let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
@@ -53,12 +58,16 @@ struct RuntimeTests {
     }
 
     @Test func `a module declares the runtime's panic once, however many operators can panic`() throws {
-        let dividesTwice = program(locals: [.int], [
-            BasicBlock(statements: [
-                statement(storingIn: 0, .binary(.divide(.checked), .constant(.int(1)), .constant(.int(0)))),
-                statement(storingIn: 0, .binary(.divide(.checked), .constant(.int(2)), .constant(.int(0)))),
-            ], terminator: .return(nil)),
-        ])
+        let dividesTwice = try executable("""
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: Int
+            bb0:
+              %0 @1:1-1:2 = divide checked 1, 0 @1:1-1:2
+              %0 @1:1-1:2 = divide checked 2, 0 @1:1-1:2
+              return
+            }
+            """)
 
         try withEmitted(dividesTwice) { module in
             let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
@@ -67,7 +76,7 @@ struct RuntimeTests {
     }
 
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
-        let empty = program(locals: [], [BasicBlock(statements: [], terminator: .return(nil))])
+        let empty = try executable(emptyMain)
 
         // A program that calls nothing in the runtime keeps the runtime's panic in debug, and none of it in release.
         #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix("rayo.panic") })

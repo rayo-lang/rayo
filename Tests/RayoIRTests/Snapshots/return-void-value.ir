@@ -1,0 +1,9 @@
+main "main()"
+
+func "main()"() -> Void {
+bb0:
+  _ = call builtin "print(_: Int)"(1) @2:8-2:16
+  return
+bb1:
+  return
+}
