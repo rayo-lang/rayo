@@ -38,6 +38,24 @@ struct LayoutTests {
         #expect(table.layout(of: .bool) == Layout(size: 1, alignment: 1))
     }
 
+    @Test func `an array takes its count times its element's size, and is aligned as its element`() throws {
+        let table = try types("struct Hit(var crit: Bool, var damage: Int, let team: Bool)")
+        let hit = RayoType.structure(StructID(index: 0, name: "Hit"))
+        #expect(table.layout(of: .array(count: 3, element: hit)) == Layout(size: 48, alignment: 8))
+        #expect(table.layout(of: .array(count: 3, element: .bool)) == Layout(size: 3, alignment: 1))
+        #expect(table.layout(of: .array(count: 2, element: .array(count: 3, element: .int))) ==
+            Layout(size: 48, alignment: 8))
+        #expect(table.layout(of: .array(count: 0, element: .int)) == Layout(size: 0, alignment: 8))
+    }
+
+    @Test func `an array field is laid out as its array is, among the struct's fields`() throws {
+        // `bits`, of 3 bytes aligned to 1, comes after `counts`, of 16 bytes aligned to 8, and pads the struct to 24.
+        let layout = try layout(of: "S", in: types("struct S(var bits: [3 of Bool], var counts: [2 of Int])"))
+        #expect(layout.layoutOrder == [1, 0])
+        #expect(layout.fieldOffsets == [16, 0])
+        #expect(layout.layout == Layout(size: 24, alignment: 8))
+    }
+
     @Test func `a struct is laid out only when its layout is asked for`() {
         // `Loop` contains itself, so it has no layout, but asking for `Hit`'s never asks for `Loop`'s.
         let table = TypeTable(structs: [loop, hit])

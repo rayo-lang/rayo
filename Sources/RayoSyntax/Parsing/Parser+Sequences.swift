@@ -34,18 +34,19 @@ extension Parser {
         return items
     }
 
-    /// After a `(`: parses items separated by commas, with an optional trailing comma, and the `)`.
+    /// After an opening bracket: parses items separated by commas, with an optional trailing comma, and `closing`, the
+    /// bracket that closes it.
     mutating func parseList<T>(
-        ifUnclosed unclosed: ErrorCase,
+        upTo closing: Punct, ifUnclosed unclosed: ErrorCase,
         _ item: (inout Parser) throws(ParseFailure) -> T,
     ) throws(ParseFailure) -> [T] {
         var items: [T] = []
-        while !current.isPunct(.rparen) {
+        while !current.isPunct(closing) {
             items.append(try item(&self))
             // An item without a comma after it is the last.
             if !consume(.comma) { break }
         }
-        try expect(.rparen, else: unclosed)
+        try expect(closing, else: unclosed)
         return items
     }
 
@@ -60,7 +61,7 @@ extension Parser {
         loop: while !atEnd {
             switch current.kind {
             // A bracket the item opens is skipped whole, up to the bracket that closes it.
-            case .punct(.lbrace), .punct(.lparen):
+            case .punct(.lbrace), .punct(.lparen), .punct(.lbracket):
                 depth += 1
 
             // A `}` outside the item's brackets closes its block, which the sequence stops at; inside, it closes one.
@@ -68,8 +69,8 @@ extension Parser {
                 if depth == 0 { break loop }
                 depth -= 1
 
-            // A `)` closes one of the item's brackets; a stray one is skipped.
-            case .punct(.rparen):
+            // A `)` or `]` closes one of the item's brackets; a stray one is skipped.
+            case .punct(.rparen), .punct(.rbracket):
                 if depth > 0 { depth -= 1 }
 
             // A newline or `;` outside the item's brackets ends it; inside them, it is skipped.

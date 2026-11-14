@@ -26,6 +26,8 @@ public indirect enum ExprKind: Sendable {
     case copy(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)
+    /// `[elements]`: an array literal, whose elements are in the order the source writes them.
+    case arrayLiteral([Expr])
 }
 
 /// `label: value`, or the value alone.

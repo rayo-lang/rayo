@@ -90,6 +90,36 @@ struct IRTextTests {
         #expect(statements[5] == .depend(Place(root: LocalID(index: 1)), on: AccessID(index: 1)))
         #expect(statements[6] == .end(AccessID(index: 1)))
     }
+
+    @Test func `array types, and an array made of its elements, read back the same`() throws {
+        let text = """
+            struct Grid {
+              rows: [2 of [3 of Bool]]
+            }
+
+            main "main()"
+
+            func "main()"() -> Void {
+              var %0 a: [2 of Int]
+              temp %1: [0 of Grid]
+            bb0:
+              %0 @1:1-1:2 = array of Int(1, move %0 @2:3-2:4) @1:1-1:2
+              %1 @1:1-1:2 = array of Grid() @1:1-1:2
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+
+        // The array names its element type, and holds its elements in order.
+        let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
+        let elements: [Operand] = [.constant(.int(1)), .move(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4))]
+        #expect(statements[0] == .compute(
+            destination: Destination(Place(root: LocalID(index: 0)), at: range(1, 1, 1, 2)),
+            value: .array(elements, of: .int), range: range(1, 1, 1, 2),
+        ))
+    }
 }
 
 /// The range the text writes `@startLine:startColumn-endLine:endColumn`, which names no offsets.
@@ -120,6 +150,11 @@ private let malformedIR = [
         testDescription: "a type no struct declares",
         text: "struct Pair {\n  count: Count\n}",
         error: IRTextError(line: 2, column: 10, message: "no type is named 'Count'"),
+    ),
+    MalformedIR(
+        testDescription: "an array type without 'of'",
+        text: "struct Pair {\n  counts: [2 Int]\n}",
+        error: IRTextError(line: 2, column: 14, message: "expected 'of', found 'Int'"),
     ),
     MalformedIR(
         testDescription: "a struct declared twice",

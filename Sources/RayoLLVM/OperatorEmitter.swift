@@ -257,7 +257,7 @@ private enum Signedness {
         switch type {
         case .int: self = .signed
         case .uint: self = .unsigned
-        case .bool, .void, .structure: preconditionFailure("\(type) isn't an integer type")
+        case .bool, .void, .structure, .array: preconditionFailure("\(type) isn't an integer type")
         }
     }
 

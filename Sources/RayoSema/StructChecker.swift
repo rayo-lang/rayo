@@ -140,17 +140,24 @@ struct StructChecker {
     }
 
     /// The indices of the structs that `structure`'s fields hold, at any depth, among `structs`, which are indexed
-    /// by `StructID`.
+    /// by `StructID`. A field holds a struct as its value, or as the elements of an array, which lie inside it.
     private func contained(in structure: DeclaredStruct, among structs: [DeclaredStruct]) -> Set<Int> {
         var found: Set<Int> = []
         var unvisited = [structure]
         while let next = unvisited.popLast() {
-            for case .structure(let id)? in next.fields.map(\.type) {
+            for field in next.fields {
+                guard let type = field.type, case .structure(let id) = innermostElement(of: type) else { continue }
                 // A struct found for the first time has its own fields searched in turn.
                 if found.insert(id.index).inserted { unvisited.append(structs[id.index]) }
             }
         }
         return found
+    }
+
+    /// The innermost element type of `type`, where it is an array, of arrays at any depth, and otherwise `type`.
+    private func innermostElement(of type: RayoType) -> RayoType {
+        guard case .array(_, let element) = type else { return type }
+        return innermostElement(of: element)
     }
 
     /// The types `structs` make, which are indexed by `StructID`, with none for those of `failed`.

@@ -60,7 +60,7 @@ struct IRLexer: ~Copyable {
             advance()
             return .symbol("->")
         }
-        if "{}(),:=@-.%".utf8.contains(byte) {
+        if "{}()[],:=@-.%".utf8.contains(byte) {
             advance()
             return .symbol(String(decoding: [byte], as: UTF8.self))
         }

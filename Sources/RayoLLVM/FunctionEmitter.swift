@@ -143,6 +143,10 @@ struct FunctionEmitter {
         // A call passes its arguments as its function's signature says, or builds a struct from them.
         case .call(let callee, let arguments):
             try call(callee, passing: arguments, into: destination, at: range, in: program)
+
+        // An array is built from its elements' values.
+        case .array(let elements, _):
+            build(arrayOf: elements, into: destination, with: program.builder)
         }
     }
 

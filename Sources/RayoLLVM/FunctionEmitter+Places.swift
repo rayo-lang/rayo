@@ -88,6 +88,26 @@ extension FunctionEmitter {
         return address
     }
 
+    /// Emits the instructions that take each of `steps`, a scalar's, in turn from the value at `address`, and returns
+    /// the scalar's address.
+    private func address(
+        following steps: [Scalar.Step], from address: Address, with builder: borrowing Builder,
+    ) -> Address {
+        var address = address
+        for step in steps {
+            switch step {
+            // A field lies inside the struct that holds it.
+            case .field(let field):
+                address = fieldAddress(of: field, in: address, with: builder)
+
+            // An element lies inside the array that holds it.
+            case .element(let index):
+                address = elementAddress(of: index, in: address, with: builder)
+            }
+        }
+        return address
+    }
+
     /// Emits the instruction that points at the field at `field`, its place in its struct's declaration, of the
     /// struct at `address`, and returns the field's address.
     func fieldAddress(of field: Int, in address: Address, with builder: borrowing Builder) -> Address {
@@ -96,6 +116,16 @@ extension FunctionEmitter {
         let (fieldType, element) = types.fields(of: address.type)[field]
         let pointer = builder.fieldPointer(to: element, of: types.llvmStruct(address.type), at: address.pointer)
         return Address(pointer: pointer, type: fieldType)
+    }
+
+    /// Emits the instruction that points at the element at `index` of the array at `address`, and returns the
+    /// element's address.
+    func elementAddress(of index: Int, in address: Address, with builder: borrowing Builder) -> Address {
+        // Only an array has elements, which lie end to end from where it starts.
+        guard case .array(_, let element) = address.type else { preconditionFailure("only an array has elements") }
+        let llvmIndex = types.int64.constant(Int64(index))
+        let pointer = builder.elementPointer(to: llvmIndex, of: types.llvmType(element), at: address.pointer)
+        return Address(pointer: pointer, type: element)
     }
 
     /// Emits the instructions that find the value `operand` gives, and returns it.

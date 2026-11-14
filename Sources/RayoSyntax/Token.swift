@@ -7,7 +7,7 @@ public enum Keyword: String, Sendable {
 
 /// Punctuation and operators. The lexer takes the longest match.
 public enum Punct: String, Sendable, CaseIterable {
-    case lparen = "(", rparen = ")", lbrace = "{", rbrace = "}"
+    case lparen = "(", rparen = ")", lbrace = "{", rbrace = "}", lbracket = "[", rbracket = "]"
     case comma = ",", colon = ":", semicolon = ";", bang = "!", dot = "."
     case arrow = "->", assign = "="
     case plus = "+", minus = "-", star = "*", slash = "/", percent = "%"

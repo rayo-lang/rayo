@@ -42,6 +42,23 @@ struct MemoryTests {
         #expect(function.text.contains(copy))
     }
 
+    @Test func `an element's pointer points at its index among the elements that a pointer points to`() throws {
+        let bench = Workbench()
+        let function = bench.function(
+            named: "f", returning: bench.int64, taking: [bench.context.pointerType, bench.int64],
+        )
+        let elements = try #require(PointerValue(function.parameter(at: 0)))
+        let index = parameter(1, of: function, as: I64.self)
+        let element = bench.builder.elementPointer(to: index, of: bench.int64, at: elements)
+        bench.builder.return(bench.builder.load(bench.int64, from: element, alignment: 8))
+
+        try bench.module.verify()
+        #expect(function.text.contains("""
+              %2 = getelementptr inbounds i64, ptr %0, i64 %1
+              %3 = load i64, ptr %2, align 8
+            """))
+    }
+
     @Test func `a pointer converts to a pointer value, and an integer doesn't`() {
         let bench = Workbench()
         let function = bench.function(

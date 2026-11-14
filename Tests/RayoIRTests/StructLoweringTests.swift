@@ -49,6 +49,12 @@ struct StructLoweringTests {
         try expectLowering(withShot: body, toMatch: "nested-field-assignment")
     }
 
+    @Test func `an array literal makes an array of its elements, in order, each moved where a local is given bare`()
+        throws {
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = [e, Enemy(hp: 3, armor: 4)]\nlet b = [[1], [2]]"
+        try expectLowering(withEnemy: body, toMatch: "array-literal")
+    }
+
     @Test func `a struct made inside another is computed into a temporary, and a field is read through its fields`()
         throws {
         try expectLowering(withShot: "let s = Shot(range: 4, hit: Hit(damage: 7))\nprint(s.hit.damage)",

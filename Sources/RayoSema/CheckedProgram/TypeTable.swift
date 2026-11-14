@@ -71,8 +71,15 @@ public struct TypeTable: Equatable, Sendable {
         case .uint: .uint
         case .bool: .bool
         case .structure: structLayout(of: type, inside: enclosing).layout
+        case .array(let count, let element): arrayLayout(of: count, layout(of: element, inside: enclosing))
         case .void: preconditionFailure("no value of type Void lies in memory")
         }
+    }
+
+    /// The layout of an array of `count` elements, each laid out as `element`. The elements lie end to end, each
+    /// at its index times the element's size, which is a multiple of its alignment, so each element is aligned.
+    private func arrayLayout(of count: Int, _ element: Layout) -> Layout {
+        Layout(size: count * element.size, alignment: element.alignment)
     }
 
     /// The layout of the struct `type`, which lies inside each struct of `enclosing`.

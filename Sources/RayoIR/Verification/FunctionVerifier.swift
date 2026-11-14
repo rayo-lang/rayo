@@ -114,7 +114,19 @@ struct FunctionVerifier {
         case .unary(let op, let operand): op.resultType(on: try operandType(of: op, operand))
         case .binary(let op, let left, let right): op.resultType(on: try operandType(of: op, left, right))
         case .call(let callee, let arguments): try resultType(of: callee, passing: arguments)
+        case .array(let elements, let element): try arrayType(of: elements, eachOf: element)
         }
+    }
+
+    /// The type of an array of `elements`, each of which must be of `element`.
+    private func arrayType(of elements: [Operand], eachOf element: RayoType) throws(IRViolation) -> RayoType {
+        for operand in elements {
+            let elementType = try type(of: operand)
+            guard elementType == element else {
+                throw violation("the IR makes an array of \(element) from an element of type \(elementType)")
+            }
+        }
+        return .array(count: elements.count, element: element)
     }
 
     /// The type of `operand`, which `op` must take.

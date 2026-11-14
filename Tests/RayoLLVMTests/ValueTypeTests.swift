@@ -63,6 +63,21 @@ struct ValueTypeTests {
         }
     }
 
+    @Test func `an array is held in an LLVM array of its element's type, and a struct holds it in its layout order`()
+        throws {
+        let grid = StructType(name: "Grid", fields: [
+            Field(name: "bits", type: .array(count: 3, element: .bool)),
+            Field(name: "counts", type: .array(count: 2, element: .int)),
+        ])
+
+        try withTypes(of: [grid]) { types in
+            let gridType = RayoType.structure(StructID(index: 0, name: "Grid"))
+            #expect(types.llvmType(.array(count: 2, element: .array(count: 3, element: gridType))).text ==
+                "[2 x [3 x %Grid]]")
+            #expect(types.llvmType(gridType).text == "%Grid = type <{ [2 x i64], [3 x i1], [5 x i8] }>")
+        }
+    }
+
     @Test func `a value is aligned as its type is, a struct as its most-aligned field`() throws {
         let pair = StructType(name: "Pair", fields: [
             Field(name: "flag", type: .bool), Field(name: "count", type: .int),

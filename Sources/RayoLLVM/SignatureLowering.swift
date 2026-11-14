@@ -23,7 +23,7 @@ struct SignatureLowering {
     /// Whether a value of `type` is small: whether it splits into at most `smallValueScalarLimit` scalars. A small
     /// value moves between places whole, and a larger one with `memcpy`.
     func isSmall(_ type: RayoType) -> Bool {
-        types.scalars(of: type).count <= Self.smallValueScalarLimit
+        types.scalarCount(of: type) <= Self.smallValueScalarLimit
     }
 
     /// How `parameter` is passed in `convention`.

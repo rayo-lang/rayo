@@ -153,6 +153,15 @@ public struct Builder: ~Copyable {
         PointerValue(LLVMBuildStructGEP2(ref, type.ref, pointer.ref, UInt32(index), "")!)
     }
 
+    /// Builds `getelementptr`, which gives a pointer to the element at `index` of the values of type `element` that
+    /// lie end to end from where `pointer` points. The element must lie inside the memory that `pointer` reaches.
+    public func elementPointer(
+        to index: IntValue<I64>, of element: some TypeHandle, at pointer: PointerValue,
+    ) -> PointerValue {
+        var indices: [LLVMValueRef?] = [index.ref]
+        return PointerValue(LLVMBuildInBoundsGEP2(ref, element.anyType.ref, pointer.ref, &indices, 1, "")!)
+    }
+
     /// Builds `store`, which stores `value` where `pointer` points, aligned to `alignment` bytes.
     public func store(_ value: some ValueHandle, to pointer: PointerValue, alignment: Int) {
         let store = LLVMBuildStore(ref, value.anyValue.ref, pointer.ref)!

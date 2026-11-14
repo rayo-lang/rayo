@@ -7,18 +7,19 @@ enum StatementEnds {
         for (index, token) in raw.enumerated() {
             switch token.kind {
             // An opening bracket becomes the innermost one, which decides what a newline inside it means.
-            case .punct(let bracket) where bracket == .lparen || bracket == .lbrace:
+            case .punct(let bracket) where [.lparen, .lbracket, .lbrace].contains(bracket):
                 brackets.append(bracket)
 
             // A closing bracket ends the innermost one; a stray one ends nothing.
-            case .punct(.rparen), .punct(.rbrace):
+            case .punct(.rparen), .punct(.rbracket), .punct(.rbrace):
                 _ = brackets.popLast()
 
             // A newline is kept where it ends a statement, and each `continue` drops it where the statement goes on.
             case .newline:
-                // Where `(` is the innermost bracket, a call's arguments and a grouped expression run across lines.
-                if brackets.last == .lparen { continue }
-                // A line that ends in a binary or assignment operator, `->`, `(` or `{` runs on into the next.
+                // Where `(` or `[` is the innermost bracket, a call's arguments, a grouped expression, an array type
+                // and an array literal run across lines.
+                if brackets.last == .lparen || brackets.last == .lbracket { continue }
+                // A line that ends in a binary or assignment operator, `->`, `(`, `[` or `{` runs on into the next.
                 if let previous = result.last, continuesLine(previous) { continue }
                 // A line that starts with `.`, `->`, `{`, `else`, or a binary operator other than `-` joins the line
                 // above; a `-` there starts a negation.
@@ -41,7 +42,8 @@ enum StatementEnds {
     private static func continuesLine(_ token: Token) -> Bool {
         // No token but punctuation runs a line on.
         guard case .punct(let punct) = token.kind else { return false }
-        return punct.binaryOperator != nil || punct.assignOperator != nil || [.arrow, .lparen, .lbrace].contains(punct)
+        let isArrowOrOpeningBracket = [.arrow, .lparen, .lbracket, .lbrace].contains(punct)
+        return punct.binaryOperator != nil || punct.assignOperator != nil || isArrowOrOpeningBracket
     }
 
     /// Whether a line that starts with `token` joins the line above.
