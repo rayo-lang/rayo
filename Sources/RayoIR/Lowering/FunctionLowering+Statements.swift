@@ -9,7 +9,7 @@ extension FunctionLowering {
 
     private mutating func lower(_ statement: CheckedStmt) {
         switch statement {
-        // An expression statement computes its value and drops it, which takes it, as `_ =` does.
+        // An expression statement, `_ =` included, takes its value and drops it.
         case .expression(let expr):
             compute(expr, into: nil, as: .take)
 
@@ -47,7 +47,7 @@ extension FunctionLowering {
     private mutating func lowerCompoundAssign(
         _ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr,
     ) {
-        let operand = operand(of: value)
+        let operand = operand(of: value, as: .read)
         let place = place(of: target)
         let destination = Destination(place, at: target.range)
         let value = Rvalue.binary(IRBinaryOperator(op), .read(place, at: target.range), operand)
@@ -115,6 +115,6 @@ extension FunctionLowering {
     private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
         // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
-        return .branch(operand(of: condition), then: body, otherwise: exit)
+        return .branch(operand(of: condition, as: .read), then: body, otherwise: exit)
     }
 }

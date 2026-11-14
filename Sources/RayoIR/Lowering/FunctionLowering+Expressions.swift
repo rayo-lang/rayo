@@ -20,7 +20,7 @@ extension FunctionLowering {
 
     /// Lowers `expr`, the value of a position that `use`s it, to an operand that holds its value, computing it into a
     /// new temporary unless it is a constant or a place.
-    mutating func operand(of expr: CheckedExpr, as use: ValueUse = .read) -> Operand {
+    mutating func operand(of expr: CheckedExpr, as use: ValueUse) -> Operand {
         switch expr.kind {
         // An integer is a constant operand.
         case .intLiteral(let value): .constant(.int(value))
@@ -47,7 +47,7 @@ extension FunctionLowering {
     }
 
     /// Lowers `place` to the IR place it names, computing its root into a new temporary where it is a value that no
-    /// local holds. That value is read, so a place it ends in, such as an `if`'s branch, keeps its own.
+    /// local holds. The root's value is read, so a place that an `if`'s branch gives keeps its value.
     mutating func place(of place: CheckedPlace) -> Place {
         let root = switch place.root {
         case .local(let local, _): local
@@ -75,13 +75,13 @@ extension FunctionLowering {
             .use(operand(of: expr, as: use))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
-            .unary(IRUnaryOperator(op), operand(of: value))
+            .unary(IRUnaryOperator(op), operand(of: value, as: .read))
         // The left operand is computed before the right one, in the order the source reads.
         case .binary(let op, let left, let right):
-            .binary(IRBinaryOperator(op), operand(of: left), operand(of: right))
+            .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
-            .call(callee, arguments: arguments.map { operand(of: $0) })
+            .call(callee, arguments: arguments.map { operand(of: $0, as: .read) })
         // And the values of a struct's fields, in the order the struct declares them, which the struct takes.
         case .structure(let id, let fields):
             .structure(id, fields: fields.map { operand(of: $0, as: .take) })
@@ -102,7 +102,7 @@ extension FunctionLowering {
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
                                   into destination: Destination?, as use: ValueUse) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
-        let conditionValue = operand(of: condition)
+        let conditionValue = operand(of: condition, as: .read)
         let thenBlock = builder.newBlock()
         let elseBlock = builder.newBlock()
         let join = builder.newBlock()
@@ -125,11 +125,11 @@ extension FunctionLowering {
         compute(value, into: destination, as: use)
     }
 
-    /// Computes `expr`, an operation that is neither a place nor an `if`, into a new temporary, and returns the
-    /// temporary's place.
+    /// Computes `expr`, an operation that is neither a place nor an `if`, into a new temporary that an operand reads,
+    /// and returns the temporary's place.
     private mutating func lowerIntoTemporary(_ expr: CheckedExpr) -> Place {
         let temporary = builder.newTemporary(expr.type)
-        compute(expr, into: Destination(temporary, at: expr.range), as: .take)
+        compute(expr, into: Destination(temporary, at: expr.range), as: .read)
         return temporary
     }
 
@@ -141,7 +141,7 @@ extension FunctionLowering {
         // The result starts as `left`'s value, which is the result when it is `decidingValue`.
         let result = Destination(builder.newTemporary(.bool), at: range)
         let resultValue = Operand.read(result.place, at: range)
-        let leftValue = operand(of: left)
+        let leftValue = operand(of: left, as: .read)
         builder.emit(.use(leftValue), into: result, range: range)
 
         // A `left` that decides goes on to the join, and any other to a block of its own that evaluates `right`.
@@ -153,7 +153,7 @@ extension FunctionLowering {
         builder.end(with: branch, continuingIn: evaluateRight)
 
         // There `right`'s value becomes the result, and both paths meet at the join, where lowering goes on.
-        let rightValue = operand(of: right)
+        let rightValue = operand(of: right, as: .read)
         builder.emit(.use(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
