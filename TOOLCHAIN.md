@@ -162,12 +162,13 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoSema` | The checker, which resolves names and checks types, giving a checked program, the printer that writes a checked program as text, and the type table, which says how a value of each type lies in memory |
 | `Sources/RayoIR` | Rayo IR, a checked program as a control-flow graph, the lowering to it, the verifier that checks it keeps its types, and its text, which a printer writes and a parser reads back |
 | `Sources/RayoOwnership` | The initialization checker, which follows what each local holds through Rayo IR's control flow, and reports the uses of locals that may hold no value, and the assignments to `let`s that may already have been assigned; the checker that reports each move out of a borrowed parameter; the checker that reports each value no code reads; and the exclusivity checker, which works out where each access ends, reports the accesses that conflict, and writes each access's ends into the IR the emitter receives |
-| `Sources/CLLVM` | The module map that imports LLVM's C API into Swift, and the directories of the clang and LLD that `Package.swift` found |
+| `Sources/CLLVM` | The module map that imports LLVM's C API into Swift |
 | `Sources/LLVM` | The Swift binding of LLVM's C API: the context, modules, builders, target machine and JIT that own LLVM's handles, and the types and values they make, each integer typed by its width |
 | `Sources/RayoRuntime` | The program runtime, as LLVM IR files that `rayoc` embeds |
 | `Sources/RayoLLVM` | The compiler of Rayo IR to object code through LLVM, which links the program runtime into each program |
 | `Sources/RayoCompiler` | What `rayoc` does, given its arguments and a way to read and write files: the pipeline that reads, checks and compiles a source file, and writes its object code or prints what a stage made of it |
 | `Sources/rayoc` | The compiler's executable: reads and writes files, and writes the compiler's output and errors |
+| `Sources/CLLVMInstall` | The LLVM install that `Package.swift` found, as C constants that include no LLVM header: its major release, and the directories of its clang and of the LLD found with it |
 | `Sources/RayoLLVMInstall` | The LLVM install the toolchain was built against, whose clang and LLD link programs |
 | `Sources/RayoDriver` | What each `rayo` command does, given its arguments and the `rayoc` to run: the `rayoc` it runs out of process, and the clang and linker it links a program with |
 | `Sources/rayo` | The driver's executable: finds `rayoc` beside itself, and writes the driver's output and errors |
