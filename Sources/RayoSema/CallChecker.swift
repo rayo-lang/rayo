@@ -235,8 +235,10 @@ struct CallChecker {
 
         // The prelude's built-ins of one name stand in for one generic function, which binds an untyped argument to
         // its default type, so `print(1)` prints an Int.
-        let defaultTypes = values.map(\.typeOrDefault)
-        if remaining.allSatisfy(\.isBuiltin), let chosen = remaining.first(where: { $0.takes(defaultTypes) }) {
+        // An array literal that no element gives a type has no default, and binds no built-in.
+        let defaultTypes = values.compactMap(\.typeOrDefault)
+        if defaultTypes.count == values.count, remaining.allSatisfy(\.isBuiltin),
+           let chosen = remaining.first(where: { $0.takes(defaultTypes) }) {
             return chosen
         }
 

@@ -36,8 +36,8 @@ struct ParserErrorTests {
 
     @Test("a statement that holds unexpected characters is reported once, at the first")
     func unexpectedOncePerStatement() {
-        #expect(errors("func f() {\n    print(\"it's a.b\")\n    x[0] = 2\n}") == [
-            .unexpectedCharacter(character: "\""), .unexpectedCharacter(character: "["),
+        #expect(errors("func f() {\n    print(\"it's a.b\")\n    x$0 = 2\n}") == [
+            .unexpectedCharacter(character: "\""), .unexpectedCharacter(character: "$"),
         ])
         #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
@@ -202,5 +202,47 @@ struct ParserErrorTests {
 
     @Test func `a struct's body that the file ends inside is reported at the file's end`() {
         #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
+    }
+
+    @Test(arguments: [
+        "func f(_ a: [2 of Int]) -> [0 of Bool] { g() }", "struct S(var a: [3 of [2 of S]])",
+        "func f() { let a: [ 4 of Pair ] = g() }", "func f() { var a: [\n    2 of Int\n] }",
+    ])
+    func `an array type is '[', a count, 'of', the element's type and ']'`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f(_ a: [of Int]) {}", ErrorCode.missingArrayCount(found: .token("of"))),
+        ("func f(_ a: [-1 of Int]) {}", .missingArrayCount(found: .token("-"))),
+        ("func f(_ a: [2 Int]) {}", .missingArrayOf(found: .token("Int"))),
+        ("func f(_ a: [2 of]) {}", .missingType(found: .token("]"))),
+        ("func f(_ a: [2 of Int) {}", .unclosedArrayType(found: .token(")"))),
+    ])
+    func `a malformed array type is reported at what it found`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
+    @Test(arguments: [
+        "func f() { let a = [] }", "func f() { let a = [1, 2, 3,] }", "func f() { g([[1], [x + 1, copy y.z]]) }",
+        "func f() {\n    let a = [\n        1,\n        2\n    ]\n    print(1)\n}",
+    ])
+    func `an array literal is '[', elements separated by commas that may end in one, and ']'`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { let a = [1, 2 }", ErrorCode.unclosedArrayLiteral(found: .token("}"))),
+        ("func f() { let a = [1,, 2] }", .missingExpression(found: .token(","))),
+    ])
+    func `a malformed array literal is reported at what it found`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
+    @Test func `an array literal that fails is skipped whole, and the parser goes on at the next statement`() {
+        // The `[` keeps the newline inside the literal from ending the statement, so the `copy` after it is the next.
+        #expect(errors("func f() {\n    let a = [1, ,\n    2]\n    copy\n}") == [
+            .missingExpression(found: .token(",")), .missingCopiedName(found: .newline),
+        ])
     }
 }

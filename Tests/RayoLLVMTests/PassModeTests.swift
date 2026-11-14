@@ -261,6 +261,31 @@ struct SignatureLoweringTests {
         }
     }
 
+    @Test func `an array splits into its elements' scalars, in order, so a small one passes directly`() throws {
+        try withModes { mode in
+            let pair = RayoType.array(count: 2, element: .int)
+            #expect(mode(.borrowed, pair) == .direct([
+                Scalar(steps: [.element(0)], type: .int), Scalar(steps: [.element(1)], type: .int),
+            ]))
+            #expect(mode(.borrowed, .array(count: 0, element: trioType)) == .direct([]))
+            #expect(mode(.borrowed, .array(count: 1, element: trioType)) == .callerPlace([
+                .noAlias, .readOnly, .capturesNone, .noUndef, .nonNull, .dereferenceable(24), .align(8),
+            ]))
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `how an array passes is decided in the same time for any count`() throws {
+        // An array of a billion arrays of Trios splits into nine billion scalars, so deciding takes too long, or runs
+        // out of memory, unless it never lists them.
+        let huge = RayoType.array(count: 1_000_000_000, element: .array(count: 3, element: trioType))
+        try withModes { mode in
+            #expect(mode(.borrowed, huge) == .callerPlace([
+                .noAlias, .readOnly, .capturesNone, .noUndef, .nonNull, .dereferenceable(72_000_000_000), .align(8),
+            ]))
+        }
+    }
+
     /// A Trio of two Ints and a Bool, which splits into three scalars, and an Empty, which splits into none.
     private let table = TypeTable(structs: [
         StructType(name: "Trio", fields: [

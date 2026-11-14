@@ -31,6 +31,8 @@ struct LLVMTypes {
         case .bool: bool.anyType
         case .void: void
         case .structure: llvmStruct(type).anyType
+        // An LLVM array's elements lie end to end, as each element type's size apart, which is its layout's size.
+        case .array(let count, let element): maker.arrayType(of: llvmType(element), count: count)
         }
     }
 
@@ -56,7 +58,8 @@ struct LLVMTypes {
     }
 
     /// The scalars a value of `type` splits into: an integer or a Bool is one, a struct is its fields' scalars in the
-    /// order it declares the fields, and Void is none.
+    /// order it declares the fields, an array its elements' in order, and Void is none. An array of many elements
+    /// splits into many scalars, so a caller that only needs to know how many asks `scalarCount(of:)`.
     func scalars(of type: RayoType) -> [Scalar] {
         switch type {
         // An integer or a Bool is a scalar of its own.
@@ -72,6 +75,23 @@ struct LLVMTypes {
             table.fields(of: type).enumerated().flatMap { index, field in
                 scalars(of: field.type).map { Scalar(steps: [.field(index)] + $0.steps, type: $0.type) }
             }
+
+        // An array is the scalars of each element in turn, each lying inside its element.
+        case .array(let count, let element):
+            (0..<count).flatMap { index in
+                scalars(of: element).map { Scalar(steps: [.element(index)] + $0.steps, type: $0.type) }
+            }
+        }
+    }
+
+    /// How many scalars a value of `type` splits into, or `Int.max` where that many or more. It takes as long for an
+    /// array of any count, since it counts an element's scalars once.
+    func scalarCount(of type: RayoType) -> Int {
+        switch type {
+        case .int, .uint, .bool: 1
+        case .void: 0
+        case .structure: table.fields(of: type).reduce(0) { $0.addingSaturated(scalarCount(of: $1.type)) }
+        case .array(let count, let element): count.multipliedSaturated(by: scalarCount(of: element))
         }
     }
 
@@ -98,6 +118,20 @@ struct LLVMTypes {
         // The bytes that pad the end, if there are any, hold nothing.
         if layout.endPadding > 0 { elements.append(maker.arrayType(of: int8, count: layout.endPadding)) }
         return elements
+    }
+}
+
+private extension Int {
+    /// The sum of this and `other`, both at least 0, or `Int.max` where the sum is that or more.
+    func addingSaturated(_ other: Int) -> Int {
+        let (sum, overflowed) = addingReportingOverflow(other)
+        return overflowed ? .max : sum
+    }
+
+    /// The product of this and `other`, both at least 0, or `Int.max` where the product is that or more.
+    func multipliedSaturated(by other: Int) -> Int {
+        let (product, overflowed) = multipliedReportingOverflow(by: other)
+        return overflowed ? .max : product
     }
 }
 

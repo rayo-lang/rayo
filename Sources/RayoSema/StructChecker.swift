@@ -30,10 +30,13 @@ struct StructChecker {
         let declared = checkStructs(structs, withIDs: ids, in: declarations)
         declareFields(of: declared, in: &declarations)
 
-        // Only once every struct's fields are known can the structs that fail be told.
+        // Only once every struct's fields are known can the structs that fail be told, and only once those are left
+        // out can the others be laid out, to tell those too large to lie in memory.
         let failed = failedStructs(among: declared)
-        for id in failed { declarations.declareUnlaidOut(id) }
-        return types(of: declared, besides: failed)
+        let tooLarge = tooLargeStructs(among: declared, besides: failed)
+        let unlaidOut = failed.union(tooLarge)
+        for id in unlaidOut { declarations.declareUnlaidOut(id) }
+        return types(of: declared, besides: unlaidOut)
     }
 
     /// Checks every struct's fields, and returns each struct that has an ID, with what checking its fields found.
@@ -140,17 +143,53 @@ struct StructChecker {
     }
 
     /// The indices of the structs that `structure`'s fields hold, at any depth, among `structs`, which are indexed
-    /// by `StructID`.
+    /// by `StructID`. A field holds a struct as its value, or as the elements of an array, which lie inside it.
     private func contained(in structure: DeclaredStruct, among structs: [DeclaredStruct]) -> Set<Int> {
         var found: Set<Int> = []
         var unvisited = [structure]
         while let next = unvisited.popLast() {
-            for case .structure(let id)? in next.fields.map(\.type) {
+            for field in next.fields {
+                guard let type = field.type, case .structure(let id) = innermostElement(of: type) else { continue }
                 // A struct found for the first time has its own fields searched in turn.
                 if found.insert(id.index).inserted { unvisited.append(structs[id.index]) }
             }
         }
         return found
+    }
+
+    /// The IDs of the structs among `structs`, which are indexed by `StructID`, whose sizes in bytes don't fit in an
+    /// Int, leaving out those of `failed`, which can't be laid out at all.
+    private func tooLargeStructs(among structs: [DeclaredStruct], besides failed: Set<StructID>) -> Set<StructID> {
+        let table = types(of: structs, besides: failed)
+        let tooLarge = structs.filter { !failed.contains($0.id) && !table.fitsInMemory(.structure($0.id)) }
+        for structure in tooLarge { reportTooLarge(structure, laidOutIn: table) }
+        return Set(tooLarge.map(\.id))
+    }
+
+    /// Reports `structure`, which is too large to lie in memory, as `table` lays it out: at each array field whose
+    /// elements fit but whose size doesn't, or at its name where each field fits but not all together. A field too
+    /// large because of a struct it holds was reported at that struct.
+    private func reportTooLarge(_ structure: DeclaredStruct, laidOutIn table: TypeTable) {
+        var everyFieldFits = true
+        for (declaration, checked) in zip(structure.declaration.fields, structure.fields) {
+            // A struct whose declaration didn't fail knows each field's type.
+            guard let type = checked.type, !table.fitsInMemory(type) else { continue }
+            everyFieldFits = false
+            if case .array = type, table.fitsInMemory(innermostElement(of: type)), let written = declaration.type {
+                errors.report(.arrayTooLarge, at: written.range)
+            }
+        }
+
+        // Fields that each fit can still be too large together.
+        if everyFieldFits {
+            errors.report(.structTooLarge(name: structure.id.name), at: structure.declaration.nameRange)
+        }
+    }
+
+    /// The innermost element type of `type`, where it is an array, of arrays at any depth, and otherwise `type`.
+    private func innermostElement(of type: RayoType) -> RayoType {
+        guard case .array(_, let element) = type else { return type }
+        return innermostElement(of: element)
     }
 
     /// The types `structs` make, which are indexed by `StructID`, with none for those of `failed`.

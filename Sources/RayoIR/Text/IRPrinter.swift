@@ -126,6 +126,8 @@ public enum IRPrinter {
             "\(name(of: op)) \(text(of: left)), \(text(of: right))"
         case .call(let callee, let arguments):
             "call \(text(of: callee, in: program))(\(arguments.map(text(of:)).joined(separator: ", ")))"
+        case .array(let elements, let element):
+            "array of \(element)(\(list(elements)))"
         }
     }
 

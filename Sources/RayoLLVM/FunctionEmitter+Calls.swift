@@ -152,7 +152,7 @@ extension FunctionEmitter {
         guard let returnedStruct = AggregateValue(result) else {
             return storeScalars([result], at: destination, with: builder)
         }
-        let count = types.scalars(of: destination.type).count
+        let count = types.scalarCount(of: destination.type)
         let scalars = (0..<count).map { builder.extractValue(from: returnedStruct, at: $0) }
         storeScalars(scalars, at: destination, with: builder)
     }

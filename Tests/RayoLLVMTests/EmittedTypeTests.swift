@@ -103,6 +103,32 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `an array is built in its place, each element stored at its index`() throws {
+        // `main` makes an array of its Int and a 7.
+        let main = """
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: Int
+              temp %1: [2 of Int]
+            bb0:
+              %1 @1:1-1:2 = array of Int(read %0 @1:1-1:2, 7) @1:1-1:2
+              return
+            }
+            """
+
+        // The Int goes in the first element, and the 7 in the second, an Int's size after it.
+        try withEmitted(executable(main)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  %2 = getelementptr inbounds i64, ptr %1, i64 0
+                  %3 = load i64, ptr %0, align 8
+                  store i64 %3, ptr %2, align 8
+                  %4 = getelementptr inbounds i64, ptr %1, i64 1
+                  store i64 7, ptr %4, align 8
+                """))
+        }
+    }
+
     @Test func `a field is read from the element that its struct's layout puts it in, aligned as its type is`() throws {
         // `main` reads the Pair's Bool, which it declares first.
         let main = """

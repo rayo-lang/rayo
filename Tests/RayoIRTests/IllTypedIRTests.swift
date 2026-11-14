@@ -57,6 +57,20 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(makingBool) == IRViolation(function: "Pair(count: Int)", message: makesBool))
     }
 
+    @Test func `an array of elements of another type than it names is a violation`() throws {
+        let program = try IRParser.program(from: computing(
+            "array of Int(read %0 @1:1-1:2, read %1 @1:1-1:2)", on: ["Int", "Bool"], into: "[2 of Int]",
+        ))
+        let message = "the IR makes an array of Int from an element of type Bool"
+        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+    }
+
+    @Test func `an array is of its element type, and of as many elements as it is made from`() throws {
+        let program = try IRParser.program(from: computing("array of Int(1, 2)", on: [], into: "[3 of Int]"))
+        let message = "the IR stores a value of type [2 of Int] in a place of type [3 of Int]"
+        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+    }
+
     @Test func `a wrapping operator is named as one`() throws {
         let program = try IRParser.program(from: main("""
               temp %0: Bool

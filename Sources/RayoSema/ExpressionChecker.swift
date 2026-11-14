@@ -87,23 +87,35 @@ struct ExpressionChecker {
         // An `if` read for its value gives the value of the branch that runs.
         case .if:
             check(expr).map { .typed($0) }
+
+        // An array literal waits for its position to give it a type, which its elements settle to.
+        case .arrayLiteral(let elements):
+            arrayLiteral(of: elements, in: expr.range)
         }
     }
 
     /// Settles `value` to `type` where it is untyped and fits `type`, and to its default type where it is untyped
+    /// otherwise. An array literal settles to `type` where it is an array, and to the type its elements give
     /// otherwise. A typed value is given back as it is.
     func settled(_ value: CheckedValue, toward type: RayoType?) -> CheckedExpr? {
         switch value {
         case .typed(let typed): typed
         case .untyped(let untyped): settled(untyped, toward: type)
+        case .arrayLiteral(let literal): ArrayLiteralChecker(expressions: self).settled(literal, toward: type)
         }
     }
 
     /// Settles each of `values` that checked to its default type where it is untyped, so the literals in it that
     /// their default type can't hold are reported, where the expression that holds them fails for another reason.
+    /// An array literal's elements are settled so, and not the literal itself, whose type the failed expression
+    /// would have given.
     func reportSettlingErrors(of values: [CheckedValue?]) {
-        for case .untyped(let untyped)? in values {
-            _ = settled(untyped, toward: nil)
+        for value in values {
+            switch value {
+            case .untyped(let untyped)?: _ = settled(untyped, toward: nil)
+            case .arrayLiteral(let literal)?: reportSettlingErrors(of: literal.elements)
+            case .typed?, nil: break
+            }
         }
     }
 
@@ -129,6 +141,20 @@ struct ExpressionChecker {
         return untyped.settled(to: settledType, named: typeName(of: settledType), reporting: errors)
     }
 
+    /// Checks each of `elements`, those of the array literal at `range`, on its own, so that each settles to the
+    /// element type of the array the literal settles to.
+    private func arrayLiteral(of elements: [Expr], in range: SourceRange) -> CheckedValue? {
+        // Every element is checked, so each one's errors are reported, before any failure fails the literal.
+        let values = elements.map { value(of: $0) }
+        let checked = values.compactMap { $0 }
+        // An element that failed was reported, and the others' literals are settled for their own errors.
+        guard checked.count == values.count else {
+            reportSettlingErrors(of: values)
+            return nil
+        }
+        return .arrayLiteral(ArrayLiteral(elements: checked, range: range))
+    }
+
     /// Reports the implicit member at `range`, which isn't supported, and returns nil.
     private func unsupportedImplicitMember(at range: SourceRange) -> CheckedValue? {
         errors.report(.unsupportedImplicitMember, at: range)
@@ -152,6 +178,8 @@ struct ExpressionChecker {
         // An untyped operand gives an untyped negation.
         case .untyped(let untyped): .untyped(.negation(untyped, range: range))
         case .typed(let typed): negation(of: typed, in: range)
+        // An array literal settles to the type its elements give, which no negation takes.
+        case .arrayLiteral: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
         }
     }
 
@@ -334,8 +362,8 @@ struct ExpressionChecker {
         switch type {
         // Integers and Bools compare.
         case .int, .uint, .bool: true
-        // A Void value holds nothing to compare, and a struct has no `==`.
-        case .void, .structure: false
+        // A Void value holds nothing to compare, and a struct and an array have no `==`.
+        case .void, .structure, .array: false
         }
     }
 

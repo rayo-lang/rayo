@@ -123,6 +123,10 @@ extension Parser {
         case .punct(.lparen):
             try parseParenthesized(from: advance().range)
 
+        // A `[` starts an array literal.
+        case .punct(.lbracket):
+            try parseArrayLiteral(from: advance().range)
+
         // An `if` gives the value of the branch that runs.
         case .keyword(.if):
             try parseIfExpression(from: advance().range)
@@ -142,7 +146,8 @@ extension Parser {
     /// At the `(` that follows `callee`: the `(`, the arguments and the `)`.
     private mutating func parseCall(to callee: Expr) throws(ParseFailure) -> Expr {
         advance()
-        let arguments = try parseList(ifUnclosed: ErrorCode.unclosedArguments) { parser throws(ParseFailure) in
+        let arguments = try parseList(upTo: .rparen, ifUnclosed: ErrorCode.unclosedArguments) {
+            parser throws(ParseFailure) in
             try parser.parseArgument()
         }
         return Expr(kind: .call(callee: callee, arguments: arguments), range: range(from: callee.range))
@@ -163,6 +168,15 @@ extension Parser {
         advance()
         advance()
         return spelling
+    }
+
+    /// After the `[` at `start`: the array literal's elements and the `]`.
+    private mutating func parseArrayLiteral(from start: SourceRange) throws(ParseFailure) -> Expr {
+        let elements = try parseList(upTo: .rbracket, ifUnclosed: ErrorCode.unclosedArrayLiteral) {
+            parser throws(ParseFailure) in
+            try parser.parseExpression()
+        }
+        return Expr(kind: .arrayLiteral(elements), range: range(from: start))
     }
 
     /// After the `if` at `start`: the `if` as an expression.

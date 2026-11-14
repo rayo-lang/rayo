@@ -21,6 +21,9 @@ public indirect enum CheckedExprKind: Sendable {
     /// Runs `then` when the Bool `condition` is true, and `otherwise` when it is false, and gives the value of the
     /// branch that runs.
     case `if`(condition: CheckedExpr, then: CheckedBranch, otherwise: CheckedBranch)
+    /// An array of the elements' values, each of the array's element type, evaluated from first to last and taken
+    /// as the array's own.
+    case arrayLiteral([CheckedExpr])
 }
 
 /// A branch of an `if`: the statements it runs, then the value it ends in.

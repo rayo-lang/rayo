@@ -100,6 +100,18 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(127, error: "expected a member's name after '.', found {found}")
     case missingMemberName(found: FoundToken)
 
+    @Code(128, error: "expected the array's count, found {found}")
+    case missingArrayCount(found: FoundToken)
+
+    @Code(129, error: "expected 'of' after the array's count, found {found}")
+    case missingArrayOf(found: FoundToken)
+
+    @Code(130, error: "expected ']' to close the array type, found {found}")
+    case unclosedArrayType(found: FoundToken)
+
+    @Code(131, error: "expected ']' to close the array literal, found {found}")
+    case unclosedArrayLiteral(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -276,6 +288,24 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(260, error: "the call fits more than one '{name}'")
     case ambiguousCall(name: String)
 
+    @Code(261, error: "a {type} literal needs {needs}, found {found}")
+    case arrayLiteralCount(type: TypeName, needs: ElementCount, found: Int)
+
+    @Code(262, error: "an empty array literal needs a type")
+    case emptyArrayLiteral
+
+    @Code(263, error: "the array literal holds {settled} in one element and {other} in another")
+    case elementTypesDiffer(settled: TypeName, other: TypeName)
+
+    @Code(264, error: "an array's elements can't have {type.typePhrase}")
+    case voidElement(type: TypeName)
+
+    @Code(265, error: "the array's size in bytes doesn't fit in an Int")
+    case arrayTooLarge
+
+    @Code(266, error: "the size of '{name}' in bytes doesn't fit in an Int")
+    case structTooLarge(name: String)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
@@ -425,4 +455,14 @@ public struct ArgumentCount: Sendable, Hashable, ExpressibleByIntegerLiteral, Cu
     public init(integerLiteral count: Int) { self.count = count }
 
     public var description: String { count == 1 ? "1 argument" : "\(count) arguments" }
+}
+
+/// How many elements an array holds, as an error names it: `1 element`, `2 elements`.
+public struct ElementCount: Sendable, Hashable, ExpressibleByIntegerLiteral, CustomStringConvertible {
+    public var count: Int
+
+    public init(_ count: Int) { self.count = count }
+    public init(integerLiteral count: Int) { self.count = count }
+
+    public var description: String { count == 1 ? "1 element" : "\(count) elements" }
 }

@@ -1,34 +1,60 @@
 import RayoDiagnostics
 import RayoSource
 
-/// What checking an expression gives before its position is known: a typed value, or an untyped one that waits for a
-/// type to settle it.
+/// What checking an expression gives before its position is known: a typed value, or an untyped one or an array
+/// literal, each of which waits for a type to settle it.
 enum CheckedValue {
     case typed(CheckedExpr)
     case untyped(UntypedValue)
+    /// An array literal, whose type, and so its elements' types, its position gives where it gives one.
+    case arrayLiteral(ArrayLiteral)
 
-    /// The value's type, or nil where it is untyped.
+    /// The value's type, or nil where its position settles it.
     var type: RayoType? {
         switch self {
         case .typed(let value): value.type
-        case .untyped: nil
+        case .untyped, .arrayLiteral: nil
         }
     }
 
-    /// The value's type, or the type an untyped value settles to where nothing else gives it one.
-    var typeOrDefault: RayoType {
+    /// The value's type, or the type it settles to where its position gives none: an untyped value's default, and
+    /// an array literal's from its elements. Nil for a literal no element gives a type, such as `[]`.
+    var typeOrDefault: RayoType? {
         switch self {
         case .typed(let value): value.type
         case .untyped(let value): value.defaultType
+        case .arrayLiteral(let literal):
+            literal.defaultElementType.map { .array(count: literal.elements.count, element: $0) }
         }
     }
 
-    /// Whether a parameter of `type` takes the value: a typed value of that type, or an untyped one that fits it.
+    /// Whether a parameter of `type` takes the value: a typed value of that type, an untyped one that fits it, or an
+    /// array literal of the type's count whose elements each fit the type's element type.
     func fits(_ type: RayoType) -> Bool {
         switch self {
         case .typed(let value): value.type == type
         case .untyped(let value): value.fits(type)
+        case .arrayLiteral(let literal): literal.fits(type)
         }
+    }
+}
+
+/// An array literal's elements, each checked on its own, and where the source writes the literal.
+struct ArrayLiteral {
+    var elements: [CheckedValue]
+    var range: SourceRange
+
+    /// The type the elements settle to where the literal's position gives none: the type of the first typed element,
+    /// or, where none is typed, the first default type among them. Nil where no element gives one.
+    var defaultElementType: RayoType? {
+        elements.lazy.compactMap(\.type).first ?? elements.lazy.compactMap(\.typeOrDefault).first
+    }
+
+    /// Whether the literal can settle to `type`: an array of as many elements as the literal, each of which fits
+    /// its element type.
+    func fits(_ type: RayoType) -> Bool {
+        guard case .array(let count, let element) = type, count == elements.count else { return false }
+        return elements.allSatisfy { $0.fits(element) }
     }
 }
 
@@ -84,7 +110,8 @@ indirect enum UntypedValue {
         let kind: CheckedExprKind? = switch type {
         case .int: int(magnitude, isNegative: isNegative).map(CheckedExprKind.intLiteral)
         case .uint: uint(magnitude, isNegative: isNegative).map(CheckedExprKind.uintLiteral)
-        case .bool, .void, .structure: preconditionFailure("an integer literal settles only to an integer type")
+        case .bool, .void, .structure, .array:
+            preconditionFailure("an integer literal settles only to an integer type")
         }
 
         // A literal the type can't hold is reported.

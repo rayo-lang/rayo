@@ -47,7 +47,7 @@ struct TokenTests {
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [
-        "#", "[", "?", "$", "`", "é",
+        "#", "?", "$", "`", "é",
     ])
     func unexpected(character: String) {
         let (lexed, diagnostics) = Lexer.tokenize("a \(character) b")

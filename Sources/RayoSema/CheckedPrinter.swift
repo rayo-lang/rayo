@@ -122,6 +122,8 @@ public struct CheckedPrinter: ~Copyable {
             write(right, depth: depth + 1)
         case .call(_, let arguments):
             for argument in arguments { write(argument, depth: depth + 1) }
+        case .arrayLiteral(let elements):
+            for element in elements { write(element, depth: depth + 1) }
         case .if(let condition, let then, let otherwise):
             write(condition, depth: depth + 1)
             line("then", depth)
@@ -143,6 +145,7 @@ public struct CheckedPrinter: ~Copyable {
         case .binary(let op, _, _): "binary \(op)"
         case .call(let callee, _): "call \(text(of: callee))"
         case .if: "if"
+        case .arrayLiteral: "array"
         }
     }
 

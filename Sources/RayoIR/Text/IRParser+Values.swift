@@ -2,8 +2,19 @@ import RayoSema
 import RayoSource
 
 extension IRParser {
-    /// The type the word at the current token names: `Int`, `UInt`, `Bool`, `Void`, or a struct the text declares.
+    /// The type at the current token: `Int`, `UInt`, `Bool`, `Void`, a struct the text declares, or
+    /// `[count of type]`.
     mutating func type() throws(IRTextError) -> RayoType {
+        // A `[` starts an array type.
+        if consume("[") {
+            let count = try integer()
+            try expect(word: "of")
+            let element = try type()
+            try expect("]")
+            return .array(count: count, element: element)
+        }
+
+        // Any other type is named by a word.
         let token = current
         let name = try word()
         return switch name {
@@ -37,8 +48,17 @@ extension IRParser {
         return switch keyword {
         case "operand": .operand(try operand())
         case "call": .call(try callee(), arguments: try arguments())
+        case "array": try array()
         default: try operation(named: keyword, at: token)
         }
+    }
+
+    /// After `array`: `of`, the element type, and the elements' operands between parentheses.
+    private mutating func array() throws(IRTextError) -> Rvalue {
+        try expect(word: "of")
+        let element = try type()
+        let elements = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.operand() }
+        return .array(elements, of: element)
     }
 
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and

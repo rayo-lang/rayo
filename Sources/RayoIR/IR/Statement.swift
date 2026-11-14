@@ -29,6 +29,8 @@ public enum Rvalue: Equatable, Sendable {
     case binary(IRBinaryOperator, Operand, Operand)
     /// A call of a function, whose value is the function's result.
     case call(Callee, arguments: [CallArgument])
+    /// An array of the operands' values, in order, each of the element type, which the array takes as its own.
+    case array([Operand], of: RayoType)
 
     /// The operands, in the order the operation evaluates them. A call argument that passes an access, rather than a
     /// value, isn't an operand.
@@ -37,6 +39,7 @@ public enum Rvalue: Equatable, Sendable {
         case .operand(let operand), .unary(_, let operand): [operand]
         case .binary(_, let left, let right): [left, right]
         case .call(_, let arguments): arguments.compactMap(\.operand)
+        case .array(let elements, _): elements
         }
     }
 
@@ -54,6 +57,7 @@ public enum Rvalue: Equatable, Sendable {
         case .unary(let op, let operand): op.resultType(on: operand.type(in: body, types: types))
         case .binary(let op, let left, _): op.resultType(on: left.type(in: body, types: types))
         case .call(let callee, _): callee.result(in: functions)
+        case .array(let elements, let element): .array(count: elements.count, element: element)
         }
     }
 }

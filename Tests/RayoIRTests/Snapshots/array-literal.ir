@@ -1,0 +1,28 @@
+struct Enemy {
+  hp: Int
+  armor: Int
+}
+
+main "main()"
+
+init "Enemy(hp: Int, armor: Int)"(Int, Int) -> Enemy
+
+func "main()"() -> Void {
+  let %0 e: Enemy
+  let %1 a: [2 of Enemy]
+  let %2 b: [2 of [1 of Int]]
+  temp %3: Enemy
+  temp %4: [1 of Int]
+  temp %5: [1 of Int]
+bb0:
+  declare %0
+  %0 @2:5-2:6 = call "Enemy(hp: Int, armor: Int)"(1, 2) @2:9-2:31
+  declare %1
+  %3 @3:13-3:35 = call "Enemy(hp: Int, armor: Int)"(3, 4) @3:13-3:35
+  %1 @3:5-3:6 = array of Enemy(move %0 @3:10-3:11, read %3 @3:13-3:35) @3:9-3:36
+  declare %2
+  %4 @4:10-4:13 = array of Int(1) @4:10-4:13
+  %5 @4:15-4:18 = array of Int(2) @4:15-4:18
+  %2 @4:5-4:6 = array of [1 of Int](read %4 @4:10-4:13, read %5 @4:15-4:18) @4:9-4:19
+  return
+}

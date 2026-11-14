@@ -51,6 +51,11 @@ struct NewlineTests {
         #expect(tokens("if a\n{ b }") == ["if", "a", "{", "b", "}"])
     }
 
+    @Test func `inside '[', newlines are whitespace, and a line that ends in '[' runs on`() {
+        #expect(tokens("let a = [\n    1,\n    2\n]\nx") == ["let", "a", "=", "[", "1", ",", "2", "]", "⏎", "x"])
+        #expect(tokens("let a = [{ b\nc }]") == ["let", "a", "=", "[", "{", "b", "⏎", "c", "}", "]"])
+    }
+
     @Test("blank lines and comments collapse into one newline")
     func blankLines() {
         #expect(tokens("a\n\n// note\n\nb") == ["a", "⏎", "b"])

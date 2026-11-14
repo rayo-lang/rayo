@@ -47,7 +47,8 @@ extension Parser {
             let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
             name = (readName, nameRange)
             try expect(.lparen, else: ErrorCode.missingParameterList)
-            let parameters = try parseList(ifUnclosed: ErrorCode.unclosedParameters) { parser throws(ParseFailure) in
+            let parameters = try parseList(upTo: .rparen, ifUnclosed: ErrorCode.unclosedParameters) {
+                parser throws(ParseFailure) in
                 try parser.parseParameter()
             }
             let result = consume(.arrow) ? try parseType() : nil
@@ -134,7 +135,9 @@ extension Parser {
 
     /// After the `(` of a struct's header: its fields and the `)`.
     private mutating func parseFields() throws(ParseFailure) -> [FieldDecl] {
-        try parseList(ifUnclosed: ErrorCode.unclosedFields) { parser throws(ParseFailure) in try parser.parseField() }
+        try parseList(upTo: .rparen, ifUnclosed: ErrorCode.unclosedFields) { parser throws(ParseFailure) in
+            try parser.parseField()
+        }
     }
 
     /// `('var' | 'let') identifier (':' type)? ('=' expression)?`.

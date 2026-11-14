@@ -21,6 +21,9 @@ struct Declarations {
     private var unlaidOutStructs: Set<StructID> = []
     /// The names of the functions that failed to parse, whose uses report nothing more.
     private var unparsedFunctions: Set<String> = []
+    /// The structs that can be laid out, which lay out every type that holds them; nil until the structs are
+    /// checked, while their fields' types are resolved.
+    private var layouts: TypeTable?
     private static let preludeTypes: [String: RayoType] = [
         "Int": .int, "UInt": .uint, "Bool": .bool, "Void": .void,
     ]
@@ -48,6 +51,12 @@ struct Declarations {
     /// Declares the struct `id` as one that can't be laid out, whose uses report nothing more.
     mutating func declareUnlaidOut(_ id: StructID) {
         unlaidOutStructs.insert(id)
+    }
+
+    /// Declares `types`, the structs that can be laid out, so that each type resolved from here on is checked to
+    /// fit in memory.
+    mutating func declareLayouts(_ types: TypeTable) {
+        layouts = types
     }
 
     /// Declares `name` as the name of a function that failed to parse, whose uses report nothing more.
@@ -130,17 +139,46 @@ struct Declarations {
         case .structure: .named(name)
         // A prelude type is shadowed where a type or a function of the file has its name.
         case .int, .uint, .bool, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
+        // An array is named by its count and its element's name.
+        case .array(let count, let element): .named("[\(count) of \(typeName(of: element))]")
         }
     }
 
-    /// The type that `type` names, or nil after reporting a name that names no type.
+    /// The type that `type` names, or nil after reporting a name that names no type, or an array that can't be.
     func resolve(_ type: TypeExpr, reporting errors: ErrorList) -> RayoType? {
         switch type {
         // `()` is Void.
         case .void: .void
         // A name names one of the file's types, or one of the prelude's types that no function shadows.
         case .named(let name, let range): resolve(named: name, at: range, reporting: errors)
+        // An array holds values of its element's type.
+        case .array(let count, let element, let range):
+            resolveArray(of: count, element, at: range, reporting: errors)
         }
+    }
+
+    /// The array of `count` values of the type `element` names, which the source writes at `range`, or nil after
+    /// reporting an element type that names no type or names Void, or an array whose size in bytes doesn't fit in
+    /// an Int.
+    private func resolveArray(
+        of count: UInt64, _ element: TypeExpr, at range: SourceRange, reporting errors: ErrorList,
+    ) -> RayoType? {
+        // An element type that names no type was reported.
+        guard let elementType = resolve(element, reporting: errors) else { return nil }
+        // No element holds a Void value.
+        guard elementType != .void else {
+            errors.report(.voidElement(type: typeName(of: .void)), at: element.range)
+            return nil
+        }
+
+        // An array's size in bytes must fit in an Int, which counts its elements too, even ones that take no memory.
+        // A field's array is resolved before the structs are laid out, so its size is checked with its struct's.
+        let array = Int(exactly: count).map { RayoType.array(count: $0, element: elementType) }
+        guard let array, layouts?.fitsInMemory(array) ?? true else {
+            errors.report(.arrayTooLarge, at: range)
+            return nil
+        }
+        return array
     }
 
     /// Resolves `name` to one of the file's types or one of the prelude's types that no function shadows, or
