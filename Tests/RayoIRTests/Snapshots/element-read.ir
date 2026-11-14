@@ -10,7 +10,6 @@ func "main()"() -> Void {
   temp %6: UInt
   temp %7: UInt
   temp %8: UInt
-  temp %9: UInt
 bb0:
   declare %0
   %3 @2:13-2:19 = array of Int(1, 2) @2:13-2:19
@@ -25,13 +24,10 @@ bb0:
   %6 @5:15-5:20 = index read %7 @5:15-5:20 below 2 @5:15-5:20
   begin a1 read static %0[%5][%6] @5:7-5:21
   _ = call builtin "print(_: Int)"(a1) @5:1-5:22
-  %8 @6:15-6:16 = index uint 2 below 2 @6:15-6:16
-  begin a2 read static %0[0][%8] @6:7-6:17
-  _ = call builtin "print(_: Int)"(a2) @6:1-6:18
   declare %2
-  %9 @7:21-7:22 = index read %1 @7:21-7:22 below 2 @7:21-7:22
-  %2 @7:5-7:8 = operand read %0[%9] @7:11-7:23 @7:11-7:23
-  begin a3 read static %2[0] @8:7-8:13
-  _ = call builtin "print(_: Int)"(a3) @8:1-8:14
+  %8 @6:21-6:22 = index read %1 @6:21-6:22 below 2 @6:21-6:22
+  %2 @6:5-6:8 = operand read %0[%8] @6:11-6:23 @6:11-6:23
+  begin a2 read static %2[0] @7:7-7:13
+  _ = call builtin "print(_: Int)"(a2) @7:1-7:14
   return
 }

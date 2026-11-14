@@ -74,11 +74,12 @@ extension FunctionLowering {
     }
 
     /// Lowers the step into the element at `index` of an array of `count` elements: one the IR writes where `index`
-    /// is a UInt literal below `count`, and otherwise one at a new temporary that holds the index, which is computed
-    /// once and checked against `count` where the source writes it.
+    /// is a UInt literal, and otherwise one at a new temporary that holds the index, which is computed once and
+    /// checked against `count` where the source writes it.
     private mutating func elementStep(at index: CheckedExpr, below count: Int) -> PlaceStep {
-        // A literal below the count needs no check, and names an element apart from those at other literals.
-        if case .uintLiteral(let value) = index.kind, value < UInt64(count) { return .element(Int(value)) }
+        // A literal lies below the count, since checking reports one that doesn't, so it needs no check, and names an
+        // element apart from those at other literals.
+        if case .uintLiteral(let value) = index.kind { return .element(Int(value)) }
 
         let checked = builder.newTemporary(.uint)
         let value = operand(of: index, as: .read)

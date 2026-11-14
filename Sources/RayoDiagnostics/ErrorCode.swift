@@ -330,6 +330,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(273, error: "an array's 'count' is fixed by its type, so it can't change")
     case assignToCount
 
+    @Code(274, error: "index {index} is out of range for a {type}")
+    case indexOutOfRange(index: UInt64, type: TypeName)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
