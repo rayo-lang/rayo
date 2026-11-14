@@ -151,11 +151,21 @@ struct CompilerTests {
         ["--warnings-as-errors", "--check", "a.rayo"], ["--check", "--warnings-as-errors", "a.rayo"],
         ["--warnings-as-errors", "-o", "a.o", "a.rayo"], ["--debug", "-o", "a.o", "--warnings-as-errors", "a.rayo"],
     ])
-    func `'--warnings-as-errors' goes with either compile, and a program without warnings still compiles`(
+    func `'--warnings-as-errors' goes with any compile, and a program without warnings still compiles`(
         arguments: [String],
     ) {
         let compiled = compile(arguments, files: ["a.rayo": "func main() { print(1) }"])
         #expect(compiled.result == CompilerResult(exitCode: 0, errors: ""))
+    }
+
+    @Test(arguments: ["--emit=checked", "--emit=ir"])
+    func `'--warnings-as-errors' goes with a dump, which a program without warnings still prints`(dump: String) {
+        let source = ["a.rayo": "func main() { print(1) }"]
+        let strict = compile(["--warnings-as-errors", dump, "a.rayo"], files: source).result
+        #expect(strict.exitCode == 0)
+        #expect(strict.errors == "")
+        #expect(!strict.standardOutput.isEmpty)
+        #expect(strict.standardOutput == compile([dump, "a.rayo"], files: source).result.standardOutput)
     }
 
     @Test(arguments: [
