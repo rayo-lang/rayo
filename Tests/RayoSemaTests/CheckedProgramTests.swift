@@ -78,7 +78,7 @@ struct CheckedProgramTests {
             """, toMatch: "control-flow")
     }
 
-    @Test func `a local that gives its value away is moved, and 'copy' reads it`() throws {
+    @Test func `a local written bare is its value, whatever takes it, and a 'copy' of it stays a copy`() throws {
         try expectChecking(of: """
             func main() {
                 let a = 1

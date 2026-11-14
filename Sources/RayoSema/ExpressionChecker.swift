@@ -21,28 +21,23 @@ struct ExpressionChecker {
         file.declarations.typeName(of: type)
     }
 
-    /// Checks `expr` as the value of a position that `use`s it, and that expects `expected` of it where it expects a
-    /// type. An untyped value takes the expected type where it fits it, and its default type where it doesn't.
-    func check(_ expr: Expr, as use: ValueUse = .read, expecting expected: Expectation? = nil) -> CheckedExpr? {
+    /// Checks `expr` as the value of a position that expects `expected` of it where it expects a type. An untyped
+    /// value takes the expected type where it fits it, and its default type where it doesn't.
+    func check(_ expr: Expr, expecting expected: Expectation? = nil) -> CheckedExpr? {
         // An `if` hands its position to the branch that runs, so each branch's value is checked as the position's.
         if case .if(let ifExpr) = expr.kind {
-            return IfChecker(expressions: self).check(ifExpr, in: expr.range, as: use, expecting: expected)
+            return IfChecker(expressions: self).check(ifExpr, in: expr.range, expecting: expected)
         }
 
-        // Any other value is checked on its own, settled toward the type the position expects, and used as the
-        // position uses it.
+        // Any other value is checked on its own, and settled toward the type the position expects.
         // A value that failed was reported.
         guard let value = value(of: expr) else { return nil }
         // So was a literal that the type it settles to can't hold.
         guard let settled = settled(value, toward: expected?.type) else { return nil }
-        let used = switch use {
-        case .read: settled
-        case .take: taken(settled, writtenAs: expr)
-        }
 
         // A value passes where the position expects no type.
-        guard let expected else { return used }
-        return expect(used.type, at: used.range, expected) ? used : nil
+        guard let expected else { return settled }
+        return expect(settled.type, at: settled.range, expected) ? settled : nil
     }
 
     /// Checks `expr` on its own, leaving it untyped where it is a literal, or a negation or arithmetic on untyped
@@ -83,9 +78,11 @@ struct ExpressionChecker {
         case .implicitMember:
             unsupportedImplicitMember(at: expr.range)
 
-        // A `copy` reads the place and leaves its value in it, and it covers the whole `copy place`.
-        case .copy(let place):
-            check(place).map { .typed(CheckedExpr(kind: $0.kind, type: $0.type, range: expr.range)) }
+        // A `copy` copies the value of the place it names, and covers the whole `copy place`.
+        case .copy(let copied):
+            place(copied, under: self).map {
+                .typed(CheckedExpr(kind: .copy($0.place), type: $0.type, range: expr.range))
+            }
 
         // An `if` read for its value gives the value of the branch that runs.
         case .if:
@@ -190,18 +187,6 @@ struct ExpressionChecker {
         // An operand that failed was reported.
         guard let settledLeft, let settledRight else { return nil }
         return binary(checkedOp, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
-    }
-
-    /// Turns `value`, which `expr` gives, into the value its position takes, which moves a place's value out of it.
-    private func taken(_ value: CheckedExpr, writtenAs expr: Expr) -> CheckedExpr {
-        // A `copy` checks to a read of the place it copies, so only a place written bare is moved.
-        switch (expr.kind, value.kind) {
-        // A local, or a field, written bare is moved.
-        case (.name, .place(let place)), (.member, .place(let place)):
-            CheckedExpr(kind: .move(place), type: value.type, range: value.range)
-        // Any other value, a copy included, is a new one, which is taken as it is.
-        default: value
-        }
     }
 
     /// Checks `expr` as a place that `rules` admit: a root they check, then each field the source steps into from it.
@@ -365,8 +350,10 @@ extension ExpressionChecker: PlaceRules {
         // Any other value roots it in a temporary that holds the value, unless the value is a place itself, such as a
         // `copy` of one. A value that failed was reported.
         guard let value = check(expr) else { return nil }
-        if case .place(let place) = value.kind { return (place, value.type) }
-        return (CheckedPlace(root: .temporary(value)), value.type)
+        switch value.kind {
+        case .place(let place), .copy(let place): return (place, value.type)
+        default: return (CheckedPlace(root: .temporary(value)), value.type)
+        }
     }
 
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {

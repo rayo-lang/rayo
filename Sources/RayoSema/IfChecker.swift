@@ -13,13 +13,12 @@ struct IfChecker {
     private var errors: ErrorList { expressions.file.errors }
     private var bodyChecker: BodyChecker { BodyChecker(expressions: expressions) }
 
-    /// Checks `ifExpr`, which the source gives at `range`, as the value of a position that `use`s it, and that expects
-    /// `expected` of it where it expects a type.
-    func check(_ ifExpr: IfExpr, in range: SourceRange, as use: ValueUse,
-               expecting expected: Expectation?) -> CheckedExpr? {
+    /// Checks `ifExpr`, which the source gives at `range`, as the value of a position that expects `expected` of it
+    /// where it expects a type.
+    func check(_ ifExpr: IfExpr, in range: SourceRange, expecting expected: Expectation?) -> CheckedExpr? {
         // Check the condition, and `then` as the position's own value.
         let condition = expressions.check(ifExpr.condition, expecting: Expectation(.bool))
-        let then = branch(ifExpr.then, as: use, expecting: expected)
+        let then = branch(ifExpr.then, expecting: expected)
 
         // An `if` without an `else` has no value to give where its condition fails, which is reported.
         guard let otherwiseBlock = ifExpr.otherwise else {
@@ -27,7 +26,7 @@ struct IfChecker {
             return nil
         }
         // Where the position expects no type, the `else` must give the type that `then` gives.
-        let otherwise = branch(otherwiseBlock, as: use, expecting: expected ?? agreeing(with: then))
+        let otherwise = branch(otherwiseBlock, expecting: expected ?? agreeing(with: then))
 
         // A condition or a branch that failed was reported.
         guard let condition, let then, let otherwise else { return nil }
@@ -49,9 +48,9 @@ struct IfChecker {
         return Expectation(type, mismatch: ErrorCode.branchTypesDiffer)
     }
 
-    /// Checks `block` as a branch whose value stands in the position of the `if`, which `use`s it, and expects
-    /// `expected` of it where it expects a type.
-    private func branch(_ block: Block, as use: ValueUse, expecting expected: Expectation?) -> Branch? {
+    /// Checks `block` as a branch whose value stands in the position of the `if`, which expects `expected` of it where
+    /// it expects a type.
+    private func branch(_ block: Block, expecting expected: Expectation?) -> Branch? {
         // A branch that no run gets through gives no value, and fits any type; it is checked as a statement's branch.
         guard Reachability.canComplete(block) else {
             return (CheckedBranch(statements: bodyChecker.check(block), value: nil), nil)
@@ -64,7 +63,7 @@ struct IfChecker {
         // A branch that ends in an expression gives its value.
         if let last = block.lastExpression {
             let checked = bodyChecker.check(block.statements.dropLast())
-            let value = expressions.check(last, as: use, expecting: expected)
+            let value = expressions.check(last, expecting: expected)
             return value.map { (CheckedBranch(statements: checked, value: $0), $0.type) }
         }
 

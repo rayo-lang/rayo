@@ -10,6 +10,21 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = a", toMatch: "reads-and-moves")
     }
 
+    @Test func `'_ =', an assignment and a declaration's 'if' move a local, and an argument's 'if' reads it`() throws {
+        let body = """
+            let a = 1
+            var b = 2
+            b = a
+            _ = b
+            let t = true
+            let d = 3
+            let e = if t { d } else { 4 }
+            let g = 5
+            print(if t { g } else { e })
+            """
+        try expectLowering(ofMain: body, toMatch: "taken-positions")
+    }
+
     @Test func `'!' applies to its operand as '-' does`() throws {
         try expectLowering(ofMain: "let a = true\nlet b = !a", toMatch: "not")
     }

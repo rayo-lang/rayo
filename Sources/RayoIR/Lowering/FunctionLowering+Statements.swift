@@ -9,17 +9,17 @@ extension FunctionLowering {
 
     private mutating func lower(_ statement: CheckedStmt) {
         switch statement {
-        // An expression statement computes its value and drops it.
+        // An expression statement computes its value and drops it, which takes it, as `_ =` does.
         case .expression(let expr):
-            compute(expr, into: nil)
+            compute(expr, into: nil, as: .take)
 
         // A declaration starts its local's life.
         case .binding(let local, let range, let value):
             lowerDeclaration(of: local, at: range, givenBy: value)
 
-        // An assignment computes its value into its place.
+        // An assignment computes its value into its place, which takes it.
         case .assign(let target, let value):
-            compute(value, into: Destination(place(of: target), at: target.range))
+            compute(value, into: Destination(place(of: target), at: target.range), as: .take)
 
         // A compound assignment applies its operator to its place and the value.
         case .compoundAssign(let target, let op, let value):
@@ -60,7 +60,7 @@ extension FunctionLowering {
 
         // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        compute(value, into: Destination(Place(root: local), at: range))
+        compute(value, into: Destination(Place(root: local), at: range), as: .take)
     }
 
     /// Leaves the function with `value`.
@@ -85,8 +85,8 @@ extension FunctionLowering {
     /// and returns nil.
     private mutating func returnedOperand(of value: CheckedExpr) -> Operand? {
         // A value of any other type is the result.
-        guard value.type == .void else { return operand(of: value) }
-        compute(value, into: nil)
+        guard value.type == .void else { return operand(of: value, as: .take) }
+        compute(value, into: nil, as: .take)
         return nil
     }
 

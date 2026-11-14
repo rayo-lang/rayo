@@ -9,10 +9,11 @@ public struct CheckedExpr: Sendable {
 public indirect enum CheckedExprKind: Sendable {
     case intLiteral(Int64)
     case boolLiteral(Bool)
-    /// Reads the value of a place, which the place keeps.
+    /// The value of a place that the source writes on its own. Lowering decides whether its position reads the
+    /// value, or moves it out of the place.
     case place(CheckedPlace)
-    /// Takes the value of a place, which leaves the place without one until it is assigned again.
-    case move(CheckedPlace)
+    /// A copy of the value of a place, which the place keeps wherever the copy is used.
+    case copy(CheckedPlace)
     case unary(CheckedUnaryOperator, CheckedExpr)
     case binary(CheckedBinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])

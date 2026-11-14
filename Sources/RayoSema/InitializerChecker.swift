@@ -45,7 +45,7 @@ struct InitializerChecker {
         // A struct with a field whose declaration failed, which was reported there, takes its arguments' values on
         // their own, so the failure doesn't spread to its calls.
         guard types.count == fields.count else {
-            for argument in arguments { _ = expressions.check(argument.value, as: .take) }
+            for argument in arguments { _ = expressions.check(argument.value) }
             return nil
         }
 
@@ -118,7 +118,7 @@ struct InitializerChecker {
             let expected = given.field.map { field in
                 Expectation(types[field]) { .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1) }
             }
-            let value = expressions.check(argument.value, as: .take, expecting: expected)
+            let value = expressions.check(argument.value, expecting: expected)
             // A value that failed, that has another type than its field's, or that gives no field, was reported.
             guard let value, given.field != nil else { continue }
             values.append(value)

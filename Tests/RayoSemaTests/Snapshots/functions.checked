@@ -19,9 +19,9 @@ func "add(_: Int, to: Int)"(Int, Int) -> Int {
   param %1 b: Int
   return
     binary add: Int @6:40-6:45
-      read: Int @6:40-6:41
+      value: Int @6:40-6:41
         place %0 @6:40-6:41
-      read: Int @6:44-6:45
+      value: Int @6:44-6:45
         place %1 @6:44-6:45
 }
 
@@ -29,7 +29,7 @@ func "isZero(_: Int)"(Int) -> Bool {
   param %0 n: Int
   return
     binary equal: Bool @8:12-8:18
-      read: Int @8:12-8:13
+      value: Int @8:12-8:13
         place %0 @8:12-8:13
       int 0: Int @8:17-8:18
 }
