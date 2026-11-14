@@ -189,7 +189,7 @@ struct PipelineTests {
         #expect(result.exitCode == exitCode)
         #expect(result.diagnostics == [warning(on: 1)])
         #expect(result.errors == """
-            a.rayo:1:1: warning[E0201]: a file without a 'main' function is a library, which can't be built into an \
+            a.rayo:1:1: warning[E0201]: the file has no 'main' function, so it can't be built into an \
             executable or run
 
             """)

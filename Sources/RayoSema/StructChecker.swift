@@ -36,8 +36,8 @@ struct StructChecker {
         return types(of: declared, besides: failed)
     }
 
-    /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
-    /// with their fields' types.
+    /// Checks every struct's fields, and returns each struct that has an ID, with what checking its fields found.
+    /// The IDs follow the order of the structs.
     private func checkStructs(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
@@ -53,7 +53,7 @@ struct StructChecker {
         return declared
     }
 
-    /// Checks the fields of `declaration`, and returns what checking each found.
+    /// Checks the fields of one struct, and returns what checking each found.
     private func checkFields(of declaration: StructDecl, in declarations: Declarations) -> [CheckedField] {
         var names: Set<String> = []
         var fields: [CheckedField] = []
@@ -65,7 +65,7 @@ struct StructChecker {
         return fields
     }
 
-    /// Declares the fields of each of `structs`, as a function body sees them.
+    /// Declares each struct's fields, as a function body sees them.
     private func declareFields(of structs: [DeclaredStruct], in declarations: inout Declarations) {
         for structure in structs {
             // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.

@@ -118,14 +118,15 @@ struct FunctionEmitter {
         }
     }
 
-    /// Emits the instructions that compute `rvalue`, and stores its result in `destination` when there is one.
+    /// Emits the instructions that compute an operation's value, and stores the value in the destination when there
+    /// is one.
     private func emit(
         _ rvalue: Rvalue, into destination: Place?, at range: SourceRange, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         switch rvalue {
-        // A use copies its operand's value.
+        // An operand's value is copied as it is.
         case .operand(let operand):
-            use(operand, into: destination, with: program.builder)
+            copyValue(of: operand, into: destination, with: program.builder)
 
         // An operator computes on its operands' values, as their type says.
         case .unary(let op, let operand):
@@ -145,9 +146,9 @@ struct FunctionEmitter {
         }
     }
 
-    /// Emits the copy of `operand`'s value into `destination`, or nothing where there is no destination, since
-    /// reading a place changes nothing.
-    private func use(_ operand: Operand, into destination: Place?, with builder: borrowing Builder) {
+    /// Emits a copy of an operand's value into the destination. Where there is no destination it emits nothing,
+    /// since reading a place changes nothing.
+    private func copyValue(of operand: Operand, into destination: Place?, with builder: borrowing Builder) {
         let value = value(of: operand, with: builder)
 
         // A value that no place takes is dropped.

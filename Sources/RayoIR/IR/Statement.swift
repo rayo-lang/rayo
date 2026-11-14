@@ -21,8 +21,7 @@ public enum Statement: Equatable, Sendable {
 /// The operation a statement makes its value with, from its operands.
 public enum Rvalue: Equatable, Sendable {
     /// The operand's value as it is, with no operation applied: a constant, or the value read or moved out of a
-    /// place. `let s = e.stats` lowers to one: it moves the field `stats` out of `e`, and the statement stores it in
-    /// `s`.
+    /// place.
     case operand(Operand)
     /// An operator applied to one operand, such as negation.
     case unary(IRUnaryOperator, Operand)

@@ -102,7 +102,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // MARK: Checking
 
-    @Code(201, error: "a file without a 'main' function is a library, which can't be built into an executable or run")
+    @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
     case noMain
 
     @Code(202, error: "'{signature}' is declared more than once")

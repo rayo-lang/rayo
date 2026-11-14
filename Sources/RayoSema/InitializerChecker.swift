@@ -38,7 +38,7 @@ struct InitializerChecker {
     /// Checks a call that makes a struct, such as `Enemy(hp: 100, armor: 5)`, and returns the checked call, or nil
     /// when it has a mistake, which is reported. Each argument is matched to the field it gives a value for, so that
     /// an error about it names the field. Every argument is checked, even when the call as a whole doesn't fit.
-    func checkCall(making id: StructID, with arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+    func checkCall(making id: StructID, passing arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
         let fields = expressions.file.declarations.fields(of: id)
 
         // When a field's own declaration has an error, such as a type that doesn't exist, the call can't be checked

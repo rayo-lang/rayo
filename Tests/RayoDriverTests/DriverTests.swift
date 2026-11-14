@@ -9,7 +9,7 @@ private let noCompiler = URL(fileURLWithPath: "/nonexistent/rayoc")
 
 /// What `rayo build` and `rayo run` give for `lib.rayo`, a file without `main`.
 private let libraryRejected = CommandResult(exitCode: 1, output: "", errors: """
-    lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into an \
+    lib.rayo:1:1: error[E0201]: the file has no 'main' function, so it can't be built into an \
     executable or run
 
     """)

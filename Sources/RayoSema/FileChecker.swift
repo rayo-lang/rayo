@@ -47,8 +47,8 @@ final class FileChecker {
         return program(types: types, main: main)
     }
 
-    /// The result type of a call to `signature` at `range`, or nil when it isn't known. A result type that depends
-    /// on itself is reported at `range`.
+    /// The result type of a call to a function, or nil when it isn't known. A result type that depends on itself is
+    /// reported at the call.
     func result(of signature: Signature, calledAt range: SourceRange) -> RayoType? {
         switch signature.result {
         // A declared result type is the call's.

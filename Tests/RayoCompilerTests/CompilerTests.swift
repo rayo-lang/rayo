@@ -124,7 +124,7 @@ struct CompilerTests {
         #expect(compiled.result.exitCode == 1)
         #expect(compiled.result.diagnostics.map(\.code) == [.noMain])
         #expect(compiled.result.errors == """
-            lib.rayo:1:1: error[E0201]: a file without a 'main' function is a library, which can't be built into \
+            lib.rayo:1:1: error[E0201]: the file has no 'main' function, so it can't be built into \
             an executable or run
 
             """)
