@@ -139,7 +139,12 @@ let package = Package(
         .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSource"]),
         .target(name: "RayoOwnership", dependencies: ["RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource"]),
         .systemLibrary(name: "CLLVM"),
-        .target(name: "RayoLLVMInstall", dependencies: ["CLLVM"]),
+        .target(name: "CLLVMInstall", cSettings: [
+            .define("RAYO_LLVM_MAJOR_VERSION", to: "\(llvmMajorVersion)"),
+            .define("RAYO_LLVM_TOOL_DIRECTORY", to: "\"\(checkedForDefine(llvmPrefix + "/bin"))\""),
+            .define("RAYO_LLD_DIRECTORY", to: "\"\(checkedForDefine(lldDirectory))\""),
+        ]),
+        .target(name: "RayoLLVMInstall", dependencies: ["CLLVMInstall"]),
         .target(name: "RayoRuntime", resources: [
             .embedInCode("entry.ll"),
             .embedInCode("print.ll"),
@@ -202,23 +207,22 @@ let package = Package(
     ],
 )
 
-// A target that imports RayoLLVM, however indirectly, loads CLLVM too, and so reads LLVM's headers and the
-// directories of the tools that link a program, which CLLVM's header holds.
+// A target that imports the binding, however indirectly, loads CLLVM too, and so reads LLVM's headers.
 for target in package.targets where readsLLVMHeaders(target, among: package.targets) {
-    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags([
-        "-Xcc", "-I\(llvmPrefix)/include",
-        "-Xcc", "-DRAYO_LLVM_TOOL_DIRECTORY=\"\(checkedForDefine(llvmPrefix + "/bin"))\"",
-        "-Xcc", "-DRAYO_LLD_DIRECTORY=\"\(checkedForDefine(lldDirectory))\"",
-    ])]
+    target.swiftSettings = (target.swiftSettings ?? []) + [.unsafeFlags(["-Xcc", "-I\(llvmPrefix)/include"])]
 }
 
 /// Whether `target` reads LLVM's headers, directly or through others of `targets`.
 func readsLLVMHeaders(_ target: Target, among targets: [Target]) -> Bool {
     target.dependencies.contains { dependency in
         switch dependency {
-        // A dependency reaches LLVM's headers when it is CLLVM, or one of `targets` that depends on it.
+        // A dependency reaches LLVM's headers when it is CLLVM, or one of `targets` that depends on it and whose
+        // module a dependent imports. Nothing imports an executable's module: the driver's tests depend on `rayoc`
+        // only to run it.
         case .targetItem(let name, _), .byNameItem(let name, _):
-            return name == "CLLVM" || targets.contains { $0.name == name && readsLLVMHeaders($0, among: targets) }
+            return name == "CLLVM" || targets.contains { candidate in
+                candidate.name == name && candidate.type != .executable && readsLLVMHeaders(candidate, among: targets)
+            }
 
         // A product of another package never reaches them.
         default:
