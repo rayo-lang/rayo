@@ -97,6 +97,12 @@ struct CallChecker {
     /// Checks a call of one of `candidates`, the functions of one name, that passes `arguments`.
     private func call(among candidates: [Signature], passing arguments: [Argument],
                       in range: SourceRange) -> CheckedExpr? {
+        // A prelude type's initializer called with one unlabeled literal makes the literal a value of the type, so
+        // `UInt(-1)` is an error, as `let u: UInt = -1` is, where a conversion would only fail as the program runs.
+        if let type = preludeType(initializedBy: candidates), let literal = soleLiteral(of: arguments) {
+            return self.literal(literal, as: type, in: range)
+        }
+
         // A call whose arguments fit no candidate was reported.
         guard let match = match(arguments, among: candidates, in: range) else { return nil }
 
@@ -104,6 +110,28 @@ struct CallChecker {
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
         let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
         return CheckedExpr(kind: kind, type: result, range: range)
+    }
+
+    /// The prelude type whose initializers `candidates` are, or nil where they are anything else.
+    private func preludeType(initializedBy candidates: [Signature]) -> RayoType? {
+        guard case .builtin(let builtin)? = candidates.first?.callee else { return nil }
+        return builtin.initializedType
+    }
+
+    /// The value of `arguments` where they are one unlabeled integer literal, or nil where they are anything else.
+    private func soleLiteral(of arguments: [Argument]) -> Expr? {
+        guard arguments.count == 1, arguments[0].label == nil else { return nil }
+        return switch arguments[0].value.kind {
+        case .intLiteral, .negativeIntLiteral: arguments[0].value
+        default: nil
+        }
+    }
+
+    /// Checks `literal` as a value of `type`, which the call at `range` makes it.
+    private func literal(_ literal: Expr, as type: RayoType, in range: SourceRange) -> CheckedExpr? {
+        // A literal that the type can't hold was reported.
+        guard let value = expressions.check(literal, expecting: Expectation(type)) else { return nil }
+        return CheckedExpr(kind: value.kind, type: type, range: range)
     }
 
     /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters.
@@ -201,7 +229,8 @@ struct CallChecker {
         // No candidate needs a conversion, so one that alone remains is the call's.
         if remaining.count == 1 { return remaining[0] }
 
-        // Several remain where one names a type that isn't one, and so takes any argument.
+        // A parameter whose type failed to resolve fits any argument, so several remain; that failure was reported
+        // where the function is declared.
         if remaining.contains(where: \.hasFailed) { return nil }
 
         // The prelude's built-ins of one name stand in for one generic function, which binds an untyped argument to

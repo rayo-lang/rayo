@@ -53,10 +53,7 @@ indirect enum UntypedValue {
 
     /// Whether the value can settle to `type`. An integer literal fits every integer type, and nothing else.
     func fits(_ type: RayoType) -> Bool {
-        switch type {
-        case .int, .uint: true
-        case .bool, .void, .structure: false
-        }
+        type.isInteger
     }
 
     /// Settles the value to `type`, which it fits, reporting each literal whose value `type` can't hold. An error

@@ -15,6 +15,7 @@ struct UIntTests {
         "let u: UInt = -0\nprint(u)",
         "let h = Hits(count: 3)\nprint(takes(copy h.count))",
         "var u: UInt = 1\nu += 2\nprint(u)",
+        "let u: UInt = 1\nprint(u + (1 + 18446744073709551614))",
     ])
     func `a literal is a UInt where its position expects one`(body: String) {
         let source = mainSource(body) + """
@@ -32,7 +33,7 @@ struct UIntTests {
     }
 
     @Test(arguments: [("f(1)", [ErrorCode.ambiguousCall(name: "f")]), ("let u: UInt = 1\nf(u)", [])])
-    func `a literal that overloads on Int and UInt both take makes the call ambiguous`(
+    func `a literal passed to overloads on Int and UInt makes the call ambiguous`(
         body: String, expected: [ErrorCode],
     ) {
         let source = mainSource(body) + "\nfunc f(_ i: Int) {}\nfunc f(_ u: UInt) {}"
@@ -79,13 +80,32 @@ struct UIntTests {
     }
 
     @Test(arguments: [
-        "let u: UInt = UInt(5)\nprint(u)",
         "let i = -1\nprint(UInt(i))",
         "let u: UInt = 1\nlet i: Int = Int(u)\nprint(i)",
-        "print(Int(18446744073709551615))",
     ])
     func `'UInt(_:)' converts an Int, and 'Int(_:)' a UInt`(body: String) {
         #expect(errors(mainSource(body)) == [])
+    }
+
+    @Test(arguments: [
+        "print(UInt(18446744073709551615))",
+        "let u: UInt = UInt(5)\nprint(u)",
+        "let i: Int = Int(-9223372036854775808)\nprint(i)",
+    ])
+    func `'UInt' or 'Int' called with one literal makes the literal a value of its type`(body: String) {
+        #expect(errors(mainSource(body)) == [])
+    }
+
+    @Test(arguments: [
+        ("let u = UInt(-1)", ErrorCode.literalDoesntFit(type: "UInt"), "-1"),
+        ("let i = Int(18446744073709551615)", .literalDoesntFit(type: "Int"), "18446744073709551615"),
+    ])
+    func `a literal that 'UInt' or 'Int' is called with must fit in its type`(
+        body: String, expected: ErrorCode, literal: String,
+    ) {
+        let (codes, covered) = codesAndCoverage(inMain: body)
+        #expect(codes == [expected])
+        #expect(covered == [literal])
     }
 
     @Test(arguments: [

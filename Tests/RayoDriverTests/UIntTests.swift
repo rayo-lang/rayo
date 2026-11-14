@@ -90,15 +90,15 @@ struct UIntTests {
     }
 
     @Test(arguments: [
-        ("UInt(-1)", "18446744073709551615"),
-        ("Int(18446744073709551615)", "-1"),
-        ("UInt(-9223372036854775808)", "9223372036854775808"),
-        ("Int(9223372036854775808)", "-9223372036854775808"),
+        ("i: Int", "UInt(i)", "-1", "18446744073709551615"),
+        ("u: UInt", "Int(u)", "18446744073709551615", "-1"),
+        ("i: Int", "UInt(i)", "-9223372036854775808", "9223372036854775808"),
+        ("u: UInt", "Int(u)", "9223372036854775808", "-9223372036854775808"),
     ])
     func `a conversion of a value the other type can't hold panics in debug, and keeps its bits in release`(
-        expression: String, bits: String,
+        parameter: String, expression: String, value: String, bits: String,
     ) {
-        let source = "func main() { print(\(expression)) }"
+        let source = "func main() { show(\(value)) }\nfunc show(_ \(parameter)) { print(\(expression)) }"
         #expect(panic(in: run(source, options: ["--debug"])) == Panic(reason: "integer overflow"))
         #expect(run(source, options: ["--release"]) == CommandResult(exitCode: 0, output: bits + "\n", errors: ""))
     }

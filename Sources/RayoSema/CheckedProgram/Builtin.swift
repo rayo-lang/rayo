@@ -23,6 +23,12 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
         }
     }
 
+    /// The prelude type the built-in initializes, or nil where it is no initializer.
+    var initializedType: RayoType? {
+        guard case .initializer(let type) = name else { return nil }
+        return type
+    }
+
     /// The parameters, in order, each with the label a call passes its argument with, or nil where it passes none.
     var parameters: [(label: String?, type: RayoType)] {
         switch self {

@@ -92,8 +92,12 @@ struct OperatorEmitter {
             try emitUnsignedRemainder(left, right, at: range, in: program).anyValue
 
         // A comparison orders its operands as their signedness says.
-        case (.equal, _), (.notEqual, _), (.less, _), (.lessEqual, _), (.greater, _), (.greaterEqual, _):
-            compare(signedness.predicate(for: op), left, right, with: program.builder)
+        case (.equal, _): compare(.equal, left, right, with: program.builder)
+        case (.notEqual, _): compare(.notEqual, left, right, with: program.builder)
+        case (.less, _): compare(signedness.less, left, right, with: program.builder)
+        case (.lessEqual, _): compare(signedness.lessEqual, left, right, with: program.builder)
+        case (.greater, _): compare(signedness.greater, left, right, with: program.builder)
+        case (.greaterEqual, _): compare(signedness.greaterEqual, left, right, with: program.builder)
         }
     }
 
@@ -257,23 +261,11 @@ private enum Signedness {
         }
     }
 
-    /// The predicate that compares two integers of this signedness as `op`, a comparison, does.
-    func predicate(for op: IRBinaryOperator) -> IntegerPredicate {
-        switch (op, self) {
-        case (.equal, _): .equal
-        case (.notEqual, _): .notEqual
-        case (.less, .signed): .signedLess
-        case (.less, .unsigned): .unsignedLess
-        case (.lessEqual, .signed): .signedLessEqual
-        case (.lessEqual, .unsigned): .unsignedLessEqual
-        case (.greater, .signed): .signedGreater
-        case (.greater, .unsigned): .unsignedGreater
-        case (.greaterEqual, .signed): .signedGreaterEqual
-        case (.greaterEqual, .unsigned): .unsignedGreaterEqual
-        case (.add, _), (.subtract, _), (.multiply, _), (.divide, _), (.remainder, _):
-            preconditionFailure("'\(op)' isn't a comparison")
-        }
-    }
+    /// The predicates that order two integers of this signedness as `<`, `<=`, `>` and `>=` do.
+    var less: IntegerPredicate { self == .signed ? .signedLess : .unsignedLess }
+    var lessEqual: IntegerPredicate { self == .signed ? .signedLessEqual : .unsignedLessEqual }
+    var greater: IntegerPredicate { self == .signed ? .signedGreater : .unsignedGreater }
+    var greaterEqual: IntegerPredicate { self == .signed ? .signedGreaterEqual : .unsignedGreaterEqual }
 }
 
 /// An integer operation that can overflow.
