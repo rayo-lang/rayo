@@ -1,11 +1,13 @@
 import RayoDiagnostics
 import RayoIR
+import RayoSema
 
 /// Checks that a program moves no value out of a borrowed parameter, whose caller still owns the value.
 public enum ParameterMoveChecker {
-    /// Reports each move out of a borrowed parameter, or out of a field inside one, in source order.
-    public static func check(_ program: IRProgram) -> [Diagnostic] {
-        program.definedFunctions.flatMap { check(PlaceTypes(body: $0.body, types: program.types)) }.inSourceOrder
+    /// Reports each move out of a borrowed parameter, or out of a field inside one, under the ID of each function
+    /// that makes any, in source order.
+    public static func check(_ program: IRProgram) -> [FunctionID: [Diagnostic]] {
+        program.errors { check(PlaceTypes(body: $1, types: program.types)) }
     }
 
     /// Checks every block of the body whose places `places` gives the types of, whether or not a path reaches it.

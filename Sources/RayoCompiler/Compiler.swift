@@ -176,8 +176,8 @@ public enum Compiler {
     /// program's errors and warnings to `errors`. Returns what `rayoc` prints to its standard output: the dump
     /// `invocation` asks for, or nothing.
     ///
-    /// Each pipeline it runs ends in a step that ends the compile on the program's errors, so a pipeline gives nothing
-    /// only where the compile has already ended, and nothing is printed there.
+    /// Each stage skips only what an earlier stage found failed, and the compile ends on the program's errors only
+    /// before it prints or writes anything. So every error that every stage finds is reported together.
     private static func compile(
         _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
         writeFile: @escaping (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
@@ -201,7 +201,7 @@ public enum Compiler {
     private static func check(
         _ path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        _ = try frontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors).run(path, errors: &errors)
+        _ = try errorFreeFrontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors).run(path, errors: &errors)
         return ""
     }
 
@@ -209,9 +209,16 @@ public enum Compiler {
     private static func checkedProgramText(
         of path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let checked = try checking(readFile: readFile, warningsAreErrors: warningsAreErrors).run(path, errors: &errors)
-        guard let checked,
-              try lowering(warningsAreErrors: warningsAreErrors).run(checked, errors: &errors) != nil else { return "" }
+        let checkedStages = pipeline {
+            lowering
+            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
+        }
+        // A file that can't be read as text checks to no program, and its errors end the compile.
+        guard let checked = try checking(readFile: readFile).run(path, errors: &errors) else {
+            try checkedStages.skip(errors: errors)
+            return ""
+        }
+        _ = try checkedStages.run(checked, errors: &errors)
         return CheckedPrinter.text(of: checked)
     }
 
@@ -219,7 +226,8 @@ public enum Compiler {
     private static func irText(
         of path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let program = try frontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors).run(path, errors: &errors)
+        let program = try errorFreeFrontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors)
+            .run(path, errors: &errors)
         return program.map(IRPrinter.text(of:)) ?? ""
     }
 
@@ -230,7 +238,7 @@ public enum Compiler {
         writeFile: @escaping (String, [UInt8]) -> Bool, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         _ = try pipeline {
-            frontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors)
+            frontEnd(readFile: readFile)
             RequireMain()
             StopOnErrors<IRExecutable>(warningsAreErrors: warningsAreErrors)
             Emit(build: build, sourcePath: path)
@@ -240,46 +248,50 @@ public enum Compiler {
     }
 
     /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR. It
-    /// ends the compile when the program has errors, or any warning where `warningsAreErrors`.
-    static func frontEnd(
-        readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool,
-    ) -> some CompilationStep<String, IRProgram> {
+    /// gives the program on with its errors and warnings, without the bodies of the functions a stage found failed.
+    static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
-            checking(readFile: readFile, warningsAreErrors: warningsAreErrors)
-            lowering(warningsAreErrors: warningsAreErrors)
+            checking(readFile: readFile)
+            lowering
         }
     }
 
-    /// The step that reads the source file at a path through `readFile`, and checks it. It ends the compile when the
-    /// program has errors, or any warning where `warningsAreErrors`.
-    private static func checking(
+    /// The front end, which ends the compile when the program has errors, or any warning where `warningsAreErrors`,
+    /// and otherwise gives its IR.
+    private static func errorFreeFrontEnd(
         readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool,
+    ) -> some CompilationStep<String, IRProgram> {
+        pipeline {
+            frontEnd(readFile: readFile)
+            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
+        }
+    }
+
+    /// The step that reads the source file at a path through `readFile`, and checks it. It gives the program on with
+    /// its errors and warnings, without the bodies of the functions that are tainted.
+    private static func checking(
+        readFile: @escaping (String) -> [UInt8]?,
     ) -> some CompilationStep<String, CheckedProgram> {
         pipeline {
             ReadSource(readFile: readFile)
             Parse()
-            StopOnErrors<SourceFile>(warningsAreErrors: warningsAreErrors)
             Check()
-            StopOnErrors<CheckedProgram>(warningsAreErrors: warningsAreErrors)
         }
     }
 
-    /// The step that lowers a checked program to Rayo IR, and checks what its functions do with their locals. It ends
-    /// the compile when the program has errors, or any warning where `warningsAreErrors`.
-    private static func lowering(warningsAreErrors: Bool) -> some CompilationStep<CheckedProgram, IRProgram> {
+    /// The step that lowers a checked program to Rayo IR, and checks what its functions do with their locals. It
+    /// gives the program on with its errors and warnings, without the bodies of the functions a check found failed.
+    private static var lowering: some CompilationStep<CheckedProgram, IRProgram> {
         pipeline {
             Lower()
             VerifyIR()
+            // Only a function that moves out of no borrowed parameter is checked for where its locals hold a value,
+            // so a use of a parameter after such a move isn't reported again as a use after a move.
             CheckParameterMoves()
-            // Only a program that moves out of no borrowed parameter is checked for where its locals hold a value, so
-            // a use of a parameter after such a move isn't reported again as a use after a move.
-            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
-            CheckOwnership()
-            // Only a program whose locals hold a value at each use is checked for values no code reads, so a
+            // Only a function whose locals hold a value at each use is checked for values no code reads, so a
             // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
-            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
+            CheckOwnership()
             CheckUnusedValues()
-            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
         }
     }
 

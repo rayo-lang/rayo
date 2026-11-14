@@ -15,6 +15,11 @@ enum Reachability {
         case .returnStmt, .breakStmt, .continueStmt:
             return false
 
+        // A statement that failed to parse may have been one that goes elsewhere, so no missing `return` is reported
+        // after it.
+        case .error:
+            return false
+
         // An `if` completes as it does as a value.
         case .ifStmt(let ifExpr):
             return canComplete(ifExpr)
@@ -78,8 +83,9 @@ enum Reachability {
         case .drop(let value), .expression(let value), .returnStmt(let value?): breaks(value)
         // A loop's condition runs outside the loop, but a `break` in its body leaves the nested loop.
         case .whileStmt(let condition, _): breaks(condition)
-        // Nothing else leaves a loop.
-        case .continueStmt, .returnStmt(nil): false
+        // Nothing else leaves a loop; a statement that failed to parse is taken to leave none, so the loop isn't
+        // taken to complete, and no missing `return` is reported after it.
+        case .continueStmt, .returnStmt(nil), .error: false
         }
     }
 

@@ -1,24 +1,33 @@
 internal import RayoDiagnostics
+internal import RayoSource
 
 /// Parses the grammar's sequences of items: statements and declarations, one to a line or `;`, and the
 /// arguments and parameters a `(` opens, separated by commas.
 extension Parser {
     /// Parses items separated by newlines or `;`, up to a `}` or the end of the file, which it leaves for the
-    /// caller. An item that fails is skipped, and its error stays reported.
-    mutating func parseLines<T>(
+    /// caller. An item that fails is skipped, and its error stays reported; `failed` gives what the sequence keeps in
+    /// its place, from how it failed and the source it covers, or nil where it keeps nothing.
+    mutating func parseLines<T, Failure: Error>(
         ifUnended unended: ErrorCase,
-        _ item: (inout Parser) throws(ParseFailure) -> T,
+        _ item: (inout Parser) throws(Failure) -> T,
+        ifFailed failed: (Failure, SourceRange) -> T?,
     ) -> [T] {
         var items: [T] = []
         skipSeparators()
         while !current.isPunct(.rbrace) && !atEnd {
-            do throws(ParseFailure) {
+            let start = current.range
+            do {
                 items.append(try item(&self))
-                // An item that runs on past its end is reported, and the rest of it skipped.
-                if !atStatementEnd { throw fail(unended) }
+                // An item that runs on past its end is kept, and the rest of it reported and skipped.
+                if !atStatementEnd {
+                    _ = fail(unended)
+                    recover()
+                }
             } catch {
-                // An item that failed is skipped, and the sequence goes on with the next one.
+                // An item that failed is skipped, up to its end, and kept as `failed` says. The item covers at least
+                // its first token, which it either read or the skipping did.
                 recover()
+                if let kept = failed(error, range(from: start)) { items.append(kept) }
             }
             skipSeparators()
         }

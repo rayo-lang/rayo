@@ -13,11 +13,11 @@ struct RejectedSource: Error {
 
 /// Parses, checks and lowers `source`, throwing a `RejectedSource` where the parser or the checker rejects it.
 func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
-    let (file, syntaxErrors) = Parser.parse(Array(source.utf8))
+    let (file, syntaxErrors) = Parser.parse(source)
     guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
 
     let (program, checkErrors) = Checker.check(file)
-    guard let program else { throw RejectedSource(diagnostics: checkErrors) }
+    guard checkErrors.isEmpty else { throw RejectedSource(diagnostics: checkErrors) }
 
     return Lowering.lower(program)
 }

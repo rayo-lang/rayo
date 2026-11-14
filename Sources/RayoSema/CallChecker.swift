@@ -52,8 +52,8 @@ struct CallChecker {
         case .inScope(.local):
             reachingNothing(reporting: .notAFunction(name: name), at: nameRange, passing: arguments)
 
-        // A local whose declaration failed was reported there.
-        case .inScope(.failed):
+        // A local, a function or a struct whose declaration failed was reported there.
+        case .inScope(.failed), .failed:
             reachingNothing(reporting: nil, at: nameRange, passing: arguments)
 
         // Nothing has the name.

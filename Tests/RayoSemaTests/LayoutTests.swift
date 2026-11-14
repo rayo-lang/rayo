@@ -74,7 +74,7 @@ private let hit = StructType(name: "Hit", fields: [
 private func types(_ declarations: String) throws -> TypeTable {
     let checked = Checker.check(Parser.parse("func main() {}\n" + declarations).file)
     #expect(checked.diagnostics.isEmpty)
-    return try #require(checked.program).types
+    return checked.program.types
 }
 
 /// The layout of the struct `name` among `table`'s structs.

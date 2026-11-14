@@ -4,9 +4,10 @@ import RayoSema
 
 /// Checks that some code reads each value a program assigns to a local, or to a field inside one.
 public enum UnusedValueChecker {
-    /// Reports each place that assigns a local, or a field inside one, a value that no code reads, in source order.
-    public static func check(_ program: IRProgram) -> [Diagnostic] {
-        program.definedFunctions.flatMap { check(PlaceTypes(body: $0.body, types: program.types)) }.inSourceOrder
+    /// Reports each place that assigns a local, or a field inside one, a value that no code reads, under the ID of
+    /// each function that has any, in source order.
+    public static func check(_ program: IRProgram) -> [FunctionID: [Diagnostic]] {
+        program.errors { check(PlaceTypes(body: $1, types: program.types)) }
     }
 
     /// Checks the body whose places `places` gives the types of.

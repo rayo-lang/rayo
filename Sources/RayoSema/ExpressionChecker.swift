@@ -258,8 +258,8 @@ struct ExpressionChecker {
         case .inScope(.local(let local)):
             return (CheckedPlace(root: .local(local, range: range)), names[local].type)
 
-        // A local whose declaration failed was reported there.
-        case .inScope(.failed):
+        // A local, a function or a struct whose declaration failed was reported there.
+        case .inScope(.failed), .failed:
             return nil
 
         // A function is no value.

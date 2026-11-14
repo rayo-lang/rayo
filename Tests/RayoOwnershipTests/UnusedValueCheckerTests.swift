@@ -2,6 +2,7 @@ import Testing
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
+import RayoSema
 
 struct UnusedValueCheckerTests {
     @Test func `a value stored in a local that no code reads is reported at the store`() throws {
@@ -163,18 +164,21 @@ struct UnusedValueCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
     }
 
-    @Test func `the errors come in source order across the program's functions`() throws {
+    @Test func `each function's errors come under its ID, and a function without any has none`() throws {
         // The first function's error comes after the second's in the source.
         let late = function("bb0:\n  %0 @2:6-2:6 = use 1 @1:1-1:1\n  return", named: "late()")
         let early = function("bb0:\n  %0 @2:5-2:5 = use 1 @1:1-1:1\n  return", named: "early()")
 
-        // The checker reports the second function's error first, as the source has it.
-        let reported = UnusedValueChecker.check(try program(of: [late, early]))
-        #expect(reported.map(\.range.start.column) == [5, 6])
+        let clean = function("bb0:\n  return", named: "clean()")
+
+        let reported = UnusedValueChecker.check(try program(of: [late, early, clean]))
+        #expect(reported.mapValues { $0.map(\.range.start.column) } == [
+            FunctionID(index: 0): [6], FunctionID(index: 1): [5],
+        ])
     }
 }
 
 /// The errors the checker reports in a program of one function, which returns `result` and is made of `blocks`.
 private func errors(in blocks: String, result: String = "Void") throws -> [Diagnostic] {
-    UnusedValueChecker.check(try program(of: [function(blocks, result: result)]))
+    UnusedValueChecker.check(try program(of: [function(blocks, result: result)]))[FunctionID(index: 0)] ?? []
 }

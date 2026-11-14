@@ -15,6 +15,10 @@ struct Declarations {
     private var initializers: [StructID: [Signature]] = [:]
     /// Each struct's fields, in the order the struct declares them.
     private var fields: [StructID: [DeclaredField]] = [:]
+    /// The structs that can't be laid out, whose uses report nothing more.
+    private var unlaidOutStructs: Set<StructID> = []
+    /// The names of the functions that failed to parse, whose uses report nothing more.
+    private var unparsedFunctions: Set<String> = []
     private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
@@ -35,6 +39,30 @@ struct Declarations {
     /// Declares `type` by its name, which no other type has.
     mutating func declare(_ type: DeclaredType) {
         types[type.name] = type
+    }
+
+    /// Declares the struct `id` as one that can't be laid out, whose uses report nothing more.
+    mutating func declareUnlaidOut(_ id: StructID) {
+        unlaidOutStructs.insert(id)
+    }
+
+    /// Declares `name` as the name of a function that failed to parse, whose uses report nothing more.
+    mutating func declareUnparsedFunction(named name: String) {
+        unparsedFunctions.insert(name)
+    }
+
+    /// Whether a function called `name` failed to parse.
+    func hasFailedFunction(named name: String) -> Bool {
+        unparsedFunctions.contains(name)
+    }
+
+    /// Whether the type called `name` failed to parse, or is a struct that can't be laid out.
+    func hasFailedType(named name: String) -> Bool {
+        switch types[name] {
+        case .failed: true
+        case .structure(let id): unlaidOutStructs.contains(id)
+        case nil: false
+        }
     }
 
     /// Declares `fields` as the fields of the struct `id`, in the order it declares them.
@@ -102,8 +130,15 @@ struct Declarations {
     /// Resolves `name` to one of the file's types or one of the prelude's types that no function shadows, or
     /// reports that `name`, written at `range`, names neither, and returns nil.
     private func resolve(named name: String, at range: SourceRange, reporting errors: ErrorList) -> RayoType? {
-        // A type of the file shadows the prelude's type of its name.
-        if let declared = types[name] { return declared.type }
+        // A type of the file shadows the prelude's type of its name. One that failed names no type, and taints the body
+        // that names it, which reports nothing more.
+        if let declared = types[name] {
+            guard !hasFailedType(named: name), let type = declared.type else {
+                errors.taints.taint()
+                return nil
+            }
+            return type
+        }
         // A function shadows it too, though it names no type. The file's names are known before any is declared, so
         // a type written before the function is declared, such as a field's, is shadowed as well.
         let isShadowedByFunction = kind(of: name) == .functions

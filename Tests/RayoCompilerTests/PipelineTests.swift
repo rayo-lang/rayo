@@ -180,7 +180,7 @@ struct PipelineTests {
         warningsAreErrors: Bool, exitCode: Int32,
     ) {
         let steps = pipeline {
-            Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) }, warningsAreErrors: warningsAreErrors)
+            Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) })
             WarnAtStart()
             StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
         }

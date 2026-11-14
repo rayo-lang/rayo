@@ -29,17 +29,20 @@ final class NameScopes {
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
     /// functions and structs. A call gets the module's functions or struct where it has either; any other use gets
-    /// the local or parameter where there is one.
+    /// the local or parameter where there is one. A name that reaches a declaration that failed taints the body.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         // Find the name in scope and in the module; the use picks between them.
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
         let module = moduleMatch(for: name, use: use)
-        return switch use {
+        let match = switch use {
         // No local can be called, so a function or a struct wins even over a local whose declaration failed.
         case .call: module ?? inScope
         // A local or parameter shadows the module's functions and structs.
         case .ordinary: inScope ?? module
         }
+
+        if match?.reachesFailedDeclaration == true { file.errors.taints.taint() }
+        return match
     }
 
     /// Declares `name` in the innermost block as a new local of `type`, or, when `type` is nil or the name is
@@ -70,14 +73,24 @@ final class NameScopes {
     /// The module's functions or type called `name` that `use` finds, nil when it has neither. Where both have the
     /// name, a call finds the functions, and any other use the kind the name belongs to.
     private func moduleMatch(for name: String, use: NameUse) -> NameMatch? {
-        let functions = file.declarations.functions(named: name)
-        let functionMatch = functions.isEmpty ? nil : NameMatch.functions(functions)
-        let typeMatch = file.declarations.type(named: name).map(NameMatch.init(type:))
+        let declarations = file.declarations
+        let functions = declarations.functions(named: name)
+        let declaredFunctions = functions.isEmpty ? nil : NameMatch.functions(functions)
+        let declaredType = declarations.type(named: name).map(NameMatch.init(type:))
+        let functionMatch = match(declaredFunctions, unlessFailed: declarations.hasFailedFunction(named: name))
+        let typeMatch = match(declaredType, unlessFailed: declarations.hasFailedType(named: name))
 
         // A call finds the functions, so a function whose name a type took still answers its calls; any other use
         // finds the type first where the type declares the name first.
         let findsTypeFirst = use == .ordinary && file.declarations.kind(of: name) == .type
         return findsTypeFirst ? typeMatch ?? functionMatch : functionMatch ?? typeMatch
+    }
+
+    /// What a name finds among the module's declarations of one kind: `declared`, what it names of that kind, or
+    /// `.failed` where `hasFailed` says a declaration of that kind and name failed. The failed declaration might have
+    /// been the one the use means, so the name reaches it in place of any other of its kind.
+    private func match(_ declared: NameMatch?, unlessFailed hasFailed: Bool) -> NameMatch? {
+        hasFailed ? .failed : declared
     }
 
     /// Declares `name` in the innermost block as a failed declaration, whose uses report nothing more.

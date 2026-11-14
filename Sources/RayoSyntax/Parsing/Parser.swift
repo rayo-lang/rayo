@@ -14,21 +14,28 @@ package struct Parser: ~Copyable {
     private var position = 0
     private var diagnostics: [Diagnostic]
 
-    /// Lexes `bytes`, held as UTF-8, and starts at the first token, with the lexer's errors as the first diagnostics.
-    private init(_ bytes: [UInt8]) {
-        let (tokens, diagnostics) = Lexer.tokenize(bytes)
+    /// A parser of `bytes`, held as UTF-8, which lex to `tokens`, at the first token, with the lexer's errors,
+    /// `lexerErrors`, as the first diagnostics.
+    private init(_ bytes: [UInt8], tokens: [Token], lexerErrors: [Diagnostic]) {
         self.bytes = bytes
         self.tokens = tokens
-        self.diagnostics = diagnostics
+        diagnostics = lexerErrors
     }
 
     package static func parse(_ source: String) -> (file: SourceFile, diagnostics: [Diagnostic]) {
-        parse(Array(source.utf8))
+        let (file, diagnostics) = parse(Array(source.utf8))
+        // A string is UTF-8, so it always parses to a file.
+        guard let file else { preconditionFailure("a string is UTF-8") }
+        return (file, diagnostics)
     }
 
-    /// Parses `bytes`, with the lexer's and the parser's diagnostics in source order.
-    package static func parse(_ bytes: [UInt8]) -> (file: SourceFile, diagnostics: [Diagnostic]) {
-        var parser = Parser(bytes)
+    /// Parses `bytes`, with the lexer's and the parser's diagnostics in source order. Bytes that aren't UTF-8 can't
+    /// be read as text at all, and parse to no file.
+    package static func parse(_ bytes: [UInt8]) -> (file: SourceFile?, diagnostics: [Diagnostic]) {
+        let (tokens, lexerErrors) = Lexer.tokenize(bytes)
+        guard let tokens else { return (nil, lexerErrors) }
+
+        var parser = Parser(bytes, tokens: tokens, lexerErrors: lexerErrors)
         let file = parser.parseFile()
         return (file, parser.diagnostics.inSourceOrder)
     }

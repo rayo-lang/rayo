@@ -18,6 +18,8 @@ public indirect enum StmtKind: Sendable {
     case breakStmt
     case continueStmt
     case returnStmt(Expr?)
+    /// A statement that failed to parse, whose syntax error was reported.
+    case error
 }
 
 /// `name: Type = value`, where the type and the value are optional.

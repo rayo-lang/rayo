@@ -12,6 +12,6 @@ This page names each stage's kind of question, not each question. A new feature 
 | Lowering | `RayoIR` | How the checked program runs as control flow. It reports no errors. |
 | Ownership | `RayoOwnership` | Whether each move, read and assignment is allowed, given what a function's paths leave in each place. Semantic checking says which uses are moves; this stage says whether they are allowed. |
 | Emitting | `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM` | How the program becomes LLVM code, taking each type's layout from semantic checking, and the runtime it links. It reports no errors in the program. |
-| Pipeline | `RayoCompiler`, `rayoc` | Which stages run, in what order, and what the output asks of a program, such as a `main`. The pipeline, not a stage, decides where the program's errors end the compile; it ends it after each stage that reports errors, so each stage sees only a program the ones before it accepted. It also decides what `rayoc` reads, writes and prints. |
+| Pipeline | `RayoCompiler`, `rayoc` | Which stages run, in what order, and what the output asks of a program, such as a `main`. The pipeline, not a stage, decides where the program's errors end the compile: every stage runs, skipping what an earlier one marked as failed, and the compile ends before emitting. It also decides what `rayoc` reads, writes and prints. |
 
 The driver, `rayo`, in `RayoDriver` and `RayoLLVMInstall`, runs `rayoc` and links what it writes: it lies outside `rayoc`'s stages.
