@@ -32,7 +32,7 @@ private func isObjectFile(_ bytes: [UInt8]) -> Bool {
     // arm64, and 0x8664 for x86-64.
     #if arch(arm64)
     let coff: [UInt8] = [0x64, 0xAA]
-    #else
+    #elseif arch(x86_64)
     let coff: [UInt8] = [0x64, 0x86]
     #endif
     return bytes.starts(with: machO) || bytes.starts(with: elf) || bytes.starts(with: coff)
