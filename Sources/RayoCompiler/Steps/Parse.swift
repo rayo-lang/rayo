@@ -1,11 +1,11 @@
+import RayoDiagnostics
 import RayoSyntax
 
-/// Parses a file's source into its syntax tree.
+/// Parses a file's source into its syntax tree, and adds its syntax errors to the compile's errors.
 struct Parse: CompilationStep {
-    func run(_ source: [UInt8]) throws(CompilationError) -> SourceFile {
+    func run(_ source: [UInt8], errors: inout [Diagnostic]) -> SourceFile? {
         let (file, diagnostics) = Parser.parse(source)
-        // A file with syntax errors is rejected with them.
-        guard diagnostics.isEmpty else { throw .rejected(diagnostics) }
+        errors += diagnostics
         return file
     }
 }

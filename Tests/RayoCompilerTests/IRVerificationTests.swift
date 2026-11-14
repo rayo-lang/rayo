@@ -1,4 +1,5 @@
 @testable import RayoCompiler
+import RayoDiagnostics
 import RayoIR
 import RayoSema
 import Testing
@@ -18,18 +19,21 @@ struct IRVerificationTests {
         let returnsBool = program(endingIn: .return(.constant(.bool(true))))
         let violation = "the IR returns a value of type Bool from a function that returns Void"
         let message = "internal error: in 'main()': \(violation)"
-        #expect(throws: CompilationError.failed(message)) { try VerifyIR().run(returnsBool) }
+        var errors: [Diagnostic] = []
+        #expect(throws: CompilationError.failed(message)) { try VerifyIR().run(returnsBool, errors: &errors) }
     }
     #else
     @Test func `in a release build, IR that breaks its types goes on unchecked`() throws {
         let returnsBool = program(endingIn: .return(.constant(.bool(true))))
-        #expect(try VerifyIR().run(returnsBool) == returnsBool)
+        var errors: [Diagnostic] = []
+        #expect(try VerifyIR().run(returnsBool, errors: &errors) == returnsBool)
     }
     #endif
 
     @Test func `IR that keeps its types goes on as it is`() throws {
         let returnsNothing = program(endingIn: .return(nil))
-        #expect(try VerifyIR().run(returnsNothing) == returnsNothing)
+        var errors: [Diagnostic] = []
+        #expect(try VerifyIR().run(returnsNothing, errors: &errors) == returnsNothing)
     }
 
     @Test func `the front end verifies the IR that lowering gives, before any stage reads it`() {

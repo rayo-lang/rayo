@@ -1,5 +1,8 @@
+import RayoDiagnostics
 import RayoIR
 import RayoLLVM
+import RayoSema
+import RayoSyntax
 
 /// The compiler, `rayoc`, which checks a source file or compiles it to object code for the host.
 public enum Compiler {
@@ -121,34 +124,42 @@ public enum Compiler {
         _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
         writeFile: @escaping (String, [UInt8]) -> Bool,
     ) throws(CompilationError) {
+        var errors: [Diagnostic] = []
         switch invocation.output {
         case .check:
-            _ = try frontEnd(readFile: readFile).run(invocation.path)
+            _ = try frontEnd(readFile: readFile).run(invocation.path, errors: &errors)
         case .objectFile(let path, let build):
-            try pipeline {
+            _ = try pipeline {
                 frontEnd(readFile: readFile)
                 RequireMain()
+                StopOnErrors<IRExecutable>()
                 Emit(build: build, sourcePath: invocation.path)
                 WriteObject(path: path, writeFile: writeFile)
-            }.run(invocation.path)
+            }.run(invocation.path, errors: &errors)
         }
     }
 
-    /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR.
+    /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR. It
+    /// ends the compile when the program has errors.
     static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
         pipeline {
             ReadSource(readFile: readFile)
             Parse()
+            StopOnErrors<SourceFile>()
             Check()
+            StopOnErrors<CheckedProgram>()
             Lower()
             VerifyIR()
+            CheckParameterMoves()
             // Only a program that moves out of no borrowed parameter is checked for where its locals hold a value, so
             // a use of a parameter after such a move isn't reported again as a use after a move.
-            CheckParameterMoves()
+            StopOnErrors<IRProgram>()
             CheckOwnership()
             // Only a program whose locals hold a value at each use is checked for values no code reads, so a
             // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
+            StopOnErrors<IRProgram>()
             CheckUnusedValues()
+            StopOnErrors<IRProgram>()
         }
     }
 

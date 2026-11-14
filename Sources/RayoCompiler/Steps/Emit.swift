@@ -1,3 +1,4 @@
+import RayoDiagnostics
 import RayoIR
 import RayoLLVM
 
@@ -6,7 +7,7 @@ struct Emit: CompilationStep {
     var build: Build
     var sourcePath: String
 
-    func run(_ executable: IRExecutable) throws(CompilationError) -> [UInt8] {
+    func run(_ executable: IRExecutable, errors: inout [Diagnostic]) throws(CompilationError) -> [UInt8]? {
         do {
             return try LLVMEmitter.objectCode(for: executable, sourcePath: sourcePath, build: build)
         } catch {
