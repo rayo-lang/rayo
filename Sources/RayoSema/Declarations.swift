@@ -10,9 +10,11 @@ struct Declarations {
     private var functions: [String: [Signature]] = [:]
     /// The file's types of every kind, which share one namespace.
     private var types: [String: DeclaredType] = [:]
-    /// Each struct's initializers, which a call of the struct's name reaches. A struct without one is made from its
-    /// fields' values.
+    /// Each struct's initializers, which a call of the struct's name reaches. A struct without one is made by its
+    /// primary initializer.
     private var initializers: [StructID: [Signature]] = [:]
+    /// The primary initializer of each struct that can be laid out.
+    private var primaryInitializers: [StructID: FunctionID] = [:]
     /// Each struct's fields, in the order the struct declares them.
     private var fields: [StructID: [DeclaredField]] = [:]
     /// The structs that can't be laid out, whose uses report nothing more.
@@ -70,6 +72,11 @@ struct Declarations {
         self.fields[id] = fields
     }
 
+    /// Declares the function `initializer` as the primary initializer of the struct `id`.
+    mutating func declarePrimaryInitializer(_ initializer: FunctionID, of id: StructID) {
+        primaryInitializers[id] = initializer
+    }
+
     /// Declares the prelude's built-ins whose names the file's own types and functions leave free.
     mutating func declarePrelude() {
         declarePrelude(Builtin.allCases.map(Signature.init(of:)))
@@ -92,6 +99,16 @@ struct Declarations {
 
     func initializers(of id: StructID) -> [Signature] {
         initializers[id, default: []]
+    }
+
+    /// The primary initializer of the struct `id`, which must be laid out.
+    func primaryInitializer(of id: StructID) -> FunctionID {
+        // The checker declares the primary initializer of every struct that can be laid out before it checks a body,
+        // and a body reaches no struct that can't.
+        guard let initializer = primaryInitializers[id] else {
+            preconditionFailure("'\(id.name)' has no primary initializer declared")
+        }
+        return initializer
     }
 
     func type(named name: String) -> DeclaredType? {

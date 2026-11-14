@@ -36,19 +36,8 @@ extension IRParser {
         return switch keyword {
         case "use": .use(try operand())
         case "call": .call(try callee(), arguments: try operands())
-        case "struct": .structure(try madeStruct(), fields: try operands())
         default: try operation(named: keyword, at: token)
         }
-    }
-
-    /// Reads the struct a value is made of, which must be a struct the text declares.
-    private mutating func madeStruct() throws(IRTextError) -> StructID {
-        let token = current
-        let type = try type()
-        guard case .structure(let id) = type else {
-            throw IRTextError(at: token, "\(type) isn't a struct, so no value of it is made of fields")
-        }
-        return id
     }
 
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and
@@ -85,7 +74,7 @@ extension IRParser {
         return .builtin(builtin)
     }
 
-    /// Reads a call's arguments, or a struct's fields, between parentheses.
+    /// Reads a call's arguments between parentheses.
     private mutating func operands() throws(IRTextError) -> [Operand] {
         try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.operand() }
     }

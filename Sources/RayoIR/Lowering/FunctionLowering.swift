@@ -10,11 +10,14 @@ struct FunctionLowering: ~Copyable {
     }
 
     var builder: FunctionBuilder
+    /// The program's functions, whose declarations say what a call does with its arguments.
+    let functions: FunctionTable
     /// The loops around the code being lowered, innermost last.
     var loops: [Loop] = []
 
-    init(builder: consuming FunctionBuilder) {
+    init(builder: consuming FunctionBuilder, functions: FunctionTable) {
         self.builder = builder
+        self.functions = functions
     }
 
     /// Makes the IR body of the statements lowered so far, which are the body of a function whose result type is

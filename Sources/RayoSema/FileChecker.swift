@@ -14,10 +14,11 @@ final class FileChecker {
     /// The functions whose bodies are being checked.
     private var checking: Set<FunctionID> = []
 
-    /// What checking a body gave: the body, and its function's result type, which is nil when it isn't known.
+    /// What checking a body gave: the body, nil for a function without one, and its function's result type, which
+    /// is nil when it isn't known.
     private struct BodyCheck {
         var result: RayoType?
-        var body: CheckedBody
+        var body: CheckedBody?
     }
 
     init(_ file: SourceFile) {
@@ -36,6 +37,7 @@ final class FileChecker {
         // Check every struct and function; a file without a `main` is a library, checked the same.
         let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
         let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
+        declarePrimaryInitializers(of: typeIDs.structs.compactMap(\.self), in: types)
         let main = declareFunctions()
         for index in functions.indices { _ = body(of: FunctionID(index: index)) }
 
@@ -67,6 +69,22 @@ final class FileChecker {
             let result = body(of: id).result
             if result == nil { errors.taints.taint() }
             return result
+        }
+    }
+
+    /// Declares the primary initializer of each of `structs` that can be laid out, whose fields `types` gives. A
+    /// struct that can't be laid out has none, since no call reaches it.
+    private func declarePrimaryInitializers(of structs: [StructID], in types: TypeTable) {
+        for id in structs where !declarations.hasFailedType(named: id.name) {
+            // The initializer takes each field's value, labeled by its name, and makes the struct.
+            let initializer = FunctionID(index: functions.count)
+            let parameters = types[id].fields.map { field in
+                Parameter(label: field.name, type: field.type, spelledType: "\(field.type)")
+            }
+            let signature = Signature(name: id.name, callee: .function(initializer), parameters: parameters,
+                                      result: .type(.structure(id)))
+            functions.append(DeclaredFunction(signature: signature, kind: .primaryInitializer(id)))
+            declarations.declarePrimaryInitializer(initializer, of: id)
         }
     }
 
@@ -212,6 +230,8 @@ final class FileChecker {
         return switch function.kind {
         // A function the source writes has the body its declaration holds.
         case .written(let declaration): checkBody(of: declaration, as: function.signature)
+        // A primary initializer has no body, and makes its struct.
+        case .primaryInitializer(let id): BodyCheck(result: .structure(id), body: nil)
         }
     }
 

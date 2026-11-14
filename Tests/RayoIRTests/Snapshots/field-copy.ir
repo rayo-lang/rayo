@@ -5,13 +5,15 @@ struct Enemy {
 
 main "main()"
 
+init "Enemy(hp: Int, armor: Int)"(Int, Int) -> Enemy
+
 func "main()"() -> Void {
   let %0 e: Enemy
   let %1 a: Int
   temp %2: Int
 bb0:
   declare %0
-  %0 @2:5-2:6 = struct Enemy(1, 2) @2:9-2:31
+  %0 @2:5-2:6 = call "Enemy(hp: Int, armor: Int)"(1, 2) @2:9-2:31
   declare %1
   %1 @3:5-3:6 = use read %0.1 @3:9-3:21 @3:9-3:21
   %2 @4:7-4:15 = add checked read %1 @4:7-4:8, read %0.0 @4:11-4:15 @4:7-4:15

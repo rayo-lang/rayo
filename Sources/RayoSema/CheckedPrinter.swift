@@ -3,9 +3,10 @@ import RayoSource
 /// Writes a checked program as text, for a reader to see what checking made of the source.
 ///
 /// The text gives the program's structs, then the function a run starts at, then each function, in the order of
-/// their IDs, with its locals and then its statements. Each statement and expression starts a line, and the
-/// expressions and places it holds follow, indented under it. An expression's line ends in its type and its source
-/// range, written `line:column-line:column` after an `@`:
+/// their IDs, with its locals and then its statements. A struct's primary initializer is declared with `init`, and has
+/// no body. Each statement and expression starts a line, and the expressions and places it holds follow, indented
+/// under it. An expression's line ends in its type and its source range, written `line:column-line:column` after an
+/// `@`:
 ///
 /// ```
 /// func "main()"() -> Void {
@@ -53,7 +54,7 @@ public struct CheckedPrinter: ~Copyable {
     private mutating func writeFunction(_ id: FunctionID) {
         let function = program.functions[id]
         let parameters = function.parameters.map(\.description).joined(separator: ", ")
-        let header = "func \(quoted(function.name))(\(parameters)) -> \(function.result)"
+        let header = "\(function.kind.keyword) \(quoted(function.name))(\(parameters)) -> \(function.result)"
         guard let body = program.bodies[id] else {
             lines += [header, ""]
             return
@@ -119,7 +120,7 @@ public struct CheckedPrinter: ~Copyable {
         case .binary(_, let left, let right):
             write(left, depth: depth + 1)
             write(right, depth: depth + 1)
-        case .call(_, let arguments), .structure(_, let arguments):
+        case .call(_, let arguments):
             for argument in arguments { write(argument, depth: depth + 1) }
         case .if(let condition, let then, let otherwise):
             write(condition, depth: depth + 1)
@@ -140,7 +141,6 @@ public struct CheckedPrinter: ~Copyable {
         case .unary(let op, _): "unary \(op)"
         case .binary(let op, _, _): "binary \(op)"
         case .call(let callee, _): "call \(text(of: callee))"
-        case .structure(let id, _): "struct \(id.name)"
         case .if: "if"
         }
     }

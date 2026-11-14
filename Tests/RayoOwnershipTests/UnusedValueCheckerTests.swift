@@ -136,7 +136,7 @@ struct UnusedValueCheckerTests {
     @Test(arguments: [
         ("%5.0", "use 9", "s.range"),
         ("%5.1.0", "use 9", "s.hit.damage"),
-        ("%5.1", "struct Hit(9)", "s.hit"),
+        ("%5.1", "call \"Hit(damage: Int)\"(9)", "s.hit"),
     ])
     func `a later read of the whole struct doesn't read a field's value that a store replaced before it`(
         field: String, value: String, path: String,

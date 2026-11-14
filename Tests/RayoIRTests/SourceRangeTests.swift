@@ -82,7 +82,8 @@ struct SourceRangeTests {
             }
             struct Enemy(let hp: Int)
             """
-        let main = try lowered(source).body(at: 0)
+        // The struct declares its primary initializer ahead of every function the source writes.
+        let main = try lowered(source).body(at: 1)
 
         // The two prints follow the declaration and its value, and each reads `e.hp` where it lies.
         guard case .compute(nil, .call(_, let firstArguments), _) = main.blocks[0].statements[2],

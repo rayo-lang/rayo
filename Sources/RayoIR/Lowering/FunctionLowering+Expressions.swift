@@ -41,7 +41,7 @@ extension FunctionLowering {
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
         // Any other value, an `if` included, is computed into a temporary, from where it is read.
-        case .unary, .binary, .call, .structure, .if:
+        case .unary, .binary, .call, .if:
             .read(temporary(holding: expr, as: use), at: expr.range)
         }
     }
@@ -81,11 +81,15 @@ extension FunctionLowering {
             .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
-            .call(callee, arguments: arguments.map { operand(of: $0, as: .read) })
-        // And the values of a struct's fields, in the order the struct declares them, which the struct takes.
-        case .structure(let id, let fields):
-            .structure(id, fields: fields.map { operand(of: $0, as: .take) })
+            .call(callee, arguments: arguments.map { operand(of: $0, as: argumentUse(of: callee)) })
         }
+    }
+
+    /// What a call of `callee` does with its arguments: a primary initializer takes each, as its struct's field, and
+    /// any other function reads it.
+    private func argumentUse(of callee: Callee) -> ValueUse {
+        guard case .function(let id) = callee, case .primaryInitializer = functions[id].kind else { return .read }
+        return .take
     }
 
     /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which

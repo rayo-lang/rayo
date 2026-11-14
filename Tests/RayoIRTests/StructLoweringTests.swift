@@ -15,7 +15,7 @@ private func expectLowering(withShot body: String, toMatch name: String) throws 
 
 @Suite("Lowering structs")
 struct StructLoweringTests {
-    @Test func `a struct's value is made of its fields' values, and a local given as one is moved`() throws {
+    @Test func `a struct's value is a call of its primary initializer, which moves a local given bare`() throws {
         try expectLowering(withEnemy: "let hp = 1\nlet e = Enemy(hp: hp, armor: 2)", toMatch: "struct-value")
     }
 

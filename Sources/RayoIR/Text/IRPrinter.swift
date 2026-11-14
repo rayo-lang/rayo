@@ -4,7 +4,7 @@ import RayoSource
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.
 ///
 /// The text gives the program's structs, then the function it starts at, then each function, in the order of their
-/// IDs:
+/// IDs. A struct's primary initializer is declared with `init`, and has no body:
 ///
 /// ```
 /// struct Pair {
@@ -13,6 +13,8 @@ import RayoSource
 /// }
 ///
 /// main "main()"
+///
+/// init "Pair(count: Int, flag: Bool)"(Int, Bool) -> Pair
 ///
 /// func "main()"() -> Void {
 ///   var %0 x: Int
@@ -51,7 +53,7 @@ public enum IRPrinter {
     /// A function's declaration, followed, where it has a body, by its locals and its blocks.
     private static func text(of function: FunctionDeclaration, body: IRBody?, in program: IRProgram) -> String {
         let parameters = function.parameters.map(\.description).joined(separator: ", ")
-        let header = "func \(quoted(function.name))(\(parameters)) -> \(function.result)"
+        let header = "\(function.kind.keyword) \(quoted(function.name))(\(parameters)) -> \(function.result)"
         guard let body else { return header + "\n" }
 
         // Each local on a line, then each block under its label.
@@ -104,8 +106,6 @@ public enum IRPrinter {
             "\(name(of: op)) \(text(of: left)), \(text(of: right))"
         case .call(let callee, let arguments):
             "call \(text(of: callee, in: program))(\(list(arguments)))"
-        case .structure(let id, let fields):
-            "struct \(id.name)(\(list(fields)))"
         }
     }
 

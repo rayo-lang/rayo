@@ -35,8 +35,9 @@ struct InitializerChecker {
 
     private var errors: ErrorList { expressions.file.errors }
 
-    /// Checks `id(arguments)`, which makes a value of the struct `id`. Every argument is checked, whether or not the
-    /// call fits the struct's fields.
+    /// Checks `id(arguments)`, a call of the primary initializer of the struct `id`. Every argument is checked, whether
+    /// or not the call fits the struct's fields. The arguments are matched to the struct's fields, which the
+    /// initializer's parameters follow, rather than as any other call's are, so that each error names a field.
     func make(_ id: StructID, from arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
         // Find the struct's fields, and the types of those whose declarations are known.
         let fields = expressions.file.declarations.fields(of: id)
@@ -57,7 +58,8 @@ struct InitializerChecker {
 
         // A call that fails any of these was reported.
         guard let values, hasEveryField, isInOrder, given.allSatisfy(\.isLabeledRight) else { return nil }
-        return CheckedExpr(kind: .structure(id, fields: values), type: .structure(id), range: range)
+        let initializer = expressions.file.declarations.primaryInitializer(of: id)
+        return CheckedExpr(kind: .call(.function(initializer), arguments: values), type: .structure(id), range: range)
     }
 
     /// The field that each of `arguments` gives a value for, among `fields`, those of the struct `id`. Reports each

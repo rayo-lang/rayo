@@ -31,8 +31,8 @@ struct FunctionEmitter {
     let llvmFunction: Function
     /// How the function's parameters and result are passed.
     let signature: LoweredSignature
-    /// The program's functions, indexed by `FunctionID`.
-    let functions: [DeclaredFunction]
+    /// What a call of each of the program's functions reaches, indexed by `FunctionID`.
+    let callTargets: [CallTarget]
     /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
     let operators: OperatorEmitter
@@ -47,13 +47,13 @@ struct FunctionEmitter {
 
     init(
         body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction,
-        functions: [DeclaredFunction], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
+        callTargets: [CallTarget], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
     ) {
         self.body = body
         self.declaration = declaration
         llvmFunction = declared.function
         signature = declared.signature
-        self.functions = functions
+        self.callTargets = callTargets
         self.lowering = lowering
         operators = OperatorEmitter(into: declared.function, types: lowering.types)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
@@ -123,13 +123,9 @@ struct FunctionEmitter {
             let value = try operators.emit(op, operands.0, operands.1, of: type, at: range, in: program)
             keep(value, in: destination, with: program.builder)
 
-        // A call passes its arguments as its function's signature says.
+        // A call passes its arguments as its function's signature says, or builds a struct from them.
         case .call(let callee, let arguments):
             try call(callee, passing: arguments, into: destination, in: program)
-
-        // A struct is built in its place, one field at a time.
-        case .structure(let id, let fields):
-            build(id, from: fields, into: destination, with: program.builder)
         }
     }
 

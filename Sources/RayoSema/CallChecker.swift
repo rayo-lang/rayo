@@ -62,12 +62,12 @@ struct CallChecker {
         }
     }
 
-    /// Checks a call of one of the initializers of the struct `id`, or, where the struct declares none, makes the
-    /// struct from its fields' values.
+    /// Checks a call of one of the initializers of the struct `id`, or, where the struct declares none, of its
+    /// primary initializer.
     private func initializerCall(of id: StructID, passing arguments: [Argument],
                                  in range: SourceRange) -> CheckedExpr? {
         let initializers = expressions.file.declarations.initializers(of: id)
-        // A struct without initializers is made from its fields' values, which the arguments give.
+        // A struct without initializers is made by its primary initializer, from its fields' values.
         guard !initializers.isEmpty else {
             return InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
         }

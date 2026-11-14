@@ -2,10 +2,10 @@ import LLVM
 import RayoIR
 import RayoSema
 
-/// Structs, which are built in their place one field at a time.
+/// Structs, which a call of their primary initializer builds in its destination one field at a time.
 extension FunctionEmitter {
-    /// Emits the instructions that build a value of the struct `id` in `destination`, from `operands`, the values of
-    /// its fields in the order it declares them.
+    /// Emits the instructions that build a value of the struct `id` in `destination`, from `operands`, the arguments
+    /// of a call of its primary initializer, which are the values of its fields in the order it declares them.
     func build(_ id: StructID, from operands: [Operand], into destination: Place?, with builder: borrowing Builder) {
         let fields = values(of: operands, with: builder)
 

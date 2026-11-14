@@ -102,7 +102,7 @@ struct PassModeTests {
               temp %2: Holder
             bb0:
               %1 @1:1-1:2 = use read %0 @1:1-1:2 @1:1-1:2
-              %2 @1:1-1:2 = struct Holder(move %1 @1:1-1:2, true) @1:1-1:2
+              %2 @1:1-1:2 = call "Holder(trio: Trio, flag: Bool)"(move %1 @1:1-1:2, true) @1:1-1:2
               return
             }
             """
@@ -151,7 +151,7 @@ struct PassModeTests {
             func "main()"() -> Void {
               temp %0: Ints
             bb0:
-              %0 @1:1-1:2 = struct Ints(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
+              %0 @1:1-1:2 = call "Ints(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
               return
             }
             """
@@ -170,7 +170,7 @@ struct PassModeTests {
     }
 
     /// The structs the tests pass: a Pair of two scalars, a Trio and a Nested of three, a Holder of a Trio, a Flags
-    /// of two Bools, and an Ints of two Ints.
+    /// of two Bools, and an Ints of two Ints, with the primary initializers of those the tests make.
     private let structs = """
         struct Pair {
           flag: Bool
@@ -197,6 +197,9 @@ struct PassModeTests {
           a: Int
           b: Int
         }
+        init "Trio(a: Int, b: Int, c: Bool)"(Int, Int, Bool) -> Trio
+        init "Holder(trio: Trio, flag: Bool)"(Trio, Bool) -> Holder
+        init "Ints(a: Int, b: Int)"(Int, Int) -> Ints
 
         """
 
@@ -222,7 +225,7 @@ struct PassModeTests {
         func "make()"() -> Trio {
           temp %0: Trio
         bb0:
-          %0 @1:1-1:2 = struct Trio(1, 2, true) @1:1-1:2
+          %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
           return move %0 @1:1-1:2
         }
         """

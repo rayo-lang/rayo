@@ -17,8 +17,6 @@ public indirect enum CheckedExprKind: Sendable {
     case unary(CheckedUnaryOperator, CheckedExpr)
     case binary(CheckedBinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])
-    /// Makes a value of the struct from its fields' values, in the order the struct declares its fields.
-    case structure(StructID, fields: [CheckedExpr])
     /// Runs `then` when the Bool `condition` is true, and `otherwise` when it is false, and gives the value of the
     /// branch that runs.
     case `if`(condition: CheckedExpr, then: CheckedBranch, otherwise: CheckedBranch)

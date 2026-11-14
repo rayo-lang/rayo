@@ -9,13 +9,17 @@ struct Hit {
 
 main "main()"
 
+init "Shot(range: Int, hit: Hit)"(Int, Hit) -> Shot
+
+init "Hit(damage: Int)"(Int) -> Hit
+
 func "main()"() -> Void {
   var %0 s: Shot
   temp %1: Hit
 bb0:
   declare %0
-  %1 @2:29-2:43 = struct Hit(7) @2:29-2:43
-  %0 @2:5-2:6 = struct Shot(4, read %1 @2:29-2:43) @2:9-2:44
+  %1 @2:29-2:43 = call "Hit(damage: Int)"(7) @2:29-2:43
+  %0 @2:5-2:6 = call "Shot(range: Int, hit: Hit)"(4, read %1 @2:29-2:43) @2:9-2:44
   %0.1.0 @3:1-3:13 = use 9 @3:16-3:17
   _ = call builtin "print(_: Int)"(read %0.0 @4:7-4:14) @4:1-4:15
   _ = call builtin "print(_: Int)"(read %0.1.0 @5:7-5:19) @5:1-5:20

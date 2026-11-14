@@ -48,11 +48,13 @@ public struct IRParser: ~Copyable {
                 depth += 1
             case (.symbol("}"), _):
                 depth -= 1
-            // A struct's declaration names it after `struct`, outside every brace; inside a body, `struct` makes one.
+            // A struct's declaration names it after `struct`, outside every brace.
             case (.word("struct"), .word(let name)) where depth == 0:
                 guard !structs.contains(name) else { throw IRTextError(at: next, "struct '\(name)' is declared twice") }
                 structs.append(name)
-            case (.word("func"), .string(let name)) where depth == 0:
+            // A function's declaration names it after `func`, or after `init` for a struct's primary initializer.
+            case (.word("func"), .string(let name)) where depth == 0,
+                 (.word("init"), .string(let name)) where depth == 0:
                 guard !functions.contains(name) else {
                     throw IRTextError(at: next, "function \"\(name)\" is declared twice")
                 }
@@ -80,10 +82,12 @@ public struct IRParser: ~Copyable {
             case .word("func"):
                 let (declaration, body) = try function()
                 bodies[functions.declare(declaration)] = body
+            case .word("init"):
+                _ = functions.declare(try primaryInitializer())
             case .word("main"):
                 throw IRTextError(at: token, "the function a run starts at is named twice")
             default:
-                throw expected("'struct', 'main' or 'func'")
+                throw expected("'struct', 'main', 'func' or 'init'")
             }
         }
         return IRProgram(types: TypeTable(structs: structs), functions: functions, bodies: bodies, main: main)
@@ -112,9 +116,7 @@ public struct IRParser: ~Copyable {
     /// Reads `func "name"(Types) -> Type`, followed by the function's body where it has one.
     private mutating func function() throws(IRTextError) -> (FunctionDeclaration, IRBody?) {
         try expect(word: "func")
-        guard case .string(let name) = current.kind else { throw expected("a function's quoted name") }
-        advance()
-        let parameters = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.type() }
+        let (name, parameters) = try nameAndParameters()
         try expect("->")
         let result = try type()
         let declaration = FunctionDeclaration(name: name, parameters: parameters, result: result, kind: .written)
@@ -122,5 +124,33 @@ public struct IRParser: ~Copyable {
         // A function without a body ends at its result.
         guard current.kind == .symbol("{") else { return (declaration, nil) }
         return (declaration, try body())
+    }
+
+    /// Reads `init "name"(Types) -> Struct`, the primary initializer of the struct it makes, which has no body.
+    private mutating func primaryInitializer() throws(IRTextError) -> FunctionDeclaration {
+        try expect(word: "init")
+        let (name, parameters) = try nameAndParameters()
+        try expect("->")
+        let id = try madeStruct()
+        return FunctionDeclaration(name: name, parameters: parameters, result: .structure(id),
+                                   kind: .primaryInitializer(id))
+    }
+
+    /// Reads the struct a primary initializer makes, which must be a struct the text declares.
+    private mutating func madeStruct() throws(IRTextError) -> StructID {
+        let token = current
+        let type = try type()
+        guard case .structure(let id) = type else {
+            throw IRTextError(at: token, "\(type) isn't a struct, so no primary initializer makes it")
+        }
+        return id
+    }
+
+    /// Reads a function's quoted name, then its parameters' types between parentheses.
+    private mutating func nameAndParameters() throws(IRTextError) -> (name: String, parameters: [RayoType]) {
+        guard case .string(let name) = current.kind else { throw expected("a function's quoted name") }
+        advance()
+        let parameters = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.type() }
+        return (name, parameters)
     }
 }

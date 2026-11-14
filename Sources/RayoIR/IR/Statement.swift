@@ -17,15 +17,13 @@ public enum Rvalue: Equatable, Sendable {
     case unary(IRUnaryOperator, Operand)
     case binary(IRBinaryOperator, Operand, Operand)
     case call(Callee, arguments: [Operand])
-    /// Makes a value of the struct from its fields' values, in the order the struct declares its fields.
-    case structure(StructID, fields: [Operand])
 
     /// The operands, in the order the operation evaluates them.
     public var operands: [Operand] {
         switch self {
         case .use(let operand), .unary(_, let operand): return [operand]
         case .binary(_, let left, let right): return [left, right]
-        case .call(_, let arguments), .structure(_, let arguments): return arguments
+        case .call(_, let arguments): return arguments
         }
     }
 
@@ -37,7 +35,6 @@ public enum Rvalue: Equatable, Sendable {
         case .unary(let op, let operand): op.resultType(on: operand.type(in: body, types: types))
         case .binary(let op, let left, _): op.resultType(on: left.type(in: body, types: types))
         case .call(let callee, _): callee.result(in: functions)
-        case .structure(let id, _): .structure(id)
         }
     }
 }
