@@ -9,17 +9,17 @@ extension FunctionLowering {
 
     private mutating func lower(_ statement: CheckedStmt) {
         switch statement {
-        // An expression statement computes its value and drops it.
+        // An expression statement, `_ =` included, takes its value and drops it.
         case .expression(let expr):
-            compute(expr, into: nil)
+            compute(expr, into: nil, as: .take)
 
         // A declaration starts its local's life.
         case .binding(let local, let range, let value):
             lowerDeclaration(of: local, at: range, givenBy: value)
 
-        // An assignment computes its value into its place.
+        // An assignment computes its value into its place, which takes it.
         case .assign(let target, let value):
-            compute(value, into: Destination(place(of: target), at: target.range))
+            compute(value, into: Destination(place(of: target), at: target.range), as: .take)
 
         // A compound assignment applies its operator to its place and the value.
         case .compoundAssign(let target, let op, let value):
@@ -47,7 +47,7 @@ extension FunctionLowering {
     private mutating func lowerCompoundAssign(
         _ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr,
     ) {
-        let operand = operand(of: value)
+        let operand = operand(of: value, as: .read)
         let place = place(of: target)
         let destination = Destination(place, at: target.range)
         let value = Rvalue.binary(IRBinaryOperator(op), .read(place, at: target.range), operand)
@@ -60,7 +60,7 @@ extension FunctionLowering {
 
         // A local declared without a value holds none until it is assigned.
         guard let value else { return }
-        compute(value, into: Destination(Place(root: local), at: range))
+        compute(value, into: Destination(Place(root: local), at: range), as: .take)
     }
 
     /// Leaves the function with `value`.
@@ -85,8 +85,8 @@ extension FunctionLowering {
     /// and returns nil.
     private mutating func returnedOperand(of value: CheckedExpr) -> Operand? {
         // A value of any other type is the result.
-        guard value.type == .void else { return operand(of: value) }
-        compute(value, into: nil)
+        guard value.type == .void else { return operand(of: value, as: .take) }
+        compute(value, into: nil, as: .take)
         return nil
     }
 
@@ -115,6 +115,6 @@ extension FunctionLowering {
     private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
         // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
         if case .boolLiteral(true) = condition.kind { return .goto(body) }
-        return .branch(operand(of: condition), then: body, otherwise: exit)
+        return .branch(operand(of: condition, as: .read), then: body, otherwise: exit)
     }
 }

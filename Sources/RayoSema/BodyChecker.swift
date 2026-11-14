@@ -47,7 +47,7 @@ struct BodyChecker {
         // A function whose result type isn't known takes any value: its body gives the type, or its written type
         // failed and was reported.
         let expected = jumps.result.map { Expectation($0) }
-        return expressions.check(expr, as: .take, expecting: expected)
+        return expressions.check(expr, expecting: expected)
     }
 
     /// Checks `statement`, giving a checked statement, or nil where one fails, for each binding of a declaration
@@ -59,7 +59,7 @@ struct BodyChecker {
         case .expression(let expr):
             return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
-            return [expressions.check(value, as: .take).map { .expression($0) }]
+            return [expressions.check(value).map { .expression($0) }]
         case .assign(let target, let op, let value):
             return [assignmentChecker.assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let ifExpr):

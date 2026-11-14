@@ -4,125 +4,132 @@ import RayoSource
 /// Lowers expressions, from the current block on, as the operations that compute them and the operands that hold
 /// their values.
 extension FunctionLowering {
-    /// Lowers `expr` as the computation of its value into `destination`, or, where `destination` is nil, of a value
-    /// that is dropped.
-    mutating func compute(_ expr: CheckedExpr, into destination: Destination?) {
+    /// Lowers `expr`, the value of a position that `use`s it, as the computation of its value into `destination`, or,
+    /// where `destination` is nil, of a value that is dropped.
+    mutating func compute(_ expr: CheckedExpr, into destination: Destination?, as use: ValueUse) {
         // An `if` whose value is dropped runs the branch its condition picks, and computes that branch's value for
         // what it does, so a Void `if` needs no temporary.
         if destination == nil, case .if(let condition, let then, let otherwise) = expr.kind {
-            return lowerIf(condition, then, otherwise, into: nil)
+            return lowerIf(condition, then, otherwise, into: nil, as: use)
         }
 
         // Any other value is one operation, whose operands are computed first.
-        let value = rvalue(of: expr)
+        let value = rvalue(of: expr, as: use)
         builder.emit(value, into: destination, range: expr.range)
     }
 
-    /// Lowers `expr` to an operand that holds its value, computing it into a new temporary unless it is a constant or
-    /// a place.
-    mutating func operand(of expr: CheckedExpr) -> Operand {
+    /// Lowers `expr`, the value of a position that `use`s it, to an operand that holds its value, computing it into a
+    /// new temporary unless it is a constant or a place.
+    mutating func operand(of expr: CheckedExpr, as use: ValueUse) -> Operand {
         switch expr.kind {
         // An integer is a constant operand.
         case .intLiteral(let value): .constant(.int(value))
         // So is a Bool.
         case .boolLiteral(let value): .constant(.bool(value))
-        // A place that the checker reads is read where it lies, keeping its value.
-        case .place(let place): .read(self.place(of: place), at: expr.range)
-        // A place that the checker moves gives its value up.
-        case .move(let place): .move(self.place(of: place), at: expr.range)
+        // A place written on its own gives its value up where its position takes it, and keeps it where it reads it.
+        case .place(let place):
+            switch use {
+            case .read: .read(self.place(of: place), at: expr.range)
+            case .take: .move(self.place(of: place), at: expr.range)
+            }
+        // A copy reads the place it copies, whatever its position does with the value.
+        case .copy(let place): .read(self.place(of: place), at: expr.range)
         // `&&` evaluates its right operand only when its left one is true.
         case .binary(.and, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
         // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
-        // Any other value, an `if` included, is computed into a temporary.
+        // Any other value, an `if` included, is computed into a temporary, from where it is read.
         case .unary, .binary, .call, .structure, .if:
-            .read(temporary(holding: expr), at: expr.range)
+            .read(temporary(holding: expr, as: use), at: expr.range)
         }
     }
 
     /// Lowers `place` to the IR place it names, computing its root into a new temporary where it is a value that no
-    /// local holds.
+    /// local holds. The root's value is read, so a place that an `if`'s branch gives keeps its value.
     mutating func place(of place: CheckedPlace) -> Place {
         let root = switch place.root {
         case .local(let local, _): local
-        case .temporary(let value): temporary(holding: value).root
+        case .temporary(let value): temporary(holding: value, as: .read).root
         }
         return Place(root: root, steps: place.steps.map(PlaceStep.init))
     }
 
-    /// Computes `expr` into a new temporary, or, for an `if`, has the branch that runs compute its value there, and
-    /// returns the temporary's place.
-    private mutating func temporary(holding expr: CheckedExpr) -> Place {
-        // An `if` computes its value on the path of the branch that runs.
+    /// Computes `expr`, the value of a position that `use`s it, into a new temporary, or, for an `if`, has the branch
+    /// that runs compute its value there, and returns the temporary's place.
+    private mutating func temporary(holding expr: CheckedExpr, as use: ValueUse) -> Place {
+        // An `if` computes its value on the path of the branch that runs, which uses it as the `if`'s position does.
         if case .if(let condition, let then, let otherwise) = expr.kind {
-            return lowerIf(condition, then, otherwise, intoTemporaryOf: expr.type, at: expr.range)
+            return lowerIf(condition, then, otherwise, intoTemporaryOf: expr.type, at: expr.range, as: use)
         }
         return lowerIntoTemporary(expr)
     }
 
-    /// Lowers `expr` to the operation that computes its value, computing its operands first.
-    private mutating func rvalue(of expr: CheckedExpr) -> Rvalue {
+    /// Lowers `expr`, the value of a position that `use`s it, to the operation that computes its value, computing its
+    /// operands first.
+    private mutating func rvalue(of expr: CheckedExpr, as use: ValueUse) -> Rvalue {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
-        case .intLiteral, .boolLiteral, .place, .move, .binary(.and, _, _), .binary(.or, _, _), .if:
-            .use(operand(of: expr))
+        case .intLiteral, .boolLiteral, .place, .copy, .binary(.and, _, _), .binary(.or, _, _), .if:
+            .use(operand(of: expr, as: use))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
-            .unary(IRUnaryOperator(op), operand(of: value))
+            .unary(IRUnaryOperator(op), operand(of: value, as: .read))
         // The left operand is computed before the right one, in the order the source reads.
         case .binary(let op, let left, let right):
-            .binary(IRBinaryOperator(op), operand(of: left), operand(of: right))
+            .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
-            .call(callee, arguments: arguments.map { operand(of: $0) })
-        // And the values of a struct's fields, in the order the struct declares them.
+            .call(callee, arguments: arguments.map { operand(of: $0, as: .read) })
+        // And the values of a struct's fields, in the order the struct declares them, which the struct takes.
         case .structure(let id, let fields):
-            .structure(id, fields: fields.map { operand(of: $0) })
+            .structure(id, fields: fields.map { operand(of: $0, as: .take) })
         }
     }
 
-    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into a new
-    /// temporary of `type` at `range`, and returns the temporary's place.
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which
+    /// the `if`'s position `use`s, into a new temporary of `type` at `range`, and returns the temporary's place.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
-                                  intoTemporaryOf type: RayoType, at range: SourceRange) -> Place {
+                                  intoTemporaryOf type: RayoType, at range: SourceRange, as use: ValueUse) -> Place {
         let temporary = builder.newTemporary(type)
-        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range))
+        lowerIf(condition, then, otherwise, into: Destination(temporary, at: range), as: use)
         return temporary
     }
 
-    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs into
-    /// `destination`, or dropping it where `destination` is nil.
+    /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which
+    /// the `if`'s position `use`s, into `destination`, or dropping it where `destination` is nil.
     private mutating func lowerIf(_ condition: CheckedExpr, _ then: CheckedBranch, _ otherwise: CheckedBranch,
-                                  into destination: Destination?) {
+                                  into destination: Destination?, as use: ValueUse) {
         // Compute the condition, and make the blocks of the two branches and of the join after them.
-        let conditionValue = operand(of: condition)
+        let conditionValue = operand(of: condition, as: .read)
         let thenBlock = builder.newBlock()
         let elseBlock = builder.newBlock()
         let join = builder.newBlock()
 
         // Each branch runs its statements and computes its value, then goes on to the join.
         builder.end(with: .branch(conditionValue, then: thenBlock, otherwise: elseBlock), continuingIn: thenBlock)
-        lower(then, into: destination)
+        lower(then, into: destination, as: use)
         builder.end(with: .goto(join), continuingIn: elseBlock)
-        lower(otherwise, into: destination)
+        lower(otherwise, into: destination, as: use)
         builder.end(with: .goto(join), continuingIn: join)
     }
 
-    /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`.
-    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?) {
+    /// Lowers `branch`'s statements, then computes its value, where it gives one, into `destination`, which uses it
+    /// as the `if`'s position `use`s it.
+    private mutating func lower(_ branch: CheckedBranch, into destination: Destination?, as use: ValueUse) {
         lower(branch.statements)
 
         // A branch that gives no value computes none.
         guard let value = branch.value else { return }
-        compute(value, into: destination)
+        compute(value, into: destination, as: use)
     }
 
-    /// Computes `expr` into a new temporary, and returns the temporary's place.
+    /// Computes `expr`, an operation that is neither a place nor an `if`, into a new temporary that an operand reads,
+    /// and returns the temporary's place.
     private mutating func lowerIntoTemporary(_ expr: CheckedExpr) -> Place {
         let temporary = builder.newTemporary(expr.type)
-        compute(expr, into: Destination(temporary, at: expr.range))
+        compute(expr, into: Destination(temporary, at: expr.range), as: .read)
         return temporary
     }
 
@@ -134,7 +141,7 @@ extension FunctionLowering {
         // The result starts as `left`'s value, which is the result when it is `decidingValue`.
         let result = Destination(builder.newTemporary(.bool), at: range)
         let resultValue = Operand.read(result.place, at: range)
-        let leftValue = operand(of: left)
+        let leftValue = operand(of: left, as: .read)
         builder.emit(.use(leftValue), into: result, range: range)
 
         // A `left` that decides goes on to the join, and any other to a block of its own that evaluates `right`.
@@ -146,7 +153,7 @@ extension FunctionLowering {
         builder.end(with: branch, continuingIn: evaluateRight)
 
         // There `right`'s value becomes the result, and both paths meet at the join, where lowering goes on.
-        let rightValue = operand(of: right)
+        let rightValue = operand(of: right, as: .read)
         builder.emit(.use(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue

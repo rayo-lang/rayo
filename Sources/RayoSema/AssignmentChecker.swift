@@ -27,7 +27,7 @@ struct AssignmentChecker {
     private func checkAssigned(_ expr: Expr, by op: AssignOperator, to type: RayoType?) -> CheckedExpr? {
         // A plain assignment takes the value, which must have the place's type.
         if op.binary == nil {
-            expressions.check(expr, as: .take, expecting: type.map { Expectation($0) })
+            expressions.check(expr, expecting: type.map { Expectation($0) })
         } else {
             // A compound one reads it, as its operator's right operand, so an untyped value takes the place's type
             // as the other operand's.

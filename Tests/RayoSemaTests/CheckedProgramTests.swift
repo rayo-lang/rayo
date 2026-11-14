@@ -78,7 +78,7 @@ struct CheckedProgramTests {
             """, toMatch: "control-flow")
     }
 
-    @Test func `a local that gives its value away is moved, and 'copy' reads it`() throws {
+    @Test func `checking leaves a local written bare as its value, and a 'copy' of it as a copy`() throws {
         try expectChecking(of: """
             func main() {
                 let a = 1
@@ -86,7 +86,7 @@ struct CheckedProgramTests {
                 let c = a
                 print(b + c)
             }
-            """, toMatch: "moves")
+            """, toMatch: "places")
     }
 
     @Test func `a struct is made of its fields' values, and a field is a place in a local or a temporary`() throws {

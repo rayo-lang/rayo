@@ -22,18 +22,18 @@ func "main()"() -> Void {
     int 9: Int @5:20-5:21
   expression
     call builtin "print(_: Int)": Void @6:5-6:19
-      read: Int @6:11-6:18
+      value: Int @6:11-6:18
         place %0 @6:11-6:12 .0 @6:11-6:18
   bind %1 @7:9-7:10
-    move: Hit @7:13-7:18
+    value: Hit @7:13-7:18
       place %0 @7:13-7:14 .1 @7:13-7:18
   expression
     call builtin "print(_: Int)": Void @8:5-8:20
-      read: Int @8:11-8:19
+      value: Int @8:11-8:19
         place %1 @8:11-8:12 .0 @8:11-8:19
   expression
     call builtin "print(_: Int)": Void @9:5-9:33
-      read: Int @9:11-9:32
+      value: Int @9:11-9:32
         place temporary .0 @9:11-9:32
           struct Hit: Hit @9:11-9:25
             int 3: Int @9:23-9:24

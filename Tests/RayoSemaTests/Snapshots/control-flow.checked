@@ -10,7 +10,7 @@ func "main()"() -> Void {
     bool true: Bool @3:13-3:17
   expression
     if: Void @4:5-4:40
-      read: Bool @4:8-4:9
+      value: Bool @4:8-4:9
         place %1 @4:8-4:9
     then
       expression
@@ -22,7 +22,7 @@ func "main()"() -> Void {
           int 2: Int @4:36-4:37
   bind %2 @5:9-5:10
     if: Int @5:13-5:34
-      read: Bool @5:16-5:17
+      value: Bool @5:16-5:17
         place %1 @5:16-5:17
     then
       value
@@ -32,9 +32,9 @@ func "main()"() -> Void {
         int 2: Int @5:31-5:32
   while
     binary less: Bool @6:11-6:16
-      read: Int @6:11-6:12
+      value: Int @6:11-6:12
         place %0 @6:11-6:12
-      read: Int @6:15-6:16
+      value: Int @6:15-6:16
         place %2 @6:15-6:16
   do
     compound-assign add
@@ -43,7 +43,7 @@ func "main()"() -> Void {
     expression
       if: Void @8:9-8:31
         binary equal: Bool @8:12-8:18
-          read: Int @8:12-8:13
+          value: Int @8:12-8:13
             place %0 @8:12-8:13
           int 1: Int @8:17-8:18
       then

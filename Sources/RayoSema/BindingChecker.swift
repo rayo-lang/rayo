@@ -76,7 +76,7 @@ struct BindingChecker {
         // Without a value, the annotation alone gives the local's type.
         guard let valueExpr = binding.value else { return Declared(annotation) }
         // A value that failed, or that has another type than the annotation names, was reported.
-        let value = expressions.check(valueExpr, as: .take, expecting: annotation.expected)
+        let value = expressions.check(valueExpr, expecting: annotation.expected)
         guard let value else { return .failed }
         // So was an annotation that failed; otherwise the value has the local's type.
         if case .failed = annotation { return .failed }
