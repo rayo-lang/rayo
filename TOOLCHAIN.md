@@ -5,7 +5,7 @@ The Rayo toolchain is a Swift package at the root of this repository. It builds 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl`, `Darwin` or `CRT`.
 - **Swift 6.4, and macOS 27 or later**, whose standard library has the spans and the unique-ownership types the code-style rules call for. Linux and Windows need no particular release.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, on macOS with the runner's Xcode that holds Swift 6.4, and on Windows x64 with Swift 6.4 and the build of LLVM that LLVM publishes for Windows. Code must pass on all three. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
+- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, and on macOS with the runner's Xcode that holds Swift 6.4. On Windows it tests x64 and arm64, each built natively, with Swift 6.4 and the build of LLVM that LLVM publishes for it. Code must pass on all four. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## Build it
@@ -80,10 +80,11 @@ python3 scripts/check_imports.py
 | macOS | `brew install llvm@23 lld@23` |
 | Ubuntu or Debian | `llvm-23-dev clang-23 lld-23`, from [apt.llvm.org](https://apt.llvm.org) or the distribution |
 | Windows x64 | The archive `clang+llvm-23.x.y-x86_64-pc-windows-msvc.tar.xz`, from [LLVM's releases](https://github.com/llvm/llvm-project/releases) |
+| Windows arm64 | The archive `clang+llvm-23.x.y-aarch64-pc-windows-msvc.tar.xz`, from [LLVM's releases](https://github.com/llvm/llvm-project/releases) |
 
-On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against Visual Studio's C runtime, and `--linker=platform` runs its `link.exe`.
+On Windows, install Swift 6.4 as [swift.org](https://www.swift.org/install/windows/) says, with the Visual Studio Build Tools and the Windows SDK it requires. clang links each program against Visual Studio's C runtime, and `--linker=platform` runs its `link.exe`. On arm64 Windows, install Swift's arm64 toolchain, and keep the component `Microsoft.VisualStudio.Component.VC.Tools.ARM64` that swift.org's Visual Studio command adds: it holds the C runtime and the `link.exe` that clang links arm64 programs with.
 
-LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. The 7-Zip installer doesn't put it on the search path, so the commands run it from where it installs. Install 7-Zip, unpack the archive in a directory with a few gigabytes free, and move its directory to where LLVM is to stay, such as `C:\llvm`:
+LLVM's installer for Windows holds no headers, so only the archive will do. It holds one directory, named as the archive is, with `include`, `lib` and `bin` in it. Windows' own `tar` takes many minutes over it, and 7-Zip is much faster, decompressing the archive in one pass and unpacking it in a second. The 7-Zip installer doesn't put it on the search path, so the commands run it from where it installs. Install 7-Zip, unpack the archive in a directory with a few gigabytes free, and move its directory to where LLVM is to stay, such as `C:\llvm`. These unpack the x64 archive; on arm64 Windows, name `aarch64` where they name `x86_64`:
 
 ```powershell
 winget install 7zip.7zip

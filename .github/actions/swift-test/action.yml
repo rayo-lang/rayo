@@ -47,7 +47,7 @@ runs:
         echo "key=$prefix$SOURCES" >> "$GITHUB_OUTPUT"
 
     # A pull request starts from the build main last saved, so it compiles only what it changed. Only a push to
-    # main saves a build, which keeps the cache to one build per platform.
+    # main saves a build, which keeps the cache to one build per platform and architecture.
     - name: Restore the build
       id: build
       uses: actions/cache/restore@v6

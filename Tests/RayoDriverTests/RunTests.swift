@@ -113,6 +113,13 @@ private func values(of field: String, in executable: URL, listedBy option: Strin
     }
 }
 
+/// The architecture `llvm-readobj` names for the host's executables.
+#if arch(arm64)
+private let hostArchitecture = "aarch64"
+#elseif arch(x86_64)
+private let hostArchitecture = "x86_64"
+#endif
+
 /// The LLVM install's tool `name`.
 private func llvmTool(_ name: String) -> URL {
     URL(fileURLWithPath: LLVMInstall.toolDirectory).appendingPathComponent(Executable.fileName(name))
@@ -179,7 +186,10 @@ struct BuildTests {
         }
     }
 
-    @Test("each linker links an executable that runs, and LLD links unless the platform's linker is asked for",
+    @Test("""
+        each linker links an executable for the host's architecture that runs, and LLD links unless the platform's \
+        linker is asked for
+        """,
           arguments: [(["--linker=lld"], true), (["--linker=platform"], false), ([], true)])
     func linkers(options: [String], linksWithLLD: Bool) throws {
         try withTemporaryDirectory { directory in
@@ -196,7 +206,9 @@ struct BuildTests {
             let tools = LinkTools(clang: LinkTools.installed.clang, lld: lld)
             let result = Driver.run(["build"] + options + [source], compiler: compiler, linkTools: tools)
             #expect(result == CommandResult(exitCode: 0, output: "", errors: ""))
-            #expect(try runExecutable(directory.appendingPathComponent(Executable.fileName("answer"))) == "42\n")
+            let executable = directory.appendingPathComponent(Executable.fileName("answer"))
+            #expect(try values(of: "Arch", in: executable, listedBy: "--file-headers") == [hostArchitecture])
+            #expect(try runExecutable(executable) == "42\n")
             #expect(FileManager.default.fileExists(atPath: ran.path) == linksWithLLD)
         }
     }
