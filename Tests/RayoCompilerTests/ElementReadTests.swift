@@ -8,11 +8,6 @@ private let declarations = """
     func take(_ n: Int) {}
     """
 
-/// The errors that `body`, as `main`'s body beside `declarations`, reports, each as its position, code and message.
-private func errorLines(_ body: String) -> [String] {
-    diagnostics("func main() {\n\(body)\n}\n\(declarations)").map(\.description)
-}
-
 /// The error at a move out of an element, at `position`.
 private func elementMove(at position: String) -> String {
     "\(position): error[E0315]: an array's element can't be moved, nor any part of one; 'copy' makes an owned copy"
@@ -27,7 +22,7 @@ struct ElementReadTests {
         "let a = [1, 2]\nlet b = a\ntake(b[0])",
     ])
     func `an element is borrowed where it is read, and copied with 'copy'`(body: String) {
-        #expect(errorLines(body) == [])
+        #expect(errorLines(inMain: body, beside: declarations) == [])
     }
 
     @Test(arguments: [
@@ -36,7 +31,7 @@ struct ElementReadTests {
         ("let a = [[1, 2]]\n_ = a[0][1]", elementMove(at: "3:5")),
     ])
     func `an element, or a part of one, can't be moved out of its array`(body: String, expected: String) {
-        #expect(errorLines(body) == [expected])
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
     @Test(arguments: [
@@ -45,7 +40,7 @@ struct ElementReadTests {
         ("let s = Stats(hp: 1)\ntake(s[0].hp)", "3:6: error[E0271]: only an array can be indexed, found Stats"),
     ])
     func `an index is a UInt, and only an array is indexed`(body: String, expected: String) {
-        #expect(errorLines(body) == [expected])
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
     @Test(arguments: [
@@ -55,6 +50,6 @@ struct ElementReadTests {
     func `an element of an array that was moved, or of one moved out of a struct, can't be read`(
         body: String, expected: String,
     ) {
-        #expect(errorLines(body) == [expected])
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 }

@@ -13,11 +13,6 @@ private let declarations = """
     struct Holder(var hits: [2 of Hit])
     """
 
-/// The errors that `body`, as `main`'s body beside `declarations`, reports, each as its position, code and message.
-private func errorLines(_ body: String) -> [String] {
-    diagnostics("func main() {\n\(body)\n}\n\(declarations)").map(\.description)
-}
-
 struct ArrayTypeTests {
     @Test(arguments: [
         "func f(_ a: [2 of Int]) -> [2 of Int] { copy a }",
@@ -109,7 +104,7 @@ struct ArrayLiteralTests {
         "_ = [if true { 1 } else { 2 }, 3]",
     ])
     func `an array literal takes its type from its position, or from its elements`(body: String) {
-        #expect(errorLines(body) == [])
+        #expect(errorLines(inMain: body, beside: declarations) == [])
     }
 
     @Test(arguments: [
@@ -130,7 +125,7 @@ struct ArrayLiteralTests {
     func `an array literal whose count or elements don't fit its type, or that has no type, is an error`(
         body: String, expected: String,
     ) {
-        #expect(errorLines(body) == [expected])
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
     @Test func `a literal returned from a function needs as many elements as the function's result type`() {
@@ -140,7 +135,7 @@ struct ArrayLiteralTests {
     }
 
     @Test func `each element is checked, so an error in one still reports the others'`() {
-        #expect(errorLines("let a = [q, 9223372036854775808]") == [
+        #expect(errorLines(inMain: "let a = [q, 9223372036854775808]", beside: declarations) == [
             "2:10: error[E0206]: 'q' isn't declared", "2:13: error[E0217]: the literal doesn't fit in an Int",
         ])
     }
@@ -165,7 +160,7 @@ struct ArrayInitializerTests {
         "let n = 3\nlet a: [2 of Int] = .init(all: n + 1)\n_ = a",
     ])
     func `.init(all:) makes the array its position expects`(body: String) {
-        #expect(errorLines(body) == [])
+        #expect(errorLines(inMain: body, beside: declarations) == [])
     }
 
     @Test(arguments: [
@@ -188,7 +183,7 @@ struct ArrayInitializerTests {
     func `.init(all:) with no array type, or with the wrong member, label or value, is an error`(
         body: String, expected: String,
     ) {
-        #expect(errorLines(body) == [expected])
+        #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 
     @Test func `the value an array is filled with is copied into it, so it is borrowed and stays usable`() {

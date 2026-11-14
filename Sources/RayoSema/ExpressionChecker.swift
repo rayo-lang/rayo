@@ -64,8 +64,8 @@ struct ExpressionChecker {
         case .boolLiteral(let value):
             .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
 
-        // A name reads the local it names, a member a field of the place its base names or the count of the array it
-        // names, and an element the element of the array its base names.
+        // A name reads the local it names, a member a field of the place its base names or the count of the array its
+        // base names, and an element the element of the array its base names.
         case .name, .member, .element:
             place(expr, under: self).map { .typed(value(at: $0, in: expr.range)) }
 
@@ -157,10 +157,12 @@ struct ExpressionChecker {
         return .arrayLiteral(ArrayLiteral(elements: checked, range: range))
     }
 
-    /// The value of `place`, which the source names at `range`. A place that is only a value no local holds, such as
-    /// an array's count, is that value.
+    /// The value of `place`, which the source names at `range`. A place that is an array's count and nothing more
+    /// gives the count itself.
     private func value(at place: TypedPlace, in range: SourceRange) -> CheckedExpr {
-        if place.place.steps.isEmpty, case .temporary(let value) = place.place.root { return value }
+        if place.place.steps.isEmpty, case .temporary(let value) = place.place.root, case .arrayCount = value.kind {
+            return value
+        }
         return CheckedExpr(kind: .place(place.place), type: place.type, range: range)
     }
 
@@ -265,13 +267,18 @@ struct ExpressionChecker {
         // A base that failed was reported.
         guard let holder = place(base, under: rules, holdsParts: true) else { return nil }
 
-        // An array's one member is its count, and it has no fields.
+        // The one member an array's value has is its count, and it has no fields.
         if case .array(let count, _) = holder.type {
             guard name == "count" else {
                 errors.report(.noSuchMember(type: typeName(of: holder.type), name: name), at: nameRange)
                 return nil
             }
-            return rules.count(of: holder.place, count, at: nameRange, in: range)
+            // A position whose rules don't admit a count was reported.
+            guard rules.admitsCount(at: nameRange) else { return nil }
+
+            // A count is a value that no local holds, so it roots a place as a call's result does.
+            let value = CheckedExpr(kind: .arrayCount(holder.place, count: count), type: .uint, range: range)
+            return (CheckedPlace(root: .temporary(value)), .uint)
         }
 
         // A field that the holder doesn't have, or that the rules don't admit, was reported.
@@ -482,9 +489,7 @@ extension ExpressionChecker: PlaceRules {
         true
     }
 
-    func count(of array: CheckedPlace, _ count: Int, at nameRange: SourceRange, in range: SourceRange) -> TypedPlace? {
-        // A count is a value that no local holds, so a place that goes on from it starts in a temporary.
-        let value = CheckedExpr(kind: .arrayCount(array, count: count), type: .uint, range: range)
-        return (CheckedPlace(root: .temporary(value)), .uint)
+    func admitsCount(at nameRange: SourceRange) -> Bool {
+        true
     }
 }

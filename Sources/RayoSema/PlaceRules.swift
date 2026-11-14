@@ -20,8 +20,7 @@ protocol PlaceRules {
     /// not.
     func admitsElement(at range: SourceRange) -> Bool
 
-    /// Checks the count of the array that `array` holds, which is `count`, where the source names it at `range`, and
-    /// the member's name `count` at `nameRange`. Returns the count as a place that holds it, or nil once it has
-    /// reported why the position can't name it.
-    func count(of array: CheckedPlace, _ count: Int, at nameRange: SourceRange, in range: SourceRange) -> TypedPlace?
+    /// Whether a place may name an array's count, whose name the source writes at `nameRange`, reporting why where it
+    /// may not.
+    func admitsCount(at nameRange: SourceRange) -> Bool
 }
