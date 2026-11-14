@@ -1,0 +1,22 @@
+main "main()"
+
+func "main()"() -> Void {
+bb0:
+  goto bb1
+bb1:
+  goto bb2
+bb2:
+  goto bb4
+bb3:
+  return
+bb4:
+  goto bb5
+bb5:
+  goto bb6
+bb6:
+  goto bb3
+bb7:
+  goto bb4
+bb8:
+  goto bb1
+}

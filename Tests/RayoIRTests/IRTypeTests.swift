@@ -1,5 +1,6 @@
 import RayoIR
 import RayoSema
+import RayoSource
 import Testing
 
 @Suite("The types of IR values")
@@ -25,6 +26,9 @@ struct IRTypeTests {
         #expect(valueTypes == [.int, .int, .bool, .bool, pair, .int, .bool, .void])
 
         // A read of a field is of the field's type.
-        #expect(read(0, fields: 1).type(in: main, types: program.types) == .bool)
+        let somewhere = SourceLocation(line: 1, column: 1, offset: 0)
+        let flagPlace = Place(root: LocalID(index: 0), steps: [.field(1)])
+        let flag = Operand.read(flagPlace, at: SourceRange(somewhere, somewhere))
+        #expect(flag.type(in: main, types: program.types) == .bool)
     }
 }

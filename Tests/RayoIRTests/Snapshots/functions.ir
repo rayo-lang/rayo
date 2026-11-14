@@ -1,0 +1,17 @@
+main "main()"
+
+func "main()"() -> Void {
+bb0:
+  return
+}
+
+func "double(_: Int, by: Bool)"(Int, Bool) -> Int {
+  param %0 n: Int
+  param %1 by: Bool
+  temp %2: Int
+bb0:
+  %2 @2:42-2:47 = multiply checked read %0 @2:42-2:43, 2 @2:42-2:47
+  return read %2 @2:42-2:47
+bb1:
+  unreachable
+}

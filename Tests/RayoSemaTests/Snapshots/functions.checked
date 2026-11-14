@@ -1,0 +1,39 @@
+main "main()"
+
+func "main()"() -> Void {
+  expression
+    call builtin "print(_: Int)": Void @2:5-2:25
+      call "add(_: Int, to: Int)": Int @2:11-2:24
+        int 1: Int @2:15-2:16
+        int 2: Int @2:22-2:23
+  expression
+    call builtin "print(_: Bool)": Void @3:5-3:21
+      call "isZero(_: Int)": Bool @3:11-3:20
+        int 0: Int @3:18-3:19
+  expression
+    call "greet()": Void @4:5-4:12
+}
+
+func "add(_: Int, to: Int)"(Int, Int) -> Int {
+  param %0 a: Int
+  param %1 b: Int
+  return
+    binary add: Int @6:40-6:45
+      read: Int @6:40-6:41
+        place %0 @6:40-6:41
+      read: Int @6:44-6:45
+        place %1 @6:44-6:45
+}
+
+func "isZero(_: Int)"(Int) -> Bool {
+  param %0 n: Int
+  return
+    binary equal: Bool @8:12-8:18
+      read: Int @8:12-8:13
+        place %0 @8:12-8:13
+      int 0: Int @8:17-8:18
+}
+
+func "greet()"() -> Void {
+  return
+}

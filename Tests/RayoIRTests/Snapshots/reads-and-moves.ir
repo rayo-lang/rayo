@@ -1,0 +1,15 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 a: Int
+  let %1 b: Int
+  let %2 c: Int
+bb0:
+  declare %0
+  %0 @2:5-2:6 = use 1 @2:9-2:10
+  declare %1
+  %1 @3:5-3:6 = negate checked read %0 @3:10-3:11 @3:9-3:11
+  declare %2
+  %2 @4:5-4:6 = use move %0 @4:9-4:10 @4:9-4:10
+  return
+}

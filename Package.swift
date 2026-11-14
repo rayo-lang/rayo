@@ -167,6 +167,7 @@ let package = Package(
         .executableTarget(name: "rayoc", dependencies: ["RayoCompiler"]),
         .target(name: "RayoDriver", dependencies: ["RayoLLVMInstall"]),
         .executableTarget(name: "rayo", dependencies: ["RayoDriver"]),
+        .testTarget(name: "RayoSourceTests", dependencies: ["RayoSource"]),
         .testTarget(name: "RayoDiagnosticsTests", dependencies: ["RayoDiagnostics"]),
         .testTarget(name: "RayoDiagnosticsMacrosTests", dependencies: [
             "RayoDiagnosticsMacros",
@@ -174,7 +175,10 @@ let package = Package(
             .product(name: "SwiftSyntaxMacrosGenericTestSupport", package: "swift-syntax"),
         ]),
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
-        .testTarget(name: "RayoSemaTests", dependencies: ["RayoSema", "RayoSyntax"]),
+        .target(name: "SnapshotTesting", path: "Tests/SnapshotTesting"),
+        .testTarget(
+            name: "RayoSemaTests", dependencies: ["RayoSema", "RayoSyntax", "SnapshotTesting"], exclude: ["Snapshots"],
+        ),
         .testTarget(name: "RayoCompilerTests", dependencies: [
             "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource",
         ]),
@@ -185,8 +189,8 @@ let package = Package(
             "rayo", "rayoc", "tool-stand-in", "RayoDriver", "RayoLLVMInstall", "RayoRuntime", "ToolStandIn",
         ]),
         .testTarget(name: "RayoIRTests", dependencies: [
-            "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax",
-        ]),
+            "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax", "SnapshotTesting",
+        ], exclude: ["Snapshots"]),
         .testTarget(name: "RayoOwnershipTests", dependencies: [
             "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),

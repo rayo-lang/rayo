@@ -1,3 +1,7 @@
 # A proof program's expected output ends each line in a newline alone, as the program prints it on every platform,
 # so a checkout on Windows must not turn it into a carriage return and a newline.
 /examples/**/*.out text eol=lf
+
+# A snapshot holds the text a test prints, which ends each line in a newline alone on every platform, so a checkout
+# on Windows must not turn it into a carriage return and a newline.
+/Tests/*/Snapshots/** text eol=lf

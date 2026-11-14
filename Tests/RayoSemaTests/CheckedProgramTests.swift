@@ -1,0 +1,106 @@
+import RayoSema
+import RayoSyntax
+import SnapshotTesting
+import Testing
+
+/// Parses and checks `source`, and expects the checked program's text to be the snapshot `name.checked`.
+private func expectChecking(
+    of source: String, toMatch name: String, sourceLocation: Testing.SourceLocation = #_sourceLocation,
+) throws {
+    let (file, syntaxErrors) = Parser.parse(source)
+    try #require(syntaxErrors.isEmpty, "\(syntaxErrors)", sourceLocation: sourceLocation)
+    let (program, checkErrors) = Checker.check(file)
+    let checked = try #require(program, "\(checkErrors)", sourceLocation: sourceLocation)
+    Snapshot("\(name).checked").expect(CheckedPrinter.text(of: checked), sourceLocation: sourceLocation)
+}
+
+@Suite("The checked program of each construct")
+struct CheckedProgramTests {
+    @Test func `a function's parameters are its first locals, and a call names the function it resolves to`() throws {
+        try expectChecking(of: """
+            func main() {
+                print(add(1, to: 2))
+                print(isZero(0))
+                greet()
+            }
+            func add(_ a: Int, to b: Int) -> Int { a + b }
+            func isZero(_ n: Int) -> Bool {
+                return n == 0
+            }
+            func greet() {
+                return
+            }
+            """, toMatch: "functions")
+    }
+
+    @Test func `each operator on Ints and Bools has the type of its value`() throws {
+        try expectChecking(of: """
+            func main() {
+                let a = 7
+                let b = 2
+                print(a + b * a - b / a % b)
+                print(-a)
+                print(a == b && a != b || a < b)
+                print(a <= b || a > b && a >= b)
+                let t = true
+                print(!t)
+            }
+            """, toMatch: "operators")
+    }
+
+    @Test func `a local is a 'let' or a 'var', and an assignment names the place it stores in`() throws {
+        try expectChecking(of: """
+            func main() {
+                let x = 1
+                var y: Int
+                y = x
+                y += 2
+                y -= 1
+                y *= 3
+                print(y)
+            }
+            """, toMatch: "locals")
+    }
+
+    @Test func `an 'if' is a statement or a value, and a loop's 'break' and 'continue' are statements`() throws {
+        try expectChecking(of: """
+            func main() {
+                var i = 0
+                let c = true
+                if c { print(1) } else { print(2) }
+                let y = if c { 1 } else { 2 }
+                while i < y {
+                    i += 1
+                    if i == 1 { continue }
+                    break
+                }
+            }
+            """, toMatch: "control-flow")
+    }
+
+    @Test func `a local that gives its value away is moved, and 'copy' reads it`() throws {
+        try expectChecking(of: """
+            func main() {
+                let a = 1
+                let b = copy a
+                let c = a
+                print(b + c)
+            }
+            """, toMatch: "moves")
+    }
+
+    @Test func `a struct is made of its fields' values, and a field is a place in a local or a temporary`() throws {
+        try expectChecking(of: """
+            struct Shot(let range: Int, var hit: Hit)
+            struct Hit(var damage: Int)
+            func main() {
+                var s = Shot(range: 4, hit: Hit(damage: 7))
+                s.hit.damage = 9
+                print(s.range)
+                let h = s.hit
+                print(h.damage)
+                print(Hit(damage: 3).damage)
+            }
+            """, toMatch: "structs")
+    }
+}

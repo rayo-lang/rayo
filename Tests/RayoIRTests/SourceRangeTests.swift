@@ -4,10 +4,11 @@ import Testing
 
 @Suite("Lowering keeps source ranges")
 struct SourceRangeTests {
-    @Test("an operation and its temporary keep the range of the expression, and an operand the range of its local")
-    func operationRanges() throws(RejectedSource) {
+    @Test
+    func `an operation and its temporary keep the range of the expression, and an operand the range of its local`()
+        throws(RejectedSource) {
         let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The division is the third statement, after the declaration and its value, and computes into a temporary.
         guard case .compute(let temporary?, .binary(.divide(.checked), .read(_, let dividend), _), let range)
@@ -23,7 +24,7 @@ struct SourceRangeTests {
 
     @Test func `a declaration and an assignment keep the range of their value`() throws(RejectedSource) {
         let source = "func main() {\n    var x = 1 + 2\n    x = 3\n}"
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The declaration's value follows its `declare`, and the assignment follows that.
         let statements = main.blocks[0].statements
@@ -41,7 +42,7 @@ struct SourceRangeTests {
 
     @Test func `a compound assignment keeps the range of its local's name`() throws(RejectedSource) {
         let source = "func main() {\n    var x = 0\n    x += 1\n}"
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The compound assignment is the third statement, after the declaration and its value.
         guard case .compute(let destination?, .binary(.add(.checked), .read(_, let operand), _), let range)
@@ -57,7 +58,7 @@ struct SourceRangeTests {
 
     @Test func `a '&&' and its temporary keep the range of the whole '&&'`() throws(RejectedSource) {
         let source = "func main() {\n    let a = true\n    let b = a && false\n}"
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The `&&` computes `a` into its temporary after the two declarations and `a`'s value, and its right operand
         // into the same temporary, first in the block that evaluates it.
@@ -81,7 +82,7 @@ struct SourceRangeTests {
             }
             struct Enemy(let hp: Int)
             """
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The two prints follow the declaration and its value, and each reads `e.hp` where it lies.
         guard case .compute(nil, .call(_, let firstArguments), _) = main.blocks[0].statements[2],
@@ -107,7 +108,7 @@ struct SourceRangeTests {
     )
     func branchConditionRange(body: String, condition: String) throws(RejectedSource) {
         let source = "func main() {\n    \(body)\n}"
-        let main = try loweredWithRanges(source).body(at: 0)
+        let main = try lowered(source).body(at: 0)
 
         // The first block branches on the condition, which it reads from a temporary or from the local itself.
         guard case .branch(.read(_, let range), _, _) = main.blocks[0].terminator else {
@@ -126,7 +127,7 @@ struct SourceRangeTests {
     )
     func returnedValueRange(body: String, value: String) throws(RejectedSource) {
         let source = "func main() {}\nfunc result(_ n: Int) -> Int {\n    \(body)\n}"
-        let result = try loweredWithRanges(source).body(at: 1)
+        let result = try lowered(source).body(at: 1)
 
         // The first block returns the value, which it reads from a temporary or moves out of the local.
         guard case .return(let operand?) = result.blocks[0].terminator, let range = operand.range else {

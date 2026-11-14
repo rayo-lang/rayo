@@ -1,5 +1,5 @@
 /// What an integer operation does with a result that its type can't hold.
-public enum OverflowMode: Hashable, Sendable {
+public enum OverflowMode: Hashable, Sendable, CaseIterable {
     /// Panics where the build checks overflow, and wraps where it doesn't.
     case checked
     /// Wraps in every build.

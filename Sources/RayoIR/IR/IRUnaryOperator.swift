@@ -1,9 +1,12 @@
 import RayoSema
 
 /// An operator that computes a value from one operand, whose type says how it computes it.
-public enum IRUnaryOperator: Hashable, Sendable, CustomStringConvertible {
+public enum IRUnaryOperator: Hashable, Sendable, CaseIterable, CustomStringConvertible {
     case negate(OverflowMode)
     case not
+
+    /// Every operator, each in each of its overflow modes.
+    public static let allCases: [IRUnaryOperator] = OverflowMode.allCases.map(negate) + [.not]
 
     /// The operator as an error names it, such as `-` or `wrapping -`.
     public var description: String {

@@ -51,6 +51,52 @@ struct CompilerTests {
         #expect(wrong.result.diagnostics.map(\.code) == [.notDeclared(name: "x")])
     }
 
+    @Test func `'--emit=ir' prints the Rayo IR of a file that checks, and writes nothing`() {
+        let compiled = compile(["--emit=ir", "a.rayo"], files: ["a.rayo": "func main() {\n    print(1)\n}"])
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", standardOutput: """
+            main "main()"
+
+            func "main()"() -> Void {
+            bb0:
+              _ = call builtin "print(_: Int)"(1) @2:5-2:13
+              return
+            }
+
+            """))
+        #expect(compiled.written.isEmpty)
+    }
+
+    @Test func `'--emit=checked' prints the checked program of a file that checks, and writes nothing`() {
+        let compiled = compile(["--emit=checked", "a.rayo"], files: ["a.rayo": "func main() {\n    print(1)\n}"])
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", standardOutput: """
+            main "main()"
+
+            func "main()"() -> Void {
+              expression
+                call builtin "print(_: Int)": Void @2:5-2:13
+                  int 1: Int @2:11-2:12
+            }
+
+            """))
+        #expect(compiled.written.isEmpty)
+    }
+
+    @Test(arguments: ["--emit=checked", "--emit=ir"])
+    func `'--emit' prints nothing for a file that doesn't check, and reports its errors`(option: String) {
+        let source = "func main() {\n    let x = 1\n    let y = x\n    print(x)\n}"
+        let compiled = compile([option, "a.rayo"], files: ["a.rayo": source])
+        #expect(compiled.result.exitCode == 1)
+        #expect(compiled.result.diagnostics.map(\.code) == [.usedAfterMove(name: "x")])
+        #expect(compiled.result.standardOutput.isEmpty)
+    }
+
+    @Test func `the usage names each dump '--emit' prints`() {
+        let usage = compile([]).result.errors
+        #expect(usage.contains("rayoc --emit=checked|ir [--] <file>\n"))
+        #expect(usage.contains("--emit=checked"))
+        #expect(usage.contains("--emit=ir"))
+    }
+
     @Test(arguments: [[], ["--debug"], ["--release"]])
     func `'-o' makes no object code of a file without 'main', which is a library`(mode: [String]) {
         let compiled = compile(mode + ["-o", "lib.o", "lib.rayo"],
@@ -130,6 +176,9 @@ struct CompilerTests {
         ["-o", "--check", "a.rayo"], ["-o", "a.o", "--debug"], ["--check", "--debug"],
         ["--check", "--"], ["--", "a.rayo"], ["--", "--check", "a.rayo"], ["--check", "--", "a.rayo", "b.rayo"],
         ["-o", "--", "a.rayo"], ["--check", "--", "--", "a.rayo"],
+        ["--emit=asm", "a.rayo"], ["--emit", "a.rayo"], ["--emit=", "a.rayo"], ["--emit=ir", "--check", "a.rayo"],
+        ["--check", "--emit=checked", "a.rayo"], ["--emit=ir", "-o", "a.o", "a.rayo"],
+        ["--emit=ir", "--emit=checked", "a.rayo"], ["--emit=ir", "--debug", "a.rayo"], ["--emit=ir"],
     ])
     func `arguments that name no one compile print the usage, and write nothing`(arguments: [String]) {
         let compiled = compile(arguments, files: ["a.rayo": "func main() {}", "b.rayo": "func main() {}"])

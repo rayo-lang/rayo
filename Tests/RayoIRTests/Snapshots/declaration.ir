@@ -1,0 +1,9 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 x: Int
+bb0:
+  declare %0
+  %0 @2:5-2:6 = use 1 @2:9-2:10
+  return
+}

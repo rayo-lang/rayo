@@ -1,0 +1,17 @@
+struct Enemy {
+  hp: Int
+  armor: Int
+}
+
+main "main()"
+
+func "main()"() -> Void {
+  var %0 e: Enemy
+bb0:
+  declare %0
+  %0 @2:5-2:6 = struct Enemy(1, 2) @2:9-2:31
+  %0.0 @3:1-3:5 = use 3 @3:8-3:9
+  %0.0 @4:1-4:5 = subtract checked read %0.0 @4:1-4:5, read %0.1 @4:9-4:16 @4:1-4:5
+  _ = call builtin "print(_: Int)"(read %0.0 @5:7-5:11) @5:1-5:12
+  return
+}

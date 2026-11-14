@@ -1,0 +1,9 @@
+main "main()"
+
+func "main()"() -> Void {
+  temp %0: Int
+bb0:
+  %0 @2:7-2:12 = add checked 1, 2 @2:7-2:12
+  _ = call builtin "print(_: Int)"(read %0 @2:7-2:12) @2:1-2:13
+  return
+}
