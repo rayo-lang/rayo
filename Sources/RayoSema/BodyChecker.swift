@@ -74,6 +74,10 @@ struct BodyChecker {
             return [returned(value).map { .returnStmt($0) }]
         case .returnStmt(nil):
             return [checkEmptyReturn(at: statement.range)]
+        // A statement that failed to parse was reported there, and leaves the body tainted.
+        case .error:
+            errors.taints.taint()
+            return []
         }
     }
 

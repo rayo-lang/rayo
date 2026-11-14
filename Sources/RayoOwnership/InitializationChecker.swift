@@ -7,15 +7,12 @@ import RayoSource
 /// `let` at most once on each path.
 public enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
-    /// assigned, in source order.
-    public static func check(_ program: IRProgram) -> [Diagnostic] {
+    /// assigned, under the ID of each function that has any, in source order.
+    public static func check(_ program: IRProgram) -> [FunctionID: [Diagnostic]] {
         // Check each body, whose first locals are its function's parameters.
-        let errors = program.definedFunctions.flatMap { id, body in
+        program.errors { id, body in
             check(PlaceTypes(body: body, types: program.types), parameterCount: program.functions[id].parameters.count)
         }
-        // A use and a store share a place in a compound assignment, which uses the local before it stores to it,
-        // so errors at one place keep the order each function gives them.
-        return errors.inSourceOrder
     }
 
     /// Checks `places.body`, whose first `parameterCount` locals are its function's parameters.

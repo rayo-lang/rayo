@@ -9,9 +9,16 @@ extension Parser {
         return Block(statements: statements, closingBrace: closingBrace)
     }
 
+    /// Parses a block's statements, with an error statement in place of each that fails.
     private mutating func parseStatements() -> [Stmt] {
         parseLines(ifUnended: ErrorCode.unendedStatement) { parser throws(ParseFailure) in
-            try parser.parseStatement()
+            let statement = try parser.parseStatement()
+            // A statement that runs on past its end fails whole, since the source it leaves out may change what it
+            // means.
+            if !parser.atStatementEnd { throw parser.fail(ErrorCode.unendedStatement) }
+            return statement
+        } ifFailed: { _, range in
+            Stmt(kind: .error, range: range)
         }
     }
 

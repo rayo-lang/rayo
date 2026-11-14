@@ -20,6 +20,10 @@ struct TypeNameChecker {
                 let isDeclared = declare(.structure(id), at: structure.nameRange, in: &declarations)
                 ids.structs.append(isDeclared ? id : nil)
                 if isDeclared { nextStructIndex += 1 }
+
+            // A type that failed to parse takes its name, so its uses find it, and gets no ID.
+            case .failed(let name, let nameRange):
+                _ = declare(.failed(name: name), at: nameRange, in: &declarations)
             }
         }
         return ids

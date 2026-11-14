@@ -83,8 +83,8 @@ struct AssignmentChecker {
         case .inScope(.local(let local)):
             return local
 
-        // A local whose declaration failed was reported there.
-        case .inScope(.failed):
+        // A local, a function or a struct whose declaration failed was reported there.
+        case .inScope(.failed), .failed:
             return nil
 
         // A function can't be assigned.

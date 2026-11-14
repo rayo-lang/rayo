@@ -20,25 +20,27 @@ final class FileChecker {
         var body: CheckedBody
     }
 
-    /// A function of the checked program: its declaration, and its checked body.
-    private typealias Definition = (declaration: FunctionDeclaration, body: CheckedBody)
-
     init(_ file: SourceFile) {
         self.file = file
         declarations = Declarations(names: TopLevelNames(of: file))
+        // A function that failed to parse is declared before any other, so every use of its name finds it. A type that
+        // failed to parse is declared with the other types' names.
+        for declaration in file.failedDeclarations where declaration.kind == .function {
+            if let name = declaration.name { declarations.declareUnparsedFunction(named: name) }
+        }
     }
 
-    func check() -> CheckedProgram? {
+    /// Checks every struct and function of the file, and gives its program, which holds each declaration, and the
+    /// body of each function whose body isn't tainted.
+    func check() -> CheckedProgram {
         // Check every struct and function; a file without a `main` is a library, checked the same.
         let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
         let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
         let main = declareFunctions()
-        let checked = functions.indices.map { checkedFunction(FunctionID(index: $0)) }
+        for index in functions.indices { _ = body(of: FunctionID(index: index)) }
 
-        // The program is checked only when its structs can be laid out and each of its functions is checked.
-        let definitions = checked.compactMap { $0 }
-        guard let types, definitions.count == checked.count else { return nil }
-        return program(of: definitions, types: types, main: main)
+        // Only once every body is checked is each one's taint known.
+        return program(types: types, main: main)
     }
 
     /// The result type of a call to `signature` at `range`, or nil when it isn't known. A result type that depends
@@ -59,9 +61,12 @@ final class FileChecker {
             errors.report(.resultDependsOnItself(signature: "\(signature)"), at: range)
             return nil
 
-        // Any other body that gives the result type is checked for it, if it hasn't been yet.
+        // Any other body that gives the result type is checked for it, if it hasn't been yet. A body that gives none
+        // failed the function's declaration, which taints the body that calls it.
         case .givenByBody(let id):
-            return body(of: id).result
+            let result = body(of: id).result
+            if result == nil { errors.taints.taint() }
+            return result
         }
     }
 
@@ -147,33 +152,44 @@ final class FileChecker {
         return .type(type)
     }
 
-    /// The checked program of `definitions`, which are in the order of their functions' IDs.
-    private func program(of definitions: [Definition], types: TypeTable, main: FunctionID?) -> CheckedProgram {
-        // Declare each function in the program's table, with its body under its ID.
+    /// The checked program of the file's functions, each of whose bodies is checked already, with `types` and
+    /// `main`.
+    private func program(types: TypeTable, main: FunctionID?) -> CheckedProgram {
+        // Declare each function in the program's table, with its body under its ID unless it is tainted.
         var table = FunctionTable()
         var bodies: [FunctionID: CheckedBody] = [:]
-        for (index, definition) in definitions.enumerated() {
-            let id = table.declare(definition.declaration)
+        for index in functions.indices {
+            let id = FunctionID(index: index)
+            let declaration = declaration(of: id)
+            let declared = declaration.map { table.declare($0) } ?? table.declareFailed()
             // The table numbers the functions as the checker did, so each call reaches the function it was checked
             // against.
-            precondition(id == FunctionID(index: index), "a checked function keeps its ID")
-            bodies[id] = definition.body
+            precondition(declared == id, "a checked function keeps its ID")
+            // A function whose declaration failed has no body a later stage could use, and nor has a tainted one.
+            if declaration != nil, !errors.taints.functions.contains(id) { bodies[id] = body(of: id).body }
         }
 
-        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main)
+        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main,
+                              mainMayHaveFailed: mainMayHaveFailed)
     }
 
-    /// The declaration and the checked body of the function `id`; nil when its result type or the type of one of its
-    /// parameters isn't known.
-    private func checkedFunction(_ id: FunctionID) -> Definition? {
-        let check = body(of: id)
+    /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
+    /// named `main`.
+    private var mainMayHaveFailed: Bool {
+        file.failedDeclarations.contains { $0.kind == .function && ($0.name == nil || $0.name == "main") }
+    }
+
+    /// The declaration of the function `id`, whose body is checked already; nil when its result type or the type of
+    /// one of its parameters isn't known, which fails it.
+    private func declaration(of id: FunctionID) -> FunctionDeclaration? {
         let function = functions[id.index]
         let parameters = function.signature.parameters.compactMap(\.type)
-        // A function whose result type or one of whose parameters' types isn't known doesn't check.
-        guard let result = check.result, parameters.count == function.signature.parameters.count else { return nil }
-        let declaration = FunctionDeclaration(name: "\(function.signature)", parameters: parameters, result: result,
-                                              kind: function.kind.functionKind)
-        return (declaration, check.body)
+        // A function whose result type or one of whose parameters' types isn't known fails.
+        guard let result = body(of: id).result, parameters.count == function.signature.parameters.count else {
+            return nil
+        }
+        return FunctionDeclaration(name: "\(function.signature)", parameters: parameters, result: result,
+                                   kind: function.kind.functionKind)
     }
 
     /// The body of the function `id`, checked when this first asks for it.
@@ -181,9 +197,10 @@ final class FileChecker {
         // A body checked already gives what it gave then.
         if let body = bodies[id] { return body }
 
-        // Check the body, marked as being checked while it is, so a call back into it finds the cycle.
+        // Check the body, marked as being checked while it is, so a call back into it finds the cycle, and so what it
+        // reports taints it.
         checking.insert(id)
-        let body = checkBody(of: id)
+        let body = errors.taints.checkingBody(of: id) { checkBody(of: id) }
         checking.remove(id)
         bodies[id] = body
         return body

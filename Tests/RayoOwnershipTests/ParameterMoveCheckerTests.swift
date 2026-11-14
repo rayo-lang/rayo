@@ -2,6 +2,7 @@ import Testing
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
+import RayoSema
 
 struct ParameterMoveCheckerTests {
     @Test func `a move out of a borrowed parameter is reported at the move`() throws {
@@ -67,5 +68,5 @@ private func errors(in blocks: String, result: String = "Void") throws -> [Diagn
         \(blocks)
         }
         """
-    return ParameterMoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))
+    return ParameterMoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))[FunctionID(index: 0)] ?? []
 }

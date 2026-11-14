@@ -2,6 +2,7 @@ import Testing
 @testable import RayoDiagnostics
 @testable import RayoCompiler
 import RayoIR
+import RayoSema
 import RayoSource
 
 /// Adds its letter to the end of the text it's given.
@@ -180,7 +181,7 @@ struct PipelineTests {
         warningsAreErrors: Bool, exitCode: Int32,
     ) {
         let steps = pipeline {
-            Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) }, warningsAreErrors: warningsAreErrors)
+            Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) })
             WarnAtStart()
             StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
         }
@@ -219,5 +220,17 @@ struct PipelineTests {
         let gathered = [error(on: 1), error(on: 2)]
         #expect(throws: CompilationError.rejected(gathered)) { try steps.run(">", errors: &errors) }
         #expect(log.texts.isEmpty)
+    }
+
+    @Test(arguments: [(false, false), (true, true)])
+    func `a check's error drops the body of the function it is in, so later checks skip it, and a warning drops none`(
+        isWarning: Bool, keepsBody: Bool,
+    ) throws {
+        var errors: [Diagnostic] = []
+        let program = try #require(try Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) })
+            .run("a.rayo", errors: &errors))
+        let main = try #require(program.main)
+        let found = isWarning ? warning(on: 1) : error(on: 1)
+        #expect((program.withoutBodies(failing: [main: [found]]).bodies[main] != nil) == keepsBody)
     }
 }

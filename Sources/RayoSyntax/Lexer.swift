@@ -18,25 +18,30 @@ public struct Lexer {
     }
 
     public static func tokenize(_ source: String) -> (tokens: [Token], diagnostics: [Diagnostic]) {
-        tokenize(Array(source.utf8))
+        let (tokens, diagnostics) = tokenize(Array(source.utf8))
+        // A string is UTF-8, so it always lexes to tokens.
+        guard let tokens else { preconditionFailure("a string is UTF-8") }
+        return (tokens, diagnostics)
     }
 
-    public static func tokenize(_ bytes: [UInt8]) -> (tokens: [Token], diagnostics: [Diagnostic]) {
+    /// The tokens of `bytes`, or nil when they aren't UTF-8, and so can't be read as text at all, with the errors
+    /// the lexer finds.
+    public static func tokenize(_ bytes: [UInt8]) -> (tokens: [Token]?, diagnostics: [Diagnostic]) {
         var lexer = Lexer(bytes)
         let raw = lexer.lexAll()
-        return (StatementEnds.significantNewlines(raw), lexer.diagnostics)
+        return (raw.map(StatementEnds.significantNewlines), lexer.diagnostics)
     }
 
-    /// Lexes the whole file into tokens that end with `.eof`. A file that isn't UTF-8 lexes to `.eof` alone, with
-    /// one error at its first invalid byte.
-    mutating func lexAll() -> [Token] {
+    /// Lexes the whole file into tokens that end with `.eof`. A file that isn't UTF-8 lexes to nil, with one error at
+    /// its first invalid byte.
+    mutating func lexAll() -> [Token]? {
         // A file that isn't UTF-8 has no characters to lex, so its one error points at the first byte that breaks it.
         if let invalid = Self.firstInvalidByte(in: bytes) {
             while index < invalid { advance() }
             let start = location
             advance()
             report(.notUTF8, from: start)
-            return [Token(.eof, SourceRange(location, location))]
+            return nil
         }
 
         // Lex token after token up to the end of the file.

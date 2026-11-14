@@ -6,6 +6,11 @@ enum DeclaredResult {
     /// None written, on a body that is a single expression, whose type is the result type.
     case givenByBody(FunctionID)
 
+    /// Whether a written type failed.
+    var hasFailed: Bool {
+        if case .failed = self { true } else { false }
+    }
+
     /// The type, when the declaration alone gives it.
     var type: RayoType? {
         // A result that failed, or that the body gives, has none.

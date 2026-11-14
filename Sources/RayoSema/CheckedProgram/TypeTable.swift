@@ -1,30 +1,47 @@
 internal import Synchronization
 
-/// A program's structs, and how a value of each of its types lies in memory.
+/// A program's structs, and how a value of each of its types lies in memory. A struct whose declaration failed keeps
+/// its ID, with no type under it, and no body of the program reaches it.
 ///
 /// A type's layout is worked out the first time it's asked for, and kept for every later ask, so the stages from
 /// checking on lay out only the types they use.
 public struct TypeTable: Equatable, Sendable {
-    /// The structs, indexed by `StructID`.
-    public let structs: [StructType]
+    /// The structs, indexed by `StructID`, nil for a struct whose declaration failed.
+    private let entries: [StructType?]
     /// The layout of each struct laid out so far, which every copy of the table shares.
     private let layouts = StructLayouts()
 
+    /// The table of `structs`, each of which checked, indexed by `StructID`.
     public init(structs: [StructType]) {
-        self.structs = structs
+        entries = structs
+    }
+
+    /// The table of `entries`, indexed by `StructID`, nil for each struct whose declaration failed.
+    init(entries: [StructType?]) {
+        self.entries = entries
+    }
+
+    /// The structs whose declarations checked, in the order of their IDs.
+    public var structs: [StructType] {
+        entries.compactMap(\.self)
     }
 
     /// The table of a program that declares no struct.
     public static let empty = TypeTable(structs: [])
 
+    /// The struct `id`, which must have checked.
     public subscript(id: StructID) -> StructType {
-        structs[id.index]
+        // A body that reaches a failed declaration is tainted, and no stage after checking sees it.
+        guard let structure = entries[id.index] else {
+            preconditionFailure("'\(id.name)' failed to declare, so no checked program reaches it")
+        }
+        return structure
     }
 
     /// The fields of `type`, which must be a struct, in the order it declares them.
     public func fields(of type: RayoType) -> [Field] {
         guard case .structure(let id) = type else { preconditionFailure("only a struct holds fields") }
-        return structs[id.index].fields
+        return self[id].fields
     }
 
     /// How a value of `type`, which isn't Void, lies in memory.
@@ -44,7 +61,7 @@ public struct TypeTable: Equatable, Sendable {
 
     /// Whether `left` and `right` declare the same structs, which decide every layout.
     public static func == (left: TypeTable, right: TypeTable) -> Bool {
-        left.structs == right.structs
+        left.entries == right.entries
     }
 
     /// The layout of `type`, which lies inside each struct of `enclosing`.

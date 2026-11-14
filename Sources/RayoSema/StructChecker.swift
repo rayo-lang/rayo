@@ -21,18 +21,19 @@ struct StructChecker {
 
     let errors: ErrorList
 
-    /// Declares the fields of `structs`, whose IDs are `ids`, in `declarations`, and returns the types they make, or
-    /// nil when they can't be laid out. `ids` follows the order of `structs`, nil for each struct whose name wasn't
-    /// declared.
+    /// Declares the fields of `structs`, whose IDs are `ids`, in `declarations`, and returns the types they make.
+    /// `ids` follows the order of `structs`, nil for each struct whose name wasn't declared. A struct that can't be
+    /// laid out is declared as one, and has no type.
     func declare(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: inout Declarations,
-    ) -> TypeTable? {
+    ) -> TypeTable {
         let declared = checkStructs(structs, withIDs: ids, in: declarations)
         declareFields(of: declared, in: &declarations)
 
-        guard !reportSelfContaining(among: declared) else { return nil }
-
-        return types(of: declared)
+        // Only once every struct's fields are known can the structs that fail be told.
+        let failed = failedStructs(among: declared)
+        for id in failed { declarations.declareUnlaidOut(id) }
+        return types(of: declared, besides: failed)
     }
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
@@ -119,14 +120,23 @@ struct StructChecker {
         return type
     }
 
-    /// Reports each of `structs`, which are indexed by `StructID`, that contains itself through its fields at any
-    /// depth, and returns whether it reported any.
-    private func reportSelfContaining(among structs: [DeclaredStruct]) -> Bool {
-        let containing = structs.filter { contained(in: $0, among: structs).contains($0.id.index) }
-        for structure in containing {
+    /// The IDs of the structs among `structs`, which are indexed by `StructID`, that can't be laid out: each with a
+    /// field whose type isn't known or that has no name of its own, each that contains itself through its fields at
+    /// any depth, which is reported, and each that contains one of those.
+    private func failedStructs(among structs: [DeclaredStruct]) -> Set<StructID> {
+        // A field that failed was reported where it is written.
+        let withFailedFields = structs.filter { $0.fields.contains { $0.type == nil || !$0.hasOwnName } }
+
+        // A struct that contains itself is reported at its name.
+        let containingItself = structs.filter { contained(in: $0, among: structs).contains($0.id.index) }
+        for structure in containingItself {
             errors.report(.containsItself(name: structure.id.name), at: structure.declaration.nameRange)
         }
-        return !containing.isEmpty
+
+        // A struct that contains one that failed fails with it, and reports nothing more.
+        let failed = Set((withFailedFields + containingItself).map(\.id.index))
+        let containingFailed = structs.filter { !contained(in: $0, among: structs).isDisjoint(with: failed) }
+        return Set((withFailedFields + containingItself + containingFailed).map(\.id))
     }
 
     /// The indices of the structs that `structure`'s fields hold, at any depth, among `structs`, which are indexed
@@ -143,18 +153,18 @@ struct StructChecker {
         return found
     }
 
-    /// The types `structs` make, or nil when a field's type isn't known.
-    private func types(of structs: [DeclaredStruct]) -> TypeTable? {
-        var types: [StructType] = []
-        for structure in structs {
-            var fields: [Field] = []
-            for (field, checked) in zip(structure.declaration.fields, structure.fields) {
-                // A field whose type isn't known was reported.
-                guard let type = checked.type else { return nil }
-                fields.append(Field(name: field.name, type: type))
-            }
-            types.append(StructType(name: structure.id.name, fields: fields))
+    /// The types `structs` make, which are indexed by `StructID`, with none for those of `failed`.
+    private func types(of structs: [DeclaredStruct], besides failed: Set<StructID>) -> TypeTable {
+        TypeTable(entries: structs.map { failed.contains($0.id) ? nil : type(of: $0) })
+    }
+
+    /// The type `structure` makes, or nil where the type of one of its fields isn't known.
+    private func type(of structure: DeclaredStruct) -> StructType? {
+        let fields = zip(structure.declaration.fields, structure.fields).compactMap { field, checked in
+            checked.type.map { Field(name: field.name, type: $0) }
         }
-        return TypeTable(structs: types)
+        // A field whose type isn't known is left out, so the struct has fewer fields than it declares.
+        guard fields.count == structure.fields.count else { return nil }
+        return StructType(name: structure.id.name, fields: fields)
     }
 }

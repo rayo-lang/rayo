@@ -356,7 +356,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2]))])
     }
 
-    @Test func `the errors come in source order across the program's functions`() throws {
+    @Test func `each function's errors come under its ID, and a function without any has none`() throws {
         // The first function's error comes after the second's in the source.
         let usesLate = function("""
             bb0:
@@ -373,9 +373,12 @@ struct InitializationCheckerTests {
               return
             """, named: "early()")
 
-        // The checker reports the second function's error first, as the source has it.
-        let reported = InitializationChecker.check(try program(of: [usesLate, usesEarly]))
-        #expect(reported.map(\.range.start.column) == [5, 6])
+        let clean = function("bb0:\n  return", named: "clean()")
+
+        let reported = InitializationChecker.check(try program(of: [usesLate, usesEarly, clean]))
+        #expect(reported.mapValues { $0.map(\.range.start.column) } == [
+            FunctionID(index: 0): [6], FunctionID(index: 1): [5],
+        ])
     }
 }
 
@@ -510,5 +513,6 @@ private func moves(at columns: [Int]) -> [Diagnostic.LabeledRange] {
 /// The errors the checker reports in a program of one function made of `blocks`, which returns `result` and whose
 /// parameters are of `parameters`' types.
 private func errors(in blocks: String, parameters: String = "", result: String = "Void") throws -> [Diagnostic] {
-    InitializationChecker.check(try program(of: [function(blocks, parameters: parameters, result: result)]))
+    let program = try program(of: [function(blocks, parameters: parameters, result: result)])
+    return InitializationChecker.check(program)[FunctionID(index: 0)] ?? []
 }

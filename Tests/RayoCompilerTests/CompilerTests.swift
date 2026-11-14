@@ -123,7 +123,7 @@ struct CompilerTests {
     func `a program's errors fail the run, each as the file's path, the position, the code and the message`(
         arguments: [String],
     ) {
-        let compiled = compile(arguments, files: ["a.rayo": "func f() {\n    let = 1\n    x = )\n}"])
+        let compiled = compile(arguments, files: ["a.rayo": "func main() {\n    let = 1\n    x = )\n}"])
         #expect(compiled.result.exitCode == 1)
         #expect(compiled.result.diagnostics.map(\.code) == [
             .missingBindingName(found: .token("=")), .missingExpression(found: .token(")")),

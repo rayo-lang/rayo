@@ -11,6 +11,12 @@ struct Signature: CustomStringConvertible {
         return "\(name)(\(parameterList))"
     }
 
+    /// Whether the declaration failed: a parameter's type or the written result type isn't known, which was reported
+    /// there.
+    var hasFailed: Bool {
+        parameters.contains { $0.type == nil } || result.hasFailed
+    }
+
     /// Whether `other` takes arguments with the same labels and types, so no call could tell the two apart. A type
     /// that isn't known matches none, since it was reported where it is written.
     func takesArguments(like other: Signature) -> Bool {

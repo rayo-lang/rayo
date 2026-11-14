@@ -10,8 +10,8 @@ private func expectChecking(
     let (file, syntaxErrors) = Parser.parse(source)
     try #require(syntaxErrors.isEmpty, "\(syntaxErrors)", sourceLocation: sourceLocation)
     let (program, checkErrors) = Checker.check(file)
-    let checked = try #require(program, "\(checkErrors)", sourceLocation: sourceLocation)
-    Snapshot("\(name).checked").expect(CheckedPrinter.text(of: checked), sourceLocation: sourceLocation)
+    try #require(checkErrors.isEmpty, "\(checkErrors)", sourceLocation: sourceLocation)
+    Snapshot("\(name).checked").expect(CheckedPrinter.text(of: program), sourceLocation: sourceLocation)
 }
 
 @Suite("The checked program of each construct")
