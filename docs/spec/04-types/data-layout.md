@@ -78,7 +78,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 **`TrailingArray<Header, Element>` is one allocation of a `Header` followed by `n` `Element`s**, as a network packet or a C API with a flexible array member wants.
 
 ```swift
-var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
+var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, all: 0)
 msg.header.kind = .snapshot
 msg.elements[0..<4].copy(from: payload[0..<4]) // MutableSpan<UInt8> over the trailing storage; lengths checked
 ```

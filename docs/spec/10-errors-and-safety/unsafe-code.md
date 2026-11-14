@@ -12,7 +12,7 @@ unsafe {
 }
 let now = unsafe plat.time_seconds()                                // one expression
 
-unsafe func blit(_ dst: *UInt8, _ src: *UInt8, _ n: Int) { ... }   // callers need unsafe too
+unsafe func blit(_ dst: *UInt8, _ src: *UInt8, _ n: UInt) { ... }   // callers need unsafe too
 ```
 
 **An `unsafe` block marks code whose correctness the compiler takes on trust.** Checks stay as they are inside it, and `unchecked { }` turns them off ([`unchecked` blocks](checks-and-build-modes.md#unchecked-blocks)).
@@ -139,7 +139,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 **So a value that counts its parts counts a part only once it is there.** This `Buffer` destroys its first `count` slots, so a slot it counts must hold a `T` whenever something can panic. Its fields are `unsafe`, so only `unsafe` code can break that:
 
 ```swift
-struct Buffer<T>(unsafe let storage: *T, unsafe var count: Int, unsafe let capacity: Int) {
+struct Buffer<T>(unsafe let storage: *T, unsafe var count: UInt, unsafe let capacity: UInt) {
     deinit { unsafe { storage.deinitialize(count: count) } }   // destroys the first 'count' slots
     mutating func push(_ make: () -> T) {
         unsafe {
@@ -161,11 +161,11 @@ If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads
 **A property's accessors are calls, each a point that can panic like any other** ([Panics](panics.md#unwinding)). A place property's accessor runs nothing once it has handed out its place, so a panic while the caller uses the place can't stop it halfway. A value property's change is different: a panic between its `get` and its `set` destroys the copy and never calls `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#panics-during-a-change)). So a `get` never takes a value out of storage for its `set` to put back:
 
 ```swift
-subscript(i: Int) -> T {
+subscript(i: UInt) -> T {
     get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
     set { unsafe (storage + i).initialize(to: newValue) }
 }
-subscript(i: Int) -> T {
+subscript(i: UInt) -> T {
     borrow { unsafe storage[i] }                             // sound: hands out slot i itself, which stays full
     mutate { unsafe &storage[i] }
 }

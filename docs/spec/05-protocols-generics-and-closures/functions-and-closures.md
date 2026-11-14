@@ -90,8 +90,8 @@ The overload rules above, by labels, parameter types and `self` convention, appl
 Each member is in one scope, instance members in 3 and static ones in 4, so no member is found twice:
 
 ```swift
-struct Ring<let N: Int> {
-    func cap() -> Int { N }                  // scope 4: Ring's own value parameter
+struct Ring<let N: UInt> {
+    func cap() -> UInt { N }                  // scope 4: Ring's own value parameter
 }
 
 extension Int {
@@ -230,7 +230,7 @@ h { finish() }                       // the closure converts to the optional's .
 
 - stored fields;
 - reflection projections of a field known where the borrows are checked;
-- inline array elements at an index known where the borrows are checked.
+- inline array elements at an index known where the borrows are checked, each a place of its own ([04](../04-types/collections.md#inline-array-elements)).
 
 **The path stops before the steps the body evaluates on each call:**
 
@@ -339,7 +339,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 A closure can also be held by its own concrete type, which never allocates:
 
 ```swift
-func times(_ n: Int, _ body: some mutating () -> Void) { … }   // monomorphized for each literal: never boxed
+func times(_ n: UInt, _ body: some mutating () -> Void) { … }   // monomorphized for each literal: never boxed
 
 var hits = 0
 var misses = 0

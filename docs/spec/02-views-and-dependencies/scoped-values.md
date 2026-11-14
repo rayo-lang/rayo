@@ -31,12 +31,12 @@ var hot = &heat.span                          // a MutableSpan<Float>: borrows t
 ```swift
 struct Span<Element>(                                  // shared view: copyable
     public unsafe let baseAddress: *Element,
-    public let count: Int,
+    public let count: UInt,
 ): Scoped
 
 struct MutableSpan<Element>(                           // exclusive view: move-only
     public unsafe let baseAddress: *Element,
-    public let count: Int,
+    public let count: UInt,
 ): Scoped, ~Copyable
 ```
 

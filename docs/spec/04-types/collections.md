@@ -7,13 +7,13 @@ Rayo has several ways to group values. Tuples and fixed-size arrays hold their e
 ## Tuples, ranges and arrays
 
 ```swift
-let pair: (Int, Float) = (3, 0.5)
+let pair: (UInt, Float) = (3, 0.5)
 let stats: (hp: Float, armor: Float) = (hp: 100, armor: 20)
 let (count, weight) = pair                   // destructuring
 for i in 0..<count { … }                     // a counted loop
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // an Array<Float, 4>: four Floats, stored inline
-var grid: [64 of Int] = .init(repeating: 0)  // every element is given
-let locks: [8 of Mutex<Int>] = .init(generating: { _ in Mutex(0) })   // one call per index, for a move-only type
+var grid: [64 of Int] = .init(all: 0)        // every element is given
+let locks: [8 of Mutex<Int>] = .init(each: { _ in Mutex(0) })   // one call per index, for a move-only type
 ```
 
 **Tuples may be labeled, and are laid out as a struct of their elements** ([Structs](structs.md#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`.
@@ -25,12 +25,41 @@ let locks: [8 of Mutex<Int>] = .init(generating: { _ in Mutex(0) })   // one cal
 **Its length is part of its type, so every element is given when it is made**, in one of these ways:
 
 - by a literal of exactly `N` elements;
-- by `.init(repeating:)`, which copies one copyable value into every element;
-- by `.init(generating:)`, which calls a closure once per index, in order, and takes each result it returns, so it serves a move-only `T` too.
+- by `.init(all:)`, which copies one copyable value into every element;
+- by `.init(each:)`, which calls a closure once per index, in order, passing it the index as a `UInt`, and takes each result it returns, so it serves a move-only `T` too.
 
 Written `[_ of T]`, an array type takes its count from the initializer.
 
-**An array's elements are laid out end to end**, each at `index × stride`, where a type's **stride** is its size rounded up to its alignment. `N` is at least 0, and `N` times `T`'s stride fits in an `Int`, checked where both are known, as for `Simd` ([SIMD and math](numbers-and-math.md#simd-and-math)).
+**A literal whose count differs from `N` is a compile error**, since it would leave elements without a value, or have values with no element to hold them. The count is known when the program is checked, so no literal is checked when it runs:
+
+```swift
+let w: [4 of Float] = [0.1, 0.2, 0.3]   // error: a [4 of Float] literal needs 4 elements
+```
+
+**An array's elements are laid out end to end**, each at `index × stride`, where a type's **stride** is its size rounded up to its alignment. `N` is a `UInt`, and `N` times `T`'s stride fits in an `Int`, checked where both are known, as for `Simd` ([SIMD and math](numbers-and-math.md#simd-and-math)).
+
+**`a.count` is `N`**, a read-only `UInt` that the type fixes. So it takes no storage in the array, and assigning it is a compile error.
+
+### Inline array elements
+
+**`a[i]` is element `i` of an inline array `a`, a place inside `a` as a stored field is.** No subscript accessor runs to find it: the element lies at `i × stride` from the array's start ([above](#tuples-ranges-and-arrays)). So the rules that follow a path through a stored field follow it through an element too:
+
+- two elements at indices known to differ where the borrows are checked are disjoint, as two stored fields are ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap));
+- a closure that names `a[2]` captures that element alone ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
+- `borrow a[i]` and `&a[i]` borrow the element where it lies ([01](../01-values-and-ownership/bindings.md#bindings)).
+
+**An element is never moved out, at any index, and an array that holds no value is made whole before any element is assigned** ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). So an inline array that holds a value holds all `N` of its elements.
+
+**An index is a `UInt`, so the indices of `[N of T]` run from `0` to `N - 1`.** An index known when the program is checked, an integer literal or a `const`, that lies outside `0..<N` is a compile error. Any other index is checked when the program runs, so `a[i]` panics with `index out of range` when `i` is `N` or more. That is a bounds check, on in every build, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)):
+
+```swift
+const edge: UInt = 64
+
+var grid: [64 of Int] = .init(all: 0)
+grid[63] = 1                 // fine: the last element
+grid[edge] = 1               // error: index 64 is out of range for a [64 of Int]
+grid[i] = 1                  // for a UInt 'i': checked when it runs, and panics when 'i' is 64 or more
+```
 
 ## Collections and strings
 
@@ -270,8 +299,8 @@ let ws: List<_> = [3, 4, 5]               // error: a List literal needs 'alloc'
 
 | Protocol | Requirement | Conforming types |
 | --- | --- | --- |
-| `ExpressibleByArrayLiteral` | `init<let N: Int>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
-| `ExpressibleByDictionaryLiteral` | `init<let N: Int>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
+| `ExpressibleByArrayLiteral` | `init<let N: UInt>(arrayLiteral elements: owned [N of ArrayLiteralElement])` | `Array`, `Simd`, `InlineList`, `List`, `Set`, `std.math`'s `Vec3` and matrices |
+| `ExpressibleByDictionaryLiteral` | `init<let N: UInt>(dictionaryLiteral pairs: owned [N of (Key, Value)])` | `Array` of `(Key, Value)` pairs, `Map`, user types such as a fixed lookup table |
 | `ExpressibleByStringLiteral` | `init(stringLiteral text: static StringView)` | `static StringView` |
 | `ExpressibleByInternedLiteral` | `unsafe init(internedLiteral entry: static Span<InternedEntry>)`, and an entry per text ([below](#interned-literals)) | `Name` |
 | `ExpressibleByIntegerLiteral` | `init(integerLiteral value: IntegerLiteralType)` | every number type |
@@ -365,7 +394,7 @@ protocol ExpressibleByInternedLiteral where InternedEntry: ~Scoped {            
 var total: Float = 0
 for e in enemies { total += e.hp }                        // e is each element, borrowed shared
 for e in &enemies { e.hp -= 1 }                           // e is each element, borrowed mutably
-for (i, e) in &enemies.enumerated() { … }                 // i is an Int, e a mutable borrow
+for (i, e) in &enemies.enumerated() { … }                 // i is a UInt, e a mutable borrow
 for (v, f) in zip(&vels, forces) { v += f * dt }          // two sequences in lockstep
 ```
 
@@ -375,7 +404,7 @@ protocol IteratorProtocol { associatedtype Element; mutating func next() -> Elem
 protocol SharedIterator: IteratorProtocol {     // elements outlive the iteration (02)
     mutating func next() -> Element? where return outlives self
 }
-protocol Collection: Sequence where Iterator: SharedIterator { var count: Int { get } }   // what generic algorithms take
+protocol Collection: Sequence where Iterator: SharedIterator { var count: UInt { get } }   // what generic algorithms take
 
 protocol MutableSequence {                      // what 'for x in &s' iterates
     associatedtype MutableIterator: IteratorProtocol   // a collection's yields exclusive views, such as MutableRef<T>; a Receiver's, owned items
@@ -454,8 +483,8 @@ for (x, y) in consume z { … }       // 'z' holds a zip with an '&' argument: i
 **One name can have a shared and a mutable form, each picked by its context:**
 
 ```swift
-for (i, e) in items.enumerated() { … }           // shared: (Int, Borrow<Item>) elements
-for (i, e) in &items.enumerated() { … }          // exclusive: (Int, MutableRef<Item>) elements
+for (i, e) in items.enumerated() { … }           // shared: (UInt, Borrow<Item>) elements
+for (i, e) in &items.enumerated() { … }          // exclusive: (UInt, MutableRef<Item>) elements
 let ages = particles.life                        // Span<Float>
 log("first age \(ages[0])")
 var lives = &particles.life                      // MutableSpan<Float>

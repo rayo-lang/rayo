@@ -80,11 +80,11 @@ A packed struct can put a field at a misaligned address, where a load or store o
 
 ### E8 · One library on 32-bit and 64-bit targets
 
-**A library ships for a 64-bit console, a dual-core 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `Int`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
+**A library ships for a 64-bit console, a dual-core 32-bit microcontroller without lock-free 64-bit atomics, and 32-bit WebAssembly.** It counts items in `UInt`s, passes buffers to C functions that take a `size_t`, keeps a counter in an atomic, and hands handles and weak links to C as `uint64_t`s ([11](../../spec/11-compilation-model.md#what-a-target-must-provide)).
 
 - **Must accept** one source for all three targets, with `unsafe` only around the C calls.
 - **Must hold:** integer arithmetic gives the same results on each target, including where `Int` arithmetic overflows.
-- **Must accept** passing an `Int` count to a `size_t` parameter on each target. State what happens when the count doesn't fit.
+- **Must accept** passing a `UInt` count to a `size_t` parameter on each target. State what happens when the count doesn't fit.
 - **Must accept** a 64-bit atomic counter where the target has 64-bit atomics, and a narrower one, chosen at compile time, where it doesn't. State what the plain `Atomic<Int>` gives on the microcontroller.
 - **Must hold:** the bits of handles, weak pointers and weak links are 8 bytes on each target. On the microcontroller, `WeakShared(bits:)`, `upgrade()` and opens give the outcomes they give on the console.
 
@@ -102,8 +102,8 @@ size_t board_uart_pending(void);                            // how many queued b
 ```swift
 import c "board.h" as board where prefix: "board_" unsafe { noalloc board_uart_write }   // the vendor's SDK
 
-let queued = Int(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))   // size_t is CSize: a UInt32 here
-let pending: Int = unsafe board.uart_pending()          // compiles here, where a UInt32 widens to Int, and not on the host
+let queued = UInt(unsafe board.uart_write(msg.baseAddress, CSize(msg.count)))  // size_t is CSize: a UInt32 here
+let pending: UInt = unsafe board.uart_pending()         // compiles here, where a UInt32 widens to UInt, and not on the host
 let received = Atomic<UInt32>(0)                        // fine on every target
 let uptime = Atomic<Int>(0)                             // error here: an Int is 8 bytes, and the cores have no 64-bit atomics
 
