@@ -289,7 +289,8 @@ struct ExpressionChecker {
     }
 
     /// Checks `base[indexExpr]`, the element at a UInt index of the array its base names, which the source writes at
-    /// `range`. Reports a base that isn't an array, and an index that isn't a UInt.
+    /// `range`. Reports a base that isn't an array, an index that isn't a UInt, and an integer literal index past the
+    /// array's end.
     private func element(at indexExpr: Expr, of base: Expr, in range: SourceRange,
                          under rules: some PlaceRules) -> TypedPlace? {
         // The base and the index are both checked, so each one's errors are reported; a literal index is a UInt.
@@ -305,6 +306,14 @@ struct ExpressionChecker {
 
         // An index that failed was reported.
         guard let index else { return nil }
+
+        // An integer literal is known as the program is checked, so one past the array's end is an error here; any
+        // other index is checked as the program runs.
+        if case .uintLiteral(let value) = index.kind, value >= count {
+            errors.report(.indexOutOfRange(index: value, type: typeName(of: holder.type)), at: index.range)
+            return nil
+        }
+
         return (holder.place.appending(.element(index: index, count: count, range: range)), element)
     }
 

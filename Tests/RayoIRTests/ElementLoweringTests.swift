@@ -2,15 +2,14 @@ import Testing
 
 @Suite("Lowering elements")
 struct ElementLoweringTests {
-    @Test func `an element is read where it lies, once any index but a literal below the count is checked`() throws {
-        // The literal `1` lies below the count, so the IR writes it; `2` lies past the end, so it is checked as any
-        // index a value gives is.
+    @Test func `an element is read where it lies, once any index but a literal is checked`() throws {
+        // A literal index lies below the count, since checking reports one that doesn't, so the IR writes it; an
+        // index a value gives is checked.
         let body = """
             let grid = [[1, 2], [3, 4]]
             let i: UInt = 1
             print(grid[1][0])
             print(grid[i][i - 1])
-            print(grid[0][2])
             let row = copy grid[i]
             print(row[0])
             """
