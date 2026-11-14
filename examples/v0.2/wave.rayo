@@ -1,0 +1,94 @@
+// A hero fights a wave of three enemies for five rounds, striking each enemy that still stands in turn.
+//
+// The program prints the strongest enemy's health before the fight. Each round it prints the round's number, then
+// each enemy's health. After the fight it prints how many blows wounded and how many felled, the damage each kind
+// dealt, the damage the strongest enemy took, and whether each enemy survives.
+
+func main() {
+    var wave = Wave(enemies: [
+        Enemy(stats: Stats(hp: 30, armor: 2)),
+        Enemy(stats: Stats(hp: 52, armor: 8)),
+        Enemy(stats: Stats(hp: 18, armor: 4)),
+    ])
+
+    // Each round's blow takes its strength from this table, at the round's number modulo 4, plus the round's number,
+    // so the hero's blows grow harder as the fight goes on.
+    let hits: [4 of Int] = [7, 4, 10, 6]
+
+    // A snapshot of the enemy with the most health, which the fight leaves as it is, so that the damage the enemy
+    // takes can be measured once the fight is over.
+    let strongest = strongestOf(wave.enemies)
+    let before = copy wave.enemies[strongest]
+    print(before.stats.hp)
+
+    // The ledger's first row is for blows that wound and its second for blows that fell. Each row holds how many such
+    // blows landed, then the damage they dealt.
+    var ledger: [2 of [2 of Int]] = .init(all: .init(all: 0))
+
+    // Each round the hero strikes every enemy that still stands, in turn, and the ledger records each blow.
+    var round: UInt = 0
+    while round < 5 {
+        round += 1
+        print(round)
+        var i: UInt = 0
+        while i < wave.enemies.count {
+            if wave.enemies[i].stats.hp > 0 {
+                let damage = blow(hits[round % 4] + Int(round), on: wave.enemies[i])
+                wave.enemies[i].stats.hp -= damage
+                let row: UInt = if wave.enemies[i].stats.hp > 0 { 0 } else { 1 }
+                ledger[row][0] += 1
+                ledger[row][1] += damage
+            }
+            print(wave.enemies[i].stats.hp)
+            i += 1
+        }
+    }
+
+    // The ledger, and the damage the strongest enemy took.
+    print(ledger[0][0])
+    print(ledger[1][0])
+    print(ledger[0][1])
+    print(ledger[1][1])
+    print(before.stats.hp - wave.enemies[strongest].stats.hp)
+
+    // Whether each enemy survives.
+    let standing = survivors(of: wave.enemies)
+    var i: UInt = 0
+    while i < standing.count {
+        print(standing[i])
+        i += 1
+    }
+}
+
+// Gives the damage a blow of `strength` deals `enemy`: armor at least as strong as the blow leaves it a scratch, and
+// weaker armor takes off half its own strength.
+func blow(_ strength: Int, on enemy: Enemy) -> Int {
+    if enemy.stats.armor >= strength { return 1 }
+    return strength - enemy.stats.armor / 2
+}
+
+// Gives the place of the enemy with the most health, the first of them on a tie.
+func strongestOf(_ enemies: [3 of Enemy]) -> UInt {
+    var strongest: UInt = 0
+    var i: UInt = 1
+    while i < enemies.count {
+        if enemies[i].stats.hp > enemies[strongest].stats.hp { strongest = copy i }
+        i += 1
+    }
+    return strongest
+}
+
+// Gives whether each enemy still stands.
+func survivors(of enemies: [3 of Enemy]) -> [3 of Bool] {
+    var standing: [3 of Bool] = .init(all: false)
+    var i: UInt = 0
+    while i < enemies.count {
+        standing[i] = enemies[i].stats.hp > 0
+        i += 1
+    }
+    return standing
+}
+
+struct Wave(var enemies: [3 of Enemy])
+struct Enemy(var stats: Stats)
+struct Stats(var hp: Int, let armor: Int)
