@@ -6,27 +6,21 @@ import RayoSyntax
 struct TypeNameChecker {
     let errors: ErrorList
 
-    /// Declares the name of each of `file`'s types in `declarations`, and returns the IDs it gives them. A type whose
-    /// name is `_` or another type's is reported, and gets no ID. A type whose name belongs to the file's functions
-    /// is reported, and still declared.
+    /// Declares the name of each of `file`'s types in `declarations`, in source order, and returns the IDs it gives
+    /// them. A type whose name is `_` or another type's is reported, and gets no ID. A type whose name belongs to the
+    /// file's functions is reported, and still declared.
     func declare(_ file: SourceFile, in declarations: inout Declarations) -> TypeIDs {
-        TypeIDs(structs: declareStructs(file.structs, in: &declarations))
-    }
-
-    /// Declares the name of each of `structs`, numbering them in source order, and returns their IDs, nil for each
-    /// that takes no name.
-    private func declareStructs(_ structs: [StructDecl], in declarations: inout Declarations) -> [StructID?] {
-        var ids: [StructID?] = []
-        var nextIndex = 0
-        for declaration in structs {
-            // A struct that takes no name is skipped in the numbering, so each struct lies at its ID's index.
-            let id = StructID(index: nextIndex, name: declaration.name)
-            guard declare(.structure(id), at: declaration.nameRange, in: &declarations) else {
-                ids.append(nil)
-                continue
+        var ids = TypeIDs(structs: [])
+        var nextStructIndex = 0
+        for declaration in TypeDeclaration.all(in: file) {
+            switch declaration {
+            // Structs are numbered in source order, skipping each that takes no name, so each lies at its ID's index.
+            case .structure(let structure):
+                let id = StructID(index: nextStructIndex, name: structure.name)
+                let isDeclared = declare(.structure(id), at: structure.nameRange, in: &declarations)
+                ids.structs.append(isDeclared ? id : nil)
+                if isDeclared { nextStructIndex += 1 }
             }
-            ids.append(id)
-            nextIndex += 1
         }
         return ids
     }
@@ -34,11 +28,7 @@ struct TypeNameChecker {
     /// Declares `type`, whose name is written at `range`, and returns whether it did. Reports a name that is `_` or
     /// another type's, which `type` doesn't take, and one that belongs to the file's functions, which it still does.
     private func declare(_ type: DeclaredType, at range: SourceRange, in declarations: inout Declarations) -> Bool {
-        // A type named `_` names nothing.
-        guard type.name != "_" else {
-            errors.report(.underscoreDeclared, at: range)
-            return false
-        }
+        guard errors.isNaming(type.name, at: range) else { return false }
         // A type before it holds the name already, whatever its kind.
         guard declarations.type(named: type.name) == nil else {
             errors.report(.alreadyDeclared(name: type.name), at: range)

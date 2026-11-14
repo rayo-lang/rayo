@@ -30,8 +30,8 @@ final class FileChecker {
 
     func check() -> CheckedProgram? {
         // Check every struct and function; a file without a `main` is a library, checked the same.
-        let ids = TypeNameChecker(errors: errors).declare(file, in: &declarations)
-        let types = StructChecker(errors: errors).declare(file.structs, withIDs: ids.structs, in: &declarations)
+        let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
+        let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
         let main = declareFunctions()
         let checked = functions.indices.map { checkedFunction(FunctionID(index: $0)) }
 

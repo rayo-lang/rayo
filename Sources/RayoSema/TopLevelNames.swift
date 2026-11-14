@@ -17,7 +17,7 @@ struct TopLevelNames {
     private let firstFunctions: [String: SourceLocation]
 
     init(of file: SourceFile) {
-        firstTypes = Self.firstStarts(of: file.structs.map { ($0.name, $0.nameRange.start) })
+        firstTypes = Self.firstStarts(of: TypeDeclaration.all(in: file).map { ($0.name, $0.nameRange.start) })
         firstFunctions = Self.firstStarts(of: file.functions.map { ($0.name, $0.nameRange.start) })
     }
 

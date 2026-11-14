@@ -1,5 +1,4 @@
 import RayoDiagnostics
-import RayoSource
 import RayoSyntax
 
 /// Checks a file's structs, whose names are declared already: that their fields have names of their own and types
@@ -34,14 +33,6 @@ struct StructChecker {
         guard !reportSelfContaining(among: declared) else { return nil }
 
         return types(of: declared)
-    }
-
-    /// Whether `name`, written at `range`, names a field, reporting it when it is `_`, which names nothing.
-    private func isNaming(_ name: String, at range: SourceRange) -> Bool {
-        // Any name but `_` names one.
-        guard name == "_" else { return true }
-        errors.report(.underscoreDeclared, at: range)
-        return false
     }
 
     /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
@@ -96,7 +87,7 @@ struct StructChecker {
     /// when it is. Adds the name to `names`.
     private func checkName(of field: FieldDecl, besides names: inout Set<String>) -> Bool {
         // A field named `_` is reported, and its name is checked no further.
-        guard isNaming(field.name, at: field.nameRange) else { return false }
+        guard errors.isNaming(field.name, at: field.nameRange) else { return false }
         // A field before it has the name already.
         guard names.insert(field.name).inserted else {
             errors.report(.alreadyDeclared(name: field.name), at: field.nameRange)

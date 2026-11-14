@@ -2,8 +2,8 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// The names a function body sees beyond its own locals: the file's own types, with its structs' fields, and
-/// functions, and the prelude's functions and types that none of them shadows.
+/// The names a function body sees beyond its own locals: the file's own types, with each struct's fields,
+/// and functions, and the prelude's functions and types that none of them shadows.
 struct Declarations {
     /// The file's top-level names, known before any of its declarations is declared.
     private let names: TopLevelNames
@@ -68,13 +68,6 @@ struct Declarations {
 
     func type(named name: String) -> DeclaredType? {
         types[name]
-    }
-
-    func structure(named name: String) -> StructID? {
-        switch types[name] {
-        case .structure(let id): id
-        case nil: nil
-        }
     }
 
     /// The fields of the struct `id`, whose fields must be declared already.

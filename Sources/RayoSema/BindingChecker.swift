@@ -54,7 +54,7 @@ struct BindingChecker {
     func declare(_ parameters: [Param], types: [RayoType?]) {
         for (parameter, type) in zip(parameters, types) {
             // A parameter named `_` is reported, and declares no local.
-            guard bindsName(parameter.name, at: parameter.nameRange) else { continue }
+            guard errors.isNaming(parameter.name, at: parameter.nameRange) else { continue }
             _ = names.declare(parameter.name, type: type, kind: .parameter, at: parameter.nameRange)
         }
     }
@@ -64,7 +64,7 @@ struct BindingChecker {
         // Checked before the name, so a declaration of `_` still reports its type's and its value's errors.
         let declared = checkTypeAndValue(of: binding)
         // A binding of `_` is reported, and declares no local.
-        guard bindsName(binding.name, at: binding.nameRange) else { return nil }
+        guard errors.isNaming(binding.name, at: binding.nameRange) else { return nil }
         let type = checkLocalType(declared, of: binding)
         let local = names.declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
         return local.map { .binding($0, at: binding.nameRange, declared.value) }
@@ -114,14 +114,6 @@ struct BindingChecker {
         case .failed:
             return nil
         }
-    }
-
-    /// Whether `name` is a name to bind, reporting it when it is `_`.
-    private func bindsName(_ name: String, at range: SourceRange) -> Bool {
-        // Any name but `_` binds.
-        guard name == "_" else { return true }
-        errors.report(.underscoreDeclared, at: range)
-        return false
     }
 }
 

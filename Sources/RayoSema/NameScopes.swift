@@ -67,17 +67,17 @@ final class NameScopes {
         blocks.reversed().lazy.compactMap { $0[name] }.first
     }
 
-    /// The module's functions or struct called `name` that `use` finds, nil when it has neither. Where both have the
+    /// The module's functions or type called `name` that `use` finds, nil when it has neither. Where both have the
     /// name, a call finds the functions, and any other use the kind the name belongs to.
     private func moduleMatch(for name: String, use: NameUse) -> NameMatch? {
         let functions = file.declarations.functions(named: name)
         let functionMatch = functions.isEmpty ? nil : NameMatch.functions(functions)
-        let structMatch = file.declarations.structure(named: name).map { NameMatch.structure($0) }
+        let typeMatch = file.declarations.type(named: name).map(NameMatch.init(type:))
 
-        // A call finds the functions, so a function whose name a struct took still answers its calls; any other use
-        // finds the struct first where the struct declares the name first.
-        let findsStructFirst = use == .ordinary && file.declarations.kind(of: name) == .type
-        return findsStructFirst ? structMatch ?? functionMatch : functionMatch ?? structMatch
+        // A call finds the functions, so a function whose name a type took still answers its calls; any other use
+        // finds the type first where the type declares the name first.
+        let findsTypeFirst = use == .ordinary && file.declarations.kind(of: name) == .type
+        return findsTypeFirst ? typeMatch ?? functionMatch : functionMatch ?? typeMatch
     }
 
     /// Declares `name` in the innermost block as a failed declaration, whose uses report nothing more.

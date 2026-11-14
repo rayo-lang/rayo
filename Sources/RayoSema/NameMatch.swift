@@ -6,4 +6,11 @@ enum NameMatch {
     case functions([Signature])
     /// The module's struct of that name.
     case structure(StructID)
+
+    /// What a use of the name of `type`, one of the module's types, stands for.
+    init(type: DeclaredType) {
+        switch type {
+        case .structure(let id): self = .structure(id)
+        }
+    }
 }
