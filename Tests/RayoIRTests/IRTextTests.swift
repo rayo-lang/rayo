@@ -147,6 +147,37 @@ struct IRTextTests {
             range: range(1, 1, 1, 2),
         ))
     }
+
+    @Test func `an index, and elements at an index the text writes or a local holds, read back the same`() throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+              var %0 grid: [2 of [3 of Int]]
+              temp %1: UInt
+              temp %2: Int
+            bb0:
+              %1 @1:1-1:2 = index uint 4 below 3 @2:3-2:4
+              %2 @1:1-1:2 = operand read %0[1][%1] @1:1-1:2 @1:1-1:2
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+
+        // The index names the array's count, and the read steps into the element at `1`, then the one at `%1`.
+        let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
+        #expect(statements[0] == .compute(
+            destination: Destination(Place(root: LocalID(index: 1)), at: range(1, 1, 1, 2)),
+            value: .index(.constant(.uint(4)), below: 3), range: range(2, 3, 2, 4),
+        ))
+        let element = Place(root: LocalID(index: 0), steps: [.element(1), .elementAt(LocalID(index: 1))])
+        #expect(statements[1] == .compute(
+            destination: Destination(Place(root: LocalID(index: 2)), at: range(1, 1, 1, 2)),
+            value: .operand(.read(element, at: range(1, 1, 1, 2))), range: range(1, 1, 1, 2),
+        ))
+    }
 }
 
 /// The range the text writes `@startLine:startColumn-endLine:endColumn`, which names no offsets.
@@ -177,6 +208,11 @@ private let malformedIR = [
         testDescription: "a type no struct declares",
         text: "struct Pair {\n  count: Count\n}",
         error: IRTextError(line: 2, column: 10, message: "no type is named 'Count'"),
+    ),
+    MalformedIR(
+        testDescription: "an element step without its ']'",
+        text: "func \"f()\"() -> Void {\n  temp %0: [2 of Int]\nbb0:\n  return read %0[1 @1:1-1:2\n}",
+        error: IRTextError(line: 4, column: 20, message: "expected ']', found '@'"),
     ),
     MalformedIR(
         testDescription: "an array type without 'of'",

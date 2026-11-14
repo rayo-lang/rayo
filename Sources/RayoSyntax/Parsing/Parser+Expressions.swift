@@ -19,7 +19,8 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `'copy' identifier ('.' member)*`, `('-' | '!') unary`, or a postfix expression.
+    /// `'-' int-literal`, `'copy' identifier ('.' member | '[' expression ']')*`, `('-' | '!') unary`, or a postfix
+    /// expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -29,10 +30,10 @@ extension Parser {
             advance()
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        // A `copy` takes the local it copies, or a field of it at any depth.
+        // A `copy` takes the local it copies, or a part of it at any depth.
         if consume(.copy) {
             let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingCopiedName)
-            let place = try parseMembers(of: Expr(kind: .name(name), range: nameRange))
+            let place = try parseParts(of: Expr(kind: .name(name), range: nameRange))
             return Expr(kind: .copy(place), range: range(from: start))
         }
         // An expression without a `-` or `!` in front is a postfix one.
@@ -46,8 +47,8 @@ extension Parser {
         return Expr(kind: .unary(op, operand), range: range(from: start))
     }
 
-    /// `primary postfix*`, where a postfix is `'.' member`, or `'(' arguments ')'` after a name, a member or an
-    /// implicit member.
+    /// `primary postfix*`, where a postfix is `'.' member`, `'[' expression ']'`, or `'(' arguments ')'` after a name,
+    /// a member or an implicit member.
     private mutating func parsePostfix() throws(ParseFailure) -> Expr {
         // A parenthesized expression keeps the kind of the expression inside it, so `(f)` reads as the name `f`, but
         // it is no name or member, and nothing calls it until a member is taken of it.
@@ -62,6 +63,11 @@ extension Parser {
                 value = try parseMembers(of: value)
                 isParenthesized = false
 
+            // A `[` takes an element of the value.
+            case .punct(.lbracket):
+                value = try parseElement(of: value)
+                isParenthesized = false
+
             // A `(` calls the value, where it is a name, a member or an implicit member written bare.
             case .punct(.lparen) where value.isCallable && !isParenthesized:
                 value = try parseCall(to: value)
@@ -71,6 +77,27 @@ extension Parser {
                 return value
             }
         }
+    }
+
+    /// After `base`: the parts of it that a place names, each a member after a `.` or an element between `[` and `]`,
+    /// such as `.party[i].hp`.
+    private mutating func parseParts(of base: Expr) throws(ParseFailure) -> Expr {
+        var value = base
+        while true {
+            switch current.kind {
+            case .punct(.dot): value = try parseMembers(of: value)
+            case .punct(.lbracket): value = try parseElement(of: value)
+            default: return value
+            }
+        }
+    }
+
+    /// At the `[` that follows `base`: the `[`, the index and the `]`.
+    private mutating func parseElement(of base: Expr) throws(ParseFailure) -> Expr {
+        advance()
+        let index = try parseExpression()
+        try expect(.rbracket, else: ErrorCode.unclosedIndex)
+        return Expr(kind: .element(base, index: index), range: range(from: base.range))
     }
 
     /// After `base`: the members taken of it, each after a `.`.

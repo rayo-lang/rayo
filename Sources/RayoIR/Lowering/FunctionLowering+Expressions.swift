@@ -48,13 +48,40 @@ extension FunctionLowering {
     }
 
     /// Lowers `place` to the IR place it names, computing its root into a new temporary where it is a value that no
-    /// local holds. The root's value is read, so a place that an `if`'s branch gives keeps its value.
+    /// local holds, then each index of an element it steps into, in the order of its steps. The root's value is read,
+    /// so a place that an `if`'s branch gives keeps its value.
     mutating func place(of place: CheckedPlace) -> Place {
         let root = switch place.root {
         case .local(let local, _): local
         case .temporary(let value): temporary(holding: value, as: .read).root
         }
-        return Place(root: root, steps: place.steps.map(PlaceStep.init))
+
+        var lowered = Place(root: root)
+        for step in place.steps {
+            lowered = lowered.appending(self.step(step))
+        }
+        return lowered
+    }
+
+    /// Lowers `step`, computing the index of an element it steps into where the IR can't write it.
+    private mutating func step(_ step: CheckedPlaceStep) -> PlaceStep {
+        switch step {
+        case .field(let index, _): .field(index)
+        case .element(let index, let count, _): elementStep(at: index, below: count)
+        }
+    }
+
+    /// Lowers the step into the element at `index` of an array of `count` elements: one the IR writes where `index`
+    /// is a UInt literal below `count`, and otherwise one at a new temporary that holds the index, which is computed
+    /// once and checked against `count` where the source writes it.
+    private mutating func elementStep(at index: CheckedExpr, below count: Int) -> PlaceStep {
+        // A literal below the count needs no check, and names an element apart from those at other literals.
+        if case .uintLiteral(let value) = index.kind, value < UInt64(count) { return .element(Int(value)) }
+
+        let checked = builder.newTemporary(.uint)
+        let value = operand(of: index, as: .read)
+        builder.emit(.index(value, below: count), into: Destination(checked, at: index.range), range: index.range)
+        return .elementAt(checked.root)
     }
 
     /// Computes `expr`, the value of a position that `use`s it, into a new temporary, or, for an `if`, has the branch
@@ -187,13 +214,5 @@ extension FunctionLowering {
         builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
-    }
-}
-
-private extension PlaceStep {
-    init(_ step: CheckedPlaceStep) {
-        self = switch step {
-        case .field(let index, _): .field(index)
-        }
     }
 }

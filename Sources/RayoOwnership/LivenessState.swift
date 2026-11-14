@@ -16,9 +16,9 @@ struct LivenessState: DataflowState {
     }
 
     /// Whether some code reads the value that a store to `place` just before this state leaves there: a later read
-    /// of the place, of a part inside it, or of a value that holds it.
+    /// of the place, of a part that may lie inside it, or of a value that may hold it.
     func reads(_ place: Place) -> Bool {
-        live.contains { place.contains($0) || $0.contains(place) }
+        live.contains { place.overlaps($0) }
     }
 
     /// Takes the state after `terminator` back to the state before it.
@@ -45,7 +45,7 @@ struct LivenessState: DataflowState {
 
         // An access reaches the value its place holds, whether it reads it or changes it.
         case .begin(_, let access):
-            live.insert(access.place)
+            read(access.place)
 
         // Ending an access, or depending on one, reads no place.
         case .end, .depend:
@@ -86,7 +86,13 @@ struct LivenessState: DataflowState {
 
         // A read and a move both read the value the place holds.
         case .read(let place, _), .move(let place, _):
-            live.insert(place)
+            read(place)
         }
+    }
+
+    /// Reads the value at `place`, and the locals that hold the indices it finds its elements by.
+    private mutating func read(_ place: Place) {
+        live.insert(place)
+        live.formUnion(place.indexLocals.map { Place(root: $0) })
     }
 }

@@ -42,6 +42,6 @@ struct IRVerificationTests {
         // The front end's steps chain in the order it runs them, and its type names each step.
         let frontEnd = Compiler.frontEnd(readFile: { _ in nil })
         let steps = String(describing: type(of: frontEnd))
-        #expect(steps.contains("Lower, VerifyIR>, CheckParameterMoves>"))
+        #expect(steps.contains("Lower, VerifyIR>, CheckMoves>"))
     }
 }

@@ -64,8 +64,9 @@ struct ExpressionChecker {
         case .boolLiteral(let value):
             .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
 
-        // A name reads the local it names, and a member a field of the place its base names.
-        case .name, .member:
+        // A name reads the local it names, a member a field of the place its base names, and an element the element of
+        // the array its base names.
+        case .name, .member, .element:
             place(expr, under: self).map {
                 .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
             }
@@ -227,28 +228,62 @@ struct ExpressionChecker {
         return binary(checkedOp, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
     }
 
-    /// Checks an expression that names a place, such as `e.stats.hp`, under the rules of the position it stands in:
-    /// first where the place starts, then each field it goes into. Returns nil once it has reported a mistake in any
-    /// of them.
+    /// Checks an expression that names a place, such as `e.stats.hp` or `e.party[i]`, under the rules of the position
+    /// it stands in: first where the place starts, then each field or element it goes into. Returns nil once it has
+    /// reported a mistake in any of them.
     func place(_ expr: Expr, under rules: some PlaceRules) -> TypedPlace? {
-        place(expr, under: rules, holdsFields: false)
+        place(expr, under: rules, holdsParts: false)
     }
 
     /// Checks an expression that names a place under the given rules. The flag says whether the place goes on into
-    /// a field of it, as the base of a longer place does.
-    private func place(_ expr: Expr, under rules: some PlaceRules, holdsFields: Bool) -> TypedPlace? {
-        // Anything but a member is the place's root.
-        guard case .member(let base, let name, let nameRange) = expr.kind else {
-            return rules.root(expr, holdsFields: holdsFields)
-        }
+    /// a field or an element of it, as the base of a longer place does.
+    private func place(_ expr: Expr, under rules: some PlaceRules, holdsParts: Bool) -> TypedPlace? {
+        switch expr.kind {
+        // A member steps into a field of the place its base names, and an element into an element of it.
+        case .member(let base, let name, let nameRange):
+            field(named: name, at: nameRange, of: base, in: expr.range, under: rules)
+        case .element(let base, let index):
+            element(at: index, of: base, in: expr.range, under: rules)
 
-        // A member steps into a field of the place its base names; a base that failed was reported.
-        guard let holder = place(base, under: rules, holdsFields: true) else { return nil }
+        // Anything else is the place's root.
+        default:
+            rules.root(expr, holdsParts: holdsParts)
+        }
+    }
+
+    /// Checks `base.name`, the field called `name` of the place its base names, which the source writes at `range`.
+    private func field(named name: String, at nameRange: SourceRange, of base: Expr, in range: SourceRange,
+                       under rules: some PlaceRules) -> TypedPlace? {
+        // A base that failed was reported.
+        guard let holder = place(base, under: rules, holdsParts: true) else { return nil }
         // So was a field that the holder doesn't have, or that the rules don't admit.
         guard let (index, field, type) = field(named: name, at: nameRange, of: holder.type),
               rules.admits(field, at: nameRange)
         else { return nil }
-        return (holder.place.appending(.field(index, range: expr.range)), type)
+        return (holder.place.appending(.field(index, range: range)), type)
+    }
+
+    /// Checks `base[indexExpr]`, the element at a UInt index of the array its base names, which the source writes at
+    /// `range`. Reports a base that isn't an array, and an index that isn't a UInt.
+    private func element(at indexExpr: Expr, of base: Expr, in range: SourceRange,
+                         under rules: some PlaceRules) -> TypedPlace? {
+        // A place whose rules don't admit an element was reported.
+        guard rules.admitsElement(at: range) else { return nil }
+
+        // The base and the index are both checked, so each one's errors are reported; a literal index is a UInt.
+        let holder = place(base, under: rules, holdsParts: true)
+        let index = check(indexExpr, expecting: Expectation(.uint) { _, found in .indexNotUInt(found: found) })
+        guard let holder else { return nil }
+
+        // Only an array has elements.
+        guard case .array(let count, let element) = holder.type else {
+            errors.report(.notIndexable(found: typeName(of: holder.type)), at: base.range)
+            return nil
+        }
+
+        // An index that failed was reported.
+        guard let index else { return nil }
+        return (holder.place.appending(.element(index: index, count: count, range: range)), element)
     }
 
     /// Finds a field by its name in a value's type: its position in the struct's declaration, the field, and its
@@ -405,9 +440,9 @@ private extension CheckedBinaryOperator {
     }
 }
 
-/// The rules of a place that an expression reads, which may start from any value and step into any field.
+/// The rules of a place that an expression reads, which may start from any value and step into any field or element.
 extension ExpressionChecker: PlaceRules {
-    func root(_ expr: Expr, holdsFields: Bool) -> TypedPlace? {
+    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A name roots the place in the local it names.
         if case .name(let name) = expr.kind { return local(named: name, at: expr.range) }
 
@@ -421,6 +456,10 @@ extension ExpressionChecker: PlaceRules {
     }
 
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
+        true
+    }
+
+    func admitsElement(at range: SourceRange) -> Bool {
         true
     }
 }

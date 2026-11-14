@@ -35,6 +35,39 @@ struct AccessExtentTests {
         #expect(try checked(blocks).errors == [])
     }
 
+    @Test func `accesses to two elements at different indices the IR writes don't conflict, whatever they do`() throws {
+        // As `take(&a[0].damage, a[1])` lowers.
+        let blocks = """
+            bb0:
+              begin a0 modify static %7[0].0 @2:3-2:3
+              begin a1 read static %7[1] @2:6-2:6
+              _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              return
+            """
+        #expect(try checked(blocks).errors == [])
+    }
+
+    @Test(arguments: [
+        ("%7[%8].0", "%7[1]", ErrorCode.usedWhileMutablyBorrowed(name: "a[1]", borrowed: "a")),
+        ("%7[1].0", "%7[%8]", .usedWhileMutablyBorrowed(name: "a", borrowed: "a[1].damage")),
+        ("%7[0].0", "%7[0]", .usedWhileMutablyBorrowed(name: "a[0]", borrowed: "a[0].damage")),
+    ])
+    func `accesses to two elements of one array conflict, unless the IR writes both indices and they differ`(
+        modified: String, read: String, code: ErrorCode,
+    ) throws {
+        // As `take(&a[i].damage, a[1])` lowers, where the local `%8` holds `i`'s value.
+        let blocks = """
+            bb0:
+              %8 @1:1-1:1 = index uint 1 below 2 @1:1-1:1
+              begin a0 modify static \(modified) @2:3-2:3
+              begin a1 read static \(read) @2:6-2:6
+              _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              return
+            """
+        let expected = Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])
+        #expect(try checked(blocks).errors == [expected])
+    }
+
     @Test func `two read accesses of one place don't conflict`() throws {
         let blocks = """
             bb0:

@@ -48,19 +48,19 @@ struct AssignmentChecker {
 
     /// Finds the local an assignment changes, either whole or, when the target is one of its fields, field by field.
     /// Returns nil once it has reported why the local can't change that way, or that no local has the name.
-    private func changedLocal(named name: String, at range: SourceRange, holdsFields: Bool) -> TypedPlace? {
+    private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }
 
         // A local whose value can't change as the assignment changes it is reported.
-        if let refusal = refusal(toChange: local, holdsFields: holdsFields) { return refuse(refusal, at: range) }
+        if let refusal = refusal(toChange: local, holdsParts: holdsParts) { return refuse(refusal, at: range) }
         return (CheckedPlace(root: .local(local, range: range)), names[local].type)
     }
 
     /// The error to report when an assignment may not change a local, whole or field by field as it asks, or nil
     /// when it may.
-    private func refusal(toChange local: LocalID, holdsFields: Bool) -> ErrorCode? {
-        switch (names[local].kind, holdsFields) {
+    private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
+        switch (names[local].kind, holdsParts) {
         // A borrowed parameter's value is its caller's, whole and field by field.
         case (.parameter, _): .assignToParameter(name: names[local].name)
         // A `let` may be assigned whole, only once on each path, which the initialization check enforces; it never
@@ -110,10 +110,10 @@ struct AssignmentChecker {
 /// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
 /// declared with `var`.
 extension AssignmentChecker: PlaceRules {
-    func root(_ expr: Expr, holdsFields: Bool) -> TypedPlace? {
+    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A local's name roots the place in the local; `_`, and anything but a name or a member, names no place.
         guard case .name(let name) = expr.kind, name != "_" else { return refuse(.assignToNonLocal, at: expr.range) }
-        return changedLocal(named: name, at: expr.range, holdsFields: holdsFields)
+        return changedLocal(named: name, at: expr.range, holdsParts: holdsParts)
     }
 
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
@@ -123,5 +123,11 @@ extension AssignmentChecker: PlaceRules {
             return false
         }
         return true
+    }
+
+    func admitsElement(at range: SourceRange) -> Bool {
+        // Only a local, or a field of one, can be assigned, which leaves out an element and every place inside one.
+        errors.report(.assignToNonLocal, at: range)
+        return false
     }
 }

@@ -33,12 +33,16 @@ public enum Rvalue: Equatable, Sendable {
     case array([Operand], of: RayoType)
     /// An array of `count` copies of the operand's value, each an element, which the operand keeps.
     case filledArray(Operand, count: Int)
+    /// The operand's value, a UInt, as an index into an array of `count` elements, which panics with `index out of
+    /// range` where the value is `count` or more.
+    case index(Operand, below: Int)
 
     /// The operands, in the order the operation evaluates them. A call argument that passes an access, rather than a
     /// value, isn't an operand.
     public var operands: [Operand] {
         switch self {
-        case .operand(let operand), .unary(_, let operand), .filledArray(let operand, _): [operand]
+        case .operand(let operand), .unary(_, let operand), .filledArray(let operand, _),
+             .index(let operand, _): [operand]
         case .binary(_, let left, let right): [left, right]
         case .call(_, let arguments): arguments.compactMap(\.operand)
         case .array(let elements, _): elements
@@ -61,6 +65,7 @@ public enum Rvalue: Equatable, Sendable {
         case .call(let callee, _): callee.result(in: functions)
         case .array(let elements, let element): .array(count: elements.count, element: element)
         case .filledArray(let value, let count): .array(count: count, element: value.type(in: body, types: types))
+        case .index: .uint
         }
     }
 }

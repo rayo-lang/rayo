@@ -3,9 +3,9 @@ import RayoIR
 import RayoSema
 import RayoSource
 
-/// Emits the IR's operators on integer and Bool values into a function, each as its operands' type says, and the
-/// conversions between the integer types. Integer operations panic or wrap where Rayo says they do, and so never
-/// reach LLVM's undefined cases.
+/// Emits the IR's operators on integer and Bool values into a function, each as its operands' type says, the
+/// conversions between the integer types, and the checks of indices against their arrays' counts. Integer operations
+/// panic or wrap where Rayo says they do, and so never reach LLVM's undefined cases.
 struct OperatorEmitter {
     /// The function that a panic's blocks are appended to.
     private let llvmFunction: Function
@@ -66,6 +66,17 @@ struct OperatorEmitter {
             let isNegative = program.builder.compare(.signedLess, int(value), types.int64.constant(0))
             try panic(if: isNegative, .overflow, at: range, in: program)
         }
+        return value
+    }
+
+    /// Emits the check that `value`, a UInt, is an index into an array of `count` elements, at the builder's position,
+    /// and returns the index. The check panics with `index out of range` where the value is `count` or more, in every
+    /// build, and leaves the builder in a new block.
+    func emitIndex(_ value: AnyValue, below count: Int, at range: SourceRange,
+                   in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
+        let count = types.int64.constant(Int64(count))
+        try panic(if: program.builder.compare(.unsignedGreaterEqual, int(value), count), .indexOutOfRange, at: range,
+                  in: program)
         return value
     }
 
@@ -244,6 +255,7 @@ private enum PanicReason: String {
     case overflow = "integer overflow"
     case divisionByZero = "division by zero"
     case remainderByZero = "remainder by zero"
+    case indexOutOfRange = "index out of range"
 }
 
 /// How an integer type's operations read its bits: as a two's complement value, which may be negative, or as one

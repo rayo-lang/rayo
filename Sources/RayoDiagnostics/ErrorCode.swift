@@ -112,6 +112,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(131, error: "expected ']' to close the array literal, found {found}")
     case unclosedArrayLiteral(found: FoundToken)
 
+    @Code(132, error: "expected ']' to close the index, found {found}")
+    case unclosedIndex(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -318,6 +321,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(270, error: "{type} has no member '{name}'")
     case noSuchMember(type: TypeName, name: String)
 
+    @Code(271, error: "only an array can be indexed, found {found}")
+    case notIndexable(found: TypeName)
+
+    @Code(272, error: "an index needs a UInt, found {found}")
+    case indexNotUInt(found: TypeName)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
@@ -365,6 +374,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(314, error: "'{name}' can't be moved while '{borrowed}' is borrowed", labels: ["borrowed": "borrowed here"])
     case movedWhileBorrowed(name: String, borrowed: String)
+
+    @Code(315, error: "an array's element can't be moved, nor any part of one; 'copy' makes an owned copy")
+    case moveFromElement
 }
 
 extension ErrorCode {

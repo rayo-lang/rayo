@@ -151,6 +151,12 @@ struct FunctionEmitter {
         // A filled array is built from copies of one value.
         case .filledArray(let value, let count):
             fill(destination, withCopiesOf: value, count: count, in: program)
+
+        // An index is checked against its array's count before any code finds the element.
+        case .index(let operand, let count):
+            let value = try operators.emitIndex(read(operand, with: program.builder), below: count, at: range,
+                                                in: program)
+            keep(value, in: destination, with: program.builder)
         }
     }
 
