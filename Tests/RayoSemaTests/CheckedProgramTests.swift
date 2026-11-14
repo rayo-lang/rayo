@@ -89,7 +89,7 @@ struct CheckedProgramTests {
             """, toMatch: "places")
     }
 
-    @Test func `a struct is made by its primary initializer, and a field is a place in a local or a temporary`() throws {
+    @Test func `a struct is made by its primary initializer, and a field is a place in a local or temporary`() throws {
         try expectChecking(of: """
             struct Shot(let range: Int, var hit: Hit)
             struct Hit(var damage: Int)

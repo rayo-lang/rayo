@@ -40,16 +40,6 @@ extension IRParser {
         }
     }
 
-    /// Reads the struct a primary initializer makes, which must be a struct the text declares.
-    mutating func madeStruct() throws(IRTextError) -> StructID {
-        let token = current
-        let type = try type()
-        guard case .structure(let id) = type else {
-            throw IRTextError(at: token, "\(type) isn't a struct, so no primary initializer makes it")
-        }
-        return id
-    }
-
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and
     /// the rest of whose name follows it.
     private mutating func operation(named keyword: String, at token: IRToken) throws(IRTextError) -> Rvalue {

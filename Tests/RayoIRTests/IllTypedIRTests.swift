@@ -35,6 +35,28 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(program) == nil)
     }
 
+    @Test func `a primary initializer with a body, or that makes another type than its struct, is a violation`()
+        throws {
+        let text = main("bb0:\n  return", after: "init \"Pair(count: Int)\"(Int) -> Pair")
+        let program = try IRParser.program(from: text)
+        let initializer = FunctionID(index: 1)
+        let pair = StructID(index: 0, name: "Pair")
+
+        var withBody = program
+        withBody.bodies[initializer] = program.bodies[FunctionID(index: 0)]
+        let hasBody = "the IR gives the primary initializer of 'Pair' a body"
+        #expect(IRVerifier.verify(withBody) == IRViolation(function: "Pair(count: Int)", message: hasBody))
+
+        var functions = FunctionTable()
+        _ = functions.declare(program.functions[FunctionID(index: 0)])
+        _ = functions.declare(FunctionDeclaration(name: "Pair(count: Int)", parameters: [.int], result: .bool,
+                                                  kind: .primaryInitializer(pair)))
+        var makingBool = program
+        makingBool.functions = functions
+        let makesBool = "the IR's primary initializer of 'Pair' makes Bool, where it makes Pair"
+        #expect(IRVerifier.verify(makingBool) == IRViolation(function: "Pair(count: Int)", message: makesBool))
+    }
+
     @Test func `a wrapping operator is named as one`() throws {
         let program = try IRParser.program(from: main("""
               temp %0: Bool
@@ -266,6 +288,12 @@ private let illTypedIR = [
         text: main("bb0:\n  return", after: "init \"Pair(count: Bool)\"(Bool) -> Pair"),
         function: "Pair(count: Bool)",
         message: "the IR's primary initializer of 'Pair' takes (Bool), where its fields are (Int)",
+    ),
+    IllTypedIR(
+        testDescription: "a run that starts at a primary initializer",
+        text: "struct Pair {\n  count: Int\n}\nmain \"Pair(count: Int)\"\ninit \"Pair(count: Int)\"(Int) -> Pair",
+        function: "Pair(count: Int)",
+        message: "the IR starts a run at the primary initializer of 'Pair', which has no body",
     ),
     IllTypedIR(
         testDescription: "a read of a field of an Int",

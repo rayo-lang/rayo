@@ -54,7 +54,7 @@ public struct CheckedPrinter: ~Copyable {
     private mutating func writeFunction(_ id: FunctionID) {
         let function = program.functions[id]
         let parameters = function.parameters.map(\.description).joined(separator: ", ")
-        let header = "\(keyword(of: function.kind)) \(quoted(function.name))(\(parameters)) -> \(function.result)"
+        let header = "\(function.kind.keyword) \(quoted(function.name))(\(parameters)) -> \(function.result)"
         guard let body = program.bodies[id] else {
             lines += [header, ""]
             return
@@ -174,15 +174,6 @@ public struct CheckedPrinter: ~Copyable {
     /// Adds `text` as a line, indented two spaces for each level of `depth`.
     private mutating func line(_ text: String, _ depth: Int) {
         lines.append(String(repeating: "  ", count: depth) + text)
-    }
-
-    /// The word a function's declaration starts with: `func` for one the source writes, and `init` for a struct's
-    /// primary initializer.
-    private func keyword(of kind: FunctionKind) -> String {
-        switch kind {
-        case .written: "func"
-        case .primaryInitializer: "init"
-        }
     }
 
     private func keyword(of kind: LocalKind) -> String {

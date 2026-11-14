@@ -53,7 +53,7 @@ public enum IRPrinter {
     /// A function's declaration, followed, where it has a body, by its locals and its blocks.
     private static func text(of function: FunctionDeclaration, body: IRBody?, in program: IRProgram) -> String {
         let parameters = function.parameters.map(\.description).joined(separator: ", ")
-        let header = "\(keyword(of: function.kind)) \(quoted(function.name))(\(parameters)) -> \(function.result)"
+        let header = "\(function.kind.keyword) \(quoted(function.name))(\(parameters)) -> \(function.result)"
         guard let body else { return header + "\n" }
 
         // Each local on a line, then each block under its label.
@@ -69,15 +69,6 @@ public enum IRPrinter {
         switch local {
         case .source(let name, let kind, let type): "\(keyword(of: kind)) %\(id) \(name): \(type)"
         case .temporary(let type): "temp %\(id): \(type)"
-        }
-    }
-
-    /// The word a function's declaration starts with: `func` for one the source writes, and `init` for a struct's
-    /// primary initializer, whose result is the struct it makes.
-    static func keyword(of kind: FunctionKind) -> String {
-        switch kind {
-        case .written: "func"
-        case .primaryInitializer: "init"
         }
     }
 

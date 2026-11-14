@@ -13,7 +13,7 @@ extension FunctionEmitter {
         case .builtin(let builtin):
             try call(builtin, passing: operands, into: destination, in: program)
         case .function(let id):
-            call(functions[id.index], passing: operands, into: destination, with: program.builder)
+            call(callTargets[id.index], passing: operands, into: destination, with: program.builder)
         }
     }
 
@@ -29,21 +29,21 @@ extension FunctionEmitter {
         }
     }
 
-    /// Emits a call of `target` with `operands`, of the types it takes, and stores its result in `destination`, a
+    /// Emits a call of `function` with `operands`, of the types it takes, and stores its result in `destination`, a
     /// place of the result's type, when there is one.
     func call(
-        _ target: DeclaredFunction, passing operands: [Operand], into destination: Place?,
+        _ function: DeclaredFunction, passing operands: [Operand], into destination: Place?,
         with builder: borrowing Builder,
     ) {
         let arguments = values(of: operands, with: builder)
         let destinationAddress = destination.map { address(of: $0, with: builder) }
 
-        switch target.signature.result {
+        switch function.signature.result {
         case .direct:
-            let result = emitCall(of: target, passing: arguments, resultSlot: nil, with: builder)
+            let result = emitCall(of: function, passing: arguments, resultSlot: nil, with: builder)
             storeResult(result, in: destinationAddress, with: builder)
         case .slot:
-            callWritingSlot(of: target, passing: arguments, from: operands, into: destination,
+            callWritingSlot(of: function, passing: arguments, from: operands, into: destination,
                             at: destinationAddress, with: builder)
         }
     }

@@ -136,6 +136,16 @@ public struct IRParser: ~Copyable {
                                    kind: .primaryInitializer(id))
     }
 
+    /// Reads the struct a primary initializer makes, which must be a struct the text declares.
+    private mutating func madeStruct() throws(IRTextError) -> StructID {
+        let token = current
+        let type = try type()
+        guard case .structure(let id) = type else {
+            throw IRTextError(at: token, "\(type) isn't a struct, so no primary initializer makes it")
+        }
+        return id
+    }
+
     /// Reads a function's quoted name, then its parameters' types between parentheses.
     private mutating func nameAndParameters() throws(IRTextError) -> (name: String, parameters: [RayoType]) {
         guard case .string(let name) = current.kind else { throw expected("a function's quoted name") }

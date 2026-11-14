@@ -22,4 +22,13 @@ public enum FunctionKind: Equatable, Sendable {
     /// A struct's primary initializer, which the struct declares with no body: it takes each field's value, owned,
     /// in the order the struct declares its fields, and makes the struct of them.
     case primaryInitializer(StructID)
+
+    /// The word the program's text starts the declaration with: `func` for a function the source writes, and `init`
+    /// for a primary initializer.
+    package var keyword: String {
+        switch self {
+        case .written: "func"
+        case .primaryInitializer: "init"
+        }
+    }
 }

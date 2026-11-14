@@ -32,7 +32,7 @@ struct FunctionEmitter {
     /// How the function's parameters and result are passed.
     let signature: LoweredSignature
     /// What a call of each of the program's functions reaches, indexed by `FunctionID`.
-    let functions: [CallTarget]
+    let callTargets: [CallTarget]
     /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
     let operators: OperatorEmitter
@@ -47,13 +47,13 @@ struct FunctionEmitter {
 
     init(
         body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction,
-        functions: [CallTarget], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
+        callTargets: [CallTarget], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
     ) {
         self.body = body
         self.declaration = declaration
         llvmFunction = declared.function
         signature = declared.signature
-        self.functions = functions
+        self.callTargets = callTargets
         self.lowering = lowering
         operators = OperatorEmitter(into: declared.function, types: lowering.types)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
