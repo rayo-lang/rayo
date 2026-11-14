@@ -15,6 +15,19 @@ struct MoveTests {
         #expect(errorLines(inMain: body) == [expected])
     }
 
+    @Test(arguments: [
+        ("let x = 1\nlet y = x\nprint(x)", ["3:9: note: moved here"]),
+        ("var x = 1\nif true { let y = x } else { var z = 0\nz = x }\nprint(x)",
+         ["3:19: note: moved here", "4:5: note: moved here"]),
+        ("var x = 1\nif true { if true { let y = x } } else { let z = x }\nprint(x)",
+         ["3:29: note: moved here", "3:50: note: moved here"]),
+    ])
+    func `a use of a local that was or may have been moved notes each move that caused it, in source order`(
+        body: String, notes: [String],
+    ) {
+        #expect(diagnostics(mainSource(body)).flatMap(\.notes) == notes)
+    }
+
     @Test("a 'return' moves its local, and a use after it on no path is no error", arguments: [
         ("func f() -> Int {\n    let x = 1\n    let y = x\n    return x\n}", ["5:12: error[E0302]: 'x' was moved"]),
         ("func f() -> Int {\n    let x = 1\n    return x\n    print(x)\n}", []),

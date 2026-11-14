@@ -84,9 +84,9 @@ private struct FunctionErrors {
             partlyMovedError(naming: name(of: place), movedField: missingName, holding: missing.state)
         }
 
-        // Of the uses with the same cause, only the first in the source is kept.
+        // Of the uses with the same cause, only the first in the source is kept, with the moves that caused it.
         let cause = Cause(place: missing.place, moves: missing.state.moves)
-        keep(Diagnostic(code, at: range), for: cause)
+        keep(Diagnostic(code, at: range, labeling: labeledMoves(missing.state)), for: cause)
     }
 
     mutating func store(to destination: Destination, holding state: PlaceState) {
@@ -118,6 +118,12 @@ private struct FunctionErrors {
             return state.holdsValueOnSomePath ? .usedMaybeUninitialized(name: name) : .usedUninitialized(name: name)
         }
         return state.isMovedOnEveryPath ? .usedAfterMove(name: name) : .usedAfterMaybeMove(name: name)
+    }
+
+    /// The moves that may have left a place holding `state` without its value, each labeled where it is, in source
+    /// order.
+    private func labeledMoves(_ state: PlaceState) -> [Diagnostic.LabeledRange] {
+        state.moves.sorted { $0.start < $1.start }.map { Diagnostic.LabeledRange(.moved, at: $0) }
     }
 
     /// The error for a use of the place called `name` whole, where the field called `field` inside it holds `state`,

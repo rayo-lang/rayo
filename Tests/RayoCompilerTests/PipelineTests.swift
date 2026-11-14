@@ -1,6 +1,7 @@
 import Testing
-import RayoDiagnostics
+@testable import RayoDiagnostics
 @testable import RayoCompiler
+import RayoIR
 import RayoSource
 
 /// Adds its letter to the end of the text it's given.
@@ -56,10 +57,32 @@ private struct GiveUp: CompilationStep {
     }
 }
 
+/// Finds a warning at the start of the program it's given, and gives the program on.
+private struct WarnAtStart: CompilationStep {
+    func run(_ program: IRProgram, errors: inout [Diagnostic]) -> IRProgram? {
+        errors.append(warning(on: 1))
+        return program
+    }
+}
+
+/// What `rayoc` gives when `steps` compile `a.rayo`, printing nothing.
+private func rayocResult<Output>(compiling steps: some CompilationStep<String, Output>) -> CompilerResult {
+    Compiler.result(compiling: "a.rayo") { errors throws(CompilationError) in
+        _ = try steps.run("a.rayo", errors: &errors)
+        return ""
+    }
+}
+
 /// An error at `line` of the file.
 private func error(on line: Int) -> Diagnostic {
     let start = SourceLocation(line: line, column: 1, offset: line * 10)
     return Diagnostic(.noMain, at: SourceRange(start, start))
+}
+
+/// A warning at `line` of the file. No code is a warning, so it takes an error's code.
+private func warning(on line: Int) -> Diagnostic {
+    let start = SourceLocation(line: line, column: 1, offset: line * 10)
+    return Diagnostic(.noMain, severity: .warning, at: SourceRange(start, start))
 }
 
 struct PipelineTests {
@@ -107,7 +130,7 @@ struct PipelineTests {
     @Test func `stopping on errors gives its input on when there are none`() throws {
         let steps = pipeline {
             Append(letter: "a")
-            StopOnErrors<String>()
+            StopOnErrors<String>(warningsAreErrors: false)
             Append(letter: "b")
         }
         var errors: [Diagnostic] = []
@@ -119,13 +142,67 @@ struct PipelineTests {
         let steps = pipeline {
             Report(diagnostics: [error(on: 3), error(on: 1)])
             Report(diagnostics: [error(on: 2)])
-            StopOnErrors<String>()
+            StopOnErrors<String>(warningsAreErrors: false)
             Record(log: log)
         }
         var errors: [Diagnostic] = []
         let gathered = [error(on: 1), error(on: 2), error(on: 3)]
         #expect(throws: CompilationError.rejected(gathered)) { try steps.run(">", errors: &errors) }
         #expect(log.texts.isEmpty)
+    }
+
+    @Test func `stopping on errors gives its input on past warnings, which stay among those gathered`() throws {
+        let steps = pipeline {
+            Report(diagnostics: [warning(on: 1)])
+            StopOnErrors<String>(warningsAreErrors: false)
+            Append(letter: "a")
+        }
+        var errors: [Diagnostic] = []
+        #expect(try steps.run(">", errors: &errors) == ">a")
+        #expect(errors == [warning(on: 1)])
+    }
+
+    @Test func `when warnings are errors, stopping on errors ends the compile on a warning, with every one gathered`() {
+        let log = Log()
+        let steps = pipeline {
+            Report(diagnostics: [warning(on: 3), warning(on: 1)])
+            StopOnErrors<String>(warningsAreErrors: true)
+            Record(log: log)
+        }
+        var errors: [Diagnostic] = []
+        let gathered = [warning(on: 1), warning(on: 3)]
+        #expect(throws: CompilationError.rejected(gathered)) { try steps.run(">", errors: &errors) }
+        #expect(log.texts.isEmpty)
+    }
+
+    @Test(arguments: [(false, 0), (true, 1)])
+    func `a warning is shown as one, and fails the compile only when warnings are errors`(
+        warningsAreErrors: Bool, exitCode: Int32,
+    ) {
+        let steps = pipeline {
+            Compiler.frontEnd(readFile: { _ in Array("func main() {}".utf8) }, warningsAreErrors: warningsAreErrors)
+            WarnAtStart()
+            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
+        }
+        let result = rayocResult(compiling: steps)
+        #expect(result.exitCode == exitCode)
+        #expect(result.diagnostics == [warning(on: 1)])
+        #expect(result.errors == """
+            a.rayo:1:1: warning[E0201]: a file without a 'main' function is a library, which can't be built into an \
+            executable or run
+
+            """)
+    }
+
+    @Test func `the warnings found before rayoc can't go on are shown before why`() {
+        let steps = pipeline {
+            Report(diagnostics: [warning(on: 2)])
+            Fail(message: "can't write 'a.o'")
+        }
+        let result = rayocResult(compiling: steps)
+        #expect(result.exitCode == 1)
+        #expect(result.errors.hasPrefix("a.rayo:2:1: warning[E0201]: "))
+        #expect(result.errors.hasSuffix("\nrayoc: can't write 'a.o'\n"))
     }
 
     @Test func `a step that gives nothing skips the steps up to the next stop, which ends the compile`() {
@@ -135,7 +212,7 @@ struct PipelineTests {
             GiveUp(diagnostics: [error(on: 2)])
             Record(log: log)
             Report(diagnostics: [error(on: 3)])
-            StopOnErrors<String>()
+            StopOnErrors<String>(warningsAreErrors: false)
             Record(log: log)
         }
         var errors: [Diagnostic] = []

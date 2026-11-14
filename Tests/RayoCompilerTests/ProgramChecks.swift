@@ -18,7 +18,7 @@ func diagnostics(_ source: String) -> [Diagnostic] {
     let result = Compiler.run(["--check", "main.rayo"], readFile: { $0 == "main.rayo" ? Array(source.utf8) : nil }) {
         _, _ in false
     }
-    #expect(result.exitCode == (result.diagnostics.isEmpty ? 0 : 1))
+    #expect(result.exitCode == (result.diagnostics.contains { $0.severity == .error } ? 1 : 0))
     return result.diagnostics
 }
 
@@ -35,6 +35,6 @@ func codesAndCoverage(inMain body: String) -> (codes: [ErrorCode], covered: [Str
 }
 
 /// The source of a program whose `main` runs `body`.
-private func mainSource(_ body: String) -> String {
+func mainSource(_ body: String) -> String {
     "func main() {\n\(body)\n}"
 }

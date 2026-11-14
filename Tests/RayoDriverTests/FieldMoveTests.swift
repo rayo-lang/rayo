@@ -69,15 +69,30 @@ struct FieldMoveTests {
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
-        (["print(strength(e))"], "5:20: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole"),
+        (
+            ["print(strength(e))"],
+            "5:20: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
+                "\nmain.rayo:3:13: note: moved here",
+        ),
         (
             ["let c = copy e", "print(c.armor)"],
-            "5:13: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole",
+            "5:13: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
+                "\nmain.rayo:3:13: note: moved here",
         ),
-        (["_ = e"], "5:9: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole"),
-        (["print(e.stats.hp)"], "5:11: error[E0302]: 'e.stats' was moved"),
-        (["let t = e.stats", "print(t.hp)"], "5:13: error[E0302]: 'e.stats' was moved"),
-        (["let t = copy e.stats", "print(t.hp)"], "5:13: error[E0302]: 'e.stats' was moved"),
+        (
+            ["_ = e"],
+            "5:9: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
+                "\nmain.rayo:3:13: note: moved here",
+        ),
+        (["print(e.stats.hp)"], "5:11: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here"),
+        (
+            ["let t = e.stats", "print(t.hp)"],
+            "5:13: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here",
+        ),
+        (
+            ["let t = copy e.stats", "print(t.hp)"],
+            "5:13: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here",
+        ),
     ])
     func `a struct a field was moved out of can't be used whole, nor the field read, in either build`(
         mode: [String], failure: (lines: [String], error: String),
@@ -90,10 +105,11 @@ struct FieldMoveTests {
     @Test(arguments: [["--debug"], ["--release"]], [
         (
             "print(strength(e))",
-            "7:20: error[E0310]: 'e.stats' may have been moved out of 'e', so 'e' can't be used whole",
+            "7:20: error[E0310]: 'e.stats' may have been moved out of 'e', so 'e' can't be used whole" +
+                "\nmain.rayo:4:17: note: moved here",
         ),
-        ("print(e.stats.speed)", "7:11: error[E0303]: 'e.stats' may have been moved"),
-        ("let t = copy e.stats", "7:13: error[E0303]: 'e.stats' may have been moved"),
+        ("print(e.stats.speed)", "7:11: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here"),
+        ("let t = copy e.stats", "7:13: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here"),
     ])
     func `a field moved in one branch of an 'if' may have been moved after it, in either build`(
         mode: [String], failure: (line: String, error: String),
@@ -123,14 +139,19 @@ struct FieldMoveTests {
         let lines = [
             "var e = enemy()", "while e.armor > 3 {", "    let s = e.stats", "    print(s.hp)", "    e.armor -= 1", "}",
         ]
-        let expected = CommandResult(
-            exitCode: 1, output: "", errors: "main.rayo:4:17: error[E0303]: 'e.stats' may have been moved\n")
+        // The move on one pass is what may have taken the field on the next.
+        let errors = "main.rayo:4:17: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here\n"
+        let expected = CommandResult(exitCode: 1, output: "", errors: errors)
         #expect(run(main(running: lines), options: mode) == expected)
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
         ("l.stats = s", "5:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
-        ("print(strength(l))", "5:20: error[E0309]: 'l.stats' was moved out of 'l', so 'l' can't be used whole"),
+        (
+            "print(strength(l))",
+            "5:20: error[E0309]: 'l.stats' was moved out of 'l', so 'l' can't be used whole" +
+                "\nmain.rayo:3:13: note: moved here",
+        ),
     ])
     func `a 'let' that a field was moved out of stays partly moved, in either build`(
         mode: [String], failure: (line: String, error: String),

@@ -144,6 +144,14 @@ speed = lerp(speed, topSpeed, 0.1)  // the body runs in place, in every build
 - **No cycles.** An `@inline` function that reaches itself through direct calls to `@inline` functions is a compile error, since its body would run in place inside its own expansion, without end. An `@inline` cycle that only an instantiation makes, through a requirement call, isn't an error. In that instantiation, the call that would run an `@inline` function in place inside its own expansion is an ordinary call.
 - **Its body is part of what it exports.** A module that calls it needs its body to build, since the body runs in place in the caller, though not to type-check.
 
+## Compile errors and warnings
+
+**A program that breaks one of the language's rules has a compile error, and the compiler rejects it.** A module that imports itself is one ([above](#no-import-cycles)). A program with a compile error doesn't build, so it never runs.
+
+**A warning flags code that is likely a mistake but has a defined meaning.** The compiler reports a warning as it reports a compile error, and still builds the program. **A program with warnings compiles and runs as if they weren't there**, since each warning is about code whose meaning the spec already defines.
+
+**Which checks are warnings is stated where each check is specified**, as each compile error is. Both are found as the program compiles, unlike a diagnostic check, which runs as the program runs and stops it when it fails ([10](10-errors-and-safety/checks-and-build-modes.md#check-levels)).
+
 ## What the spec defines
 
 **The spec defines the language, the run-time behavior that programs can rely on, and the contracts that libraries implement.** The run-time behavior includes what panics, and the order of startup, thread teardown and exit. How a toolchain or runtime implements these, and everything built on the language, is outside the spec.

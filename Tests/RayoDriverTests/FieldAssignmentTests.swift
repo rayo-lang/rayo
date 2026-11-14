@@ -226,7 +226,10 @@ struct FieldAssignmentTests {
 
     @Test(arguments: [["--debug"], ["--release"]], [
         ("var e: Enemy\n    e.armor = 1\n    print(e.armor)", "3:5: error[E0304]: 'e' isn't initialized"),
-        ("var e = enemy()\n    _ = e\n    e.stats.hp = 1\n    print(e.armor)", "4:5: error[E0302]: 'e' was moved"),
+        (
+            "var e = enemy()\n    _ = e\n    e.stats.hp = 1\n    print(e.armor)",
+            "4:5: error[E0302]: 'e' was moved\nmain.rayo:3:9: note: moved here",
+        ),
         (
             "var e = enemy()\n    print(e.armor)\n    e.armor = 1",
             "4:5: error[E0308]: the value assigned to 'e.armor' is never read",
@@ -240,7 +243,10 @@ struct FieldAssignmentTests {
             "3:5: error[E0308]: the value assigned to 'e.stats.hp' is never read",
         ),
         ("var e: Enemy\n    e.armor += 1\n    print(e.armor)", "3:5: error[E0304]: 'e' isn't initialized"),
-        ("var e = enemy()\n    _ = e\n    e.stats.hp -= 1\n    print(e.armor)", "4:5: error[E0302]: 'e' was moved"),
+        (
+            "var e = enemy()\n    _ = e\n    e.stats.hp -= 1\n    print(e.armor)",
+            "4:5: error[E0302]: 'e' was moved\nmain.rayo:3:9: note: moved here",
+        ),
         (
             "var e = enemy()\n    print(e.armor)\n    e.stats.hp *= 2",
             "4:5: error[E0308]: the value assigned to 'e.stats.hp' is never read",

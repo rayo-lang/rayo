@@ -4,13 +4,16 @@ import RayoLLVMInstall
 /// The driver, `rayo`, which has the compiler, `rayoc`, compile a source file, and links and runs the program.
 public enum Driver {
     static let usage = """
-        usage: rayo <command> <file>
-               rayo build|run [--debug | --release] [--linker=lld | --linker=platform] <file>
+        usage: rayo <command> [--warnings-as-errors] <file>
+               rayo build|run [--warnings-as-errors] [--debug | --release] [--linker=lld | --linker=platform] <file>
 
         commands:
-          check    check the file and report its errors
+          check    check the file and report its errors and warnings
           build    compile the file to an executable beside it, named after it
           run      compile the file and run it
+
+        warnings:
+          --warnings-as-errors  a warning fails the compile, as an error does
 
         build modes:
           --debug    integer overflow panics, and the program isn't optimised
@@ -32,18 +35,25 @@ public enum Driver {
         var command: Command
         var mode: BuildMode
         var linker: Linker
+        /// Whether a warning fails the compile, as an error does.
+        var warningsAreErrors = false
         var path: String
 
         init(_ arguments: [String]) throws(CommandLineError) {
             // Arguments that start with no command `rayo` knows ask for nothing it does.
             guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { throw .usage }
 
-            // Read each option of `build` and `run` before the file, each at most once; `check` takes none.
+            // Read each option before the file, each at most once; `check` takes only `--warnings-as-errors`.
             var operands = arguments.dropFirst()
             var mode: BuildMode?
             var linker: Linker?
-            while command != .check, operands.count > 1, let option = operands.first {
-                if let newMode = BuildMode(rawValue: option), mode == nil {
+            while operands.count > 1, let option = operands.first {
+                if option == "--warnings-as-errors", !warningsAreErrors {
+                    warningsAreErrors = true
+                } else if command == .check {
+                    // `check` builds nothing, so it takes no option of a build.
+                    throw .usage
+                } else if let newMode = BuildMode(rawValue: option), mode == nil {
                     // A build mode says how the program is built.
                     mode = newMode
                 } else if let name = Self.value(of: option, named: "--linker"), linker == nil {
@@ -68,6 +78,7 @@ public enum Driver {
         /// Whether `operand` is one of `rayo`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
             BuildMode(rawValue: operand) != nil || operand == "--linker" || value(of: operand, named: "--linker") != nil
+                || operand == "--warnings-as-errors"
         }
 
         /// The value `option` gives, when it is `name=value`.
@@ -139,7 +150,7 @@ public enum Driver {
 
         /// Checks the file, and writes nothing but what `rayoc` wrote.
         private func check() throws(CommandError) -> CommandResult {
-            let errors = try toolchain.check(invocation.path)
+            let errors = try toolchain.check(invocation.path, warningsAreErrors: invocation.warningsAreErrors)
 
             return CommandResult(exitCode: 0, output: "", errors: errors)
         }
@@ -148,7 +159,8 @@ public enum Driver {
         private func build() throws(CommandError) -> CommandResult {
             let executable = try executable(building: invocation.path)
 
-            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode,
+                                              warningsAreErrors: invocation.warningsAreErrors) {
                 objectFile throws(CommandError) in try toolchain.link(objectFile, to: executable)
             }
 
@@ -157,7 +169,8 @@ public enum Driver {
 
         /// Compiles the file and runs it, and gives what the run gave, after what `rayoc` wrote.
         private func runProgram() throws(CommandError) -> CommandResult {
-            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode) {
+            let compiled = try toolchain.compile(invocation.path, mode: invocation.mode,
+                                              warningsAreErrors: invocation.warningsAreErrors) {
                 objectFile throws(CommandError) in try toolchain.linkAndRun(objectFile)
             }
 

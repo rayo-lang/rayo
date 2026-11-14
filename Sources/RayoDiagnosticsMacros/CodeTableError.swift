@@ -10,6 +10,10 @@ enum CodeTableError: DiagnosticMessage, Equatable {
     case unlabeledValue(String)
     case numberNotLiteral
     case messageNotPlain
+    case labelsNotLiteral
+    case labelNameNotIdentifier
+    case labelNotPlain
+    case labelTwice(String)
     case duplicateNumber(Int)
     case unknownPlaceholder(String)
     case unusedValue(String)
@@ -26,6 +30,10 @@ enum CodeTableError: DiagnosticMessage, Equatable {
         case .unlabeledValue(let name): "each value of case '\(name)' needs a label, which its message names"
         case .numberNotLiteral: "a code's number is a positive integer literal"
         case .messageNotPlain: "a code's message is a one-line string literal, with '{label}' for a value"
+        case .labelsNotLiteral: "a code's labels are a dictionary literal, from each label's name to its text"
+        case .labelNameNotIdentifier: "a label's name is a string literal that spells an identifier"
+        case .labelNotPlain: "a label's text is a one-line string literal, with '{label}' for a value"
+        case .labelTwice(let name): "the code declares the label '\(name)' more than once"
         case .duplicateNumber(let number): "another code already has the number \(number)"
         case .unknownPlaceholder(let label): "the case has no value labeled '\(label)'"
         case .unusedValue(let label): "the message never names the value '\(label)'"

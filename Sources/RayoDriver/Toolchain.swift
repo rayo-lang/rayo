@@ -21,22 +21,23 @@ struct Toolchain {
     /// The environment that `rayoc`, clang and a program run in.
     var environment: [String: String]
 
-    /// Has `rayoc` check the source file at `path`, and returns what `rayoc` wrote to its standard error, where
-    /// `output` captures it.
-    func check(_ path: String) throws(CommandError) -> String {
-        try runCompiler(["--check", "--", path])
+    /// Has `rayoc` check the source file at `path`, failing on a warning where `warningsAreErrors`, and returns what
+    /// `rayoc` wrote to its standard error, where `output` captures it.
+    func check(_ path: String, warningsAreErrors: Bool) throws(CommandError) -> String {
+        try runCompiler(Self.warningOptions(warningsAreErrors) + ["--check", "--", path])
     }
 
-    /// Has `rayoc` compile the source file at `path` to object code in `mode`, and runs `body` on the object file,
-    /// which is removed once `body` ends. Returns what `body` returns, and what `rayoc` wrote to its standard error,
-    /// where `output` captures it.
+    /// Has `rayoc` compile the source file at `path` to object code in `mode`, failing on a warning where
+    /// `warningsAreErrors`, and runs `body` on the object file, which is removed once `body` ends. Returns what `body`
+    /// returns, and what `rayoc` wrote to its standard error, where `output` captures it.
     func compile<Value>(
-        _ path: String, mode: BuildMode, _ body: (URL) throws(CommandError) -> Value,
+        _ path: String, mode: BuildMode, warningsAreErrors: Bool, _ body: (URL) throws(CommandError) -> Value,
     ) throws(CommandError) -> (value: Value, errors: String) {
         try Self.withTemporaryDirectory { directory throws(CommandError) in
             // Have `rayoc` write the object file inside the directory, so it goes with the directory.
             let objectFile = directory.appendingPathComponent("program.o")
-            let errors = try runCompiler([mode.rawValue, "-o", objectFile.path, "--", path])
+            let options = Self.warningOptions(warningsAreErrors) + [mode.rawValue]
+            let errors = try runCompiler(options + ["-o", objectFile.path, "--", path])
 
             // Run the body on the object file; what `rayoc` wrote comes before why the body stopped, if it did.
             do throws(CommandError) {
@@ -78,6 +79,11 @@ struct Toolchain {
             let run = try runSendingOutput(executable)
             return CommandResult(exitCode: run.termination.exitCode, output: run.output, errors: run.errors)
         }
+    }
+
+    /// The options that have `rayoc` fail on a warning where `warningsAreErrors`.
+    private static func warningOptions(_ warningsAreErrors: Bool) -> [String] {
+        warningsAreErrors ? ["--warnings-as-errors"] : []
     }
 
     /// Runs `rayoc` with `arguments`, and returns what it wrote to its standard error, where `output` captures it,
