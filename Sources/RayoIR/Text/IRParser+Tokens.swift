@@ -20,10 +20,16 @@ extension IRParser {
         guard consume(symbol) else { throw expected("'\(symbol)'") }
     }
 
+    /// Moves past the current token where it is the word `word`, and returns whether it was.
+    mutating func consume(word: String) -> Bool {
+        guard current.kind == .word(word) else { return false }
+        advance()
+        return true
+    }
+
     /// Moves past the current token, which must be the word `expected`.
     mutating func expect(word expected: String) throws(IRTextError) {
-        guard current.kind == .word(expected) else { throw self.expected("'\(expected)'") }
-        advance()
+        guard consume(word: expected) else { throw self.expected("'\(expected)'") }
     }
 
     /// The word at the current token, which it moves past.

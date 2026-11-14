@@ -105,18 +105,11 @@ extension IRParser {
     /// Reads `goto bbN`, `branch condition, bbN, bbM`, `return`, `return result` or `unreachable`.
     private mutating func terminator() throws(IRTextError) -> Terminator {
         // A terminator starts with the word that names it, which the rest of it follows.
-        let keywords = ["goto", "branch", "return", "unreachable"]
-        guard case .word(let keyword) = current.kind, keywords.contains(keyword) else {
-            throw expected("a statement or a terminator")
-        }
-        advance()
-
-        return switch keyword {
-        case "goto": .goto(try blockReference())
-        case "branch": try branch()
-        case "return": .return(startsOperand ? try operand() : nil)
-        default: .unreachable
-        }
+        if consume(word: "goto") { return .goto(try blockReference()) }
+        if consume(word: "branch") { return try branch() }
+        if consume(word: "return") { return .return(startsOperand ? try operand() : nil) }
+        if consume(word: "unreachable") { return .unreachable }
+        throw expected("a statement or a terminator")
     }
 
     /// Reads `condition, bbN, bbM`, the rest of a branch.

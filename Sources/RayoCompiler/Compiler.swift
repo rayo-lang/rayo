@@ -152,6 +152,9 @@ public enum Compiler {
 
     /// Checks the source file `invocation` names, and writes its object code when it asks for that. Returns what
     /// `rayoc` prints to its standard output: the dump `invocation` asks for, or nothing.
+    ///
+    /// Each pipeline it runs ends in a step that ends the compile on the program's errors, so a pipeline gives nothing
+    /// only where the compile has already ended, and nothing is printed there.
     private static func compile(
         _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
         writeFile: @escaping (String, [UInt8]) -> Bool,
@@ -165,9 +168,6 @@ public enum Compiler {
             try writeObjectCode(of: path, to: objectPath, build: build, readFile: readFile, writeFile: writeFile)
         }
     }
-
-    // Each pipeline below ends in a step that ends the compile on the program's errors, so a pipeline gives nothing
-    // only where the compile has already ended, and nothing is printed there.
 
     /// Checks the source file at `path`, and prints nothing.
     private static func check(
