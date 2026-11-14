@@ -36,6 +36,26 @@ struct IRTextTests {
             """)
     }
 
+    @Test func `a UInt local, a UInt constant and a conversion read back the same`() throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+              var %0 x: UInt
+              temp %1: Int
+            bb0:
+              %0 @1:1-1:2 = operand uint 18446744073709551615 @1:1-1:2
+              begin a0 read static %0 @2:3-2:4
+              %1 @2:1-2:2 = call builtin "Int(_: UInt)"(a0) @2:1-2:2
+              end a0
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+    }
+
     @Test func `an access begun, passed to a call, depended on and ended reads back the same`() throws {
         let text = """
             main "main()"

@@ -8,6 +8,10 @@ public enum IntegerPredicate: Equatable, Sendable {
     case signedLessEqual
     case signedGreater
     case signedGreaterEqual
+    case unsignedLess
+    case unsignedLessEqual
+    case unsignedGreater
+    case unsignedGreaterEqual
 
     var llvmPredicate: LLVMIntPredicate {
         switch self {
@@ -17,6 +21,10 @@ public enum IntegerPredicate: Equatable, Sendable {
         case .signedLessEqual: LLVMIntSLE
         case .signedGreater: LLVMIntSGT
         case .signedGreaterEqual: LLVMIntSGE
+        case .unsignedLess: LLVMIntULT
+        case .unsignedLessEqual: LLVMIntULE
+        case .unsignedGreater: LLVMIntUGT
+        case .unsignedGreaterEqual: LLVMIntUGE
         }
     }
 }

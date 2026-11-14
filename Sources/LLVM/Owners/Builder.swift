@@ -51,6 +51,16 @@ public struct Builder: ~Copyable {
         IntValue(unchecked: LLVMBuildSRem(ref, left.ref, right.ref, ""))
     }
 
+    /// Builds `udiv`, which LLVM leaves undefined for a zero divisor.
+    public func unsignedDivide<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
+        IntValue(unchecked: LLVMBuildUDiv(ref, left.ref, right.ref, ""))
+    }
+
+    /// Builds `urem`, which LLVM leaves undefined for a zero divisor.
+    public func unsignedRemainder<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
+        IntValue(unchecked: LLVMBuildURem(ref, left.ref, right.ref, ""))
+    }
+
     /// Builds `and`.
     public func and<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
         IntValue(unchecked: LLVMBuildAnd(ref, left.ref, right.ref, ""))

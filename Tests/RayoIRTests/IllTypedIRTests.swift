@@ -66,7 +66,7 @@ struct IllTypedIRTests {
               %2 @1:1-1:2 = add wrapping read %0 @1:1-1:2, read %1 @1:1-1:2 @1:1-1:2
               return
             """))
-        let message = "the IR gives 'wrapping +' an operand of type Bool, where it takes Int"
+        let message = "the IR gives 'wrapping +' an operand of type Bool, where it takes Int or UInt"
         #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
     }
 }
@@ -96,7 +96,7 @@ private let illTypedIR = [
         testDescription: "an operator given an operand of a type it doesn't take",
         text: computing("add checked read %0 @1:1-1:2, read %1 @1:1-1:2", on: ["Bool", "Int"], into: "Int"),
         function: "main()",
-        message: "the IR gives '+' an operand of type Bool, where it takes Int",
+        message: "the IR gives '+' an operand of type Bool, where it takes Int or UInt",
     ),
     IllTypedIR(
         testDescription: "a division by a Bool",
@@ -108,13 +108,13 @@ private let illTypedIR = [
         testDescription: "a remainder of a Bool",
         text: computing("remainder read %0 @1:1-1:2, read %1 @1:1-1:2", on: ["Bool", "Int"], into: "Int"),
         function: "main()",
-        message: "the IR gives '%' an operand of type Bool, where it takes Int",
+        message: "the IR gives '%' an operand of type Bool, where it takes Int or UInt",
     ),
     IllTypedIR(
         testDescription: "negation of a Bool",
         text: computing("negate checked read %0 @1:1-1:2", on: ["Bool"], into: "Int"),
         function: "main()",
-        message: "the IR gives '-' an operand of type Bool, where it takes Int",
+        message: "the IR gives '-' an operand of type Bool, where it takes Int or UInt",
     ),
     IllTypedIR(
         testDescription: "'!' of an Int",
@@ -138,13 +138,13 @@ private let illTypedIR = [
         testDescription: "an ordering of two Bools",
         text: computing("less read %0 @1:1-1:2, read %1 @1:1-1:2", on: ["Bool", "Bool"], into: "Bool"),
         function: "main()",
-        message: "the IR gives '<' an operand of type Bool, where it takes Int",
+        message: "the IR gives '<' an operand of type Bool, where it takes Int or UInt",
     ),
     IllTypedIR(
         testDescription: "a comparison of two structs",
         text: computing("equal read %0 @1:1-1:2, read %1 @1:1-1:2", on: ["Pair", "Pair"], into: "Bool"),
         function: "main()",
-        message: "the IR gives '==' an operand of type Pair, where it takes Int or Bool",
+        message: "the IR gives '==' an operand of type Pair, where it takes Int, UInt or Bool",
     ),
     IllTypedIR(
         testDescription: "a branch on an Int",

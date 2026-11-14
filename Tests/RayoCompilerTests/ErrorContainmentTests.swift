@@ -77,7 +77,7 @@ struct ErrorContainmentTests {
         ("struct Loop(let next: Loop)\nfunc broken(_ n: Int) -> Loop { broken(n) }", [.containsItself(name: "Loop")]),
         // A function whose body gives its result type, and fails.
         ("func broken(_ n: Int) { true + 1 }", [
-            .operandTypes(op: "+", needs: .named("Int"), left: .named("Bool"), right: .named("Int")),
+            .integerOperands(op: "+", left: .named("Bool"), right: .named("Int")),
         ]),
     ])
     func `a call to a function whose declaration failed reports nothing more, and taints its caller`(

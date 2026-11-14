@@ -169,3 +169,83 @@ struct OptimizedOperatorTests {
         #expect(try folding(of: op, .min, -1) == .defined(result))
     }
 }
+
+@Suite("Operators on UInt values, and conversions between Int and UInt")
+struct UIntOperatorTests {
+    @Test(arguments: [
+        (.add(.checked), 7, 5, 12), (.subtract(.checked), .max, 1, .max - 1),
+        (.multiply(.checked), 1 << 62, 2, 1 << 63),
+        (.divide(.checked), .max, 2, .max / 2), (.remainder, .max, 10, 5),
+    ] as [(IRBinaryOperator, UInt64, UInt64, UInt64)], Build.allCases)
+    func `arithmetic on UInts computes what it names, above Int.max too, in every build`(
+        operation: (IRBinaryOperator, UInt64, UInt64, UInt64), build: Build,
+    ) throws {
+        let (op, left, right, result) = operation
+        #expect(try unsignedOutcome(of: op, left, right, in: build) == .uint(result))
+    }
+
+    @Test(arguments: [
+        (.add(.checked), .max, 1, 0), (.subtract(.checked), 0, 1, .max), (.multiply(.checked), 1 << 63, 2, 0),
+    ] as [(IRBinaryOperator, UInt64, UInt64, UInt64)])
+    func `an overflowing UInt '+', '-' or '*' panics where overflow is checked, and wraps where it isn't`(
+        op: IRBinaryOperator, left: UInt64, right: UInt64, wrapped: UInt64,
+    ) throws {
+        #expect(try unsignedOutcome(of: op, left, right, in: .debug) == .panics("integer overflow"))
+        #expect(try unsignedOutcome(of: op, left, right, in: .release) == .uint(wrapped))
+    }
+
+    @Test(arguments: Build.allCases)
+    func `negating the UInt 0 gives 0, in every build`(build: Build) throws {
+        #expect(try unsignedOutcome(of: .negate(.checked), 0, in: build) == .uint(0))
+    }
+
+    @Test func `negating any other UInt panics where overflow is checked, and wraps where it isn't`() throws {
+        #expect(try unsignedOutcome(of: .negate(.checked), 1, in: .debug) == .panics("integer overflow"))
+        #expect(try unsignedOutcome(of: .negate(.checked), 1, in: .release) == .uint(.max))
+    }
+
+    @Test(arguments: [
+        (.divide(.checked), "division by zero"), (.remainder, "remainder by zero"),
+    ] as [(IRBinaryOperator, String)], Build.allCases)
+    func `UInt '/' and '%' by zero panic in every build`(operation: (IRBinaryOperator, String), build: Build) throws {
+        let (op, reason) = operation
+        #expect(try unsignedOutcome(of: op, 7, 0, in: build) == .panics(reason))
+    }
+
+    @Test(arguments: [
+        (.equal, [false, true, false]),
+        (.notEqual, [true, false, true]),
+        (.less, [true, false, false]),
+        (.lessEqual, [true, true, false]),
+        (.greater, [false, false, true]),
+        (.greaterEqual, [false, true, true]),
+    ] as [(IRBinaryOperator, [Bool])])
+    func `a comparison of two UInts orders them as unsigned`(op: IRBinaryOperator, againstMiddle: [Bool]) throws {
+        // Each operator compares a value below, at and above 1 << 63 with it, which a signed comparison would get
+        // wrong, since it reads 1 << 63 as Int.min.
+        let middle: UInt64 = 1 << 63
+        for (left, expected) in zip([1, middle, .max] as [UInt64], againstMiddle) {
+            #expect(try unsignedOutcome(of: op, left, middle, in: .debug) == .bool(expected))
+        }
+    }
+
+    @Test(arguments: [
+        (OperatorModule.Operands.ints, Int64.max), (.ints, 0), (.uints, Int64.max),
+    ], Build.allCases)
+    func `a conversion keeps a value that both Int and UInt hold, in every build`(
+        conversion: (OperatorModule.Operands, Int64), build: Build,
+    ) throws {
+        let (from, value) = conversion
+        let kept: OperatorOutcome = from == .uints ? .uint(UInt64(value)) : .int(value)
+        #expect(try conversionOutcome(of: value, from: from, in: build) == kept)
+    }
+
+    @Test(arguments: [(OperatorModule.Operands.ints, -1), (.uints, Int64.min)] as [(OperatorModule.Operands, Int64)])
+    func `a conversion of a value the other type can't hold panics where overflow is checked, and keeps its bits`(
+        from: OperatorModule.Operands, bits: Int64,
+    ) throws {
+        let kept: OperatorOutcome = from == .uints ? .uint(UInt64(bitPattern: bits)) : .int(bits)
+        #expect(try conversionOutcome(of: bits, from: from, in: .debug) == .panics("integer overflow"))
+        #expect(try conversionOutcome(of: bits, from: from, in: .release) == kept)
+    }
+}

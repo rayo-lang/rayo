@@ -38,8 +38,8 @@ public enum IRBinaryOperator: Hashable, Sendable, CaseIterable, CustomStringConv
     /// The types of the operands the operator takes, both of one of them.
     public var operandTypes: [RayoType] {
         switch self {
-        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual: [.int]
-        case .equal, .notEqual: [.int, .bool]
+        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual: [.int, .uint]
+        case .equal, .notEqual: [.int, .uint, .bool]
         }
     }
 

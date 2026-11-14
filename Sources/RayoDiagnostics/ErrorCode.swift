@@ -148,8 +148,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(216, error: "'{op}' can't compare {type} values")
     case incomparable(op: String, type: TypeName)
 
-    @Code(217, error: "the literal doesn't fit in {type.withAn}")
-    case literalExceedsInt(type: TypeName)
+    @Code(217, error: "the literal doesn't fit in {type.withArticle}")
+    case literalDoesntFit(type: TypeName)
 
     @Code(218, error: "'_' can't be declared")
     case underscoreDeclared
@@ -267,6 +267,15 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(257, error: "implicit members aren't supported")
     case unsupportedImplicitMember
 
+    @Code(258, error: "'{op}' needs integer operands, found {left} and {right}")
+    case integerOperands(op: String, left: TypeName, right: TypeName)
+
+    @Code(259, error: "'{op}' needs an integer operand, found {found}")
+    case integerOperand(op: String, found: TypeName)
+
+    @Code(260, error: "the call fits more than one '{name}'")
+    case ambiguousCall(name: String)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
@@ -382,13 +391,20 @@ public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStri
         }
     }
 
-    /// The name with `an` before it, as in `an Int`, for a message that names a type whose name takes `an`. A
-    /// shadowed prelude type's, `the prelude's Int`, has its own.
-    public var withAn: String {
+    /// The name with `a` or `an` before it, as in `a UInt` or `an Int`. A shadowed prelude type's, `the prelude's
+    /// Int`, has its own.
+    public var withArticle: String {
         switch self {
-        case .named(let name): "an \(name)"
+        case .named(let name): "\(Self.article(of: name)) \(name)"
         case .shadowedPrelude: description
         }
+    }
+
+    /// The article that goes before `name`: `an` where the name starts with a vowel's sound, and `a` elsewhere. A
+    /// `U` is read as "you", as in `UInt`, so it takes `a`.
+    private static func article(of name: String) -> String {
+        guard let first = name.first, "AEIOaeio".contains(first) else { return "a" }
+        return "an"
     }
 
     /// The name with the word `type` before it, as in `a local can't have type Void`, or, for a shadowed prelude

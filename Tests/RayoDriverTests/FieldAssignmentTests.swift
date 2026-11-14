@@ -175,7 +175,7 @@ struct FieldAssignmentTests {
         ("e.stats.alive = false", "4:13: error[E0252]: 'alive' is a 'let' field, so it can't change"),
         ("e.armor = true", "4:15: error[E0213]: expected Int, found Bool"),
         ("e.stats = l", "4:15: error[E0213]: expected Stats, found Enemy"),
-        ("e.stats.hp += true", "4:5: error[E0215]: '+=' needs Int operands, found Int and Bool"),
+        ("e.stats.hp += true", "4:5: error[E0258]: '+=' needs integer operands, found Int and Bool"),
         ("e.mana = 1", "4:7: error[E0244]: Enemy has no field 'mana'"),
         ("e.armor.hp = 1", "4:13: error[E0244]: Int has no field 'hp'"),
         ("hit(e).armor = 1", "4:5: error[E0223]: only a local, or a field of one, can be assigned"),

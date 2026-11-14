@@ -2,7 +2,7 @@ import Testing
 import RayoDiagnostics
 
 /// The error for adding a Bool to an Int, as in `1 + true`.
-private let intAndBool = ErrorCode.operandTypes(op: "+", needs: "Int", left: "Int", right: "Bool")
+private let intAndBool = ErrorCode.integerOperands(op: "+", left: "Int", right: "Bool")
 
 struct LocalTests {
     @Test("a block's locals are visible only inside it")
@@ -15,7 +15,7 @@ struct LocalTests {
         ("let x = 1\nx += 2", .letAssignedTwice(name: "x")),
         ("let x: Bool = 1", .typeMismatch(expected: "Bool", found: "Int")),
         ("var x = 1\nx = true", .typeMismatch(expected: "Int", found: "Bool")),
-        ("var x = true\nx += 1", .operandTypes(op: "+=", needs: "Int", left: "Bool", right: "Int")),
+        ("var x = true\nx += 1", .integerOperands(op: "+=", left: "Bool", right: "Int")),
         ("1 = 2", .assignToNonLocal),
         ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
         ("let x = print(1)", .voidLocal(type: "Void")),

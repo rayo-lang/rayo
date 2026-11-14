@@ -27,6 +27,16 @@ struct Signature: CustomStringConvertible {
         }
     }
 
+    /// Whether the function is one of the prelude's built-ins.
+    var isBuiltin: Bool {
+        if case .builtin = callee { true } else { false }
+    }
+
+    /// Whether the parameters have exactly `types`, in order.
+    func takes(_ types: [RayoType]) -> Bool {
+        parameters.map(\.type) == types
+    }
+
     /// Whether a call may pass arguments with these labels, in this order.
     func takesLabels(_ labels: [String?]) -> Bool {
         parameters.count == labels.count && zip(parameters, labels).allSatisfy { $0.label == $1 }

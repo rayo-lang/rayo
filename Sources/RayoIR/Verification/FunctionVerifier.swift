@@ -141,7 +141,13 @@ struct FunctionVerifier {
 
     /// The violation of an operator `op` given an operand of `given`, where it takes one of `taken`.
     private func unfit(_ op: some CustomStringConvertible, given: RayoType, taking taken: [RayoType]) -> IRViolation {
-        let takes = taken.map(\.description).joined(separator: " or ")
+        // The types are listed as a sentence lists them, such as `Int, UInt or Bool`.
+        let names = taken.map(\.description)
+        let takes = if names.count > 1, let last = names.last {
+            names.dropLast().joined(separator: ", ") + " or " + last
+        } else {
+            names.joined()
+        }
         return violation("the IR gives '\(op)' an operand of type \(given), where it takes \(takes)")
     }
 

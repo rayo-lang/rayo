@@ -68,6 +68,7 @@ public struct TypeTable: Equatable, Sendable {
     private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout {
         switch type {
         case .int: .int
+        case .uint: .uint
         case .bool: .bool
         case .structure: structLayout(of: type, inside: enclosing).layout
         case .void: preconditionFailure("no value of type Void lies in memory")

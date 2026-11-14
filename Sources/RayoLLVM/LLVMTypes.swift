@@ -27,7 +27,7 @@ struct LLVMTypes {
     /// The LLVM type that holds a value of `type`, or that a function returns when it returns nothing.
     func llvmType(_ type: RayoType) -> AnyType {
         switch type {
-        case .int: int64.anyType
+        case .int, .uint: int64.anyType
         case .bool: bool.anyType
         case .void: void
         case .structure: llvmStruct(type).anyType
@@ -55,12 +55,12 @@ struct LLVMTypes {
         table.layout(of: type)
     }
 
-    /// The scalars a value of `type` splits into: an Int or a Bool is one, a struct is its fields' scalars in the
+    /// The scalars a value of `type` splits into: an integer or a Bool is one, a struct is its fields' scalars in the
     /// order it declares the fields, and Void is none.
     func scalars(of type: RayoType) -> [Scalar] {
         switch type {
-        // An Int or a Bool is a scalar of its own.
-        case .int, .bool:
+        // An integer or a Bool is a scalar of its own.
+        case .int, .uint, .bool:
             [Scalar(steps: [], type: type)]
 
         // Void holds nothing.

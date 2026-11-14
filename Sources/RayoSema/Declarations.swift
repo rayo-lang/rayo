@@ -21,7 +21,9 @@ struct Declarations {
     private var unlaidOutStructs: Set<StructID> = []
     /// The names of the functions that failed to parse, whose uses report nothing more.
     private var unparsedFunctions: Set<String> = []
-    private static let preludeTypes: [String: RayoType] = ["Int": .int, "Bool": .bool, "Void": .void]
+    private static let preludeTypes: [String: RayoType] = [
+        "Int": .int, "UInt": .uint, "Bool": .bool, "Void": .void,
+    ]
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
     init(names: TopLevelNames) {
@@ -79,13 +81,10 @@ struct Declarations {
 
     /// Declares the prelude's built-ins whose names the file's own types and functions leave free.
     mutating func declarePrelude() {
-        declarePrelude(Builtin.allCases.map(Signature.init(of:)))
-    }
-
-    /// Declares each of `signatures`, the prelude's, whose name the file's own types and functions leave free.
-    mutating func declarePrelude(_ signatures: [Signature]) {
         // A type or a function of the file shadows every prelude function that a call reaches by its name.
-        for signature in signatures where kind(of: signature.name) == nil { _ = declare(signature) }
+        for signature in Builtin.allCases.map(Signature.init(of:)) where kind(of: signature.name) == nil {
+            _ = declare(signature)
+        }
     }
 
     /// The kind of the file's declarations that `name` belongs to, nil when no type or function of the file has it.
@@ -130,7 +129,7 @@ struct Declarations {
         // A struct is the file's own, so its name alone tells it apart.
         case .structure: .named(name)
         // A prelude type is shadowed where a type or a function of the file has its name.
-        case .int, .bool, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
+        case .int, .uint, .bool, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
         }
     }
 

@@ -19,7 +19,7 @@ public enum IRUnaryOperator: Hashable, Sendable, CaseIterable, CustomStringConve
     /// The types of the operands the operator takes.
     public var operandTypes: [RayoType] {
         switch self {
-        case .negate: [.int]
+        case .negate: [.int, .uint]
         case .not: [.bool]
         }
     }

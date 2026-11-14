@@ -9,7 +9,7 @@ struct StructTests {
         ("let i: Int = copy s", ErrorCode.typeMismatch(expected: "Int", found: "S")),
         ("let e: E = copy s", .typeMismatch(expected: "E", found: "S")),
         ("print(s)", .noMatchingFunction(name: "print", arguments: "S")),
-        ("let t = s + s", .operandTypes(op: "+", needs: "Int", left: "S", right: "S")),
+        ("let t = s + s", .integerOperands(op: "+", left: "S", right: "S")),
         ("let b = s == s", .incomparable(op: "==", type: "S")),
     ])
     func `a value of a struct's type has no other type, and '==' can't compare it`(body: String, expected: ErrorCode) {
@@ -61,10 +61,10 @@ struct StructTests {
     @Test(arguments: [
         ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
         ("1", .unusedValue(type: .shadowedPrelude("Int"))),
-        ("let a = 9223372036854775808", .literalExceedsInt(type: .shadowedPrelude("Int"))),
+        ("let a = 9223372036854775808", .literalDoesntFit(type: .shadowedPrelude("Int"))),
         ("let y: () = g()", .voidLocal(type: .shadowedPrelude("Void"))),
         ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
-        ("let t = true + true", .operandTypes(op: "+", needs: .shadowedPrelude("Int"), left: "Bool", right: "Bool")),
+        ("let t = true + 1", .integerOperands(op: "+", left: "Bool", right: .shadowedPrelude("Int"))),
         ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
         ("let y = (1).big", .noSuchField(type: .shadowedPrelude("Int"), field: "big")),
         ("f(1)", .noMatchingFunction(name: "f", arguments: "the prelude's Int")),

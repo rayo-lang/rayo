@@ -144,14 +144,26 @@ struct ExpressionChecker {
     }
 
     /// Checks `-operandExpr`, which negates an untyped operand to an untyped value, and a typed one only where it is
-    /// an Int.
+    /// an integer, to a value of its type.
     private func negation(of operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         // An operand that failed was reported already.
         guard let operand = value(of: operandExpr) else { return nil }
+        return switch operand {
         // An untyped operand gives an untyped negation.
-        if case .untyped(let untyped) = operand { return .untyped(.negation(untyped, range: range)) }
-        let negated = settled(operand, expecting: Expectation(.int))
-        return negated.map { .typed(CheckedExpr(kind: .unary(.negate, $0), type: .int, range: range)) }
+        case .untyped(let untyped): .untyped(.negation(untyped, range: range))
+        case .typed(let typed): negation(of: typed, in: range)
+        }
+    }
+
+    /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is an integer.
+    private func negation(of operand: CheckedExpr, in range: SourceRange) -> CheckedValue? {
+        // An operand of a type that isn't an integer is reported.
+        guard operand.type.isInteger else {
+            errors.report(.integerOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
+                          at: range)
+            return nil
+        }
+        return .typed(CheckedExpr(kind: .unary(.negate, operand), type: operand.type, range: range))
     }
 
     /// Checks `!operandExpr`, which takes a Bool, a type no untyped value fits.
@@ -279,13 +291,13 @@ struct ExpressionChecker {
     private func resultType(of op: CheckedBinaryOperator, _ left: CheckedExpr, _ right: CheckedExpr,
                             spelled: String, in range: SourceRange) -> RayoType? {
         switch op {
-        // Arithmetic takes two Ints, and gives an Int.
+        // Arithmetic takes two integers of one type, and gives a value of that type.
         case .add, .subtract, .multiply, .divide, .remainder:
-            operands(of: spelled, left, right, are: .int, in: range) ? .int : nil
+            integerOperands(of: spelled, left, right, in: range) ? left.type : nil
 
-        // An ordering takes two Ints, and gives a Bool.
+        // An ordering takes two integers of one type, and gives a Bool.
         case .less, .lessEqual, .greater, .greaterEqual:
-            operands(of: spelled, left, right, are: .int, in: range) ? .bool : nil
+            integerOperands(of: spelled, left, right, in: range) ? .bool : nil
 
         // `&&` and `||` take two Bools, and give a Bool.
         case .and, .or:
@@ -320,11 +332,28 @@ struct ExpressionChecker {
     /// Whether `==` and `!=` compare values of `type`.
     private func isComparable(_ type: RayoType) -> Bool {
         switch type {
-        // Ints and Bools compare.
-        case .int, .bool: true
+        // Integers and Bools compare.
+        case .int, .uint, .bool: true
         // A Void value holds nothing to compare, and a struct has no `==`.
         case .void, .structure: false
         }
+    }
+
+    /// Whether `left` and `right` are integers of one type, reporting it when they aren't.
+    private func integerOperands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
+                                 in range: SourceRange) -> Bool {
+        // Two integers of one type pass.
+        if left.type == right.type && left.type.isInteger { return true }
+
+        // No integer type converts to another, so two integers of different types are reported as such.
+        let (leftName, rightName) = (typeName(of: left.type), typeName(of: right.type))
+        let code: ErrorCode = if left.type.isInteger && right.type.isInteger {
+            .operandsDiffer(op: spelled, left: leftName, right: rightName)
+        } else {
+            .integerOperands(op: spelled, left: leftName, right: rightName)
+        }
+        errors.report(code, at: range)
+        return false
     }
 
     /// Whether `left` and `right` both have `type`, reporting it when they don't.
