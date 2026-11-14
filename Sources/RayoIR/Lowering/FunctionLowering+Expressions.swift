@@ -77,8 +77,8 @@ extension FunctionLowering {
     /// is a UInt literal, and otherwise one at a new temporary that holds the index, which is computed once and
     /// checked against `count` where the source writes it.
     private mutating func elementStep(at index: CheckedExpr, below count: Int) -> PlaceStep {
-        // A literal lies below the count, since checking reports one that doesn't, so it needs no check, and names an
-        // element apart from those at other literals.
+        // A literal index lies below the count, so it needs no check. It names an element apart from those at other
+        // literals.
         if case .uintLiteral(let value) = index.kind { return .element(Int(value)) }
 
         let checked = builder.newTemporary(.uint)

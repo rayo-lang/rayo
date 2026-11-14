@@ -313,6 +313,7 @@ struct ExpressionChecker {
             errors.report(.indexOutOfRange(index: value, type: typeName(of: holder.type)), at: index.range)
             return nil
         }
+
         return (holder.place.appending(.element(index: index, count: count, range: range)), element)
     }
 
