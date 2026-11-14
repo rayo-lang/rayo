@@ -34,6 +34,7 @@ struct ArrayCountTests {
         ("var grid = [[1], [2]]\ngrid[0].count = 3\nuse(grid[0][0])", countAssignment(at: "3:9")),
         ("made().count = 3", countAssignment(at: "2:8")),
         ("var a = [1, 2]\na.count.size = 3\nuse(a[0])", countAssignment(at: "3:3")),
+        ("let a = [1, 2]\na.count.size = 3", countAssignment(at: "3:3")),
     ])
     func `an array's count can't be assigned, whatever holds the array`(body: String, expected: String) {
         #expect(errorLines(inMain: body, beside: declarations) == [expected])

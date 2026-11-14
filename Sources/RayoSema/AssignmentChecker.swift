@@ -24,16 +24,30 @@ struct AssignmentChecker {
     }
 
     /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. An
-    /// array's count never changes, whatever holds the array, so a target that names one is reported as that, ahead of
-    /// anything the rules would refuse in the place that holds the array.
+    /// array's count never changes, whatever holds the array, so a target that names one or goes on from one is
+    /// reported as that, ahead of anything the rules would refuse in the place that holds the array.
     private func changedPlace(_ target: Expr) -> TypedPlace? {
-        if case .member(let base, let name, let nameRange) = target.kind, name == "count" {
-            // The base is checked as a place a read names, so whether it holds an array is known whatever holds it.
+        for (base, nameRange) in countMembers(in: target) {
+            // Each base is checked as a place a read names, so whether it holds an array is known whatever holds it.
             // A base that failed was reported.
             guard let holder = expressions.place(base, under: expressions) else { return nil }
             if case .array = holder.type { return refuse(.assignToCount, at: nameRange) }
         }
         return expressions.place(target, under: self)
+    }
+
+    /// Each member called `count` along the members and elements that `target` steps through, innermost first: the
+    /// base it is a member of, and where the source writes its name. Whether each is an array's count, or a struct's
+    /// field, depends on its base's type.
+    private func countMembers(in target: Expr) -> [(base: Expr, nameRange: SourceRange)] {
+        switch target.kind {
+        case .member(let base, let name, let nameRange):
+            countMembers(in: base) + (name == "count" ? [(base, nameRange)] : [])
+        case .element(let base, _):
+            countMembers(in: base)
+        default:
+            []
+        }
     }
 
     /// Checks the value an assignment gives its target. It is checked against the target's type where that is known,
