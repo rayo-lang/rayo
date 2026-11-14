@@ -2,12 +2,13 @@ import RayoSema
 import RayoSource
 
 extension IRParser {
-    /// The type the word at the current token names: `Int`, `Bool`, `Void`, or a struct the text declares.
+    /// The type the word at the current token names: `Int`, `UInt`, `Bool`, `Void`, or a struct the text declares.
     mutating func type() throws(IRTextError) -> RayoType {
         let token = current
         let name = try word()
         return switch name {
         case "Int": .int
+        case "UInt": .uint
         case "Bool": .bool
         case "Void": .void
         default: .structure(try structID(named: name, at: token))
@@ -92,7 +93,7 @@ extension IRParser {
     /// Whether the current token starts an operand.
     var startsOperand: Bool {
         switch current.kind {
-        case .integer, .symbol("-"), .word("true"), .word("false"), .word("read"), .word("move"): true
+        case .integer, .symbol("-"), .word("uint"), .word("true"), .word("false"), .word("read"), .word("move"): true
         default: false
         }
     }
@@ -102,6 +103,7 @@ extension IRParser {
         switch current.kind {
         case .word("true"), .word("false"): .constant(.bool(boolConstant()))
         case .integer, .symbol("-"): .constant(.int(try intConstant()))
+        case .word("uint"): .constant(.uint(try uintConstant()))
         case .word("read"): try placeOperand(Operand.read)
         case .word("move"): try placeOperand(Operand.move)
         default: throw expected("an operand")
@@ -125,6 +127,14 @@ extension IRParser {
         // The most negative Int has a magnitude one more than the most positive.
         let value = negative ? Int64(exactly: -Int128(magnitude)) : Int64(exactly: magnitude)
         guard let value else { throw IRTextError(at: token, "\(negative ? "-" : "")\(magnitude) isn't an Int") }
+        return value
+    }
+
+    /// Reads `uint` and the number of a UInt constant after it, which the current token starts.
+    private mutating func uintConstant() throws(IRTextError) -> UInt64 {
+        advance()
+        guard case .integer(let value) = current.kind else { throw expected("a number") }
+        advance()
         return value
     }
 

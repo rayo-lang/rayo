@@ -42,12 +42,14 @@ public enum Operand: Equatable, Sendable {
 /// A value written into the IR itself, an integer or a Boolean, as a literal in the source gives it.
 public enum Constant: Equatable, Sendable {
     case int(Int64)
+    case uint(UInt64)
     case bool(Bool)
 
     public var type: RayoType {
         switch self {
-        case .int: return .int
-        case .bool: return .bool
+        case .int: .int
+        case .uint: .uint
+        case .bool: .bool
         }
     }
 }

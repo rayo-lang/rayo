@@ -142,7 +142,7 @@ struct FunctionEmitter {
 
         // A call passes its arguments as its function's signature says, or builds a struct from them.
         case .call(let callee, let arguments):
-            try call(callee, passing: arguments, into: destination, in: program)
+            try call(callee, passing: arguments, into: destination, at: range, in: program)
         }
     }
 
@@ -157,7 +157,7 @@ struct FunctionEmitter {
     }
 
     /// Emits the store of `value`, an operator's result, in `destination`, where there is one.
-    private func keep(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) {
+    func keep(_ value: AnyValue, in destination: Place?, with builder: borrowing Builder) {
         // A value that no place takes is dropped.
         guard let destination else { return }
         store(value, at: address(of: destination, with: builder), with: builder)

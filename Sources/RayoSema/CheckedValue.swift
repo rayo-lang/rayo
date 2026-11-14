@@ -15,6 +15,14 @@ enum CheckedValue {
         }
     }
 
+    /// The value's type, or the type an untyped value settles to where nothing else gives it one.
+    var typeOrDefault: RayoType {
+        switch self {
+        case .typed(let value): value.type
+        case .untyped(let value): value.defaultType
+        }
+    }
+
     /// Whether a parameter of `type` takes the value: a typed value of that type, or an untyped one that fits it.
     func fits(_ type: RayoType) -> Bool {
         switch self {
@@ -46,7 +54,7 @@ indirect enum UntypedValue {
     /// Whether the value can settle to `type`. An integer literal fits every integer type, and nothing else.
     func fits(_ type: RayoType) -> Bool {
         switch type {
-        case .int: true
+        case .int, .uint: true
         case .bool, .void, .structure: false
         }
     }
@@ -76,17 +84,18 @@ indirect enum UntypedValue {
     private static func literal(_ magnitude: UInt64, isNegative: Bool, as type: RayoType, named typeName: TypeName,
                                 at range: SourceRange, reporting errors: ErrorList) -> CheckedExpr? {
         // Find the literal's value among the type's values.
-        let value: Int64? = switch type {
-        case .int: int(magnitude, isNegative: isNegative)
+        let kind: CheckedExprKind? = switch type {
+        case .int: int(magnitude, isNegative: isNegative).map(CheckedExprKind.intLiteral)
+        case .uint: uint(magnitude, isNegative: isNegative).map(CheckedExprKind.uintLiteral)
         case .bool, .void, .structure: preconditionFailure("an integer literal settles only to an integer type")
         }
 
         // A literal the type can't hold is reported.
-        guard let value else {
-            errors.report(.literalExceedsInt(type: typeName), at: range)
+        guard let kind else {
+            errors.report(.literalDoesntFit(type: typeName), at: range)
             return nil
         }
-        return CheckedExpr(kind: .intLiteral(value), type: type, range: range)
+        return CheckedExpr(kind: kind, type: type, range: range)
     }
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
@@ -108,5 +117,11 @@ indirect enum UntypedValue {
         guard isNegative else { return Int64(exactly: magnitude) }
         // A negative literal fits one value more than a positive one: `Int.min`, whose magnitude no Int holds.
         return magnitude == Int64.min.magnitude ? Int64.min : Int64(exactly: magnitude).map { -$0 }
+    }
+
+    /// The UInt that a literal of `magnitude`, negated where `isNegative`, has, or nil where no UInt holds it.
+    private static func uint(_ magnitude: UInt64, isNegative: Bool) -> UInt64? {
+        // Every positive literal fits, since its digits fit in 64 bits, and of the negative ones only `-0` does.
+        isNegative && magnitude != 0 ? nil : magnitude
     }
 }

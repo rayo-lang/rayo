@@ -111,7 +111,7 @@ public struct CheckedPrinter: ~Copyable {
     private mutating func write(_ expression: CheckedExpr, depth: Int) {
         line("\(head(of: expression.kind)): \(expression.type) \(text(of: expression.range))", depth)
         switch expression.kind {
-        case .intLiteral, .boolLiteral:
+        case .intLiteral, .uintLiteral, .boolLiteral:
             break
         case .place(let place), .copy(let place):
             write(place, depth: depth + 1)
@@ -135,6 +135,7 @@ public struct CheckedPrinter: ~Copyable {
     private func head(of kind: CheckedExprKind) -> String {
         switch kind {
         case .intLiteral(let value): "int \(value)"
+        case .uintLiteral(let value): "uint \(value)"
         case .boolLiteral(let value): "bool \(value)"
         case .place: "value"
         case .copy: "copy"

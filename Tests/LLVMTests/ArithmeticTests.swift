@@ -3,7 +3,7 @@ import Testing
 
 /// A builder's operation on two integers of one width, named as LLVM IR writes its instruction.
 enum Operation: String, CaseIterable, Sendable {
-    case add, sub, mul, sdiv, srem, and, xor
+    case add, sub, mul, sdiv, srem, udiv, urem, and, xor
 
     func build(with builder: borrowing Builder, _ left: IntValue<I64>, _ right: IntValue<I64>) -> IntValue<I64> {
         switch self {
@@ -12,6 +12,8 @@ enum Operation: String, CaseIterable, Sendable {
         case .mul: builder.multiply(left, right)
         case .sdiv: builder.signedDivide(left, right)
         case .srem: builder.signedRemainder(left, right)
+        case .udiv: builder.unsignedDivide(left, right)
+        case .urem: builder.unsignedRemainder(left, right)
         case .and: builder.and(left, right)
         case .xor: builder.xor(left, right)
         }
@@ -40,7 +42,8 @@ struct ArithmeticTests {
 
     @Test(arguments: [
         (IntegerPredicate.equal, "eq"), (.notEqual, "ne"), (.signedLess, "slt"), (.signedLessEqual, "sle"),
-        (.signedGreater, "sgt"), (.signedGreaterEqual, "sge"),
+        (.signedGreater, "sgt"), (.signedGreaterEqual, "sge"), (.unsignedLess, "ult"), (.unsignedLessEqual, "ule"),
+        (.unsignedGreater, "ugt"), (.unsignedGreaterEqual, "uge"),
     ])
     func `a comparison of two integers builds LLVM's icmp, which gives an i1`(
         predicate: IntegerPredicate, written: String,

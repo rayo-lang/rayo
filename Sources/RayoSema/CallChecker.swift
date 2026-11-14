@@ -178,13 +178,12 @@ struct CallChecker {
         let labels = arguments.map(\.label)
         let remaining = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
-        guard let chosen = remaining.first else {
+        guard !remaining.isEmpty else {
             reportNoMatch(of: candidates[0].name, labels: labels, values: values, in: range)
             return nil
         }
-        // No candidate needs a conversion, so exactly one must remain. Two remain only when one names a type that
-        // isn't one, which was reported there; the arguments' literals are settled for their own errors.
-        guard remaining.count == 1 else {
+        // Where several fit and none of them is the call's, the arguments' literals are settled for their own errors.
+        guard let chosen = chosen(among: remaining, for: values, in: range) else {
             expressions.reportSettlingErrors(of: values)
             return nil
         }
@@ -194,6 +193,27 @@ struct CallChecker {
         // An argument whose literal its parameter's type can't hold was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)
+    }
+
+    /// The one of `remaining`, the candidates that `values` fit, that the call reaches. Reports a call that several
+    /// fit, unless one of them failed, which was reported where it is declared.
+    private func chosen(among remaining: [Signature], for values: [CheckedValue], in range: SourceRange) -> Signature? {
+        // No candidate needs a conversion, so one that alone remains is the call's.
+        if remaining.count == 1 { return remaining[0] }
+
+        // Several remain where one names a type that isn't one, and so takes any argument.
+        if remaining.contains(where: \.hasFailed) { return nil }
+
+        // The prelude's built-ins of one name stand in for one generic function, which binds an untyped argument to
+        // its default type, so `print(1)` prints an Int.
+        let defaultTypes = values.map(\.typeOrDefault)
+        if remaining.allSatisfy(\.isBuiltin), let chosen = remaining.first(where: { $0.takes(defaultTypes) }) {
+            return chosen
+        }
+
+        // Otherwise an untyped argument fits more than one of the functions the code declares.
+        errors.report(.ambiguousCall(name: remaining[0].name), at: range)
+        return nil
     }
 
     /// The candidates that a call passing arguments with `labels` and `values`, in order, can reach.

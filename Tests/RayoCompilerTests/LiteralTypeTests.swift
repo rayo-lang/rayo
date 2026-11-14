@@ -61,14 +61,14 @@ struct LiteralTypeTests {
         body: String, literal: String,
     ) {
         let (codes, covered) = reported(inMain: body)
-        #expect(codes == [.literalExceedsInt(type: "Int")])
+        #expect(codes == [.literalDoesntFit(type: "Int")])
         #expect(covered == [literal])
     }
 
     @Test(arguments: [
-        ("print(9223372036854775808 + nope)", [ErrorCode.literalExceedsInt(type: "Int"), .notDeclared(name: "nope")]),
-        ("print(nope + 9223372036854775808)", [.notDeclared(name: "nope"), .literalExceedsInt(type: "Int")]),
-        ("f(9223372036854775808, nope)", [.literalExceedsInt(type: "Int"), .notDeclared(name: "nope")]),
+        ("print(9223372036854775808 + nope)", [ErrorCode.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")]),
+        ("print(nope + 9223372036854775808)", [.notDeclared(name: "nope"), .literalDoesntFit(type: "Int")]),
+        ("f(9223372036854775808, nope)", [.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")]),
     ])
     func `a literal its default type can't hold is reported beside an operand or argument that fails`(
         body: String, expected: [ErrorCode],
@@ -78,12 +78,12 @@ struct LiteralTypeTests {
 
     @Test func `a literal its default type can't hold is reported in a call that two overloads fit`() {
         let source = "func main() { k(9223372036854775808) }\nfunc k(_ a: Int) {}\nfunc k(_ a: Nope) {}"
-        #expect(errors(source) == [.literalExceedsInt(type: "Int"), .notAType(name: "Nope")])
+        #expect(errors(source) == [.literalDoesntFit(type: "Int"), .notAType(name: "Nope")])
     }
 
     @Test(arguments: [
         ("let a: Bool = 2 * 3", ErrorCode.typeMismatch(expected: "Bool", found: "Int"), "2 * 3"),
-        ("var a = true\na += 1", .operandTypes(op: "+=", needs: "Int", left: "Bool", right: "Int"), "a += 1"),
+        ("var a = true\na += 1", .integerOperands(op: "+=", left: "Bool", right: "Int"), "a += 1"),
         ("let a = true == 1", .operandsDiffer(op: "==", left: "Bool", right: "Int"), "true == 1"),
         ("let a = 1 && 2", .operandTypes(op: "&&", needs: "Bool", left: "Int", right: "Int"), "1 && 2"),
         ("h(1)", .noMatchingFunction(name: "h", arguments: "Int"), "h(1)"),

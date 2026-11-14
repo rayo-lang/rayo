@@ -1,18 +1,19 @@
 import LLVM
 import RayoIR
 import RayoSema
+import RayoSource
 
 /// Calls, which pass their arguments and take their result as the called function's signature says.
 extension FunctionEmitter {
-    /// Emits a call of `callee` with `arguments`, and stores its result in `destination` when there is one. Throws
-    /// where the runtime lacks the function that a built-in calls.
+    /// Emits a call of `callee` with `arguments`, which the source makes at `range`, and stores its result in
+    /// `destination` when there is one. Throws where the runtime lacks the function that a built-in calls.
     func call(
-        _ callee: Callee, passing arguments: [CallArgument], into destination: Place?,
+        _ callee: Callee, passing arguments: [CallArgument], into destination: Place?, at range: SourceRange,
         in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         switch callee {
         case .builtin(let builtin):
-            try call(builtin, passing: arguments, into: destination, in: program)
+            try call(builtin, passing: arguments, into: destination, at: range, in: program)
         case .function(let id):
             call(callTargets[id.index], passing: arguments, into: destination, with: program.builder)
         }
@@ -126,7 +127,7 @@ extension FunctionEmitter {
 
     /// The pointer to the place that holds `argument`.
     private func placePointer(of argument: OperandValue) -> AnyValue {
-        // A constant is an Int or a Bool, which passes directly to any parameter but a mutable one, and no mutable
+        // A constant is an integer or a Bool, which passes directly to any parameter but a mutable one, and no mutable
         // parameter takes a constant.
         guard case .place(let address) = argument else {
             preconditionFailure("a constant is never passed in the caller's place")

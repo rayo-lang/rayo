@@ -18,23 +18,17 @@ struct BuiltinTests {
 
     @Test func `an initializer of a prelude type is declared under the type's name`() {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
-        declarations.declarePrelude([intInitializer])
+        declarations.declarePrelude()
 
-        #expect(declarations.functions(named: "Int").map(\.description) == ["Int(_: Bool)"])
+        #expect(declarations.functions(named: "Int").map(\.description) == ["Int(_: UInt)"])
+        #expect(declarations.functions(named: "UInt").map(\.description) == ["UInt(_: Int)"])
     }
 
     @Test(arguments: ["func Int() {}", "struct Int"])
     func `a struct or a function of the file shadows an initializer of a prelude type`(source: String) {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse(source).file))
-        declarations.declarePrelude([intInitializer])
+        declarations.declarePrelude()
 
         #expect(declarations.functions(named: "Int").isEmpty)
     }
 }
-
-/// An initializer of Int that takes a Bool, as a built-in `Int(_: Bool)` would declare it. No built-in is one, so it
-/// borrows another's callee, which declaring never reads.
-private let intInitializer = Signature(
-    name: BuiltinName.initializer(of: .int).spelling, callee: .builtin(.printBool),
-    parameters: [Parameter(label: nil, type: .bool, spelledType: "Bool")], result: .type(.int),
-)

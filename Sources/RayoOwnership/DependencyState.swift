@@ -52,7 +52,7 @@ struct DependencyState: DataflowState {
 
     /// The accesses that the value `value` makes depends on. A copy of a value, or a move of one, carries what the
     /// value depends on. So does a call's result, of what the values the call is passed as they are depend on, since
-    /// it may hold them, as a struct that its primary initializer makes does. An operator's result is an Int or a
+    /// it may hold them, as a struct that its primary initializer makes does. An operator's result is an integer or a
     /// Bool, which depends on nothing.
     private func dependencies(of value: Rvalue) -> Set<AccessID> {
         switch value {

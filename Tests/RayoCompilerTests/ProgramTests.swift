@@ -46,7 +46,7 @@ struct ProgramTests {
     func literals(body: String, literal: String) {
         let source = "func main() { \(body) }"
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.literalExceedsInt(type: "Int")])
+        #expect(reported.map(\.code) == [.literalDoesntFit(type: "Int")])
         #expect(coveredText(reported, in: source) == [literal])
     }
 
@@ -57,7 +57,7 @@ struct ProgramTests {
         ("print(1, true)", .noMatchingFunction(name: "print", arguments: "Int, Bool")),
         ("print(print(1))", .noMatchingFunction(name: "print", arguments: "Void")),
         ("print(value: true)", .noMatchingFunction(name: "print", arguments: "value: Bool")),
-        ("print(1) + 2", .operandTypes(op: "+", needs: "Int", left: "Void", right: "Int")),
+        ("print(1) + 2", .integerOperands(op: "+", left: "Void", right: "Int")),
         ("print", .functionAsValue(name: "print")),
         ("print(main)", .functionAsValue(name: "main")),
         ("main(1)", .argumentCount(name: "main", takes: 0, passes: 1)),

@@ -1,24 +1,44 @@
 import LLVM
 import RayoIR
 import RayoSema
+import RayoSource
 
 /// Calls of the prelude's built-ins.
 extension FunctionEmitter {
-    /// Emits a call of `builtin` with `arguments`, and stores its result in `destination` when there is one. Throws
-    /// where the runtime lacks the function that the built-in calls.
+    /// Emits a call of `builtin` with `arguments`, which the source makes at `range`, and stores its result in
+    /// `destination` when there is one. Throws where the runtime lacks the function that the built-in calls.
     func call(
-        _ builtin: Builtin, passing arguments: [CallArgument], into destination: Place?,
+        _ builtin: Builtin, passing arguments: [CallArgument], into destination: Place?, at range: SourceRange,
         in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         switch builtin {
-        // The runtime's prints are C functions, whose convention passes a lone Int or Bool directly, as Rayo's does.
+        // A conversion between the integer types runs in place, with no call.
+        case .intFromUInt, .uintFromInt:
+            try convert(arguments[0], into: destination, at: range, in: program)
+
+        // The runtime's prints are C functions, whose convention passes a lone integer or Bool directly, as Rayo's
+        // does.
         case .printInt:
             try callRuntime("rayo.print_int", in: .rayo, for: builtin, passing: arguments, into: destination,
+                            in: program)
+        case .printUInt:
+            try callRuntime("rayo.print_uint", in: .rayo, for: builtin, passing: arguments, into: destination,
                             in: program)
         case .printBool:
             try callRuntime("rayo.print_bool", in: .rayo, for: builtin, passing: arguments, into: destination,
                             in: program)
         }
+    }
+
+    /// Emits the conversion of `argument`, an Int or a UInt, to the other of the two, which the source makes at
+    /// `range`, and stores the converted value in `destination` when there is one.
+    private func convert(
+        _ argument: CallArgument, into destination: Place?, at range: SourceRange,
+        in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) {
+        let integer = whole(value(of: argument, with: program.builder), with: program.builder)
+        let converted = try operators.emitConversion(of: integer, at: range, in: program)
+        keep(converted, in: destination, with: program.builder)
     }
 
     /// Emits a call, in `convention`, of the runtime's function `symbol`, which takes `builtin`'s parameters and gives

@@ -105,6 +105,10 @@ extension FunctionEmitter {
         case .constant(.int(let value)):
             .constant(types.int64.constant(value).anyValue, .int)
 
+        // A UInt constant is an `i64` holding the UInt's bits.
+        case .constant(.uint(let value)):
+            .constant(types.int64.constant(Int64(bitPattern: value)).anyValue, .uint)
+
         // A Bool constant is an `i1`, 1 for true and 0 for false.
         case .constant(.bool(let value)):
             .constant(types.bool.constant(value ? 1 : 0).anyValue, .bool)
@@ -121,7 +125,7 @@ extension FunctionEmitter {
     }
 
     /// Emits the load of `value` whole, where it lies in a place, and returns it.
-    private func whole(_ value: OperandValue, with builder: borrowing Builder) -> AnyValue {
+    func whole(_ value: OperandValue, with builder: borrowing Builder) -> AnyValue {
         switch value {
         // A constant is held whole already.
         case .constant(let constant, _):
@@ -137,7 +141,7 @@ extension FunctionEmitter {
     /// Emits the loads of the scalars `value` splits into, and returns them in order.
     func scalars(of value: OperandValue, with builder: borrowing Builder) -> [AnyValue] {
         switch value {
-        // A constant is an Int or a Bool, each one scalar.
+        // A constant is an integer or a Bool, each one scalar.
         case .constant(let constant, _): [constant]
         // A value in a place is read one scalar at a time, from where each lies.
         case .place(let address): loadScalars(at: address, with: builder)

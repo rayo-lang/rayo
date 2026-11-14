@@ -10,5 +10,6 @@ public struct Layout: Hashable, Sendable {
     }
 
     public static let int = Layout(size: 8, alignment: 8)
+    public static let uint = Layout(size: 8, alignment: 8)
     public static let bool = Layout(size: 1, alignment: 1)
 }

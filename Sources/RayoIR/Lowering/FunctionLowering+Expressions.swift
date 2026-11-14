@@ -24,6 +24,7 @@ extension FunctionLowering {
         switch expr.kind {
         // An integer is a constant operand.
         case .intLiteral(let value): .constant(.int(value))
+        case .uintLiteral(let value): .constant(.uint(value))
         // So is a Bool.
         case .boolLiteral(let value): .constant(.bool(value))
         // A place written on its own gives its value up where its position takes it, and keeps it where it reads it.
@@ -71,7 +72,7 @@ extension FunctionLowering {
     private mutating func rvalue(of expr: CheckedExpr, as use: ValueUse) -> Rvalue {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
-        case .intLiteral, .boolLiteral, .place, .copy, .binary(.and, _, _), .binary(.or, _, _), .if:
+        case .intLiteral, .uintLiteral, .boolLiteral, .place, .copy, .binary(.and, _, _), .binary(.or, _, _), .if:
             .operand(operand(of: expr, as: use))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):

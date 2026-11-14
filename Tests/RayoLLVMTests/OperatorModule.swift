@@ -10,6 +10,8 @@ struct OperatorModule: ~Copyable {
     /// The type of the operands of a function's operators.
     enum Operands: Equatable {
         case ints
+        /// UInts, which the function takes as the Ints of their bits.
+        case uints
         /// Bools, which the function takes as the Ints 0 and 1.
         case bools
     }
@@ -24,6 +26,8 @@ struct OperatorModule: ~Copyable {
     /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
     /// it has made them.
     private var operators: OperatorEmitter?
+    /// The type of the integers the function that `define` is defining computes on.
+    private var integerType = RayoType.int
 
     init(for build: Build) throws(LLVMError) {
         programModule = try ProgramModule(for: build)
@@ -49,6 +53,7 @@ struct OperatorModule: ~Copyable {
         // Make the function, and its operators.
         let function = beginFunction(name, taking: [types.int64, types.int64])
         operators = OperatorEmitter(into: function, types: types)
+        integerType = operands == .uints ? .uint : .int
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are. The function takes Ints, so
         // each parameter is one.
@@ -79,24 +84,29 @@ struct OperatorModule: ~Copyable {
         try LLVMEmitter.ready(program.module, for: programModule.target, exporting: exported)
     }
 
-    /// Emits `left op right`, on two Ints or two Bools.
+    /// Emits `left op right`, on two integers of the function's integer type or two Bools.
     func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, left, right, of: Self.type(of: left), at: Self.range, in: program)
+        try operators!.emit(op, left, right, of: type(of: left), at: Self.range, in: program)
     }
 
-    /// Emits `left op right`, where `right` is an Int constant.
+    /// Emits `left op right`, where `right` is a constant of the function's integer type, given by its bits.
     func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
         try self(op, left, types.int64.constant(right).anyValue)
     }
 
-    /// Emits `op operand`, on an Int or a Bool.
+    /// Emits `op operand`, on an integer of the function's integer type or a Bool.
     func callAsFunction(_ op: IRUnaryOperator, _ operand: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, on: operand, of: Self.type(of: operand), at: Self.range, in: program)
+        try operators!.emit(op, on: operand, of: type(of: operand), at: Self.range, in: program)
     }
 
-    /// The Rayo type of `value`, an Int or a Bool.
-    private static func type(of value: AnyValue) -> RayoType {
-        IntValue<I1>(value) == nil ? .int : .bool
+    /// Emits the conversion of `value`, an integer of the function's integer type, to the other integer type.
+    func convert(_ value: AnyValue) throws(LLVMError) -> AnyValue {
+        try operators!.emitConversion(of: value, at: Self.range, in: program)
+    }
+
+    /// The Rayo type of `value`, an integer of the function's integer type or a Bool.
+    private func type(of value: AnyValue) -> RayoType {
+        IntValue<I1>(value) == nil ? integerType : .bool
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.
