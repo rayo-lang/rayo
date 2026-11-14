@@ -70,13 +70,14 @@ struct ExpressionChecker {
                 .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
             }
 
-        // A call reaches one of the functions its callee names, or makes the struct it names.
+        // A call reaches one of the functions its callee names, or makes the struct it names. A call of an implicit
+        // member waits for its position to give the type whose member it calls.
         case .call(let callee, let arguments):
-            CallChecker(expressions: self).call(callee, arguments, in: expr.range).map { .typed($0) }
+            CallChecker(expressions: self).call(callee, arguments, in: expr.range)
 
-        // An implicit member names a member of the type its position expects, which no position gives yet.
-        case .implicitMember:
-            unsupportedImplicitMember(at: expr.range)
+        // So does an implicit member that isn't called.
+        case .implicitMember(let name):
+            .implicitMember(ImplicitMember(name: name, nameRange: expr.range, arguments: nil, range: expr.range))
 
         // A `copy` copies the value of the place it names, and covers the whole `copy place`.
         case .copy(let copied):
@@ -96,24 +97,26 @@ struct ExpressionChecker {
 
     /// Settles `value` to `type` where it is untyped and fits `type`, and to its default type where it is untyped
     /// otherwise. An array literal settles to `type` where it is an array, and to the type its elements give
-    /// otherwise. A typed value is given back as it is.
+    /// otherwise. An implicit member names a member of `type`. A typed value is given back as it is.
     func settled(_ value: CheckedValue, toward type: RayoType?) -> CheckedExpr? {
         switch value {
         case .typed(let typed): typed
         case .untyped(let untyped): settled(untyped, toward: type)
         case .arrayLiteral(let literal): ArrayLiteralChecker(expressions: self).settled(literal, toward: type)
+        case .implicitMember(let member): ImplicitMemberChecker(expressions: self).settled(member, toward: type)
         }
     }
 
     /// Settles each of `values` that checked to its default type where it is untyped, so the literals in it that
     /// their default type can't hold are reported, where the expression that holds them fails for another reason.
     /// An array literal's elements are settled so, and not the literal itself, whose type the failed expression
-    /// would have given.
+    /// would have given; so are an implicit member's arguments, and not the member.
     func reportSettlingErrors(of values: [CheckedValue?]) {
         for value in values {
             switch value {
             case .untyped(let untyped)?: _ = settled(untyped, toward: nil)
             case .arrayLiteral(let literal)?: reportSettlingErrors(of: literal.elements)
+            case .implicitMember(let member)?: reportSettlingErrors(of: member.argumentValues)
             case .typed?, nil: break
             }
         }
@@ -155,12 +158,6 @@ struct ExpressionChecker {
         return .arrayLiteral(ArrayLiteral(elements: checked, range: range))
     }
 
-    /// Reports the implicit member at `range`, which isn't supported, and returns nil.
-    private func unsupportedImplicitMember(at range: SourceRange) -> CheckedValue? {
-        errors.report(.unsupportedImplicitMember, at: range)
-        return nil
-    }
-
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
     private func unary(_ op: UnaryOperator, _ operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         switch op {
@@ -178,8 +175,9 @@ struct ExpressionChecker {
         // An untyped operand gives an untyped negation.
         case .untyped(let untyped): .untyped(.negation(untyped, range: range))
         case .typed(let typed): negation(of: typed, in: range)
-        // An array literal settles to the type its elements give, which no negation takes.
-        case .arrayLiteral: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
+        // An array literal settles to the type its elements give, which no negation takes, and an implicit member
+        // to no type.
+        case .arrayLiteral, .implicitMember: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
         }
     }
 

@@ -147,6 +147,10 @@ struct FunctionEmitter {
         // An array is built from its elements' values.
         case .array(let elements, _):
             build(arrayOf: elements, into: destination, with: program.builder)
+
+        // A filled array is built from copies of one value.
+        case .filledArray(let value, let count):
+            fill(destination, withCopiesOf: value, count: count, in: program)
         }
     }
 

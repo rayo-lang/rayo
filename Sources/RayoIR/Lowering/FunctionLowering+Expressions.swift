@@ -42,7 +42,7 @@ extension FunctionLowering {
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
         // Any other value, an `if` included, is computed into a temporary, from where it is read.
-        case .unary, .binary, .call, .if, .arrayLiteral:
+        case .unary, .binary, .call, .if, .arrayLiteral, .filledArray:
             .read(temporary(holding: expr, as: use), at: expr.range)
         }
     }
@@ -85,15 +85,20 @@ extension FunctionLowering {
             .call(callee, arguments: passed(arguments, to: callee))
         // An array takes its elements, from first to last, as a primary initializer takes its fields.
         case .arrayLiteral(let elements):
-            .array(elements.map { operand(of: $0, as: .take) }, of: elementType(of: expr.type))
+            .array(elements.map { operand(of: $0, as: .take) }, of: arrayShape(of: expr).element)
+        // A filled array reads its value once, and copies it into each element.
+        case .filledArray(let value):
+            .filledArray(operand(of: value, as: .read), count: arrayShape(of: expr).count)
         }
     }
 
-    /// The element type of `type`, an array's.
-    private func elementType(of type: RayoType) -> RayoType {
-        // Checking gives an array literal an array type.
-        guard case .array(_, let element) = type else { preconditionFailure("an array literal makes an array") }
-        return element
+    /// The count and element type of the array that `expr` makes.
+    private func arrayShape(of expr: CheckedExpr) -> (count: Int, element: RayoType) {
+        // Checking gives an array literal or a filled array an array type.
+        guard case .array(let count, let element) = expr.type else {
+            preconditionFailure("an array literal or a filled array makes an array")
+        }
+        return (count, element)
     }
 
     /// Lowers `arguments`, those of a call of `callee`, to what the call passes. A primary initializer takes each, as

@@ -55,6 +55,13 @@ struct StructLoweringTests {
         try expectLowering(withEnemy: body, toMatch: "array-literal")
     }
 
+    @Test func `.init(all:) fills an array with copies of a value it reads, so a local it names keeps its value`()
+        throws {
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a: [3 of Enemy] = .init(all: e)\n"
+            + "let b: [2 of [1 of Int]] = .init(all: .init(all: 5))\nlet c: [0 of Enemy] = .init(all: e)"
+        try expectLowering(withEnemy: body, toMatch: "filled-array")
+    }
+
     @Test func `a struct made inside another is computed into a temporary, and a field is read through its fields`()
         throws {
         try expectLowering(withShot: "let s = Shot(range: 4, hit: Hit(damage: 7))\nprint(s.hit.damage)",

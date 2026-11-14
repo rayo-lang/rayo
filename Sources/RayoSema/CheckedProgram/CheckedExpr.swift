@@ -24,6 +24,9 @@ public indirect enum CheckedExprKind: Sendable {
     /// An array of the elements' values, each of the array's element type, evaluated from first to last and taken
     /// as the array's own.
     case arrayLiteral([CheckedExpr])
+    /// An array whose every element is a copy of the value, which is evaluated once, even for an array of no
+    /// elements, and which the array copies rather than takes.
+    case filledArray(CheckedExpr)
 }
 
 /// A branch of an `if`: the statements it runs, then the value it ends in.

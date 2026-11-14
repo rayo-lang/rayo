@@ -120,6 +120,33 @@ struct IRTextTests {
             value: .array(elements, of: .int), range: range(1, 1, 1, 2),
         ))
     }
+
+    @Test func `an array filled with copies of a value reads back the same`() throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+              let %0 a: Int
+              temp %1: [3 of Int]
+              temp %2: [0 of [3 of Int]]
+            bb0:
+              %1 @1:1-1:2 = fill 3 of read %0 @2:3-2:4 @1:1-1:2
+              %2 @1:1-1:2 = fill 0 of read %1 @1:1-1:2 @1:1-1:2
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+
+        // The array holds as many copies as it says, of the value its operand reads.
+        let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
+        #expect(statements[0] == .compute(
+            destination: Destination(Place(root: LocalID(index: 1)), at: range(1, 1, 1, 2)),
+            value: .filledArray(.read(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4)), count: 3),
+            range: range(1, 1, 1, 2),
+        ))
+    }
 }
 
 /// The range the text writes `@startLine:startColumn-endLine:endColumn`, which names no offsets.

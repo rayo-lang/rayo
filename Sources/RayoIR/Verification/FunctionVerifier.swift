@@ -115,6 +115,7 @@ struct FunctionVerifier {
         case .binary(let op, let left, let right): op.resultType(on: try operandType(of: op, left, right))
         case .call(let callee, let arguments): try resultType(of: callee, passing: arguments)
         case .array(let elements, let element): try arrayType(of: elements, eachOf: element)
+        case .filledArray(let value, let count): .array(count: count, element: try type(of: value))
         }
     }
 

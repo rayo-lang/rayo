@@ -276,8 +276,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(256, error: "member calls aren't supported")
     case unsupportedMemberCall
 
-    @Code(257, error: "implicit members aren't supported")
-    case unsupportedImplicitMember
+    @Code(257, error: "implicit members of {type} aren't supported")
+    case unsupportedImplicitMember(type: TypeName)
 
     @Code(258, error: "'{op}' needs integer operands, found {left} and {right}")
     case integerOperands(op: String, left: TypeName, right: TypeName)
@@ -305,6 +305,18 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(266, error: "the size of '{name}' in bytes doesn't fit in an Int")
     case structTooLarge(name: String)
+
+    @Code(267, error: "the implicit member '.{name}' needs a type")
+    case implicitMemberWithoutType(name: String)
+
+    @Code(268, error: "'.init(each:)' isn't supported")
+    case unsupportedEachInitializer
+
+    @Code(269, error: "'.init' must be called")
+    case uncalledInitializer
+
+    @Code(270, error: "{type} has no member '{name}'")
+    case noSuchMember(type: TypeName, name: String)
 
     // MARK: Ownership
 

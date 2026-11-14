@@ -1,40 +1,46 @@
 import RayoDiagnostics
 import RayoSource
 
-/// What checking an expression gives before its position is known: a typed value, or an untyped one or an array
-/// literal, each of which waits for a type to settle it.
+/// What checking an expression gives before its position is known: a typed value, or an untyped one, an array
+/// literal or an implicit member, each of which waits for a type to settle it.
 enum CheckedValue {
     case typed(CheckedExpr)
     case untyped(UntypedValue)
     /// An array literal, whose type, and so its elements' types, its position gives where it gives one.
     case arrayLiteral(ArrayLiteral)
+    /// An implicit member, such as `.init(all: 0)`, which names a member of the type its position gives.
+    case implicitMember(ImplicitMember)
 
     /// The value's type, or nil where its position settles it.
     var type: RayoType? {
         switch self {
         case .typed(let value): value.type
-        case .untyped, .arrayLiteral: nil
+        case .untyped, .arrayLiteral, .implicitMember: nil
         }
     }
 
     /// The value's type, or the type it settles to where its position gives none: an untyped value's default, and
-    /// an array literal's from its elements. Nil for a literal no element gives a type, such as `[]`.
+    /// an array literal's from its elements. Nil for a literal no element gives a type, such as `[]`, and for an
+    /// implicit member, which names a member of no type until its position gives one.
     var typeOrDefault: RayoType? {
         switch self {
         case .typed(let value): value.type
         case .untyped(let value): value.defaultType
         case .arrayLiteral(let literal):
             literal.defaultElementType.map { .array(count: literal.elements.count, element: $0) }
+        case .implicitMember: nil
         }
     }
 
-    /// Whether a parameter of `type` takes the value: a typed value of that type, an untyped one that fits it, or an
-    /// array literal of the type's count whose elements each fit the type's element type.
+    /// Whether a parameter of `type` takes the value: a typed value of that type, an untyped one that fits it, an
+    /// array literal of the type's count whose elements each fit the type's element type, or an implicit member that
+    /// makes a value of the type.
     func fits(_ type: RayoType) -> Bool {
         switch self {
         case .typed(let value): value.type == type
         case .untyped(let value): value.fits(type)
         case .arrayLiteral(let literal): literal.fits(type)
+        case .implicitMember(let member): member.fits(type)
         }
     }
 }
@@ -55,6 +61,43 @@ struct ArrayLiteral {
     func fits(_ type: RayoType) -> Bool {
         guard case .array(let count, let element) = type, count == elements.count else { return false }
         return elements.allSatisfy { $0.fits(element) }
+    }
+}
+
+/// An implicit member, such as `.init(all: 0)`: its name, and the arguments of the call where it is called, each
+/// checked on its own.
+struct ImplicitMember {
+    /// An argument of the call: its label, its value checked on its own, and where the source writes both.
+    struct Argument {
+        var label: String?
+        var value: CheckedValue
+        var range: SourceRange
+    }
+
+    var name: String
+    /// Where the source writes the `.` and the name.
+    var nameRange: SourceRange
+    /// The call's arguments, or nil where the member isn't called.
+    var arguments: [Argument]?
+    /// Where the source writes the member, with the call's arguments where it is called.
+    var range: SourceRange
+
+    /// The values of the call's arguments; none where the member isn't called.
+    var argumentValues: [CheckedValue] {
+        arguments?.map(\.value) ?? []
+    }
+
+    /// The value that `.init(all: value)`, the one member an array has, fills it with; nil for any other member. An
+    /// array's members are told apart here alone, so checking a member and picking among overloads agree.
+    var fillingValue: CheckedValue? {
+        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == "all" else { return nil }
+        return arguments[0].value
+    }
+
+    /// Whether the member makes a value of `type`: an array, filled with a value that fits its element type.
+    func fits(_ type: RayoType) -> Bool {
+        guard case .array(_, let element) = type, let fillingValue else { return false }
+        return fillingValue.fits(element)
     }
 }
 

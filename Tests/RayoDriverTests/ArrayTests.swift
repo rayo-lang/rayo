@@ -74,3 +74,90 @@ struct ArrayTests {
         #expect(run(source, options: mode) == expected)
     }
 }
+
+struct FilledArrayTests {
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `.init(all:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
+        mode: [String],
+    ) {
+        // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
+        // or an outer array expects it. A call prints a count, so the run shows each one ran.
+        let source = """
+            func main() {
+                var ints: [3 of Int] = .init(all: 7)
+                print(three(ints))
+                ints = .init(all: -1)
+                let flags = relayFlags(.init(all: true))
+                let hit = Hit(damage: 3)
+                let board = Board(hits: .init(all: hit), grid: [.init(all: 1), [2, 3]])
+                let grids: [2 of [2 of [3 of Int]]] = .init(all: .init(all: .init(all: 0)))
+                let none: [0 of Hit] = .init(all: hit)
+                print(count(of: ints, flags, board, grids, none, made(), hit))
+            }
+            func three(_ a: [3 of Int]) -> Int { 3 }
+            func relayFlags(_ a: [2 of Bool]) -> [2 of Bool] {
+                print(2)
+                return copy a
+            }
+            func made() -> [4 of Hit] {
+                print(4)
+                return .init(all: Hit(damage: 9))
+            }
+            func count(
+                of ints: [3 of Int], _ flags: [2 of Bool], _ board: Board, _ grids: [2 of [2 of [3 of Int]]],
+                _ none: [0 of Hit], _ made: [4 of Hit], _ hit: Hit,
+            ) -> Int { 7 }
+            struct Hit(var damage: Int)
+            struct Board(let hits: [2 of Hit], var grid: [2 of [2 of Int]])
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "3\n2\n4\n7\n", errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `the value is evaluated once, even for an array of no elements`(mode: [String]) {
+        let source = """
+            func main() {
+                let a: [3 of Int] = .init(all: next(1))
+                let b: [0 of Int] = .init(all: next(2))
+                let c: [2 of [2 of Int]] = .init(all: .init(all: next(3)))
+                print(sum(a, b, c))
+            }
+            func next(_ n: Int) -> Int {
+                print(n)
+                return copy n
+            }
+            func sum(_ a: [3 of Int], _ b: [0 of Int], _ c: [2 of [2 of Int]]) -> Int { 0 }
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "1\n2\n3\n0\n", errors: ""))
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
+    func `an array of a hundred thousand elements is filled, and its program builds quickly and runs`(mode: [String]) {
+        let source = """
+            func main() {
+                var a: [100000 of Int] = .init(all: 0)
+                print(count(a))
+                a = .init(all: 1)
+                let hits: [1000 of [100 of Hit]] = .init(all: .init(all: Hit(damage: 1, crit: true)))
+                print(count(a, hits))
+            }
+            func count(_ a: [100000 of Int]) -> Int { 0 }
+            func count(_ a: [100000 of Int], _ hits: [1000 of [100 of Hit]]) -> Int { 1 }
+            struct Hit(var damage: Int, let crit: Bool)
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n1\n", errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]], [
+        ("let a = .init(all: 0)", "2:13: error[E0267]: the implicit member '.init' needs a type"),
+        ("let a: [2 of Int] = .init(each: 0)", "2:25: error[E0268]: '.init(each:)' isn't supported"),
+        ("let a: [2 of Int] = .init(al: 0)", "2:31: error[E0228]: expected 'all:' before the argument, found 'al:'"),
+    ])
+    func `.init(all:) with no array type, or with the wrong member or label, is an error, in debug and release`(
+        mode: [String], failure: (body: String, error: String),
+    ) {
+        let source = "func main() {\n    \(failure.body)\n}"
+        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
+        #expect(run(source, options: mode) == expected)
+    }
+}

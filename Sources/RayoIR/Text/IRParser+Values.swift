@@ -49,6 +49,7 @@ extension IRParser {
         case "operand": .operand(try operand())
         case "call": .call(try callee(), arguments: try arguments())
         case "array": try array()
+        case "fill": try filledArray()
         default: try operation(named: keyword, at: token)
         }
     }
@@ -59,6 +60,13 @@ extension IRParser {
         let element = try type()
         let elements = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.operand() }
         return .array(elements, of: element)
+    }
+
+    /// After `fill`: the count, `of`, and the operand whose value fills each element.
+    private mutating func filledArray() throws(IRTextError) -> Rvalue {
+        let count = try integer()
+        try expect(word: "of")
+        return .filledArray(try operand(), count: count)
     }
 
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and

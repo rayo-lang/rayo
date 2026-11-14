@@ -121,10 +121,15 @@ extension FunctionEmitter {
     /// Emits the instruction that points at the element at `index` of the array at `address`, and returns the
     /// element's address.
     func elementAddress(of index: Int, in address: Address, with builder: borrowing Builder) -> Address {
+        elementAddress(at: types.int64.constant(Int64(index)), in: address, with: builder)
+    }
+
+    /// Emits the instruction that points at the element at `index`, a value the program computes, of the array at
+    /// `address`, and returns the element's address.
+    func elementAddress(at index: IntValue<I64>, in address: Address, with builder: borrowing Builder) -> Address {
         // Only an array has elements, which lie end to end from where it starts.
         guard case .array(_, let element) = address.type else { preconditionFailure("only an array has elements") }
-        let llvmIndex = types.int64.constant(Int64(index))
-        let pointer = builder.elementPointer(to: llvmIndex, of: types.llvmType(element), at: address.pointer)
+        let pointer = builder.elementPointer(to: index, of: types.llvmType(element), at: address.pointer)
         return Address(pointer: pointer, type: element)
     }
 

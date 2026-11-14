@@ -115,7 +115,7 @@ public struct CheckedPrinter: ~Copyable {
             break
         case .place(let place), .copy(let place):
             write(place, depth: depth + 1)
-        case .unary(_, let operand):
+        case .unary(_, let operand), .filledArray(let operand):
             write(operand, depth: depth + 1)
         case .binary(_, let left, let right):
             write(left, depth: depth + 1)
@@ -146,6 +146,7 @@ public struct CheckedPrinter: ~Copyable {
         case .call(let callee, _): "call \(text(of: callee))"
         case .if: "if"
         case .arrayLiteral: "array"
+        case .filledArray: "filled array"
         }
     }
 
