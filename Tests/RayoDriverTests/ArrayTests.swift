@@ -93,8 +93,8 @@ struct FilledArrayTests {
         mode: [String],
     ) {
         // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
-        // or an outer array expects it, and each of its elements is printed. A call that makes an array prints its
-        // count first, so the run shows each one ran.
+        // or an outer array expects it, and each of its elements is printed. `relayFlags` and `made` each print their
+        // array's count as they run, so the run shows each was called.
         let source = """
             func main() {
                 var ints: [3 of Int] = .init(all: 7)
