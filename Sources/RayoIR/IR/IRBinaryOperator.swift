@@ -2,7 +2,7 @@ import RayoSema
 
 /// An operator that computes a value from two operands of one type. Arithmetic carries its overflow mode, and the
 /// operands' type says the rest of how the operator computes, such as whether it orders them as signed.
-public enum IRBinaryOperator: Hashable, Sendable, CustomStringConvertible {
+public enum IRBinaryOperator: Hashable, Sendable, CaseIterable, CustomStringConvertible {
     case add(OverflowMode)
     case subtract(OverflowMode)
     case multiply(OverflowMode)
@@ -11,6 +11,11 @@ public enum IRBinaryOperator: Hashable, Sendable, CustomStringConvertible {
     /// is 0.
     case remainder
     case equal, notEqual, less, lessEqual, greater, greaterEqual
+
+    /// Every operator, each in each of its overflow modes.
+    public static let allCases: [IRBinaryOperator] =
+        [add, subtract, multiply, divide].flatMap { OverflowMode.allCases.map($0) }
+            + [.remainder, .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual]
 
     /// The operator as an error names it, such as `+` or `wrapping +`.
     public var description: String {

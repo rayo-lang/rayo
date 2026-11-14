@@ -6,8 +6,7 @@ import RayoSema
 import RayoSource
 
 struct InitializationCheckerTests {
-    @Test("a use of a local after a move reports that it was moved, at the use")
-    func useAfterMove() throws {
+    @Test func `a use of a local after a move reports that it was moved, at the use`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -18,8 +17,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
     }
 
-    @Test("a move uses the local as a read does, so moving it again is reported there")
-    func moveAfterMove() throws {
+    @Test func `a move uses the local as a read does, so moving it again is reported there`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -30,8 +28,8 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
     }
 
-    @Test("a move takes a value only where the local holds one, so a move that is an error takes nothing")
-    func moveOfNoValue() throws {
+    @Test
+    func `a move takes a value only where the local holds one, so a move that is an error takes nothing`() throws {
         let blocks = """
             bb0:
               declare %2
@@ -48,8 +46,7 @@ struct InitializationCheckerTests {
         ])
     }
 
-    @Test("an assignment gives a moved local a value again")
-    func reassigned() throws {
+    @Test func `an assignment gives a moved local a value again`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -61,8 +58,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [])
     }
 
-    @Test("a parameter holds its argument from the function's entry")
-    func parameterHoldsValue() throws {
+    @Test func `a parameter holds its argument from the function's entry`() throws {
         let blocks = """
             bb0:
               _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
@@ -71,9 +67,10 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks, parameters: "Int") == [])
     }
 
-    @Test("a local moved on some of the paths that join may have been moved, and one moved on all of them was moved",
-          arguments: [(true, ErrorCode.usedAfterMaybeMove(name: "x")), (false, .usedAfterMove(name: "x"))])
-    func join(keptOnOnePath: Bool, expected: ErrorCode) throws {
+    @Test(arguments: [(true, ErrorCode.usedAfterMaybeMove(name: "x")), (false, .usedAfterMove(name: "x"))])
+    func `a local moved on some of the paths that join may have been moved, and one moved on all of them was moved`(
+        keptOnOnePath: Bool, expected: ErrorCode,
+    ) throws {
         let otherwise = keptOnOnePath ? "" : "%1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1"
         let blocks = """
             bb0:
@@ -92,9 +89,10 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(3))])
     }
 
-    @Test("a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it again",
-          arguments: [(false, [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(1))]), (true, [])])
-    func loop(assignsAgain: Bool, expected: [Diagnostic]) throws {
+    @Test(arguments: [(false, [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(1))]), (true, [])])
+    func `a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it again`(
+        assignsAgain: Bool, expected: [Diagnostic],
+    ) throws {
         let assignment = assignsAgain ? "%0 @1:1-1:1 = use 2 @1:1-1:1" : ""
         let blocks = """
             bb0:
@@ -112,8 +110,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == expected)
     }
 
-    @Test("a branch's condition and a return's result are uses, and a return's result may be a move")
-    func terminators() throws {
+    @Test func `a branch's condition and a return's result are uses, and a return's result may be a move`() throws {
         let blocks = """
             bb0:
               %6 @1:1-1:1 = use true @1:1-1:1
@@ -129,8 +126,7 @@ struct InitializationCheckerTests {
         ])
     }
 
-    @Test("a block that no path reaches reports nothing")
-    func unreachable() throws {
+    @Test func `a block that no path reaches reports nothing`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -142,8 +138,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks, result: "Int") == [])
     }
 
-    @Test("the uses that the same moves reach are reported once, at the first of them in the source")
-    func sameMovesReportedOnce() throws {
+    @Test func `the uses that the same moves reach are reported once, at the first of them in the source`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -155,8 +150,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
     }
 
-    @Test("a use that other moves reach is reported again")
-    func otherMovesReportedAgain() throws {
+    @Test func `a use that other moves reach is reported again`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = use 1 @1:1-1:1
@@ -179,8 +173,8 @@ struct InitializationCheckerTests {
         ])
     }
 
-    @Test("a use of a local that nothing has assigned since its declaration reports that it isn't initialized")
-    func useBeforeAssignment() throws {
+    @Test
+    func `a use of a local that nothing has assigned since its declaration reports that it isn't initialized`() throws {
         let blocks = """
             bb0:
               declare %0
@@ -192,9 +186,10 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedUninitialized(name: "x"), at: at(1))])
     }
 
-    @Test("a local assigned on some of the paths that join isn't initialized on every path, unlike one assigned on all",
-          arguments: [(true, [Diagnostic(.usedMaybeUninitialized(name: "x"), at: at(3))]), (false, [])])
-    func joinUnassigned(unassignedOnOnePath: Bool, expected: [Diagnostic]) throws {
+    @Test(arguments: [(true, [Diagnostic(.usedMaybeUninitialized(name: "x"), at: at(3))]), (false, [])])
+    func `a local assigned on some of the paths that join isn't initialized on every path, unlike one assigned on all`(
+        unassignedOnOnePath: Bool, expected: [Diagnostic],
+    ) throws {
         let otherwise = unassignedOnOnePath ? "" : "%0 @1:1-1:1 = use 2 @1:1-1:1"
         let blocks = """
             bb0:
@@ -213,8 +208,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == expected)
     }
 
-    @Test("a local moved on one path and never assigned on the other may have been moved")
-    func joinMovedAndUnassigned() throws {
+    @Test func `a local moved on one path and never assigned on the other may have been moved`() throws {
         let blocks = """
             bb0:
               declare %0
@@ -230,8 +224,8 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2))])
     }
 
-    @Test("a declaration in a loop's body leaves the local without a value, whatever the last pass assigned")
-    func declarationInLoop() throws {
+    @Test
+    func `a declaration in a loop's body leaves the local without a value, whatever the last pass assigned`() throws {
         let blocks = """
             bb0:
               goto bb1
@@ -250,8 +244,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.usedUninitialized(name: "x"), at: at(2))])
     }
 
-    @Test("a 'var' may be assigned any number of times, and a 'let' only once on each path")
-    func assignedTwice() throws {
+    @Test func `a 'var' may be assigned any number of times, and a 'let' only once on each path`() throws {
         let blocks = """
             bb0:
               declare %0
@@ -268,8 +261,7 @@ struct InitializationCheckerTests {
         ])
     }
 
-    @Test("a 'let' that a move left without a value was still assigned, so it can't be assigned again")
-    func assignedAfterMove() throws {
+    @Test func `a 'let' that a move left without a value was still assigned, so it can't be assigned again`() throws {
         let blocks = """
             bb0:
               declare %2
@@ -281,9 +273,10 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
     }
 
-    @Test("a 'let' assigned on some of the paths that join, or on an earlier pass of a loop, may have been assigned",
-          arguments: [true, false])
-    func maybeAssignedTwice(inLoop: Bool) throws {
+    @Test(arguments: [true, false])
+    func `a 'let' assigned on some of the paths that join, or on an earlier pass of a loop, may have been assigned`(
+        inLoop: Bool,
+    ) throws {
         let blocks = inLoop ? """
             bb0:
               declare %2
@@ -309,8 +302,7 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.letMaybeAssignedTwice(name: "k"), at: at(1))])
     }
 
-    @Test("the uses that no assignment reaches since a declaration are reported once for each local")
-    func unassignedReportedOnce() throws {
+    @Test func `the uses that no assignment reaches since a declaration are reported once for each local`() throws {
         let blocks = """
             bb0:
               declare %0

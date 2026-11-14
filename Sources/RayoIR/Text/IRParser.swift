@@ -4,13 +4,13 @@ import RayoSema
 ///
 /// The parser checks that every name and number the text uses is declared: each struct, function, built-in, local and
 /// block. It doesn't check that the IR keeps its types, which `IRVerifier` does.
-public struct IRParser {
+public struct IRParser: ~Copyable {
     let tokens: [IRToken]
     var position = 0
     /// The ID of each struct the text declares, by its name.
     let structIDs: [String: StructID]
     /// The ID of each function the text declares, by its name.
-    private let functionIDs: [String: FunctionID]
+    let functionIDs: [String: FunctionID]
     /// The number of locals the function being read declares so far.
     var localCount = 0
     /// Each block the function being read names, and the token that names it, to check once its blocks are read.
@@ -122,28 +122,5 @@ public struct IRParser {
         // A function without a body ends at its result.
         guard current.kind == .symbol("{") else { return (declaration, nil) }
         return (declaration, try body())
-    }
-
-    /// The function the quoted name at the current token names.
-    mutating func functionReference() throws(IRTextError) -> FunctionID {
-        let token = current
-        guard case .string(let name) = token.kind else { throw expected("a function's quoted name") }
-        guard let id = functionIDs[name] else { throw IRTextError(at: token, "no function is named \"\(name)\"") }
-        advance()
-        return id
-    }
-
-    /// The type the word at the current token names: `Int`, `Bool`, `Void`, or a struct the text declares.
-    mutating func type() throws(IRTextError) -> RayoType {
-        let token = current
-        let name = try word()
-        switch name {
-        case "Int": return .int
-        case "Bool": return .bool
-        case "Void": return .void
-        default:
-            guard let id = structIDs[name] else { throw IRTextError(at: token, "no type is named '\(name)'") }
-            return .structure(id)
-        }
     }
 }

@@ -9,11 +9,13 @@ struct ParameterMoveCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
-    @Test("a move of a field out of a borrowed parameter is reported with the field's name", arguments: [
+    @Test(arguments: [
         ("%1.1", "p.hit"),
         ("%1.1.0", "p.hit.damage"),
     ])
-    func fieldMove(field: String, name: String) throws {
+    func `a move of a field out of a borrowed parameter is reported with the field's name`(
+        field: String, name: String,
+    ) throws {
         let blocks = "bb0:\n  _ = use move \(field) @2:1-2:1 @1:1-1:1\n  return"
         #expect(try errors(in: blocks) == [
             Diagnostic(.moveFieldFromParameter(field: name, parameter: "p"), at: at(1)),

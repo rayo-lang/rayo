@@ -143,7 +143,7 @@ public enum Compiler {
         // Compile the file as the arguments ask.
         do {
             let output = try compile(invocation, readFile: readFile, writeFile: writeFile)
-            return CompilerResult(exitCode: 0, errors: "", output: output)
+            return CompilerResult(exitCode: 0, errors: "", standardOutput: output)
         } catch {
             // A compile that stops is reported with why.
             return result(of: error, in: invocation.path)
@@ -156,31 +156,62 @@ public enum Compiler {
         _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
         writeFile: @escaping (String, [UInt8]) -> Bool,
     ) throws(CompilationError) -> String {
-        // Each pipeline ends in a step that ends the compile on the program's errors, so a pipeline gives nothing only
-        // where the compile has already ended, and nothing is printed there.
-        var errors: [Diagnostic] = []
-        switch invocation.output {
-        case .check:
-            _ = try frontEnd(readFile: readFile).run(invocation.path, errors: &errors)
-            return ""
-        case .dump(.checked):
-            // The checked program is printed only once the stages after checking accept it too.
-            let checked = try checking(readFile: readFile).run(invocation.path, errors: &errors)
-            guard let checked, try lowering.run(checked, errors: &errors) != nil else { return "" }
-            return CheckedPrinter.text(of: checked)
-        case .dump(.ir):
-            let program = try frontEnd(readFile: readFile).run(invocation.path, errors: &errors)
-            return program.map(IRPrinter.text(of:)) ?? ""
-        case .objectFile(let path, let build):
-            _ = try pipeline {
-                frontEnd(readFile: readFile)
-                RequireMain()
-                StopOnErrors<IRExecutable>()
-                Emit(build: build, sourcePath: invocation.path)
-                WriteObject(path: path, writeFile: writeFile)
-            }.run(invocation.path, errors: &errors)
-            return ""
+        let path = invocation.path
+        return switch invocation.output {
+        case .check: try check(path, readFile: readFile)
+        case .dump(.checked): try checkedProgramText(of: path, readFile: readFile)
+        case .dump(.ir): try irText(of: path, readFile: readFile)
+        case .objectFile(let objectPath, let build):
+            try writeObjectCode(of: path, to: objectPath, build: build, readFile: readFile, writeFile: writeFile)
         }
+    }
+
+    // Each pipeline below ends in a step that ends the compile on the program's errors, so a pipeline gives nothing
+    // only where the compile has already ended, and nothing is printed there.
+
+    /// Checks the source file at `path`, and prints nothing.
+    private static func check(
+        _ path: String, readFile: @escaping (String) -> [UInt8]?,
+    ) throws(CompilationError) -> String {
+        var errors: [Diagnostic] = []
+        _ = try frontEnd(readFile: readFile).run(path, errors: &errors)
+        return ""
+    }
+
+    /// The checked program of the source file at `path`, as text, once the stages after checking accept it too.
+    private static func checkedProgramText(
+        of path: String, readFile: @escaping (String) -> [UInt8]?,
+    ) throws(CompilationError) -> String {
+        var errors: [Diagnostic] = []
+        let checked = try checking(readFile: readFile).run(path, errors: &errors)
+        guard let checked, try lowering.run(checked, errors: &errors) != nil else { return "" }
+        return CheckedPrinter.text(of: checked)
+    }
+
+    /// The Rayo IR of the source file at `path`, as text, once it checks.
+    private static func irText(
+        of path: String, readFile: @escaping (String) -> [UInt8]?,
+    ) throws(CompilationError) -> String {
+        var errors: [Diagnostic] = []
+        let program = try frontEnd(readFile: readFile).run(path, errors: &errors)
+        return program.map(IRPrinter.text(of:)) ?? ""
+    }
+
+    /// Compiles the source file at `path` as `build` asks, writes its object code to the file at `objectPath`, and
+    /// prints nothing.
+    private static func writeObjectCode(
+        of path: String, to objectPath: String, build: Build, readFile: @escaping (String) -> [UInt8]?,
+        writeFile: @escaping (String, [UInt8]) -> Bool,
+    ) throws(CompilationError) -> String {
+        var errors: [Diagnostic] = []
+        _ = try pipeline {
+            frontEnd(readFile: readFile)
+            RequireMain()
+            StopOnErrors<IRExecutable>()
+            Emit(build: build, sourcePath: path)
+            WriteObject(path: objectPath, writeFile: writeFile)
+        }.run(path, errors: &errors)
+        return ""
     }
 
     /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR. It

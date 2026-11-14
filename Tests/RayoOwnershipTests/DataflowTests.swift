@@ -18,11 +18,13 @@ struct DataflowTests {
         #expect(results.state(before: 0, in: BlockID(index: 3)) == EvaluatedOperands.State([4, 5]))
     }
 
-    @Test("a loop's header holds what each pass of its body brings, in either direction", arguments: [
+    @Test(arguments: [
         (DataflowDirection.forward, 0, Set([1, 2, 3])),
         (DataflowDirection.backward, 1, Set([2, 3, 4])),
     ])
-    func loop(direction: DataflowDirection, statement: Int, expected: Set<Int>) throws {
+    func `a loop's header holds what each pass of its body brings, in either direction`(
+        direction: DataflowDirection, statement: Int, expected: Set<Int>,
+    ) throws {
         let blocks = """
             bb0:
               \(printing(1))
@@ -55,10 +57,12 @@ struct DataflowTests {
         #expect(results.state(before: 0, in: BlockID(index: 0)) == EvaluatedOperands.State([1, 2]))
     }
 
-    @Test("a block that no path from the entry reaches has no state, in either direction", arguments: [
+    @Test(arguments: [
         DataflowDirection.forward, .backward,
     ])
-    func unreached(direction: DataflowDirection) throws {
+    func `a block that no path from the entry reaches has no state, in either direction`(
+        direction: DataflowDirection,
+    ) throws {
         let blocks = """
             bb0:
               \(printing(1))
@@ -71,11 +75,13 @@ struct DataflowTests {
         #expect(results.state(before: 0, in: BlockID(index: 1)) == nil)
     }
 
-    @Test("the states asked about a block in any order are those of its points, in either direction", arguments: [
+    @Test(arguments: [
         (DataflowDirection.forward, [Set([1, 2]), Set([1]), Set([1])]),
         (DataflowDirection.backward, [Set([3]), Set([2, 3]), Set([2, 3])]),
     ])
-    func anyOrder(direction: DataflowDirection, expected: [Set<Int>]) throws {
+    func `the states asked about a block in any order are those of its points, in either direction`(
+        direction: DataflowDirection, expected: [Set<Int>],
+    ) throws {
         let blocks = """
             bb0:
               \(printing(1))

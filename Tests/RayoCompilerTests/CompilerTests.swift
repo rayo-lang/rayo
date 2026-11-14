@@ -53,7 +53,7 @@ struct CompilerTests {
 
     @Test func `'--emit=ir' prints the Rayo IR of a file that checks, and writes nothing`() {
         let compiled = compile(["--emit=ir", "a.rayo"], files: ["a.rayo": "func main() {\n    print(1)\n}"])
-        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", output: """
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", standardOutput: """
             main "main()"
 
             func "main()"() -> Void {
@@ -68,7 +68,7 @@ struct CompilerTests {
 
     @Test func `'--emit=checked' prints the checked program of a file that checks, and writes nothing`() {
         let compiled = compile(["--emit=checked", "a.rayo"], files: ["a.rayo": "func main() {\n    print(1)\n}"])
-        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", output: """
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", standardOutput: """
             main "main()"
 
             func "main()"() -> Void {
@@ -87,7 +87,7 @@ struct CompilerTests {
         let compiled = compile([option, "a.rayo"], files: ["a.rayo": source])
         #expect(compiled.result.exitCode == 1)
         #expect(compiled.result.diagnostics.map(\.code) == [.usedAfterMove(name: "x")])
-        #expect(compiled.result.output.isEmpty)
+        #expect(compiled.result.standardOutput.isEmpty)
     }
 
     @Test func `the usage names each dump '--emit' prints`() {

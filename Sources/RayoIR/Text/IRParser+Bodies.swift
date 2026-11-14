@@ -71,20 +71,25 @@ extension IRParser {
     /// Reads `declare %N`, or `destination = value @range`; or nil where the current token starts no statement.
     private mutating func statement() throws(IRTextError) -> Statement? {
         switch current.kind {
-        case .word("declare"):
-            advance()
-            return .declare(try localReference())
-
+        case .word("declare"): try declaration()
         // A computation stores its value in a place, or drops it where the text writes `_`.
-        case .word("_"), .symbol("%"):
-            let destination = try destination()
-            try expect("=")
-            let value = try rvalue()
-            return .compute(destination: destination, value: value, range: try range())
-
-        default:
-            return nil
+        case .word("_"), .symbol("%"): try computation()
+        default: nil
         }
+    }
+
+    /// Reads `declare %N`.
+    private mutating func declaration() throws(IRTextError) -> Statement {
+        try expect(word: "declare")
+        return .declare(try localReference())
+    }
+
+    /// Reads `destination = value @range`.
+    private mutating func computation() throws(IRTextError) -> Statement {
+        let destination = try destination()
+        try expect("=")
+        let value = try rvalue()
+        return .compute(destination: destination, value: value, range: try range())
     }
 
     /// Reads `_`, which drops a computation's value, or a place and where the source names it.
@@ -99,27 +104,28 @@ extension IRParser {
 
     /// Reads `goto bbN`, `branch condition, bbN, bbM`, `return`, `return result` or `unreachable`.
     private mutating func terminator() throws(IRTextError) -> Terminator {
-        let token = current
-        switch token.kind {
-        case .word("goto"):
-            advance()
-            return .goto(try blockReference())
-        case .word("branch"):
-            advance()
-            let condition = try operand()
-            try expect(",")
-            let then = try blockReference()
-            try expect(",")
-            return .branch(condition, then: then, otherwise: try blockReference())
-        case .word("return"):
-            advance()
-            return .return(startsOperand ? try operand() : nil)
-        case .word("unreachable"):
-            advance()
-            return .unreachable
-        default:
+        // A terminator starts with the word that names it, which the rest of it follows.
+        let keywords = ["goto", "branch", "return", "unreachable"]
+        guard case .word(let keyword) = current.kind, keywords.contains(keyword) else {
             throw expected("a statement or a terminator")
         }
+        advance()
+
+        return switch keyword {
+        case "goto": .goto(try blockReference())
+        case "branch": try branch()
+        case "return": .return(startsOperand ? try operand() : nil)
+        default: .unreachable
+        }
+    }
+
+    /// Reads `condition, bbN, bbM`, the rest of a branch.
+    private mutating func branch() throws(IRTextError) -> Terminator {
+        let condition = try operand()
+        try expect(",")
+        let then = try blockReference()
+        try expect(",")
+        return .branch(condition, then: then, otherwise: try blockReference())
     }
 
     /// Reads `bbN`, a block that the function's blocks must hold.

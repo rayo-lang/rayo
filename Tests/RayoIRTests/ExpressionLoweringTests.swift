@@ -6,8 +6,7 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: "let x = 1 + 2 * 3", toMatch: "nested-operation")
     }
 
-    @Test("a local used as an operand is read, and a local that gives a declaration its value is moved")
-    func readsAndMoves() throws {
+    @Test func `a local used as an operand is read, and a local that gives a declaration its value is moved`() throws {
         try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = a", toMatch: "reads-and-moves")
     }
 
@@ -19,24 +18,26 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: "let a = 1\nlet b = copy a", toMatch: "copy")
     }
 
-    @Test("'&&' evaluates its right operand in a block of its own, which only a true left operand reaches")
-    func and() throws {
+    @Test
+    func `'&&' evaluates its right operand in a block of its own, which only a true left operand reaches`() throws {
         try expectLowering(ofMain: "let a = true\nlet b = a && false", toMatch: "and")
     }
 
-    @Test("'||' evaluates its right operand in a block of its own, which only a false left operand reaches")
-    func or() throws {
+    @Test
+    func `'||' evaluates its right operand in a block of its own, which only a false left operand reaches`() throws {
         try expectLowering(ofMain: "let a = true\nlet b = a || false", toMatch: "or")
     }
 
-    @Test("a '&&' that is the left operand of '||' is decided first, and its result decides whether '||' goes on")
-    func andInsideOr() throws {
+    @Test
+    func `a '&&' that is the left operand of '||' is decided first, and its result decides whether '||' goes on`()
+        throws {
         let body = "let a = true\nlet b = false\nlet c = true\nlet d = a && b || c"
         try expectLowering(ofMain: body, toMatch: "and-inside-or")
     }
 
-    @Test("a '||' that is the right operand of '&&' is lowered in the block that evaluates it, and joins before it")
-    func orInsideAnd() throws {
+    @Test
+    func `a '||' that is the right operand of '&&' is lowered in the block that evaluates it, and joins before it`()
+        throws {
         let body = "let a = true\nlet b = false\nlet c = true\nlet d = a && (b || c)"
         try expectLowering(ofMain: body, toMatch: "or-inside-and")
     }

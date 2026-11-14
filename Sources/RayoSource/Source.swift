@@ -1,8 +1,8 @@
 /// A position in a source file: 1-based line and column, and the 0-based byte offset.
 ///
 /// Two positions are the same where their lines and columns are, and come in the order those do, since within one
-/// file the line and column decide the offset. A position read back from Rayo IR's text, which names only lines and
-/// columns, has the offset 0.
+/// file the line and column decide the offset. A position known only by its line and column, such as one read back
+/// from text that names no offsets, has the offset 0, and is still the same position as the one the lexer found there.
 public struct SourceLocation: Sendable, Hashable, Comparable, CustomStringConvertible {
     public var line: Int
     public var column: Int

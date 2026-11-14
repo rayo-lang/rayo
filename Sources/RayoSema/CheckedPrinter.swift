@@ -16,7 +16,7 @@ import RayoSource
 ///       int 2: Int @2:17-2:18
 /// }
 /// ```
-public struct CheckedPrinter {
+public struct CheckedPrinter: ~Copyable {
     private let program: CheckedProgram
     private var lines: [String] = []
 

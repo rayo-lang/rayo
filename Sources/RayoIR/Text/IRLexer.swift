@@ -1,5 +1,5 @@
 /// Splits Rayo IR's text into tokens, skipping spaces, line breaks and `//` comments.
-struct IRLexer {
+struct IRLexer: ~Copyable {
     /// The text, as UTF-8.
     private let bytes: [UInt8]
     private var index = 0

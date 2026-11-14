@@ -22,8 +22,9 @@ struct StatementLoweringTests {
         try expectLowering(ofMain: "var x = 1\nx += 3", toMatch: "compound-assignment")
     }
 
-    @Test("a compound assignment computes a value that is an operation into a temporary, then applies its operator")
-    func compoundAssignOfOperation() throws {
+    @Test
+    func `a compound assignment computes a value that is an operation into a temporary, then applies its operator`()
+        throws {
         try expectLowering(ofMain: "var x = 1\nx += 2 * 3", toMatch: "compound-assignment-of-operation")
     }
 

@@ -4,8 +4,9 @@ import Testing
 
 @Suite("Lowering keeps source ranges")
 struct SourceRangeTests {
-    @Test("an operation and its temporary keep the range of the expression, and an operand the range of its local")
-    func operationRanges() throws(RejectedSource) {
+    @Test
+    func `an operation and its temporary keep the range of the expression, and an operand the range of its local`()
+        throws(RejectedSource) {
         let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
         let main = try lowered(source).body(at: 0)
 

@@ -169,6 +169,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Sources/RayoLLVMInstall` | The LLVM install the toolchain was built against, whose clang and LLD link programs |
 | `Sources/RayoDriver` | What each `rayo` command does, given its arguments and the `rayoc` to run: the `rayoc` it runs out of process, and the clang and linker it links a program with |
 | `Sources/rayo` | The driver's executable: finds `rayoc` beside itself, and writes the driver's output and errors |
+| `Tests/RayoSourceTests` | When two source positions are the same, and how they order |
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |

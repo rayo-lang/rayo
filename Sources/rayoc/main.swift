@@ -81,6 +81,6 @@ _ = _setmode(standardError, _O_BINARY)
 #endif
 
 let result = Compiler.run(Array(CommandLine.arguments.dropFirst()), readFile: readFile, writeFile: writeFile)
-writeAll(result.output, to: standardOutput)
+writeAll(result.standardOutput, to: standardOutput)
 writeAll(result.errors, to: standardError)
 exit(result.exitCode)

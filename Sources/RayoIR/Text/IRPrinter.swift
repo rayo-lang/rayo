@@ -71,7 +71,7 @@ public enum IRPrinter {
     }
 
     /// The word a local's declaration starts with, for the kind the source declares it with.
-    static func keyword(of kind: LocalKind) -> String {
+    private static func keyword(of kind: LocalKind) -> String {
         switch kind {
         case .let: "let"
         case .var: "var"

@@ -8,12 +8,12 @@ public struct CompilerResult: Equatable, Sendable {
     /// The errors found in the program, which `errors` also shows.
     public var diagnostics: [Diagnostic]
     /// What a stage made of the program, where the arguments ask for it to be printed.
-    public var output: String
+    public var standardOutput: String
 
-    public init(exitCode: Int32, errors: String, diagnostics: [Diagnostic] = [], output: String = "") {
+    public init(exitCode: Int32, errors: String, diagnostics: [Diagnostic] = [], standardOutput: String = "") {
         self.exitCode = exitCode
         self.errors = errors
         self.diagnostics = diagnostics
-        self.output = output
+        self.standardOutput = standardOutput
     }
 }

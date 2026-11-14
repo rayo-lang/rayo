@@ -9,8 +9,8 @@ struct UnusedValueCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "k"), at: at(1))])
     }
 
-    @Test("a value that an assignment overwrites before any code reads it is reported, and the new one isn't")
-    func overwritten() throws {
+    @Test
+    func `a value that an assignment overwrites before any code reads it is reported, and the new one isn't`() throws {
         let blocks = """
             bb0:
               %0 @2:1-2:1 = use 1 @1:1-1:1
@@ -37,11 +37,13 @@ struct UnusedValueCheckerTests {
         #expect(try errors(in: blocks) == [])
     }
 
-    @Test("a value stored in a loop's body is used when the next pass reads it", arguments: [
+    @Test(arguments: [
         (true, [Diagnostic]()),
         (false, [Diagnostic(.unreadValue(name: "x"), at: at(1)), Diagnostic(.unreadValue(name: "x"), at: at(2))]),
     ])
-    func loop(bodyReads: Bool, expected: [Diagnostic]) throws {
+    func `a value stored in a loop's body is used when the next pass reads it`(
+        bodyReads: Bool, expected: [Diagnostic],
+    ) throws {
         let value = bodyReads ? "add checked read %0 @2:3-2:3, 1" : "use 1"
         let blocks = """
             bb0:

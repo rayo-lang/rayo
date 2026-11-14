@@ -2,49 +2,68 @@ import RayoSema
 import RayoSource
 
 extension IRParser {
-    /// Every unary operator, each in each of its overflow modes.
-    private static let unaryOperators: [IRUnaryOperator] = [.negate(.checked), .negate(.wrapping), .not]
+    /// The type the word at the current token names: `Int`, `Bool`, `Void`, or a struct the text declares.
+    mutating func type() throws(IRTextError) -> RayoType {
+        let token = current
+        let name = try word()
+        return switch name {
+        case "Int": .int
+        case "Bool": .bool
+        case "Void": .void
+        default: .structure(try structID(named: name, at: token))
+        }
+    }
 
-    /// Every binary operator, each in each of its overflow modes.
-    private static let binaryOperators: [IRBinaryOperator] = [
-        .add(.checked), .add(.wrapping), .subtract(.checked), .subtract(.wrapping),
-        .multiply(.checked), .multiply(.wrapping), .divide(.checked), .divide(.wrapping),
-        .remainder, .equal, .notEqual, .less, .lessEqual, .greater, .greaterEqual,
-    ]
+    /// The struct the text declares as `name`, which `token` holds.
+    private func structID(named name: String, at token: IRToken) throws(IRTextError) -> StructID {
+        guard let id = structIDs[name] else { throw IRTextError(at: token, "no type is named '\(name)'") }
+        return id
+    }
+
+    /// The function the quoted name at the current token names.
+    mutating func functionReference() throws(IRTextError) -> FunctionID {
+        let token = current
+        guard case .string(let name) = token.kind else { throw expected("a function's quoted name") }
+        guard let id = functionIDs[name] else { throw IRTextError(at: token, "no function is named \"\(name)\"") }
+        advance()
+        return id
+    }
 
     /// Reads the operation a computation makes its value with.
     mutating func rvalue() throws(IRTextError) -> Rvalue {
         let token = current
         let keyword = try word()
-        switch keyword {
-        case "use":
-            return .use(try operand())
-        case "call":
-            let callee = try callee()
-            return .call(callee, arguments: try operands())
-        case "struct":
-            let type = try type()
-            guard case .structure(let id) = type else {
-                throw IRTextError(at: token, "\(type) isn't a struct, so no value of it is made of fields")
-            }
-            return .structure(id, fields: try operands())
-        default:
-            return try operation(named: keyword, at: token)
+        return switch keyword {
+        case "use": .use(try operand())
+        case "call": .call(try callee(), arguments: try operands())
+        case "struct": .structure(try madeStruct(), fields: try operands())
+        default: try operation(named: keyword, at: token)
         }
+    }
+
+    /// Reads the struct a value is made of, which must be a struct the text declares.
+    private mutating func madeStruct() throws(IRTextError) -> StructID {
+        let token = current
+        let type = try type()
+        guard case .structure(let id) = type else {
+            throw IRTextError(at: token, "\(type) isn't a struct, so no value of it is made of fields")
+        }
+        return id
     }
 
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and
     /// the rest of whose name follows it.
     private mutating func operation(named keyword: String, at token: IRToken) throws(IRTextError) -> Rvalue {
         // An operator with an overflow mode names it in a second word.
-        let takesMode = (Self.unaryOperators.map(IRPrinter.name(of:)) + Self.binaryOperators.map(IRPrinter.name(of:)))
-            .contains { $0.hasPrefix(keyword + " ") }
+        let unaryNames = IRUnaryOperator.allCases.map(IRPrinter.name(of:))
+        let binaryNames = IRBinaryOperator.allCases.map(IRPrinter.name(of:))
+        let takesMode = (unaryNames + binaryNames).contains { $0.hasPrefix(keyword + " ") }
         let name = takesMode ? "\(keyword) \(try word())" : keyword
 
-        if let op = Self.unaryOperators.first(where: { IRPrinter.name(of: $0) == name }) {
+        if let op = IRUnaryOperator.allCases.first(where: { IRPrinter.name(of: $0) == name }) {
             return .unary(op, try operand())
         }
-        if let op = Self.binaryOperators.first(where: { IRPrinter.name(of: $0) == name }) {
+        if let op = IRBinaryOperator.allCases.first(where: { IRPrinter.name(of: $0) == name }) {
             let left = try operand()
             try expect(",")
             return .binary(op, left, try operand())
@@ -82,23 +101,19 @@ extension IRParser {
     /// Reads a constant, `read place @range` or `move place @range`.
     mutating func operand() throws(IRTextError) -> Operand {
         switch current.kind {
-        case .word("true"), .word("false"):
-            let value = current.kind == .word("true")
-            advance()
-            return .constant(.bool(value))
-        case .word("read"):
-            advance()
-            let place = try place()
-            return .read(place, at: try range())
-        case .word("move"):
-            advance()
-            let place = try place()
-            return .move(place, at: try range())
-        case .integer, .symbol("-"):
-            return .constant(.int(try intConstant()))
-        default:
-            throw expected("an operand")
+        case .word("true"), .word("false"): .constant(.bool(boolConstant()))
+        case .integer, .symbol("-"): .constant(.int(try intConstant()))
+        case .word("read"): try placeOperand(Operand.read)
+        case .word("move"): try placeOperand(Operand.move)
+        default: throw expected("an operand")
         }
+    }
+
+    /// Reads `true` or `false`, which the current token holds.
+    private mutating func boolConstant() -> Bool {
+        let value = current.kind == .word("true")
+        advance()
+        return value
     }
 
     /// Reads an Int constant, with `-` before it where it is negative.
@@ -112,6 +127,14 @@ extension IRParser {
         let value = negative ? Int64(exactly: -Int128(magnitude)) : Int64(exactly: magnitude)
         guard let value else { throw IRTextError(at: token, "\(negative ? "-" : "")\(magnitude) isn't an Int") }
         return value
+    }
+
+    /// Reads the word that says how an operand uses a place, then the place and where the source names it, and
+    /// gives them to `make`.
+    private mutating func placeOperand(_ make: (Place, SourceRange) -> Operand) throws(IRTextError) -> Operand {
+        advance()
+        let place = try place()
+        return make(place, try range())
     }
 
     /// Reads `%N`, then `.F` for each field a step leads into.
