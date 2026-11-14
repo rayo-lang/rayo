@@ -75,26 +75,58 @@ struct ArrayTests {
     }
 }
 
+/// A function that prints each element of an array of three Ints, which the programs below use.
+private let show = """
+
+    func show(_ a: [3 of Int]) {
+        var i: UInt = 0
+        while i < a.count {
+            print(a[i])
+            i += 1
+        }
+    }
+    """
+
 struct FilledArrayTests {
     @Test(arguments: [["--debug"], ["--release"]])
     func `.init(all:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
         mode: [String],
     ) {
         // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
-        // or an outer array expects it. A call prints a count, so the run shows each one ran.
+        // or an outer array expects it, and each of its elements is printed. `relayFlags` and `made` each print their
+        // array's count as they run, so the run shows each was called.
         let source = """
             func main() {
                 var ints: [3 of Int] = .init(all: 7)
-                print(three(ints))
+                show(ints)
                 ints = .init(all: -1)
+                show(ints)
                 let flags = relayFlags(.init(all: true))
+                print(flags[0])
+                print(flags[1])
                 let hit = Hit(damage: 3)
                 let board = Board(hits: .init(all: hit), grid: [.init(all: 1), [2, 3]])
-                let grids: [2 of [2 of [3 of Int]]] = .init(all: .init(all: .init(all: 0)))
+                print(board.hits[0].damage)
+                print(board.hits[1].damage)
+                print(board.grid[0][0])
+                print(board.grid[0][1])
+                let grids: [2 of [2 of [3 of Int]]] = .init(all: .init(all: .init(all: 5)))
+                var i: UInt = 0
+                while i < grids.count {
+                    show(grids[i][0])
+                    show(grids[i][1])
+                    i += 1
+                }
                 let none: [0 of Hit] = .init(all: hit)
-                print(count(of: ints, flags, board, grids, none, made(), hit))
+                print(none.count)
+                let filled = made()
+                var j: UInt = 0
+                while j < filled.count {
+                    print(filled[j].damage)
+                    j += 1
+                }
+                print(hit.damage)
             }
-            func three(_ a: [3 of Int]) -> Int { 3 }
             func relayFlags(_ a: [2 of Bool]) -> [2 of Bool] {
                 print(2)
                 return copy a
@@ -103,32 +135,56 @@ struct FilledArrayTests {
                 print(4)
                 return .init(all: Hit(damage: 9))
             }
-            func count(
-                of ints: [3 of Int], _ flags: [2 of Bool], _ board: Board, _ grids: [2 of [2 of [3 of Int]]],
-                _ none: [0 of Hit], _ made: [4 of Hit], _ hit: Hit,
-            ) -> Int { 7 }
             struct Hit(var damage: Int)
             struct Board(let hits: [2 of Hit], var grid: [2 of [2 of Int]])
-            """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "3\n2\n4\n7\n", errors: ""))
+            """ + show
+        let expected = "7\n7\n7\n-1\n-1\n-1\n2\ntrue\ntrue\n3\n3\n1\n1\n" + String(repeating: "5\n", count: 12)
+            + "0\n4\n9\n9\n9\n9\n3\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
     }
 
     @Test(arguments: [["--debug"], ["--release"]])
     func `the value is evaluated once, even for an array of no elements`(mode: [String]) {
+        // Each value prints its number as it is evaluated, before the filled arrays' elements are printed.
         let source = """
             func main() {
                 let a: [3 of Int] = .init(all: next(1))
                 let b: [0 of Int] = .init(all: next(2))
-                let c: [2 of [2 of Int]] = .init(all: .init(all: next(3)))
-                print(sum(a, b, c))
+                let c: [2 of [3 of Int]] = .init(all: .init(all: next(3)))
+                print(b.count)
+                show(a)
+                show(c[0])
+                show(c[1])
             }
             func next(_ n: Int) -> Int {
                 print(n)
                 return copy n
             }
-            func sum(_ a: [3 of Int], _ b: [0 of Int], _ c: [2 of [2 of Int]]) -> Int { 0 }
-            """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "1\n2\n3\n0\n", errors: ""))
+            """ + show
+        let expected = "1\n2\n3\n0\n1\n1\n1\n3\n3\n3\n3\n3\n3\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `changing one element of a filled array leaves the others holding the value`(mode: [String]) {
+        let source = """
+            func main() {
+                var a: [3 of Int] = .init(all: 7)
+                a[1] = 8
+                show(a)
+                var grid: [2 of [3 of Int]] = .init(all: .init(all: 1))
+                grid[1][2] += 5
+                show(grid[0])
+                show(grid[1])
+                var hits: [2 of Hit] = .init(all: Hit(damage: 3))
+                hits[0].damage = 4
+                print(hits[0].damage)
+                print(hits[1].damage)
+            }
+            struct Hit(var damage: Int)
+            """ + show
+        let expected = "7\n8\n7\n1\n1\n1\n1\n1\n6\n4\n3\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
@@ -136,16 +192,15 @@ struct FilledArrayTests {
         let source = """
             func main() {
                 var a: [100000 of Int] = .init(all: 0)
-                print(count(a))
+                print(a[0] + a[99999])
                 a = .init(all: 1)
-                let hits: [1000 of [100 of Hit]] = .init(all: .init(all: Hit(damage: 1, crit: true)))
-                print(count(a, hits))
+                let hits: [1000 of [100 of Hit]] = .init(all: .init(all: Hit(damage: 2, crit: true)))
+                print(a[0] + a[99999])
+                print(hits[0][0].damage + hits[999][99].damage)
             }
-            func count(_ a: [100000 of Int]) -> Int { 0 }
-            func count(_ a: [100000 of Int], _ hits: [1000 of [100 of Hit]]) -> Int { 1 }
             struct Hit(var damage: Int, let crit: Bool)
             """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n1\n", errors: ""))
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n2\n4\n", errors: ""))
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
