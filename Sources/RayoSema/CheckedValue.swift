@@ -87,7 +87,8 @@ struct ImplicitMember {
         arguments?.map(\.value) ?? []
     }
 
-    /// The value that `.init(all: value)`, the one member an array has, fills it with; nil for any other member.
+    /// The value that `.init(all: value)`, the one member an array has, fills it with; nil for any other member. An
+    /// array's members are told apart here alone, so checking a member and picking among overloads agree.
     var fillingValue: CheckedValue? {
         guard name == "init", let arguments, arguments.count == 1, arguments[0].label == "all" else { return nil }
         return arguments[0].value

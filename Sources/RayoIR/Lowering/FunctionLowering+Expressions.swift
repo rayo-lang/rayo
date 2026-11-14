@@ -85,15 +85,15 @@ extension FunctionLowering {
             .call(callee, arguments: passed(arguments, to: callee))
         // An array takes its elements, from first to last, as a primary initializer takes its fields.
         case .arrayLiteral(let elements):
-            .array(elements.map { operand(of: $0, as: .take) }, of: arrayType(of: expr).element)
+            .array(elements.map { operand(of: $0, as: .take) }, of: arrayShape(of: expr).element)
         // A filled array reads its value once, and copies it into each element.
         case .filledArray(let value):
-            .filledArray(operand(of: value, as: .read), count: arrayType(of: expr).count)
+            .filledArray(operand(of: value, as: .read), count: arrayShape(of: expr).count)
         }
     }
 
     /// The count and element type of the array that `expr` makes.
-    private func arrayType(of expr: CheckedExpr) -> (count: Int, element: RayoType) {
+    private func arrayShape(of expr: CheckedExpr) -> (count: Int, element: RayoType) {
         // Checking gives an array literal or a filled array an array type.
         guard case .array(let count, let element) = expr.type else {
             preconditionFailure("an array literal or a filled array makes an array")

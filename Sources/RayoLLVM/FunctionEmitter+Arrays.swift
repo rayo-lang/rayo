@@ -3,14 +3,15 @@ import RayoIR
 
 /// Arrays, which an array operation builds in its destination one element at a time.
 extension FunctionEmitter {
-    /// Emits the loop that copies the value of `value` into each of the `count` elements of the array in
+    /// Emits the loop that copies the value of `filling` into each of the `count` elements of the array in
     /// `destination`. The loop is the same few instructions for an array of any count.
     func fill(
-        _ destination: Place?, withCopiesOf value: Operand, count: Int, in program: borrowing ProgramEmitter,
+        _ destination: Place?, withCopiesOf filling: Operand, count: Int, in program: borrowing ProgramEmitter,
     ) {
-        let source = self.value(of: value, with: program.builder)
+        let source = value(of: filling, with: program.builder)
 
-        // An array that no place takes is dropped, and finding its value changed nothing.
+        // An array that no place takes is dropped: its value was computed into the operand already, so nothing is
+        // left to emit.
         guard let destination else { return }
         let array = address(of: destination, with: program.builder)
 
