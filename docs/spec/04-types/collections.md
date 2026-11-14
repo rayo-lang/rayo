@@ -48,7 +48,7 @@ let w: [4 of Float] = [0.1, 0.2, 0.3]   // error: a [4 of Float] literal needs 4
 - a closure that names `a[2]` captures that element alone ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
 - `borrow a[i]` and `&a[i]` borrow the element where it lies ([01](../01-values-and-ownership/bindings.md#bindings)).
 
-**An element is never moved out, at any index, and an array that holds no value is made whole before any element is assigned** ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). So an inline array that holds a value holds all `N` of its elements.
+An inline array that holds a value holds all `N` of its elements, since no element is moved out and none is assigned before the array holds a value ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).
 
 **An index is a `UInt`, so the indices of `[N of T]` run from `0` to `N - 1`.** An index known when the program is checked, an integer literal or a `const`, that lies outside `0..<N` is a compile error. Any other index is checked when the program runs, so `a[i]` panics with `index out of range` when `i` is `N` or more. That is a bounds check, on in every build, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)):
 
@@ -58,7 +58,8 @@ const edge: UInt = 64
 var grid: [64 of Int] = .init(all: 0)
 grid[63] = 1                 // fine: the last element
 grid[edge] = 1               // error: index 64 is out of range for a [64 of Int]
-grid[i] = 1                  // for a UInt 'i': checked when it runs, and panics when 'i' is 64 or more
+let i: UInt = readIndex()
+grid[i] = 1                  // checked when it runs: panics when 'i' is 64 or more
 ```
 
 ## Collections and strings

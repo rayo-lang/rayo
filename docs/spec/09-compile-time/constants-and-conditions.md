@@ -13,7 +13,7 @@ const jumpId: Name = "jump"                             // interned by the build
 
 func makeSinTable() -> [1024 of Float] {
     var t: [1024 of Float] = .init(all: 0)
-    for i in 0..<1024 { t[i] = sin(Float(i) / 1024 * 2 * .pi) }
+    for i in 0..<t.count { t[i] = sin(Float(i) / 1024 * 2 * .pi) }
     return t
 }
 ```

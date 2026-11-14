@@ -78,7 +78,7 @@ func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec
 func relaxCloth(_ verts: mutable List<ClothVertex>, _ cs: Span<(a: UInt32, b: UInt32, rest: Float)>, iterations: UInt) {
     for _ in 0..<iterations {
         for c in cs {
-            if var (a, b) = &verts[UInt(c.a), UInt(c.b)] {          // checked: c.a != c.b
+            if var (a, b) = &verts[c.a, c.b] {                      // checked: c.a != c.b
                 let delta = b.pos - a.pos
                 let len = delta.length
                 guard len > 1e-6 else { continue }
@@ -105,7 +105,7 @@ let frameArena = Allocator.register(Arena(size: 64.mb))
 func debugDraw(_ sim: Sim, _ draw: mutable DebugDraw) {
     var lines = frameArena.alloc List<(Vec3, Vec3)>(reservingCapacity: sim.clothConstraints.count)
     for c in sim.clothConstraints {                     // 'sim' is borrowed, so the positions are copied
-        lines.append((copy sim.cloth[UInt(c.a)].pos, copy sim.cloth[UInt(c.b)].pos))
+        lines.append((copy sim.cloth[c.a].pos, copy sim.cloth[c.b].pos))
     }
     draw.lines(lines.span, color: .yellow)
 }
