@@ -8,8 +8,9 @@ typealias TypedPlace = (place: CheckedPlace, type: RayoType)
 /// changes: which roots it may start from, and which fields and elements it may step into.
 protocol PlaceRules {
     /// Checks the expression a place starts from, such as the local `e` in `e.stats.hp`. The flag says whether the
-    /// place goes on into a field of it. Returns the start as a place, or nil once it has reported why it can't be one.
-    func root(_ expr: Expr, holdsFields: Bool) -> TypedPlace?
+    /// place goes on into a field or an element of it. Returns the start as a place, or nil once it has reported why it
+    /// can't be one.
+    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace?
 
     /// Whether a place may go into a field, reporting why where it may not.
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool

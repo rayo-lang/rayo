@@ -57,8 +57,8 @@ enum Reachability {
         // `&&` and `||` evaluate their right operand on some runs only, so their left operand decides.
         case .binary(.and, let left, _), .binary(.or, let left, _): canComplete(left)
         // Every other operation evaluates each of its operands.
-        case .binary(_, let left, let right), .element(let left, index: let right):
-            canComplete(left) && canComplete(right)
+        case .binary(_, let left, let right): canComplete(left) && canComplete(right)
+        case .element(let base, let index): canComplete(base) && canComplete(index)
         case .unary(_, let operand): canComplete(operand)
         case .call(let callee, let arguments): canComplete(callee) && arguments.allSatisfy { canComplete($0.value) }
         case .arrayLiteral(let elements): elements.allSatisfy { canComplete($0) }
@@ -101,7 +101,8 @@ enum Reachability {
         switch expr.kind {
         case .if(let ifExpr): breaks(ifExpr)
         case .unary(_, let operand): breaks(operand)
-        case .binary(_, let left, let right), .element(let left, index: let right): breaks(left) || breaks(right)
+        case .binary(_, let left, let right): breaks(left) || breaks(right)
+        case .element(let base, let index): breaks(base) || breaks(index)
         case .call(let callee, let arguments): breaks(callee) || arguments.contains { breaks($0.value) }
         case .arrayLiteral(let elements): elements.contains { breaks($0) }
         case .member(let base, _, _), .copy(let base): breaks(base)

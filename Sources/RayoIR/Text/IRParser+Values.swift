@@ -191,12 +191,22 @@ extension IRParser {
             if consume(".") {
                 steps.append(.field(try integer()))
             } else if consume("[") {
-                steps.append(current.kind == .symbol("%") ? .elementAt(try localReference()) : .element(try integer()))
-                try expect("]")
+                steps.append(try elementStep())
             } else {
                 return Place(root: root, steps: steps)
             }
         }
+    }
+
+    /// After a `[`: the index of an element, `I` or `%L`, and the `]`.
+    private mutating func elementStep() throws(IRTextError) -> PlaceStep {
+        let step: PlaceStep = if current.kind == .symbol("%") {
+            .elementAt(try localReference())
+        } else {
+            .element(try integer())
+        }
+        try expect("]")
+        return step
     }
 
     /// Reads `@line:column-line:column`, a range of the source.
