@@ -21,6 +21,9 @@ struct Declarations {
     private var unlaidOutStructs: Set<StructID> = []
     /// The names of the functions that failed to parse, whose uses report nothing more.
     private var unparsedFunctions: Set<String> = []
+    /// The structs that can be laid out, which lay out every type that holds them; nil until the structs are
+    /// checked, while their fields' types are resolved.
+    private var layouts: TypeTable?
     private static let preludeTypes: [String: RayoType] = [
         "Int": .int, "UInt": .uint, "Bool": .bool, "Void": .void,
     ]
@@ -48,6 +51,12 @@ struct Declarations {
     /// Declares the struct `id` as one that can't be laid out, whose uses report nothing more.
     mutating func declareUnlaidOut(_ id: StructID) {
         unlaidOutStructs.insert(id)
+    }
+
+    /// Declares `types`, the structs that can be laid out, so that each type resolved from here on is checked to
+    /// fit in memory.
+    mutating func declareLayouts(_ types: TypeTable) {
+        layouts = types
     }
 
     /// Declares `name` as the name of a function that failed to parse, whose uses report nothing more.
@@ -149,7 +158,8 @@ struct Declarations {
     }
 
     /// The array of `count` values of the type `element` names, which the source writes at `range`, or nil after
-    /// reporting an element type that names no type or names Void, or a count that doesn't fit in an Int.
+    /// reporting an element type that names no type or names Void, or an array whose size in bytes doesn't fit in
+    /// an Int.
     private func resolveArray(
         of count: UInt64, _ element: TypeExpr, at range: SourceRange, reporting errors: ErrorList,
     ) -> RayoType? {
@@ -160,12 +170,15 @@ struct Declarations {
             errors.report(.voidElement(type: typeName(of: .void)), at: element.range)
             return nil
         }
-        // An array's size in bytes is an Int, so its count must fit in one first.
-        guard let count = Int(exactly: count) else {
-            errors.report(.arrayCountExceedsInt, at: range)
+
+        // An array's size in bytes must fit in an Int, which counts its elements too, even ones that take no memory.
+        // A field's array is resolved before the structs are laid out, so its size is checked with its struct's.
+        let array = Int(exactly: count).map { RayoType.array(count: $0, element: elementType) }
+        guard let array, layouts?.fitsInMemory(array) ?? true else {
+            errors.report(.arrayTooLarge, at: range)
             return nil
         }
-        return .array(count: count, element: elementType)
+        return array
     }
 
     /// Resolves `name` to one of the file's types or one of the prelude's types that no function shadows, or

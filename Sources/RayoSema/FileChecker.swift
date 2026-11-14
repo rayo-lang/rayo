@@ -39,6 +39,7 @@ final class FileChecker {
         // down the file.
         let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
         let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
+        declarations.declareLayouts(types)
         declarePrimaryInitializers(of: typeIDs.structs.compactMap(\.self), in: types)
         let main = declareFunctions()
         for index in functions.indices { _ = body(of: FunctionID(index: index)) }

@@ -275,8 +275,9 @@ struct SignatureLoweringTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func `an array is passed as a struct of its size is, deciding how no slower for more elements`() throws {
-        // An array of a billion arrays of Trios splits into nine billion scalars, which no compiler could list.
+    func `how an array passes is decided in the same time for any count`() throws {
+        // An array of a billion arrays of Trios splits into nine billion scalars, so deciding takes too long, or runs
+        // out of memory, unless it never lists them.
         let huge = RayoType.array(count: 1_000_000_000, element: .array(count: 3, element: trioType))
         try withModes { mode in
             #expect(mode(.borrowed, huge) == .callerPlace([

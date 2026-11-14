@@ -44,14 +44,26 @@ public struct TypeTable: Equatable, Sendable {
         return self[id].fields
     }
 
-    /// How a value of `type`, which isn't Void, lies in memory.
+    /// How a value of `type`, which isn't Void, lies in memory. Checking reports a type whose size doesn't fit in an
+    /// Int, so the type must have a layout.
     public func layout(of type: RayoType) -> Layout {
-        layout(of: type, inside: [])
+        guard let layout = layout(of: type, inside: []) else {
+            preconditionFailure("\(type) is too large to lay out")
+        }
+        return layout
     }
 
-    /// How the fields of `type`, which must be a struct, lie in its memory.
+    /// How the fields of `type`, which must be a struct whose size fits in an Int, lie in its memory.
     public func structLayout(of type: RayoType) -> StructLayout {
-        structLayout(of: type, inside: [])
+        guard let layout = structLayout(of: type, inside: []) else {
+            preconditionFailure("\(type) is too large to lay out")
+        }
+        return layout
+    }
+
+    /// Whether the size of a value of `type`, which isn't Void, fits in an Int, so that the value can lie in memory.
+    func fitsInMemory(_ type: RayoType) -> Bool {
+        layout(of: type, inside: []) != nil
     }
 
     /// The structs laid out so far.
@@ -64,36 +76,36 @@ public struct TypeTable: Equatable, Sendable {
         left.entries == right.entries
     }
 
-    /// The layout of `type`, which lies inside each struct of `enclosing`.
-    private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout {
+    /// The layout of `type`, which lies inside each struct of `enclosing`, or nil where its size doesn't fit in an
+    /// Int.
+    private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout? {
         switch type {
         case .int: .int
         case .uint: .uint
         case .bool: .bool
-        case .structure: structLayout(of: type, inside: enclosing).layout
-        case .array(let count, let element): arrayLayout(of: count, layout(of: element, inside: enclosing))
+        case .structure: structLayout(of: type, inside: enclosing)?.layout
+        case .array(let count, let element): layout(of: element, inside: enclosing)?.array(of: count)
         case .void: preconditionFailure("no value of type Void lies in memory")
         }
     }
 
-    /// The layout of an array of `count` elements, each laid out as `element`. The elements lie end to end, each
-    /// at its index times the element's size, which is a multiple of its alignment, so each element is aligned.
-    private func arrayLayout(of count: Int, _ element: Layout) -> Layout {
-        Layout(size: count * element.size, alignment: element.alignment)
-    }
-
-    /// The layout of the struct `type`, which lies inside each struct of `enclosing`.
-    private func structLayout(of type: RayoType, inside enclosing: [RayoType]) -> StructLayout {
+    /// The layout of the struct `type`, which lies inside each struct of `enclosing`, or nil where its size doesn't
+    /// fit in an Int.
+    private func structLayout(of type: RayoType, inside enclosing: [RayoType]) -> StructLayout? {
         // A struct laid out already keeps its layout.
         if let known = layouts.cache.withLock({ $0[type] }) { return known }
 
         // Lay out the fields first, since a field's layout is its type's. Checking reports a struct that contains
-        // itself, so none reaches a layout.
+        // itself, so none reaches a layout. A field too large to lay out makes the struct too large.
         precondition(!enclosing.contains(type), "a struct that contains itself has no layout")
-        let fields = fields(of: type).map { layout(of: $0.type, inside: enclosing + [type]) }
+        var fields: [Layout] = []
+        for field in self.fields(of: type) {
+            guard let layout = layout(of: field.type, inside: enclosing + [type]) else { return nil }
+            fields.append(layout)
+        }
+        guard let layout = StructLayout(fields: fields) else { return nil }
 
         // Two threads that lay out one struct at once work out the same layout, so either may keep it.
-        let layout = StructLayout(fields: fields)
         layouts.cache.withLock { $0[type] = layout }
         return layout
     }

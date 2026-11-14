@@ -294,14 +294,17 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(262, error: "an empty array literal needs a type")
     case emptyArrayLiteral
 
-    @Code(263, error: "the array literal holds {first} in one element and {second} in another")
-    case elementTypesDiffer(first: TypeName, second: TypeName)
+    @Code(263, error: "the array literal holds {settled} in one element and {other} in another")
+    case elementTypesDiffer(settled: TypeName, other: TypeName)
 
     @Code(264, error: "an array's elements can't have {type.typePhrase}")
     case voidElement(type: TypeName)
 
-    @Code(265, error: "the array's count doesn't fit in an Int")
-    case arrayCountExceedsInt
+    @Code(265, error: "the array's size in bytes doesn't fit in an Int")
+    case arrayTooLarge
+
+    @Code(266, error: "the size of '{name}' in bytes doesn't fit in an Int")
+    case structTooLarge(name: String)
 
     // MARK: Ownership
 

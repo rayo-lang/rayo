@@ -49,10 +49,10 @@ struct ArrayLiteralChecker {
         // A literal of another count would leave elements without a value, or values with no element to hold them.
         let hasCount = literal.elements.count == count
         if !hasCount {
+            let typeName = expressions.typeName(of: type)
             let needs = ElementCount(count)
-            let code = ErrorCode.arrayLiteralCount(type: expressions.typeName(of: type), needs: needs,
-                                                   found: literal.elements.count)
-            errors.report(code, at: literal.range)
+            errors.report(.arrayLiteralCount(type: typeName, needs: needs, found: literal.elements.count),
+                          at: literal.range)
         }
 
         // Every element is settled, so each one's errors are reported, before any failure fails the literal.

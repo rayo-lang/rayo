@@ -64,8 +64,9 @@ struct ArrayTests {
         ("let a = []", "2:13: error[E0262]: an empty array literal needs a type"),
         ("let a = [1, true]", "2:14: error[E0263]: the array literal holds Bool in one element and Int in another"),
         ("var a: [2 of ()]", "2:18: error[E0264]: an array's elements can't have type Void"),
+        ("var a: [2305843009213693952 of Int]", "2:12: error[E0265]: the array's size in bytes doesn't fit in an Int"),
     ])
-    func `an array literal that doesn't fit its type, or has no type, is an error, in debug and release`(
+    func `an array that can't be laid out, or a literal that doesn't fit its type, is an error, in debug and release`(
         mode: [String], failure: (body: String, error: String),
     ) {
         let source = "func main() {\n    \(failure.body)\n}"

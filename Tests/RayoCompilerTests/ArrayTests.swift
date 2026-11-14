@@ -30,9 +30,16 @@ struct ArrayTypeTests {
         ("func f(_ a: [2 of Q]) {}", ErrorCode.notAType(name: "Q"), "Q"),
         ("func f(_ a: [2 of ()]) {}", .voidElement(type: "Void"), "()"),
         ("func f(_ a: [2 of [1 of Void]]) {}", .voidElement(type: "Void"), "Void"),
-        ("func f(_ a: [9223372036854775808 of Int]) {}", .arrayCountExceedsInt, "[9223372036854775808 of Int]"),
+        ("func f(_ a: [9223372036854775808 of Bool]) {}", .arrayTooLarge, "[9223372036854775808 of Bool]"),
+        ("func f(_ a: [1152921504606846976 of Int]) {}", .arrayTooLarge, "[1152921504606846976 of Int]"),
+        (
+            "func f() {\n    var a: [2 of [576460752303423488 of Int]]\n}",
+            .arrayTooLarge, "[2 of [576460752303423488 of Int]]",
+        ),
+        ("func f(_ a: [2 of S]) {}\nstruct S(var a: [576460752303423488 of Int])", .arrayTooLarge, "[2 of S]"),
+        ("struct S(var a: Int, let b: [1152921504606846976 of Int])", .arrayTooLarge, "[1152921504606846976 of Int]"),
     ])
-    func `an array's element type names a type that isn't Void, and its count fits in an Int`(
+    func `an array's element type names a type that isn't Void, and its size in bytes fits in an Int`(
         declaration: String, expected: ErrorCode, covered: String,
     ) {
         let source = "func main() {}\n" + declaration
@@ -41,6 +48,19 @@ struct ArrayTypeTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [expected])
         #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test func `a struct whose fields fit in memory, but not together, is too large, and so is one that holds it`() {
+        // `S` takes two fields of 2^62 bytes each, which no Int can count together. `T` holds `S`, and fails with it.
+        let source = """
+            func main() {}
+            struct S(var a: [576460752303423488 of Int], var b: [576460752303423488 of Int])
+            struct T(var s: S)
+            func f(_ t: T) {}
+            """
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [.structTooLarge(name: "S")])
+        #expect(coveredText(reported, in: source) == ["S"])
     }
 
     @Test(arguments: [
@@ -82,6 +102,7 @@ struct ArrayLiteralTests {
         "let h = Hit(damage: 1)\n_ = [h, Hit(damage: 2)]",
         "let n = 3\n_ = [1, n]",
         "pick([1, 2, 3])",
+        "let a: [2 of UInt] = [1, 2]\n_ = a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = b",
         "_ = [if true { 1 } else { 2 }, 3]",
     ])
     func `an array literal takes its type from its position, or from its elements`(body: String) {
