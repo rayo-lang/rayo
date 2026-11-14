@@ -21,9 +21,9 @@ struct StructChecker {
 
     let errors: ErrorList
 
-    /// Declares the fields of `structs`, whose IDs are `ids`, in `declarations`, and returns the types they make.
-    /// `ids` follows the order of `structs`, nil for each struct whose name wasn't declared. A struct that can't be
-    /// laid out is declared as one, and has no type.
+    /// Checks each struct's fields, declares them, and returns the types the structs make. The IDs follow the order
+    /// of the structs, with nil for a struct whose name couldn't be declared. A struct that can't be laid out is
+    /// declared as such, and makes no type.
     func declare(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: inout Declarations,
     ) -> TypeTable {
@@ -36,8 +36,8 @@ struct StructChecker {
         return types(of: declared, besides: failed)
     }
 
-    /// Checks the fields of each of `structs`, and returns those that `ids`, which follows their order, gives an ID,
-    /// with their fields' types.
+    /// Checks every struct's fields, and returns each struct that has an ID, with what checking its fields found.
+    /// The IDs follow the order of the structs.
     private func checkStructs(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
@@ -53,7 +53,7 @@ struct StructChecker {
         return declared
     }
 
-    /// Checks the fields of `declaration`, and returns what checking each found.
+    /// Checks the fields of one struct, and returns what checking each found.
     private func checkFields(of declaration: StructDecl, in declarations: Declarations) -> [CheckedField] {
         var names: Set<String> = []
         var fields: [CheckedField] = []
@@ -65,7 +65,7 @@ struct StructChecker {
         return fields
     }
 
-    /// Declares the fields of each of `structs`, as a function body sees them.
+    /// Declares each struct's fields, as a function body sees them.
     private func declareFields(of structs: [DeclaredStruct], in declarations: inout Declarations) {
         for structure in structs {
             // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.

@@ -72,7 +72,7 @@ extension FunctionLowering {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
         case .intLiteral, .boolLiteral, .place, .copy, .binary(.and, _, _), .binary(.or, _, _), .if:
-            .use(operand(of: expr, as: use))
+            .operand(operand(of: expr, as: use))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
             .unary(IRUnaryOperator(op), operand(of: value, as: .read))
@@ -156,7 +156,7 @@ extension FunctionLowering {
         let result = Destination(builder.newTemporary(.bool), at: range)
         let resultValue = Operand.read(result.place, at: range)
         let leftValue = operand(of: left, as: .read)
-        builder.emit(.use(leftValue), into: result, range: range)
+        builder.emit(.operand(leftValue), into: result, range: range)
 
         // A `left` that decides goes on to the join, and any other to a block of its own that evaluates `right`.
         let evaluateRight = builder.newBlock()
@@ -168,7 +168,7 @@ extension FunctionLowering {
 
         // There `right`'s value becomes the result, and both paths meet at the join, where lowering goes on.
         let rightValue = operand(of: right, as: .read)
-        builder.emit(.use(rightValue), into: result, range: range)
+        builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
     }

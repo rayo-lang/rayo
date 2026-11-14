@@ -6,9 +6,10 @@ public enum IRBinaryOperator: Hashable, Sendable, CaseIterable, CustomStringConv
     case add(OverflowMode)
     case subtract(OverflowMode)
     case multiply(OverflowMode)
+    /// Division, which panics when the divisor is zero.
     case divide(OverflowMode)
-    /// The remainder of a division, which takes the dividend's sign. No remainder overflows: every remainder by -1
-    /// is 0.
+    /// The remainder of a division, which takes the dividend's sign, and panics when the divisor is zero. No
+    /// remainder overflows: every remainder by -1 is 0.
     case remainder
     case equal, notEqual, less, lessEqual, greater, greaterEqual
 

@@ -1,4 +1,6 @@
-/// What a call needs to know about the function it calls.
+/// A function's name, its parameters' labels and types, and its result type: everything a call is checked against,
+/// apart from the function's body. Each function the file declares has one, and so does each struct's primary
+/// initializer and each of the prelude's built-ins.
 struct Signature: CustomStringConvertible {
     var name: String
     var callee: Callee
@@ -17,21 +19,21 @@ struct Signature: CustomStringConvertible {
         parameters.contains { $0.type == nil } || result.hasFailed
     }
 
-    /// Whether `other` takes arguments with the same labels and types, so no call could tell the two apart. A type
-    /// that isn't known matches none, since it was reported where it is written.
+    /// Whether the other signature takes arguments with the same labels and types, so no call could tell the two
+    /// apart. A type that isn't known matches none, since its error was already reported where it is written.
     func takesArguments(like other: Signature) -> Bool {
         parameters.count == other.parameters.count && zip(parameters, other.parameters).allSatisfy { mine, theirs in
             mine.label == theirs.label && mine.type != nil && mine.type == theirs.type
         }
     }
 
-    /// Whether a call may pass arguments with `labels`, in order.
+    /// Whether a call may pass arguments with these labels, in this order.
     func takesLabels(_ labels: [String?]) -> Bool {
         parameters.count == labels.count && zip(parameters, labels).allSatisfy { $0.label == $1 }
     }
 
-    /// Whether each of `arguments`, in order, that `isConsidered` picks fits its parameter. A parameter whose type
-    /// isn't known takes any argument, so a declaration's error doesn't spread to its calls.
+    /// Whether each argument the filter picks has the type of its parameter, taken in order. A parameter whose type
+    /// isn't known takes any argument, so a mistake in the declaration gives no further error at each call.
     func takes(_ arguments: [CheckedValue], where isConsidered: (CheckedValue) -> Bool) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
             guard isConsidered(argument), let type = parameter.type else { return true }
@@ -41,7 +43,7 @@ struct Signature: CustomStringConvertible {
 }
 
 extension Signature {
-    /// The signature of `builtin`, under the name a call writes to reach it.
+    /// The signature of a built-in function, under the name a call writes to reach it.
     init(of builtin: Builtin) {
         let parameters = builtin.parameters.map { Parameter(label: $0.label, type: $0.type, spelledType: "\($0.type)") }
         self.init(name: builtin.name.spelling, callee: .builtin(builtin), parameters: parameters,

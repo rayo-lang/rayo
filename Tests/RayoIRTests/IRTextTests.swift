@@ -21,7 +21,7 @@ struct IRTextTests {
         let program = try IRParser.program(from: """
             // The program's one function.
             main "main()" func "main()"(
-            ) -> Void { temp %0: Int bb0: %0 @1:1-1:2 = use -9223372036854775808 @1:1-1:2 return }
+            ) -> Void { temp %0: Int bb0: %0 @1:1-1:2 = operand -9223372036854775808 @1:1-1:2 return }
             """)
         #expect(IRPrinter.text(of: program) == """
             main "main()"
@@ -29,7 +29,7 @@ struct IRTextTests {
             func "main()"() -> Void {
               temp %0: Int
             bb0:
-              %0 @1:1-1:2 = use -9223372036854775808 @1:1-1:2
+              %0 @1:1-1:2 = operand -9223372036854775808 @1:1-1:2
               return
             }
 
@@ -44,11 +44,11 @@ struct IRTextTests {
               var %0 x: Int
               temp %1: Int
             bb0:
-              %0 @1:1-1:2 = use 1 @1:1-1:2
+              %0 @1:1-1:2 = operand 1 @1:1-1:2
               begin a0 read static %0 @2:3-2:4
               begin a1 modify dynamic %0 @2:6-2:7
               _ = call builtin "print(_: Int)"(a0, 2) @1:1-1:2
-              %1 @1:1-1:2 = use 3 @1:1-1:2
+              %1 @1:1-1:2 = operand 3 @1:1-1:2
               depend %1 on a1
               end a1
               end a0

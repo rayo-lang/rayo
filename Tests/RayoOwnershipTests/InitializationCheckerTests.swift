@@ -9,8 +9,8 @@ struct InitializationCheckerTests {
     @Test func `a use of a local after a move reports that it was moved, at the use`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
@@ -20,9 +20,9 @@ struct InitializationCheckerTests {
     @Test func `a move uses the local as a read does, so moving it again is reported there`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:2-2:2 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
@@ -33,11 +33,11 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
               declare %2
-              %2 @2:2-2:2 = use move %2 @2:1-2:1 @1:1-1:1
+              %2 @2:2-2:2 = operand move %2 @2:1-2:1 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %2 @2:3-2:3) @1:1-1:1
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:4-2:4 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:5-2:5 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:4-2:4 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:5-2:5 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:6-2:6) @1:1-1:1
               return
             """
@@ -50,9 +50,9 @@ struct InitializationCheckerTests {
     @Test func `an assignment gives a moved local a value again`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
-              %0 @1:1-1:1 = use 2 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
+              %0 @1:1-1:1 = operand 2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
@@ -74,13 +74,13 @@ struct InitializationCheckerTests {
     func `a local moved on some of the paths that join may have been moved, and one moved on all of them was moved`(
         keptOnOnePath: Bool, expected: ErrorCode, moveColumns: [Int],
     ) throws {
-        let otherwise = keptOnOnePath ? "" : "%1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1"
+        let otherwise = keptOnOnePath ? "" : "%1 @1:1-1:1 = operand move %0 @2:2-2:2 @1:1-1:1"
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb3
             bb2:
               \(otherwise)
@@ -98,15 +98,15 @@ struct InitializationCheckerTests {
     func `a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it again`(
         assignsAgain: Bool, expected: [Diagnostic],
     ) throws {
-        let assignment = assignsAgain ? "%0 @1:1-1:1 = use 2 @1:1-1:1" : ""
+        let assignment = assignsAgain ? "%0 @1:1-1:1 = operand 2 @1:1-1:1" : ""
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb1:
               branch true, bb2, bb3
             bb2:
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               \(assignment)
               goto bb1
             bb3:
@@ -118,12 +118,12 @@ struct InitializationCheckerTests {
     @Test func `a branch's condition and a return's result are uses, and a return's result may be a move`() throws {
         let blocks = """
             bb0:
-              %6 @1:1-1:1 = use true @1:1-1:1
-              _ = use move %6 @2:1-2:1 @1:1-1:1
+              %6 @1:1-1:1 = operand true @1:1-1:1
+              _ = operand move %6 @2:1-2:1 @1:1-1:1
               branch read %6 @2:2-2:2, bb1, bb1
             bb1:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:3-2:3 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:3-2:3 @1:1-1:1
               return move %0 @2:4-2:4
             """
         #expect(try errors(in: blocks, result: "Int") == [
@@ -135,7 +135,7 @@ struct InitializationCheckerTests {
     @Test func `a block that no path reaches reports nothing`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               return move %0 @2:1-2:1
             bb1:
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
@@ -147,8 +147,8 @@ struct InitializationCheckerTests {
     @Test func `the uses that the same moves reach are reported once, at the first of them in the source`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               %1 @1:1-1:1 = add checked read %0 @2:3-2:3, read %0 @2:2-2:2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
               return
@@ -159,17 +159,17 @@ struct InitializationCheckerTests {
     @Test func `a use that other moves reach is reported again`() throws {
         let blocks = """
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               branch true, bb1, bb2
             bb1:
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb3
             bb2:
               goto bb3
             bb3:
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
-              %0 @1:1-1:1 = use 2 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:3-2:3 @1:1-1:1
+              %0 @1:1-1:1 = operand 2 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:3-2:3 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:5-2:5) @1:1-1:1
               return
@@ -186,7 +186,7 @@ struct InitializationCheckerTests {
             bb0:
               declare %0
               _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
@@ -197,13 +197,13 @@ struct InitializationCheckerTests {
     func `a local assigned on some of the paths that join isn't initialized on every path, unlike one assigned on all`(
         unassignedOnOnePath: Bool, expected: [Diagnostic],
     ) throws {
-        let otherwise = unassignedOnOnePath ? "" : "%0 @1:1-1:1 = use 2 @1:1-1:1"
+        let otherwise = unassignedOnOnePath ? "" : "%0 @1:1-1:1 = operand 2 @1:1-1:1"
         let blocks = """
             bb0:
               declare %0
               branch true, bb1, bb2
             bb1:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb3
             bb2:
               \(otherwise)
@@ -221,8 +221,8 @@ struct InitializationCheckerTests {
               declare %0
               branch true, bb1, bb2
             bb1:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               goto bb2
             bb2:
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
@@ -242,10 +242,10 @@ struct InitializationCheckerTests {
               branch true, bb2, bb3
             bb2:
               declare %2
-              %2 @2:1-2:1 = use 1 @1:1-1:1
+              %2 @2:1-2:1 = operand 1 @1:1-1:1
               declare %0
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
-              %0 @1:1-1:1 = use 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb3:
               return
@@ -257,12 +257,12 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
               declare %0
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %0 @1:1-1:1 = use 2 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %0 @1:1-1:1 = operand 2 @1:1-1:1
               declare %2
-              %2 @2:1-2:1 = use 1 @1:1-1:1
-              %2 @2:2-2:2 = use 2 @1:1-1:1
-              %2 @2:3-2:3 = use 3 @1:1-1:1
+              %2 @2:1-2:1 = operand 1 @1:1-1:1
+              %2 @2:2-2:2 = operand 2 @1:1-1:1
+              %2 @2:3-2:3 = operand 3 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [
@@ -274,9 +274,9 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
               declare %2
-              %2 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %2 @2:1-2:1 @1:1-1:1
-              %2 @2:2-2:2 = use 2 @1:1-1:1
+              %2 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %2 @2:1-2:1 @1:1-1:1
+              %2 @2:2-2:2 = operand 2 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
@@ -293,7 +293,7 @@ struct InitializationCheckerTests {
             bb1:
               branch true, bb2, bb3
             bb2:
-              %2 @2:1-2:1 = use 1 @1:1-1:1
+              %2 @2:1-2:1 = operand 1 @1:1-1:1
               goto bb1
             bb3:
               return
@@ -302,10 +302,10 @@ struct InitializationCheckerTests {
               declare %2
               branch true, bb1, bb2
             bb1:
-              %2 @1:1-1:1 = use 1 @1:1-1:1
+              %2 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb2
             bb2:
-              %2 @2:1-2:1 = use 2 @1:1-1:1
+              %2 @2:1-2:1 = operand 2 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.letMaybeAssignedTwice(name: "k"), at: at(1))])
@@ -328,7 +328,7 @@ struct InitializationCheckerTests {
 
     @Test(arguments: [
         ("declare %5", ErrorCode.usedUninitialized(name: "s"), []),
-        (storeShot() + "\n  _ = use move %5 @2:1-2:1 @1:1-1:1", .usedAfterMove(name: "s"), [1]),
+        (storeShot() + "\n  _ = operand move %5 @2:1-2:1 @1:1-1:1", .usedAfterMove(name: "s"), [1]),
     ])
     func `a store to a field uses its local, which must hold the rest of its value`(
         before: String, expected: ErrorCode, moveColumns: [Int],
@@ -336,8 +336,8 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
             \(before)
-              %5.1.0 @2:2-2:2 = use 9 @1:1-1:1
-              _ = use read %5 @2:3-2:3 @1:1-1:1
+              %5.1.0 @2:2-2:2 = operand 9 @1:1-1:1
+              _ = operand read %5 @2:3-2:3 @1:1-1:1
               return
             """
         // The read after the store has the same cause as the store, so the store alone is reported.
@@ -348,9 +348,9 @@ struct InitializationCheckerTests {
         let blocks = """
             bb0:
             \(storeShot())
-              %5.0 @2:1-2:1 = use 9 @1:1-1:1
-              _ = use move %5 @2:2-2:2 @1:1-1:1
-              _ = use read %5 @2:3-2:3 @1:1-1:1
+              %5.0 @2:1-2:1 = operand 9 @1:1-1:1
+              _ = operand move %5 @2:2-2:2 @1:1-1:1
+              _ = operand read %5 @2:3-2:3 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2]))])
@@ -360,15 +360,15 @@ struct InitializationCheckerTests {
         // The first function's error comes after the second's in the source.
         let usesLate = function("""
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:1-2:1 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:6-2:6) @1:1-1:1
               return
             """, named: "late()")
         let usesEarly = function("""
             bb0:
-              %0 @1:1-1:1 = use 1 @1:1-1:1
-              %1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %1 @1:1-1:1 = operand move %0 @2:2-2:2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:5-2:5) @1:1-1:1
               return
             """, named: "early()")
@@ -387,10 +387,10 @@ struct FieldMoveTests {
         let blocks = """
             bb0:
             \(storeShot())
-              %4 @1:1-1:1 = use move %5.1 @2:1-2:1 @1:1-1:1
+              %4 @1:1-1:1 = operand move %5.1 @2:1-2:1 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.0 @2:2-2:2) @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
-              _ = use read %4 @2:4-2:4 @1:1-1:1
+              _ = operand read %4 @2:4-2:4 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [
@@ -410,8 +410,8 @@ struct FieldMoveTests {
         let blocks = """
             bb0:
             \(storeShot())
-              _ = use move \(moved) @2:1-2:1 @1:1-1:1
-              _ = use \(use) @1:1-1:1
+              _ = operand move \(moved) @2:1-2:1 @1:1-1:1
+              _ = operand \(use) @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(2), labeling: moves(at: [1]))])
@@ -422,13 +422,13 @@ struct FieldMoveTests {
         moved: String, assigned: String,
     ) throws {
         // A `Hit` replaces a moved `hit`, and an Int its `damage`.
-        let newValue = assigned == "%5.1" ? "call \"Hit(damage: Int)\"(3)" : "use 3"
+        let newValue = assigned == "%5.1" ? "call \"Hit(damage: Int)\"(3)" : "operand 3"
         let blocks = """
             bb0:
             \(storeShot())
-              _ = use move \(moved) @2:1-2:1 @1:1-1:1
+              _ = operand move \(moved) @2:1-2:1 @1:1-1:1
               \(assigned) @2:2-2:2 = \(newValue) @1:1-1:1
-              _ = use move %5 @2:3-2:3 @1:1-1:1
+              _ = operand move %5 @2:3-2:3 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [])
@@ -438,8 +438,8 @@ struct FieldMoveTests {
         let blocks = """
             bb0:
             \(storeShot())
-              _ = use move %5.1 @2:1-2:1 @1:1-1:1
-              %5.1.0 @2:2-2:2 = use 3 @1:1-1:1
+              _ = operand move %5.1 @2:1-2:1 @1:1-1:1
+              %5.1.0 @2:2-2:2 = operand 3 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
             """
@@ -453,7 +453,7 @@ struct FieldMoveTests {
         let blocks = """
             bb0:
             \(storeShot())
-              _ = use move %5.1 @2:1-2:1 @1:1-1:1
+              _ = operand move %5.1 @2:1-2:1 @1:1-1:1
             \(storeShot(at: 2))
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
@@ -474,10 +474,10 @@ struct FieldMoveTests {
             \(storeShot())
               branch true, bb1, bb2
             bb1:
-              _ = use move %5.1 @2:1-2:1 @1:1-1:1
+              _ = operand move %5.1 @2:1-2:1 @1:1-1:1
               goto bb2
             bb2:
-              _ = use \(use) @1:1-1:1
+              _ = operand \(use) @1:1-1:1
               return
             """
         let expectedErrors = expected.map { [Diagnostic($0, at: at(2), labeling: moves(at: [1]))] }
@@ -490,10 +490,10 @@ struct FieldMoveTests {
             \(storeShot())
               branch true, bb1, bb2
             bb1:
-              _ = use move %5.1 @2:1-2:1 @1:1-1:1
+              _ = operand move %5.1 @2:1-2:1 @1:1-1:1
               goto bb3
             bb2:
-              _ = use move %5.1 @2:2-2:2 @1:1-1:1
+              _ = operand move %5.1 @2:2-2:2 @1:1-1:1
               goto bb3
             bb3:
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1

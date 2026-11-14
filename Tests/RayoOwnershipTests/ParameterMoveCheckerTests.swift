@@ -6,7 +6,7 @@ import RayoSema
 
 struct ParameterMoveCheckerTests {
     @Test func `a move out of a borrowed parameter is reported at the move`() throws {
-        let blocks = "bb0:\n  _ = use move %0 @2:1-2:1 @1:1-1:1\n  return"
+        let blocks = "bb0:\n  _ = operand move %0 @2:1-2:1 @1:1-1:1\n  return"
         #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
@@ -17,7 +17,7 @@ struct ParameterMoveCheckerTests {
     func `a move of a field out of a borrowed parameter is reported with the field's name`(
         field: String, name: String,
     ) throws {
-        let blocks = "bb0:\n  _ = use move \(field) @2:1-2:1 @1:1-1:1\n  return"
+        let blocks = "bb0:\n  _ = operand move \(field) @2:1-2:1 @1:1-1:1\n  return"
         #expect(try errors(in: blocks) == [
             Diagnostic(.moveFieldFromParameter(field: name, parameter: "p"), at: at(1)),
         ])
@@ -26,8 +26,8 @@ struct ParameterMoveCheckerTests {
     @Test func `a read of a borrowed parameter, and a move out of a local it was copied into, are allowed`() throws {
         let blocks = """
             bb0:
-              %2 @1:1-1:1 = use read %0 @2:1-2:1 @1:1-1:1
-              _ = use move %2 @2:2-2:2 @1:1-1:1
+              %2 @1:1-1:1 = operand read %0 @2:1-2:1 @1:1-1:1
+              _ = operand move %2 @2:2-2:2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %1.0 @2:3-2:3) @1:1-1:1
               return
             """
@@ -39,7 +39,7 @@ struct ParameterMoveCheckerTests {
             bb0:
               return
             bb1:
-              _ = use move %0 @2:1-2:1 @1:1-1:1
+              _ = operand move %0 @2:1-2:1 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
@@ -48,7 +48,7 @@ struct ParameterMoveCheckerTests {
     @Test func `moves out of parameters are reported in source order, a terminator's among them`() throws {
         let blocks = """
             bb0:
-              _ = use move %0 @2:2-2:2 @1:1-1:1
+              _ = operand move %0 @2:2-2:2 @1:1-1:1
               return move %1 @2:1-2:1
             """
         let reported = try errors(in: blocks, result: "Shot")

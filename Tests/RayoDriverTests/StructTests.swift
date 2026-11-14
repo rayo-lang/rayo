@@ -68,7 +68,7 @@ struct StructTests {
         ),
         (
             "let e = Enemy(armor: 5, hp: 100)",
-            "2:29: error[E0247]: 'hp' must come before 'armor', as the struct declares them",
+            "2:29: error[E0247]: 'hp' must come before 'armor'",
         ),
         ("let e = Enemy(hp: true, armor: 5)", "2:23: error[E0248]: the field 'hp' takes Int, found Bool"),
         ("let e = Enemy(hp: 100, armor: 5)\n    print(e.speed)", "3:13: error[E0244]: Enemy has no field 'speed'"),

@@ -102,7 +102,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // MARK: Checking
 
-    @Code(201, error: "a file without a 'main' function is a library, which can't be built into an executable or run")
+    @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
     case noMain
 
     @Code(202, error: "'{signature}' is declared more than once")
@@ -235,7 +235,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(246, error: "the call gives the field '{field}' more than once")
     case fieldGivenTwice(field: String)
 
-    @Code(247, error: "'{field}' must come before '{after}', as the struct declares them")
+    @Code(247, error: "'{field}' must come before '{after}'")
     case fieldOutOfOrder(field: String, after: String)
 
     @Code(248, error: "the field '{field}' takes {expected}, found {found}")

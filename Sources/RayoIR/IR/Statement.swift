@@ -1,9 +1,10 @@
 import RayoSema
 import RayoSource
 
+/// One step of a basic block, run in order with the block's other statements.
 public enum Statement: Equatable, Sendable {
-    /// Computes `value`, and stores it in `destination` when there is one. `range` is the source of the
-    /// operation, where it reports a panic.
+    /// Computes a value, and stores it in the destination, or drops it where there is none. The range is the source
+    /// of the operation, where a panic in it is reported.
     case compute(destination: Destination?, value: Rvalue, range: SourceRange)
     /// Starts the life of a local where the source declares it. The local holds no value until a statement
     /// stores one, whatever an earlier pass of a loop stored in it.
@@ -17,18 +18,23 @@ public enum Statement: Equatable, Sendable {
     case depend(Place, on: AccessID)
 }
 
-/// An operation that makes a value. Integer arithmetic panics on division or remainder by zero, and on overflow as
-/// its operator's overflow mode says.
+/// The operation a statement makes its value with, from its operands.
 public enum Rvalue: Equatable, Sendable {
-    case use(Operand)
+    /// The operand's value as it is, with no operation applied: a constant, or the value read or moved out of a
+    /// place.
+    case operand(Operand)
+    /// An operator applied to one operand, such as negation.
     case unary(IRUnaryOperator, Operand)
+    /// An operator applied to two operands, such as addition or a comparison.
     case binary(IRBinaryOperator, Operand, Operand)
+    /// A call of a function, whose value is the function's result.
     case call(Callee, arguments: [CallArgument])
 
-    /// The operands, in the order the operation evaluates them. A call's arguments that pass an access are none.
+    /// The operands, in the order the operation evaluates them. A call argument that passes an access, rather than a
+    /// value, isn't an operand.
     public var operands: [Operand] {
         switch self {
-        case .use(let operand), .unary(_, let operand): [operand]
+        case .operand(let operand), .unary(_, let operand): [operand]
         case .binary(_, let left, let right): [left, right]
         case .call(_, let arguments): arguments.compactMap(\.operand)
         }
@@ -40,11 +46,11 @@ public enum Rvalue: Equatable, Sendable {
         return arguments.compactMap(\.access)
     }
 
-    /// The type of the value the operation makes in `body`, a body of a program whose structs `types` holds and
-    /// whose functions `functions` declares. The operation's operands must be of the types it takes.
+    /// The type of the value the operation makes, in the given body of a program with the given structs and
+    /// functions. The operands must have the types the operation takes.
     public func type(in body: IRBody, types: TypeTable, functions: FunctionTable) -> RayoType {
         switch self {
-        case .use(let operand): operand.type(in: body, types: types)
+        case .operand(let operand): operand.type(in: body, types: types)
         case .unary(let op, let operand): op.resultType(on: operand.type(in: body, types: types))
         case .binary(let op, let left, _): op.resultType(on: left.type(in: body, types: types))
         case .call(let callee, _): callee.result(in: functions)

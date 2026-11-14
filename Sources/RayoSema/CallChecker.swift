@@ -69,7 +69,7 @@ struct CallChecker {
         let initializers = expressions.file.declarations.initializers(of: id)
         // A struct without initializers is made by its primary initializer, from its fields' values.
         guard !initializers.isEmpty else {
-            return InitializerChecker(expressions: expressions).make(id, from: arguments, in: range)
+            return InitializerChecker(expressions: expressions).checkCall(making: id, passing: arguments, in: range)
         }
         return call(among: initializers, passing: arguments, in: range)
     }

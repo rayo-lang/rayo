@@ -160,7 +160,7 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a store of an Int in a Bool",
-        text: computing("use read %0 @1:1-1:2", on: ["Int"], into: "Bool"),
+        text: computing("operand read %0 @1:1-1:2", on: ["Int"], into: "Bool"),
         function: "main()",
         message: "the IR stores a value of type Int in a place of type Bool",
     ),
@@ -170,7 +170,7 @@ private let illTypedIR = [
               temp %0: Bool
               temp %1: Pair
             bb0:
-              %1.0 @1:1-1:2 = use read %0 @1:1-1:2 @1:1-1:2
+              %1.0 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return
             """),
         function: "main()",
@@ -182,7 +182,7 @@ private let illTypedIR = [
               temp %0: Int
               temp %1: Int
             bb0:
-              %1.0 @1:1-1:2 = use read %0 @1:1-1:2 @1:1-1:2
+              %1.0 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return
             """),
         function: "main()",
@@ -332,13 +332,13 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a read of a field of an Int",
-        text: computing("use read %0.0 @1:1-1:2", on: ["Int"], into: "Int"),
+        text: computing("operand read %0.0 @1:1-1:2", on: ["Int"], into: "Int"),
         function: "main()",
         message: "the IR names field 0 of a value of type Int",
     ),
     IllTypedIR(
         testDescription: "a read of a field that a struct doesn't have",
-        text: computing("use read %0.1 @1:1-1:2", on: ["Pair"], into: "Int"),
+        text: computing("operand read %0.1 @1:1-1:2", on: ["Pair"], into: "Int"),
         function: "main()",
         message: "the IR names field 1 of a value of type Pair",
     ),

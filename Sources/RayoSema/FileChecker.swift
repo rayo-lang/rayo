@@ -34,7 +34,9 @@ final class FileChecker {
     /// Checks every struct and function of the file, and gives its program, which holds each declaration, and the
     /// body of each function whose body isn't tainted.
     func check() -> CheckedProgram {
-        // Check every struct and function; a file without a `main` is a library, checked the same.
+        // Check every struct and function; a file without a `main` is a library, checked the same. Every type's name
+        // is declared before any struct's fields are checked, since a field's type may name a struct declared further
+        // down the file.
         let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
         let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
         declarePrimaryInitializers(of: typeIDs.structs.compactMap(\.self), in: types)
@@ -45,8 +47,8 @@ final class FileChecker {
         return program(types: types, main: main)
     }
 
-    /// The result type of a call to `signature` at `range`, or nil when it isn't known. A result type that depends
-    /// on itself is reported at `range`.
+    /// The result type of a call to a function, or nil when it isn't known. A result type that depends on itself is
+    /// reported at the call.
     func result(of signature: Signature, calledAt range: SourceRange) -> RayoType? {
         switch signature.result {
         // A declared result type is the call's.
@@ -132,8 +134,8 @@ final class FileChecker {
         return (id, isDeclared)
     }
 
-    /// What a call needs to know about `parameter`. Reports what in it rayoc doesn't support: a convention, a
-    /// default value, and the type Void, which leaves the parameter without a type.
+    /// Makes the signature's parameter from the one the declaration writes. Reports what rayoc doesn't support in
+    /// it: a convention, a default value, and the type Void, which leaves the parameter without a type.
     private func parameter(from parameter: Param) -> Parameter {
         // A convention is reported, since every parameter borrows its argument.
         if let convention = parameter.convention {

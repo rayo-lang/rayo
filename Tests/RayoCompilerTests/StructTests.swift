@@ -227,7 +227,7 @@ struct StructInitializerTests {
         #expect(errors(source + enemy) == [expected])
     }
 
-    @Test func `a call of a struct whose field failed checks only its arguments, so the failure doesn't spread`() {
+    @Test func `a field's error is reported once, and a call that makes its struct reports only its arguments'`() {
         #expect(errors("func main() {\n_ = S(a: true, b: Q)\n}\nstruct S(var a: Q)") == [
             .notDeclared(name: "Q"), .notAType(name: "Q"),
         ])
