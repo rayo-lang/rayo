@@ -107,8 +107,10 @@ struct RuntimeTests {
 /// Stands in for the C runtime's `_setmode`, and changes no stream's mode.
 private let leavingMode: @convention(c) (Int32, Int32) -> Int32 = { _, _ in 0 }
 
-/// Windows' `SetThreadStackGuarantee`, which the host calls.
-private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> WindowsBool = SetThreadStackGuarantee
+/// Calls Windows' `SetThreadStackGuarantee`, and returns its result as the C `BOOL` the host reads.
+private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> Int32 = {
+    SetThreadStackGuarantee($0) ? 1 : 0
+}
 
 /// The stack guarantee a thread of its own has once it has run `start`, or 0 where no thread could start.
 private func stackGuarantee(ofThreadRunning start: @convention(c) () -> Void) -> ULONG {
