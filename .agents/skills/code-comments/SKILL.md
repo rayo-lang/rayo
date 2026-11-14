@@ -13,7 +13,7 @@ A comment reads as plain English at first glance. Write it the way a careful eng
 
 Use the language's and the compiler's own terms (*borrow*, *lower*, *witness*) where they are the precise word, and everyday words everywhere else.
 
-- **Words about the things themselves.** Say what happens to the things the code works on: the struct, the field, the call, the argument. Name a parameter, or any exact thing, in inline code only where that helps the reader find it; the sentence makes sense without decoding it, since a sentence built mostly of code is decoded, not read.
+- **Words about the things themselves.** Say what happens to the things the code works on: the struct, the field, the call, the argument. Name a parameter, or any exact thing, in inline code only where that helps the reader find it. The sentence makes sense without decoding it: one built mostly of code is decoded, not read.
 - **Examples for what's hard.** Give an example only for an important or complex case, in a code block of its own. Something simple is said in words alone.
 
 A function's doc in that spirit:
@@ -38,7 +38,7 @@ A comment tells the reader something they need and the code doesn't already show
 
 ## Error messages
 
-An error message is read by someone whose program just failed. It says what is wrong, directly, in the fewest plain words, the way a person would say it out loud. It gives a reason only where the reader would otherwise not know how to fix the mistake.
+An error message says what is wrong, directly, in the fewest plain words, the way a person would say it out loud. It gives a reason only where the reader would otherwise not know how to fix the mistake.
 
 ## Code is its own source of truth
 
@@ -46,4 +46,4 @@ Comments and names describe the code as it is, in the present tense, and state a
 
 ## Before you open a pull request
 
-Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment reads at first glance in words about the things themselves, says all a reader needs, tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds), is true of the code as it stands, and cites no record of a decision. Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
+Audit every comment, name and error message you added or changed, and every comment in code you touched. Each comment and name reads at first glance, is true of the code as it stands, and cites no record of a decision. Each name is spelled out and says what the thing holds or does, and nothing it doesn't. Each comment is in words about the things themselves, says all a reader needs, and tells the reader something the code doesn't (for a block's opening comment, its step; for a type's doc, what it is and holds). Each error message says what is wrong in the fewest plain words, with a reason only where the reader needs it to fix the mistake. A reviewer audits the same.
