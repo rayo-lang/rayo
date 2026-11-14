@@ -7,8 +7,8 @@ A function that can fail in an expected way returns the failure to its caller as
 ```swift
 enum LoadError: Error {
     case notFound(path: static StringView)
-    case corrupt(offset: Int)
-    case unknownCase(type: static StringView, offset: Int)   // reflective loaders (09)
+    case corrupt(offset: UInt?)                               // nil where the offset isn't known
+    case unknownCase(type: static StringView, offset: UInt)   // reflective loaders (09)
     case badValue(field: static StringView)
     case outOfMemory
 }
@@ -20,7 +20,7 @@ func loadMesh(_ path: StringView) -> Mesh!LoadError {
 }
 
 extension LoadError {                                   // enables 'try' across error types
-    @converts init(_ e: owned IoError) { self = if e == .missing { .notFound(path: "?") } else { .corrupt(offset: -1) } }
+    @converts init(_ e: owned IoError) { self = if e == .missing { .notFound(path: "?") } else { .corrupt(offset: nil) } }
     @converts init(_ e: owned ParseError) { self = .corrupt(offset: e.offset) }
 }
 ```

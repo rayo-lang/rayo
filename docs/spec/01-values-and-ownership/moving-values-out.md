@@ -59,7 +59,14 @@ extension Bag {
 
 **After a field is consumed, the whole value can't be used or passed until the field is assigned again.** If the scope ends first, by any exit or by a panic's unwind, the fields still held are destroyed one by one, last declared first ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)).
 
-**Only a place that holds the rest of its value has a field assigned.** A place that holds no value, or maybe holds one, is given a whole value, made by an initializer, so no value is ever half-built ([04](../04-types/structs.md#initializers)).
+**Only a place that holds the rest of its value has a field or an element assigned.** A place that holds no value, or maybe holds one, is given a whole value, made by an initializer, so no value is ever half-built ([04](../04-types/structs.md#initializers)). So an inline array that holds no value is made whole, by a literal or an initializer, before any element is assigned ([04](../04-types/collections.md#tuples-ranges-and-arrays)):
+
+```swift
+var slots: [4 of Int]
+slots[0] = 1                       // error: 'slots' holds no value yet
+slots = .init(all: 0)
+slots[0] = 1                       // fine: 'slots' holds all four elements
+```
 
 **Nothing else can be consumed.** So none of these can:
 
@@ -67,8 +74,8 @@ extension Bag {
 - a borrowing binding;
 - a borrowed or `mutable` parameter;
 - an owned capture outside a `consuming` closure, since only a `consuming` closure runs at most once ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
-- a collection's element;
-- a place reached through a weak pointer, an accessor or a subscript.
+- an inline array's element, at any index, whether or not the index is known when the program is checked ([04](../04-types/collections.md#inline-array-elements));
+- a place reached through a weak pointer, an accessor or a subscript, such as a `List`'s element.
 
 **The alternatives leave a value in the place:**
 

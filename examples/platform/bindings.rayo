@@ -60,7 +60,7 @@ struct Loads(
     let ticket = UInt32(truncating: raw)                               // drops only zero bits, after the guard
     var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
     if error == 0 && data != nil {
-        result = .done(unsafe alloc List(copying: data, count: Int(len)))   // copied into .heap
+        result = .done(unsafe alloc List(copying: data, count: UInt(len)))   // copied into .heap
     }
     completedLoads.push((ticket, consume result))                      // Synchronized: safe from any thread
 }

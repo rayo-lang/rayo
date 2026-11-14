@@ -223,8 +223,8 @@ scripts.step(&game)                                              // wherever the
 **std's `TaskSet` takes ownership of each task it starts:**
 
 ```swift
-init(capacity: Int)                                        // TaskSet<C>'s; C: the set's resume context type
-init(capacity: Int, notifying loop: Waker)                 // also calls 'loop.wake()' after each wake it records (below)
+init(capacity: UInt)                                       // TaskSet<C>'s; C: the set's resume context type
+init(capacity: UInt, notifying loop: Waker)                // also calls 'loop.wake()' after each wake it records (below)
 mutating func start<A: Awaitable>(_ work: owned A) -> Handle<TaskSlot>!TaskSetFull<A>   // the task, moved in
     where A.Context == C, A.Output == Void, A.Failure == Never, A: ~Scoped { … }
 mutating func step(_ ctx: mutable C) { … }

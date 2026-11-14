@@ -140,7 +140,7 @@ let burn = burnDamage(perSecond: 12.5, seconds: 3)     // 37.5
 When a function that returns a value has a body of one expression, like `burnDamage`, that expression's value is what it returns. A longer body says what it returns with `return`:
 
 ```swift
-func average(total: Float, count: Int) -> Float {
+func average(total: Float, count: UInt) -> Float {
     let n = Float(count)
     return total / n
 }

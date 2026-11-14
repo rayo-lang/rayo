@@ -51,7 +51,7 @@ heal(&boss, overcharge: true, by: 10)       // error: 'by' comes before 'overcha
 
 A label may be a keyword, as `in` is in `index(of: h, in: handles.span)` ([12](../12-grammar/lexical.md#lexical)). Three kinds of call differ from a call to a named function:
 
-- **Subscripts.** A subscript's parameter is unlabeled unless a label is written, so `list[i]` passes `i` to `subscript(i: Int)`, and `a[as: Tooltip.self]` passes a type to a parameter written `as t`.
+- **Subscripts.** A subscript's parameter is unlabeled unless a label is written, so `list[i]` passes `i` to `subscript(i: UInt)`, and `a[as: Tooltip.self]` passes a type to a parameter written `as t`.
 - **Operators.** An operator's parameters take no labels, since `a + b` writes none ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 - **Function values.** A function type's parameters have no labels, so a call to a function value, such as `body(x)`, writes none ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
