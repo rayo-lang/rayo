@@ -1,0 +1,82 @@
+name: Probe stack overflow on Windows
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Probe ${{ matrix.runner }} ${{ matrix.copy }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2022]
+        copy: [1, 2, 3, 4, 5, 6, 7, 8]
+        include:
+          - runner: windows-11-arm
+            copy: 1
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: probe
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: |
+          clang --version
+          clang -O0 facts.c -o facts.exe -ladvapi32
+          clang -O2 harness.c -o harness.exe
+          clang -O0 overflow.c -o overflow-a.exe "-Wl,/STACK:16777216"
+          clang -O0 overflow.c -o overflow-c.exe "-Wl,/STACK:16777216" -DGUARANTEE=0x10000
+      - name: Facts
+        run: |
+          ./facts.exe
+          Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -ErrorAction SilentlyContinue | Format-List
+          Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Recurse -ErrorAction SilentlyContinue | Format-List
+          Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AeDebug' -ErrorAction SilentlyContinue | Format-List
+      - name: Turn on local dumps
+        run: |
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\dumps" | Out-Null
+          foreach ($exe in 'overflow-a.exe', 'overflow-c.exe') {
+            $key = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\$exe"
+            New-Item -Force $key | Out-Null
+            Set-ItemProperty $key DumpFolder "$env:RUNNER_TEMP\dumps"
+            Set-ItemProperty $key DumpType 1 -Type DWord
+            Set-ItemProperty $key DumpCount 50 -Type DWord
+          }
+      - name: Run
+        run: |
+          ./harness.exe overflow-a.exe 300 1 1
+          ./harness.exe overflow-a.exe 600 16 1
+          ./harness.exe overflow-a.exe 100 8 0
+          ./harness.exe overflow-c.exe 600 16 1
+          ./harness.exe overflow-c.exe 100 8 0
+      - name: Read the dumps
+        if: always()
+        run: |
+          $cdb = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Debuggers' -Recurse -Filter cdb.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\(x64|arm64)\\' } | Select-Object -First 1
+          "cdb: $($cdb.FullName)"
+          $dumps = Get-ChildItem "$env:RUNNER_TEMP\dumps" -Filter *.dmp
+          "dumps: $($dumps.Count)"
+          $seen = @{}
+          foreach ($dump in $dumps) {
+            $out = & $cdb.FullName -z $dump.FullName -c ".exr -1; .ecxr; r rsp; kn 12; !teb; q" 2>&1 | Out-String
+            $code = if ($out -match 'ExceptionCode: ([0-9a-f]+)') { $Matches[1] } else { '?' }
+            $seen[$code] = 1 + [int]$seen[$code]
+            if ($seen[$code] -le 2 -or $code -ne 'c00000fd') {
+              "===== $($dump.Name) code=$code"
+              $out
+            }
+          }
+          "codes in dumps: " + (($seen.GetEnumerator() | ForEach-Object { "$($_.Key) x$($_.Value)" }) -join ', ')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dumps-${{ matrix.runner }}-${{ matrix.copy }}
+          path: ${{ runner.temp }}/dumps
+          if-no-files-found: ignore
