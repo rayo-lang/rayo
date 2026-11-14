@@ -80,8 +80,39 @@ struct ElementAssignmentTests {
             "var a = [1, 2]\na[0] = 3\na[0] = 4\ntake(total(a))",
             "4:1: error[E0308]: the value assigned to 'a[0]' is never read",
         ),
+        (
+            "var a = [1, 2]\na[0] = 3\na[1] = 4\ntake(total(a))",
+            "3:5: error[E0308]: the value assigned to 'a' is never read",
+        ),
     ])
     func `an element takes the value it is assigned, which some code reads`(body: String, expected: String) {
         #expect(errorLines(body) == [expected])
+    }
+}
+
+struct HugeElementAssignmentTests {
+    /// The errors in a function that holds `a`, an array of a billion Ints, and runs `body`, each as its position,
+    /// code and message. The body starts on line 4.
+    private func errorLines(_ body: String) -> [String] {
+        let source = """
+            func main() {}
+            func f(_ i: UInt) {
+            var a: [1000000000 of Int] = .init(all: 0)
+            \(body)
+            }
+            func total(_ a: [1000000000 of Int]) -> Int { copy a[0] }
+            func take(_ n: Int) {}
+            """
+        return diagnostics(source).map(\.description)
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [
+        ("a[0] = 1\ntake(total(a))\na[i] = 2\ntake(total(a))\na[0] += 3\ntake(total(a))", [String]()),
+        ("a[0] = 1\na[0] = 2\ntake(total(a))", ["4:1: error[E0308]: the value assigned to 'a[0]' is never read"]),
+    ])
+    func `an element of an array of a billion is assigned in the time one of a small array takes`(
+        body: String, expected: [String],
+    ) {
+        #expect(errorLines(body) == expected)
     }
 }

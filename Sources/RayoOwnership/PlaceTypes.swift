@@ -11,15 +11,6 @@ struct PlaceTypes {
         types.fields(of: type(of: place))
     }
 
-    /// The steps into each part of the value at `place`: each field of a struct, or each element of an array. Lowering
-    /// steps only into parts of a struct or an array, so the place must hold one.
-    func partSteps(at place: Place) -> [PlaceStep] {
-        switch type(of: place) {
-        case .array(let count, _): (0..<count).map(PlaceStep.element)
-        case let holder: types.fields(of: holder).indices.map(PlaceStep.field)
-        }
-    }
-
     /// The name of `place` as the source writes it, such as `e.stats.hp` or `e.slots[0]`, or nil where its local is a
     /// temporary. A place inside an element at an index a local holds is named by the array, since the IR keeps no
     /// source for the index.
@@ -39,7 +30,7 @@ struct PlaceTypes {
     }
 
     /// The type of the value at `place`.
-    private func type(of place: Place) -> RayoType {
+    func type(of place: Place) -> RayoType {
         do {
             return try place.type(in: body, types: types)
         } catch {
