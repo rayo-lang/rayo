@@ -49,11 +49,11 @@ struct Chain(var next: Chain?)    // error: a Chain would hold a Chain inline, i
 - **The struct's size and alignment.** A struct is aligned to its most-aligned field, and its size is the end of its last field rounded up to the struct's alignment. A struct with no fields has size 0 and alignment 1.
 - **Each type's alignment.** A number, `Bool` or raw pointer is aligned to its size, and every other type's alignment follows from its own layout.
 
-**Every Rayo target's C ABI places a struct's fields by these rules too** ([11](../11-compilation-model.md#what-a-target-must-provide)). So a struct whose fields all have C representations crosses to C as the C struct that declares its fields in layout order ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). For a `@c` or `@layout(.declared)` struct, that is the C struct that declares them as it does. A struct with `@layout(.packed)` or `@layout(.packed(N))` crosses as that C struct packed the same way.
+**Every Rayo target's C ABI places a struct's fields by these rules too** ([11](../11-compilation-model.md#what-a-target-must-provide)). So a struct whose fields all have C representations crosses to C as the C struct that declares its fields in layout order ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). For a `@c` or `@layout(.declared)` struct, that is the C struct that declares them as it does. A packed struct crosses as that C struct packed the same way, since every target's C ABI packs a record as `@layout(.packed(N))` does.
 
 ## Layout attributes
 
-**Three attributes change or check a struct's layout.** `@layout` arranges its fields, with a value that says how, `@c` makes it a C struct, and `@align(N)` raises its alignment:
+**Attributes change or check a struct's layout.** `@layout` arranges its fields, with a value that says how, `@c` makes it a C struct, and `@align(N)` raises its alignment:
 
 ```swift
 struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                       // 16 bytes: 'damage', 'crit', 'team', then 6 bytes of padding
@@ -68,7 +68,9 @@ struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                 
 - **`@c` keeps the declared order, and rejects fields with no C representation** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). It changes nothing else, since every target's C ABI already places fields by the rules above.
 - **`@align(N)` raises the alignment to at least `N`**, a power of two, and the size rounds up to it. It combines with any of the others.
 
-**A declaration takes at most one `@layout`, and `@c` takes only a packed one beside it.** `@c @layout(.packed)` is a packed C record, as C's packed records import ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), and it crosses to C as that packed C struct. `@c @layout(.declared)` is a compile error, since `@c` already keeps the declared order:
+**A declaration takes at most one `@layout`, and `@c` takes only a packed one beside it.** `@c @layout(.packed)` is a packed C record. `@c @layout(.declared)` is a compile error, since `@c` already keeps the declared order.
+
+**`@layout` and `@align(N)` apply only to a struct or union declaration**, and are a compile error elsewhere. `@layout(.packed)` and `@layout(.packed(N))` apply to either. `@layout(.declared)` applies only to a struct, since every member of a union starts at offset 0, so a union has no order to keep:
 
 ```swift
 @c @layout(.packed) struct Header(var magic: UInt32, var kind: UInt8)   // 5 bytes: a packed C struct
@@ -76,8 +78,6 @@ struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                 
 @layout(.packed) @layout(.packed(2)) struct Twice(var a: UInt32)        // error: more than one '@layout'
 @layout(.declared) union Word { var f: Float; var u: UInt32 }           // error: a union's members all start at offset 0
 ```
-
-**`@layout` and `@align(N)` apply only to a struct or union declaration**, and are a compile error elsewhere. `@layout(.packed)` and `@layout(.packed(N))` apply to either. `@layout(.declared)` applies only to a struct, since every member of a union starts at offset 0, so a union has no order to keep.
 
 ## Initializers
 

@@ -187,6 +187,9 @@ _Avoid_: smart cast, flow typing
 **Niche**:
 A bit pattern a type never uses, in which an optional of it stores `nil` at no extra size ([04](docs/spec/04-types/enums.md#optionals)).
 
+**Packed**:
+Said of a struct or union with `@layout(.packed)` or `@layout(.packed(N))`, which counts each field's alignment as 1, or at most `N`, so a field may lie at a misaligned address ([04](docs/spec/04-types/structs.md#layout-attributes)).
+
 **Padding-free**:
 Said of a type with no padding bytes, as `T.isPaddingFree` reports ([04](docs/spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
