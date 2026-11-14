@@ -83,9 +83,23 @@ extension FunctionEmitter {
             // A field lies inside the value that holds it.
             case .field(let field):
                 address = fieldAddress(of: field, in: address, with: builder)
+
+            // An element lies inside the array that holds it, at an index the IR writes or one a local holds.
+            case .element(let index):
+                address = elementAddress(of: index, in: address, with: builder)
+            case .elementAt(let local):
+                address = elementAddress(at: index(in: local, with: builder), in: address, with: builder)
             }
         }
         return address
+    }
+
+    /// Emits the load of the index that `local`, a UInt local, holds, and returns it.
+    private func index(in local: LocalID, with builder: borrowing Builder) -> IntValue<I64> {
+        let value = whole(.place(Address(pointer: places[local.index], type: .uint)), with: builder)
+        // The verifier passes no IR that indexes by a local that isn't a UInt, which LLVM holds as an i64.
+        guard let index = IntValue<I64>(value) else { preconditionFailure("a UInt is held as an i64") }
+        return index
     }
 
     /// Emits the instructions that take each of `steps`, a scalar's, in turn from the value at `address`, and returns

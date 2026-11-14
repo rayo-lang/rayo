@@ -110,8 +110,13 @@ struct InitializationState: DataflowState {
         }
     }
 
-    /// Hands `use` the place an operand names at `range`, where it may hold no value.
+    /// Hands `use` the place an operand names at `range`, where it may hold no value, after each local that holds an
+    /// index the place finds its elements by, where that may hold none.
     private func visitUse(of place: Place, at range: SourceRange, use: UseVisitor) {
+        for local in place.indexLocals {
+            visitUse(of: Place(root: local), at: range, use: use)
+        }
+
         // A place that holds its whole value on every path leaves nothing to hand on.
         guard let missing = locals[place.root.index].missingValue(forUseOf: place) else { return }
         use(place, range, missing)

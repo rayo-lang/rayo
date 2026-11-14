@@ -21,8 +21,10 @@ public indirect enum ExprKind: Sendable {
     case implicitMember(name: String)
     case unary(UnaryOperator, Expr)
     case binary(BinaryOperator, Expr, Expr)
-    /// `copy place`: the value of a local, or of a field of one at any depth, which the place keeps. `place` is a
-    /// name, or a member of a place.
+    /// `value[index]`: the element at `index` of the array `value`.
+    case element(Expr, index: Expr)
+    /// `copy place`: the value of a local, or of a part of one at any depth, which the place keeps. `place` is a
+    /// name, a member of a place, or an element of one.
     case copy(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)

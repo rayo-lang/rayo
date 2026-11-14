@@ -130,6 +130,8 @@ public enum IRPrinter {
             "array of \(element)(\(list(elements)))"
         case .filledArray(let value, let count):
             "fill \(count) of \(text(of: value))"
+        case .index(let operand, let count):
+            "index \(text(of: operand)) below \(count)"
         }
     }
 
@@ -169,11 +171,14 @@ public enum IRPrinter {
         }
     }
 
-    /// A place as its local's number and the field each step leads into, such as `%2.1.0`.
+    /// A place as its local's number, then the field or the element each step leads into, such as `%2.1[0][%3]`, where
+    /// `[%3]` is the element at the index the local `%3` holds.
     private static func text(of place: Place) -> String {
         let steps = place.steps.map { step in
             switch step {
             case .field(let index): ".\(index)"
+            case .element(let index): "[\(index)]"
+            case .elementAt(let local): "[%\(local.index)]"
             }
         }
         return "%\(place.root.index)\(steps.joined())"

@@ -160,11 +160,13 @@ public struct CheckedPrinter: ~Copyable {
     }
 
     /// Writes a place as its root, then each step and where the source names the place it leads to, such as
-    /// `place %0 @3:1-3:2 .1 @3:1-3:7`. A value that no local holds is written under the line.
+    /// `place %0 @3:1-3:2 .1 @3:1-3:7 [of 4] @3:1-3:10`. A value that no local holds is written under the line, and
+    /// each element's index under it in turn.
     private mutating func write(_ place: CheckedPlace, depth: Int) {
         let steps = place.steps.map { step in
             switch step {
             case .field(let index, let range): " .\(index) \(text(of: range))"
+            case .element(_, let count, let range): " [of \(count)] \(text(of: range))"
             }
         }.joined()
         switch place.root {
@@ -173,6 +175,11 @@ public struct CheckedPrinter: ~Copyable {
         case .temporary(let value):
             line("place temporary\(steps)", depth)
             write(value, depth: depth + 1)
+        }
+
+        // Each index, in the order of its step.
+        for case .element(let index, _, _) in place.steps {
+            write(index, depth: depth + 1)
         }
     }
 

@@ -4,7 +4,7 @@ import RayoIR
 import RayoOwnership
 import RayoSema
 
-struct ParameterMoveCheckerTests {
+struct MoveCheckerTests {
     @Test func `a move out of a borrowed parameter is reported at the move`() throws {
         let blocks = "bb0:\n  _ = operand move %0 @2:1-2:1 @1:1-1:1\n  return"
         #expect(try errors(in: blocks) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
@@ -54,19 +54,37 @@ struct ParameterMoveCheckerTests {
         let reported = try errors(in: blocks, result: "Shot")
         #expect(reported.map(\.range.start.column) == [1, 2])
     }
+
+    @Test(arguments: ["%3[1]", "%3[%4]", "%3[0].0"])
+    func `a move out of an array's element, or out of a part of one, is reported at the move`(place: String) throws {
+        let blocks = "bb0:\n  _ = operand move \(place) @2:1-2:1 @1:1-1:1\n  return"
+        #expect(try errors(in: blocks) == [Diagnostic(.moveFromElement, at: at(1))])
+    }
+
+    @Test func `a read of an element, and a move of the whole array, are allowed`() throws {
+        let blocks = """
+            bb0:
+              _ = call builtin "print(_: Int)"(read %3[0].0 @2:1-2:1) @1:1-1:1
+              _ = operand move %3 @2:2-2:2 @1:1-1:1
+              return
+            """
+        #expect(try errors(in: blocks) == [])
+    }
 }
 
 /// The errors the checker reports in a program of one function, which returns `result` and is made of `blocks`, and
-/// whose locals are `n` (`%0`), a borrowed Int parameter, `p` (`%1`), a borrowed `Shot` parameter, and `v` (`%2`), a
-/// `var` that holds an Int.
+/// whose locals are `n` (`%0`), a borrowed Int parameter, `p` (`%1`), a borrowed `Shot` parameter, `v` (`%2`), a
+/// `var` that holds an Int, `a` (`%3`), a `var` that holds two `Hit`s, and a UInt temporary (`%4`).
 private func errors(in blocks: String, result: String = "Void") throws -> [Diagnostic] {
     let function = """
         func "f(_: Int, _: Shot)"(Int, Shot) -> \(result) {
           param %0 n: Int
           param %1 p: Shot
           var %2 v: Int
+          var %3 a: [2 of Hit]
+          temp %4: UInt
         \(blocks)
         }
         """
-    return ParameterMoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))[FunctionID(index: 0)] ?? []
+    return MoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))[FunctionID(index: 0)] ?? []
 }

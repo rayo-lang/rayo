@@ -104,4 +104,17 @@ struct CheckedProgramTests {
             }
             """, toMatch: "structs")
     }
+
+    @Test func `an element is a place that names its array's count, and holds its index, a literal as a UInt`() throws {
+        try expectChecking(of: """
+            struct Hit(var damage: Int)
+            func main() {
+                let hits = [[Hit(damage: 1)], [Hit(damage: 2)]]
+                let i: UInt = 1
+                print(hits[i][0].damage)
+                let h = copy hits[0][i - 1]
+                print(h.damage)
+            }
+            """, toMatch: "elements")
+    }
 }

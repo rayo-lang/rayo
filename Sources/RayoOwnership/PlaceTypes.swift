@@ -8,28 +8,34 @@ struct PlaceTypes {
 
     /// The fields of the struct at `place`. Lowering steps into a field only of a struct, so the place must hold one.
     func fields(ofStructAt place: Place) -> [Field] {
-        // Step from the local's type into each part's in turn.
-        var type = body.locals[place.root.index].type
-        for step in place.steps {
-            switch step {
-            // A field has the type its struct declares it with.
-            case .field(let index): type = types.fields(of: type)[index].type
-            }
-        }
-        return types.fields(of: type)
+        types.fields(of: type(of: place))
     }
 
-    /// The name of `place` as the source writes it, such as `e.stats.hp`, or nil where its local is a temporary.
+    /// The name of `place` as the source writes it, such as `e.stats.hp` or `e.slots[0]`, or nil where its local is a
+    /// temporary. A place inside an element at an index a local holds is named by the array, since the IR keeps no
+    /// source for the index.
     func sourceName(of place: Place) -> String? {
         // A temporary has no name in the source.
-        guard case .source(let name, _, _) = body.locals[place.root.index] else { return nil }
+        guard case .source(var name, _, _) = body.locals[place.root.index] else { return nil }
 
-        // Each field takes its name from the struct that holds it.
-        let stepNames = place.steps.indices.map { depth in
+        // Each field takes its name from the struct that holds it, and each element its index, where the IR writes it.
+        for depth in place.steps.indices {
             switch place.steps[depth] {
-            case .field(let index): fields(ofStructAt: place.prefix(depth))[index].name
+            case .field(let index): name += "." + fields(ofStructAt: place.prefix(depth))[index].name
+            case .element(let index): name += "[\(index)]"
+            case .elementAt: return name
             }
         }
-        return ([name] + stepNames).joined(separator: ".")
+        return name
+    }
+
+    /// The type of the value at `place`.
+    private func type(of place: Place) -> RayoType {
+        do {
+            return try place.type(in: body, types: types)
+        } catch {
+            // Lowering steps only into parts its values have.
+            preconditionFailure("the IR names \(error.step) of a value of type \(error.holder)")
+        }
     }
 }

@@ -1,7 +1,7 @@
 import RayoSource
 
 /// A place the source names: a local, or a value that no local holds, and the steps the source takes into it, such as
-/// `e.stats.hp`.
+/// `e.stats.hp` or `e.party[i].hp`.
 public struct CheckedPlace: Sendable {
     public var root: CheckedPlaceRoot
     /// The steps from the root to the place, outermost first; none where the place is the root itself.
@@ -10,7 +10,7 @@ public struct CheckedPlace: Sendable {
     /// Where the source names the whole place.
     public var range: SourceRange {
         switch steps.last {
-        case .field(_, let range)?: range
+        case .field(_, let range)?, .element(_, _, let range)?: range
         case nil: root.range
         }
     }

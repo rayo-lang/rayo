@@ -239,6 +239,24 @@ struct ParserErrorTests {
         #expect(errors(source) == [expected])
     }
 
+    @Test(arguments: [
+        "func f() { print(a[0]) }", "func f() { print(g()[i + 1][0].hp) }", "func f() { print((a)[0]) }",
+        "func f() { print(copy a[i].hp + copy grid[1][2]) }", "func f() {\n    let x = b[\n        0\n    ]\n}",
+        "func f() {\n    let x = b\n    [1, 2]\n}",
+    ])
+    func `an element is '[', an index and ']' after a value, or after the place 'copy' names`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { print(a[0) }", ErrorCode.unclosedIndex(found: .token(")"))),
+        ("func f() { print(a[]) }", .missingExpression(found: .token("]"))),
+        ("func f() { print(copy a[0) }", .unclosedIndex(found: .token(")"))),
+    ])
+    func `a malformed element is reported at what it found`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
     @Test func `an array literal that fails is skipped whole, and the parser goes on at the next statement`() {
         // The `[` keeps the newline inside the literal from ending the statement, so the `copy` after it is the next.
         #expect(errors("func f() {\n    let a = [1, ,\n    2]\n    copy\n}") == [

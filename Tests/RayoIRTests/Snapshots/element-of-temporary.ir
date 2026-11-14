@@ -1,0 +1,38 @@
+main "main()"
+
+func "main()"() -> Void {
+  temp %0: [2 of [2 of Int]]
+  temp %1: UInt
+  temp %2: UInt
+  temp %3: UInt
+  temp %4: UInt
+bb0:
+  %0 @2:11-2:17 = call "made()"() @2:11-2:17
+  %2 @2:18-2:25 = call "index()"() @2:18-2:25
+  %1 @2:18-2:25 = index read %2 @2:18-2:25 below 2 @2:18-2:25
+  %4 @2:27-2:34 = call "index()"() @2:27-2:34
+  %3 @2:27-2:34 = index read %4 @2:27-2:34 below 2 @2:27-2:34
+  begin a0 read static %0[%1][%3] @2:11-2:35
+  _ = call builtin "print(_: Int)"(a0) @2:5-2:36
+  return
+}
+
+func "made()"() -> [2 of [2 of Int]] {
+  temp %0: [2 of [2 of Int]]
+  temp %1: [2 of Int]
+  temp %2: [2 of Int]
+bb0:
+  %1 @4:37-4:43 = array of Int(1, 2) @4:37-4:43
+  %2 @4:45-4:51 = array of Int(3, 4) @4:45-4:51
+  %0 @4:36-4:52 = array of [2 of Int](read %1 @4:37-4:43, read %2 @4:45-4:51) @4:36-4:52
+  return read %0 @4:36-4:52
+bb1:
+  unreachable
+}
+
+func "index()"() -> UInt {
+bb0:
+  return uint 1
+bb1:
+  unreachable
+}

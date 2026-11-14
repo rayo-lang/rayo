@@ -124,4 +124,10 @@ extension AssignmentChecker: PlaceRules {
         }
         return true
     }
+
+    func admitsElement(at range: SourceRange) -> Bool {
+        // Only a local, or a field of one, can be assigned, which leaves out an element and every place inside one.
+        errors.report(.assignToNonLocal, at: range)
+        return false
+    }
 }

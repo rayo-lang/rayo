@@ -286,9 +286,9 @@ public enum Compiler {
         pipeline {
             Lower()
             VerifyIR()
-            // Only a function that moves out of no borrowed parameter is checked for where its locals hold a value,
-            // so a use of a parameter after such a move isn't reported again as a use after a move.
-            CheckParameterMoves()
+            // Only a function that moves out of no borrowed parameter or element is checked for where its locals hold a
+            // value, so a use of a place after such a move isn't reported again as a use after a move.
+            CheckMoves()
             // Only a function whose locals hold a value at each use is checked for values no code reads, so a
             // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
             CheckOwnership()

@@ -50,6 +50,7 @@ extension IRParser {
         case "call": .call(try callee(), arguments: try arguments())
         case "array": try array()
         case "fill": try filledArray()
+        case "index": try index()
         default: try operation(named: keyword, at: token)
         }
     }
@@ -67,6 +68,13 @@ extension IRParser {
         let count = try integer()
         try expect(word: "of")
         return .filledArray(try operand(), count: count)
+    }
+
+    /// After `index`: the index's operand, `below`, and the count of the array it indexes.
+    private mutating func index() throws(IRTextError) -> Rvalue {
+        let value = try operand()
+        try expect(word: "below")
+        return .index(value, below: try integer())
     }
 
     /// Reads the operands of the unary or binary operator whose name starts with `keyword`, which `token` holds, and
@@ -174,14 +182,21 @@ extension IRParser {
         return make(place, try range())
     }
 
-    /// Reads `%N`, then `.F` for each field a step leads into.
+    /// Reads `%N`, then `.F` for each field a step leads into, `[I]` for each element at an index the text writes, and
+    /// `[%L]` for each element at the index a local holds.
     mutating func place() throws(IRTextError) -> Place {
         let root = try localReference()
         var steps: [PlaceStep] = []
-        while consume(".") {
-            steps.append(.field(try integer()))
+        while true {
+            if consume(".") {
+                steps.append(.field(try integer()))
+            } else if consume("[") {
+                steps.append(current.kind == .symbol("%") ? .elementAt(try localReference()) : .element(try integer()))
+                try expect("]")
+            } else {
+                return Place(root: root, steps: steps)
+            }
         }
-        return Place(root: root, steps: steps)
     }
 
     /// Reads `@line:column-line:column`, a range of the source.

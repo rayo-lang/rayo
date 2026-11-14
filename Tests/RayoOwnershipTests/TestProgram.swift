@@ -36,8 +36,9 @@ func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
 }
 
 /// The function `name`, made of `blocks`, whose locals are the `var`s `x` (`%0`) and `y` (`%1`), the `let` `k` (`%2`)
-/// and a temporary (`%3`), all Ints, then the `var`s `h` (`%4`), a `Hit`, `s` (`%5`), a `Shot`, and `b` (`%6`), a
-/// Bool. It returns `result`, and its parameters are of `parameters`' types, which its first locals hold.
+/// and a temporary (`%3`), all Ints, then the `var`s `h` (`%4`), a `Hit`, `s` (`%5`), a `Shot`, `b` (`%6`), a Bool,
+/// and `a` (`%7`), two `Hit`s, and a UInt temporary (`%8`). It returns `result`, and its parameters are of
+/// `parameters`' types, which its first locals hold.
 func function(
     _ blocks: String, named name: String = "f()", parameters: String = "", result: String = "Void",
 ) -> (name: String, text: String) {
@@ -50,6 +51,8 @@ func function(
           var %4 h: Hit
           var %5 s: Shot
           var %6 b: Bool
+          var %7 a: [2 of Hit]
+          temp %8: UInt
         \(blocks)
         }
         """

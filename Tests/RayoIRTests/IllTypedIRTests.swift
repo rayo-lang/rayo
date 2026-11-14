@@ -363,4 +363,28 @@ private let illTypedIR = [
         function: "main()",
         message: "the IR names field 1 of a value of type Pair",
     ),
+    IllTypedIR(
+        testDescription: "a read of an element of an Int",
+        text: computing("operand read %0[0] @1:1-1:2", on: ["Int"], into: "Int"),
+        function: "main()",
+        message: "the IR names element 0 of a value of type Int",
+    ),
+    IllTypedIR(
+        testDescription: "a read of an element past an array's end",
+        text: computing("operand read %0[2] @1:1-1:2", on: ["[2 of Int]"], into: "Int"),
+        function: "main()",
+        message: "the IR names element 2 of a value of type [2 of Int]",
+    ),
+    IllTypedIR(
+        testDescription: "a read of an element at an index that an Int local holds",
+        text: computing("operand read %0[%1] @1:1-1:2", on: ["[2 of Int]", "Int"], into: "Int"),
+        function: "main()",
+        message: "the IR names element at %1 of a value of type [2 of Int]",
+    ),
+    IllTypedIR(
+        testDescription: "an index that an Int gives",
+        text: computing("index 1 below 2", on: [], into: "UInt"),
+        function: "main()",
+        message: "the IR indexes with a value of type Int",
+    ),
 ]

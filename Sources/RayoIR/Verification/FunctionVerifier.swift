@@ -116,7 +116,15 @@ struct FunctionVerifier {
         case .call(let callee, let arguments): try resultType(of: callee, passing: arguments)
         case .array(let elements, let element): try arrayType(of: elements, eachOf: element)
         case .filledArray(let value, let count): .array(count: count, element: try type(of: value))
+        case .index(let operand, _): try indexType(of: operand)
         }
+    }
+
+    /// The type of an index, which `operand` must give as a UInt.
+    private func indexType(of operand: Operand) throws(IRViolation) -> RayoType {
+        let operandType = try type(of: operand)
+        guard operandType == .uint else { throw violation("the IR indexes with a value of type \(operandType)") }
+        return .uint
     }
 
     /// The type of an array of `elements`, each of which must be of `element`.

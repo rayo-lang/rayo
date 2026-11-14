@@ -1,0 +1,37 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 grid: [2 of [2 of Int]]
+  let %1 i: UInt
+  let %2 row: [2 of Int]
+  temp %3: [2 of Int]
+  temp %4: [2 of Int]
+  temp %5: UInt
+  temp %6: UInt
+  temp %7: UInt
+  temp %8: UInt
+  temp %9: UInt
+bb0:
+  declare %0
+  %3 @2:13-2:19 = array of Int(1, 2) @2:13-2:19
+  %4 @2:21-2:27 = array of Int(3, 4) @2:21-2:27
+  %0 @2:5-2:9 = array of [2 of Int](read %3 @2:13-2:19, read %4 @2:21-2:27) @2:12-2:28
+  declare %1
+  %1 @3:5-3:6 = operand uint 1 @3:15-3:16
+  begin a0 read static %0[1][0] @4:7-4:17
+  _ = call builtin "print(_: Int)"(a0) @4:1-4:18
+  %5 @5:12-5:13 = index read %1 @5:12-5:13 below 2 @5:12-5:13
+  %7 @5:15-5:20 = subtract checked read %1 @5:15-5:16, uint 1 @5:15-5:20
+  %6 @5:15-5:20 = index read %7 @5:15-5:20 below 2 @5:15-5:20
+  begin a1 read static %0[%5][%6] @5:7-5:21
+  _ = call builtin "print(_: Int)"(a1) @5:1-5:22
+  %8 @6:15-6:16 = index uint 2 below 2 @6:15-6:16
+  begin a2 read static %0[0][%8] @6:7-6:17
+  _ = call builtin "print(_: Int)"(a2) @6:1-6:18
+  declare %2
+  %9 @7:21-7:22 = index read %1 @7:21-7:22 below 2 @7:21-7:22
+  %2 @7:5-7:8 = operand read %0[%9] @7:11-7:23 @7:11-7:23
+  begin a3 read static %2[0] @8:7-8:13
+  _ = call builtin "print(_: Int)"(a3) @8:1-8:14
+  return
+}
