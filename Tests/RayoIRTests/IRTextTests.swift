@@ -1,4 +1,6 @@
 import RayoIR
+import RayoSema
+import RayoSource
 import Testing
 
 /// Text that isn't Rayo IR, and the error the parser reports for it.
@@ -33,6 +35,49 @@ struct IRTextTests {
 
             """)
     }
+
+    @Test func `an access begun, passed to a call, depended on and ended reads back the same`() throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+              var %0 x: Int
+              temp %1: Int
+            bb0:
+              %0 @1:1-1:2 = use 1 @1:1-1:2
+              begin a0 read static %0 @2:3-2:4
+              begin a1 modify dynamic %0 @2:6-2:7
+              _ = call builtin "print(_: Int)"(a0, 2) @1:1-1:2
+              %1 @1:1-1:2 = use 3 @1:1-1:2
+              depend %1 on a1
+              end a1
+              end a0
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+
+        // The statements hold the accesses as they are written.
+        let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
+        let access = Access(.read, .static, to: Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4))
+        #expect(statements[1] == .begin(AccessID(index: 0), access))
+        let arguments: [CallArgument] = [.access(AccessID(index: 0)), .operand(.constant(.int(2)))]
+        #expect(statements[3] == .compute(
+            destination: nil, value: .call(.builtin(.printInt), arguments: arguments), range: range(1, 1, 1, 2),
+        ))
+        #expect(statements[5] == .depend(Place(root: LocalID(index: 1)), on: AccessID(index: 1)))
+        #expect(statements[6] == .end(AccessID(index: 1)))
+    }
+}
+
+/// The range the text writes `@startLine:startColumn-endLine:endColumn`, which names no offsets.
+private func range(_ startLine: Int, _ startColumn: Int, _ endLine: Int, _ endColumn: Int) -> SourceRange {
+    SourceRange(
+        SourceLocation(line: startLine, column: startColumn, offset: 0),
+        SourceLocation(line: endLine, column: endColumn, offset: 0),
+    )
 }
 
 private let malformedIR = [
@@ -85,6 +130,17 @@ private let malformedIR = [
         testDescription: "a use of a local the function doesn't declare",
         text: "func \"f()\"() -> Void {\n  temp %0: Int\nbb0:\n  return read %1 @1:1-1:2\n}",
         error: IRTextError(line: 4, column: 16, message: "no local is numbered %1"),
+    ),
+    MalformedIR(
+        testDescription: "an access that no statement begins",
+        text: "func \"f()\"() -> Void {\nbb0:\n  end a2\n  return\n}",
+        error: IRTextError(line: 3, column: 7, message: "no statement begins a2"),
+    ),
+    MalformedIR(
+        testDescription: "an access begun twice",
+        text: "func \"f()\"() -> Void {\n  temp %0: Int\nbb0:\n  begin a0 read static %0 @1:1-1:2\n"
+            + "  begin a0 read static %0 @1:1-1:2\n  return\n}",
+        error: IRTextError(line: 5, column: 9, message: "a0 is begun twice"),
     ),
     MalformedIR(
         testDescription: "a block labelled out of order",

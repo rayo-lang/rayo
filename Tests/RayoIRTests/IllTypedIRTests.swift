@@ -200,6 +200,41 @@ private let illTypedIR = [
         message: "the IR passes 'print(_: Int)' an argument of type Bool, where it takes Int",
     ),
     IllTypedIR(
+        testDescription: "a call given an access to a place of a type its function doesn't take",
+        text: main("""
+              temp %0: Bool
+            bb0:
+              begin a0 read static %0 @1:1-1:2
+              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
+              return
+            """),
+        function: "main()",
+        message: "the IR passes 'print(_: Int)' an argument of type Bool, where it takes Int",
+    ),
+    IllTypedIR(
+        testDescription: "a dynamic access, which only an object's value takes",
+        text: main("""
+              temp %0: Int
+            bb0:
+              begin a0 read dynamic %0 @1:1-1:2
+              end a0
+              return
+            """),
+        function: "main()",
+        message: "the IR takes a dynamic access to a place that is no object's value",
+    ),
+    IllTypedIR(
+        testDescription: "an access to a field that its place's value doesn't have",
+        text: main("""
+              temp %0: Int
+            bb0:
+              begin a0 read static %0.0 @1:1-1:2
+              return
+            """),
+        function: "main()",
+        message: "the IR names field 0 of a value of type Int",
+    ),
+    IllTypedIR(
         testDescription: "a call of the Bool print given an Int",
         text: main("bb0:\n  _ = call builtin \"print(_: Bool)\"(1) @1:1-1:2\n  return"),
         function: "main()",

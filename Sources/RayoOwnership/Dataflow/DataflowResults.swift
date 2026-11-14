@@ -26,6 +26,11 @@ struct DataflowResults<Analysis: DataflowAnalysis> {
         self.boundaryStates = boundaryStates
     }
 
+    /// The way the analysis carries its state, which is the cheap way to ask about a block's points in turn.
+    var direction: DataflowDirection {
+        analysis.direction
+    }
+
     /// The state just before the statement at `index` in `block`, or before its terminator where `index` is the
     /// number of statements; nil where no state reaches the block.
     mutating func state(before index: Int, in block: BlockID) -> Analysis.State? {

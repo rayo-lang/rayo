@@ -3,7 +3,7 @@ import RayoSema
 /// Reads Rayo IR from the text `IRPrinter` writes, as a recursive-descent parser over its tokens.
 ///
 /// The parser checks that every name and number the text uses is declared: each struct, function, built-in, local and
-/// block. It doesn't check that the IR keeps its types, which `IRVerifier` does.
+/// block, and each access. It doesn't check that the IR keeps its types, which `IRVerifier` does.
 public struct IRParser: ~Copyable {
     let tokens: [IRToken]
     var position = 0
@@ -15,6 +15,11 @@ public struct IRParser: ~Copyable {
     var localCount = 0
     /// Each block the function being read names, and the token that names it, to check once its blocks are read.
     var blockReferences: [(block: BlockID, token: IRToken)] = []
+    /// The accesses the function being read begins so far.
+    var begunAccesses: Set<AccessID> = []
+    /// Each access the function being read passes, ends or depends on, and the token that names it, to check once its
+    /// blocks are read.
+    var accessReferences: [(access: AccessID, token: IRToken)] = []
 
     /// Starts at the first of `tokens`, with the structs and functions they declare at the top level numbered in
     /// order.

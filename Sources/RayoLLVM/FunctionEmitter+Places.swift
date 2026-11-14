@@ -115,11 +115,6 @@ extension FunctionEmitter {
         }
     }
 
-    /// Emits the instructions that find each of `operands`' values, in order, and returns them.
-    func values(of operands: [Operand], with builder: borrowing Builder) -> [OperandValue] {
-        operands.map { value(of: $0, with: builder) }
-    }
-
     /// Emits the instructions that read `operand`'s value whole, and returns it.
     func read(_ operand: Operand, with builder: borrowing Builder) -> AnyValue {
         whole(value(of: operand, with: builder), with: builder)
@@ -188,28 +183,5 @@ extension FunctionEmitter {
     /// Emits the instruction that stores `value`, a scalar of the type of the place at `address`, there.
     func store(_ value: AnyValue, at address: Address, with builder: borrowing Builder) {
         builder.store(value, to: address.pointer, alignment: types.alignment(of: address.type))
-    }
-
-    /// Whether any of `operands` reads or moves a place that shares memory with `destination`, which a write to
-    /// `destination` before the operands are read would change.
-    func anyOf(_ operands: [Operand], overlaps destination: Place) -> Bool {
-        operands.contains { $0.place?.overlaps(destination) ?? false }
-    }
-}
-
-private extension Place {
-    /// Whether this place and `other` share memory: whether one lies inside the other.
-    func overlaps(_ other: Place) -> Bool {
-        contains(other) || other.contains(self)
-    }
-}
-
-private extension Operand {
-    /// The place the operand reads or moves, or nil for a constant.
-    var place: Place? {
-        switch self {
-        case .read(let place, _), .move(let place, _): place
-        case .constant: nil
-        }
     }
 }

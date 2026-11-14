@@ -12,6 +12,8 @@ struct FunctionBuilder: ~Copyable {
     private var locals: [IRLocal]
     private var blocks = [PendingBlock()]
     private var current = BlockID(index: 0)
+    /// How many accesses the body begins so far, which numbers the next.
+    private var accessCount = 0
 
     init(locals: [IRLocal]) {
         self.locals = locals
@@ -49,6 +51,15 @@ struct FunctionBuilder: ~Copyable {
 
     mutating func emit(_ statement: Statement) {
         blocks[current.index].statements.append(statement)
+    }
+
+    /// Begins `access` in the current block, and returns its ID. Lowering writes no end: the ownership stage works
+    /// out where each access ends.
+    mutating func begin(_ access: Access) -> AccessID {
+        let id = AccessID(index: accessCount)
+        accessCount += 1
+        emit(.begin(id, access))
+        return id
     }
 
     /// Adds a temporary of `type` to the function, and returns its place.

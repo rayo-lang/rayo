@@ -11,6 +11,7 @@ func "main()"() -> Void {
   temp %0: Enemy
 bb0:
   %0 @2:7-2:29 = call "Enemy(hp: Int, armor: Int)"(1, 2) @2:7-2:29
-  _ = call builtin "print(_: Int)"(read %0.0 @2:7-2:32) @2:1-2:33
+  begin a0 read static %0.0 @2:7-2:32
+  _ = call builtin "print(_: Int)"(a0) @2:1-2:33
   return
 }

@@ -85,19 +85,17 @@ struct SourceRangeTests {
         // The struct declares its primary initializer ahead of every function the source writes.
         let main = try lowered(source).body(at: 1)
 
-        // The two prints follow the declaration and its value, and each reads `e.hp` where it lies.
-        guard case .compute(nil, .call(_, let firstArguments), _) = main.blocks[0].statements[2],
-              case .compute(nil, .call(_, let secondArguments), _) = main.blocks[0].statements[3],
-              case .read(let first, let firstRange) = firstArguments.first,
-              case .read(let second, let secondRange) = secondArguments.first
+        // The two prints follow the declaration and its value, and each begins an access to `e.hp` where it lies.
+        guard case .begin(_, let first) = main.blocks[0].statements[2],
+              case .begin(_, let second) = main.blocks[0].statements[4]
         else {
-            Issue.record("the two prints don't read a place as statements 3 and 4 of \(main.blocks[0])")
+            Issue.record("the two prints don't begin an access as statements 3 and 5 of \(main.blocks[0])")
             return
         }
-        #expect(first == second)
-        #expect(Set([first, second]).count == 1)
-        #expect(text(of: firstRange, in: source) == "e.hp")
-        #expect(firstRange != secondRange)
+        #expect(first.place == second.place)
+        #expect(Set([first.place, second.place]).count == 1)
+        #expect(text(of: first.range, in: source) == "e.hp")
+        #expect(first.range != second.range)
     }
 
     @Test(

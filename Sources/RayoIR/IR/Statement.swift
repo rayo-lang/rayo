@@ -8,6 +8,13 @@ public enum Statement: Equatable, Sendable {
     /// Starts the life of a local where the source declares it. The local holds no value until a statement
     /// stores one, whatever an earlier pass of a loop stored in it.
     case declare(LocalID)
+    /// Begins the access to a place, which the code then reaches the place through. The place is found here, once,
+    /// whatever the code changes before the access ends.
+    case begin(AccessID, Access)
+    /// Ends the access, after which nothing reaches the place through it.
+    case end(AccessID)
+    /// Makes the value at the place depend on the access too, so the access stays live while the value is used.
+    case depend(Place, on: AccessID)
 }
 
 /// An operation that makes a value. Integer arithmetic panics on division or remainder by zero, and on overflow as
@@ -16,15 +23,21 @@ public enum Rvalue: Equatable, Sendable {
     case use(Operand)
     case unary(IRUnaryOperator, Operand)
     case binary(IRBinaryOperator, Operand, Operand)
-    case call(Callee, arguments: [Operand])
+    case call(Callee, arguments: [CallArgument])
 
-    /// The operands, in the order the operation evaluates them.
+    /// The operands, in the order the operation evaluates them. A call's arguments that pass an access are none.
     public var operands: [Operand] {
         switch self {
-        case .use(let operand), .unary(_, let operand): return [operand]
-        case .binary(_, let left, let right): return [left, right]
-        case .call(_, let arguments): return arguments
+        case .use(let operand), .unary(_, let operand): [operand]
+        case .binary(_, let left, let right): [left, right]
+        case .call(_, let arguments): arguments.compactMap(\.operand)
         }
+    }
+
+    /// The accesses a call passes, in the order of its arguments; none for any other operation.
+    public var accesses: [AccessID] {
+        guard case .call(_, let arguments) = self else { return [] }
+        return arguments.compactMap(\.access)
     }
 
     /// The type of the value the operation makes in `body`, a body of a program whose structs `types` holds and

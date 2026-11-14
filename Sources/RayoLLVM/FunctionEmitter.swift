@@ -12,6 +12,12 @@ struct FunctionEmitter {
         var type: RayoType
     }
 
+    /// An access the body has begun: the place it reaches, and that place's address, found where the access began.
+    struct BegunAccess {
+        var place: Place
+        var address: Address
+    }
+
     /// The value an operand gives: a constant, or the place that holds it, which is read only where it is used.
     enum OperandValue {
         case constant(AnyValue, RayoType)
@@ -41,6 +47,9 @@ struct FunctionEmitter {
     /// The pointer to each local's place, indexed by `LocalID`.
     var places: [PointerValue] = []
     var blocks: [LLVM.BasicBlock] = []
+    /// Each access begun so far, by its ID. A block's accesses are begun before a block it leads to uses them, since
+    /// the beginning of an access comes before every use of it on every path.
+    var accesses: [AccessID: BegunAccess] = [:]
 
     /// The LLVM types of the program's values.
     var types: LLVMTypes { lowering.types }
@@ -80,7 +89,7 @@ struct FunctionEmitter {
         builder.branch(to: blocks[0])
     }
 
-    private func emit(
+    private mutating func emit(
         _ block: RayoIR.BasicBlock, into llvmBlock: LLVM.BasicBlock, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         program.builder.position(atEndOf: llvmBlock)
@@ -91,13 +100,20 @@ struct FunctionEmitter {
         try emit(block.terminator, in: program)
     }
 
-    private func emit(_ statement: Statement, in program: borrowing ProgramEmitter) throws(LLVMError) {
+    private mutating func emit(_ statement: Statement, in program: borrowing ProgramEmitter) throws(LLVMError) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
             try emit(rvalue, into: destination?.place, at: range, in: program)
 
-        // A declaration emits nothing: the program reads a place only once a statement has stored to it.
-        case .declare:
+        // A static access is its place's address, found once where it begins. Only an object's value takes a dynamic
+        // access, and the IR has no objects.
+        case .begin(let id, let access):
+            guard access.enforcement == .static else { preconditionFailure("the IR has no objects") }
+            accesses[id] = BegunAccess(place: access.place, address: address(of: access.place, with: program.builder))
+
+        // A declaration emits nothing: the program reads a place only once a statement has stored to it. Nor does
+        // the end of a static access, or a dependence, which only the ownership stage looks at.
+        case .declare, .end, .depend:
             break
         }
     }

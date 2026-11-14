@@ -6,9 +6,12 @@ struct FunctionVerifier {
     private let declaration: FunctionDeclaration
     private let types: TypeTable
     private let functions: FunctionTable
+    /// The access each statement of the body that begins one begins, by its ID.
+    private let accesses: [AccessID: Access]
 
     init(body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram) {
         self.body = body
+        accesses = body.begunAccesses
         self.declaration = declaration
         types = program.types
         functions = program.functions
@@ -32,7 +35,27 @@ struct FunctionVerifier {
         // A declaration only starts a local's life.
         case .declare:
             break
+
+        // An access reaches a place of the body. Only an object's value takes a dynamic one, and the IR has no objects.
+        case .begin(_, let access):
+            _ = try type(of: access.place)
+            guard access.enforcement == .static else {
+                throw violation("the IR takes a dynamic access to a place that is no object's value")
+            }
+
+        // An end names an access that the body begins, and a dependence names one too, and a place of the body.
+        case .end(let id):
+            _ = try access(id)
+        case .depend(let place, let id):
+            _ = try type(of: place)
+            _ = try access(id)
         }
+    }
+
+    /// The access that `id` names. Throws where no statement of the body begins it.
+    private func access(_ id: AccessID) throws(IRViolation) -> Access {
+        guard let access = accesses[id] else { throw violation("the IR names a\(id.index), which it never begins") }
+        return access
     }
 
     /// Throws where `value` breaks the IR's types, or isn't of the type of `destination`, where there is one.
@@ -124,7 +147,7 @@ struct FunctionVerifier {
 
     /// The type of what a call of `callee` with `arguments` gives. Throws where the arguments aren't as many as its
     /// parameters, or of their types.
-    private func resultType(of callee: Callee, passing arguments: [Operand]) throws(IRViolation) -> RayoType {
+    private func resultType(of callee: Callee, passing arguments: [CallArgument]) throws(IRViolation) -> RayoType {
         let name = callee.name(in: functions)
         let parameters = callee.parameters(in: functions)
 
@@ -143,6 +166,15 @@ struct FunctionVerifier {
             }
         }
         return callee.result(in: functions)
+    }
+
+    /// The type of the value `argument` passes: its operand's, or that of the place its access reaches. Throws where
+    /// no statement of the body begins its access.
+    private func type(of argument: CallArgument) throws(IRViolation) -> RayoType {
+        switch argument {
+        case .operand(let operand): try type(of: operand)
+        case .access(let id): try type(of: try access(id).place)
+        }
     }
 
     /// The type of `operand`'s value, whose root, where it names a place, must be one of the body's locals. Throws

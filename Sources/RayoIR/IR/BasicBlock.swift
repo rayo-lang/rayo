@@ -9,11 +9,11 @@ public struct BasicBlock: Equatable, Sendable {
 
     /// The operands the block uses, in the order it evaluates them: its statements' in turn, then its terminator's.
     public var operands: [Operand] {
-        // A computation uses its value's operands, and a declaration uses none.
+        // A computation uses its value's operands, and no other statement uses one.
         let statementOperands = statements.flatMap { statement in
             switch statement {
             case .compute(_, let value, _): value.operands
-            case .declare: [Operand]()
+            case .declare, .begin, .end, .depend: [Operand]()
             }
         }
 

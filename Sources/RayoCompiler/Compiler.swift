@@ -43,7 +43,7 @@ public enum Compiler {
         enum Dump {
             /// The checked program, which checking makes.
             case checked
-            /// The Rayo IR, which lowering makes.
+            /// The Rayo IR, as lowering makes it and the ownership stage ends its accesses.
             case ir
 
             /// The dump `option` asks for, as `rayoc`'s command line spells it, or nil where it asks for none.
@@ -279,8 +279,9 @@ public enum Compiler {
         }
     }
 
-    /// The step that lowers a checked program to Rayo IR, and checks what its functions do with their locals. It
-    /// gives the program on with its errors and warnings, without the bodies of the functions a check found failed.
+    /// The step that lowers a checked program to Rayo IR, checks what its functions do with their locals, and ends
+    /// each access where the ownership stage finds its last use. It gives the program on with its errors and
+    /// warnings, without the bodies of the functions a check found failed.
     private static var lowering: some CompilationStep<CheckedProgram, IRProgram> {
         pipeline {
             Lower()
@@ -291,6 +292,10 @@ public enum Compiler {
             // Only a function whose locals hold a value at each use is checked for values no code reads, so a
             // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
             CheckOwnership()
+            // The ownership stage writes the end of each access into the IR that the emitter receives, which is
+            // verified again, since it is no longer lowering's.
+            CheckExclusivity()
+            VerifyIR()
             CheckUnusedValues()
         }
     }

@@ -81,15 +81,25 @@ extension FunctionLowering {
             .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
-            .call(callee, arguments: arguments.map { operand(of: $0, as: argumentUse(of: callee)) })
+            .call(callee, arguments: passed(arguments, to: callee))
         }
     }
 
-    /// What a call of `callee` does with its arguments: a primary initializer takes each, as its struct's field, and
-    /// any other function reads it.
-    private func argumentUse(of callee: Callee) -> ValueUse {
-        guard case .function(let id) = callee, case .primaryInitializer = functions[id].kind else { return .read }
-        return .take
+    /// Lowers `arguments`, those of a call of `callee`, to what the call passes. A primary initializer takes each, as
+    /// its struct's field. Any other function borrows each: a constant is passed as it is, and any other value through
+    /// a read access to the place that holds it.
+    private mutating func passed(_ arguments: [CheckedExpr], to callee: Callee) -> [CallArgument] {
+        if case .function(let id) = callee, case .primaryInitializer = functions[id].kind {
+            return arguments.map { .operand(operand(of: $0, as: .take)) }
+        }
+
+        // Every argument is evaluated, left to right, before any of the call's borrows begins: they begin together
+        // as the call begins, in the order of the arguments.
+        let operands = arguments.map { operand(of: $0, as: .read) }
+        return operands.map { operand in
+            guard case .read(let place, let range) = operand else { return .operand(operand) }
+            return .access(builder.begin(Access(.read, .static, to: place, at: range)))
+        }
     }
 
     /// Lowers `condition` and the branches it chooses between, computing the value of the branch that runs, which
