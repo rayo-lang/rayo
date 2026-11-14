@@ -164,6 +164,23 @@ struct UnusedValueCheckerTests {
         #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
     }
 
+    @Test func `a store to an element at an index a local holds leaves a later read through that local reading`()
+        throws {
+        // The temporary holds a new index by the time the read goes through it, so the read may reach an element the
+        // store left as the first store to `a` made it.
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @2:1-2:1 = array of Hit(read %4 @1:1-1:1, read %4 @1:1-1:1) @1:1-1:1
+              %8 @1:1-1:1 = index uint 0 below 2 @1:1-1:1
+              %7[%8] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+              %8 @1:1-1:1 = index uint 1 below 2 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[%8].0 @2:3-2:3) @1:1-1:1
+              return
+            """
+        #expect(try errors(in: blocks) == [])
+    }
+
     @Test func `each function's errors come under its ID, and a function without any has none`() throws {
         // The first function's error comes after the second's in the source.
         let late = function("bb0:\n  %0 @2:6-2:6 = operand 1 @1:1-1:1\n  return", named: "late()")
