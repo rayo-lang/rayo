@@ -73,8 +73,8 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// Finds the local an assignment changes, either whole or, when the target is one of its fields, field by field.
-    /// Returns nil once it has reported why the local can't change that way, or that no local has the name.
+    /// Finds the local an assignment changes: whole, or part by part when the target is a field or an element inside
+    /// it. Returns nil once it has reported why the local can't change that way, or that no local has the name.
     private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }
@@ -84,16 +84,16 @@ struct AssignmentChecker {
         return (CheckedPlace(root: .local(local, range: range)), names[local].type)
     }
 
-    /// The error to report when an assignment may not change a local, whole or field by field as it asks, or nil
+    /// The error to report when an assignment may not change a local, whole or part by part as it asks, or nil
     /// when it may.
     private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
         switch (names[local].kind, holdsParts) {
-        // A borrowed parameter's value is its caller's, whole and field by field.
+        // A borrowed parameter's value is its caller's, whole and part by part.
         case (.parameter, _): .assignToParameter(name: names[local].name)
         // A `let` may be assigned whole, only once on each path, which the initialization check enforces; it never
-        // changes field by field.
-        case (.let, true): .assignToFieldOfLet(name: names[local].name)
-        // A `var` owns its value, and may change it whole or field by field.
+        // changes part by part.
+        case (.let, true): .assignToPartOfLet(name: names[local].name)
+        // A `var` owns its value, and may change it whole or part by part.
         case (.let, false), (.var, _): nil
         }
     }
@@ -138,7 +138,8 @@ struct AssignmentChecker {
 /// declared with `var`, never into an array's count.
 extension AssignmentChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A local's name roots the place in the local; `_`, and anything but a name or a member, names no place.
+        // A local's name roots the place in the local; `_`, and anything but a name, a member or an element, names no
+        // place.
         guard case .name(let name) = expr.kind, name != "_" else { return refuse(.assignToNonLocal, at: expr.range) }
         return changedLocal(named: name, at: expr.range, holdsParts: holdsParts)
     }
@@ -150,12 +151,6 @@ extension AssignmentChecker: PlaceRules {
             return false
         }
         return true
-    }
-
-    func admitsElement(at range: SourceRange) -> Bool {
-        // Only a local, or a field of one, can be assigned, which leaves out an element and every place inside one.
-        errors.report(.assignToNonLocal, at: range)
-        return false
     }
 
     func admitsCount(at nameRange: SourceRange) -> Bool {

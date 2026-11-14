@@ -30,7 +30,7 @@ struct PlaceTypes {
     }
 
     /// The type of the value at `place`.
-    private func type(of place: Place) -> RayoType {
+    func type(of place: Place) -> RayoType {
         do {
             return try place.type(in: body, types: types)
         } catch {

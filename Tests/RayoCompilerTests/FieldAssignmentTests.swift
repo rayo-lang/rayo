@@ -16,8 +16,8 @@ private func source(running body: String) -> String {
 
 struct FieldAssignmentTests {
     @Test(arguments: [
-        ("l.armor = 1", ErrorCode.assignToFieldOfLet(name: "l"), "l"),
-        ("l.stats.hp += 1", .assignToFieldOfLet(name: "l"), "l"),
+        ("l.armor = 1", ErrorCode.assignToPartOfLet(name: "l"), "l"),
+        ("l.stats.hp += 1", .assignToPartOfLet(name: "l"), "l"),
         ("p.stats.hp = 1", .assignToParameter(name: "p"), "p"),
         ("e.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
         ("e.stats.mana = 1", .noSuchField(type: "Stats", field: "mana"), "mana"),
@@ -42,11 +42,11 @@ struct FieldAssignmentTests {
 
     @Test func `a 'let' declared without a value is given one whole, never field by field`() {
         let source = "func main() {\nlet l: Enemy\nl.armor = 1\n}" + enemyAndStats
-        #expect(errors(source) == [.assignToFieldOfLet(name: "l")])
+        #expect(errors(source) == [.assignToPartOfLet(name: "l")])
     }
 
     @Test func `the value is checked even where the field can't be assigned`() {
-        let expected: [ErrorCode] = [.assignToFieldOfLet(name: "l"), .notDeclared(name: "nope")]
+        let expected: [ErrorCode] = [.assignToPartOfLet(name: "l"), .notDeclared(name: "nope")]
         #expect(errors(source(running: "l.armor = nope")) == expected)
     }
 

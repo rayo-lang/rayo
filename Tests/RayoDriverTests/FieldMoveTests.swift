@@ -146,7 +146,7 @@ struct FieldMoveTests {
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
-        ("l.stats = s", "5:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
+        ("l.stats = s", "5:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
         (
             "print(strength(l))",
             "5:20: error[E0309]: 'l.stats' was moved out of 'l', so 'l' can't be used whole" +

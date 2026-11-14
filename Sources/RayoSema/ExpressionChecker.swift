@@ -292,9 +292,6 @@ struct ExpressionChecker {
     /// `range`. Reports a base that isn't an array, and an index that isn't a UInt.
     private func element(at indexExpr: Expr, of base: Expr, in range: SourceRange,
                          under rules: some PlaceRules) -> TypedPlace? {
-        // A place whose rules don't admit an element was reported.
-        guard rules.admitsElement(at: range) else { return nil }
-
         // The base and the index are both checked, so each one's errors are reported; a literal index is a UInt.
         let holder = place(base, under: rules, holdsParts: true)
         let index = check(indexExpr, expecting: Expectation(.uint) { _, found in .indexNotUInt(found: found) })
@@ -465,8 +462,8 @@ private extension CheckedBinaryOperator {
     }
 }
 
-/// The rules of a place that an expression reads, which may start from any value, step into any field or element, and
-/// name any array's count.
+/// The rules of a place that an expression reads, which may start from any value, step into any field, and name any
+/// array's count.
 extension ExpressionChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A name roots the place in the local it names.
@@ -482,10 +479,6 @@ extension ExpressionChecker: PlaceRules {
     }
 
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
-        true
-    }
-
-    func admitsElement(at range: SourceRange) -> Bool {
         true
     }
 
