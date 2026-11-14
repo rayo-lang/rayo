@@ -30,7 +30,8 @@ final class FileChecker {
 
     func check() -> CheckedProgram? {
         // Check every struct and function; a file without a `main` is a library, checked the same.
-        let types = StructChecker(errors: errors).declare(file.structs, in: &declarations)
+        let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
+        let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
         let main = declareFunctions()
         let checked = functions.indices.map { checkedFunction(FunctionID(index: $0)) }
 
@@ -84,7 +85,7 @@ final class FileChecker {
     }
 
     /// Gives `function` the next ID, and returns it and whether calls can reach the function by its name. Reports a
-    /// function whose name belongs to a struct, which calls still reach, and one that takes arguments as a function
+    /// function whose name belongs to a type, which calls still reach, and one that takes arguments as a function
     /// before it does, which they don't.
     private func declare(_ function: FuncDecl) -> (id: FunctionID, isDeclared: Bool) {
         // Give the function its ID and its signature, and add it to the checker's functions.
@@ -96,8 +97,8 @@ final class FileChecker {
 
         // Declare the function, reporting a name it can't take.
         let isDeclared = declarations.declare(signature)
-        if declarations.kind(of: function.name) == .structure {
-            // A function whose name belongs to a struct is reported, and still declared: a call looks up functions
+        if declarations.kind(of: function.name) == .type {
+            // A function whose name belongs to a type is reported, and still declared: a call looks up functions
             // alone, so it still finds the function, and raises no error of its own.
             errors.report(.alreadyDeclared(name: function.name), at: function.nameRange)
         } else if !isDeclared {
