@@ -6,7 +6,7 @@ Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` build
 
 **Each version lists its feature set, once.** The list says what the release holds, so it stays the same as those features come to run. The work toward the version, what of it is left, and its bugs and refactors are in the [issue tracker](https://github.com/rayo-lang/rayo/issues).
 
-**A version is done when every feature it lists runs end to end, and its proof program shows it.** The proof program is one Rayo program, `examples/v0.N/<name>.rayo`, with its expected output beside it in `<name>.out`. A driver test runs it, in debug and in release builds, on every platform CI tests: macOS arm64, Linux x64 and Windows x64. The driver tests check each feature in detail, so the proof program only puts the features to work together. The other programs in `examples/` show the whole language, which `rayoc` cannot compile yet, and no test runs them.
+**A version is done when every feature it lists runs end to end, and its proof program shows it.** The proof program is one Rayo program, `examples/v0.N/<name>.rayo`, with its expected output beside it in `<name>.out`. A driver test runs it, in debug and in release builds, on every platform CI tests: macOS arm64, Linux x64, Windows x64 and Windows arm64. The driver tests check each feature in detail, so the proof program only puts the features to work together. The other programs in `examples/` show the whole language, which `rayoc` cannot compile yet, and no test runs them.
 
 **A half version, such as v0.1.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
 
@@ -69,5 +69,4 @@ These come after v0.3, in an order not yet decided:
 - enums and optionals;
 - the other number types, and implicit widening between them;
 - the wrapping, saturating, bitwise and shift operators;
-- installing a toolchain ([#184](https://github.com/rayo-lang/rayo/issues/184), [#216](https://github.com/rayo-lang/rayo/issues/216));
-- arm64 Windows ([#186](https://github.com/rayo-lang/rayo/issues/186)).
+- installing a toolchain ([#184](https://github.com/rayo-lang/rayo/issues/184), [#216](https://github.com/rayo-lang/rayo/issues/216)).
