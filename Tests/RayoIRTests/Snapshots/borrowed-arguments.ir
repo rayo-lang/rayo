@@ -1,0 +1,22 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 x: Int
+  temp %1: Int
+bb0:
+  declare %0
+  %0 @2:9-2:10 = use 1 @2:13-2:14
+  begin a0 read static %0 @3:9-3:10
+  %1 @3:12-3:17 = add checked read %0 @3:12-3:13, 1 @3:12-3:17
+  begin a1 read static %1 @3:12-3:17
+  _ = call "add(_: Int, _: Int, _: Int)"(a0, a1, 2) @3:5-3:21
+  return
+}
+
+func "add(_: Int, _: Int, _: Int)"(Int, Int, Int) -> Void {
+  param %0 a: Int
+  param %1 b: Int
+  param %2 c: Int
+bb0:
+  return
+}

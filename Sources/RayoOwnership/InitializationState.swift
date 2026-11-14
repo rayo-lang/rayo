@@ -67,6 +67,14 @@ struct InitializationState: DataflowState {
         // A declaration leaves the local without a value, even one an earlier pass of a loop gave it.
         case .declare(let local):
             locals[local.index] = .declared
+
+        // An access uses its place, whose value it reads or changes, and leaves the value there.
+        case .begin(_, let access):
+            visitUse(of: access.place, at: access.range, use: use)
+
+        // Ending an access, or depending on one, uses no place.
+        case .end, .depend:
+            break
         }
     }
 

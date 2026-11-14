@@ -24,12 +24,16 @@ import RayoSource
 ///   %0 @2:9-2:10 = use 1 @2:13-2:14
 ///   %1 @3:4-3:9 = less read %0 @3:4-3:5, 3 @3:4-3:9
 ///   branch read %1 @3:4-3:9, bb1, bb2
+/// bb1:
+///   begin a0 read static %0 @4:11-4:12
+///   _ = call "show(_: Int)"(a0) @4:6-4:13
+///   end a0
 /// ...
 /// }
 /// ```
 ///
-/// Each local is numbered by its ID and each block by its own, and a source range is written `line:column-line:column`
-/// after an `@`. A statement's own range comes last on its line, after its destination's and its operands'.
+/// Each local, access and block is numbered by its ID, and a source range is written `line:column-line:column` after
+/// an `@`. A statement's own range comes last on its line, after its destination's and its operands'.
 public enum IRPrinter {
     /// `program` as text.
     public static func text(of program: IRProgram) -> String {
@@ -87,7 +91,37 @@ public enum IRPrinter {
             "declare %\(local.index)"
         case .compute(let destination, let value, let range):
             "\(text(of: destination)) = \(text(of: value, in: program)) \(text(of: range))"
+        case .begin(let id, let access):
+            "begin \(text(of: id)) \(text(of: access))"
+        case .end(let id):
+            "end \(text(of: id))"
+        case .depend(let place, let id):
+            "depend \(text(of: place)) on \(text(of: id))"
         }
+    }
+
+    /// What an access does, how it is enforced, and the place it reaches, such as `read static %0.1 @2:3-2:6`.
+    private static func text(of access: Access) -> String {
+        "\(name(of: access.kind)) \(name(of: access.enforcement)) \(text(of: access.place)) \(text(of: access.range))"
+    }
+
+    private static func name(of kind: AccessKind) -> String {
+        switch kind {
+        case .read: "read"
+        case .modify: "modify"
+        }
+    }
+
+    private static func name(of enforcement: Enforcement) -> String {
+        switch enforcement {
+        case .static: "static"
+        case .dynamic: "dynamic"
+        }
+    }
+
+    /// An access as its number, such as `a2`.
+    private static func text(of id: AccessID) -> String {
+        "a\(id.index)"
     }
 
     /// The place a computation stores its value in and where the source names it, or `_` where it drops the value.
@@ -105,7 +139,7 @@ public enum IRPrinter {
         case .binary(let op, let left, let right):
             "\(name(of: op)) \(text(of: left)), \(text(of: right))"
         case .call(let callee, let arguments):
-            "call \(text(of: callee, in: program))(\(list(arguments)))"
+            "call \(text(of: callee, in: program))(\(arguments.map(text(of:)).joined(separator: ", ")))"
         }
     }
 
@@ -125,6 +159,13 @@ public enum IRPrinter {
         case .return(let result?): "return \(text(of: result))"
         case .return(nil): "return"
         case .unreachable: "unreachable"
+        }
+    }
+
+    private static func text(of argument: CallArgument) -> String {
+        switch argument {
+        case .operand(let operand): text(of: operand)
+        case .access(let id): text(of: id)
         }
     }
 

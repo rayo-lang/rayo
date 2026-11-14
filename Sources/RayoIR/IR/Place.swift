@@ -38,4 +38,10 @@ public struct Place: Hashable, Sendable {
     public func contains(_ other: Place) -> Bool {
         root == other.root && other.steps.starts(with: steps)
     }
+
+    /// Whether this place and `other` overlap: whether one lies inside the other. Two fields of one value lie apart,
+    /// and so do the places inside each.
+    public func overlaps(_ other: Place) -> Bool {
+        contains(other) || other.contains(self)
+    }
 }

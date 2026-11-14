@@ -9,6 +9,14 @@ public enum Operand: Equatable, Sendable {
     /// the place at the range.
     case move(Place, at: SourceRange)
 
+    /// The place the operand reads or moves, or nil for a constant.
+    public var place: Place? {
+        switch self {
+        case .read(let place, _), .move(let place, _): place
+        case .constant: nil
+        }
+    }
+
     /// The type of the operand's value in `body`, a body of a program whose structs `types` holds. A place the
     /// operand names must step only into fields its values have.
     public func type(in body: IRBody, types: TypeTable) -> RayoType {

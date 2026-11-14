@@ -35,7 +35,7 @@ extension IRParser {
         let keyword = try word()
         return switch keyword {
         case "use": .use(try operand())
-        case "call": .call(try callee(), arguments: try operands())
+        case "call": .call(try callee(), arguments: try arguments())
         default: try operation(named: keyword, at: token)
         }
     }
@@ -74,9 +74,19 @@ extension IRParser {
         return .builtin(builtin)
     }
 
-    /// Reads a call's arguments between parentheses.
-    private mutating func operands() throws(IRTextError) -> [Operand] {
-        try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.operand() }
+    /// Reads a call's arguments between parentheses, each an access, `aN`, or an operand.
+    private mutating func arguments() throws(IRTextError) -> [CallArgument] {
+        try parenthesized { (parser: inout IRParser) throws(IRTextError) in
+            guard case .word(let word) = parser.current.kind, Self.isAccessName(word) else {
+                return .operand(try parser.operand())
+            }
+            return .access(try parser.accessReference())
+        }
+    }
+
+    /// Whether `word` names an access: `a`, then digits.
+    static func isAccessName(_ word: String) -> Bool {
+        word.count > 1 && word.first == "a" && word.dropFirst().allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     /// Whether the current token starts an operand.

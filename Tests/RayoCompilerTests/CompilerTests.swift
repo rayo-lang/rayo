@@ -66,6 +66,26 @@ struct CompilerTests {
         #expect(compiled.written.isEmpty)
     }
 
+    @Test func `'--emit=ir' prints the IR the emitter receives, with the end of each access after its last use`() {
+        let source = "func main() {\n    let x = 1\n    print(x)\n}"
+        let compiled = compile(["--emit=ir", "a.rayo"], files: ["a.rayo": source])
+        #expect(compiled.result.standardOutput == """
+            main "main()"
+
+            func "main()"() -> Void {
+              let %0 x: Int
+            bb0:
+              declare %0
+              %0 @2:9-2:10 = use 1 @2:13-2:14
+              begin a0 read static %0 @3:11-3:12
+              _ = call builtin "print(_: Int)"(a0) @3:5-3:13
+              end a0
+              return
+            }
+
+            """)
+    }
+
     @Test func `'--emit=checked' prints the checked program of a file that checks, and writes nothing`() {
         let compiled = compile(["--emit=checked", "a.rayo"], files: ["a.rayo": "func main() {\n    print(1)\n}"])
         #expect(compiled.result == CompilerResult(exitCode: 0, errors: "", standardOutput: """

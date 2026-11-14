@@ -17,6 +17,7 @@ bb0:
   declare %1
   %1 @3:5-3:6 = use read %0.1 @3:9-3:21 @3:9-3:21
   %2 @4:7-4:15 = add checked read %1 @4:7-4:8, read %0.0 @4:11-4:15 @4:7-4:15
-  _ = call builtin "print(_: Int)"(read %2 @4:7-4:15) @4:1-4:16
+  begin a0 read static %2 @4:7-4:15
+  _ = call builtin "print(_: Int)"(a0) @4:1-4:16
   return
 }

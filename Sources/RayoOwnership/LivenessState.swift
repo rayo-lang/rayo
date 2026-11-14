@@ -42,6 +42,14 @@ struct LivenessState: DataflowState {
         // A declaration starts its local's life, so no code before it reads a value the local holds after it.
         case .declare(let local):
             live = live.filter { $0.root != local }
+
+        // An access reaches the value its place holds, whether it reads it or changes it.
+        case .begin(_, let access):
+            live.insert(access.place)
+
+        // Ending an access, or depending on one, reads no place.
+        case .end, .depend:
+            break
         }
     }
 

@@ -6,6 +6,8 @@ extension IRParser {
         try expect("{")
         localCount = 0
         blockReferences = []
+        begunAccesses = []
+        accessReferences = []
 
         // The locals come first, each numbered by its ID.
         var locals: [IRLocal] = []
@@ -23,6 +25,10 @@ extension IRParser {
         // A block that a terminator names must be among them.
         for reference in blockReferences where reference.block.index >= blocks.count {
             throw IRTextError(at: reference.token, "no block is labelled bb\(reference.block.index)")
+        }
+        // So must the access that a statement or an argument names.
+        for reference in accessReferences where !begunAccesses.contains(reference.access) {
+            throw IRTextError(at: reference.token, "no statement begins a\(reference.access.index)")
         }
         return IRBody(locals: locals, blocks: blocks)
     }
@@ -68,10 +74,14 @@ extension IRParser {
         return BasicBlock(statements: statements, terminator: try terminator())
     }
 
-    /// Reads `declare %N`, or `destination = value @range`; or nil where the current token starts no statement.
+    /// Reads `declare %N`, `destination = value @range`, `begin aN access`, `end aN` or `depend place on aN`; or nil
+    /// where the current token starts no statement.
     private mutating func statement() throws(IRTextError) -> Statement? {
         switch current.kind {
         case .word("declare"): try declaration()
+        case .word("begin"): try accessBeginning()
+        case .word("end"): try accessEnd()
+        case .word("depend"): try dependence()
         // A computation stores its value in a place, or drops it where the text writes `_`.
         case .word("_"), .symbol("%"): try computation()
         default: nil
@@ -82,6 +92,68 @@ extension IRParser {
     private mutating func declaration() throws(IRTextError) -> Statement {
         try expect(word: "declare")
         return .declare(try localReference())
+    }
+
+    /// Reads `begin aN kind enforcement place @range`, where `N` is the access's ID, which no other statement of the
+    /// function begins.
+    private mutating func accessBeginning() throws(IRTextError) -> Statement {
+        try expect(word: "begin")
+        let token = current
+        let id = try accessID()
+        guard begunAccesses.insert(id).inserted else { throw IRTextError(at: token, "a\(id.index) is begun twice") }
+        return .begin(id, try access())
+    }
+
+    /// Reads `kind enforcement place @range`: what an access does, how it is enforced, and the place it reaches.
+    private mutating func access() throws(IRTextError) -> Access {
+        let kindToken = current
+        let kind: AccessKind = switch try word() {
+        case "read": .read
+        case "modify": .modify
+        default: throw IRTextError(at: kindToken, "expected 'read' or 'modify'")
+        }
+
+        let enforcementToken = current
+        let enforcement: Enforcement = switch try word() {
+        case "static": .static
+        case "dynamic": .dynamic
+        default: throw IRTextError(at: enforcementToken, "expected 'static' or 'dynamic'")
+        }
+
+        let place = try place()
+        return Access(kind, enforcement, to: place, at: try range())
+    }
+
+    /// Reads `end aN`.
+    private mutating func accessEnd() throws(IRTextError) -> Statement {
+        try expect(word: "end")
+        return .end(try accessReference())
+    }
+
+    /// Reads `depend place on aN`.
+    private mutating func dependence() throws(IRTextError) -> Statement {
+        try expect(word: "depend")
+        let place = try place()
+        try expect(word: "on")
+        return .depend(place, on: try accessReference())
+    }
+
+    /// Reads `aN`, an access that a statement of the function must begin.
+    mutating func accessReference() throws(IRTextError) -> AccessID {
+        let token = current
+        let id = try accessID()
+        accessReferences.append((id, token))
+        return id
+    }
+
+    /// Reads `aN`, the access whose ID is `N`.
+    private mutating func accessID() throws(IRTextError) -> AccessID {
+        let token = current
+        let name = try word()
+        guard Self.isAccessName(name), let index = Int(name.dropFirst()) else {
+            throw IRTextError(at: token, "expected an access, found '\(name)'")
+        }
+        return AccessID(index: index)
     }
 
     /// Reads `destination = value @range`.

@@ -4,9 +4,21 @@ import Testing
 
 @Suite("Lowering functions")
 struct FunctionLoweringTests {
-    @Test func `a call names the function it calls, and passes its arguments as operands`() throws {
+    @Test func `a call names the function it calls, and passes a constant argument as it is`() throws {
         let source = "func main() {\nlet x = double(3)\n}\nfunc double(_ n: Int) -> Int { n * 2 }"
         try expectLowering(of: source, toMatch: "call")
+    }
+
+    @Test func `a borrowed argument is a read access, begun where it is evaluated, which lowering never ends`() throws {
+        // The second argument is computed after the first's access begins, and before its own begins.
+        let source = """
+            func main() {
+                let x = 1
+                add(x, x + 1, 2)
+            }
+            func add(_ a: Int, _ b: Int, _ c: Int) {}
+            """
+        try expectLowering(of: source, toMatch: "borrowed-arguments")
     }
 
     @Test func `the program's table declares each function, by its ID in source order`() throws {

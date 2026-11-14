@@ -304,6 +304,13 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(311, error:
         "'{field}' is in the borrowed parameter '{parameter}', so it can't be moved; 'copy' makes an owned copy")
     case moveFieldFromParameter(field: String, parameter: String)
+
+    @Code(312, error: "'{name}' can't be used while '{borrowed}' is mutably borrowed",
+          labels: ["borrowed": "mutably borrowed here"])
+    case usedWhileMutablyBorrowed(name: String, borrowed: String)
+
+    @Code(313, error: "'{name}' can't change while '{borrowed}' is borrowed", labels: ["borrowed": "borrowed here"])
+    case changedWhileBorrowed(name: String, borrowed: String)
 }
 
 extension ErrorCode {

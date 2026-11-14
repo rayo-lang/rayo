@@ -4,59 +4,85 @@ import RayoSema
 
 /// Calls, which pass their arguments and take their result as the called function's signature says.
 extension FunctionEmitter {
-    /// Emits a call of `callee` with `operands`, and stores its result in `destination` when there is one. Throws
+    /// Emits a call of `callee` with `arguments`, and stores its result in `destination` when there is one. Throws
     /// where the runtime lacks the function that a built-in calls.
     func call(
-        _ callee: Callee, passing operands: [Operand], into destination: Place?, in program: borrowing ProgramEmitter,
+        _ callee: Callee, passing arguments: [CallArgument], into destination: Place?,
+        in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         switch callee {
         case .builtin(let builtin):
-            try call(builtin, passing: operands, into: destination, in: program)
+            try call(builtin, passing: arguments, into: destination, in: program)
         case .function(let id):
-            call(callTargets[id.index], passing: operands, into: destination, with: program.builder)
+            call(callTargets[id.index], passing: arguments, into: destination, with: program.builder)
         }
     }
 
-    /// Emits a call that reaches `target` with `operands`, and stores its result in `destination` when there is one.
+    /// Emits a call that reaches `target` with `arguments`, and stores its result in `destination` when there is
+    /// one.
     private func call(
-        _ target: CallTarget, passing operands: [Operand], into destination: Place?, with builder: borrowing Builder,
+        _ target: CallTarget, passing arguments: [CallArgument], into destination: Place?,
+        with builder: borrowing Builder,
     ) {
         switch target {
         case .function(let function):
-            call(function, passing: operands, into: destination, with: builder)
+            call(function, passing: arguments, into: destination, with: builder)
         case .primaryInitializer(let id):
-            build(id, from: operands, into: destination, with: builder)
+            build(id, from: arguments, into: destination, with: builder)
         }
     }
 
-    /// Emits a call of `function` with `operands`, of the types it takes, and stores its result in `destination`, a
+    /// Emits a call of `function` with `arguments`, of the types it takes, and stores its result in `destination`, a
     /// place of the result's type, when there is one.
     func call(
-        _ function: DeclaredFunction, passing operands: [Operand], into destination: Place?,
+        _ function: DeclaredFunction, passing arguments: [CallArgument], into destination: Place?,
         with builder: borrowing Builder,
     ) {
-        let arguments = values(of: operands, with: builder)
+        let values = arguments.map { value(of: $0, with: builder) }
+        let readPlaces = arguments.compactMap(place(of:))
         let destinationAddress = destination.map { address(of: $0, with: builder) }
 
         switch function.signature.result {
         case .direct:
-            let result = emitCall(of: function, passing: arguments, resultSlot: nil, with: builder)
+            let result = emitCall(of: function, passing: values, resultSlot: nil, with: builder)
             storeResult(result, in: destinationAddress, with: builder)
         case .slot:
-            callWritingSlot(of: function, passing: arguments, from: operands, into: destination,
+            callWritingSlot(of: function, passing: values, reading: readPlaces, into: destination,
                             at: destinationAddress, with: builder)
         }
     }
 
-    /// Emits a call of `target`, whose result is written to a slot, with `arguments`, the values of `operands`. The
-    /// slot is `destination`'s place, at `address`, where nothing the call reads shares it, and otherwise a new one,
-    /// copied into the destination after.
+    /// The value `argument` passes: its operand's, or the place its access reaches.
+    func value(of argument: CallArgument, with builder: borrowing Builder) -> OperandValue {
+        switch argument {
+        case .operand(let operand): value(of: operand, with: builder)
+        case .access(let id): .place(begun(id).address)
+        }
+    }
+
+    /// The place `argument` reads, or nil where it passes a constant.
+    func place(of argument: CallArgument) -> Place? {
+        switch argument {
+        case .operand(let operand): operand.place
+        case .access(let id): begun(id).place
+        }
+    }
+
+    /// The access `id`, which every path to its use has begun.
+    private func begun(_ id: AccessID) -> BegunAccess {
+        guard let access = accesses[id] else { preconditionFailure("a\(id.index) is used before it begins") }
+        return access
+    }
+
+    /// Emits a call of `target`, whose result is written to a slot, with `arguments`, which read the places
+    /// `readPlaces`. The slot is `destination`'s place, at `address`, where nothing the call reads shares it, and
+    /// otherwise a new one, copied into the destination after.
     private func callWritingSlot(
-        of target: DeclaredFunction, passing arguments: [OperandValue], from operands: [Operand],
+        of target: DeclaredFunction, passing arguments: [OperandValue], reading readPlaces: [Place],
         into destination: Place?, at address: Address?, with builder: borrowing Builder,
     ) {
         // A destination that no argument reads takes the result straight from the call.
-        if let destination, let address, !anyOf(operands, overlaps: destination) {
+        if let destination, let address, !readPlaces.contains(where: { $0.overlaps(destination) }) {
             emitCall(of: target, passing: arguments, resultSlot: address, with: builder)
             return
         }
