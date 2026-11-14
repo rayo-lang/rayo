@@ -8,6 +8,7 @@ private let declarations = """
     struct Enemy(var slots: [2 of Int], let fixed: [2 of Int])
     func made() -> [2 of Int] { [1, 2] }
     func take(_ n: Int) {}
+    func total(_ a: [2 of Int]) -> Int { a[0] + a[1] }
     """
 
 /// The errors that `body`, as the body of a function that borrows the array `p`, reports, each as its position, code
@@ -24,6 +25,11 @@ struct ElementAssignmentTests {
         "var grid = [[1, 2], [3, 4]]\ngrid[1][0] = 5\ngrid[0] = [6, 7]\ntake(grid[0][1] + grid[1][0] + grid[1][1])",
         "var a = [Stats(hp: 1), Stats(hp: 2)]\nlet s = Stats(hp: 3)\na[0] = s\na[0].hp += 1\ntake(a[0].hp + a[1].hp)",
         "var a = [Stats(hp: 1), Stats(hp: 2)]\na[0] = copy a[1]\ntake(a[0].hp)",
+        "var a = [1, 2]\na[0] = 5\nlet b = a\ntake(b[0])",
+        "var a = [1, 2]\nlet i: UInt = 1\na[i] = 5\ntake(total(a))",
+        "var a = [1, 2]\na[1] += 5\ntake(total(a))",
+        "var e = Enemy(slots: [1, 2], fixed: [3, 4])\ne.slots[0] = 5\nlet t = e\ntake(t.slots[0])",
+        "var grid = [[1, 2], [3, 4]]\ngrid[0][1] = 5\ntake(total(grid[0]) + total(grid[1]))",
     ])
     func `an element of a 'var' place is assigned a value of its type`(body: String) {
         #expect(errorLines(body) == [])
@@ -70,6 +76,10 @@ struct ElementAssignmentTests {
             "4:8: error[E0315]: an array's element can't be moved, nor any part of one; 'copy' makes an owned copy",
         ),
         ("var a = [1, 2]\na[0] = 3\ntake(a[1])", "4:1: error[E0308]: the value assigned to 'a[0]' is never read"),
+        (
+            "var a = [1, 2]\na[0] = 3\na[0] = 4\ntake(total(a))",
+            "4:1: error[E0308]: the value assigned to 'a[0]' is never read",
+        ),
     ])
     func `an element takes the value it is assigned, which some code reads`(body: String, expected: String) {
         #expect(errorLines(body) == [expected])

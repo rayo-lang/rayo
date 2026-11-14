@@ -1,6 +1,15 @@
 import Testing
 import RayoDriver
 
+/// A struct, another that holds arrays of Ints and of the first, and a function that reads a whole array, which the
+/// programs below use.
+private let declarations = """
+
+    struct Stats(var hp: Int)
+    struct Enemy(var slots: [2 of Int], var party: [2 of Stats])
+    func total(_ a: [2 of Int]) -> Int { a[0] + a[1] }
+    """
+
 struct ElementAssignmentTests {
     @Test(arguments: [["--debug"], ["--release"]])
     func `elements of locals, fields, nested arrays and arrays of structs are assigned where they lie`(
@@ -25,9 +34,7 @@ struct ElementAssignmentTests {
                 print(e.slots[0] + e.slots[1])
                 print(e.party[0].hp + e.party[1].hp)
             }
-            struct Stats(var hp: Int)
-            struct Enemy(var slots: [2 of Int], var party: [2 of Stats])
-            """
+            """ + declarations
         let expected = "24\n9\n1\n65\n150\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
     }
@@ -56,10 +63,38 @@ struct ElementAssignmentTests {
                 print(e.slots[1])
                 print(e.party[0].hp)
             }
-            struct Stats(var hp: Int)
-            struct Enemy(var slots: [2 of Int], var party: [2 of Stats])
-            """
+            """ + declarations
         let expected = "11\n90\n-6\n1\n3\n3\n10\n"
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
+    }
+
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `an array read whole after an element changes holds the new element beside the others`(mode: [String]) {
+        let source = """
+            func main() {
+                var a = [1, 2]
+                let i: UInt = 1
+                a[0] = 5
+                let b = a
+                print(total(b))
+                var c = [1, 2]
+                c[i] = 7
+                print(total(c))
+                var d = [1, 2]
+                d[i] += 10
+                print(total(d))
+                var e = Enemy(slots: [1, 2], party: [Stats(hp: 3), Stats(hp: 4)])
+                e.slots[0] = 9
+                e.party[i].hp = 40
+                let f = e
+                print(total(f.slots))
+                print(f.party[0].hp + f.party[1].hp)
+                var grid = [[1, 2], [3, 4]]
+                grid[0][1] = 20
+                print(total(grid[0]) + total(grid[1]))
+            }
+            """ + declarations
+        let expected = "7\n8\n13\n11\n43\n28\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
     }
 }

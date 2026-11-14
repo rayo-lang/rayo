@@ -73,9 +73,8 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// Finds the local an assignment changes, either whole or, when the target is a field or an element inside it, part
-    /// by part.
-    /// Returns nil once it has reported why the local can't change that way, or that no local has the name.
+    /// Finds the local an assignment changes: whole, or part by part when the target is a field or an element inside
+    /// it. Returns nil once it has reported why the local can't change that way, or that no local has the name.
     private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }

@@ -55,24 +55,28 @@ struct LivenessState: DataflowState {
 
     /// Leaves what `stored` held before a store to it unread by any code after the store.
     private mutating func assign(_ stored: Place, in places: PlaceTypes) {
+        // A store to an element at an index a local holds doesn't say which element it replaces, and a loop may store
+        // a new index in that local before the next read through it, so the store leaves every value live.
+        guard stored.indexLocals.isEmpty else { return }
+
         // The store replaces the place's value, and the values of the parts inside it.
         live = live.filter { !stored.contains($0) }
         narrowHolders(of: stored, in: places)
     }
 
-    /// Narrows each live place that holds `stored` inside it to the fields beside the path down to `stored`, at each
+    /// Narrows each live place that holds `stored` inside it to the parts beside the path down to `stored`, at each
     /// level, since a store to `stored` leaves only their values for a later read of the holder.
     private mutating func narrowHolders(of stored: Place, in places: PlaceTypes) {
         let holders = live.filter { $0.contains(stored) }
         for holder in holders {
             live.remove(holder)
 
-            // At each level from the holder down, the fields beside the one on the path to `stored` stay live.
+            // At each level from the holder down, the fields or elements beside the one on the path to `stored` stay
+            // live.
             for depth in holder.steps.count..<stored.steps.count {
                 let level = stored.prefix(depth)
-                let count = places.fields(ofStructAt: level).count
-                for field in 0..<count where PlaceStep.field(field) != stored.steps[depth] {
-                    live.insert(level.appending(.field(field)))
+                for step in places.partSteps(at: level) where step != stored.steps[depth] {
+                    live.insert(level.appending(step))
                 }
             }
         }
