@@ -171,7 +171,7 @@ A type conforming to `Hashing`, such as the default `SeededHashing` or `FixedHas
 _Avoid_: BuildHasher, hasher builder
 
 **Layout order**:
-The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
+The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a struct with `@layout(.declared)`, `@layout(.packed)` or `@c` ([04](docs/spec/04-types/structs.md#structs)).
 
 **Mask**:
 Any `Simd<Bool, N>`, such as a comparison of vectors gives, which `select` uses and which has `any`, `all` and its lanes as `UInt64` `bits` ([04](docs/spec/04-types/numbers-and-math.md#masks)).

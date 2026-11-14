@@ -34,7 +34,7 @@ func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
 
 **Reflection reads a user attribute only on a field, a type or an enum case, so one on any other declaration is a compile error.** A declaration may take one attribute type several times, as a type could take both `@Requires(Physics.self)` and `@Requires(Render.self)`, which `attributes(Requires.self)` lists.
 
-**The built-in attributes are reserved names**: `@align`, `@c`, `@checks`, `@converts`, `@export`, `@guard`, `@inline`, `@noalloc`, `@nonexhaustive`, `@opaque`, `@packed`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
+**The built-in attributes are reserved names**: `@align`, `@c`, `@checks`, `@converts`, `@export`, `@guard`, `@inline`, `@layout`, `@noalloc`, `@nonexhaustive`, `@opaque`, `@pod`, `@reflect`, `@sendable` and `@threadlocal`. A toolchain may add attributes of its own that change no program's meaning.
 
 ## Runtime type info
 

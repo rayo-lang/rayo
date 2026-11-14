@@ -34,7 +34,7 @@ modifier      = 'public' | 'private' | 'static' | 'mutating' | 'consuming' | 'un
                                                                       An extern-c-decl or protocol-decl only at a file's top level *)
 attribute     = '@' (type-name | keyword) ('(' attribute-args? ')')? ;   (* a keyword right after '@' is an attribute name: @guard; @ui.Bounds names another module's *)
 attribute-args= attribute-arg (',' attribute-arg)* ','? ;
-attribute-arg = ((identifier | keyword) ':')? (expression | keyword) ;   (* @packed(4); @checks(.all); @reflect(private), a keyword argument; @export(c, name: "nav_path"), a labeled one *)
+attribute-arg = ((identifier | keyword) ':')? (expression | keyword) ;   (* @layout(.packed(4)); @checks(.all); @reflect(private), a keyword argument; @export(c, name: "nav_path"), a labeled one *)
 
 const-decl    = 'const' identifier (':' type)? '=' expression ;
 let-decl      = 'let' binding (',' binding)* ;                      (* let lo = 0, hi = 10 *)

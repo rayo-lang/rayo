@@ -27,35 +27,6 @@ cam.look(dx: 0.1, dy: 0)
 
 **The body never declares a stored field.** It declares computed properties, methods, subscripts, secondary initializers, a `deinit`, static members, nested types and type aliases. A struct with no stored fields may leave the header out, and its primary initializer is then `init()`.
 
-**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose layout follows the target's pointer width, such as a raw pointer, a `Span` or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
-
-**A `@c` or `@packed` struct's layout order is its declaration order**, for a layout that something outside the program fixes, such as a C header, a file format or a network packet.
-
-**Everything else follows declaration order**, since it concerns what the fields mean, not where they lie: the primary initializer's parameters, `T.fields`, `SoA`'s columns, derived `==` and `hash(into:)`, and destruction ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
-
-**The compiler places the fields, in layout order, by these rules:**
-
-- **Offsets.** Each field goes at the first multiple of its alignment at or after the end of the field before it, the first at offset 0.
-- **The struct's size and alignment.** A struct is aligned to its most-aligned field, and its size is the end of its last field rounded up to the struct's alignment. A struct with no fields has size 0 and alignment 1.
-- **Each type's alignment.** A number, `Bool` or raw pointer is aligned to its size, and every other type's alignment follows from its own layout.
-
-**Every Rayo target's C ABI places a struct's fields by these rules too** ([11](../11-compilation-model.md#what-a-target-must-provide)). So a struct whose fields all have C representations crosses to C as the C struct that declares its fields in layout order ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). A `@c` struct crosses as the one that declares them as it does.
-
-**Attributes change or check the layout:**
-
-```swift
-struct Hit(var crit: Bool, var damage: Double, var team: UInt8)       // 16 bytes: 'damage', 'crit', 'team', then 6 bytes of padding
-@c struct CHit(var crit: Bool, var damage: Double, var team: UInt8)   // 24 bytes, in declared order: 7 bytes of padding after 'crit'
-@packed struct Rec(var id: UInt32, var tag: UInt8)                    // 5 bytes, alignment 1, in declared order
-@align(16) struct Slot(var value: Float)                              // 16 bytes, 16-byte aligned
-```
-
-- **`@packed`, on a struct or a union, counts every field's alignment as 1.** So the alignment is 1, and there is no padding between or after fields: a struct's fields sit end to end. Padding inside a field's own type stays. `@packed(N)` caps each field's alignment at `N`, a power of two. C's packed records import as these ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
-- **`@align(N)` raises the alignment to at least `N`**, a power of two, and the size rounds up to it.
-- **`@c` keeps the declared order, and rejects fields with no C representation** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). It changes nothing else, since every target's C ABI already places fields by the rules above.
-
-**`@packed`, `@packed(N)` and `@align(N)` apply only to a struct or union declaration**, and are a compile error elsewhere.
-
 **A value never contains itself.** A struct, tuple, enum or union that would hold a value of its own type inline, through its fields, payloads, optionals or inline arrays at any depth, is a compile error. So is a task whose state would ([07](../07-concurrency/tasks.md#semantics)). Recursion goes through an owner, so the allocation is visible:
 
 ```swift
@@ -65,6 +36,48 @@ enum Tree {
 }
 struct Chain(var next: Chain?)    // error: a Chain would hold a Chain inline, in its optional
 ```
+
+**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose layout follows the target's pointer width, such as a raw pointer, a `Span` or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
+
+**A `@c` or `@layout` struct's layout order is its declaration order** ([below](#layout-attributes)). That serves a layout something outside the program fixes, such as a C header, a file format or a network packet.
+
+**Everything else follows declaration order**, since it concerns what the fields mean, not where they lie: the primary initializer's parameters, `T.fields`, `SoA`'s columns, derived `==` and `hash(into:)`, and destruction ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
+
+**The compiler places the fields, in layout order, by these rules:**
+
+- **Offsets.** Each field goes at the first multiple of its alignment at or after the end of the field before it, the first at offset 0.
+- **The struct's size and alignment.** A struct is aligned to its most-aligned field, and its size is the end of its last field rounded up to the struct's alignment. A struct with no fields has size 0 and alignment 1.
+- **Each type's alignment.** A number, `Bool` or raw pointer is aligned to its size, and every other type's alignment follows from its own layout.
+
+**Every Rayo target's C ABI places a struct's fields by these rules too** ([11](../11-compilation-model.md#what-a-target-must-provide)). So a struct whose fields all have C representations crosses to C as the C struct that declares its fields in layout order ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). For a `@c` or `@layout(.declared)` struct, that is the C struct that declares them as it does. A struct with `@layout(.packed)` or `@layout(.packed(N))` crosses as that C struct packed the same way.
+
+## Layout attributes
+
+**Three attributes change or check a struct's layout.** `@layout` arranges its fields, with a value that says how, `@c` makes it a C struct, and `@align(N)` raises its alignment:
+
+```swift
+struct Hit(var crit: Bool, var damage: Double, var team: UInt8)                       // 16 bytes: 'damage', 'crit', 'team', then 6 bytes of padding
+@layout(.declared) struct Row(var crit: Bool, var damage: Double, var team: UInt8)    // 24 bytes, in declared order: 7 bytes of padding after 'crit'
+@c struct CHit(var crit: Bool, var damage: Double, var team: UInt8)                   // 24 bytes, as 'Row', and every field has a C representation
+@layout(.packed) struct Rec(var id: UInt32, var tag: UInt8)                           // 5 bytes, alignment 1, in declared order
+@align(16) struct Slot(var value: Float)                                              // 16 bytes, 16-byte aligned
+```
+
+- **`@layout(.declared)` keeps the declared order, and changes nothing else.** Each field is still aligned and padded by the rules above, and may be of any type.
+- **`@layout(.packed)` keeps the declared order, and counts every field's alignment as 1.** So the alignment is 1, and there is no padding between or after fields: a struct's fields sit end to end. Padding inside a field's own type stays. `@layout(.packed(N))` caps each field's alignment at `N` instead, a power of two. A struct or union with either is **packed**. C's packed records import as these ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+- **`@c` keeps the declared order, and rejects fields with no C representation** ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). It changes nothing else, since every target's C ABI already places fields by the rules above.
+- **`@align(N)` raises the alignment to at least `N`**, a power of two, and the size rounds up to it. It combines with any of the others.
+
+**A declaration takes at most one `@layout`, and `@c` takes only a packed one beside it.** `@c @layout(.packed)` is a packed C record, as C's packed records import ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), and it crosses to C as that packed C struct. `@c @layout(.declared)` is a compile error, since `@c` already keeps the declared order:
+
+```swift
+@c @layout(.packed) struct Header(var magic: UInt32, var kind: UInt8)   // 5 bytes: a packed C struct
+@c @layout(.declared) struct Pair(var a: Int32, var b: Int32)           // error: '@c' already keeps the declared order
+@layout(.packed) @layout(.packed(2)) struct Twice(var a: UInt32)        // error: more than one '@layout'
+@layout(.declared) union Word { var f: Float; var u: UInt32 }           // error: a union's members all start at offset 0
+```
+
+**`@layout` and `@align(N)` apply only to a struct or union declaration**, and are a compile error elsewhere. `@layout(.packed)` and `@layout(.packed(N))` apply to either. `@layout(.declared)` applies only to a struct, since every member of a union starts at offset 0, so a union has no order to keep.
 
 ## Initializers
 
@@ -124,10 +137,10 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 
 ## Packed structs and under-aligned places
 
-**A `@packed` struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
+**A packed struct or union can put a field at a misaligned address**, where a load or store of the field's type is invalid ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)) and faults on some targets. So the compiler tracks which places may be misaligned, and code uses those only by value:
 
 ```swift
-@packed struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
+@layout(.packed) struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
 
 func sum(_ r: NetRec) -> UInt32 {
     var total: UInt32 = 0
@@ -148,10 +161,10 @@ func sum(_ r: NetRec) -> UInt32 {
 - **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A place property reached through such a receiver, or whose place may lie in such an argument, hands out a place in the temporary. So it is changed as a value property is, through a copy ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), and the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result, an error included ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 - **A panic still writes the temporary back.** The temporary holds the field's only value, since it was copied out bit for bit, so destroying it and keeping the field's old bytes would destroy one value twice. So unlike a value property's copy, it is written back, and changes made before the panic stay ([10](../10-errors-and-safety/panics.md#unwinding)). The write-back happens where the unwind would destroy the temporary, before the value holding the field, which was there before the access began ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)).
 
-**Generic code takes the safe bound**, since it is checked once, at its definition ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A path that crosses no `@packed` struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a `@packed` or `@packed(N)` struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have:
+**Generic code takes the safe bound**, since it is checked once, at its definition ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A path that crosses no packed struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a packed struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have:
 
 ```swift
-@packed(4) struct Msg<T: Copyable>(var tag: UInt8, var payload: T)
+@layout(.packed(4)) struct Msg<T: Copyable>(var tag: UInt8, var payload: T)
 struct Env<T>(var rec: Rec, var body: T)
 
 func unpack<T: Copyable>(_ m: Msg<T>, _ e: Env<T>) {
@@ -162,7 +175,7 @@ func unpack<T: Copyable>(_ m: Msg<T>, _ e: Env<T>) {
 
 **Places that requirements hand out stay aligned.** Generic code treats the place a place requirement hands out as aligned, for two reasons. An under-aligned field, such as `ids` in a `NetRec` that conforms to a protocol requiring `ids`, witnesses only a value requirement, `{ get }` or `{ get set }` ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)). And no place property hands out an under-aligned place (above).
 
-**A `@packed` or `@packed(N)` struct can't hold a `Synchronized` value inline**, through its fields, elements and payloads at any depth ([07](../07-concurrency/synchronization.md#atomics-and-locks)). Atomics need their alignment, and shared access to a `Synchronized` value is always in place, never through a temporary. A `Closure` counts as holding one, since its inline captures may hold one unseen in its type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)). What a field owns out of line, such as a `List`'s elements, is aligned and doesn't count.
+**A packed struct can't hold a `Synchronized` value inline**, through its fields, elements and payloads at any depth ([07](../07-concurrency/synchronization.md#atomics-and-locks)). Atomics need their alignment, and shared access to a `Synchronized` value is always in place, never through a temporary. A `Closure` counts as holding one, since its inline captures may hold one unseen in its type ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)). What a field owns out of line, such as a `List`'s elements, is aligned and doesn't count.
 
 So the type of a field that depends on a type parameter must be provably free of `Synchronized` values and `Closure`s at the definition, by being one of these:
 

@@ -44,7 +44,7 @@ A packed struct can put a field at a misaligned address, where a load or store o
     - reading a file header that contains such a union as plain bytes;
     - a C enum the header doesn't declare closed holding any value of its underlying type, with no undefined behavior, including in a `@safe` module that matches it with `when`.
 - **Must accept** imported structs under the borrow rules: union members read and written by value, and two closures of one `join` writing bitfields in different C memory locations of one struct, or a bitfield and a neighboring field.
-- **Must accept** reflection, serialization and `SoA` over an imported struct with bitfields, and a `@packed` struct conforming to a protocol whose `{ get set }` property its under-aligned field provides, used from generic code.
+- **Must accept** reflection, serialization and `SoA` over an imported struct with bitfields, and a `@layout(.packed)` struct conforming to a protocol whose `{ get set }` property its under-aligned field provides, used from generic code.
 
 ### E4 · Exporting data and functions to C callers
 

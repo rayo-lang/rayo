@@ -11,7 +11,7 @@ Six principles decide Rayo's trade-offs.
     - a closure moved into a `Closure` may put the captures its capture list shows in an allocated context, which the `Closure` type shows and no `alloc` marks ([05](spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
    Where the compiler stages a place through a temporary, a declaration announces it:
-    - a `@packed` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
+    - a `@layout(.packed)` struct ([04](spec/04-types/structs.md#packed-structs-and-under-aligned-places));
     - an imported C bitfield ([08](spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums));
     - a value property, one declared with `get` and `set` ([02](spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
