@@ -62,12 +62,14 @@ python3 scripts/check_imports.py
 
 | Command line | Does |
 | --- | --- |
-| `rayoc --check [--] <file>` | Checks the file, a program or a library, and writes no file |
-| `rayoc --emit=checked [--] <file>` | Checks the file, and prints its checked program as text |
-| `rayoc --emit=ir [--] <file>` | Checks the file, and prints its Rayo IR as text, which reads back into the same IR |
-| `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file, which must have a `main`, to object code for the host, in release mode where no mode is named, and writes it to the object file |
+| `rayoc [--warnings-as-errors] --check [--] <file>` | Checks the file, a program or a library, and writes no file |
+| `rayoc [--warnings-as-errors] --emit=checked [--] <file>` | Checks the file, and prints its checked program as text |
+| `rayoc [--warnings-as-errors] --emit=ir [--] <file>` | Checks the file, and prints its Rayo IR as text, which reads back into the same IR |
+| `rayoc [--warnings-as-errors] [--debug \| --release] -o <object file> [--] <file>` | Compiles the file, which must have a `main`, to object code for the host, in release mode where no mode is named, and writes it to the object file |
 
-`--` ends the options, so the file after it may be named like one; `rayo` always passes it. `rayoc` exits with 0 when it checked, printed or compiled the file, 1 when the program has errors or is a library given to `-o`, or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
+`--` ends the options, so the file after it may be named like one; `rayo` always passes it. A program with only warnings compiles, unless `--warnings-as-errors` makes a warning fail the compile as an error does; `rayo check`, `rayo build` and `rayo run` take it too, and pass it on.
+
+`rayoc` exits with 0 when it checked, printed or compiled the file, 1 when the program has errors or is a library given to `-o`, or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors and warnings, each followed by a `note:` line for each place it labels, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
 
 ## LLVM
 

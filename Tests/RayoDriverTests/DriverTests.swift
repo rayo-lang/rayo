@@ -31,12 +31,14 @@ struct DriverTests {
         ["run", "--linker", "a.rayo"], ["run", "a.rayo", "--linker=lld"],
         ["run", "--linker=bogus"], ["run", "--linker=lld"], ["run", "--linker"], ["run", "--debug"],
         ["build", "--release"], ["check", "--debug"], ["--check", "a.rayo"], ["-o", "a.o", "a.rayo"],
+        ["check", "--warnings-as-errors"], ["run", "--warnings-as-errors", "--warnings-as-errors", "a.rayo"],
+        ["build", "a.rayo", "--warnings-as-errors"],
     ])
     func usage(arguments: [String]) {
         let result = Driver.run(arguments, compiler: noCompiler)
         #expect(result.exitCode == 2)
         #expect(result.output == "")
-        #expect(result.errors.hasPrefix("usage: rayo <command> <file>\n"))
+        #expect(result.errors.hasPrefix("usage: rayo <command> [--warnings-as-errors] <file>\n"))
     }
 
     @Test("a linker rayo doesn't know is rejected", arguments: ["gold", "", "LLD"])
@@ -62,6 +64,30 @@ struct DriverTests {
         try withTemporaryDirectory { directory in
             try Data(source.utf8).write(to: directory.appendingPathComponent("main.rayo"))
             #expect(rayo(["check", "main.rayo"], in: directory) == expected)
+        }
+    }
+
+    @Test(arguments: [
+        ["check", "--warnings-as-errors"], ["build", "--warnings-as-errors", "--debug"],
+        ["run", "--linker=platform", "--warnings-as-errors"],
+    ])
+    func `'--warnings-as-errors' is handed on to rayoc`(options: [String]) throws {
+        try withTemporaryDirectory { directory in
+            let source = try save("func main() {}", as: "main.rayo", in: directory)
+            let standIn = ToolStandIn([.refuseArguments(endingIn: ["--warnings-as-errors"])],
+                                      then: .handOff(toToolAt: builtProduct("rayoc")))
+            let compiler = try install(standIn, as: "rayoc", in: directory)
+            let result = Driver.run(options + [source], compiler: compiler)
+            #expect(result.exitCode == 1)
+            #expect(result.errors.hasSuffix(": given '--warnings-as-errors'\n"))
+        }
+    }
+
+    @Test(arguments: ["check", "build", "run"])
+    func `a program without warnings compiles with '--warnings-as-errors'`(command: String) throws {
+        try withTemporaryDirectory { directory in
+            try Data("func main() {}".utf8).write(to: directory.appendingPathComponent("main.rayo"))
+            #expect(rayo([command, "--warnings-as-errors", "main.rayo"], in: directory).exitCode == 0)
         }
     }
 

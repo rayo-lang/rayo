@@ -2,7 +2,8 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// `@Diagnostics`, which gives an enum of codes a `number` and a `message` made from each case's `@Code`.
+/// `@Diagnostics`, which gives an enum of codes a `number`, a `message`, a `severity` and `labels` made from each
+/// case's `@Code`, and a `Label` enum with a case for each label any code declares.
 /// A table written wrong gets errors where it is wrong, and members that keep its uses compiling, so that
 /// only those errors are reported.
 public struct DiagnosticsMacro: MemberMacro {
@@ -33,7 +34,19 @@ public struct DiagnosticsMacro: MemberMacro {
             Member(name: "message", type: "String", fallbackBody: "\"\"") { entries in
                 switchOverSelf(entries.map { "case \($0.bindingPattern): \($0.messageLiteral)" })
             },
+            Member(name: "severity", type: "Severity", fallbackBody: ".error") { entries in
+                switchOverSelf(entries.map { "case .\($0.name): .\($0.severity)" })
+            },
+            Member(name: "labels", type: "[Label: String]", fallbackBody: "[:]", body: labelsBody),
         ]
+    }
+
+    /// The body of `labels`: each code's labels, and none for a code that declares none.
+    private static func labelsBody(_ entries: [CodeEntry]) -> String {
+        let labeled = entries.filter { !$0.labels.isEmpty }
+        if labeled.isEmpty { return "[:]" }
+        let cases = labeled.map { "case \($0.labelsBindingPattern): \($0.labelsLiteral)" }
+        return switchOverSelf(labeled.count == entries.count ? cases : cases + ["default: [:]"])
     }
 
     public static func expansion(of node: AttributeSyntax, providingMembersOf declaration: some DeclGroupSyntax,
@@ -45,12 +58,42 @@ public struct DiagnosticsMacro: MemberMacro {
         }
         var errors: [Diagnostic] = []
         let generated = membersToGenerate(in: enumDecl, reporting: &errors)
+        let generatesLabel = labelTypeIsFree(in: enumDecl, reporting: &errors)
         errors += conditionalCases(in: enumDecl)
         let entries = entries(of: enumDecl, reporting: &errors)
         errors.forEach { context.diagnose($0) }
 
-        let readEntries = errors.isEmpty ? entries : nil
-        return generated.map { $0.declaration(for: readEntries, access: accessModifier(of: enumDecl)) }
+        // Only a table read whole and without errors gets the members' bodies; `Label` takes what was read.
+        let access = accessModifier(of: enumDecl)
+        let readEntries = entries.compactMap(\.self)
+        let wholeTable = errors.isEmpty && readEntries.count == entries.count ? readEntries : nil
+        let members = generated.map { $0.declaration(for: wholeTable, access: access) }
+        guard generatesLabel else { return members }
+        return members + [labelType(declaredBy: readEntries, access: access)]
+    }
+
+    /// The `Label` enum, with a case for each label `entries` declare, in the order they first declare them. A table
+    /// written wrong gets the labels of the entries read without errors, so that its uses of them still compile.
+    private static func labelType(declaredBy entries: [CodeEntry], access: String) -> DeclSyntax {
+        var names: [String] = []
+        for label in entries.flatMap(\.labels) where !names.contains(label.name) {
+            names.append(label.name)
+        }
+        let cases = names.map { "case \($0)\n" }.joined()
+        return "\(raw: access)enum Label: Sendable, Hashable {\n\(raw: cases)}"
+    }
+
+    /// Whether `enumDecl` leaves the name `Label` free for the generated enum, reporting a type it declares by
+    /// that name.
+    private static func labelTypeIsFree(in enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> Bool {
+        let declaration = enumDecl.memberBlock.members.first { member in
+            let isType = member.decl.is(StructDeclSyntax.self) || member.decl.is(EnumDeclSyntax.self)
+                || member.decl.is(ClassDeclSyntax.self) || member.decl.is(TypeAliasDeclSyntax.self)
+            return isType && member.decl.asProtocol(NamedDeclSyntax.self)?.name.text == "Label"
+        }
+        guard let declaration else { return true }
+        errors.append(Diagnostic(node: declaration.decl, message: CodeTableError.memberTaken("Label")))
+        return false
     }
 
     /// The members the macro generates that `enumDecl` doesn't declare itself, reporting each it does.
@@ -69,15 +112,12 @@ public struct DiagnosticsMacro: MemberMacro {
         }
     }
 
-    /// Each case's entry, in order, or nil when any case has none. Reports a number used twice.
-    private static func entries(of enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [CodeEntry]? {
+    /// Each case's entry, in order, nil for a case that has none. Reports a number used twice.
+    private static func entries(of enumDecl: EnumDeclSyntax, reporting errors: inout [Diagnostic]) -> [CodeEntry?] {
         let cases = enumDecl.memberBlock.members.compactMap { $0.decl.as(EnumCaseDeclSyntax.self) }
-        var entries: [CodeEntry] = []
-        for caseDecl in cases {
-            if let entry = CodeEntry.read(caseDecl, reporting: &errors) { entries.append(entry) }
-        }
-        errors += duplicateNumbers(in: entries)
-        return entries.count == cases.count ? entries : nil
+        let entries = cases.map { CodeEntry.read($0, reporting: &errors) }
+        errors += duplicateNumbers(in: entries.compactMap(\.self))
+        return entries
     }
 
     /// An error at each entry whose number an earlier entry has, with a note at that earlier one.

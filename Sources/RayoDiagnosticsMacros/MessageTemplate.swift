@@ -28,6 +28,12 @@ struct MessageTemplate {
         return labels
     }
 
+    /// The text, when it has no placeholders.
+    var plainText: String? {
+        guard parts.count == 1, case .text(let text) = parts[0] else { return nil }
+        return text
+    }
+
     /// The message as the inside of a Swift string literal, in which the value labeled `labels[i]` is `v<i>`.
     /// Every placeholder names one of `labels`.
     func literalContent(valuesLabeled labels: [String]) -> String {

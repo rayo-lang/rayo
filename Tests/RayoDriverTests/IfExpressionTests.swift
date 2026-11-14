@@ -86,7 +86,10 @@ struct IfExpressionTests {
         ("let y = if c { 1 }", "4:9: error[E0253]: an 'if' used for its value needs an 'else'"),
         ("let y = if c { 1 } else { true }",
          "4:27: error[E0254]: the 'if' gives Int in one branch and Bool in another"),
-        ("let y = if c { x } else { 2 }\nprint(y)\nprint(x)", "6:7: error[E0303]: 'x' may have been moved"),
+        (
+            "let y = if c { x } else { 2 }\nprint(y)\nprint(x)",
+            "6:7: error[E0303]: 'x' may have been moved\nmain.rayo:4:16: note: moved here",
+        ),
     ])
     func `an 'if' used for its value is checked in either build`(
         mode: [String], failure: (body: String, error: String),

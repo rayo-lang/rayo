@@ -72,7 +72,10 @@ struct StructTests {
         ),
         ("let e = Enemy(hp: true, armor: 5)", "2:23: error[E0248]: the field 'hp' takes Int, found Bool"),
         ("let e = Enemy(hp: 100, armor: 5)\n    print(e.speed)", "3:13: error[E0244]: Enemy has no field 'speed'"),
-        ("let hp = 100\n    let e = Enemy(hp: hp, armor: 5)\n    print(hp)", "4:11: error[E0302]: 'hp' was moved"),
+        (
+            "let hp = 100\n    let e = Enemy(hp: hp, armor: 5)\n    print(hp)",
+            "4:11: error[E0302]: 'hp' was moved\nmain.rayo:3:23: note: moved here",
+        ),
     ])
     func `a call that doesn't give each field once, in order, or a read of no field, is an error, in debug and release`(
         mode: [String], failure: (body: String, error: String),
@@ -193,11 +196,11 @@ struct NestedStructTests {
         ("let f = Enemy(stats: e, armor: 1)", "4:26: error[E0248]: the field 'stats' takes Stats, found Enemy"),
         (
             "let f = Enemy(stats: e.stats, armor: 1)\n    print(e.stats.hp)",
-            "5:11: error[E0302]: 'e.stats' was moved",
+            "5:11: error[E0302]: 'e.stats' was moved\nmain.rayo:4:26: note: moved here",
         ),
         (
             "let s = Stats(alive: true, hp: 1, speed: 2)\n    let f = Enemy(stats: s, armor: 1)\n    print(s.hp)",
-            "6:11: error[E0302]: 's' was moved",
+            "6:11: error[E0302]: 's' was moved\nmain.rayo:5:26: note: moved here",
         ),
     ])
     func `a nested read of no field, a field given a wrong or taken value, or a moved local is an error in both builds`(

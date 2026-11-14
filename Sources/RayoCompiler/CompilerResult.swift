@@ -3,9 +3,9 @@ import RayoDiagnostics
 /// What a run of `rayoc` gives: its exit code, and what it writes to its standard error and its standard output.
 public struct CompilerResult: Equatable, Sendable {
     public var exitCode: Int32
-    /// The program's errors, why `rayoc` couldn't go on, or how to use it.
+    /// The program's errors and warnings, why `rayoc` couldn't go on, or how to use it.
     public var errors: String
-    /// The errors found in the program, which `errors` also shows.
+    /// The errors and warnings found in the program, which `errors` also shows.
     public var diagnostics: [Diagnostic]
     /// What a stage made of the program, where the arguments ask for it to be printed.
     public var standardOutput: String

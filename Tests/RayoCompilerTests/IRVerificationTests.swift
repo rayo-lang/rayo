@@ -40,7 +40,7 @@ struct IRVerificationTests {
 
     @Test func `the front end verifies the IR that lowering gives, before any stage reads it`() {
         // The front end's steps chain in the order it runs them, and its type names each step.
-        let frontEnd = Compiler.frontEnd(readFile: { _ in nil })
+        let frontEnd = Compiler.frontEnd(readFile: { _ in nil }, warningsAreErrors: false)
         let steps = String(describing: type(of: frontEnd))
         #expect(steps.contains("Lower, VerifyIR>, CheckParameterMoves>"))
     }

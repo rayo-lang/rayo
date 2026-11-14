@@ -92,7 +92,7 @@ struct CompilerTests {
 
     @Test func `the usage names each dump '--emit' prints`() {
         let usage = compile([]).result.errors
-        #expect(usage.contains("rayoc --emit=checked|ir [--] <file>\n"))
+        #expect(usage.contains("rayoc [--warnings-as-errors] --emit=checked|ir [--] <file>\n"))
         #expect(usage.contains("--emit=checked"))
         #expect(usage.contains("--emit=ir"))
     }
@@ -134,6 +134,28 @@ struct CompilerTests {
 
             """)
         #expect(compiled.written.isEmpty)
+    }
+
+    @Test func `each place an error labels is shown after it, as the file's path, the position and the label`() {
+        let source = "func f() {\n    let x = 1\n    let y = x\n    print(x)\n}"
+        let compiled = compile(["--check", "a.rayo"], files: ["a.rayo": source])
+        #expect(compiled.result.exitCode == 1)
+        #expect(compiled.result.errors == """
+            a.rayo:4:11: error[E0302]: 'x' was moved
+            a.rayo:3:13: note: moved here
+
+            """)
+    }
+
+    @Test(arguments: [
+        ["--warnings-as-errors", "--check", "a.rayo"], ["--check", "--warnings-as-errors", "a.rayo"],
+        ["--warnings-as-errors", "-o", "a.o", "a.rayo"], ["--debug", "-o", "a.o", "--warnings-as-errors", "a.rayo"],
+    ])
+    func `'--warnings-as-errors' goes with either compile, and a program without warnings still compiles`(
+        arguments: [String],
+    ) {
+        let compiled = compile(arguments, files: ["a.rayo": "func main() { print(1) }"])
+        #expect(compiled.result == CompilerResult(exitCode: 0, errors: ""))
     }
 
     @Test(arguments: [
@@ -179,11 +201,13 @@ struct CompilerTests {
         ["--emit=asm", "a.rayo"], ["--emit", "a.rayo"], ["--emit=", "a.rayo"], ["--emit=ir", "--check", "a.rayo"],
         ["--check", "--emit=checked", "a.rayo"], ["--emit=ir", "-o", "a.o", "a.rayo"],
         ["--emit=ir", "--emit=checked", "a.rayo"], ["--emit=ir", "--debug", "a.rayo"], ["--emit=ir"],
+        ["--warnings-as-errors", "a.rayo"], ["--check", "--warnings-as-errors"],
+        ["--warnings-as-errors", "--warnings-as-errors", "--check", "a.rayo"],
     ])
     func `arguments that name no one compile print the usage, and write nothing`(arguments: [String]) {
         let compiled = compile(arguments, files: ["a.rayo": "func main() {}", "b.rayo": "func main() {}"])
         #expect(compiled.result.exitCode == 2)
-        #expect(compiled.result.errors.hasPrefix("usage: rayoc --check [--] <file>\n"))
+        #expect(compiled.result.errors.hasPrefix("usage: rayoc [--warnings-as-errors] --check [--] <file>\n"))
         #expect(compiled.written.isEmpty)
     }
 }

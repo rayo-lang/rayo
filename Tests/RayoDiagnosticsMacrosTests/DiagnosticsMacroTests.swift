@@ -31,6 +31,17 @@ private let placeholderMembers = """
         var message: String {
             ""
         }
+
+        var severity: Severity {
+            .error
+        }
+
+        var labels: [Label: String] {
+            [:]
+        }
+
+        enum Label: Sendable, Hashable {
+        }
     """
 
 struct DiagnosticsMacroTests {
@@ -180,6 +191,154 @@ struct DiagnosticsMacroTests {
             """, reporting: [error(.conditionalCase, 5, 5)])
     }
 
+    @Test func `a code is an error or a warning, as its '@Code' says`() {
+        expect("""
+            @Diagnostics
+            enum E {
+                @Code(1, error: "a")
+                case a
+                @Code(2, warning: "b")
+                case b
+            }
+            """, expandsTo: """
+            enum E {
+                case a
+                case b
+
+                var number: Int {
+                    switch self {
+                    case .a:
+                        1
+                    case .b:
+                        2
+                    }
+                }
+
+                var message: String {
+                    switch self {
+                    case .a:
+                        "a"
+                    case .b:
+                        "b"
+                    }
+                }
+
+                var severity: Severity {
+                    switch self {
+                    case .a:
+                        .error
+                    case .b:
+                        .warning
+                    }
+                }
+
+                var labels: [Label: String] {
+                    [:]
+                }
+
+                enum Label: Sendable, Hashable {
+                }
+            }
+            """, reporting: [])
+    }
+
+    @Test func `a code's labels each give their text, which may name the code's values, under a kind of their own`() {
+        expect("""
+            @Diagnostics
+            enum E {
+                @Code(1, error: "'{name}' was moved", labels: ["moved": "'{name}' moved here", "seen": "seen"])
+                case moved(name: String)
+                @Code(2, warning: "{a} and {b}", labels: ["seen": "{b} seen here"])
+                case pair(a: Int, b: Int)
+                @Code(3, error: "c")
+                case c
+            }
+            """, expandsTo: """
+            enum E {
+                case moved(name: String)
+                case pair(a: Int, b: Int)
+                case c
+
+                var number: Int {
+                    switch self {
+                    case .moved:
+                        1
+                    case .pair:
+                        2
+                    case .c:
+                        3
+                    }
+                }
+
+                var message: String {
+                    switch self {
+                    case .moved(let v0):
+                        "'\\(v0)' was moved"
+                    case .pair(let v0, let v1):
+                        "\\(v0) and \\(v1)"
+                    case .c:
+                        "c"
+                    }
+                }
+
+                var severity: Severity {
+                    switch self {
+                    case .moved:
+                        .error
+                    case .pair:
+                        .warning
+                    case .c:
+                        .error
+                    }
+                }
+
+                var labels: [Label: String] {
+                    switch self {
+                    case .moved(let v0):
+                        [.moved: "'\\(v0)' moved here", .seen: "seen"]
+                    case .pair(_, let v1):
+                        [.seen: "\\(v1) seen here"]
+                    default:
+                        [:]
+                    }
+                }
+
+                enum Label: Sendable, Hashable {
+                    case moved
+                    case seen
+                }
+            }
+            """, reporting: [])
+    }
+
+    @Test func `a code's labels are a dictionary from identifiers to one-line strings that name only its values`() {
+        expect("""
+            @Diagnostics
+            enum E {
+                @Code(1, error: "a", labels: ["moved": "x", "moved": "again", "not a name": "x", "seen": "\\(x)"])
+                case a
+                @Code(2, error: "b", labels: labels)
+                case b
+                @Code(3, error: "{name}", labels: ["moved": "{nmae}"])
+                case c(name: Int)
+            }
+            """, expandsTo: """
+            enum E {
+                case a
+                case b
+                case c(name: Int)
+
+            \(placeholderMembers)
+            }
+            """, reporting: [
+                error(.labelTwice("moved"), 3, 49),
+                error(.labelNameNotIdentifier, 3, 67),
+                error(.labelNotPlain, 3, 94),
+                error(.labelsNotLiteral, 5, 34),
+                error(.unknownPlaceholder("nmae"), 7, 49),
+            ])
+    }
+
     @Test("an enum can't declare what '@Diagnostics' generates")
     func memberTaken() {
         expect("""
@@ -199,8 +358,51 @@ struct DiagnosticsMacroTests {
                 var message: String {
                     ""
                 }
+
+                var severity: Severity {
+                    .error
+                }
+
+                var labels: [Label: String] {
+                    [:]
+                }
+
+                enum Label: Sendable, Hashable {
+                }
             }
             """, reporting: [error(.memberTaken("number"), 6, 5)])
+    }
+
+    @Test func `an enum can't declare a type named 'Label', which '@Diagnostics' generates`() {
+        expect("""
+            @Diagnostics
+            enum E {
+                @Code(1, error: "a")
+                case a
+                struct Label {}
+            }
+            """, expandsTo: """
+            enum E {
+                case a
+                struct Label {}
+
+                var number: Int {
+                    0
+                }
+
+                var message: String {
+                    ""
+                }
+
+                var severity: Severity {
+                    .error
+                }
+
+                var labels: [Label: String] {
+                    [:]
+                }
+            }
+            """, reporting: [error(.memberTaken("Label"), 5, 5)])
     }
 
     @Test("'@Code' gives a code only to a case of a '@Diagnostics' enum")

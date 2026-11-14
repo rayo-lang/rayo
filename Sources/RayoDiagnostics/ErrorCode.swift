@@ -1,5 +1,5 @@
-/// An error the compiler reports in a program. A code's number never changes and is never reused, so an
-/// error can be looked up by its number.
+/// An error or a warning the compiler reports in a program. A code's number never changes and is never reused,
+/// whatever its severity, so a diagnostic can be looked up by its number.
 @Diagnostics
 public enum ErrorCode: Sendable, Hashable {
     // MARK: Lexing
@@ -272,10 +272,10 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
     case moveFromParameter(name: String)
 
-    @Code(302, error: "'{name}' was moved")
+    @Code(302, error: "'{name}' was moved", labels: ["moved": "moved here"])
     case usedAfterMove(name: String)
 
-    @Code(303, error: "'{name}' may have been moved")
+    @Code(303, error: "'{name}' may have been moved", labels: ["moved": "moved here"])
     case usedAfterMaybeMove(name: String)
 
     @Code(304, error: "'{name}' isn't initialized")
@@ -293,10 +293,12 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(308, error: "the value assigned to '{name}' is never read")
     case unreadValue(name: String)
 
-    @Code(309, error: "'{field}' was moved out of '{name}', so '{name}' can't be used whole")
+    @Code(309, error: "'{field}' was moved out of '{name}', so '{name}' can't be used whole",
+          labels: ["moved": "moved here"])
     case usedPartlyMoved(name: String, field: String)
 
-    @Code(310, error: "'{field}' may have been moved out of '{name}', so '{name}' can't be used whole")
+    @Code(310, error: "'{field}' may have been moved out of '{name}', so '{name}' can't be used whole",
+          labels: ["moved": "moved here"])
     case usedMaybePartlyMoved(name: String, field: String)
 
     @Code(311, error:

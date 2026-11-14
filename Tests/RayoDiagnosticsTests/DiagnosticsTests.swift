@@ -1,5 +1,6 @@
 import Testing
-import RayoDiagnostics
+@testable import RayoDiagnostics
+import RayoSource
 
 @Diagnostics
 enum SampleCode: Equatable {
@@ -32,6 +33,12 @@ enum SampleCode: Equatable {
 
     @Code(1_004, error: "'{name}' has {name.count} letters, and '{name.}' and '{name.count.x}' are text")
     case letters(name: String)
+
+    @Code(1_005, warning: "'{name}' is never read")
+    case unread(name: String)
+
+    @Code(1_006, error: "'{name}' was moved", labels: ["moved": "moved here", "kept": "'{name}' kept here"])
+    case moved(name: String)
 }
 
 struct DiagnosticsTests {
@@ -59,10 +66,41 @@ struct DiagnosticsTests {
         (SampleCode.noMain, 1), (.notDeclared(name: "x"), 2), (.typeMismatch(expected: "", found: ""), 3),
         (.arity(name: "", count: 0, passed: 0), 41), (.keywordLabel(in: ""), 80),
         (.braces(name: ""), 1000), (.qualified, 1001), (.edges(name: "", café: ""), 1002), (.ellipsis, 1003),
-        (.letters(name: ""), 1004),
+        (.letters(name: ""), 1004), (.unread(name: ""), 1005), (.moved(name: ""), 1006),
     ])
     func numbers(code: SampleCode, number: Int) {
         #expect(code.number == number)
+    }
+
+    @Test(arguments: [(SampleCode.noMain, Severity.error), (.unread(name: "x"), .warning), (.moved(name: "x"), .error)])
+    func `each code is an error or a warning, as its '@Code' says`(code: SampleCode, severity: Severity) {
+        #expect(code.severity == severity)
+    }
+
+    @Test func `a code's labels give their texts, filled with the code's values`() {
+        #expect(SampleCode.moved(name: "x").labels == [.moved: "moved here", .kept: "'x' kept here"])
+        #expect(SampleCode.noMain.labels.isEmpty)
+    }
+}
+
+/// The range from `line`, `column` to the end of that line.
+private func range(_ line: Int, _ column: Int) -> SourceRange {
+    SourceRange(SourceLocation(line: line, column: column, offset: line * 100 + column),
+                SourceLocation(line: line, column: 99, offset: line * 100 + 99))
+}
+
+struct DiagnosticTests {
+    @Test func `a diagnostic is shown as its position, its severity, its code and its message`() {
+        let error = Diagnostic(.usedAfterMove(name: "x"), at: range(3, 5))
+        let warning = Diagnostic(.usedAfterMove(name: "x"), severity: .warning, at: range(3, 5))
+        #expect(error.description == "3:5: error[E0302]: 'x' was moved")
+        #expect(warning.description == "3:5: warning[E0302]: 'x' was moved")
+    }
+
+    @Test func `each place a diagnostic labels is shown as a note of its position and its label's text, in order`() {
+        let moves = [range(2, 9), range(1, 7)].map { Diagnostic.LabeledRange(.moved, at: $0) }
+        let diagnostic = Diagnostic(.usedAfterMove(name: "x"), at: range(3, 5), labeling: moves)
+        #expect(diagnostic.notes == ["2:9: note: moved here", "1:7: note: moved here"])
     }
 }
 
@@ -72,6 +110,11 @@ struct ErrorCodeTests {
     ])
     func identifiers(code: ErrorCode, identifier: String) {
         #expect(code.identifier == identifier)
+    }
+
+    @Test(arguments: [ErrorCode.usedAfterMove(name: "x"), .usedAfterMaybeMove(name: "x")])
+    func `a use of a moved local labels each move 'moved here'`(code: ErrorCode) {
+        #expect(code.labels == [.moved: "moved here"])
     }
 
     @Test("an argument count names one argument, or several", arguments: [

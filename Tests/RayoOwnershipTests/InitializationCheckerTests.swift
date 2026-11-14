@@ -14,7 +14,7 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
+        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
     }
 
     @Test func `a move uses the local as a read does, so moving it again is reported there`() throws {
@@ -25,7 +25,7 @@ struct InitializationCheckerTests {
               %1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
+        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
     }
 
     @Test
@@ -42,7 +42,8 @@ struct InitializationCheckerTests {
               return
             """
         #expect(try errors(in: blocks) == [
-            Diagnostic(.usedUninitialized(name: "k"), at: at(1)), Diagnostic(.usedAfterMove(name: "x"), at: at(5)),
+            Diagnostic(.usedUninitialized(name: "k"), at: at(1)),
+            Diagnostic(.usedAfterMove(name: "x"), at: at(5), labeling: moves(at: [4])),
         ])
     }
 
@@ -67,9 +68,11 @@ struct InitializationCheckerTests {
         #expect(try errors(in: blocks, parameters: "Int") == [])
     }
 
-    @Test(arguments: [(true, ErrorCode.usedAfterMaybeMove(name: "x")), (false, .usedAfterMove(name: "x"))])
+    @Test(arguments: [
+        (true, ErrorCode.usedAfterMaybeMove(name: "x"), [1]), (false, .usedAfterMove(name: "x"), [1, 2]),
+    ])
     func `a local moved on some of the paths that join may have been moved, and one moved on all of them was moved`(
-        keptOnOnePath: Bool, expected: ErrorCode,
+        keptOnOnePath: Bool, expected: ErrorCode, moveColumns: [Int],
     ) throws {
         let otherwise = keptOnOnePath ? "" : "%1 @1:1-1:1 = use move %0 @2:2-2:2 @1:1-1:1"
         let blocks = """
@@ -86,10 +89,12 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(3))])
+        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(3), labeling: moves(at: moveColumns))])
     }
 
-    @Test(arguments: [(false, [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(1))]), (true, [])])
+    @Test(arguments: [
+        (false, [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(1), labeling: moves(at: [1]))]), (true, []),
+    ])
     func `a move in a loop's body leaves the local without a value on the next pass, unless the body assigns it again`(
         assignsAgain: Bool, expected: [Diagnostic],
     ) throws {
@@ -122,7 +127,8 @@ struct InitializationCheckerTests {
               return move %0 @2:4-2:4
             """
         #expect(try errors(in: blocks, result: "Int") == [
-            Diagnostic(.usedAfterMove(name: "b"), at: at(2)), Diagnostic(.usedAfterMove(name: "x"), at: at(4)),
+            Diagnostic(.usedAfterMove(name: "b"), at: at(2), labeling: moves(at: [1])),
+            Diagnostic(.usedAfterMove(name: "x"), at: at(4), labeling: moves(at: [3])),
         ])
     }
 
@@ -147,7 +153,7 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2))])
+        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
     }
 
     @Test func `a use that other moves reach is reported again`() throws {
@@ -169,7 +175,8 @@ struct InitializationCheckerTests {
               return
             """
         #expect(try errors(in: blocks) == [
-            Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2)), Diagnostic(.usedAfterMove(name: "x"), at: at(4)),
+            Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2), labeling: moves(at: [1])),
+            Diagnostic(.usedAfterMove(name: "x"), at: at(4), labeling: moves(at: [3])),
         ])
     }
 
@@ -221,7 +228,9 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2))])
+        #expect(try errors(in: blocks) == [
+            Diagnostic(.usedAfterMaybeMove(name: "x"), at: at(2), labeling: moves(at: [1])),
+        ])
     }
 
     @Test
@@ -318,11 +327,11 @@ struct InitializationCheckerTests {
     }
 
     @Test(arguments: [
-        ("declare %5", ErrorCode.usedUninitialized(name: "s")),
-        (storeShot() + "\n  _ = use move %5 @2:1-2:1 @1:1-1:1", .usedAfterMove(name: "s")),
+        ("declare %5", ErrorCode.usedUninitialized(name: "s"), []),
+        (storeShot() + "\n  _ = use move %5 @2:1-2:1 @1:1-1:1", .usedAfterMove(name: "s"), [1]),
     ])
     func `a store to a field uses its local, which must hold the rest of its value`(
-        before: String, expected: ErrorCode,
+        before: String, expected: ErrorCode, moveColumns: [Int],
     ) throws {
         let blocks = """
             bb0:
@@ -332,7 +341,7 @@ struct InitializationCheckerTests {
               return
             """
         // The read after the store has the same cause as the store, so the store alone is reported.
-        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(2))])
+        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(2), labeling: moves(at: moveColumns))])
     }
 
     @Test func `a store to a field leaves its local holding its value, which a move may then take`() throws {
@@ -344,7 +353,7 @@ struct InitializationCheckerTests {
               _ = use read %5 @2:3-2:3 @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3))])
+        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2]))])
     }
 
     @Test func `the errors come in source order across the program's functions`() throws {
@@ -381,7 +390,9 @@ struct FieldMoveTests {
               _ = use read %4 @2:4-2:4 @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3))])
+        #expect(try errors(in: blocks) == [
+            Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3), labeling: moves(at: [1])),
+        ])
     }
 
     @Test(arguments: [
@@ -400,7 +411,7 @@ struct FieldMoveTests {
               _ = use \(use) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(2))])
+        #expect(try errors(in: blocks) == [Diagnostic(expected, at: at(2), labeling: moves(at: [1]))])
     }
 
     @Test(arguments: [("%5.1", "%5.1"), ("%5.1.0", "%5.1.0"), ("%5.1.0", "%5.1")])
@@ -430,7 +441,9 @@ struct FieldMoveTests {
               return
             """
         // The read has the same cause as the store, so the store alone is reported.
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(2))])
+        #expect(try errors(in: blocks) == [
+            Diagnostic(.usedAfterMove(name: "s.hit"), at: at(2), labeling: moves(at: [1])),
+        ])
     }
 
     @Test func `assigning the whole local after a field was moved out of it makes it whole again`() throws {
@@ -464,7 +477,8 @@ struct FieldMoveTests {
               _ = use \(use) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == expected.map { [Diagnostic($0, at: at(2))] } ?? [])
+        let expectedErrors = expected.map { [Diagnostic($0, at: at(2), labeling: moves(at: [1]))] }
+        #expect(try errors(in: blocks) == expectedErrors ?? [])
     }
 
     @Test func `a field moved on every path that joins was moved`() throws {
@@ -482,8 +496,15 @@ struct FieldMoveTests {
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3))])
+        #expect(try errors(in: blocks) == [
+            Diagnostic(.usedAfterMove(name: "s.hit"), at: at(3), labeling: moves(at: [1, 2])),
+        ])
     }
+}
+
+/// The moves at `columns`, each labeled as a move, as an error notes the moves that caused it.
+private func moves(at columns: [Int]) -> [Diagnostic.LabeledRange] {
+    columns.map { Diagnostic.LabeledRange(.moved, at: at($0)) }
 }
 
 /// The errors the checker reports in a program of one function made of `blocks`, which returns `result` and whose

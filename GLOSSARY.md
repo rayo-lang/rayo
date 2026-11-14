@@ -507,9 +507,17 @@ What a panic does to its thread's frames, innermost first: it ends each as a `th
 
 ### Compilation
 
+**Compile error**:
+A break of one of the language's rules, which the compiler finds as it compiles, and for which it rejects the program, so it never runs ([11](docs/spec/11-compilation-model.md#compile-errors-and-warnings)).
+_Avoid_: diagnostic
+
 **Pointer width**:
 The size of a target's pointers and of C's size types, 32 or 64 bits, which `Int` and `UInt` don't follow ([11](docs/spec/11-compilation-model.md#what-a-target-must-provide)).
 _Avoid_: word size, bitness
 
 **Prelude**:
 The std declarations every module sees without an import ([11](docs/spec/11-compilation-model.md#the-prelude)).
+
+**Warning**:
+A report of code that is likely a mistake but has a defined meaning, which the program compiles and runs as if it weren't there ([11](docs/spec/11-compilation-model.md#compile-errors-and-warnings)).
+_Avoid_: diagnostic, lint
