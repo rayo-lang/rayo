@@ -166,7 +166,7 @@ static func significantNewlines(_ raw: [Token]) -> [Token] {
 **A value a `switch` or `if` picks is an expression**, in place of a `var` assigned in each branch or a `return` in each case. The `switch` or `if` is the body's one expression, follows `return`, or is bound with `let`, so `return` stands once, before it, and never inside one of its cases. A branch is one expression, a `throw`, or a call that never returns; a branch that needs statements is a step to extract. A body of one expression leaves out `return`.
 
 ```swift
-/// What the parser found in `token`, as an error names it.
+/// Describes the token the parser found, the way an error message names it.
 private func found(_ token: Token) -> FoundToken {
     switch token.kind {
     case .newline: .newline
