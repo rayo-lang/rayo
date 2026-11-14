@@ -1,0 +1,38 @@
+main "main()"
+
+func "main()"() -> Void {
+  let %0 grid: [2 of [3 of Int]]
+  let %1 i: UInt
+  let %2 n: UInt
+  bind %0 @2:9-2:13
+    array: [2 of [3 of Int]] @2:16-2:38
+      array: [3 of Int] @2:17-2:26
+        int 1: Int @2:18-2:19
+        int 2: Int @2:21-2:22
+        int 3: Int @2:24-2:25
+      array: [3 of Int] @2:28-2:37
+        int 4: Int @2:29-2:30
+        int 5: Int @2:32-2:33
+        int 6: Int @2:35-2:36
+  bind %1 @3:9-3:10
+    uint 1: UInt @3:19-3:20
+  expression
+    call builtin "print(_: UInt)": Void @4:5-4:22
+      count 2: UInt @4:11-4:21
+        place %0 @4:11-4:15
+  expression
+    call builtin "print(_: UInt)": Void @5:5-5:25
+      count 3: UInt @5:11-5:24
+        place %0 @5:11-5:15 [of 2] @5:11-5:18
+          value: UInt @5:16-5:17
+            place %1 @5:16-5:17
+  bind %2 @6:9-6:10
+    copy: UInt @6:13-6:28
+      place temporary
+        count 2: UInt @6:18-6:28
+          place %0 @6:18-6:22
+  expression
+    call builtin "print(_: UInt)": Void @7:5-7:13
+      value: UInt @7:11-7:12
+        place %2 @7:11-7:12
+}

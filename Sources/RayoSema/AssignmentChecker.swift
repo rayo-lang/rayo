@@ -12,7 +12,7 @@ struct AssignmentChecker {
     /// Checks an assignment, or a compound assignment such as `+=`. The value is checked even when the target can't
     /// be assigned, so mistakes in it are still reported.
     func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr, in range: SourceRange) -> CheckedStmt? {
-        let current = expressions.place(target, under: self)
+        let current = changedPlace(target)
         let value = checkAssigned(valueExpr, by: op, to: current?.type)
         guard let current, let value else { return nil }
 
@@ -20,6 +20,33 @@ struct AssignmentChecker {
         case nil: .assign(current.place, value)
         case let binaryOp?:
             compoundAssign(value, CheckedBinaryOperator(binaryOp), spelled: op.rawValue, to: current, in: range)
+        }
+    }
+
+    /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. An
+    /// array's count never changes, whatever holds the array, so a target that names one or goes on from one is
+    /// reported as that, ahead of anything the rules would refuse in the place that holds the array.
+    private func changedPlace(_ target: Expr) -> TypedPlace? {
+        for (base, nameRange) in countMembers(in: target) {
+            // Each base is checked as a place a read names, so whether it holds an array is known whatever holds it.
+            // A base that failed was reported.
+            guard let holder = expressions.place(base, under: expressions) else { return nil }
+            if case .array = holder.type { return refuse(.assignToCount, at: nameRange) }
+        }
+        return expressions.place(target, under: self)
+    }
+
+    /// Each member called `count` along the members and elements that `target` steps through, innermost first: the
+    /// base it is a member of, and where the source writes its name. Whether each is an array's count, or a struct's
+    /// field, depends on its base's type.
+    private func countMembers(in target: Expr) -> [(base: Expr, nameRange: SourceRange)] {
+        switch target.kind {
+        case .member(let base, let name, let nameRange):
+            countMembers(in: base) + (name == "count" ? [(base, nameRange)] : [])
+        case .element(let base, _):
+            countMembers(in: base)
+        default:
+            []
         }
     }
 
@@ -108,7 +135,7 @@ struct AssignmentChecker {
 }
 
 /// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
-/// declared with `var`.
+/// declared with `var`, never into an array's count.
 extension AssignmentChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A local's name roots the place in the local; `_`, and anything but a name or a member, names no place.
@@ -128,6 +155,12 @@ extension AssignmentChecker: PlaceRules {
     func admitsElement(at range: SourceRange) -> Bool {
         // Only a local, or a field of one, can be assigned, which leaves out an element and every place inside one.
         errors.report(.assignToNonLocal, at: range)
+        return false
+    }
+
+    func admitsCount(at nameRange: SourceRange) -> Bool {
+        // An array's count is fixed by its type, so neither it nor anything inside it changes.
+        errors.report(.assignToCount, at: nameRange)
         return false
     }
 }

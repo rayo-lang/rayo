@@ -113,7 +113,7 @@ public struct CheckedPrinter: ~Copyable {
         switch expression.kind {
         case .intLiteral, .uintLiteral, .boolLiteral:
             break
-        case .place(let place), .copy(let place):
+        case .place(let place), .copy(let place), .arrayCount(let place, _):
             write(place, depth: depth + 1)
         case .unary(_, let operand), .filledArray(let operand):
             write(operand, depth: depth + 1)
@@ -141,6 +141,7 @@ public struct CheckedPrinter: ~Copyable {
         case .boolLiteral(let value): "bool \(value)"
         case .place: "value"
         case .copy: "copy"
+        case .arrayCount(_, let count): "count \(count)"
         case .unary(let op, _): "unary \(op)"
         case .binary(let op, _, _): "binary \(op)"
         case .call(let callee, _): "call \(text(of: callee))"

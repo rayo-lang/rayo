@@ -327,6 +327,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(272, error: "an index needs a UInt, found {found}")
     case indexNotUInt(found: TypeName)
 
+    @Code(273, error: "an array's 'count' is fixed by its type, so it can't change")
+    case assignToCount
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

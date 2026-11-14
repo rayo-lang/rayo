@@ -27,6 +27,11 @@ func errorLines(inMain body: String) -> [String] {
     diagnostics(mainSource(body)).map(\.description)
 }
 
+/// The errors that `body`, as `main`'s body beside `declarations`, reports, each as its position, code and message.
+func errorLines(inMain body: String, beside declarations: String) -> [String] {
+    diagnostics("\(mainSource(body))\n\(declarations)").map(\.description)
+}
+
 /// The codes of the errors that `body`, as `main`'s body, reports, and the text of `main.rayo` each covers.
 func codesAndCoverage(inMain body: String) -> (codes: [ErrorCode], covered: [String]) {
     let source = mainSource(body)
