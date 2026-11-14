@@ -1,5 +1,10 @@
+import LLVM
 import Testing
 import RayoLLVM
+import RayoRuntime
+#if os(Windows)
+import WinSDK
+#endif
 
 struct RuntimeTests {
     @Test
@@ -82,7 +87,53 @@ struct RuntimeTests {
         #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix("rayo.panic") })
         #expect(try symbols([], in: compile(empty, for: .release)).filter { $0.contains("rayo.") } == [])
     }
+
+    #if os(Windows)
+    @Test func `the host's start keeps a stack guarantee of 64 KiB for the thread it readies`() throws {
+        // The JIT runs the Windows host, whose `_setmode` is a stand-in that leaves this process's output as it is.
+        let host = try #require(ProgramRuntime.files.first { $0.name == "host-windows.ll" })
+        let jit = try JIT()
+        try jit.define("_setmode", at: unsafeBitCast(leavingMode, to: UnsafeRawPointer.self))
+        try jit.define("SetThreadStackGuarantee", at: unsafeBitCast(settingGuarantee, to: UnsafeRawPointer.self))
+        try jit.add(Context().parseModule(host.llvmIR, named: host.name))
+
+        let start = unsafeBitCast(try jit.address(of: "rayo.host.start"), to: (@convention(c) () -> Void).self)
+        #expect(stackGuarantee(ofThreadRunning: start) == 64 * 1024)
+    }
+    #endif
 }
+
+#if os(Windows)
+/// Stands in for the C runtime's `_setmode`, and changes no stream's mode.
+private let leavingMode: @convention(c) (Int32, Int32) -> Int32 = { _, _ in 0 }
+
+/// Windows' `SetThreadStackGuarantee`, which the host calls.
+private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> WindowsBool = SetThreadStackGuarantee
+
+/// The stack guarantee a thread of its own has once it has run `start`, or 0 where no thread could start.
+private func stackGuarantee(ofThreadRunning start: @convention(c) () -> Void) -> ULONG {
+    var run = GuaranteedRun(start: start)
+    withUnsafeMutablePointer(to: &run) { runPointer in
+        // The thread runs `start`, then asks for its own guarantee, which a size of 0 reads without changing.
+        let thread = CreateThread(nil, 0, { parameter in
+            let run = parameter!.assumingMemoryBound(to: GuaranteedRun.self)
+            run.pointee.start()
+            SetThreadStackGuarantee(&run.pointee.guarantee)
+            return 0
+        }, runPointer, 0, nil)
+        guard let thread else { return }
+        WaitForSingleObject(thread, INFINITE)
+        CloseHandle(thread)
+    }
+    return run.guarantee
+}
+
+/// A function a thread runs, and the stack guarantee the thread has after it.
+private struct GuaranteedRun {
+    let start: @convention(c) () -> Void
+    var guarantee: ULONG = 0
+}
+#endif
 
 /// The names of the symbols `llvm-nm` lists in `objectCode`, given `options`.
 private func symbols(_ options: [String], in objectCode: [UInt8]) throws -> [String] {
