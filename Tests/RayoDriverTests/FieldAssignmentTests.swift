@@ -169,8 +169,8 @@ struct FieldAssignmentTests {
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
-        ("l.armor = 1", "4:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
-        ("l.stats.hp = 1", "4:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
+        ("l.armor = 1", "4:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
+        ("l.stats.hp = 1", "4:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
         ("e.alive = false", "4:7: error[E0252]: 'alive' is a 'let' field, so it can't change"),
         ("e.stats.alive = false", "4:13: error[E0252]: 'alive' is a 'let' field, so it can't change"),
         ("e.armor = true", "4:15: error[E0213]: expected Int, found Bool"),
@@ -178,13 +178,13 @@ struct FieldAssignmentTests {
         ("e.stats.hp += true", "4:5: error[E0258]: '+=' needs integer operands, found Int and Bool"),
         ("e.mana = 1", "4:7: error[E0244]: Enemy has no field 'mana'"),
         ("e.armor.hp = 1", "4:13: error[E0244]: Int has no field 'hp'"),
-        ("hit(e).armor = 1", "4:5: error[E0223]: only a local, or a field of one, can be assigned"),
+        ("hit(e).armor = 1", "4:5: error[E0223]: only a local, or a field or element of one, can be assigned"),
         (
             "var b = Boss(stats: Stats(alive: true, hp: 1, speed: 2), level: 4, armor: 3)\n    b.stats.hp = 1",
             "5:7: error[E0252]: 'stats' is a 'let' field, so it can't change",
         ),
-        ("l.armor += 1", "4:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
-        ("l.stats.hp -= 1", "4:5: error[E0251]: 'l' is a 'let', so its fields can't change"),
+        ("l.armor += 1", "4:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
+        ("l.stats.hp -= 1", "4:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
         (
             "var b = Boss(stats: Stats(alive: true, hp: 1, speed: 2), level: 4, armor: 3)\n    b.level *= 2",
             "5:7: error[E0252]: 'level' is a 'let' field, so it can't change",

@@ -43,12 +43,13 @@ extension FunctionLowering {
         }
     }
 
-    /// Lowers `target op= value` as `target = target op value`.
+    /// Lowers `target op= value` as `target = target op value`, with the target's place, each index in it included,
+    /// worked out once, before the value is evaluated.
     private mutating func lowerCompoundAssign(
         _ target: CheckedPlace, _ op: CheckedBinaryOperator, _ value: CheckedExpr,
     ) {
-        let operand = operand(of: value, as: .read)
         let place = place(of: target)
+        let operand = operand(of: value, as: .read)
         let destination = Destination(place, at: target.range)
         let value = Rvalue.binary(IRBinaryOperator(op), .read(place, at: target.range), operand)
         builder.emit(value, into: destination, range: target.range)

@@ -179,7 +179,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(222, error: "'{name}' is a function, so it can't change")
     case assignToFunction(name: String)
 
-    @Code(223, error: "only a local, or a field of one, can be assigned")
+    @Code(223, error: "only a local, or a field or element of one, can be assigned")
     case assignToNonLocal
 
     @Code(224, error: "'{keyword}' is only allowed inside a loop")
@@ -261,8 +261,8 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 250 is unused, and stays so.
 
-    @Code(251, error: "'{name}' is a 'let', so its fields can't change")
-    case assignToFieldOfLet(name: String)
+    @Code(251, error: "'{name}' is a 'let', so its fields and elements can't change")
+    case assignToPartOfLet(name: String)
 
     @Code(252, error: "'{field}' is a 'let' field, so it can't change")
     case assignToLetField(field: String)
