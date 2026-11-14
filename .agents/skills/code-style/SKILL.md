@@ -102,7 +102,7 @@ private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]
     end(with: .goto(header), continuingIn: header)
     end(with: headerTerminator(testing: condition, body: bodyBlock, exit: exit), continuingIn: bodyBlock)
 
-    // Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
+    // Lower the body with this loop innermost, so a `break` leaves it and a `continue` goes back to its test.
     loops.append(Loop(header: header, exit: exit))
     lower(body)
     loops.removeLast()
