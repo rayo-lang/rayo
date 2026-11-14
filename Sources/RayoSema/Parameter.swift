@@ -1,4 +1,4 @@
-/// What a call needs to know about one parameter of the function it calls.
+/// One parameter of a signature: the label a call writes before its argument, and the type the argument must have.
 struct Parameter {
     /// The label an argument for it is written with, or nil when it is written with none.
     var label: String?

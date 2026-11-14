@@ -7,7 +7,7 @@ import RayoLLVM
 struct ObjectCodeTests {
     @Test(arguments: Build.allCases)
     func `a program compiles to an object file for the host, in debug and in release`(build: Build) throws {
-        let objectCode = try compile(printing("use 42"), for: build)
+        let objectCode = try compile(printing("operand 42"), for: build)
         let headers = try llvmTool("llvm-readobj", ["--file-headers"], on: objectCode)
         #expect(headers.contains("Format: \(hostFormat)"))
         #expect(headers.contains("Arch: \(hostArchitecture)\n"))
@@ -25,8 +25,8 @@ struct ObjectCodeTests {
                   temp %0: Int
                   temp %1: Int
                 bb0:
-                  %0 @1:1-1:2 = use 42 @1:1-1:2
-                  %1 @1:1-1:2 = use \(taking) %0 @1:1-1:2 @1:1-1:2
+                  %0 @1:1-1:2 = operand 42 @1:1-1:2
+                  %1 @1:1-1:2 = operand \(taking) %0 @1:1-1:2 @1:1-1:2
                   _ = call builtin "print(_: Int)"(read %1 @1:1-1:2) @1:1-1:2
                   return
                 }

@@ -9,24 +9,24 @@ func "main()"() -> Void {
   temp %5: Bool
 bb0:
   declare %0
-  %0 @2:5-2:6 = use true @2:9-2:13
+  %0 @2:5-2:6 = operand true @2:9-2:13
   declare %1
-  %1 @3:5-3:6 = use false @3:9-3:14
+  %1 @3:5-3:6 = operand false @3:9-3:14
   declare %2
-  %2 @4:5-4:6 = use true @4:9-4:13
+  %2 @4:5-4:6 = operand true @4:9-4:13
   declare %3
-  %5 @5:9-5:15 = use read %0 @5:9-5:10 @5:9-5:15
+  %5 @5:9-5:15 = operand read %0 @5:9-5:10 @5:9-5:15
   branch read %5 @5:9-5:15, bb1, bb2
 bb1:
-  %5 @5:9-5:15 = use read %1 @5:14-5:15 @5:9-5:15
+  %5 @5:9-5:15 = operand read %1 @5:14-5:15 @5:9-5:15
   goto bb2
 bb2:
-  %4 @5:9-5:20 = use read %5 @5:9-5:15 @5:9-5:20
+  %4 @5:9-5:20 = operand read %5 @5:9-5:15 @5:9-5:20
   branch read %4 @5:9-5:20, bb4, bb3
 bb3:
-  %4 @5:9-5:20 = use read %2 @5:19-5:20 @5:9-5:20
+  %4 @5:9-5:20 = operand read %2 @5:19-5:20 @5:9-5:20
   goto bb4
 bb4:
-  %3 @5:5-5:6 = use read %4 @5:9-5:20 @5:9-5:20
+  %3 @5:5-5:6 = operand read %4 @5:9-5:20 @5:9-5:20
   return
 }

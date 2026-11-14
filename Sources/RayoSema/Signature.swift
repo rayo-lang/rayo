@@ -1,4 +1,6 @@
-/// What a call needs to know about the function it calls.
+/// A function's name, its parameters' labels and types, and its result type: everything a call is checked against,
+/// apart from the function's body. Each function the file declares has one, and so does each of the prelude's
+/// built-ins.
 struct Signature: CustomStringConvertible {
     var name: String
     var callee: Callee

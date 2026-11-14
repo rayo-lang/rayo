@@ -6,7 +6,7 @@ import RayoSema
 
 struct UnusedValueCheckerTests {
     @Test func `a value stored in a local that no code reads is reported at the store`() throws {
-        let blocks = "bb0:\n  declare %2\n  %2 @2:1-2:1 = use 1 @1:1-1:1\n  return"
+        let blocks = "bb0:\n  declare %2\n  %2 @2:1-2:1 = operand 1 @1:1-1:1\n  return"
         #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "k"), at: at(1))])
     }
 
@@ -14,8 +14,8 @@ struct UnusedValueCheckerTests {
     func `a value that an assignment overwrites before any code reads it is reported, and the new one isn't`() throws {
         let blocks = """
             bb0:
-              %0 @2:1-2:1 = use 1 @1:1-1:1
-              %0 @2:2-2:2 = use 2 @1:1-1:1
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
+              %0 @2:2-2:2 = operand 2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
@@ -25,13 +25,13 @@ struct UnusedValueCheckerTests {
     @Test func `a value read on one of the paths from its store is used, though another path overwrites it`() throws {
         let blocks = """
             bb0:
-              %0 @2:1-2:1 = use 1 @1:1-1:1
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
               branch true, bb1, bb2
             bb1:
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               goto bb2
             bb2:
-              %0 @2:3-2:3 = use 2 @1:1-1:1
+              %0 @2:3-2:3 = operand 2 @1:1-1:1
               _ = call builtin "print(_: Int)"(move %0 @2:4-2:4) @1:1-1:1
               return
             """
@@ -45,10 +45,10 @@ struct UnusedValueCheckerTests {
     func `a value stored in a loop's body is used when the next pass reads it`(
         bodyReads: Bool, expected: [Diagnostic],
     ) throws {
-        let value = bodyReads ? "add checked read %0 @2:3-2:3, 1" : "use 1"
+        let value = bodyReads ? "add checked read %0 @2:3-2:3, 1" : "operand 1"
         let blocks = """
             bb0:
-              %0 @2:1-2:1 = use 0 @1:1-1:1
+              %0 @2:1-2:1 = operand 0 @1:1-1:1
               goto bb1
             bb1:
               branch true, bb2, bb3
@@ -64,10 +64,10 @@ struct UnusedValueCheckerTests {
     @Test func `a branch's condition and a return's result read the locals they name`() throws {
         let blocks = """
             bb0:
-              %6 @1:1-1:1 = use true @1:1-1:1
+              %6 @1:1-1:1 = operand true @1:1-1:1
               branch read %6 @2:1-2:1, bb1, bb1
             bb1:
-              %1 @1:1-1:1 = use 2 @1:1-1:1
+              %1 @1:1-1:1 = operand 2 @1:1-1:1
               return move %1 @2:2-2:2
             """
         #expect(try errors(in: blocks, result: "Int") == [])
@@ -76,7 +76,7 @@ struct UnusedValueCheckerTests {
     @Test func `a declaration starts its local's life, so a read after it reads no value stored before it`() throws {
         let blocks = """
             bb0:
-              %0 @2:1-2:1 = use 1 @1:1-1:1
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
               declare %0
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
@@ -85,7 +85,7 @@ struct UnusedValueCheckerTests {
     }
 
     @Test func `a temporary that no code reads reports nothing, since lowering made it`() throws {
-        #expect(try errors(in: "bb0:\n  %3 @1:1-1:1 = use 1 @1:1-1:1\n  return") == [])
+        #expect(try errors(in: "bb0:\n  %3 @1:1-1:1 = operand 1 @1:1-1:1\n  return") == [])
     }
 
     @Test func `a block that no path reaches reports nothing`() throws {
@@ -93,7 +93,7 @@ struct UnusedValueCheckerTests {
             bb0:
               return
             bb1:
-              %0 @2:1-2:1 = use 1 @1:1-1:1
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [])
@@ -112,8 +112,8 @@ struct UnusedValueCheckerTests {
         let blocks = """
             bb0:
             \(storeShot(at: 1))
-              %5.1.0 @2:2-2:2 = use 9 @1:1-1:1
-              _ = use \(later) @1:1-1:1
+              %5.1.0 @2:2-2:2 = operand 9 @1:1-1:1
+              _ = operand \(later) @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
               return
             """
@@ -125,7 +125,7 @@ struct UnusedValueCheckerTests {
         let blocks = """
             bb0:
             \(storeShot(at: 1))
-              %5.0 @2:2-2:2 = use 9 @1:1-1:1
+              %5.0 @2:2-2:2 = operand 9 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.1.0 @2:3-2:3) @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
               return
@@ -134,8 +134,8 @@ struct UnusedValueCheckerTests {
     }
 
     @Test(arguments: [
-        ("%5.0", "use 9", "s.range"),
-        ("%5.1.0", "use 9", "s.hit.damage"),
+        ("%5.0", "operand 9", "s.range"),
+        ("%5.1.0", "operand 9", "s.hit.damage"),
         ("%5.1", "call \"Hit(damage: Int)\"(9)", "s.hit"),
     ])
     func `a later read of the whole struct doesn't read a field's value that a store replaced before it`(
@@ -147,7 +147,7 @@ struct UnusedValueCheckerTests {
             \(storeShot(at: 1))
               \(field) @2:2-2:2 = \(value) @1:1-1:1
               \(field) @2:3-2:3 = \(value) @1:1-1:1
-              _ = use move %5 @2:4-2:4 @1:1-1:1
+              _ = operand move %5 @2:4-2:4 @1:1-1:1
               return
             """
         #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: path), at: at(2))])
@@ -157,7 +157,7 @@ struct UnusedValueCheckerTests {
         let blocks = """
             bb0:
             \(storeShot(at: 1))
-              %5.0 @2:2-2:2 = use 9 @1:1-1:1
+              %5.0 @2:2-2:2 = operand 9 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %5.0 @2:3-2:3) @1:1-1:1
               return
             """
@@ -166,8 +166,8 @@ struct UnusedValueCheckerTests {
 
     @Test func `each function's errors come under its ID, and a function without any has none`() throws {
         // The first function's error comes after the second's in the source.
-        let late = function("bb0:\n  %0 @2:6-2:6 = use 1 @1:1-1:1\n  return", named: "late()")
-        let early = function("bb0:\n  %0 @2:5-2:5 = use 1 @1:1-1:1\n  return", named: "early()")
+        let late = function("bb0:\n  %0 @2:6-2:6 = operand 1 @1:1-1:1\n  return", named: "late()")
+        let early = function("bb0:\n  %0 @2:5-2:5 = operand 1 @1:1-1:1\n  return", named: "early()")
 
         let clean = function("bb0:\n  return", named: "clean()")
 

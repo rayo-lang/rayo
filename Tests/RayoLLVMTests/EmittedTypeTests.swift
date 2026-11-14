@@ -62,7 +62,7 @@ struct EmittedTypeTests {
               temp %0: Pair
               temp %1: Pair
             bb0:
-              %1 @1:1-1:2 = use read %0 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return
             }
             """
@@ -111,7 +111,7 @@ struct EmittedTypeTests {
               temp %0: Pair
               temp %1: Bool
             bb0:
-              %1 @1:1-1:2 = use read %0.0 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2
               return
             }
             """
@@ -134,7 +134,7 @@ struct EmittedTypeTests {
               temp %0: Holder
               temp %1: Bool
             bb0:
-              %1 @1:1-1:2 = use read %0.1.0 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = operand read %0.1.0 @1:1-1:2 @1:1-1:2
               return
             }
             """
@@ -159,7 +159,7 @@ struct EmittedTypeTests {
               temp %0: Pair
               temp %1: Bool
             bb0:
-              %0.0 @1:1-1:2 = use read %1 @1:1-1:2 @1:1-1:2
+              %0.0 @1:1-1:2 = operand read %1 @1:1-1:2 @1:1-1:2
               return
             }
             """
@@ -183,7 +183,7 @@ struct EmittedTypeTests {
               temp %0: Holder
               temp %1: Int
             bb0:
-              %0.1.1 @1:1-1:2 = use read %1 @1:1-1:2 @1:1-1:2
+              %0.1.1 @1:1-1:2 = operand read %1 @1:1-1:2 @1:1-1:2
               return
             }
             """

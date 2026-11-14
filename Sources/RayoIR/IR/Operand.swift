@@ -1,12 +1,13 @@
 import RayoSema
 import RayoSource
 
+/// An input to an operation: a constant, or the value at a place, either read or moved out.
 public enum Operand: Equatable, Sendable {
     case constant(Constant)
-    /// Reads the value of the place, which keeps it, where the source names the place at the range.
+    /// Reads the value at the place, which keeps it. The range is where the source names the place.
     case read(Place, at: SourceRange)
-    /// Takes the value of the place, which leaves it without one until it is assigned again, where the source names
-    /// the place at the range.
+    /// Moves the value out of the place, a local or a field of one, which then holds no value until it is assigned
+    /// again. The range is where the source names the place.
     case move(Place, at: SourceRange)
 
     /// The place the operand reads or moves, or nil for a constant.
@@ -17,8 +18,8 @@ public enum Operand: Equatable, Sendable {
         }
     }
 
-    /// The type of the operand's value in `body`, a body of a program whose structs `types` holds. A place the
-    /// operand names must step only into fields its values have.
+    /// The type of the operand's value, in the given body of a program with the given structs. A place the operand
+    /// names must lead only into fields that exist.
     public func type(in body: IRBody, types: TypeTable) -> RayoType {
         switch self {
         case .constant(let constant): constant.type
@@ -26,8 +27,8 @@ public enum Operand: Equatable, Sendable {
         }
     }
 
-    /// The type of the value at `place` in `body`, a body of a program whose structs `types` holds. Each step of
-    /// `place` must lead into a field that the value it steps from has.
+    /// The type of the value at a place, in the given body of a program with the given structs. Each step into a
+    /// field must name a field that the struct it steps from has.
     private static func type(of place: Place, in body: IRBody, types: TypeTable) -> RayoType {
         do {
             return try place.type(in: body, types: types)
@@ -38,6 +39,7 @@ public enum Operand: Equatable, Sendable {
     }
 }
 
+/// A value written into the IR itself, an integer or a Boolean, as a literal in the source gives it.
 public enum Constant: Equatable, Sendable {
     case int(Int64)
     case bool(Bool)

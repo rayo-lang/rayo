@@ -124,7 +124,7 @@ struct FunctionEmitter {
     ) throws(LLVMError) {
         switch rvalue {
         // A use copies its operand's value.
-        case .use(let operand):
+        case .operand(let operand):
             use(operand, into: destination, with: program.builder)
 
         // An operator computes on its operands' values, as their type says.

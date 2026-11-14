@@ -9,7 +9,8 @@ struct AssignmentChecker {
     private var names: NameScopes { expressions.names }
     private var errors: ErrorList { expressions.file.errors }
 
-    /// Checks `target op valueExpr`, checking the value even when the target fails.
+    /// Checks an assignment, or a compound assignment such as `+=`. The value is checked even when the target can't
+    /// be assigned, so mistakes in it are still reported.
     func assign(_ valueExpr: Expr, op: AssignOperator, to target: Expr, in range: SourceRange) -> CheckedStmt? {
         let current = expressions.place(target, under: self)
         let value = checkAssigned(valueExpr, by: op, to: current?.type)
@@ -22,8 +23,8 @@ struct AssignmentChecker {
         }
     }
 
-    /// Checks `expr` as the value an assignment with `op` gives a place of `type`, which is nil where the place can't
-    /// be assigned.
+    /// Checks the value an assignment gives its target. It is checked against the target's type where that is known,
+    /// and by itself where the target can't be assigned.
     private func checkAssigned(_ expr: Expr, by op: AssignOperator, to type: RayoType?) -> CheckedExpr? {
         // A plain assignment takes the value, which must have the place's type.
         if op.binary == nil {
@@ -35,7 +36,8 @@ struct AssignmentChecker {
         }
     }
 
-    /// Checks `place op= value`, where the source spells the operator `spelled`, as `place op value`.
+    /// Checks a compound assignment such as `x += 1` the way it checks the operation it applies, `x + 1`, so it
+    /// reports the same mistakes in the operands.
     private func compoundAssign(_ value: CheckedExpr, _ op: CheckedBinaryOperator, spelled: String,
                                 to place: TypedPlace, in range: SourceRange) -> CheckedStmt? {
         let current = CheckedExpr(kind: .place(place.place), type: place.type, range: place.place.range)
@@ -44,8 +46,8 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// The local called `name`, which the source names at `range`, as a place an assignment changes, whole or, where
-    /// `holdsFields` is true, field by field. Reports it when it can't be changed so, or when no local has the name.
+    /// Finds the local an assignment changes, either whole or, when the target is one of its fields, field by field.
+    /// Returns nil once it has reported why the local can't change that way, or that no local has the name.
     private func changedLocal(named name: String, at range: SourceRange, holdsFields: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }
@@ -55,8 +57,8 @@ struct AssignmentChecker {
         return (CheckedPlace(root: .local(local, range: range)), names[local].type)
     }
 
-    /// The error that refuses an assignment to `local`, whole or, where `holdsFields` is true, field by field, or nil
-    /// where the assignment may change it.
+    /// The error to report when an assignment may not change a local, whole or field by field as it asks, or nil
+    /// when it may.
     private func refusal(toChange local: LocalID, holdsFields: Bool) -> ErrorCode? {
         switch (names[local].kind, holdsFields) {
         // A borrowed parameter's value is its caller's, whole and field by field.
@@ -69,14 +71,14 @@ struct AssignmentChecker {
         }
     }
 
-    /// Reports `error` at `range`, the target it refuses, and returns nil in place of the target.
+    /// Reports why an assignment's target can't change, and returns nil in place of the target.
     private func refuse(_ error: ErrorCode, at range: SourceRange) -> TypedPlace? {
         errors.report(error, at: range)
         return nil
     }
 
-    /// The local called `name`, which an assignment's target names at `range`, reporting it when there is none,
-    /// unless its declaration failed.
+    /// The local that an assignment's target names. When the name is something else, or nothing, it reports so and
+    /// returns nil, unless the error was already reported where the name is declared.
     private func local(named name: String, at range: SourceRange) -> LocalID? {
         switch names.lookUp(name, for: .ordinary) {
         // A local is the assignment's.
@@ -105,8 +107,8 @@ struct AssignmentChecker {
     }
 }
 
-/// The rules of a place that an assignment changes, which starts from a local that may change, and steps only into
-/// `var` fields.
+/// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
+/// declared with `var`.
 extension AssignmentChecker: PlaceRules {
     func root(_ expr: Expr, holdsFields: Bool) -> TypedPlace? {
         // A local's name roots the place in the local; `_`, and anything but a name or a member, names no place.

@@ -56,7 +56,7 @@ struct DependencyState: DataflowState {
     /// Bool, which depends on nothing.
     private func dependencies(of value: Rvalue) -> Set<AccessID> {
         switch value {
-        case .use, .call:
+        case .operand, .call:
             value.operands.reduce(into: []) { dependencies, operand in
                 if let place = operand.place { dependencies.formUnion(dependentLocals[place.root] ?? []) }
             }

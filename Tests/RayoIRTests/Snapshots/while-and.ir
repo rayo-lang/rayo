@@ -6,20 +6,20 @@ func "main()"() -> Void {
   temp %2: Bool
 bb0:
   declare %0
-  %0 @2:5-2:6 = use true @2:9-2:13
+  %0 @2:5-2:6 = operand true @2:9-2:13
   declare %1
-  %1 @3:5-3:6 = use false @3:9-3:14
+  %1 @3:5-3:6 = operand false @3:9-3:14
   goto bb1
 bb1:
-  %2 @4:7-4:13 = use read %0 @4:7-4:8 @4:7-4:13
+  %2 @4:7-4:13 = operand read %0 @4:7-4:8 @4:7-4:13
   branch read %2 @4:7-4:13, bb4, bb5
 bb2:
-  %0 @4:16-4:17 = use false @4:20-4:25
+  %0 @4:16-4:17 = operand false @4:20-4:25
   goto bb1
 bb3:
   return
 bb4:
-  %2 @4:7-4:13 = use read %1 @4:12-4:13 @4:7-4:13
+  %2 @4:7-4:13 = operand read %1 @4:12-4:13 @4:7-4:13
   goto bb5
 bb5:
   branch read %2 @4:7-4:13, bb2, bb3

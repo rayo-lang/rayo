@@ -21,7 +21,7 @@ import RayoSource
 ///   temp %1: Bool
 /// bb0:
 ///   declare %0
-///   %0 @2:9-2:10 = use 1 @2:13-2:14
+///   %0 @2:9-2:10 = operand 1 @2:13-2:14
 ///   %1 @3:4-3:9 = less read %0 @3:4-3:5, 3 @3:4-3:9
 ///   branch read %1 @3:4-3:9, bb1, bb2
 /// bb1:
@@ -118,8 +118,8 @@ public enum IRPrinter {
 
     private static func text(of value: Rvalue, in program: IRProgram) -> String {
         switch value {
-        case .use(let operand):
-            "use \(text(of: operand))"
+        case .operand(let operand):
+            "operand \(text(of: operand))"
         case .unary(let op, let operand):
             "\(name(of: op)) \(text(of: operand))"
         case .binary(let op, let left, let right):

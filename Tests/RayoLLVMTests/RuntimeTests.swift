@@ -13,7 +13,7 @@ struct RuntimeTests {
 
     @Test(arguments: Build.allCases)
     func `an object exports only the C entry point, in debug and in release`(build: Build) throws {
-        let objectCode = try compile(printing("use 42"), for: build)
+        let objectCode = try compile(printing("operand 42"), for: build)
         #expect(try symbols(["--extern-only", "--defined-only"], in: objectCode).map(\.cSymbol) == ["main"])
     }
 

@@ -5,11 +5,11 @@ func "main()"() -> Void {
   temp %1: Bool
 bb0:
   declare %0
-  %0 @2:5-2:6 = use true @2:9-2:13
-  %1 @3:6-3:16 = use read %0 @3:6-3:7 @3:6-3:16
+  %0 @2:5-2:6 = operand true @2:9-2:13
+  %1 @3:6-3:16 = operand read %0 @3:6-3:7 @3:6-3:16
   branch read %1 @3:6-3:16, bb2, bb1
 bb1:
-  %1 @3:6-3:16 = use false @3:6-3:16
+  %1 @3:6-3:16 = operand false @3:6-3:16
   goto bb2
 bb2:
   begin a0 read static %1 @3:6-3:16

@@ -9,7 +9,7 @@ func "seven()"() -> Int {
   let %0 x: Int
 bb0:
   declare %0
-  %0 @3:5-3:6 = use 7 @3:9-3:10
+  %0 @3:5-3:6 = operand 7 @3:9-3:10
   return move %0 @4:8-4:9
 bb1:
   unreachable

@@ -110,7 +110,7 @@ struct FunctionVerifier {
     /// The type of the value `rvalue` makes. Throws where its operands aren't of the types it takes.
     private func type(of rvalue: Rvalue) throws(IRViolation) -> RayoType {
         switch rvalue {
-        case .use(let operand): try type(of: operand)
+        case .operand(let operand): try type(of: operand)
         case .unary(let op, let operand): op.resultType(on: try operandType(of: op, operand))
         case .binary(let op, let left, let right): op.resultType(on: try operandType(of: op, left, right))
         case .call(let callee, let arguments): try resultType(of: callee, passing: arguments)

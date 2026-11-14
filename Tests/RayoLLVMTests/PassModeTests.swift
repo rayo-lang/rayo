@@ -48,7 +48,7 @@ struct PassModeTests {
               param %0 t: Trio
               temp %1: Int
             bb0:
-              %1 @1:1-1:2 = use read %0.0 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2
               return read %1 @1:1-1:2
             }
             """
@@ -103,7 +103,7 @@ struct PassModeTests {
               temp %1: Trio
               temp %2: Holder
             bb0:
-              %1 @1:1-1:2 = use read %0 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               %2 @1:1-1:2 = call "Holder(trio: Trio, flag: Bool)"(move %1 @1:1-1:2, true) @1:1-1:2
               return
             }

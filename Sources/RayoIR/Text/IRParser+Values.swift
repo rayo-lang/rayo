@@ -34,7 +34,7 @@ extension IRParser {
         let token = current
         let keyword = try word()
         return switch keyword {
-        case "use": .use(try operand())
+        case "operand": .operand(try operand())
         case "call": .call(try callee(), arguments: try arguments())
         default: try operation(named: keyword, at: token)
         }

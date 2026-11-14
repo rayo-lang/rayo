@@ -235,7 +235,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(246, error: "the call gives the field '{field}' more than once")
     case fieldGivenTwice(field: String)
 
-    @Code(247, error: "'{field}' must come before '{after}', as the struct declares them")
+    @Code(247, error: "'{field}' must come before '{after}'")
     case fieldOutOfOrder(field: String, after: String)
 
     @Code(248, error: "the field '{field}' takes {expected}, found {found}")

@@ -21,9 +21,9 @@ struct StructChecker {
 
     let errors: ErrorList
 
-    /// Declares the fields of `structs`, whose IDs are `ids`, in `declarations`, and returns the types they make.
-    /// `ids` follows the order of `structs`, nil for each struct whose name wasn't declared. A struct that can't be
-    /// laid out is declared as one, and has no type.
+    /// Checks each struct's fields, declares them, and returns the types the structs make. The IDs follow the order
+    /// of the structs, with nil for a struct whose name couldn't be declared. A struct that can't be laid out is
+    /// declared as such, and makes no type.
     func declare(
         _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: inout Declarations,
     ) -> TypeTable {

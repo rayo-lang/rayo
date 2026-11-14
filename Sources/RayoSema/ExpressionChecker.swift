@@ -189,14 +189,15 @@ struct ExpressionChecker {
         return binary(checkedOp, settledLeft, settledRight, spelled: op.rawValue, in: range).map { .typed($0) }
     }
 
-    /// Checks `expr` as a place that `rules` admit: a root they check, then each field the source steps into from it.
-    /// Returns nil where the root or a field fails, which was reported.
+    /// Checks an expression that names a place, such as `e.stats.hp`, under the rules of the position it stands in:
+    /// first where the place starts, then each field it goes into. Returns nil once it has reported a mistake in any
+    /// of them.
     func place(_ expr: Expr, under rules: some PlaceRules) -> TypedPlace? {
         place(expr, under: rules, holdsFields: false)
     }
 
-    /// Checks `expr` as a place that `rules` admit, which holds the fields the source steps into when `holdsFields`
-    /// is true.
+    /// Checks an expression that names a place under the given rules. The flag says whether the place goes on into
+    /// a field of it, as the base of a longer place does.
     private func place(_ expr: Expr, under rules: some PlaceRules, holdsFields: Bool) -> TypedPlace? {
         // Anything but a member is the place's root.
         guard case .member(let base, let name, let nameRange) = expr.kind else {
@@ -212,8 +213,8 @@ struct ExpressionChecker {
         return (holder.place.appending(.field(index, range: expr.range)), type)
     }
 
-    /// The field called `name` of a value of `type`, which the source names at `nameRange`: its place in its struct's
-    /// declaration, the field, and its type. Reports it where `type` has no such field.
+    /// Finds a field by its name in a value's type: its position in the struct's declaration, the field, and its
+    /// type. Reports a name that names no field of the type.
     private func field(named name: String, at nameRange: SourceRange,
                        of type: RayoType) -> (index: Int, field: DeclaredField, type: RayoType)? {
         // Find the field among the struct's; a value of any other type has none.

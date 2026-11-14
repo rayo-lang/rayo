@@ -29,7 +29,7 @@ struct SourceRangeTests {
         // The declaration's value follows its `declare`, and the assignment follows that.
         let statements = main.blocks[0].statements
         guard case .compute(let declared?, .binary(.add(.checked), _, _), let declarationRange) = statements[1],
-              case .compute(let assigned?, .use, let assignmentRange) = statements[2]
+              case .compute(let assigned?, .operand, let assignmentRange) = statements[2]
         else {
             Issue.record("the declaration and the assignment aren't statements 2 and 3 of \(main.blocks[0])")
             return
@@ -62,8 +62,8 @@ struct SourceRangeTests {
 
         // The `&&` computes `a` into its temporary after the two declarations and `a`'s value, and its right operand
         // into the same temporary, first in the block that evaluates it.
-        guard case .compute(let temporary?, .use, let leftRange) = main.blocks[0].statements[3],
-              case .compute(_, .use, let rightRange) = main.blocks[1].statements[0]
+        guard case .compute(let temporary?, .operand, let leftRange) = main.blocks[0].statements[3],
+              case .compute(_, .operand, let rightRange) = main.blocks[1].statements[0]
         else {
             Issue.record("the '&&' doesn't compute its operands where it should in \(main)")
             return
