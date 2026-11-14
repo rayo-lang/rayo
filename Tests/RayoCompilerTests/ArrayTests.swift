@@ -89,7 +89,7 @@ struct ArrayTypeTests {
         ("let a = [1, 2]\nlet b: [3 of Int] = a", .typeMismatch(expected: "[3 of Int]", found: "[2 of Int]")),
         ("print([1])", .noMatchingFunction(name: "print", arguments: "[1 of Int]")),
         ("let a = [1] == [1]", .incomparable(op: "==", type: "[1 of Int]")),
-        ("let a = [1]\nlet b = a.count", .noSuchField(type: "[1 of Int]", field: "count")),
+        ("let a = [1]\nlet b = a.first", .noSuchMember(type: "[1 of Int]", name: "first")),
     ])
     func `an array type is its count and its element's type, and has no other type`(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}\n\(declarations)") == [expected])

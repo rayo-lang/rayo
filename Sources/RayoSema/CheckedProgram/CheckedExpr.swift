@@ -15,6 +15,9 @@ public indirect enum CheckedExprKind: Sendable {
     case place(CheckedPlace)
     /// A copy of the value of a place, which the place keeps wherever the copy is used.
     case copy(CheckedPlace)
+    /// The count of the array a place holds, a UInt that the array's type fixes. It uses the array, which must hold
+    /// a value, but loads none of it, and what naming the place does still runs, such as a call that gives its root.
+    case arrayCount(CheckedPlace, count: Int)
     case unary(CheckedUnaryOperator, CheckedExpr)
     case binary(CheckedBinaryOperator, CheckedExpr, CheckedExpr)
     case call(Callee, arguments: [CheckedExpr])

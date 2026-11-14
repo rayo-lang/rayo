@@ -108,7 +108,7 @@ struct AssignmentChecker {
 }
 
 /// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
-/// declared with `var`.
+/// declared with `var`, never into an array's count.
 extension AssignmentChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A local's name roots the place in the local; `_`, and anything but a name or a member, names no place.
@@ -129,5 +129,10 @@ extension AssignmentChecker: PlaceRules {
         // Only a local, or a field of one, can be assigned, which leaves out an element and every place inside one.
         errors.report(.assignToNonLocal, at: range)
         return false
+    }
+
+    func count(of array: CheckedPlace, _ count: Int, at nameRange: SourceRange, in range: SourceRange) -> TypedPlace? {
+        // An array's count is fixed by its type.
+        refuse(.assignToCount, at: nameRange)
     }
 }

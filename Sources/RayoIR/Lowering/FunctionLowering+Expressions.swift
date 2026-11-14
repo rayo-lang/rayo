@@ -35,6 +35,8 @@ extension FunctionLowering {
             }
         // A copy reads the place it copies, whatever its position does with the value.
         case .copy(let place): .read(self.place(of: place), at: expr.range)
+        // An array's count is a constant, which the type of the array it counts fixes.
+        case .arrayCount(let place, let count): arrayCount(of: place, count, at: expr.range)
         // `&&` evaluates its right operand only when its left one is true.
         case .binary(.and, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: false, range: expr.range)
@@ -84,6 +86,16 @@ extension FunctionLowering {
         return .elementAt(checked.root)
     }
 
+    /// Lowers the count of the array that `place` holds, `count`, which the source writes at `range`, to a constant.
+    /// The array is read where the count is, and the read dropped, so the count is a use of the array, which must
+    /// hold a value, though no code loads any of it. What naming the place does runs first, such as a call that gives
+    /// its root or an index it checks.
+    private mutating func arrayCount(of place: CheckedPlace, _ count: Int, at range: SourceRange) -> Operand {
+        let array = self.place(of: place)
+        builder.emit(.operand(.read(array, at: range)), into: nil, range: range)
+        return .constant(.uint(UInt64(count)))
+    }
+
     /// Computes `expr`, the value of a position that `use`s it, into a new temporary, or, for an `if`, has the branch
     /// that runs compute its value there, and returns the temporary's place.
     private mutating func temporary(holding expr: CheckedExpr, as use: ValueUse) -> Place {
@@ -99,7 +111,8 @@ extension FunctionLowering {
     private mutating func rvalue(of expr: CheckedExpr, as use: ValueUse) -> Rvalue {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
-        case .intLiteral, .uintLiteral, .boolLiteral, .place, .copy, .binary(.and, _, _), .binary(.or, _, _), .if:
+        case .intLiteral, .uintLiteral, .boolLiteral, .place, .copy, .arrayCount, .binary(.and, _, _),
+             .binary(.or, _, _), .if:
             .operand(operand(of: expr, as: use))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):

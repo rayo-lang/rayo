@@ -117,4 +117,17 @@ struct CheckedProgramTests {
             }
             """, toMatch: "elements")
     }
+
+    @Test func `a count holds the place of the array it counts, and roots a place that goes on from it`() throws {
+        try expectChecking(of: """
+            func main() {
+                let grid = [[1, 2, 3], [4, 5, 6]]
+                let i: UInt = 1
+                print(grid.count)
+                print(grid[i].count)
+                let n = copy grid.count
+                print(n)
+            }
+            """, toMatch: "counts")
+    }
 }
