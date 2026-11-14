@@ -243,7 +243,7 @@ let bad = shuffle(v, [8, 0])                          // error: lane 8 of one 8-
 
 ```swift
 func reversedLanes<let N: UInt>() -> [N of UInt] {    // ordinary code, run by the compiler
-    var lanes: [N of UInt] = .init(all: 0)
+    var lanes: [N of UInt] = .init(repeating: 0)
     for i in 0..<N { lanes[i] = N - 1 - i }
     return lanes
 }

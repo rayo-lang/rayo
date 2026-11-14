@@ -64,7 +64,7 @@ extension Bag {
 ```swift
 var slots: [4 of Int]
 slots[0] = 1                       // error: 'slots' holds no value yet
-slots = .init(all: 0)
+slots = .init(repeating: 0)
 slots[0] = 1                       // fine: 'slots' holds all four elements
 ```
 

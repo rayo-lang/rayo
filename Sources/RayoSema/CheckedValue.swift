@@ -8,7 +8,7 @@ enum CheckedValue {
     case untyped(UntypedValue)
     /// An array literal, whose type, and so its elements' types, its position gives where it gives one.
     case arrayLiteral(ArrayLiteral)
-    /// An implicit member, such as `.init(all: 0)`, which names a member of the type its position gives.
+    /// An implicit member, such as `.init(repeating: 0)`, which names a member of the type its position gives.
     case implicitMember(ImplicitMember)
 
     /// The value's type, or nil where its position settles it.
@@ -64,7 +64,7 @@ struct ArrayLiteral {
     }
 }
 
-/// An implicit member, such as `.init(all: 0)`: its name, and the arguments of the call where it is called, each
+/// An implicit member, such as `.init(repeating: 0)`: its name, and the arguments of the call where it is called, each
 /// checked on its own.
 struct ImplicitMember {
     /// An argument of the call: its label, its value checked on its own, and where the source writes both.
@@ -87,10 +87,10 @@ struct ImplicitMember {
         arguments?.map(\.value) ?? []
     }
 
-    /// The value that `.init(all: value)`, the one member an array has, fills it with; nil for any other member. An
-    /// array's members are told apart here alone, so checking a member and picking among overloads agree.
+    /// The value that `.init(repeating: value)`, the one member an array has, fills it with; nil for any other member.
+    /// An array's members are told apart here alone, so checking a member and picking among overloads agree.
     var fillingValue: CheckedValue? {
-        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == "all" else { return nil }
+        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == "repeating" else { return nil }
         return arguments[0].value
     }
 

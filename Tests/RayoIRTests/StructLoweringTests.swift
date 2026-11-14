@@ -55,10 +55,11 @@ struct StructLoweringTests {
         try expectLowering(withEnemy: body, toMatch: "array-literal")
     }
 
-    @Test func `.init(all:) fills an array with copies of a value it reads, so a local it names keeps its value`()
+    @Test func `.init(repeating:) fills an array with copies of a value it reads, so a local it names keeps its value`()
         throws {
-        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a: [3 of Enemy] = .init(all: e)\n"
-            + "let b: [2 of [1 of Int]] = .init(all: .init(all: 5))\nlet c: [0 of Enemy] = .init(all: e)"
+        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a: [3 of Enemy] = .init(repeating: e)\n"
+            + "let b: [2 of [1 of Int]] = .init(repeating: .init(repeating: 5))\n"
+            + "let c: [0 of Enemy] = .init(repeating: e)"
         try expectLowering(withEnemy: body, toMatch: "filled-array")
     }
 

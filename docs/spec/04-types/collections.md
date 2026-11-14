@@ -12,7 +12,7 @@ let stats: (hp: Float, armor: Float) = (hp: 100, armor: 20)
 let (count, weight) = pair                   // destructuring
 for i in 0..<count { … }                     // a counted loop
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // an Array<Float, 4>: four Floats, stored inline
-var grid: [64 of Int] = .init(all: 0)        // every element is given
+var grid: [64 of Int] = .init(repeating: 0)  // every element is given
 let locks: [8 of Mutex<Int>] = .init(each: { _ in Mutex(0) })   // one call per index, for a move-only type
 ```
 
@@ -25,7 +25,7 @@ let locks: [8 of Mutex<Int>] = .init(each: { _ in Mutex(0) })   // one call per 
 **Its length is part of its type, so every element is given when it is made**, in one of these ways:
 
 - by a literal of exactly `N` elements;
-- by `.init(all:)`, which copies one copyable value into every element;
+- by `.init(repeating:)`, which copies one copyable value into every element;
 - by `.init(each:)`, which calls a closure once per index, in order, passing it the index as a `UInt`, and takes each result it returns, so it serves a move-only `T` too.
 
 Written `[_ of T]`, an array type takes its count from the initializer.
@@ -55,7 +55,7 @@ An inline array that holds a value holds all `N` of its elements, since no eleme
 ```swift
 const edge: UInt = 64
 
-var grid: [64 of Int] = .init(all: 0)
+var grid: [64 of Int] = .init(repeating: 0)
 grid[63] = 1                 // fine: the last element
 grid[edge] = 1               // error: index 64 is out of range for a [64 of Int]
 let i: UInt = readIndex()

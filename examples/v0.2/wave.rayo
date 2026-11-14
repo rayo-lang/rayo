@@ -24,7 +24,7 @@ func main() {
 
     // The ledger has a row for the blows that wound and a row for the blows that fell. Each row holds how many such
     // blows landed, and the damage they dealt.
-    var ledger: [2 of [2 of Int]] = .init(all: .init(all: 0))
+    var ledger: [2 of [2 of Int]] = .init(repeating: .init(repeating: 0))
     let wounding: UInt = 0
     let felling: UInt = 1
     let blows: UInt = 0
@@ -86,7 +86,7 @@ func indexOfStrongest(in enemies: [3 of Enemy]) -> UInt {
 
 // Gives whether each enemy still stands.
 func survivors(of enemies: [3 of Enemy]) -> [3 of Bool] {
-    var standing: [3 of Bool] = .init(all: false)
+    var standing: [3 of Bool] = .init(repeating: false)
     var i: UInt = 0
     while i < enemies.count {
         standing[i] = enemies[i].stats.hp > 0

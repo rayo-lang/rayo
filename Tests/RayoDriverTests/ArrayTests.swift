@@ -89,7 +89,7 @@ private let show = """
 
 struct FilledArrayTests {
     @Test(arguments: [["--debug"], ["--release"]])
-    func `.init(all:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
+    func `.init(repeating:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
         mode: [String],
     ) {
         // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
@@ -97,27 +97,27 @@ struct FilledArrayTests {
         // array's count as they run, so the run shows each was called.
         let source = """
             func main() {
-                var ints: [3 of Int] = .init(all: 7)
+                var ints: [3 of Int] = .init(repeating: 7)
                 show(ints)
-                ints = .init(all: -1)
+                ints = .init(repeating: -1)
                 show(ints)
-                let flags = relayFlags(.init(all: true))
+                let flags = relayFlags(.init(repeating: true))
                 print(flags[0])
                 print(flags[1])
                 let hit = Hit(damage: 3)
-                let board = Board(hits: .init(all: hit), grid: [.init(all: 1), [2, 3]])
+                let board = Board(hits: .init(repeating: hit), grid: [.init(repeating: 1), [2, 3]])
                 print(board.hits[0].damage)
                 print(board.hits[1].damage)
                 print(board.grid[0][0])
                 print(board.grid[0][1])
-                let grids: [2 of [2 of [3 of Int]]] = .init(all: .init(all: .init(all: 5)))
+                let grids: [2 of [2 of [3 of Int]]] = .init(repeating: .init(repeating: .init(repeating: 5)))
                 var i: UInt = 0
                 while i < grids.count {
                     show(grids[i][0])
                     show(grids[i][1])
                     i += 1
                 }
-                let none: [0 of Hit] = .init(all: hit)
+                let none: [0 of Hit] = .init(repeating: hit)
                 print(none.count)
                 let filled = made()
                 var j: UInt = 0
@@ -133,7 +133,7 @@ struct FilledArrayTests {
             }
             func made() -> [4 of Hit] {
                 print(4)
-                return .init(all: Hit(damage: 9))
+                return .init(repeating: Hit(damage: 9))
             }
             struct Hit(var damage: Int)
             struct Board(let hits: [2 of Hit], var grid: [2 of [2 of Int]])
@@ -148,9 +148,9 @@ struct FilledArrayTests {
         // Each value prints its number as it is evaluated, before the filled arrays' elements are printed.
         let source = """
             func main() {
-                let a: [3 of Int] = .init(all: next(1))
-                let b: [0 of Int] = .init(all: next(2))
-                let c: [2 of [3 of Int]] = .init(all: .init(all: next(3)))
+                let a: [3 of Int] = .init(repeating: next(1))
+                let b: [0 of Int] = .init(repeating: next(2))
+                let c: [2 of [3 of Int]] = .init(repeating: .init(repeating: next(3)))
                 print(b.count)
                 show(a)
                 show(c[0])
@@ -169,14 +169,14 @@ struct FilledArrayTests {
     func `changing one element of a filled array leaves the others holding the value`(mode: [String]) {
         let source = """
             func main() {
-                var a: [3 of Int] = .init(all: 7)
+                var a: [3 of Int] = .init(repeating: 7)
                 a[1] = 8
                 show(a)
-                var grid: [2 of [3 of Int]] = .init(all: .init(all: 1))
+                var grid: [2 of [3 of Int]] = .init(repeating: .init(repeating: 1))
                 grid[1][2] += 5
                 show(grid[0])
                 show(grid[1])
-                var hits: [2 of Hit] = .init(all: Hit(damage: 3))
+                var hits: [2 of Hit] = .init(repeating: Hit(damage: 3))
                 hits[0].damage = 4
                 print(hits[0].damage)
                 print(hits[1].damage)
@@ -191,10 +191,10 @@ struct FilledArrayTests {
     func `an array of a hundred thousand elements is filled, and its program builds quickly and runs`(mode: [String]) {
         let source = """
             func main() {
-                var a: [100000 of Int] = .init(all: 0)
+                var a: [100000 of Int] = .init(repeating: 0)
                 print(a[0] + a[99999])
-                a = .init(all: 1)
-                let hits: [1000 of [100 of Hit]] = .init(all: .init(all: Hit(damage: 2, crit: true)))
+                a = .init(repeating: 1)
+                let hits: [1000 of [100 of Hit]] = .init(repeating: .init(repeating: Hit(damage: 2, crit: true)))
                 print(a[0] + a[99999])
                 print(hits[0][0].damage + hits[999][99].damage)
             }
@@ -204,11 +204,14 @@ struct FilledArrayTests {
     }
 
     @Test(arguments: [["--debug"], ["--release"]], [
-        ("let a = .init(all: 0)", "2:13: error[E0267]: the implicit member '.init' needs a type"),
+        ("let a = .init(repeating: 0)", "2:13: error[E0267]: the implicit member '.init' needs a type"),
         ("let a: [2 of Int] = .init(each: 0)", "2:25: error[E0268]: '.init(each:)' isn't supported"),
-        ("let a: [2 of Int] = .init(al: 0)", "2:31: error[E0228]: expected 'all:' before the argument, found 'al:'"),
+        (
+            "let a: [2 of Int] = .init(all: 0)",
+            "2:31: error[E0228]: expected 'repeating:' before the argument, found 'all:'",
+        ),
     ])
-    func `.init(all:) with no array type, or with the wrong member or label, is an error, in debug and release`(
+    func `.init(repeating:) with no array type, or with the wrong member or label, is an error, in debug and release`(
         mode: [String], failure: (body: String, error: String),
     ) {
         let source = "func main() {\n    \(failure.body)\n}"
