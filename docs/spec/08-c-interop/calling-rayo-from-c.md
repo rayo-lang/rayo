@@ -51,7 +51,7 @@ A C or C++ program uses a library written in Rayo:
 | `mutable T` parameter | `T*` |
 | `Void` or `Never` as a result | `void`, and `_Noreturn` for `Never` |
 | `static Span<T>`, `static StringView` | as `Span<T>` and `StringView`: data that lives as long as the program, which C may keep |
-| struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), each in its representation |
+| struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), packed as the struct is, each in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | a C struct whose member `_i` is element `i`, declared in layout order ([04](../04-types/collections.md#tuples-ranges-and-arrays)), each in its representation |
 | `Simd<T, N>` over a number type, other than the vector types the table above imports | `struct { _Alignas(A) T lanes[N]; }`, where `A` is the vector's alignment, the smaller of its size and 64, so a 3-lane vector's fourth slot is padding ([04](../04-types/numbers-and-math.md#vector-layout)) |

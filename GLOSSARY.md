@@ -171,7 +171,7 @@ A type conforming to `Hashing`, such as the default `SeededHashing` or `FixedHas
 _Avoid_: BuildHasher, hasher builder
 
 **Layout order**:
-The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a `@c` or `@packed` struct ([04](docs/spec/04-types/structs.md#structs)).
+The order of a struct's fields in memory: by decreasing alignment, with declaration order among equals, or declaration order for a struct with `@layout(.declared)`, `@layout(.packed)` or `@c` ([04](docs/spec/04-types/structs.md#structs)).
 
 **Mask**:
 Any `Simd<Bool, N>`, such as a comparison of vectors gives, which `select` uses and which has `any`, `all` and its lanes as `UInt64` `bits` ([04](docs/spec/04-types/numbers-and-math.md#masks)).
@@ -186,6 +186,9 @@ _Avoid_: smart cast, flow typing
 
 **Niche**:
 A bit pattern a type never uses, in which an optional of it stores `nil` at no extra size ([04](docs/spec/04-types/enums.md#optionals)).
+
+**Packed**:
+Said of a struct or union with `@layout(.packed)` or `@layout(.packed(N))`, which counts each field's alignment as 1, or at most `N`, so a field may lie at a misaligned address ([04](docs/spec/04-types/structs.md#layout-attributes)).
 
 **Padding-free**:
 Said of a type with no padding bytes, as `T.isPaddingFree` reports ([04](docs/spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).

@@ -181,7 +181,9 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **A struct crosses with its fields in the order Rayo lays them out in memory, and the generated header declares them in that order.** Rayo sorts a struct's fields by alignment, largest first, so no padding falls between them, and fields of equal alignment keep their declared order ([04](../spec/04-types/structs.md#structs)).
 
-**`@c` keeps a struct's fields in the order you declare them, and checks that each has a C representation** ([04](../spec/04-types/structs.md#structs)). Use it when something outside your program fixes the layout, such as a C library's header, a file format or a network packet. Every struct that `import c` makes is a `@c struct`.
+**`@c` keeps a struct's fields in the order you declare them, and checks that each has a C representation** ([04](../spec/04-types/structs.md#layout-attributes)). Use it when something outside your program fixes the layout, such as a C library's header, a file format or a network packet. Every struct that `import c` makes is a `@c struct`.
+
+**`@layout(.declared)` keeps the declared order too, and checks nothing**, so its fields may be of any type. When they all have C representations, the struct crosses to C with them in the order you declare them, as a `@c` struct does ([04](../spec/04-types/structs.md#layout-attributes)).
 
 **An exported function is a plain C function.** It has no type parameters. An error it returns reaches C as a value, in a struct of a tag and the result or the error.
 
