@@ -129,6 +129,45 @@ struct EmittedTypeTests {
         }
     }
 
+    @Test func `a filled array is built by a loop that copies its value into each element in turn`() throws {
+        // `main` fills an array of a hundred thousand elements with its Int.
+        let main = """
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: Int
+              temp %1: [100000 of Int]
+            bb0:
+              %1 @1:1-1:2 = fill 100000 of read %0 @1:1-1:2 @1:1-1:2
+              return
+            }
+            """
+
+        // The loop counts the elements from 0, and stops at the count, once it has stored the Int in each.
+        try withEmitted(executable(main)) { module in
+            let text = try function(named: "rayo.main", in: module).text
+            #expect(text.contains("""
+                  store i64 0, ptr %2, align 8
+                  br label %fill.header
+
+                fill.header:                                      ; preds = %fill.body, %bb0
+                  %3 = load i64, ptr %2, align 8
+                  %4 = icmp uge i64 %3, 100000
+                  br i1 %4, label %fill.end, label %fill.body
+
+                fill.body:                                        ; preds = %fill.header
+                  %5 = getelementptr inbounds i64, ptr %1, i64 %3
+                  %6 = load i64, ptr %0, align 8
+                  store i64 %6, ptr %5, align 8
+                  %7 = add i64 %3, 1
+                  store i64 %7, ptr %2, align 8
+                  br label %fill.header
+
+                fill.end:                                         ; preds = %fill.header
+                  ret void
+                """))
+        }
+    }
+
     @Test func `a field is read from the element that its struct's layout puts it in, aligned as its type is`() throws {
         // `main` reads the Pair's Bool, which it declares first.
         let main = """

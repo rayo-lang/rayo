@@ -106,12 +106,13 @@ struct FunctionTests {
         ("print(e.hp.total())", [.unsupportedMemberCall], ["e.hp.total"]),
         ("nope.hit(by: missing)", [.notDeclared(name: "nope"), .unsupportedMemberCall, .notDeclared(name: "missing")],
          ["nope", "nope.hit", "missing"]),
-        ("print(.make(1))", [.unsupportedImplicitMember], [".make"]),
-        ("print(.make(missing))", [.unsupportedImplicitMember, .notDeclared(name: "missing")], [".make", "missing"]),
-        ("let x: Int = .zero", [.unsupportedImplicitMember], [".zero"]),
-        ("print(.zero + 1)", [.unsupportedImplicitMember], [".zero"]),
+        ("print(.make(1))", [.implicitMemberWithoutType(name: "make")], [".make"]),
+        ("print(.make(missing))", [.notDeclared(name: "missing")], ["missing"]),
+        ("let x: Int = .zero", [.unsupportedImplicitMember(type: "Int")], [".zero"]),
+        ("let f: Enemy = .init(hp: 1)", [.unsupportedImplicitMember(type: "Enemy")], [".init"]),
+        ("print(.zero + 1)", [.implicitMemberWithoutType(name: "zero")], [".zero"]),
     ])
-    func `a member call and an implicit member aren't supported, and the error covers the callee or the member`(
+    func `a member call isn't supported, nor an implicit member of a type but an array, and the error covers it`(
         body: String, expected: [ErrorCode], covered: [String],
     ) {
         let source = "func main() {\nlet e = Enemy(hp: 1)\n\(body)\n}\nstruct Enemy(var hp: Int)"

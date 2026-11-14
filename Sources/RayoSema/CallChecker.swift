@@ -16,19 +16,20 @@ struct CallChecker {
     private var errors: ErrorList { expressions.file.errors }
 
     /// Checks `callee(arguments)`. Every argument is checked, whether or not the call reaches a function or a struct.
-    func call(_ callee: Expr, _ arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+    /// A call of an implicit member waits for its position to give the type whose member it calls.
+    func call(_ callee: Expr, _ arguments: [Argument], in range: SourceRange) -> CheckedValue? {
         switch callee.kind {
         // A name calls the functions it names, or the initializers of the type it names.
         case .name(let name):
-            call(named: name, at: callee.range, arguments, in: range)
+            call(named: name, at: callee.range, arguments, in: range).map { .typed($0) }
 
         // A member names a method, which no type has.
         case .member(let base, _, _):
-            memberCall(of: base, at: callee.range, passing: arguments)
+            memberCall(of: base, at: callee.range, passing: arguments).map { .typed($0) }
 
-        // An implicit member names a member of the type the call's position expects, which no position gives yet.
-        case .implicitMember:
-            reachingNothing(reporting: .unsupportedImplicitMember, at: callee.range, passing: arguments)
+        // An implicit member names a member of the type the call's position expects.
+        case .implicitMember(let name):
+            implicitMemberCall(named: name, at: callee.range, passing: arguments, in: range)
 
         // The parser calls nothing else.
         default:
@@ -79,6 +80,26 @@ struct CallChecker {
     private func memberCall(of base: Expr, at range: SourceRange, passing arguments: [Argument]) -> CheckedExpr? {
         _ = expressions.check(base)
         return reachingNothing(reporting: .unsupportedMemberCall, at: range, passing: arguments)
+    }
+
+    /// Checks `.name(arguments)`, where the source writes `.name` at `nameRange`, with each argument checked on its
+    /// own, since the member that takes them is known only once the call's position gives its type.
+    private func implicitMemberCall(named name: String, at nameRange: SourceRange, passing arguments: [Argument],
+                                    in range: SourceRange) -> CheckedValue? {
+        // Every argument is checked, so each one's errors are reported, before any failure fails the call.
+        let values = arguments.map { expressions.value(of: $0.value) }
+        let checked = values.compactMap { $0 }
+        // An argument that failed was reported, and the others' literals are settled for their own errors.
+        guard checked.count == values.count else {
+            expressions.reportSettlingErrors(of: values)
+            return nil
+        }
+
+        let memberArguments = zip(arguments, checked).map {
+            ImplicitMember.Argument(label: $0.label, value: $1, range: $0.range)
+        }
+        let member = ImplicitMember(name: name, nameRange: nameRange, arguments: memberArguments, range: range)
+        return .implicitMember(member)
     }
 
     /// Checks a call that reaches no function or struct: reports `error`, where there is one, at `range`, and the

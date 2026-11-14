@@ -8,6 +8,9 @@ private let declarations = """
     func none(_ a: [0 of Bool]) {}
     func pick(_ a: [2 of Int]) {}
     func pick(_ a: [3 of Int]) {}
+    func made() -> [2 of Int] { .init(all: 1) }
+    func returned() -> [2 of Bool] { return .init(all: true) }
+    struct Holder(var hits: [2 of Hit])
     """
 
 /// The errors that `body`, as `main`'s body beside `declarations`, reports, each as its position, code and message.
@@ -146,5 +149,55 @@ struct ArrayLiteralTests {
         #expect(errors("func main() {\nlet h = Hit(damage: 1)\n_ = [h]\n_ = h\n}\n" + declarations) == [
             .usedAfterMove(name: "h"),
         ])
+    }
+}
+
+struct ArrayInitializerTests {
+    @Test(arguments: [
+        "var a: [3 of Int] = .init(all: 0)\n_ = a",
+        "let a: [2 of UInt] = .init(all: 7)\n_ = a",
+        "_ = sum(.init(all: 1))",
+        "none(.init(all: true))",
+        "var a: [2 of Int] = [1, 2]\n_ = a\na = .init(all: 3)\n_ = a",
+        "_ = Holder(hits: .init(all: Hit(damage: 1)))",
+        "let a: [2 of [2 of Int]] = [.init(all: 1), [2, 3]]\n_ = a",
+        "let a: [2 of [3 of Bool]] = .init(all: .init(all: true))\n_ = a",
+        "let n = 3\nlet a: [2 of Int] = .init(all: n + 1)\n_ = a",
+    ])
+    func `.init(all:) makes the array its position expects`(body: String) {
+        #expect(errorLines(body) == [])
+    }
+
+    @Test(arguments: [
+        ("let a = .init(all: 0)", "2:9: error[E0267]: the implicit member '.init' needs a type"),
+        ("let a: Int = .init(all: 0)", "2:14: error[E0257]: implicit members of Int aren't supported"),
+        ("let a: Hit = .init(damage: 1)", "2:14: error[E0257]: implicit members of Hit aren't supported"),
+        ("let a: [2 of Int] = .init(0)", "2:27: error[E0228]: expected 'all:' before the argument, found no label"),
+        ("let a: [2 of Int] = .init(al: 0)", "2:27: error[E0228]: expected 'all:' before the argument, found 'al:'"),
+        ("let a: [2 of Int] = .init(each: 0)", "2:21: error[E0268]: '.init(each:)' isn't supported"),
+        ("let a: [2 of Int] = .init(all: 0, 1)", "2:21: error[E0210]: '.init' takes 1 argument, but the call passes 2"),
+        ("let a: [2 of Int] = .init()", "2:21: error[E0210]: '.init' takes 1 argument, but the call passes 0"),
+        ("let a: [2 of Int] = .init", "2:21: error[E0269]: '.init' must be called"),
+        ("let a: [2 of Int] = .zero", "2:21: error[E0270]: [2 of Int] has no member 'zero'"),
+        ("let a: [2 of Int] = .make(all: 0)", "2:21: error[E0270]: [2 of Int] has no member 'make'"),
+        ("let a: [2 of Int] = .init(all: true)", "2:32: error[E0213]: expected Int, found Bool"),
+        ("let a: [2 of UInt] = .init(all: -1)", "2:33: error[E0217]: the literal doesn't fit in a UInt"),
+        ("pick(.init(all: 1))", "2:1: error[E0260]: the call fits more than one 'pick'"),
+        ("print(.init(all: 1))", "2:7: error[E0267]: the implicit member '.init' needs a type"),
+    ])
+    func `.init(all:) with no array type, or with the wrong member, label or value, is an error`(
+        body: String, expected: String,
+    ) {
+        #expect(errorLines(body) == [expected])
+    }
+
+    @Test func `the value an array is filled with is copied into it, so it is borrowed and stays usable`() {
+        #expect(errors("func main() {\nlet h = Hit(damage: 1)\nlet a: [2 of Hit] = .init(all: h)\n_ = a\n_ = h\n}\n"
+            + declarations) == [])
+    }
+
+    @Test func `a value that was moved can't fill an array`() {
+        #expect(errors("func main() {\nlet h = Hit(damage: 1)\n_ = h\nlet a: [2 of Hit] = .init(all: h)\n_ = a\n}\n"
+            + declarations) == [.usedAfterMove(name: "h")])
     }
 }

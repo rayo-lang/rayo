@@ -71,6 +71,13 @@ struct IllTypedIRTests {
         #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
     }
 
+    @Test func `a filled array is of its value's type, and of as many elements as it says`() throws {
+        let filling = computing("fill 2 of read %0 @1:1-1:2", on: ["Bool"], into: "[2 of Int]")
+        let program = try IRParser.program(from: filling)
+        let message = "the IR stores a value of type [2 of Bool] in a place of type [2 of Int]"
+        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+    }
+
     @Test func `a wrapping operator is named as one`() throws {
         let program = try IRParser.program(from: main("""
               temp %0: Bool

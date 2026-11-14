@@ -128,6 +128,8 @@ public enum IRPrinter {
             "call \(text(of: callee, in: program))(\(arguments.map(text(of:)).joined(separator: ", ")))"
         case .array(let elements, let element):
             "array of \(element)(\(list(elements)))"
+        case .filledArray(let value, let count):
+            "fill \(count) of \(text(of: value))"
         }
     }
 

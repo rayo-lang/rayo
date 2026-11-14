@@ -53,10 +53,11 @@ struct DependencyState: DataflowState {
     /// The accesses that the value `value` makes depends on. A copy of a value, or a move of one, carries what the
     /// value depends on. So does a call's result, of what the values the call is passed as they are depend on, since
     /// it may hold them, as a struct that its primary initializer makes does, and so does an array, of what its
-    /// elements depend on. An operator's result is an integer or a Bool, which depends on nothing.
+    /// elements, or the value copied into each, depend on. An operator's result is an integer or a Bool, which
+    /// depends on nothing.
     private func dependencies(of value: Rvalue) -> Set<AccessID> {
         switch value {
-        case .operand, .call, .array:
+        case .operand, .call, .array, .filledArray:
             value.operands.reduce(into: []) { dependencies, operand in
                 if let place = operand.place { dependencies.formUnion(dependentLocals[place.root] ?? []) }
             }
