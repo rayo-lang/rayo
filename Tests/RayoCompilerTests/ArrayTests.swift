@@ -200,14 +200,28 @@ struct ArrayInitializerTests {
     }
 
     @Test func `the value an array is filled with is copied into it, so it is borrowed and stays usable`() {
-        #expect(errors("func main() {\nlet h = Hit(damage: 1)\n"
-            + "let a: [2 of Hit] = .init(repeating: h)\n_ = a\n_ = h\n}\n"
-            + declarations) == [])
+        let source = """
+            func main() {
+            let h = Hit(damage: 1)
+            let a: [2 of Hit] = .init(repeating: h)
+            _ = a
+            _ = h
+            }
+
+            """
+        #expect(errors(source + declarations) == [])
     }
 
     @Test func `a value that was moved can't fill an array`() {
-        #expect(errors("func main() {\nlet h = Hit(damage: 1)\n_ = h\n"
-            + "let a: [2 of Hit] = .init(repeating: h)\n_ = a\n}\n"
-            + declarations) == [.usedAfterMove(name: "h")])
+        let source = """
+            func main() {
+            let h = Hit(damage: 1)
+            _ = h
+            let a: [2 of Hit] = .init(repeating: h)
+            _ = a
+            }
+
+            """
+        #expect(errors(source + declarations) == [.usedAfterMove(name: "h")])
     }
 }

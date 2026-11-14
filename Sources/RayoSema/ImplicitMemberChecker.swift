@@ -58,8 +58,8 @@ struct ImplicitMemberChecker {
         guard argument.label != "each" else { return failed(member, reporting: .unsupportedEachInitializer) }
 
         // Any other label is wrong, and the value is still checked as an element's, for its own errors.
-        let found = ArgumentLabel(argument.label)
-        errors.report(.argumentLabel(expected: ArgumentLabel("repeating"), found: found), at: argument.range)
+        let expected = ArgumentLabel(ImplicitMember.fillingLabel)
+        errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
         _ = expressions.settled(argument.value, expecting: Expectation(element))
         return nil
     }

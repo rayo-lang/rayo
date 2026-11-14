@@ -207,6 +207,10 @@ struct FilledArrayTests {
         ("let a = .init(repeating: 0)", "2:13: error[E0267]: the implicit member '.init' needs a type"),
         ("let a: [2 of Int] = .init(each: 0)", "2:25: error[E0268]: '.init(each:)' isn't supported"),
         (
+            "let a: [2 of Int] = .init(al: 0)",
+            "2:31: error[E0228]: expected 'repeating:' before the argument, found 'al:'",
+        ),
+        (
             "let a: [2 of Int] = .init(all: 0)",
             "2:31: error[E0228]: expected 'repeating:' before the argument, found 'all:'",
         ),

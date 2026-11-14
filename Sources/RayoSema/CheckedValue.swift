@@ -74,6 +74,9 @@ struct ImplicitMember {
         var range: SourceRange
     }
 
+    /// The label of the argument whose value `.init(repeating:)`, the one member an array has, fills the array with.
+    static let fillingLabel = "repeating"
+
     var name: String
     /// Where the source writes the `.` and the name.
     var nameRange: SourceRange
@@ -90,7 +93,9 @@ struct ImplicitMember {
     /// The value that `.init(repeating: value)`, the one member an array has, fills it with; nil for any other member.
     /// An array's members are told apart here alone, so checking a member and picking among overloads agree.
     var fillingValue: CheckedValue? {
-        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == "repeating" else { return nil }
+        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == Self.fillingLabel else {
+            return nil
+        }
         return arguments[0].value
     }
 
