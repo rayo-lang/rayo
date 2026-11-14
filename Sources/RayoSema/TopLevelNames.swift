@@ -23,12 +23,12 @@ struct TopLevelNames {
         firstFunctions = Self.firstStarts(of: functions)
     }
 
-    /// The names and starts of `file`'s functions that failed to parse with a name. A declaration that failed starts
-    /// at its keyword, which, like a name, lies after every declaration before it and before every one after it.
+    /// The names of `file`'s functions that failed to parse after their names, and where each name starts.
     private static func unparsedFunctions(of file: SourceFile) -> [(String, SourceLocation)] {
         file.failedDeclarations.compactMap { declaration in
-            guard declaration.kind == .function else { return nil }
-            return declaration.name.map { ($0, declaration.range.start) }
+            guard declaration.kind == .function, let name = declaration.name, let nameRange = declaration.nameRange
+            else { return nil }
+            return (name, nameRange.start)
         }
     }
 

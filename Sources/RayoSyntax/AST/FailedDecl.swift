@@ -11,6 +11,8 @@ public struct FailedDecl: Sendable {
     public var kind: Kind
     /// The declaration's name, or nil where it failed before its name.
     public var name: String?
+    /// Where the name is written, or nil where the declaration failed before its name.
+    public var nameRange: SourceRange?
     /// The source the declaration covers, up to where the parser stopped skipping it.
     public var range: SourceRange
 }

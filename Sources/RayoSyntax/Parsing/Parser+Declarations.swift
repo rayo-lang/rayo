@@ -1,4 +1,5 @@
 internal import RayoDiagnostics
+internal import RayoSource
 
 /// Parses a file's declarations: its functions with their parameters, and its structs with their fields.
 extension Parser {
@@ -10,7 +11,9 @@ extension Parser {
                 try parser.parseDeclaration()
             } ifFailed: { failure, range in
                 // A declaration that failed is kept as a failed one of its kind; text that began none keeps nothing.
-                failure.kind.map { .failed(FailedDecl(kind: $0, name: failure.name, range: range)) }
+                failure.kind.map {
+                    .failed(FailedDecl(kind: $0, name: failure.name, nameRange: failure.nameRange, range: range))
+                }
             }
             // The declarations run to the end of the file.
             if atEnd { return SourceFile(declarations) }
@@ -39,10 +42,10 @@ extension Parser {
     /// After the `func`: `identifier '(' parameters ')' ('->' type)? block`. A function that fails throws its name,
     /// where it read it.
     private mutating func parseFunction() throws(DeclarationFailure) -> FuncDecl {
-        var name: String?
+        var name: (String, SourceRange)?
         do throws(ParseFailure) {
             let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingFunctionName)
-            name = readName
+            name = (readName, nameRange)
             try expect(.lparen, else: ErrorCode.missingParameterList)
             let parameters = try parseList(ifUnclosed: ErrorCode.unclosedParameters) { parser throws(ParseFailure) in
                 try parser.parseParameter()
@@ -51,7 +54,7 @@ extension Parser {
             let body = try parseBlock()
             return FuncDecl(name: readName, nameRange: nameRange, parameters: parameters, result: result, body: body)
         } catch {
-            throw DeclarationFailure(kind: .function, name: name)
+            throw DeclarationFailure(kind: .function, name: name?.0, nameRange: name?.1)
         }
     }
 
@@ -102,18 +105,18 @@ extension Parser {
     /// After the `struct`: `identifier ('(' fields ')')? ('{' '}')?`. A struct that fails throws its name, where it
     /// read it.
     private mutating func parseStruct() throws(DeclarationFailure) -> StructDecl {
-        var name: String?
+        var name: (String, SourceRange)?
         do throws(ParseFailure) {
             // Read the name, and the fields where the header has them.
             let (readName, nameRange) = try expectIdentifier(else: ErrorCode.missingStructName)
-            name = readName
+            name = (readName, nameRange)
             let fields = consume(.lparen) ? try parseFields() : []
 
             // A struct may leave its body out.
             if consume(.lbrace) { try parseEmptyBody() }
             return StructDecl(name: readName, nameRange: nameRange, fields: fields)
         } catch {
-            throw DeclarationFailure(kind: .structure, name: name)
+            throw DeclarationFailure(kind: .structure, name: name?.0, nameRange: name?.1)
         }
     }
 

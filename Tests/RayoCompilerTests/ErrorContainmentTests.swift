@@ -112,12 +112,20 @@ struct ErrorContainmentTests {
     }
 
     @Test(arguments: [
-        ("struct P(let x Int)\nstruct P(let x: Int)", "P"), ("struct f(let x Int)\nfunc f() {}", "f"),
+        // The second declaration of the name is reported at its name, whichever failed to parse.
+        ("struct P(let x Int)\nstruct P(let x: Int)", [ErrorCode.alreadyDeclared(name: "P")], "P"),
+        ("struct P(let x: Int)\nstruct P(let x Int)", [.alreadyDeclared(name: "P")], "P"),
+        ("struct f(let x Int)\nfunc f() {}", [.alreadyDeclared(name: "f")], "f"),
+        ("struct _(let x Int)", [.underscoreDeclared], "_"),
     ])
-    func `a struct that failed to parse takes its name, as one that parsed does`(source: String, name: String) {
-        #expect(errors("func main() {}\n" + source) == [
-            .unclosedFields(found: .token("Int")), .alreadyDeclared(name: name),
-        ])
+    func `a struct that failed to parse takes its name, as one that parsed does`(
+        source: String, nameErrors: [ErrorCode], covered: String,
+    ) {
+        let reported = diagnostics("func main() {}\n" + source)
+        let nameDiagnostics = reported.filter { $0.code != .unclosedFields(found: .token("Int")) }
+        #expect(reported.count == nameDiagnostics.count + 1)
+        #expect(nameDiagnostics.map(\.code) == nameErrors)
+        #expect(coveredText(nameDiagnostics, in: "func main() {}\n" + source) == [covered])
     }
 
     @Test(arguments: [
