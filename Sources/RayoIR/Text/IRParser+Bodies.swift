@@ -107,19 +107,13 @@ extension IRParser {
     /// Reads `kind enforcement place @range`: what an access does, how it is enforced, and the place it reaches.
     private mutating func access() throws(IRTextError) -> Access {
         let kindToken = current
-        let kind: AccessKind = switch try word() {
-        case "read": .read
-        case "modify": .modify
-        default: throw IRTextError(at: kindToken, "expected 'read' or 'modify'")
+        guard let kind = AccessKind(rawValue: try word()) else {
+            throw IRTextError(at: kindToken, "expected 'read' or 'modify'")
         }
-
         let enforcementToken = current
-        let enforcement: Enforcement = switch try word() {
-        case "static": .static
-        case "dynamic": .dynamic
-        default: throw IRTextError(at: enforcementToken, "expected 'static' or 'dynamic'")
+        guard let enforcement = Enforcement(rawValue: try word()) else {
+            throw IRTextError(at: enforcementToken, "expected 'static' or 'dynamic'")
         }
-
         let place = try place()
         return Access(kind, enforcement, to: place, at: try range())
     }

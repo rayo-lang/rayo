@@ -39,7 +39,6 @@ extension FunctionEmitter {
         with builder: borrowing Builder,
     ) {
         let values = arguments.map { value(of: $0, with: builder) }
-        let readPlaces = arguments.compactMap(place(of:))
         let destinationAddress = destination.map { address(of: $0, with: builder) }
 
         switch function.signature.result {
@@ -47,7 +46,7 @@ extension FunctionEmitter {
             let result = emitCall(of: function, passing: values, resultSlot: nil, with: builder)
             storeResult(result, in: destinationAddress, with: builder)
         case .slot:
-            callWritingSlot(of: function, passing: values, reading: readPlaces, into: destination,
+            callWritingSlot(of: function, passing: values, from: arguments, into: destination,
                             at: destinationAddress, with: builder)
         }
     }
@@ -60,11 +59,15 @@ extension FunctionEmitter {
         }
     }
 
-    /// The place `argument` reads, or nil where it passes a constant.
-    func place(of argument: CallArgument) -> Place? {
-        switch argument {
-        case .operand(let operand): operand.place
-        case .access(let id): begun(id).place
+    /// Whether any of `arguments` reads, moves or reaches a place that shares memory with `destination`, which a
+    /// write to `destination` before the arguments are read would change.
+    func anyOf(_ arguments: [CallArgument], overlaps destination: Place) -> Bool {
+        arguments.contains { argument in
+            let place = switch argument {
+            case .operand(let operand): operand.place
+            case .access(let id): begun(id).place as Place?
+            }
+            return place?.overlaps(destination) ?? false
         }
     }
 
@@ -74,15 +77,15 @@ extension FunctionEmitter {
         return access
     }
 
-    /// Emits a call of `target`, whose result is written to a slot, with `arguments`, which read the places
-    /// `readPlaces`. The slot is `destination`'s place, at `address`, where nothing the call reads shares it, and
-    /// otherwise a new one, copied into the destination after.
+    /// Emits a call of `target`, whose result is written to a slot, with `arguments`, the values that
+    /// `callArguments` pass. The slot is `destination`'s place, at `address`, where nothing the call reads shares it,
+    /// and otherwise a new one, copied into the destination after.
     private func callWritingSlot(
-        of target: DeclaredFunction, passing arguments: [OperandValue], reading readPlaces: [Place],
+        of target: DeclaredFunction, passing arguments: [OperandValue], from callArguments: [CallArgument],
         into destination: Place?, at address: Address?, with builder: borrowing Builder,
     ) {
         // A destination that no argument reads takes the result straight from the call.
-        if let destination, let address, !readPlaces.contains(where: { $0.overlaps(destination) }) {
+        if let destination, let address, !anyOf(callArguments, overlaps: destination) {
             emitCall(of: target, passing: arguments, resultSlot: address, with: builder)
             return
         }

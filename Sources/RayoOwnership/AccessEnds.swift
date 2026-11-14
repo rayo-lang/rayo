@@ -1,9 +1,11 @@
 import RayoIR
 
-/// Writes the end of each access of a function into its body, after the access's last live point on each path.
+/// Writes the end of each access of a function into its body, after the last point on each path where it is held:
+/// live, and begun on every path there. Where a path that never began an access joins one where a value still depends
+/// on it, the access ends on the way into the join, since no end may run on a path that has nothing to end.
 enum AccessEnds {
-    /// The ends that an edge from one block to another needs: those of the accesses live as the edge leaves `source`
-    /// and dead as it enters its target.
+    /// The ends that an edge from one block to another needs: those of the accesses held as the edge leaves `source`
+    /// and not as it enters its target.
     private struct EdgeEnds {
         var source: BlockID
         /// The edge's place among `source`'s successors.
@@ -12,48 +14,49 @@ enum AccessEnds {
         var ends: Set<AccessID>
     }
 
-    /// `body` with the end of each access written into it, where `live` holds the accesses live at each point of
-    /// each block, as `AccessExtents.live(in:)` gives them, or nil for a block that no path reaches.
-    static func written(into body: IRBody, live: [[Set<AccessID>]?]) -> IRBody {
+    /// `body` with the end of each access written into it, where `held` holds the accesses held at each point of
+    /// each block, counted as `AccessExtents` counts its points, or nil for a block that no path reaches.
+    static func written(into body: IRBody, held: [[Set<AccessID>]?]) -> IRBody {
         var ended = body
         var edges: [EdgeEnds] = []
-        for (index, blockLive) in live.enumerated() {
+        for (index, blockHeld) in held.enumerated() {
             // A block that no path reaches begins no access that runs.
-            guard let blockLive else { continue }
+            guard let blockHeld else { continue }
             let block = BlockID(index: index)
-            ended.blocks[index] = endingInside(body.blocks[index], live: blockLive)
-            edges += endsOnEdges(leaving: block, of: body, live: blockLive, entryLive: { live[$0.index]?.first ?? [] })
+            ended.blocks[index] = endingInside(body.blocks[index], held: blockHeld)
+            edges += endsOnEdges(leaving: block, of: body, held: blockHeld, entryHeld: { held[$0.index]?.first ?? [] })
         }
         return endingOnEdges(edges, in: ended)
     }
 
-    /// `block` with the end of each access that stops being live at one of its statements, or at its terminator
+    /// `block` with the end of each access that stops being held at one of its statements, or at its terminator
     /// where that leaves the function, written in after it.
-    private static func endingInside(_ block: BasicBlock, live: [Set<AccessID>]) -> BasicBlock {
+    private static func endingInside(_ block: BasicBlock, held: [Set<AccessID>]) -> BasicBlock {
         var statements: [Statement] = []
         for (index, statement) in block.statements.enumerated() {
             statements.append(statement)
 
-            // An access ends after the statement that it is live before, or that begins it, where it is dead after.
-            var ending = live[index]
+            // An access ends after the statement that it is held before, or that begins it, where it isn't held
+            // after.
+            var ending = held[index]
             if case .begin(let id, _) = statement { ending.insert(id) }
-            statements += ends(of: ending.subtracting(live[index + 1]))
+            statements += ends(of: ending.subtracting(held[index + 1]))
         }
 
-        // A terminator that leaves the function ends every access still live, just before it goes, since a function
+        // A terminator that leaves the function ends every access still held, just before it goes, since a function
         // returns no value that depends on an access it began.
-        if block.terminator.successors.isEmpty { statements += ends(of: live[block.statements.count]) }
+        if block.terminator.successors.isEmpty { statements += ends(of: held[block.statements.count]) }
         return BasicBlock(statements: statements, terminator: block.terminator)
     }
 
-    /// The ends that each edge out of `block`, a block of `body`, needs: those of the accesses live before its
-    /// terminator, which `live` gives, that `entryLive` doesn't give as live where the edge's target begins.
+    /// The ends that each edge out of `block`, a block of `body`, needs: those of the accesses held before its
+    /// terminator, which `held` gives, that `entryHeld` doesn't give as held where the edge's target begins.
     private static func endsOnEdges(
-        leaving block: BlockID, of body: IRBody, live: [Set<AccessID>], entryLive: (BlockID) -> Set<AccessID>,
+        leaving block: BlockID, of body: IRBody, held: [Set<AccessID>], entryHeld: (BlockID) -> Set<AccessID>,
     ) -> [EdgeEnds] {
-        let leaving = live[body.blocks[block.index].statements.count]
+        let leaving = held[body.blocks[block.index].statements.count]
         return body.blocks[block.index].terminator.successors.enumerated().compactMap { edge, target in
-            let ending = leaving.subtracting(entryLive(target))
+            let ending = leaving.subtracting(entryHeld(target))
             guard !ending.isEmpty else { return nil }
             return EdgeEnds(source: block, edge: edge, target: target, ends: ending)
         }

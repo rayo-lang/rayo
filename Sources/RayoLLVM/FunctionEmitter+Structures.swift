@@ -17,7 +17,7 @@ extension FunctionEmitter {
         // A struct is built in its destination, unless a field reads it, which a field written before would
         // change. Such a struct is built in a new slot, then copied in.
         let address = address(of: destination, with: builder)
-        let readsDestination = arguments.contains { place(of: $0)?.overlaps(destination) ?? false }
+        let readsDestination = anyOf(arguments, overlaps: destination)
         let target = readsDestination ? newSlot(of: address.type, with: builder) : address
         for (index, field) in fields.enumerated() {
             copy(field, to: fieldAddress(of: index, in: target, with: builder), with: builder)

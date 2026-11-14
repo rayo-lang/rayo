@@ -102,21 +102,7 @@ public enum IRPrinter {
 
     /// What an access does, how it is enforced, and the place it reaches, such as `read static %0.1 @2:3-2:6`.
     private static func text(of access: Access) -> String {
-        "\(name(of: access.kind)) \(name(of: access.enforcement)) \(text(of: access.place)) \(text(of: access.range))"
-    }
-
-    private static func name(of kind: AccessKind) -> String {
-        switch kind {
-        case .read: "read"
-        case .modify: "modify"
-        }
-    }
-
-    private static func name(of enforcement: Enforcement) -> String {
-        switch enforcement {
-        case .static: "static"
-        case .dynamic: "dynamic"
-        }
+        "\(access.kind.rawValue) \(access.enforcement.rawValue) \(text(of: access.place)) \(text(of: access.range))"
     }
 
     /// An access as its number, such as `a2`.

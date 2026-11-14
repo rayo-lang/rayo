@@ -9,8 +9,8 @@ struct FunctionLoweringTests {
         try expectLowering(of: source, toMatch: "call")
     }
 
-    @Test func `a borrowed argument is a read access, begun where it is evaluated, which lowering never ends`() throws {
-        // The second argument is computed after the first's access begins, and before its own begins.
+    @Test func `a borrowed argument is a read access, begun as the call begins, which lowering never ends`() throws {
+        // Both arguments are computed before either access begins, and the accesses begin in their order.
         let source = """
             func main() {
                 let x = 1

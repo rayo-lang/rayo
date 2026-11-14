@@ -5,7 +5,7 @@ import RayoSema
 import Testing
 
 @Suite("Where accesses end, and which of them conflict")
-struct ExclusivityCheckerTests {
+struct AccessExtentTests {
     @Test func `a modify access and a read access of one place, live across one call, conflict`() throws {
         // As `g(&x, x)` lowers: the modify access is still live where the read access begins.
         let blocks = """
@@ -49,12 +49,13 @@ struct ExclusivityCheckerTests {
 
     @Test(arguments: [
         // An assignment to a value that holds the place, or to a field inside it, changes what the access reads.
-        ("%5 @2:6-2:6 = use read %5 @1:1-1:1 @1:1-1:1", "s"), ("%5.1.0 @2:6-2:6 = use 3 @1:1-1:1", "s.hit.damage"),
+        ("%5 @2:6-2:6 = use read %5 @1:1-1:1 @1:1-1:1", ErrorCode.changedWhileBorrowed(name: "s", borrowed: "s.hit")),
+        ("%5.1.0 @2:6-2:6 = use 3 @1:1-1:1", .changedWhileBorrowed(name: "s.hit.damage", borrowed: "s.hit")),
         // So does a move out of the place.
-        ("%4 @1:1-1:1 = use move %5.1 @2:6-2:6 @1:1-1:1", "s.hit"),
+        ("%4 @1:1-1:1 = use move %5.1 @2:6-2:6 @1:1-1:1", .movedWhileBorrowed(name: "s.hit", borrowed: "s.hit")),
     ])
     func `a change to a place that a live read access overlaps conflicts with it`(
-        change: String, changed: String,
+        change: String, code: ErrorCode,
     ) throws {
         let blocks = """
             bb0:
@@ -64,10 +65,7 @@ struct ExclusivityCheckerTests {
               _ = call "take(_: Int, _: Hit)"(1, a0) @1:1-1:1
               return
             """
-        let expected = Diagnostic(
-            .changedWhileBorrowed(name: changed, borrowed: "s.hit"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
-        )
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(blocks).errors == [Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])])
     }
 
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
@@ -227,6 +225,69 @@ struct ExclusivityCheckerTests {
               end a0
               goto bb0
             """))
+    }
+
+    @Test func `an access ends only on paths that began it, though a value that may depend on it is used on`() throws {
+        // `y` may depend on the access where the paths join, but the path through `bb2` never began it.
+        let blocks = """
+            bb0:
+              %0 @1:1-1:1 = use 1 @1:1-1:1
+              branch read %6 @1:1-1:1, bb1, bb2
+            bb1:
+              begin a0 read static %0 @1:1-1:1
+              %1 @1:1-1:1 = use 2 @1:1-1:1
+              depend %1 on a0
+              goto bb3
+            bb2:
+              %1 @1:1-1:1 = use 3 @1:1-1:1
+              goto bb3
+            bb3:
+              %3 @1:1-1:1 = use read %1 @1:1-1:1 @1:1-1:1
+              return
+            """
+        #expect(try ended(blocks) == body(of: """
+            bb0:
+              %0 @1:1-1:1 = use 1 @1:1-1:1
+              branch read %6 @1:1-1:1, bb1, bb2
+            bb1:
+              begin a0 read static %0 @1:1-1:1
+              %1 @1:1-1:1 = use 2 @1:1-1:1
+              depend %1 on a0
+              goto bb4
+            bb2:
+              %1 @1:1-1:1 = use 3 @1:1-1:1
+              goto bb3
+            bb3:
+              %3 @1:1-1:1 = use read %1 @1:1-1:1 @1:1-1:1
+              return
+            bb4:
+              end a0
+              goto bb3
+            """))
+    }
+
+    @Test func `after paths join, a change conflicts with an access one began that a value may depend on`() throws {
+        let blocks = """
+            bb0:
+              %0 @1:1-1:1 = use 1 @1:1-1:1
+              branch read %6 @1:1-1:1, bb1, bb2
+            bb1:
+              begin a0 read static %0 @2:3-2:3
+              %1 @1:1-1:1 = use 2 @1:1-1:1
+              depend %1 on a0
+              goto bb3
+            bb2:
+              %1 @1:1-1:1 = use 3 @1:1-1:1
+              goto bb3
+            bb3:
+              %0 @2:6-2:6 = use 4 @1:1-1:1
+              %3 @1:1-1:1 = use read %1 @1:1-1:1 @1:1-1:1
+              return
+            """
+        let expected = Diagnostic(
+            .changedWhileBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
+        )
+        #expect(try checked(blocks).errors == [expected])
     }
 
     @Test func `an access begun in a loop's body ends in the body, on each pass`() throws {

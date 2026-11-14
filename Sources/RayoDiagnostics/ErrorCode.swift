@@ -311,6 +311,9 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(313, error: "'{name}' can't change while '{borrowed}' is borrowed", labels: ["borrowed": "borrowed here"])
     case changedWhileBorrowed(name: String, borrowed: String)
+
+    @Code(314, error: "'{name}' can't be moved while '{borrowed}' is borrowed", labels: ["borrowed": "borrowed here"])
+    case movedWhileBorrowed(name: String, borrowed: String)
 }
 
 extension ErrorCode {

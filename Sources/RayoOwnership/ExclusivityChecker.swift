@@ -25,17 +25,27 @@ public enum ExclusivityChecker {
         let accesses = places.body.begunAccesses
         guard !accesses.isEmpty else { return (places.body, []) }
 
-        // Work out where each access is live, at each point of each block.
+        // Work out where each access is live, at each point of each block, and where every path has begun it.
         var extents = AccessExtents(places)
-        let live = places.body.blocks.indices.map { extents.live(in: BlockID(index: $0)) }
+        let blocks = places.body.blocks.indices.map { BlockID(index: $0) }
+        let live = blocks.map { extents.live(in: $0) }
+        let held = zip(live, blocks.map { extents.unbegun(in: $0) }).map(Self.held)
 
         // Check each block that a path reaches; one that none reaches runs no access.
         var conflicts = AccessConflicts(places: places, accesses: accesses)
-        for (index, blockLive) in live.enumerated() {
+        for (block, blockLive) in zip(blocks, live) {
             guard let blockLive else { continue }
-            conflicts.check(BlockID(index: index), live: blockLive)
+            conflicts.check(block, live: blockLive)
         }
 
-        return (AccessEnds.written(into: places.body, live: live), conflicts.errors)
+        return (AccessEnds.written(into: places.body, held: held), conflicts.errors)
+    }
+
+    /// The accesses held at each point of a block, where `live` are those live there and `unbegun` those that some
+    /// path there hasn't begun: those live that every path has begun. Only they can end there, since a path that
+    /// hasn't begun an access has nothing to end. Nil where no path reaches the block.
+    private static func held(live: [Set<AccessID>]?, unbegun: [Set<AccessID>]?) -> [Set<AccessID>]? {
+        guard let live, let unbegun else { return nil }
+        return zip(live, unbegun).map { $0.subtracting($1) }
     }
 }

@@ -4,8 +4,9 @@ import RayoSema
 /// The accesses that the value each local holds depends on at a point, and those that each access depends on through
 /// the place it reaches. A local or an access left out depends on none.
 struct DependencyState: DataflowState {
-    /// The accesses each local's value depends on, by the local's ID, wherever in the local the value lies.
-    private var locals: [LocalID: Set<AccessID>] = [:]
+    /// The accesses each local's value depends on, by the local's ID, wherever in the local the value lies; a local
+    /// whose value depends on none is left out.
+    private(set) var dependentLocals: [LocalID: Set<AccessID>] = [:]
     /// The accesses each access depends on, by its ID: those its place's value depended on as it began.
     private var accesses: [AccessID: Set<AccessID>] = [:]
 
@@ -14,14 +15,9 @@ struct DependencyState: DataflowState {
 
     func merged(with other: DependencyState) -> DependencyState {
         var merged = self
-        merged.locals.merge(other.locals) { $0.union($1) }
+        merged.dependentLocals.merge(other.dependentLocals) { $0.union($1) }
         merged.accesses.merge(other.accesses) { $0.union($1) }
         return merged
-    }
-
-    /// The locals whose values depend on an access, and the accesses each depends on.
-    var dependentLocals: [LocalID: Set<AccessID>] {
-        locals
     }
 
     /// The accesses that `access` depends on.
@@ -38,15 +34,15 @@ struct DependencyState: DataflowState {
 
         // A declaration starts a local's life without a value, so it depends on nothing.
         case .declare(let local):
-            locals[local] = nil
+            dependentLocals[local] = nil
 
         // An access depends on what its place's value depends on, since the code reaches that value through it.
         case .begin(let id, let access):
-            accesses[id] = locals[access.place.root] ?? []
+            accesses[id] = dependentLocals[access.place.root] ?? []
 
         // The value at the place now depends on the access too, and on what the access depends on.
         case .depend(let place, let id):
-            locals[place.root, default: []].formUnion(dependencies(of: id).union([id]))
+            dependentLocals[place.root, default: []].formUnion(dependencies(of: id).union([id]))
 
         // A computation that drops its value, or the end of an access, changes no value's dependencies.
         case .compute(nil, _, _), .end:
@@ -62,7 +58,7 @@ struct DependencyState: DataflowState {
         switch value {
         case .use, .call:
             value.operands.reduce(into: []) { dependencies, operand in
-                if let place = operand.place { dependencies.formUnion(locals[place.root] ?? []) }
+                if let place = operand.place { dependencies.formUnion(dependentLocals[place.root] ?? []) }
             }
         case .unary, .binary:
             []
@@ -73,9 +69,9 @@ struct DependencyState: DataflowState {
     /// one and what it depended on; one stored in a part of it adds to what the local's value depends on.
     private mutating func store(_ dependencies: Set<AccessID>, in place: Place) {
         if place.steps.isEmpty {
-            locals[place.root] = dependencies.isEmpty ? nil : dependencies
+            dependentLocals[place.root] = dependencies.isEmpty ? nil : dependencies
         } else if !dependencies.isEmpty {
-            locals[place.root, default: []].formUnion(dependencies)
+            dependentLocals[place.root, default: []].formUnion(dependencies)
         }
     }
 }
