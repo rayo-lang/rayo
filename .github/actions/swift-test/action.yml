@@ -55,6 +55,27 @@ runs:
         path: .build
         key: ${{ steps.name.outputs.key }}
         restore-keys: ${{ steps.name.outputs.prefix }}
+    # A runner's network can stall partway through a fetch, so a fetch that fails is tried again, a few times with a
+    # pause between tries. A failed fetch can leave the build or SwiftPM's shared cache naming a clone or a download
+    # that was never made, so before the next try both lose the dependencies the failed one fetched. Each try clones
+    # into the build alone, skipping the shared cache, since a runner starts with that cache empty and keeps nothing
+    # in it. A restored build that already holds the versions Package.resolved pins fetches nothing.
+    - name: Resolve the dependencies
+      shell: bash
+      run: |
+        tries=4
+        for try in $(seq "$tries"); do
+          if swift package --disable-dependency-cache --force-resolved-versions resolve; then
+            exit 0
+          fi
+          if [ "$try" -lt "$tries" ]; then
+            echo "::warning::fetching the dependencies failed on try $try of $tries; trying again"
+            rm -rf .build/repositories .build/checkouts .build/prebuilts .build/workspace-state.json
+            swift package purge-cache
+            sleep $((try * 15))
+          fi
+        done
+        exit 1
     # The test targets the changed paths reach, by the manifest's dependencies, are the ones a run needs.
     - name: Select the tests
       id: tests
