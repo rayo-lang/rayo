@@ -249,11 +249,26 @@ jobs:
           changed-paths: ${{ needs.changes.outputs.test-paths }}
 
   windows:
-    name: Test on Windows
+    name: Test on Windows ${{ matrix.name }}
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    # Visual Studio 2022 is the release Swift's Windows install names, with its C runtime and Windows SDK.
-    runs-on: windows-2022
+    # Each architecture builds and tests on a runner of its own, natively, from the one list of steps, so the Swift
+    # and LLVM builds it pins below are the same for both. A failure on one doesn't cancel the other.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Visual Studio 2022 is the release Swift's Windows install names, with its C runtime and Windows SDK;
+          # GitHub's arm64 image holds it too, with its ARM64 build tools.
+          - name: x64
+            runner: windows-2022
+            swift-arch: amd64
+            triple: x86_64-pc-windows-msvc
+          - name: arm64
+            runner: windows-11-arm
+            swift-arch: arm64
+            triple: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     env:
       # The exact Swift build to install, of SWIFT_RELEASE; Swift's Windows installer names one.
@@ -261,6 +276,8 @@ jobs:
       # The exact LLVM build to install, of LLVM_MAJOR_VERSION. Only the archive LLVM publishes for Windows holds
       # the headers rayoc builds against: its installer and the package managers that use it hold none.
       LLVM_BUILD: 23.1.5
+      # The target LLVM's Windows archive is built for, which its name ends in.
+      LLVM_TRIPLE: ${{ matrix.triple }}
     defaults:
       run:
         shell: bash
@@ -271,6 +288,7 @@ jobs:
         with:
           swift-version: swift-${{ env.SWIFT_BUILD }}-release
           swift-build: ${{ env.SWIFT_BUILD }}-RELEASE
+          build_arch: ${{ matrix.swift-arch }}
 
       - name: Restore LLVM
         id: llvm-archive
@@ -283,7 +301,7 @@ jobs:
         run: |
           release="https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_BUILD"
           curl -fsSL --retry 3 -w 'Downloaded %{size_download} bytes in %{time_total}s\n' \
-            -o "$RUNNER_TEMP/llvm.tar.xz" "$release/clang+llvm-$LLVM_BUILD-x86_64-pc-windows-msvc.tar.xz"
+            -o "$RUNNER_TEMP/llvm.tar.xz" "$release/clang+llvm-$LLVM_BUILD-$LLVM_TRIPLE.tar.xz"
       # The archive holds a whole install, thousands of files of it libraries rayoc doesn't link, so only what rayoc
       # builds against and its tests run is unpacked: LLVM's C API headers and library, the release's version files,
       # and the tools. Windows' own tar takes many minutes to decompress the archive, so the 7-Zip the runner's
@@ -291,7 +309,7 @@ jobs:
       - name: Unpack LLVM
         if: steps.llvm-archive.outputs.cache-hit != 'true'
         run: |
-          name="clang+llvm-$LLVM_BUILD-x86_64-pc-windows-msvc"
+          name="clang+llvm-$LLVM_BUILD-$LLVM_TRIPLE"
           members=(
             include/llvm-c include/llvm/Config lib/LLVM-C.lib bin/LLVM-C.dll lib/cmake/lld
             bin/clang.exe bin/lld.exe bin/lld-link.exe bin/llvm-config.exe bin/llvm-nm.exe bin/llvm-readobj.exe
