@@ -2,7 +2,7 @@ import RayoDiagnostics
 import RayoSource
 
 /// Settles an implicit member to the member it names of the type its position expects. An array's one member is
-/// `.init(all: value)`, which fills it with copies of the value, and no other type has implicit members.
+/// `.init(repeating: value)`, which fills it with copies of the value, and no other type has implicit members.
 struct ImplicitMemberChecker {
     let expressions: ExpressionChecker
 
@@ -27,18 +27,18 @@ struct ImplicitMemberChecker {
     }
 
     /// Checks `member` as a member of the array of `count` values of `element`. The array's one member,
-    /// `.init(all: value)`, makes the array with each element a copy of the value.
+    /// `.init(repeating: value)`, makes the array with each element a copy of the value.
     private func arrayMember(_ member: ImplicitMember, makingArrayOf count: Int, _ element: RayoType) -> CheckedExpr? {
         let type = RayoType.array(count: count, element: element)
 
-        // `.init(all: value)` makes the array from its value, which an element's type must hold.
+        // `.init(repeating: value)` makes the array from its value, which an element's type must hold.
         guard let filling = member.fillingValue else { return misused(member, of: type, element) }
         return expressions.settled(filling, expecting: Expectation(element)).map {
             CheckedExpr(kind: .filledArray($0), type: type, range: member.range)
         }
     }
 
-    /// Reports `member`, a member of the array `type` of `element` values other than `.init(all:)`, for what is
+    /// Reports `member`, a member of the array `type` of `element` values other than `.init(repeating:)`, for what is
     /// wrong with it, and returns nil.
     private func misused(_ member: ImplicitMember, of type: RayoType, _ element: RayoType) -> CheckedExpr? {
         // An array has no member but its initializer, which makes a value only when it is called.
@@ -58,8 +58,8 @@ struct ImplicitMemberChecker {
         guard argument.label != "each" else { return failed(member, reporting: .unsupportedEachInitializer) }
 
         // Any other label is wrong, and the value is still checked as an element's, for its own errors.
-        let found = ArgumentLabel(argument.label)
-        errors.report(.argumentLabel(expected: ArgumentLabel("all"), found: found), at: argument.range)
+        let expected = ArgumentLabel(ImplicitMember.fillingLabel)
+        errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
         _ = expressions.settled(argument.value, expecting: Expectation(element))
         return nil
     }

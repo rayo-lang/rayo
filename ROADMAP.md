@@ -48,7 +48,7 @@ An inline array, `[N of T]`, holds `N` values in place, with no heap, and takes 
 v0.2 adds:
 
 - the `UInt` type, with literals typed by context, arithmetic and comparisons under the overflow rule, the conversions `UInt(i)` and `Int(u)`, and `print(UInt)` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
-- `[N of T]` as the type of locals, borrowed parameters, results, struct fields and array elements, nested arrays included, made by a literal or by `.init(all:)`;
+- `[N of T]` as the type of locals, borrowed parameters, results, struct fields and array elements, nested arrays included, made by a literal or by `.init(repeating:)`;
 - reading, copying, assigning and compound-assigning an element as `a[i]`, through fields and nested arrays, with a `UInt` index ([04](docs/spec/04-types/collections.md#inline-array-elements));
 - `a.count`, a `UInt`;
 - the `index out of range` panic in every build, and a compile error for an integer literal index out of range.
@@ -75,7 +75,7 @@ Declarations and types:
 - types and functions declared inside a function ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures));
 - nested types, type aliases and extensions ([04](docs/spec/04-types/structs.md#structs), [12](docs/spec/12-grammar/declarations.md#files-and-declarations));
 - tuples ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays));
-- `.init(each:)` and `[_ of T]` ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays)): v0.2 builds `[N of T]`, made by a literal or by `.init(all:)`;
+- `.init(each:)` and `[_ of T]` ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays)): v0.2 builds `[N of T]`, made by a literal or by `.init(repeating:)`;
 - enums and optionals, and `when` with a subject ([04](docs/spec/04-types/enums.md#enums));
 - untagged unions ([04](docs/spec/04-types/enums.md#untagged-unions));
 - the other number types, and implicit widening between them ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.1 builds `Int`, v0.1.5 `Float` and v0.2 `UInt`, and v0.2's array literals wait on the rest to widen their elements;

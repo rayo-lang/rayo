@@ -97,7 +97,7 @@ struct HugeElementAssignmentTests {
         let source = """
             func main() {}
             func f(_ i: UInt) {
-            var a: [1000000000 of Int] = .init(all: 0)
+            var a: [1000000000 of Int] = .init(repeating: 0)
             \(body)
             }
             func total(_ a: [1000000000 of Int]) -> Int { copy a[0] }
