@@ -4,7 +4,7 @@
 /// The major release of the LLVM install that the package manifest found.
 extern const int RayoLLVMMajorVersion;
 
-/// The directory that holds that install's tools, clang among them.
+/// The directory that holds the tools of the LLVM install that the package manifest found, clang among them.
 extern const char *const RayoLLVMToolDirectory;
 
 /// The directory that holds the LLD that the package manifest found, which some package managers install apart

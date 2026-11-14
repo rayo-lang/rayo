@@ -29,7 +29,7 @@ Edit the right-hand column to match whatever vocabulary you actually use.
 | `area:ownership` | `RayoOwnership`: the ownership checks on the IR |
 | `area:llvm` | `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM`: emitting LLVM code and the program runtime |
 | `area:pipeline` | `RayoCompiler` and `rayoc`: which stages run, and the compiler's command line |
-| `area:driver` | `rayo`, `RayoDriver`, `RayoLLVMInstall`: building, linking, running, and finding the toolchain |
+| `area:driver` | `rayo`, `RayoDriver`, `RayoLLVMInstall`, `CLLVMInstall`: building, linking, running, and finding the toolchain |
 | `area:build` | `Package.swift`, CI, install scripts, `TOOLCHAIN.md` and the toolchain's layout |
 | `area:spec` | `docs/spec/`, `docs/guide/`, `docs/validation/`, `docs/adr/`, `GLOSSARY.md`, `ROADMAP.md` and `examples/` |
 | `area:agents` | `AGENTS.md`, `docs/agents/` and the skills |
