@@ -1,8 +1,9 @@
 ; What the runtime needs from Windows: to ready a run, and to write to standard error.
 
 ; The C runtime's headers define printf inline, so its library exports none. legacy_stdio_definitions.lib holds the
-; printf that a program calling it links against, so the object names that library itself. It names kernel32.lib,
-; which holds `SetThreadStackGuarantee`, too, so that a program links it whatever libraries its linker adds.
+; printf that a program calling it links against, so the object names that library itself. The object names
+; kernel32.lib too, which holds `SetThreadStackGuarantee`, so that a program links it whatever libraries its linker
+; adds.
 !llvm.linker.options = !{!0, !1}
 !0 = !{!"/DEFAULTLIB:legacy_stdio_definitions.lib"}
 !1 = !{!"/DEFAULTLIB:kernel32.lib"}
@@ -12,7 +13,7 @@ declare i32 @_setmode(i32, i32)
 declare i32 @_write(i32, ptr, i32)
 
 ; Takes the size, in bytes, of the stack the calling thread keeps for handling a stack overflow, and returns, through
-; the same `ULONG`, the size it kept before.
+; the same `ULONG`, the size it kept before. It returns a `BOOL`, nonzero where it succeeds.
 declare i32 @SetThreadStackGuarantee(ptr)
 
 ; Readies the process to run the program: standard output and error go into binary mode, `_O_BINARY`, so that a
@@ -22,7 +23,7 @@ define void @rayo.host.start() {
   call i32 @_setmode(i32 2, i32 32768)
 
   ; Windows raises a stack overflow on the stack the thread has left, and first writes the thread's CPU state there,
-  ; which grows with each set of extended registers the CPU has: past 11 KiB with AMX's tile registers. That is more
+  ; which grows with each set of extended registers the CPU has: about 11 KiB with AMX's tile registers. That is more
   ; than the stack a thread has left by default, and a write past it ends the process with an access violation
   ; instead. 64 KiB holds the largest such state several times over.
   %guarantee = alloca i32

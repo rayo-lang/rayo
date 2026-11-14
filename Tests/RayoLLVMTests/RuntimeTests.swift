@@ -3,6 +3,7 @@ import Testing
 import RayoLLVM
 import RayoRuntime
 #if os(Windows)
+import RayoLLVMTestSupport
 import WinSDK
 #endif
 
@@ -98,7 +99,7 @@ struct RuntimeTests {
         try jit.add(Context().parseModule(host.llvmIR, named: host.name))
 
         let start = unsafeBitCast(try jit.address(of: "rayo.host.start"), to: (@convention(c) () -> Void).self)
-        #expect(stackGuarantee(ofThreadRunning: start) == 64 * 1024)
+        #expect(rayo_stack_guarantee_after(start) == 64 * 1024)
     }
     #endif
 }
@@ -110,30 +111,6 @@ private let leavingMode: @convention(c) (Int32, Int32) -> Int32 = { _, _ in 0 }
 /// Calls Windows' `SetThreadStackGuarantee`, and returns its result as the C `BOOL` the host reads.
 private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> Int32 = {
     SetThreadStackGuarantee($0) ? 1 : 0
-}
-
-/// The stack guarantee a thread of its own has once it has run `start`, or 0 where no thread could start.
-private func stackGuarantee(ofThreadRunning start: @convention(c) () -> Void) -> ULONG {
-    var run = GuaranteedRun(start: start)
-    withUnsafeMutablePointer(to: &run) { runPointer in
-        // The thread runs `start`, then asks for its own guarantee, which a size of 0 reads without changing.
-        let thread = CreateThread(nil, 0, { parameter in
-            let run = parameter!.assumingMemoryBound(to: GuaranteedRun.self)
-            run.pointee.start()
-            SetThreadStackGuarantee(&run.pointee.guarantee)
-            return 0
-        }, runPointer, 0, nil)
-        guard let thread else { return }
-        WaitForSingleObject(thread, INFINITE)
-        CloseHandle(thread)
-    }
-    return run.guarantee
-}
-
-/// A function a thread runs, and the stack guarantee the thread has after it.
-private struct GuaranteedRun {
-    let start: @convention(c) () -> Void
-    var guarantee: ULONG = 0
 }
 #endif
 
