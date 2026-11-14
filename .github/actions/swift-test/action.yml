@@ -56,25 +56,36 @@ runs:
         key: ${{ steps.name.outputs.key }}
         restore-keys: ${{ steps.name.outputs.prefix }}
     # A runner's network can stall partway through a fetch, so a fetch that fails is tried again, a few times with a
-    # pause between tries. A failed fetch can leave the build or SwiftPM's shared cache naming a clone or a download
-    # that was never made, so before the next try both lose the dependencies the failed one fetched. Each try clones
-    # into the build alone, skipping the shared cache, since a runner starts with that cache empty and keeps nothing
-    # in it. A restored build that already holds the versions Package.resolved pins fetches nothing.
+    # longer pause before each new try. Git gives up on a transfer that stays below 1 KB a second for a minute, so
+    # a stall fails its try rather than hanging until the job times out.
+    #
+    # A fetch that fails partway can leave the build naming a clone that was never made. So before the next try,
+    # the step deletes the clones, checkouts and downloads in .build, and the record of them, and keeps the rest of
+    # the restored build, which `swift package reset` would delete too. Each try clones into .build alone, skipping
+    # SwiftPM's shared cache, since a runner starts with that cache empty and keeps nothing in it.
+    #
+    # A restored build that already holds the versions Package.resolved pins fetches nothing.
     - name: Resolve the dependencies
       shell: bash
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+        GIT_HTTP_LOW_SPEED_TIME: "60"
       run: |
         tries=4
+        pause_seconds=15
         for try in $(seq "$tries"); do
           if swift package --disable-dependency-cache --force-resolved-versions resolve; then
             exit 0
           fi
           if [ "$try" -lt "$tries" ]; then
             echo "::warning::fetching the dependencies failed on try $try of $tries; trying again"
-            rm -rf .build/repositories .build/checkouts .build/prebuilts .build/workspace-state.json
-            swift package purge-cache
-            sleep $((try * 15))
+            # A file that can't be deleted, such as one Windows holds open, mustn't end the tries early.
+            rm -rf .build/repositories .build/checkouts .build/prebuilts .build/artifacts \
+              .build/workspace-state.json || true
+            sleep $((try * pause_seconds))
           fi
         done
+        echo "::error::fetching the dependencies failed $tries times"
         exit 1
     # The test targets the changed paths reach, by the manifest's dependencies, are the ones a run needs.
     - name: Select the tests
