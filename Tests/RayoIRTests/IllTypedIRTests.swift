@@ -391,6 +391,19 @@ private let illTypedIR = [
         message: "the IR declares %0 as no parameter, where its function declares a parameter of Int",
     ),
     IllTypedIR(
+        testDescription: "a declaration of a parameter, whose argument holds its value from the start",
+        text: main("bb0:\n  return", after: """
+            func "f(_: Int)"(_: Int) -> Void {
+              param %0 n: Int @1:1-1:2
+            bb0:
+              declare %0
+              return
+            }
+            """),
+        function: "f(_: Int)",
+        message: "the IR declares the parameter %0 in its function's body",
+    ),
+    IllTypedIR(
         testDescription: "a call that passes an access to an owned parameter",
         text: passing("begin a0 read static %0 @1:1-1:2", "a0", to: "owned Int"),
         function: "main()",
