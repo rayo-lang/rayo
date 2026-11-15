@@ -1,6 +1,7 @@
 internal import CLLVM
 
-/// LLVM's code generator for the host, which optimises modules and writes their object code.
+/// LLVM's code generator for a target, the host's unless it was made for another, which optimises modules and writes
+/// their object code.
 public struct TargetMachine: ~Copyable {
     private let ref: LLVMTargetMachineRef
     /// The triple that names what the machine compiles for, which is the host's unless the machine was made for
@@ -17,7 +18,7 @@ public struct TargetMachine: ~Copyable {
 
     /// A machine that compiles for `triple`, which must name a target that the host's own registers, such as the
     /// host's processor on another operating system.
-    init(optimizes: Bool, triple: String) throws(LLVMError) {
+    package init(optimizes: Bool, triple: String) throws(LLVMError) {
         // A host whose target LLVM couldn't register has no machine.
         if let nativeTargetError { throw LLVMError(message: nativeTargetError) }
 
@@ -66,9 +67,6 @@ public struct TargetMachine: ~Copyable {
 
     /// Writes the object code of `module`, and returns it.
     public func objectCode(of module: borrowing Module) throws(LLVMError) -> [UInt8] {
-        // A frame larger than the machine can make would end the process inside LLVM, so it fails here first.
-        try checkFrames(of: module)
-
         // Have LLVM write the object code into a buffer of its own, and fail with its report where it can't.
         let earlierErrors = module.reportedErrorCount
         var buffer: LLVMMemoryBufferRef?

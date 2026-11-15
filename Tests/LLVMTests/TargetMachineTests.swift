@@ -56,32 +56,29 @@ struct TargetMachineTests {
     }
 
     #if arch(arm64)
-    @Test func `a frame of 256 MiB or more for Windows on arm64 fails, where LLVM would end the process`() throws {
-        // A frame of 254 MiB compiles. One of 256 MiB fails before LLVM sees it, which would otherwise stop the
-        // process, since Windows on arm64 can't unwind it.
-        let machine = try TargetMachine(optimizes: false, triple: "aarch64-pc-windows-msvc")
-        #expect(try !objectCode(ofFrameOf: 254 << 20, on: machine).isEmpty)
-        #expect(throws: LLVMError(message: """
-            LLVM can't make a frame of 256 MiB or more for Windows on arm64, and 'framed' keeps 268435456 bytes on \
-            its stack
-            """)) {
-            try objectCode(ofFrameOf: 256 << 20, on: machine)
-        }
+    @Test func `only a machine for Windows on arm64 limits a function's fixed frame, to under 256 MiB`() throws {
+        #expect(try TargetMachine(optimizes: false, triple: "aarch64-pc-windows-msvc").largestFrame == (1 << 28) - 1)
+        #expect(try TargetMachine(optimizes: false, triple: "aarch64-unknown-linux-gnu").largestFrame == nil)
+        #expect(try TargetMachine(optimizes: false, triple: "arm64-apple-macosx").largestFrame == nil)
     }
 
-    /// The object code `machine` writes for a function whose frame holds one stack slot of `bytes` bytes.
-    private func objectCode(ofFrameOf bytes: Int, on machine: borrowing TargetMachine) throws -> [UInt8] {
+    @Test(arguments: [false, true])
+    func `a slot of 6 GiB outside the fixed frame compiles for Windows on arm64, optimised or not`(
+        optimizes: Bool,
+    ) throws {
+        // In the fixed frame, a slot of 256 MiB or more would end the process inside LLVM.
+        let machine = try TargetMachine(optimizes: optimizes, triple: "aarch64-pc-windows-msvc")
         let bench = Workbench()
-        let text = """
-            define void @framed() {
-              %bytes = alloca [\(bytes) x i8]
-              store volatile i8 1, ptr %bytes
-              ret void
-            }
-            """
-        let module = try bench.context.parseModule(Array(text.utf8), named: "framed.ll")
-        machine.configure(module)
-        return try machine.objectCode(of: module)
+        machine.configure(bench.module)
+        _ = bench.function(named: "framed", returning: bench.context.voidType)
+        let bytes = bench.context.typeMaker.arrayType(of: bench.int64, count: 3 << 28)
+        let slot = bench.builder.allocateOutsideFrame(bytes, alignment: 8)
+        bench.builder.store(bench.int64.constant(1), to: slot, alignment: 8)
+        bench.builder.returnVoid()
+
+        // Optimising leaves the slot outside the frame, since its count is read through a volatile load.
+        if optimizes { try machine.optimize(bench.module) }
+        #expect(try !machine.objectCode(of: bench.module).isEmpty)
     }
     #endif
 }

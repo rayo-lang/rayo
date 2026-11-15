@@ -31,6 +31,30 @@ struct FunctionEmitter {
         }
     }
 
+    /// The bytes of stack slots a function's fixed frame holds so far, and the most it may hold on the target, where
+    /// the target limits it. It is a class so that the emitter's methods, which don't change the emitter, can add a
+    /// slot.
+    final class FixedFrame {
+        /// The most bytes the frame's slots may take, or nil where they may take any number.
+        private let room: Int?
+        private var used = 0
+
+        init(room: Int?) {
+            self.room = room
+        }
+
+        /// Whether the frame has room for a slot of `size` bytes aligned to `alignment`, which it then holds.
+        func makesRoom(for size: Int, alignment: Int) -> Bool {
+            guard let room else { return true }
+
+            // The slot takes at most its size rounded up to its alignment, since LLVM may pad it to lie aligned.
+            let taken = (size + alignment - 1) / alignment * alignment
+            guard used + taken <= room else { return false }
+            used += taken
+            return true
+        }
+    }
+
     let body: IRBody
     /// The function whose body this emits.
     let declaration: FunctionDeclaration
@@ -48,6 +72,8 @@ struct FunctionEmitter {
     let operators: OperatorEmitter
     /// The block that holds every stack slot, and goes on to the first IR block.
     let entry: LLVM.BasicBlock
+    /// The bytes of stack slots the function's fixed frame holds so far, and may hold.
+    let fixedFrame: FixedFrame
     /// The local that every `return` returns whole, which lies in the caller's result slot, or nil where there is none.
     let returned: LocalID?
     /// The pointer to each local's place, indexed by `LocalID`.
@@ -76,6 +102,7 @@ struct FunctionEmitter {
         panics = PanicEmitter(into: declared.function, runtimeDeclarations: runtimeDeclarations, types: lowering.types)
         operators = OperatorEmitter(types: lowering.types, panics: panics)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
+        fixedFrame = FixedFrame(room: program.fixedFrameRoom)
     }
 
     /// Emits the body into the function, in `program`'s module.
