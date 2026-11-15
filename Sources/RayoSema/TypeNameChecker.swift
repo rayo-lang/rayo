@@ -13,21 +13,24 @@ struct TypeNameChecker {
     /// uses find it, and gets no ID.
     func declare(_ file: SourceFile, in declarations: inout Declarations) -> [TypeID?] {
         var ids: [TypeID?] = []
-        var nextIndex = 0
+        var numbering = TypeID.Numbering()
         for declaration in file.declarations {
-            // A function, a type that failed before its name, and a type that can't take its name get no ID.
-            guard declaration.declaresType, let name = declaration.name, let nameRange = declaration.nameRange,
-                  takesName(name, at: nameRange, in: declarations)
-            else {
+            // A function and a type that failed before its name get no ID.
+            guard declaration.declaresType, let name = declaration.name, let nameRange = declaration.nameRange else {
+                ids.append(nil)
+                continue
+            }
+            // A type that can't take its name gets no ID either.
+            guard takesName(name, at: nameRange, in: declarations) else {
                 ids.append(nil)
                 continue
             }
 
-            // Types are numbered in source order, skipping each that takes no name, so each lies at its ID's index.
-            let id = TypeID(declaredBy: declaration, at: nextIndex)
-            declarations.types.declare(name, as: id)
+            // Only a type that takes its name is numbered, so each lies at its ID's index; one that failed to parse
+            // takes the name with no ID.
+            let id = numbering.id(for: declaration)
+            if let id { declarations.types.declare(name, as: id) } else { declarations.types.declareUnparsed(name) }
             ids.append(id)
-            if id != nil { nextIndex += 1 }
         }
         return ids
     }

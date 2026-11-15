@@ -80,14 +80,14 @@ struct LayoutTests {
 
 /// A struct that contains itself, which checking reports, so it never reaches a layout.
 private let loop = StructType(name: "Loop", fields: [
-    Field(name: "next", isVariable: true, type: .named(.structure(StructID(index: 0, name: "Loop")))),
+    Field(name: "next", kind: .var, type: .named(.structure(StructID(index: 0, name: "Loop")))),
 ])
 
 /// A struct of a Bool, an Int and a Bool, which lie as the Int, then the Bools, padded to 16 bytes.
 private let hit = StructType(name: "Hit", fields: [
-    Field(name: "crit", isVariable: true, type: .bool),
-    Field(name: "damage", isVariable: true, type: .int),
-    Field(name: "team", isVariable: true, type: .bool),
+    Field(name: "crit", kind: .var, type: .bool),
+    Field(name: "damage", kind: .var, type: .int),
+    Field(name: "team", kind: .var, type: .bool),
 ])
 
 /// The types of the program `declarations` make, after an empty `main`.

@@ -187,6 +187,14 @@ struct StructChecker {
         }
     }
 
+    /// The kind of field that `field`'s keyword declares.
+    private func kind(of field: FieldDecl) -> Field.Kind {
+        switch field.kind {
+        case .var: .var
+        case .let: .let
+        }
+    }
+
     /// The innermost element type of `type`, where it is an array, of arrays at any depth, and otherwise `type`.
     private func innermostElement(of type: RayoType) -> RayoType {
         guard case .array(_, let element) = type else { return type }
@@ -201,7 +209,7 @@ struct StructChecker {
     /// The type `structure` makes, or nil where the type of one of its fields isn't known.
     private func type(of structure: DeclaredStruct) -> StructType? {
         let fields = zip(structure.declaration.fields, structure.fields).compactMap { field, checked in
-            checked.type.map { Field(name: field.name, isVariable: field.kind == .var, type: $0) }
+            checked.type.map { Field(name: field.name, kind: kind(of: field), type: $0) }
         }
         // A field whose type isn't known is left out, so the struct has fewer fields than it declares.
         guard fields.count == structure.fields.count else { return nil }

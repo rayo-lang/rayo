@@ -1,5 +1,7 @@
 extension Expr {
     /// The expressions and blocks the expression holds directly, in source order.
+    /// A traversal that follows where a run goes, such as the checker's reachability, names each form that changes
+    /// it, and walks every other form's children.
     public var children: [SyntaxChild] {
         switch kind {
         case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember: []

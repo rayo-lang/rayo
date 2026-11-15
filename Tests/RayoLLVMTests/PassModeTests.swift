@@ -289,9 +289,9 @@ struct SignatureLoweringTests {
     /// A Trio of two Ints and a Bool, which splits into three scalars, and an Empty, which splits into none.
     private let table = TypeTable(structs: [
         StructType(name: "Trio", fields: [
-            Field(name: "a", isVariable: true, type: .int),
-            Field(name: "b", isVariable: true, type: .int),
-            Field(name: "c", isVariable: true, type: .bool),
+            Field(name: "a", kind: .var, type: .int),
+            Field(name: "b", kind: .var, type: .int),
+            Field(name: "c", kind: .var, type: .bool),
         ]),
         StructType(name: "Empty", fields: []),
     ])

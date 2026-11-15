@@ -11,10 +11,14 @@ struct NamedTypes {
     /// while their fields' types are resolved.
     private var table: TypeTable?
 
-    /// Declares `name` as the name of the type `id`, or, where `id` is nil, of a type whose declaration failed to
-    /// parse.
-    mutating func declare(_ name: String, as id: TypeID?) {
-        if let id { ids[name] = id } else { unparsed.insert(name) }
+    /// Declares `name` as the name of the type `id`.
+    mutating func declare(_ name: String, as id: TypeID) {
+        ids[name] = id
+    }
+
+    /// Declares `name` as the name of a type whose declaration failed to parse, which names no type.
+    mutating func declareUnparsed(_ name: String) {
+        unparsed.insert(name)
     }
 
     /// Declares the type `id` as one that can't be laid out, whose uses report nothing more.
@@ -54,7 +58,7 @@ struct NamedTypes {
     /// The fields of the struct `id`, which must be laid out, in the order it declares them.
     func fields(of id: StructID) -> [Field] {
         // The checker lays out the types before it checks a body, which alone asks for fields.
-        guard let table else { preconditionFailure("'\(id.name)' has no fields declared") }
+        guard let table else { preconditionFailure("the types aren't laid out yet, so '\(id.name)' has no fields") }
         return table[id].fields
     }
 }

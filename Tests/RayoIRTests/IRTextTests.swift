@@ -102,7 +102,7 @@ struct IRTextTests {
         let program = try IRParser.program(from: text)
         #expect(IRPrinter.text(of: program) == text)
         #expect(program.types.structs.first?.fields == [
-            Field(name: "hp", isVariable: true, type: .int), Field(name: "armor", isVariable: false, type: .uint),
+            Field(name: "hp", kind: .var, type: .int), Field(name: "armor", kind: .let, type: .uint),
         ])
     }
 

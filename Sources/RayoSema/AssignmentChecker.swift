@@ -165,7 +165,7 @@ extension AssignmentChecker: PlaceRules {
 
     func admits(_ field: Field, at nameRange: SourceRange) -> Bool {
         // A `let` field never changes, whatever holds it.
-        guard field.isVariable else {
+        guard field.kind == .var else {
             errors.report(.assignToLetField(field: field.name), at: nameRange)
             return false
         }

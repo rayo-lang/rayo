@@ -105,18 +105,18 @@ public struct IRParser: ~Copyable {
         try expect("{")
         var fields: [Field] = []
         while !consume("}") {
-            let isVariable = try fieldKind()
+            let kind = try fieldKind()
             let fieldName = try word()
             try expect(":")
-            fields.append(Field(name: fieldName, isVariable: isVariable, type: try type()))
+            fields.append(Field(name: fieldName, kind: kind, type: try type()))
         }
         return StructType(name: name, fields: fields)
     }
 
-    /// Reads the `var` or `let` that begins a field, and returns whether it is a `var`.
-    private mutating func fieldKind() throws(IRTextError) -> Bool {
-        if consume(word: "var") { return true }
-        if consume(word: "let") { return false }
+    /// Reads the `var` or `let` that begins a field.
+    private mutating func fieldKind() throws(IRTextError) -> Field.Kind {
+        if consume(word: "var") { return .var }
+        if consume(word: "let") { return .let }
         throw expected("'var' or 'let'")
     }
 
