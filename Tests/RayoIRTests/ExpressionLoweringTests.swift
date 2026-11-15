@@ -6,6 +6,17 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: "let x = 1 + 2 * 3", toMatch: "nested-operation")
     }
 
+    @Test func `a temporary's life starts where lowering makes it, on each pass of a loop`() throws {
+        let body = """
+            var i = 0
+            while i < 3 {
+                print(i * 2)
+                i += 1
+            }
+            """
+        try expectLowering(ofMain: body, toMatch: "temporary-declarations")
+    }
+
     @Test func `a local used as an operand is read, and a local that gives a declaration its value is moved`() throws {
         try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = a", toMatch: "reads-and-moves")
     }

@@ -11,10 +11,13 @@ bb0:
   declare %0
   %0 @2:5-2:6 = operand 1 @2:9-2:10
   declare %1
+  declare %3
   %3 @2:16-2:22 = operand read %0 @2:16-2:22 @2:16-2:22
   %1 @2:12-2:13 = add checked read %3 @2:16-2:22, 1 @2:16-2:26
   declare %2
   %2 @3:1-3:2 = operand 3 @3:5-3:6
+  declare %4
+  declare %5
   %5 @4:7-4:12 = add checked read %0 @4:7-4:8, read %1 @4:11-4:12 @4:7-4:12
   %4 @4:7-4:16 = add checked read %5 @4:7-4:12, read %2 @4:15-4:16 @4:7-4:16
   begin a0 read static %4 @4:7-4:16

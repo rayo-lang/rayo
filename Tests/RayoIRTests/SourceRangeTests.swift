@@ -10,11 +10,12 @@ struct SourceRangeTests {
         let source = "func main() {\n    let a = 7\n    print(a / 0)\n}"
         let main = try lowered(source).body(at: 0)
 
-        // The division is the third statement, after the declaration and its value, and computes into a temporary.
+        // The division is the fourth statement, after the declaration and its value, and computes into a temporary,
+        // declared just before it.
         guard case .compute(let temporary?, .binary(.divide(.checked), .read(_, let dividend), _), let range)
-            = main.blocks[0].statements[2]
+            = main.blocks[0].statements[3]
         else {
-            Issue.record("the division isn't the third statement of \(main.blocks[0])")
+            Issue.record("the division isn't the fourth statement of \(main.blocks[0])")
             return
         }
         #expect(text(of: range, in: source) == "a / 0")
@@ -60,9 +61,9 @@ struct SourceRangeTests {
         let source = "func main() {\n    let a = true\n    let b = a && false\n}"
         let main = try lowered(source).body(at: 0)
 
-        // The `&&` computes `a` into its temporary after the two declarations and `a`'s value, and its right operand
-        // into the same temporary, first in the block that evaluates it.
-        guard case .compute(let temporary?, .operand, let leftRange) = main.blocks[0].statements[3],
+        // The `&&` computes `a` into its temporary after the two declarations, `a`'s value and the temporary's
+        // declaration, and its right operand into the same temporary, first in the block that evaluates it.
+        guard case .compute(let temporary?, .operand, let leftRange) = main.blocks[0].statements[4],
               case .compute(_, .operand, let rightRange) = main.blocks[1].statements[0]
         else {
             Issue.record("the '&&' doesn't compute its operands where it should in \(main)")

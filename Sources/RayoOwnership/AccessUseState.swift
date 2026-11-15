@@ -41,7 +41,7 @@ struct AccessUseState: DataflowState {
         case .depend(_, let id):
             accesses.insert(id)
 
-        case .declare, .end:
+        case .declare, .retire, .end:
             break
         }
     }

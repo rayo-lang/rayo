@@ -80,11 +80,12 @@ extension IRParser {
         return BasicBlock(statements: statements, terminator: try terminator())
     }
 
-    /// Reads `declare %N`, `destination = value @range`, `begin aN access`, `end aN` or `depend place on aN`; or nil
-    /// where the current token starts no statement.
+    /// Reads `declare %N`, `retire %N`, `destination = value @range`, `begin aN access`, `end aN` or `depend place on
+    /// aN`; or nil where the current token starts no statement.
     private mutating func statement() throws(IRTextError) -> Statement? {
         switch current.kind {
         case .word("declare"): try declaration()
+        case .word("retire"): try retirement()
         case .word("begin"): try accessBeginning()
         case .word("end"): try accessEnd()
         case .word("depend"): try dependence()
@@ -98,6 +99,12 @@ extension IRParser {
     private mutating func declaration() throws(IRTextError) -> Statement {
         try expect(word: "declare")
         return .declare(try localReference())
+    }
+
+    /// Reads `retire %N`.
+    private mutating func retirement() throws(IRTextError) -> Statement {
+        try expect(word: "retire")
+        return .retire(try localReference())
     }
 
     /// Reads `begin aN kind enforcement place @range`, where `N` is the access's ID, which no other statement of the

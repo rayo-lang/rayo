@@ -8,6 +8,7 @@ bb0:
   declare %0
   %0 @2:5-2:6 = operand true @2:9-2:13
   declare %1
+  declare %2
   %2 @3:9-3:19 = operand read %0 @3:9-3:10 @3:9-3:19
   branch read %2 @3:9-3:19, bb2, bb1
 bb1:

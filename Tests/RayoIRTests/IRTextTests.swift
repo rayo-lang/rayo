@@ -116,6 +116,34 @@ struct IRTextTests {
         #expect(statements[6] == .end(AccessID(index: 1)))
     }
 
+    @Test func `a local declared and retired, twice over, reads back the same`() throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+              temp %0: Int
+            bb0:
+              declare %0
+              %0 @1:1-1:2 = operand 1 @1:1-1:2
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              retire %0
+              declare %0
+              %0 @1:1-1:2 = operand 2 @1:1-1:2
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:2) @1:1-1:2
+              retire %0
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+
+        // Each retirement names the local it ends the life of.
+        let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
+        #expect(statements[3] == .retire(LocalID(index: 0)))
+        #expect(statements[7] == .retire(LocalID(index: 0)))
+    }
+
     @Test func `a struct's 'var' and 'let' fields read back the same`() throws {
         let text = """
             struct Enemy {
@@ -322,6 +350,11 @@ private let malformedIR = [
         testDescription: "a declaration of a local the function doesn't hold",
         text: "func \"f()\"() -> Void {\nbb0:\n  declare %0\n}",
         error: IRTextError(line: 3, column: 12, message: "no local is numbered %0"),
+    ),
+    MalformedIR(
+        testDescription: "a retirement of a local the function doesn't hold",
+        text: "func \"f()\"() -> Void {\nbb0:\n  retire %0\n}",
+        error: IRTextError(line: 3, column: 11, message: "no local is numbered %0"),
     ),
     MalformedIR(
         testDescription: "a block that ends without a terminator",

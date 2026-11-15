@@ -85,6 +85,8 @@ public enum IRPrinter {
         switch statement {
         case .declare(let local):
             "declare %\(local.index)"
+        case .retire(let local):
+            "retire %\(local.index)"
         case .compute(let destination, let value, let range):
             "\(text(of: destination)) = \(text(of: value, in: program)) \(text(of: range))"
         case .begin(let id, let access):

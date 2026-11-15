@@ -54,8 +54,9 @@ struct LivenessState: DataflowState {
             if let destination { assign(destination.place, in: places) }
             value.operands.forEach { apply($0) }
 
-        // A declaration starts its local's life, so no code before it reads a value the local holds after it.
-        case .declare(let local):
+        // A declaration starts its local's life, and a retirement ends it, so no code before either reads a value the
+        // local holds after it.
+        case .declare(let local), .retire(let local):
             live[local] = nil
 
         // An access reaches the value its place holds, whether it reads it or changes it.

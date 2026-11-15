@@ -18,6 +18,7 @@ func "main()"() -> Void {
   temp %1: Hit
 bb0:
   declare %0
+  declare %1
   %1 @2:29-2:43 = call "Hit(damage: Int)"(7) @2:29-2:43
   %0 @2:5-2:6 = call "Shot(range: Int, hit: Hit)"(4, read %1 @2:29-2:43) @2:9-2:44
   begin a0 read static %0.1.0 @3:7-3:19

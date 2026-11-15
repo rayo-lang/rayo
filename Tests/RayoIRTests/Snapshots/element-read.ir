@@ -12,19 +12,25 @@ func "main()"() -> Void {
   temp %8: UInt
 bb0:
   declare %0
+  declare %3
   %3 @2:13-2:19 = array of Int(1, 2) @2:13-2:19
+  declare %4
   %4 @2:21-2:27 = array of Int(3, 4) @2:21-2:27
   %0 @2:5-2:9 = array of [2 of Int](read %3 @2:13-2:19, read %4 @2:21-2:27) @2:12-2:28
   declare %1
   %1 @3:5-3:6 = operand UInt 1 @3:15-3:16
   begin a0 read static %0[1][0] @4:7-4:17
   _ = call builtin "print(_: Int)"(a0) @4:1-4:18
+  declare %5
   %5 @5:12-5:13 = index read %1 @5:12-5:13 below 2 @5:12-5:13
+  declare %6
+  declare %7
   %7 @5:15-5:20 = subtract checked read %1 @5:15-5:16, UInt 1 @5:15-5:20
   %6 @5:15-5:20 = index read %7 @5:15-5:20 below 2 @5:15-5:20
   begin a1 read static %0[%5][%6] @5:7-5:21
   _ = call builtin "print(_: Int)"(a1) @5:1-5:22
   declare %2
+  declare %8
   %8 @6:21-6:22 = index read %1 @6:21-6:22 below 2 @6:21-6:22
   %2 @6:5-6:8 = operand read %0[%8] @6:11-6:23 @6:11-6:23
   begin a2 read static %2[0] @7:7-7:13

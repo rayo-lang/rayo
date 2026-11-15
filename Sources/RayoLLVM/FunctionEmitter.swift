@@ -119,7 +119,7 @@ struct FunctionEmitter {
 
         // A declaration emits nothing: the program reads a place only once a statement has stored to it. Nor does
         // the end of a static access, or a dependence, which only the ownership stage looks at.
-        case .declare, .end, .depend:
+        case .declare, .retire, .end, .depend:
             break
         }
     }

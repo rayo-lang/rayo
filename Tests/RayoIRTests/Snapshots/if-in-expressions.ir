@@ -24,6 +24,7 @@ bb0:
   declare %0
   %0 @2:9-2:10 = operand true @2:13-2:17
   declare %1
+  declare %5
   branch read %0 @3:20-3:21, bb1, bb2
 bb1:
   %5 @3:17-3:38 = operand 2 @3:24-3:25
@@ -33,6 +34,7 @@ bb2:
   goto bb3
 bb3:
   %1 @3:9-3:10 = add checked 1, read %5 @3:17-3:38 @3:13-3:38
+  declare %6
   branch read %0 @4:13-4:14, bb4, bb5
 bb4:
   %6 @4:10-4:31 = operand 4 @4:17-4:18
@@ -43,6 +45,7 @@ bb5:
 bb6:
   %1 @4:5-4:6 = add checked read %1 @4:5-4:6, read %6 @4:10-4:31 @4:5-4:6
   declare %2
+  declare %7
   branch read %0 @5:17-5:18, bb7, bb8
 bb7:
   %7 @5:14-5:40 = operand read %1 @5:21-5:27 @5:21-5:27
@@ -53,6 +56,7 @@ bb8:
 bb9:
   %2 @5:9-5:10 = negate checked read %7 @5:14-5:40 @5:13-5:40
   declare %3
+  declare %8
   branch read %0 @6:25-6:26, bb10, bb11
 bb10:
   %8 @6:22-6:43 = operand 7 @6:29-6:30
@@ -63,8 +67,10 @@ bb11:
 bb12:
   %3 @6:9-6:10 = call "Point(x: Int)"(read %8 @6:22-6:43) @6:13-6:44
   declare %4
+  declare %9
   branch read %0 @7:16-7:17, bb13, bb14
 bb13:
+  declare %10
   branch read %0 @7:23-7:24, bb16, bb17
 bb14:
   _ = call builtin "print(_: Int)"(1) @8:9-8:17
@@ -72,6 +78,8 @@ bb14:
   goto bb15
 bb15:
   %4 @7:9-7:10 = operand read %9 @7:13-10:6 @7:13-10:6
+  declare %11
+  declare %12
   %12 @11:11-11:16 = add checked read %2 @11:11-11:12, read %4 @11:15-11:16 @11:11-11:16
   %11 @11:11-11:22 = add checked read %12 @11:11-11:16, read %3.0 @11:19-11:22 @11:11-11:22
   begin a0 read static %11 @11:11-11:22
@@ -93,6 +101,8 @@ func "sign(_: Int)"(_: Int) -> Int {
   temp %1: Int
   temp %2: Bool
 bb0:
+  declare %1
+  declare %2
   %2 @13:40-13:45 = less read %0 @13:40-13:41, 0 @13:40-13:45
   branch read %2 @13:40-13:45, bb1, bb2
 bb1:
