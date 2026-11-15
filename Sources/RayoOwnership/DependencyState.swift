@@ -32,8 +32,9 @@ struct DependencyState: DataflowState {
         case .compute(let destination?, let value, _):
             store(dependencies(of: value), in: destination.place)
 
-        // A declaration starts a local's life without a value, so it depends on nothing.
-        case .declare(let local):
+        // A declaration starts a local's life without a value, and a retirement ends it, so the local depends on
+        // nothing.
+        case .declare(let local), .retire(let local):
             dependentLocals[local] = nil
 
         // An access depends on what its place's value depends on, since the code reaches that value through it.

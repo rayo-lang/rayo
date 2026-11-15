@@ -198,6 +198,29 @@ public struct Builder: ~Copyable {
         LLVMBuildMemCpy(ref, destination.ref, align, source.ref, align, size)
     }
 
+    /// Builds a call of `llvm.lifetime.start`, which starts the life of the stack slot `slot`, an `alloca`, with no
+    /// value in it. Code uses a slot only while it lives, so slots whose lives don't overlap may share memory.
+    public func startLife(of slot: PointerValue) {
+        callLifetimeMarker("llvm.lifetime.start", on: slot)
+    }
+
+    /// Builds a call of `llvm.lifetime.end`, which ends the life of the stack slot `slot`, an `alloca`, until a call
+    /// of `llvm.lifetime.start` starts it again.
+    public func endLife(of slot: PointerValue) {
+        callLifetimeMarker("llvm.lifetime.end", on: slot)
+    }
+
+    /// Builds a call of the lifetime marker `name`, declared in the module of the block the builder is in, on `slot`.
+    private func callLifetimeMarker(_ name: String, on slot: PointerValue) {
+        let module = LLVMGetGlobalParent(LLVMGetBasicBlockParent(LLVMGetInsertBlock(ref)))
+        let id = LLVMLookupIntrinsicID(name, name.utf8.count)
+        var overloads: [LLVMTypeRef?] = [LLVMTypeOf(slot.ref)]
+        let marker = LLVMGetIntrinsicDeclaration(module, id, &overloads, 1)
+        let type = LLVMIntrinsicGetType(context.ref, id, &overloads, 1)
+        var arguments: [LLVMValueRef?] = [slot.ref]
+        LLVMBuildCall2(ref, type, marker, &arguments, 1, "")
+    }
+
     // MARK: Terminators
 
     /// Builds `br`, which goes on to `target`.

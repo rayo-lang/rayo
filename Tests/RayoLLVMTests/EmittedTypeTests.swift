@@ -142,10 +142,12 @@ struct EmittedTypeTests {
             }
             """
 
-        // The loop counts the elements from 0, and stops at the count, once it has stored the Int in each.
+        // The loop counts the elements from 0, in a slot that lives only while it runs, and stops at the count, once
+        // it has stored the Int in each.
         try withEmitted(executable(main)) { module in
             let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
+                  call void @llvm.lifetime.start.p0(ptr %2)
                   store i64 0, ptr %2, align 8
                   br label %fill.header
 
@@ -163,6 +165,7 @@ struct EmittedTypeTests {
                   br label %fill.header
 
                 fill.end:                                         ; preds = %fill.header
+                  call void @llvm.lifetime.end.p0(ptr %2)
                   ret void
                 """))
         }

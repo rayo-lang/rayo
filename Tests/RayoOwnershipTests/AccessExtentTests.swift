@@ -455,14 +455,3 @@ struct AccessExtentTests {
             """))
     }
 }
-
-/// The body of a function of `blocks`, with the locals `function` gives it, once the ownership stage has written the
-/// ends of its accesses into it, or nil where a check fails.
-private func ended(_ blocks: String) throws -> IRBody? {
-    try checked(function(blocks)).body
-}
-
-/// The body of a function of `blocks`, as the text writes it.
-private func body(of blocks: String) throws -> IRBody? {
-    try program(of: [function(blocks)] + callees).bodies[FunctionID(index: 0)]
-}

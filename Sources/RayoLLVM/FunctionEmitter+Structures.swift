@@ -18,10 +18,15 @@ extension FunctionEmitter {
         // change. Such a struct is built in a new slot, then copied in.
         let address = address(of: destination, with: builder)
         let readsDestination = anyOf(arguments, overlaps: destination)
-        let target = readsDestination ? newSlot(of: address.type, with: builder) : address
+        let target = readsDestination ? newTemporarySlot(of: address.type, with: builder) : address
         for (index, field) in fields.enumerated() {
             copy(field, to: fieldAddress(of: index, in: target, with: builder), with: builder)
         }
-        if readsDestination { copy(.place(target), to: address, with: builder) }
+
+        // A struct built in a new slot is copied into its destination once every field is read, and the slot's life
+        // ends.
+        guard readsDestination else { return }
+        copy(.place(target), to: address, with: builder)
+        builder.endLife(of: target.pointer)
     }
 }

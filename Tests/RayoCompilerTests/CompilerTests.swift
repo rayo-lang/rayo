@@ -71,7 +71,7 @@ struct CompilerTests {
         #expect(compiled.written.isEmpty)
     }
 
-    @Test func `'--emit=ir' prints the IR the emitter receives, with the end of each access after its last use`() {
+    @Test func `'--emit=ir' prints the IR the emitter receives, with each access and local ended after its last use`() {
         let source = "func main() {\n    let x = 1\n    print(x)\n}"
         let compiled = compile(["--emit=ir", "a.rayo"], files: ["a.rayo": source])
         #expect(compiled.result.standardOutput == """
@@ -85,6 +85,7 @@ struct CompilerTests {
               begin a0 read static %0 @3:11-3:12
               _ = call builtin "print(_: Int)"(a0) @3:5-3:13
               end a0
+              retire %0
               return
             }
 

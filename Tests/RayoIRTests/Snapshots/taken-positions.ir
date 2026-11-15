@@ -21,6 +21,7 @@ bb0:
   declare %3
   %3 @7:5-7:6 = operand 3 @7:9-7:10
   declare %4
+  declare %6
   branch read %2 @8:12-8:13, bb1, bb2
 bb1:
   %6 @8:9-8:30 = operand move %3 @8:16-8:17 @8:16-8:17
@@ -32,6 +33,7 @@ bb3:
   %4 @8:5-8:6 = operand read %6 @8:9-8:30 @8:9-8:30
   declare %5
   %5 @9:5-9:6 = operand 5 @9:9-9:10
+  declare %7
   branch read %2 @10:10-10:11, bb4, bb5
 bb4:
   %7 @10:7-10:28 = operand read %5 @10:14-10:15 @10:14-10:15

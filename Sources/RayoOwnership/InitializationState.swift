@@ -54,8 +54,8 @@ struct InitializationState: DataflowState {
             guard let destination else { return }
             assign(destination, use: use, store: store)
 
-        // A declaration leaves the local without a value, even one an earlier pass of a loop gave it.
-        case .declare(let local):
+        // A declaration, or a retirement, leaves the local without a value, even one an earlier pass of a loop gave it.
+        case .declare(let local), .retire(let local):
             locals[local.index] = .declared
 
         // An access uses its place, whose value it reads or changes, and leaves the value there.

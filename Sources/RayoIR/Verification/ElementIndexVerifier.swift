@@ -99,7 +99,7 @@ struct ElementIndexVerifier {
             case .compute(let destination, _, _): destination?.place
             case .begin(_, let access): access.place
             case .depend(let place, _): place
-            case .declare, .end: nil
+            case .declare, .retire, .end: nil
             }
         }
         return read + reached

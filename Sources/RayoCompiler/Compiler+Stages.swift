@@ -35,8 +35,8 @@ extension Compiler {
     /// IR the emitter receives, without the bodies of the functions a check found failed.
     static func ir(of checked: CheckedProgram, errors: inout [Diagnostic]) throws(CompilationError) -> IRProgram {
         let lowered = try verified(Lowering.lower(checked), from: .lowering)
-        // The ownership stage writes the end of each access into the IR, which is verified again, since it is no
-        // longer lowering's.
+        // The ownership stage writes the end of each access and the retirement of each local into the IR, which is
+        // verified again, since it is no longer lowering's.
         return try verified(owned(lowered, errors: &errors), from: .ownership)
     }
 
@@ -66,7 +66,8 @@ extension Compiler {
     }
 
     /// Runs the ownership checks on `program`, adding their errors to `errors`, and gives the program with the end of
-    /// each access written in, without the bodies of the functions a check found failed.
+    /// each access and the retirement of each local written in, without the bodies of the functions a check found
+    /// failed.
     private static func owned(_ program: IRProgram, errors: inout [Diagnostic]) -> IRProgram {
         let (owned, found) = OwnershipChecker.check(program)
         errors += found.values.joined()
@@ -74,7 +75,8 @@ extension Compiler {
     }
 
     /// `program`, which `stage` gave, once a debug build of `rayoc` has checked it keeps the IR's rules: its types, the
-    /// checks of the indices it finds elements by, and, for the ownership stage's IR, where its accesses end.
+    /// checks of the indices it finds elements by, and, for the ownership stage's IR, where its accesses end and its
+    /// locals retire.
     static func verified(_ program: IRProgram, from stage: IRStage) throws(CompilationError) -> IRProgram {
         // A release build of `rayoc` takes its stages' IR on trust, and spends no time checking it.
         #if DEBUG

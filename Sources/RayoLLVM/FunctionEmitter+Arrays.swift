@@ -18,7 +18,7 @@ extension FunctionEmitter {
 
         // The loop counts the elements it has filled in a slot of its own, a UInt, as an index is, from 0.
         let format = types.indexFormat
-        let filled = newSlot(of: .uint, with: program.builder)
+        let filled = newTemporarySlot(of: .uint, with: program.builder)
         store(format.constant(0).anyValue, at: filled, with: program.builder)
         let header = program.context.appendBlock(named: "fill.header", to: llvmFunction)
         let body = program.context.appendBlock(named: "fill.body", to: llvmFunction)
@@ -37,8 +37,9 @@ extension FunctionEmitter {
         store(program.builder.add(index, format.constant(1)).anyValue, at: filled, with: program.builder)
         program.builder.branch(to: header)
 
-        // The code after the array goes on once the loop has filled it.
+        // The code after the array goes on once the loop has filled it, and the count's life ends.
         program.builder.position(atEndOf: end)
+        program.builder.endLife(of: filled.pointer)
     }
 
     /// Emits the check that `value`, a UInt, is an index into an array of `count` elements, at the builder's position.
@@ -62,12 +63,15 @@ extension FunctionEmitter {
         // change. Such an array is built in a new slot, then copied in.
         let address = address(of: destination, with: builder)
         let readsDestination = elements.contains { $0.place?.mayOverlap(destination) ?? false }
-        let target = readsDestination ? newSlot(of: address.type, with: builder) : address
+        let target = readsDestination ? newTemporarySlot(of: address.type, with: builder) : address
         for (index, value) in values.enumerated() {
             copy(value, to: elementAddress(of: index, in: target, with: builder), with: builder)
         }
 
-        // An array built in a new slot is copied into its destination once every element is read.
-        if readsDestination { copy(.place(target), to: address, with: builder) }
+        // An array built in a new slot is copied into its destination once every element is read, and the slot's life
+        // ends.
+        guard readsDestination else { return }
+        copy(.place(target), to: address, with: builder)
+        builder.endLife(of: target.pointer)
     }
 }

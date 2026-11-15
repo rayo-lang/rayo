@@ -12,16 +12,20 @@ func "main()"() -> Void {
 bb0:
   declare %0
   %0 @2:5-2:6 = operand 2 @2:9-2:10
+  declare %2
   %2 @3:4-3:9 = less read %0 @3:4-3:5, 0 @3:4-3:9
   branch read %2 @3:4-3:9, bb1, bb2
 bb1:
   _ = call builtin "print(_: Int)"(1) @3:12-3:20
   goto bb3
 bb2:
+  declare %3
   %3 @3:31-3:37 = equal read %0 @3:31-3:32, 0 @3:31-3:37
   branch read %3 @3:31-3:37, bb4, bb5
 bb3:
   declare %1
+  declare %4
+  declare %5
   %5 @4:15-4:20 = less read %0 @4:15-4:16, 0 @4:15-4:20
   branch read %5 @4:15-4:20, bb7, bb8
 bb4:
@@ -36,6 +40,8 @@ bb7:
   %4 @4:12-4:59 = operand -1 @4:23-4:25
   goto bb9
 bb8:
+  declare %6
+  declare %7
   %7 @4:36-4:42 = equal read %0 @4:36-4:37, 0 @4:36-4:42
   branch read %7 @4:36-4:42, bb10, bb11
 bb9:
