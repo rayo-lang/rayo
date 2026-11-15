@@ -6,15 +6,14 @@ import RayoSyntax
 private func grouping(of expression: String) throws -> String {
     let (file, diagnostics) = Parser.parse("func f() {\n    _ = \(expression)\n}")
     try #require(diagnostics.isEmpty, "\(diagnostics)")
-    let statement = try #require(file.functions.first?.body.statements.first)
-    guard case .drop(let dropped) = statement.kind else { throw NotADrop(kind: statement.kind) }
+    guard case .function(let function)? = file.declarations.first else { throw NotADrop() }
+    let statement = try #require(function.body.statements.first)
+    guard case .drop(let dropped) = statement.kind else { throw NotADrop() }
     return grouped(dropped)
 }
 
-/// The statement a test's source parsed to, which isn't the `_ =` the source writes.
-private struct NotADrop: Error {
-    let kind: StmtKind
-}
+/// The source a test parsed doesn't hold the function of one `_ =` statement it writes.
+private struct NotADrop: Error {}
 
 /// `expression` as source text, with each operator and its operands in parentheses.
 private func grouped(_ expression: Expr) -> String {

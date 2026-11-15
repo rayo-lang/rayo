@@ -1,5 +1,5 @@
 struct S {
-  a: Int
+  var a: Int
 }
 
 main "main()"
