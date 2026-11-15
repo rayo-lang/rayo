@@ -5,6 +5,7 @@ func "main()"() -> Void {
   temp %1: Int
 bb0:
   declare %0
+  declare %1
   %1 @2:13-2:18 = multiply checked 2, 3 @2:13-2:18
   %0 @2:5-2:6 = add checked 1, read %1 @2:13-2:18 @2:9-2:18
   return

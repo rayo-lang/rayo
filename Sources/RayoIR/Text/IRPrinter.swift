@@ -23,12 +23,15 @@ import RayoSource
 /// bb0:
 ///   declare %0
 ///   %0 @2:9-2:10 = operand 1 @2:13-2:14
+///   declare %1
 ///   %1 @3:4-3:9 = less read %0 @3:4-3:5, 3 @3:4-3:9
 ///   branch read %1 @3:4-3:9, bb1, bb2
 /// bb1:
+///   retire %1
 ///   begin a0 read static %0 @4:11-4:12
 ///   _ = call "show(_: Int)"(a0) @4:6-4:13
 ///   end a0
+///   retire %0
 /// ...
 /// }
 /// ```
@@ -85,6 +88,8 @@ public enum IRPrinter {
         switch statement {
         case .declare(let local):
             "declare %\(local.index)"
+        case .retire(let local):
+            "retire %\(local.index)"
         case .compute(let destination, let value, let range):
             "\(text(of: destination)) = \(text(of: value, in: program)) \(text(of: range))"
         case .begin(let id, let access):

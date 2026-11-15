@@ -46,14 +46,30 @@ struct InProcessJIT: ~Copyable {
     /// Runs the program's entry function, `rayo.main`, which takes and returns nothing.
     func runMain() throws(LLVMError) -> Run {
         // Compile the entry function, and call it where a panic ends the call.
-        let address = try jit.address(of: RuntimeFunction.main.symbol)
-        let outcome = rayo_run_catching_panic(unsafeBitCast(address, to: (@convention(c) () -> Void).self))
+        let outcome = rayo_run_catching_panic(try mainFunction())
+        return Self.run(from: outcome)
+    }
 
+    /// Runs the program's entry function as `runMain()` does, on a thread of its own, and gives the bytes of that
+    /// thread's stack the run used, or 0 where it panicked.
+    func runMainMeasuringStack() throws(LLVMError) -> (run: Run, stackBytes: Int) {
+        var stackBytes = 0
+        let outcome = rayo_run_measuring_stack(try mainFunction(), &stackBytes)
+        return (Self.run(from: outcome), stackBytes)
+    }
+
+    /// The program's entry function, `rayo.main`, compiled.
+    private func mainFunction() throws(LLVMError) -> @convention(c) () -> Void {
+        unsafeBitCast(try jit.address(of: RuntimeFunction.main.symbol), to: (@convention(c) () -> Void).self)
+    }
+
+    /// What the run of a program's entry function that `outcome` records came to.
+    private static func run(from outcome: RayoCaughtCall) -> Run {
         // The output is a fixed buffer, of which the run filled only the start.
         let printed = withUnsafeBytes(of: outcome.output) { output in
             String(decoding: output.prefix(Int(outcome.outputLength)), as: UTF8.self)
         }
-        return Run(printed: printed, panic: outcome.panicked ? Self.message(of: outcome) : nil)
+        return Run(printed: printed, panic: outcome.panicked ? message(of: outcome) : nil)
     }
 
     /// The message of the panic that ended the call `outcome` records.

@@ -15,6 +15,8 @@ bb0:
   declare %2
   %2 @4:5-4:6 = operand true @4:9-4:13
   declare %3
+  declare %4
+  declare %5
   %5 @5:9-5:15 = operand read %0 @5:9-5:10 @5:9-5:15
   branch read %5 @5:9-5:15, bb1, bb2
 bb1:

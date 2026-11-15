@@ -69,7 +69,7 @@ struct AccessScopeVerifier {
             case .depend(_, let id):
                 guard held.contains(id) else { throw unheld(id, at: label) }
 
-            case .declare:
+            case .declare, .retire:
                 break
             }
         }

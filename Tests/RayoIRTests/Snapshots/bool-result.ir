@@ -9,6 +9,7 @@ func "isZero(_: Int)"(_: Int) -> Bool {
   param %0 n: Int @2:15-2:16
   temp %1: Bool
 bb0:
+  declare %1
   %1 @2:33-2:39 = equal read %0 @2:33-2:34, 0 @2:33-2:39
   return read %1 @2:33-2:39
 bb1:

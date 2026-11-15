@@ -9,6 +9,7 @@ func "double(_: Int)"(_: Int) -> Int {
   param %0 n: Int @2:15-2:16
   temp %1: Int
 bb0:
+  declare %1
   %1 @2:32-2:37 = multiply checked read %0 @2:32-2:33, 2 @2:32-2:37
   return read %1 @2:32-2:37
 bb1:

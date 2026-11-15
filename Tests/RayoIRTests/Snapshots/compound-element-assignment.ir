@@ -11,13 +11,20 @@ func "main()"() -> Void {
   temp %7: Int
 bb0:
   declare %0
+  declare %1
   %1 @2:17-2:23 = array of Int(1, 2) @2:17-2:23
+  declare %2
   %2 @2:25-2:31 = array of Int(3, 4) @2:25-2:31
   %0 @2:9-2:13 = array of [2 of Int](read %1 @2:17-2:23, read %2 @2:25-2:31) @2:16-2:32
+  declare %3
+  declare %4
   %4 @3:10-3:17 = call "index()"() @3:10-3:17
   %3 @3:10-3:17 = index read %4 @3:10-3:17 below 2 @3:10-3:17
+  declare %5
+  declare %6
   %6 @3:19-3:26 = call "index()"() @3:19-3:26
   %5 @3:19-3:26 = index read %6 @3:19-3:26 below 2 @3:19-3:26
+  declare %7
   %7 @3:31-3:38 = call "value()"() @3:31-3:38
   %0[%3][%5] @3:5-3:27 = add checked read %0[%3][%5] @3:5-3:27, read %7 @3:31-3:38 @3:5-3:27
   begin a0 read static %0[1][0] @4:11-4:21

@@ -6,9 +6,12 @@ public enum Statement: Equatable, Sendable {
     /// Computes a value, and stores it in the destination, or drops it where there is none. The range is the source
     /// of the operation, where a panic in it is reported.
     case compute(destination: Destination?, value: Rvalue, range: SourceRange)
-    /// Starts the life of a local where the source declares it. The local holds no value until a statement
-    /// stores one, whatever an earlier pass of a loop stored in it.
+    /// Starts the life of a local where the source declares it, or where lowering makes a temporary. The local holds
+    /// no value until a statement stores one, whatever an earlier pass of a loop stored in it.
     case declare(LocalID)
+    /// Ends the life of a local once no later statement uses it before a `declare` starts its life again, so that
+    /// its storage may hold another local's value meanwhile.
+    case retire(LocalID)
     /// Begins the access to a place, which the code then reaches the place through. The place is found here, once,
     /// whatever the code changes before the access ends.
     case begin(AccessID, Access)

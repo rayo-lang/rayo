@@ -7,7 +7,10 @@
 #include <process.h>
 #include <windows.h>
 #else
+#include <pthread.h>
 #include <setjmp.h>
+#include <string.h>
+#include <sys/mman.h>
 #endif
 
 // A call of a function under test, and what it came to.
@@ -29,17 +32,42 @@ static void run(Call *call) {
 }
 
 #ifdef _WIN32
-// Runs the call at `call` on the thread made for it.
-static unsigned __stdcall runOnThread(void *call) {
-    run(call);
+// A call that runs on a thread of its own, and, where it measures them, the bytes of that thread's stack it used.
+typedef struct {
+    Call call;
+    bool measures;
+    size_t stackBytes;
+} ThreadCall;
+
+// The bytes of this thread's stack that are committed, from its top down to the deepest page code has reached.
+static size_t committedStackBytes(void) {
+    ULONG_PTR low, high;
+    GetCurrentThreadStackLimits(&low, &high);
+
+    // Windows commits a stack's pages from the top down, as code first reaches each through the guard page below
+    // those committed. So the lowest committed page that isn't a guard page is the deepest the thread has reached.
+    MEMORY_BASIC_INFORMATION region;
+    for (ULONG_PTR address = low; address < high; address += region.RegionSize) {
+        VirtualQuery((void *)address, &region, sizeof region);
+        if (region.State == MEM_COMMIT && !(region.Protect & PAGE_GUARD)) return high - address;
+    }
     return 0;
 }
 
-RayoCaughtCall rayo_call_catching_panic(int64_t (*function)(int64_t, int64_t), int64_t left, int64_t right) {
-    // Windows' longjmp unwinds each frame it leaves by the frame's unwind tables, and LLVM's JIT registers none for
-    // the code it compiles. So the call runs on a thread of its own, which a panic ends where it stands.
-    Call call = {.function = function, .left = left, .right = right};
-    HANDLE thread = (HANDLE)_beginthreadex(NULL, 0, runOnThread, &call, 0, NULL);
+// Runs the call at `threadCall` on the thread made for it, and measures the thread's stack once the call returns.
+static unsigned __stdcall runOnThread(void *threadCall) {
+    ThreadCall *running = threadCall;
+    run(&running->call);
+    // A panic ends the thread before this, and so measures nothing.
+    if (running->measures) running->stackBytes = committedStackBytes();
+    return 0;
+}
+
+// Runs the call at `threadCall` on a new thread whose stack reserves `stackBytes`, or the process's default where
+// that is 0, and waits for the thread to end.
+static void runOnNewThread(ThreadCall *threadCall, unsigned stackBytes) {
+    unsigned flags = stackBytes == 0 ? 0 : STACK_SIZE_PARAM_IS_A_RESERVATION;
+    HANDLE thread = (HANDLE)_beginthreadex(NULL, stackBytes, runOnThread, threadCall, flags, NULL);
     // A thread that can't start leaves no call to run.
     if (thread == NULL) {
         fputs("rayo_call_catching_panic: can't start a thread for the call\n", stderr);
@@ -47,7 +75,14 @@ RayoCaughtCall rayo_call_catching_panic(int64_t (*function)(int64_t, int64_t), i
     }
     WaitForSingleObject(thread, INFINITE);
     CloseHandle(thread);
-    return call.outcome;
+}
+
+RayoCaughtCall rayo_call_catching_panic(int64_t (*function)(int64_t, int64_t), int64_t left, int64_t right) {
+    // Windows' longjmp unwinds each frame it leaves by the frame's unwind tables, and LLVM's JIT registers none for
+    // the code it compiles. So the call runs on a thread of its own, which a panic ends where it stands.
+    ThreadCall threadCall = {.call = {.function = function, .left = left, .right = right}};
+    runOnNewThread(&threadCall, 0);
+    return threadCall.call.outcome;
 }
 
 // Ends the call on this thread, which ends the thread, leaving the frames of the code under test as they stand.
@@ -106,6 +141,62 @@ static int64_t callMain(int64_t main, int64_t unused) {
 RayoCaughtCall rayo_run_catching_panic(void (*main)(void)) {
     return rayo_call_catching_panic(callMain, (int64_t)(uintptr_t)main, 0);
 }
+
+#ifdef _WIN32
+RayoCaughtCall rayo_run_measuring_stack(void (*main)(void), size_t *stackBytes) {
+    ThreadCall threadCall = {.call = {.function = callMain, .left = (int64_t)(uintptr_t)main}, .measures = true};
+    runOnNewThread(&threadCall, RAYO_TEST_MEASURED_STACK_BYTES);
+    *stackBytes = threadCall.stackBytes;
+    return threadCall.call.outcome;
+}
+#else
+// The byte a measured stack is filled with before the run, which the run overwrites wherever it reaches.
+static const unsigned char unreachedStackByte = 0xA5;
+
+// A run of a program's entry function on a thread of its own, and what it came to.
+typedef struct {
+    void (*main)(void);
+    RayoCaughtCall outcome;
+} MainRun;
+
+// Runs the entry function of the run at `mainRun`, and records what it came to.
+static void *runMain(void *mainRun) {
+    MainRun *running = mainRun;
+    running->outcome = rayo_run_catching_panic(running->main);
+    return NULL;
+}
+
+RayoCaughtCall rayo_run_measuring_stack(void (*main)(void), size_t *stackBytes) {
+    // Fill the stack before the run, so that the deepest byte the run changed shows how far down it reached.
+    size_t size = RAYO_TEST_MEASURED_STACK_BYTES;
+    unsigned char *stack = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (stack == MAP_FAILED) {
+        fputs("rayo_run_measuring_stack: can't map a stack for the run\n", stderr);
+        abort();
+    }
+    memset(stack, unreachedStackByte, size);
+
+    // Run the entry function on a thread that has that stack.
+    MainRun run = {.main = main};
+    pthread_attr_t attributes;
+    pthread_t thread;
+    pthread_attr_init(&attributes);
+    pthread_attr_setstack(&attributes, stack, size);
+    if (pthread_create(&thread, &attributes, runMain, &run) != 0) {
+        fputs("rayo_run_measuring_stack: can't start a thread for the run\n", stderr);
+        abort();
+    }
+    pthread_join(thread, NULL);
+    pthread_attr_destroy(&attributes);
+
+    // The stack grows down from its end, so the bytes below the deepest the run reached are still as they were filled.
+    size_t unreached = 0;
+    while (unreached < size && stack[unreached] == unreachedStackByte) unreached++;
+    *stackBytes = run.outcome.panicked ? 0 : size - unreached;
+    munmap(stack, size);
+    return run.outcome;
+}
+#endif
 
 // Adds the `length` bytes at `text` to the output of the call this thread runs.
 static void print(const char *text, int length) {

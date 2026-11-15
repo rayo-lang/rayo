@@ -3,12 +3,12 @@ import RayoIR
 import RayoSema
 
 /// Checks what each function of a lowered program does with its places: its moves, the values its locals hold at each
-/// use, its accesses, and the values it leaves unread. It writes the end of each access into the program, which the
-/// emitter then receives.
+/// use, its accesses, and the values it leaves unread. It writes the end of each access and the retirement of each
+/// local into the program, which the emitter then receives.
 public enum OwnershipChecker {
-    /// The program with the end of each access written into the body of each function that passes every check, and
-    /// without the body of each function that fails one, and the errors the checks find, under the ID of each function
-    /// that has any, in source order.
+    /// The program with the end of each access and the retirement of each local written into the body of each function
+    /// that passes every check, and without the body of each function that fails one, and the errors the checks find,
+    /// under the ID of each function that has any, in source order.
     public static func check(_ program: IRProgram) -> (program: IRProgram, errors: [FunctionID: [Diagnostic]]) {
         var checked = program
         var errors: [FunctionID: [Diagnostic]] = [:]
@@ -26,7 +26,7 @@ public enum OwnershipChecker {
     /// Runs the checks in turn on the body whose places `places` gives the types of. It stops at the first check that
     /// finds errors, so that no later check reports the same mistake again, and gives those errors, without the body.
     /// Every diagnostic these checks report is an error, so any of them fails the function. A body that passes every
-    /// check comes back with the end of each access written in.
+    /// check comes back with the end of each access and the retirement of each local written in.
     private static func check(_ places: PlaceTypes) -> (body: IRBody?, errors: [Diagnostic]) {
         // A use of a place after a move out of a borrowed parameter or element isn't reported again as a use after a
         // move.
@@ -45,6 +45,8 @@ public enum OwnershipChecker {
         guard conflicts.isEmpty else { return (nil, conflicts) }
 
         let unread = UnusedValueChecker.errors(in: places, uses: uses)
-        return (unread.isEmpty ? ended : nil, unread)
+        guard unread.isEmpty else { return (nil, unread) }
+
+        return (LocalRetirements.written(into: ended), [])
     }
 }

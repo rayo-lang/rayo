@@ -7,7 +7,6 @@ extension FunctionEmitter {
     /// Emits, in the entry block, the place of each local, and returns the pointers to them in the locals' order. A
     /// parameter's place holds its argument.
     func makePlaces(with builder: borrowing Builder) -> [PointerValue] {
-        let returned = returnedLocal()
         var places: [PointerValue] = []
         for (index, local) in body.locals.enumerated() {
             let place = if index < declaration.parameters.count {
@@ -64,6 +63,15 @@ extension FunctionEmitter {
         let slot = builder.allocate(types.llvmType(type), alignment: types.alignment(of: type))
         builder.position(atEndOf: current)
         return Address(pointer: slot, type: type)
+    }
+
+    /// Emits, in the entry block, a stack slot for a value of `type` that one operation uses, and the start of the
+    /// slot's life at the builder's position, and returns its address. The caller ends the slot's life once the
+    /// operation is done with it, so that slots whose lives don't overlap may share memory.
+    func newTemporarySlot(of type: RayoType, with builder: borrowing Builder) -> Address {
+        let slot = newSlot(of: type, with: builder)
+        builder.startLife(of: slot.pointer)
+        return slot
     }
 
     /// Emits the instructions that point at `place`, a local's place or a part inside it, and returns its address.

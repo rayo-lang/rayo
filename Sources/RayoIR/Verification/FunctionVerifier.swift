@@ -60,11 +60,16 @@ struct FunctionVerifier {
         case .compute(let destination, let value, _):
             try verify(value, storedIn: destination?.place)
 
-        // A declaration starts the life of a local the body declares. A parameter's life starts with the call, which
-        // passes its value, so no statement declares it.
+        // A declaration starts the life of a local the body declares, and a retirement ends it. A parameter's life
+        // starts with the call, which passes its value, and ends once the call returns, so no statement declares or
+        // retires it.
         case .declare(let local):
             guard body.locals[local.index].parameterConvention == nil else {
                 throw violation("the IR declares the parameter %\(local.index) in its function's body")
+            }
+        case .retire(let local):
+            guard body.locals[local.index].parameterConvention == nil else {
+                throw violation("the IR retires the parameter %\(local.index) in its function's body")
             }
 
         // An access reaches a place of the body. Only an object's value takes a dynamic one, and the IR has no objects.

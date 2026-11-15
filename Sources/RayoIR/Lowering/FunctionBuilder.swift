@@ -62,9 +62,11 @@ struct FunctionBuilder: ~Copyable {
         return id
     }
 
-    /// Adds a temporary of `type` to the function, and returns its place.
+    /// Adds a temporary of `type` to the function, starts its life in the current block, and returns its place.
     mutating func newTemporary(_ type: RayoType) -> Place {
+        let temporary = LocalID(index: locals.count)
         locals.append(.temporary(type))
-        return Place(root: LocalID(index: locals.count - 1))
+        emit(.declare(temporary))
+        return Place(root: temporary)
     }
 }
