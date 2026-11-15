@@ -177,14 +177,14 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoDiagnosticsTests` | The messages and numbers the macros give a table of codes |
 | `Tests/RayoDiagnosticsMacrosTests` | The errors the macros give a table written wrong |
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
-| `Tests/RayoSemaTests` | The tests of the type table's layouts, of which kind of declaration each top-level name belongs to, and of the checked program each construct makes, as snapshots of its text, over parsed files |
-| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of its pipeline's steps, and of the errors it reports for each program, over files held in memory |
+| `Tests/RayoSemaTests` | The tests of the errors and warnings checking reports, of the type table's layouts, of which kind of declaration each top-level name belongs to, and of the checked program each construct makes, as snapshots of its text, over parsed files |
+| `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of which stages its pipeline runs, and of where the program's errors end the compile, over files held in memory |
 | `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
 | `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |
 | `Tests/RayoIRTests` | The tests of the Rayo IR that lowering gives each construct, as snapshots of its text that read back into the same IR, over programs the front end parses and checks; of the verifier, over Rayo IR written as text; and of the errors the IR's parser reports |
-| `Tests/RayoOwnershipTests` | The ownership checkers' tests, over Rayo IR written as text |
+| `Tests/RayoOwnershipTests` | The ownership stage's tests, over Rayo IR written as text: of the errors it reports and the ends of accesses it writes, through the interface the pipeline runs it by, and of its dataflow solver |
 | `Tests/RayoLLVMTests` | The tests of the object code Rayo IR compiles to, read with the LLVM install's own tools; of the code each operator emits, run in the test process through the binding's JIT; of the LLVM types a program's values, functions and stack slots get; and of how each argument and result is passed |
 | `Tests/SnapshotTesting` | What a snapshot test does: compares a test's text with a file kept beside the test, shows a diff where they differ, and rewrites the file when `RAYO_UPDATE_SNAPSHOTS=1` asks it to |
 | `Tests/RayoLLVMTestSupport` | The C code that stands in for the runtime's panic in the LLVM tests, and ends the call that panicked instead of the process |
