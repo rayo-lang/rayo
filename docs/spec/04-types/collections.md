@@ -277,6 +277,48 @@ protocol Formattable { func format(into sink: mutable some TextSink) where sink 
 
 **Interpolation itself allocates nothing.** A function that takes a `Formattable`, as `log` does, writes the text where it is going, and `alloc "…"` allocates visibly. Without `alloc`, an interpolated literal has the type the compiler builds for it whatever its context, since no literal protocol takes interpolation. So assigning one to a `String` is an error, and `alloc "hp \(hp)"` builds the `String`.
 
+### Printing
+
+```swift
+func print(_ value: some Formattable)
+
+let hp = 7
+print(42)               // 42
+print(hp > 0)           // true
+print("hp \(hp)")       // hp 7
+print(0.1 + 0.2)        // 0.30000000000000004
+```
+
+**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and takes any `Formattable` ([11](../11-compilation-model.md#the-prelude)). The text it writes is the one the value's `format` writes, so `print(x)` and `print("\(x)")` write the same line.
+
+**The language's own types format the same text on every target and in every build**, so a program's printed output can be compared exactly with one recorded on another machine:
+
+- **`Bool`.** `true` or `false`.
+- **Integers.** The value in decimal digits, with no leading zeros and a `-` before a negative one: `0`, `42`, `-7`, `18446744073709551615`.
+- **Floating-point values.** The text below.
+
+**A `Half`, `Float` or `Double` formats as the shortest decimal that reads back as the same value.** So `0.1` prints `0.1`, though no binary float is exactly one tenth, and every printed float converts back to the bits it came from. Where several decimals of that length read back as the value, it writes the one nearest the value's exact binary value, and of two as near, the one whose last digit is even.
+
+**That decimal is written plainly or with an exponent, depending on its magnitude.** `Float` has an upper bound of 2^24, and `Double` one of 2^53. Up to its bound, each holds every integer exactly, so a whole number keeps all its digits. Past it, a float holds only some of the integers, and writing every digit would claim a precision the value doesn't have:
+
+- **Plain.** A decimal at least `0.0001` in magnitude, of a value no larger than its type's bound in magnitude, is written without an exponent, and always with a fraction: `1.0`, `0.5`, `100.0`, `0.0001`.
+- **Exponent.** Any other is written as one digit, then any further digits after a point, then `e`, the exponent's sign and at least two of its digits: `1e-05`, `3.3554432e+07`, `1e+16`.
+
+`Half` takes `Float`'s bound, which is above its largest finite value, 65504, so a whole `Half` always keeps its digits.
+
+**Zeros, infinities and NaN have fixed texts:** `0.0` and `-0.0`, `inf` and `-inf`, and `nan`. Every NaN prints `nan`, whatever its sign or payload, since which NaN a result is stays open ([Floating point](numbers-and-math.md#floating-point)).
+
+```swift
+print(Float(16777216))                // 16777216.0: 2^24, the last Float written plainly
+print(Float(33554432))                // 3.3554432e+07: past 2^24
+print(Double(9007199254740992))       // 9007199254740992.0: 2^53, the last Double written plainly
+print(Double(9007199254740994))       // 9.007199254740994e+15: past 2^53
+print(0.0001)                         // 0.0001: the smallest magnitude written plainly
+print(0.00001)                        // 1e-05
+print(-1.0 / 0.0)                     // -inf
+print(0.0 / 0.0)                      // nan
+```
+
 ### Literals
 
 **A literal has no type until something expects one**, so `[1, 2, 3]`, `"jump"` and `0.5` become whatever their context asks for:

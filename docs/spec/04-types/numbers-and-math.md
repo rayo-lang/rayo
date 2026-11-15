@@ -56,10 +56,28 @@ let g: Int64 = d                 // error: Int and Int64 never convert implicitl
 **Every other conversion between number types is explicit.** Each explicit form says what it does with a value the target type can't hold exactly. Together they have a defined result for every input but one (below):
 
 - **Between integer types.** The unlabeled form, such as `Int32(x)`, checks that the value fits. It panics where overflow checks are on, and keeps the low bits where they are off ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)). The `truncating:` form always keeps the low bits, and the `clamping:` form saturates.
-- **From a floating-point value.** `Int(f)` rounds toward zero. It panics on NaN, or on a value whose integer part doesn't fit, in every build, since targets' conversion instructions disagree on those. `Int(clamping: f)` saturates, and maps NaN to `0`.
+- **From a floating-point value.** `Int(f)` rounds toward zero, and panics in every build on a value it can't convert ([below](#float-to-integer-panics)). It panics even where overflow checks are off, since targets' conversion instructions disagree on those inputs. `Int(clamping: f)` saturates, and maps NaN to `0`.
 - **To a floating-point type.** `Float(d)` of an `Int`, `Float(x)` of a `Double` and `Half(f)` of a `Float` round to nearest. An out-of-range value becomes an infinity of its sign, as IEEE 754 defines.
 
 **The one input without a defined result is NaN or an out-of-range value, converted from a float to an integer inside an `unchecked` block**, which removes the conversion's check ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)). Unchecked, that conversion's failure is undefined behavior ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+
+#### Float-to-integer panics
+
+**An unlabeled float-to-integer conversion panics with one of two texts, since each names a different bug:**
+
+- `float to integer conversion of NaN`, where the value is NaN;
+- `float to integer conversion out of range`, where it is an infinity or its integer part doesn't fit the integer type.
+
+A negative value whose integer part isn't 0 never fits an unsigned type, so `UInt` of it is out of range.
+
+```swift
+let x = -2.9
+let zero = 0.0
+let a = Int(x)                  // -2: rounds toward zero
+let b = UInt(x + 2.5)           // 0: about -0.4, which rounds toward zero to 0
+let c = UInt(x)                 // panics: float to integer conversion out of range
+let d = Int(zero / zero)        // panics: float to integer conversion of NaN
+```
 
 ### Integer overflow, division and shifts
 
@@ -81,7 +99,7 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
 **Every integer operation has a defined result for every operand, in every build and on every target.** The one exception is a division or remainder by zero inside an `unchecked` block, which removes its check ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
 - **Overflow.** `+ - *` and unary `-` panic on overflow where overflow checks are on, and wrap where they are off. A wrapped result is a wrong value but never an invalid one, and the next bounds check still catches a wrong index. So the overflow check is a diagnostic check, which a build or a scope may turn off ([10](../10-errors-and-safety/checks-and-build-modes.md#check-levels)). The wrapping operators `&+ &- &*` always wrap, and the saturating operators `+| -| *|` saturate.
-- **Division.** `/` rounds toward zero, and `a % b` has `a`'s sign. Division and remainder by zero panic in every build, since, unchecked, their failure is undefined behavior ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)). `Int.min / -1` overflows in every signed width, and follows the overflow rule: it wraps to `Int.min` where checks are off. `Int.min % -1` is `0` in every build.
+- **Division.** `/` rounds toward zero, and `a % b` has `a`'s sign. `%` takes integers alone ([below](#floating-point)). Division and remainder by zero panic in every build, since, unchecked, their failure is undefined behavior ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)). `Int.min / -1` overflows in every signed width, and follows the overflow rule: it wraps to `Int.min` where checks are off. `Int.min % -1` is `0` in every build.
 - **Shifts.** The count may be of any integer type, and the result has the shifted value's type, so neither operand widens to the other: `b << n` above is a `UInt8`. The other shift rules fix the type of an untyped value, and the result of every count:
     - An untyped shifted value never takes its type from the count. It takes the expected type, else its default, `Int`. So `mask` above shifts a `UInt64`, not a `UInt8` that then widens.
     - `>>` is arithmetic on a signed type and logical on an unsigned one.
@@ -122,6 +140,12 @@ let r = fma(a, b, c)    // a * b + c rounded once: fused, because the code names
 - **Deterministic tests and replays.** A test compares its output with a recorded result exactly, and a replay of recorded inputs reaches the recorded state.
 - **Distributed consensus.** Replicas that each compute a state from the same inputs agree on it. They agree on its hash too, once each replaces every NaN with one canonical NaN, since which NaN a result is stays open.
 - **Lockstep simulation.** Machines on different platforms run one simulation from the same inputs, and compare a hash of its state at each step. Each makes its NaNs canonical before it hashes, as replicas do.
+
+**Floating-point types have no `%`.** A float's remainder has two common meanings: the truncated remainder, which C's `fmod` gives and whose quotient rounds toward zero, and IEEE 754's `remainder`, whose quotient rounds to nearest. `%` can't say which one it means, so each is a named function, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
+
+```swift
+let r = 7.5 % 2.0       // error: '%' takes integers
+```
 
 **`fma(a, b, c)` computes `a * b + c` with a single rounding, as IEEE 754's `fusedMultiplyAdd` does.** That makes it one correctly rounded IEEE 754 operation, under the rule above. The compiler never fuses `a * b + c` itself, so code that wants one rounding, or a target's fused multiply-add instruction, names `fma`.
 
