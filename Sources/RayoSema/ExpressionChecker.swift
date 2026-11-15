@@ -64,13 +64,18 @@ struct ExpressionChecker {
         case .boolLiteral(let value):
             .typed(CheckedExpr(kind: .boolLiteral(value), type: .bool, range: expr.range))
 
-        // A name reads the local it names, a member a field of the place its base names or the count of the array its
-        // base names, and an element the element of the array its base names.
-        case .name, .member, .element:
-            place(expr, under: self).map { .typed(value(at: $0, in: expr.range)) }
+        // A name reads the local it names, and an element the element of the array its base names.
+        case .name, .element:
+            place(expr, under: self).map {
+                .typed(CheckedExpr(kind: .place($0.place), type: $0.type, range: expr.range))
+            }
 
-        // A call reaches one of the functions its callee names, or makes the struct it names. A call of an implicit
-        // member waits for its position to give the type whose member it calls.
+        // A member reads a property of the value its base names: a field, or a value such as an array's count.
+        case .member(let base, let name, let nameRange):
+            member(named: name, at: nameRange, of: base, in: expr.range, under: self).map { .typed($0) }
+
+        // A call reaches one of the functions its callee names, or one of the initializers of the type it names. A
+        // call of an implicit member waits for its position to give the type whose member it calls.
         case .call(let callee, let arguments):
             CallChecker(expressions: self).call(callee, arguments, in: expr.range)
 
@@ -157,15 +162,6 @@ struct ExpressionChecker {
         return .arrayLiteral(ArrayLiteral(elements: checked, range: range))
     }
 
-    /// The value of `place`, which the source names at `range`. A place that is an array's count and nothing more
-    /// gives the count itself.
-    private func value(at place: TypedPlace, in range: SourceRange) -> CheckedExpr {
-        if place.place.steps.isEmpty, case .temporary(let value) = place.place.root, case .arrayCount = value.kind {
-            return value
-        }
-        return CheckedExpr(kind: .place(place.place), type: place.type, range: range)
-    }
-
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
     private func unary(_ op: UnaryOperator, _ operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         switch op {
@@ -246,10 +242,12 @@ struct ExpressionChecker {
     /// a field or an element of it, as the base of a longer place does.
     private func place(_ expr: Expr, under rules: some PlaceRules, holdsParts: Bool) -> TypedPlace? {
         switch expr.kind {
-        // A member names a field of the place its base names, or its count, and an element steps into an element of
-        // it.
+        // A member names a field of the place its base names, or a value property, whose value the rules may let a
+        // place hold.
         case .member(let base, let name, let nameRange):
-            member(named: name, at: nameRange, of: base, in: expr.range, under: rules)
+            memberPlace(named: name, at: nameRange, of: base, in: expr.range, under: rules)
+
+        // An element steps into an element of the place its base names.
         case .element(let base, let index):
             element(at: index, of: base, in: expr.range, under: rules)
 
@@ -259,33 +257,42 @@ struct ExpressionChecker {
         }
     }
 
-    /// Checks `base.name`, which the source writes at `range`: the count of the array its base names where `name` is
-    /// `count`, and otherwise the field called `name` of the place its base names. Reports any other member of an
-    /// array.
+    /// Checks `base.name`, which the source writes at `range`, as a place under the given rules: the place of a
+    /// field, or, where the rules let a place hold it, of a value property's value.
+    private func memberPlace(named name: String, at nameRange: SourceRange, of base: Expr, in range: SourceRange,
+                             under rules: some PlaceRules) -> TypedPlace? {
+        // A member that failed was reported.
+        guard let member = member(named: name, at: nameRange, of: base, in: range, under: rules) else { return nil }
+        if case .place(let place) = member.kind { return (place, member.type) }
+        return rules.place(holding: member, at: nameRange)
+    }
+
+    /// Checks `base.name`, which the source writes at `range`, under the rules of the position it stands in: the
+    /// property called `name` of the value its base names, as the value it gives. A field gives the part of the base's
+    /// place that holds it, and a value property, such as an array's count, the value it computes. Reports a name
+    /// that names no property of the base's type.
     private func member(named name: String, at nameRange: SourceRange, of base: Expr, in range: SourceRange,
-                        under rules: some PlaceRules) -> TypedPlace? {
+                        under rules: some PlaceRules) -> CheckedExpr? {
         // A base that failed was reported.
         guard let holder = place(base, under: rules, holdsParts: true) else { return nil }
 
-        // The one member an array's value has is its count, and it has no fields.
-        if case .array(let count, _) = holder.type {
-            guard name == "count" else {
-                errors.report(.noSuchMember(type: typeName(of: holder.type), name: name), at: nameRange)
-                return nil
-            }
-            // A position whose rules don't admit a count was reported.
-            guard rules.admitsCount(at: nameRange) else { return nil }
+        switch file.declarations.member(named: name, of: holder.type) {
+        // A field is the part of its base's place that holds it. A field whose declaration failed was reported there,
+        // and one the rules don't admit here.
+        case .field(let index, let field)?:
+            guard let type = field.type, rules.admits(field, at: nameRange) else { return nil }
+            let place = holder.place.appending(.field(index, range: range))
+            return CheckedExpr(kind: .place(place), type: type, range: range)
 
-            // A count is a value that no local holds, so it roots a place as a call's result does.
-            let value = CheckedExpr(kind: .arrayCount(holder.place, count: count), type: .uint, range: range)
-            return (CheckedPlace(root: .temporary(value)), .uint)
+        // An array's count is a UInt that the array's type fixes.
+        case .count(let count)?:
+            return CheckedExpr(kind: .arrayCount(holder.place, count: count), type: .uint, range: range)
+
+        // A type's initializers are no property of a value of it, and nor is a name the type lacks.
+        case .initializers?, nil:
+            reportNoProperty(named: name, at: nameRange, of: holder.type)
+            return nil
         }
-
-        // A field that the holder doesn't have, or that the rules don't admit, was reported.
-        guard let (index, field, type) = field(named: name, at: nameRange, of: holder.type),
-              rules.admits(field, at: nameRange)
-        else { return nil }
-        return (holder.place.appending(.field(index, range: range)), type)
     }
 
     /// Checks `base[indexExpr]`, the element at a UInt index of the array its base names, which the source writes at
@@ -317,22 +324,16 @@ struct ExpressionChecker {
         return (holder.place.appending(.element(index: index, count: count, range: range)), element)
     }
 
-    /// Finds a field by its name in a value's type: its position in the struct's declaration, the field, and its
-    /// type. Reports a name that names no field of the type.
-    private func field(named name: String, at nameRange: SourceRange,
-                       of type: RayoType) -> (index: Int, field: DeclaredField, type: RayoType)? {
-        // Find the field among the struct's; a value of any other type has none.
-        let fields: [DeclaredField] =
-            if case .structure(let id) = type { file.declarations.fields(of: id) } else { [] }
-        // A name that names no field of the type is reported.
-        guard let index = fields.firstIndex(where: { $0.name == name }) else {
-            errors.report(.noSuchField(type: typeName(of: type), field: name), at: nameRange)
-            return nil
+    /// Reports that a value of `type` has no property called `name`, which the source writes at `nameRange`. An
+    /// array has a property besides fields, its count, so the error names the property a member of it; any other
+    /// type's properties are fields alone.
+    private func reportNoProperty(named name: String, at nameRange: SourceRange, of type: RayoType) {
+        let code: ErrorCode = if case .array = type {
+            .noSuchMember(type: typeName(of: type), name: name)
+        } else {
+            .noSuchField(type: typeName(of: type), field: name)
         }
-
-        // A field whose declaration failed was reported there.
-        guard let fieldType = fields[index].type else { return nil }
-        return (index, fields[index], fieldType)
+        errors.report(code, at: nameRange)
     }
 
     /// The whole local called `name`, which the source names at `range`, as a place an expression reads. Reports it
@@ -348,7 +349,7 @@ struct ExpressionChecker {
         case .inScope(.local(let local)):
             return (CheckedPlace(root: .local(local, range: range)), names[local].type)
 
-        // A local, a function or a struct whose declaration failed was reported there.
+        // A local, a function or a type whose declaration failed was reported there.
         case .inScope(.failed), .failed:
             return nil
 
@@ -357,8 +358,8 @@ struct ExpressionChecker {
             errors.report(.functionAsValue(name: name), at: range)
             return nil
 
-        // A struct's name is a type, which is no value.
-        case .structure:
+        // A type's name is no value.
+        case .type:
             errors.report(.typeAsValue(name: name), at: range)
             return nil
 
@@ -471,8 +472,8 @@ private extension CheckedBinaryOperator {
     }
 }
 
-/// The rules of a place that an expression reads, which may start from any value, step into any field, and name any
-/// array's count.
+/// The rules of a place that an expression reads, which may start from any value, step into any field, and go on
+/// from any value property, whose value it holds as a call's result.
 extension ExpressionChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         // A name roots the place in the local it names.
@@ -491,7 +492,7 @@ extension ExpressionChecker: PlaceRules {
         true
     }
 
-    func admitsCount(at nameRange: SourceRange) -> Bool {
-        true
+    func place(holding property: CheckedExpr, at nameRange: SourceRange) -> TypedPlace? {
+        (CheckedPlace(root: .temporary(property)), property.type)
     }
 }

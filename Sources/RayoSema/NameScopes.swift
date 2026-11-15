@@ -1,8 +1,8 @@
 import RayoDiagnostics
 import RayoSource
 
-/// The names a function body sees: its locals and parameters, block by block, and the module's functions and
-/// structs.
+/// The names a function body sees: its locals and parameters, block by block, the module's functions and types,
+/// and the prelude's that the module leaves free.
 final class NameScopes {
     private let file: FileChecker
     /// The body's locals, indexed by `LocalID`.
@@ -28,16 +28,16 @@ final class NameScopes {
     }
 
     /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
-    /// functions and structs. A call gets the module's functions or struct where it has either; any other use gets
-    /// the local or parameter where there is one. A name that reaches a declaration that failed taints the body.
+    /// functions and types. A call gets the module's functions or type where it has either; any other use gets the
+    /// local or parameter where there is one. A name that reaches a declaration that failed taints the body.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
         // Find the name in scope and in the module; the use picks between them.
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
         let module = moduleMatch(for: name, use: use)
         let match = switch use {
-        // No local can be called, so a function or a struct wins even over a local whose declaration failed.
+        // No local can be called, so a function or a type wins even over a local whose declaration failed.
         case .call: module ?? inScope
-        // A local or parameter shadows the module's functions and structs.
+        // A local or parameter shadows the module's functions and types.
         case .ordinary: inScope ?? module
         }
 
@@ -70,8 +70,9 @@ final class NameScopes {
         blocks.reversed().lazy.compactMap { $0[name] }.first
     }
 
-    /// The module's functions or type called `name` that `use` finds, nil when it has neither. Where both have the
-    /// name, a call finds the functions, and any other use the kind the name belongs to.
+    /// The module's functions or type called `name` that `use` finds, or the prelude's type of the name where the
+    /// module has neither, nil when there is none. Where both have the name, a call finds the functions, and any
+    /// other use the kind the name belongs to.
     private func moduleMatch(for name: String, use: NameUse) -> NameMatch? {
         let declarations = file.declarations
         let functions = declarations.functions(named: name)
@@ -83,7 +84,8 @@ final class NameScopes {
         // A call finds the functions, so a function whose name a type took still answers its calls; any other use
         // finds the type first where the type declares the name first.
         let findsTypeFirst = use == .ordinary && file.declarations.kind(of: name) == .type
-        return findsTypeFirst ? typeMatch ?? functionMatch : functionMatch ?? typeMatch
+        let moduleMatch = findsTypeFirst ? typeMatch ?? functionMatch : functionMatch ?? typeMatch
+        return moduleMatch ?? declarations.preludeType(named: name).map(NameMatch.type)
     }
 
     /// What a name finds among the module's declarations of one kind: `declared`, what it names of that kind, or

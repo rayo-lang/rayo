@@ -10,9 +10,6 @@ struct Declarations {
     private var functions: [String: [Signature]] = [:]
     /// The file's types of every kind, which share one namespace.
     private var types: [String: DeclaredType] = [:]
-    /// Each struct's initializers, which a call of the struct's name reaches. A struct without one is made by its
-    /// primary initializer.
-    private var initializers: [StructID: [Signature]] = [:]
     /// The primary initializer of each struct that can be laid out.
     private var primaryInitializers: [StructID: FunctionID] = [:]
     /// Each struct's fields, in the order the struct declares them.
@@ -88,10 +85,12 @@ struct Declarations {
         primaryInitializers[id] = initializer
     }
 
-    /// Declares the prelude's built-ins whose names the file's own types and functions leave free.
+    /// Declares the prelude's functions whose names the file's own types and functions leave free. A prelude type's
+    /// initializers are members of the type, which a call reaches through the type.
     mutating func declarePrelude() {
         // A type or a function of the file shadows every prelude function that a call reaches by its name.
-        for signature in Builtin.allCases.map(Signature.init(of:)) where kind(of: signature.name) == nil {
+        let functions = Builtin.allCases.filter { $0.initializedType == nil }.map(Signature.init(of:))
+        for signature in functions where kind(of: signature.name) == nil {
             _ = declare(signature)
         }
     }
@@ -103,10 +102,6 @@ struct Declarations {
 
     func functions(named name: String) -> [Signature] {
         functions[name, default: []]
-    }
-
-    func initializers(of id: StructID) -> [Signature] {
-        initializers[id, default: []]
     }
 
     /// The primary initializer of the struct `id`, which must be laid out.
@@ -121,6 +116,12 @@ struct Declarations {
 
     func type(named name: String) -> DeclaredType? {
         types[name]
+    }
+
+    /// The prelude type called `name`, or nil where no prelude type has the name or a type or a function of the file
+    /// shadows it.
+    func preludeType(named name: String) -> RayoType? {
+        kind(of: name) == nil ? Self.preludeTypes[name] : nil
     }
 
     /// The fields of the struct `id`, whose fields must be declared already.
@@ -195,10 +196,9 @@ struct Declarations {
             return declared.type
         }
         // A function shadows it too, though it names no type. The file's names are known before any is declared, so
-        // a type written before the function is declared, such as a field's, is shadowed as well.
-        let isShadowedByFunction = kind(of: name) == .functions
-        // Such a name, and one that no prelude type has, names no type, and is reported where it is written.
-        guard !isShadowedByFunction, let resolved = Self.preludeTypes[name] else {
+        // a type written before the function is declared, such as a field's, is shadowed as well. Such a name, and
+        // one that no prelude type has, names no type, and is reported where it is written.
+        guard let resolved = preludeType(named: name) else {
             errors.report(.notAType(name: name), at: range)
             return nil
         }

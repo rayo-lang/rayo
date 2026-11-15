@@ -4,31 +4,48 @@ import Testing
 
 struct BuiltinTests {
     @Test(arguments: Builtin.allCases)
-    func `the prelude declares each built-in under the name a call writes`(builtin: Builtin) {
+    func `the prelude gives each built-in where a call finds it, a function by its name and an initializer in its type`(
+        builtin: Builtin,
+    ) {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
         declarations.declarePrelude()
 
-        let callees = declarations.functions(named: builtin.name.spelling).map(\.callee)
-        #expect(callees.contains(.builtin(builtin)))
+        let found = if let type = builtin.initializedType {
+            initializers(of: type, in: declarations)
+        } else {
+            declarations.functions(named: builtin.name.spelling)
+        }
+        let isEachBuiltin = found.allSatisfy(\.isBuiltin)
+        #expect(isEachBuiltin)
+        #expect(found.map(\.description).contains(Signature(of: builtin).description))
     }
 
     @Test func `a prelude function is called by its own name`() {
         #expect(BuiltinName.function("print").spelling == "print")
     }
 
-    @Test func `an initializer of a prelude type is declared under the type's name`() {
+    @Test func `an initializer of a prelude type is a member of the type, and no function`() {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
         declarations.declarePrelude()
 
-        #expect(declarations.functions(named: "Int").map(\.description) == ["Int(_: UInt)"])
-        #expect(declarations.functions(named: "UInt").map(\.description) == ["UInt(_: Int)"])
+        #expect(initializers(of: .int, in: declarations).map(\.description) == ["Int(_: UInt)"])
+        #expect(initializers(of: .uint, in: declarations).map(\.description) == ["UInt(_: Int)"])
+        #expect(declarations.functions(named: "Int").isEmpty)
     }
 
     @Test(arguments: ["func Int() {}", "struct Int"])
-    func `a struct or a function of the file shadows an initializer of a prelude type`(source: String) {
-        var declarations = Declarations(names: TopLevelNames(of: Parser.parse(source).file))
-        declarations.declarePrelude()
+    func `a struct or a function of the file shadows a prelude type`(source: String) {
+        let declarations = Declarations(names: TopLevelNames(of: Parser.parse(source).file))
 
-        #expect(declarations.functions(named: "Int").isEmpty)
+        #expect(declarations.preludeType(named: "Int") == nil)
+        #expect(declarations.preludeType(named: "UInt") == .uint)
     }
+}
+
+/// The initializers that `declarations` gives the prelude type `type` as its members, none where it has none.
+private func initializers(of type: RayoType, in declarations: Declarations) -> [Signature] {
+    guard case .initializers(.overloads(let initializers))? = declarations.member(named: "init", of: type) else {
+        return []
+    }
+    return initializers
 }

@@ -23,30 +23,29 @@ struct AssignmentChecker {
         }
     }
 
-    /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. An
-    /// array's count never changes, whatever holds the array, so a target that names one or goes on from one is
-    /// reported as that, ahead of anything the rules would refuse in the place that holds the array.
+    /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. A
+    /// value property, such as an array's count, never changes, whatever holds it, so a target that names one or goes
+    /// on from one is reported as that, ahead of anything the rules would refuse in the place that holds it. So a
+    /// target that changes part of its root has its root checked last.
     private func changedPlace(_ target: Expr) -> TypedPlace? {
-        for (base, nameRange) in countMembers(in: target) {
-            // Each base is checked as a place a read names, so whether it holds an array is known whatever holds it.
-            // A base that failed was reported.
-            guard let holder = expressions.place(base, under: expressions) else { return nil }
-            if case .array = holder.type { return refuse(.assignToCount, at: nameRange) }
+        // A target that failed was reported.
+        guard let changed = expressions.place(target, under: self) else { return nil }
+
+        // A target that names its root whole had the root checked as the rules found it.
+        guard !changed.place.steps.isEmpty else { return changed }
+        if let refusal = refusal(toChangePartsOf: changed.place.root) {
+            return refuse(refusal, at: changed.place.root.range)
         }
-        return expressions.place(target, under: self)
+        return changed
     }
 
-    /// Each member called `count` along the members and elements that `target` steps through, innermost first: the
-    /// base it is a member of, and where the source writes its name. Whether each is an array's count, or a struct's
-    /// field, depends on its base's type.
-    private func countMembers(in target: Expr) -> [(base: Expr, nameRange: SourceRange)] {
-        switch target.kind {
-        case .member(let base, let name, let nameRange):
-            countMembers(in: base) + (name == "count" ? [(base, nameRange)] : [])
-        case .element(let base, _):
-            countMembers(in: base)
-        default:
-            []
+    /// The error to report when an assignment may not change part of a place that starts from `root`, or nil when
+    /// it may.
+    private func refusal(toChangePartsOf root: CheckedPlaceRoot) -> ErrorCode? {
+        switch root {
+        case .local(let local, _): refusal(toChange: local, holdsParts: true)
+        // A value that no local holds is no place an assignment can change.
+        case .temporary: .assignToNonLocal
         }
     }
 
@@ -73,14 +72,15 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// Finds the local an assignment changes: whole, or part by part when the target is a field or an element inside
-    /// it. Returns nil once it has reported why the local can't change that way, or that no local has the name.
+    /// Finds the local that an assignment's target starts from. Where the assignment changes the local whole, this
+    /// checks that the local may change; where it changes only part of it, the check comes last, after the rest of the
+    /// target. Returns nil once it has reported why the local can't change, or that no local has the name.
     private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }
 
-        // A local whose value can't change as the assignment changes it is reported.
-        if let refusal = refusal(toChange: local, holdsParts: holdsParts) { return refuse(refusal, at: range) }
+        // A local whose value can't change whole is reported.
+        if !holdsParts, let refusal = refusal(toChange: local, holdsParts: false) { return refuse(refusal, at: range) }
         return (CheckedPlace(root: .local(local, range: range)), names[local].type)
     }
 
@@ -98,6 +98,16 @@ struct AssignmentChecker {
         }
     }
 
+    /// Checks a target's root that is no name, such as a call. Where the target names the root whole, it is refused
+    /// at once. Where the target goes on from it, it is checked as a value that no local holds, so a value property
+    /// along the target is reported first, and the root is refused last.
+    private func nonLocalRoot(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
+        guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
+        // A value that failed was reported.
+        guard let value = expressions.check(expr) else { return nil }
+        return (CheckedPlace(root: .temporary(value)), value.type)
+    }
+
     /// Reports why an assignment's target can't change, and returns nil in place of the target.
     private func refuse(_ error: ErrorCode, at range: SourceRange) -> TypedPlace? {
         errors.report(error, at: range)
@@ -112,7 +122,7 @@ struct AssignmentChecker {
         case .inScope(.local(let local)):
             return local
 
-        // A local, a function or a struct whose declaration failed was reported there.
+        // A local, a function or a type whose declaration failed was reported there.
         case .inScope(.failed), .failed:
             return nil
 
@@ -121,8 +131,8 @@ struct AssignmentChecker {
             errors.report(.assignToFunction(name: name), at: range)
             return nil
 
-        // A struct's name is a type, which can't be assigned.
-        case .structure:
+        // A type's name can't be assigned.
+        case .type:
             errors.report(.assignToType(name: name), at: range)
             return nil
 
@@ -135,13 +145,22 @@ struct AssignmentChecker {
 }
 
 /// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
-/// declared with `var`, never into an array's count.
+/// declared with `var`, never into a value property such as an array's count.
 extension AssignmentChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A local's name roots the place in the local; `_`, and anything but a name, a member or an element, names no
-        // place.
-        guard case .name(let name) = expr.kind, name != "_" else { return refuse(.assignToNonLocal, at: expr.range) }
-        return changedLocal(named: name, at: expr.range, holdsParts: holdsParts)
+        switch expr.kind {
+        // `_` names no place; it only drops a value.
+        case .name("_"):
+            refuse(.assignToNonLocal, at: expr.range)
+
+        // A local's name roots the place in the local.
+        case .name(let name):
+            changedLocal(named: name, at: expr.range, holdsParts: holdsParts)
+
+        // Anything but a name, a member or an element names no place.
+        default:
+            nonLocalRoot(expr, holdsParts: holdsParts)
+        }
     }
 
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
@@ -153,9 +172,9 @@ extension AssignmentChecker: PlaceRules {
         return true
     }
 
-    func admitsCount(at nameRange: SourceRange) -> Bool {
-        // An array's count is fixed by its type, so neither it nor anything inside it changes.
-        errors.report(.assignToCount, at: nameRange)
-        return false
+    func place(holding property: CheckedExpr, at nameRange: SourceRange) -> TypedPlace? {
+        // A value property gives a value that no place holds, such as an array's count, which its type fixes, so
+        // neither it nor anything inside it changes.
+        refuse(.assignToCount, at: nameRange)
     }
 }

@@ -1,9 +1,9 @@
 /// A function's name, its parameters' labels and types, and its result type: everything a call is checked against,
 /// apart from the function's body. Each function the file declares has one, and so does each struct's primary
-/// initializer and each of the prelude's built-ins.
+/// initializer, each of the prelude's built-ins, and an array's `init(repeating:)`.
 struct Signature: CustomStringConvertible {
     var name: String
-    var callee: Callee
+    var target: CallTarget
     var parameters: [Parameter]
     var result: DeclaredResult
 
@@ -29,7 +29,7 @@ struct Signature: CustomStringConvertible {
 
     /// Whether the function is one of the prelude's built-ins.
     var isBuiltin: Bool {
-        if case .builtin = callee { true } else { false }
+        if case .callee(.builtin) = target { true } else { false }
     }
 
     /// Whether the parameters have exactly `types`, in order.
@@ -42,12 +42,14 @@ struct Signature: CustomStringConvertible {
         parameters.count == labels.count && zip(parameters, labels).allSatisfy { $0.label == $1 }
     }
 
-    /// Whether each argument the filter picks has the type of its parameter, taken in order. A parameter whose type
-    /// isn't known takes any argument, so a mistake in the declaration gives no further error at each call.
-    func takes(_ arguments: [CheckedValue], where isConsidered: (CheckedValue) -> Bool) -> Bool {
+    /// Whether each argument the filter picks has the type of its parameter, taken in order, where `declarations`
+    /// gives the members an implicit member names. A parameter whose type isn't known takes any argument, so a
+    /// mistake in the declaration gives no further error at each call.
+    func takes(_ arguments: [CheckedValue], in declarations: Declarations,
+               where isConsidered: (CheckedValue) -> Bool) -> Bool {
         parameters.count == arguments.count && zip(parameters, arguments).allSatisfy { parameter, argument in
             guard isConsidered(argument), let type = parameter.type else { return true }
-            return argument.fits(type)
+            return argument.fits(type, in: declarations)
         }
     }
 }
@@ -56,7 +58,15 @@ extension Signature {
     /// The signature of a built-in function, under the name a call writes to reach it.
     init(of builtin: Builtin) {
         let parameters = builtin.parameters.map { Parameter(label: $0.label, type: $0.type, spelledType: "\($0.type)") }
-        self.init(name: builtin.name.spelling, callee: .builtin(builtin), parameters: parameters,
+        self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,
                   result: .type(builtin.result))
+    }
+
+    /// The signature of `init(repeating:)` of the array of `count` values of `element`, which makes the array with
+    /// each element a copy of its argument.
+    init(fillingArrayOf count: Int, _ element: RayoType) {
+        let parameter = Parameter(label: "repeating", type: element, spelledType: "\(element)")
+        self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
+                  result: .type(.array(count: count, element: element)))
     }
 }

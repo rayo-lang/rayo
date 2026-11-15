@@ -2,8 +2,8 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks a call: which function or struct's initializer its callee reaches, and a function's arguments against its
-/// parameters.
+/// Checks a call: which function or initializer of a type its callee reaches, and its arguments against that
+/// function's parameters.
 struct CallChecker {
     /// A function that a call reaches, and the call's arguments, checked against its parameters.
     private typealias Match = (signature: Signature, arguments: [CheckedExpr])
@@ -14,8 +14,9 @@ struct CallChecker {
     let expressions: ExpressionChecker
 
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
 
-    /// Checks `callee(arguments)`. Every argument is checked, whether or not the call reaches a function or a struct.
+    /// Checks `callee(arguments)`. Every argument is checked, whether or not the call reaches a function or a type.
     /// A call of an implicit member waits for its position to give the type whose member it calls.
     func call(_ callee: Expr, _ arguments: [Argument], in range: SourceRange) -> CheckedValue? {
         switch callee.kind {
@@ -23,9 +24,9 @@ struct CallChecker {
         case .name(let name):
             call(named: name, at: callee.range, arguments, in: range).map { .typed($0) }
 
-        // A member names a method, which no type has.
-        case .member(let base, _, _):
-            memberCall(of: base, at: callee.range, passing: arguments).map { .typed($0) }
+        // A member call calls a method of its base's type, and no type has methods yet.
+        case .member(let base, let name, let nameRange):
+            memberCall(named: name, at: nameRange, of: base, calledAt: callee.range, passing: arguments)
 
         // An implicit member names a member of the type the call's position expects.
         case .implicitMember(let name):
@@ -41,13 +42,13 @@ struct CallChecker {
     private func call(named name: String, at nameRange: SourceRange, _ arguments: [Argument],
                       in range: SourceRange) -> CheckedExpr? {
         switch expressions.names.lookUp(name, for: .call) {
-        // A struct's name calls one of the struct's initializers.
-        case .structure(let id):
-            initializerCall(of: id, passing: arguments, in: range)
+        // A type's name calls one of the type's initializers.
+        case .type(let type):
+            typeCall(of: type, named: name, at: nameRange, passing: arguments, in: range)
 
         // The name's functions are the call's candidates.
         case .functions(let functions):
-            call(among: functions, passing: arguments, in: range)
+            call(among: functions, named: name, passing: arguments, in: range)
 
         // A local can't be called.
         case .inScope(.local):
@@ -63,23 +64,55 @@ struct CallChecker {
         }
     }
 
-    /// Checks a call of one of the initializers of the struct `id`, or, where the struct declares none, of its
-    /// primary initializer.
-    private func initializerCall(of id: StructID, passing arguments: [Argument],
-                                 in range: SourceRange) -> CheckedExpr? {
-        let initializers = expressions.file.declarations.initializers(of: id)
-        // A struct without initializers is made by its primary initializer, from its fields' values.
-        guard !initializers.isEmpty else {
-            return InitializerChecker(expressions: expressions).checkCall(making: id, passing: arguments, in: range)
+    /// Checks `name(arguments)`, where `name`, which the source writes at `nameRange`, names `type`, as a call of one
+    /// of the type's initializers.
+    private func typeCall(of type: RayoType, named name: String, at nameRange: SourceRange,
+                          passing arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+        // A type without initializers makes no value by a call.
+        let initializerName = Member.initializerName
+        guard case .initializers(let initializers)? = declarations.member(named: initializerName, of: type) else {
+            let code = ErrorCode.noSuchMember(type: expressions.typeName(of: type), name: initializerName)
+            return reachingNothing(reporting: code, at: nameRange, passing: arguments)
         }
-        return call(among: initializers, passing: arguments, in: range)
+
+        // A prelude type's initializer called with one unlabeled literal makes the literal a value of the type, so
+        // `UInt(-1)` is an error, as `let u: UInt = -1` is, where a conversion would only fail as the program runs.
+        if case .overloads(let candidates) = initializers, candidates.allSatisfy(\.isBuiltin),
+           let literal = soleLiteral(of: arguments) {
+            return self.literal(literal, as: type, in: range)
+        }
+        return call(initializers, named: name, passing: arguments, in: range)
     }
 
-    /// Checks a call of the member of `base` that the source writes at `range`, which isn't supported: reports it, and
-    /// the errors of `base` and of each of `arguments`, and returns nil.
-    private func memberCall(of base: Expr, at range: SourceRange, passing arguments: [Argument]) -> CheckedExpr? {
-        _ = expressions.check(base)
-        return reachingNothing(reporting: .unsupportedMemberCall, at: range, passing: arguments)
+    /// Checks a call of one of `initializers`, which the source names as `name`, that passes `arguments`.
+    func call(_ initializers: Member.Initializers, named name: String, passing arguments: [some CallArgument],
+              in range: SourceRange) -> CheckedExpr? {
+        switch initializers {
+        // A struct's primary initializer is made from its fields' values.
+        case .primary(let id):
+            InitializerChecker(expressions: expressions).checkCall(making: id, passing: arguments, in: range)
+
+        // Any other initializers are the call's candidates.
+        case .overloads(let candidates):
+            call(among: candidates, named: name, passing: arguments, in: range)
+        }
+    }
+
+    /// Checks `base.name(arguments)`, where the source writes `name` at `nameRange` and `base.name` at `calleeRange`.
+    /// No type has a method, so the call reaches nothing: it reports a property of the base's type as no function,
+    /// and any other member as a call that isn't supported, with the errors of `base` and of each argument.
+    private func memberCall(named name: String, at nameRange: SourceRange, of base: Expr,
+                            calledAt calleeRange: SourceRange, passing arguments: [Argument]) -> CheckedValue? {
+        // A base that failed was reported, and gives no type to find the member in.
+        let member = expressions.check(base).flatMap { declarations.member(named: name, of: $0.type) }
+
+        let (code, range): (ErrorCode, SourceRange) = switch member {
+        // A property gives a value, which can't be called.
+        case .field?, .count?: (.notAFunction(name: name), nameRange)
+        // A type's initializers aren't called through a value of the type, and any other member would be a method.
+        case .initializers?, nil: (.unsupportedMemberCall, calleeRange)
+        }
+        return reachingNothing(reporting: code, at: range, passing: arguments).map { .typed($0) }
     }
 
     /// Checks `.name(arguments)`, where the source writes `.name` at `nameRange`, with each argument checked on its
@@ -105,7 +138,7 @@ struct CallChecker {
     /// Checks a call that reaches no function or struct: reports `error`, where there is one, at `range`, and the
     /// errors of each of `arguments`, and returns nil.
     private func reachingNothing(
-        reporting error: ErrorCode?, at range: SourceRange, passing arguments: [Argument],
+        reporting error: ErrorCode?, at range: SourceRange, passing arguments: [some CallArgument],
     ) -> CheckedExpr? {
         // A name whose declaration failed comes with no error, since its error was reported there.
         if let error { errors.report(error, at: range) }
@@ -115,28 +148,15 @@ struct CallChecker {
         return nil
     }
 
-    /// Checks a call of one of `candidates`, the functions of one name, that passes `arguments`.
-    private func call(among candidates: [Signature], passing arguments: [Argument],
+    /// Checks a call of one of `candidates`, which the source names as `name`, that passes `arguments`.
+    private func call(among candidates: [Signature], named name: String, passing arguments: [some CallArgument],
                       in range: SourceRange) -> CheckedExpr? {
-        // A prelude type's initializer called with one unlabeled literal makes the literal a value of the type, so
-        // `UInt(-1)` is an error, as `let u: UInt = -1` is, where a conversion would only fail as the program runs.
-        if let type = preludeType(initializedBy: candidates), let literal = soleLiteral(of: arguments) {
-            return self.literal(literal, as: type, in: range)
-        }
-
         // A call whose arguments fit no candidate was reported.
-        guard let match = match(arguments, among: candidates, in: range) else { return nil }
+        guard let match = match(arguments, among: candidates, named: name, in: range) else { return nil }
 
         // A result type that isn't known was reported in the function that gives it, or here as a cycle.
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
-        let kind = CheckedExprKind.call(match.signature.callee, arguments: match.arguments)
-        return CheckedExpr(kind: kind, type: result, range: range)
-    }
-
-    /// The prelude type whose initializers `candidates` are, or nil where they are anything else.
-    private func preludeType(initializedBy candidates: [Signature]) -> RayoType? {
-        guard case .builtin(let builtin)? = candidates.first?.callee else { return nil }
-        return builtin.initializedType
+        return CheckedExpr(kind: match.signature.target.call(passing: match.arguments), type: result, range: range)
     }
 
     /// The value of `arguments` where they are one unlabeled integer literal, or nil where they are anything else.
@@ -155,8 +175,10 @@ struct CallChecker {
         return CheckedExpr(kind: value.kind, type: type, range: range)
     }
 
-    /// The one of `candidates` that `arguments` fit, with the arguments checked against its parameters.
-    private func match(_ arguments: [Argument], among candidates: [Signature], in range: SourceRange) -> Match? {
+    /// The one of `candidates`, which the source names as `name`, that `arguments` fit, with the arguments checked
+    /// against its parameters.
+    private func match(_ arguments: [some CallArgument], among candidates: [Signature], named name: String,
+                       in range: SourceRange) -> Match? {
         switch candidates.count {
         // Without a candidate, the arguments are checked for their own errors.
         case 0:
@@ -165,22 +187,23 @@ struct CallChecker {
 
         // One candidate is the call's, if the arguments fit its parameters.
         case 1:
-            return check(arguments, against: candidates[0], in: range).map { (candidates[0], $0) }
+            return check(arguments, against: candidates[0], named: name, in: range).map { (candidates[0], $0) }
 
         // Among overloads, the arguments' labels and types pick one.
         default:
-            return pick(among: candidates, for: arguments, in: range)
+            return pick(among: candidates, named: name, for: arguments, in: range)
         }
     }
 
-    /// Checks `arguments` against `signature`'s parameters, in order, reporting each mismatch.
-    private func check(_ arguments: [Argument], against signature: Signature,
+    /// Checks `arguments` against `signature`'s parameters, in order, reporting each mismatch. An error names the
+    /// signature as `name`, the way the call writes it.
+    private func check(_ arguments: [some CallArgument], against signature: Signature, named name: String,
                        in range: SourceRange) -> [CheckedExpr]? {
         // A call that passes too few or too many arguments fails, though each argument's own errors are reported.
         let parameters = signature.parameters
         guard arguments.count == parameters.count else {
             let takes = ArgumentCount(parameters.count)
-            errors.report(.argumentCount(name: signature.name, takes: takes, passes: arguments.count), at: range)
+            errors.report(.argumentCount(name: name, takes: takes, passes: arguments.count), at: range)
             checkValues(of: arguments)
             return nil
         }
@@ -192,7 +215,7 @@ struct CallChecker {
     }
 
     /// Checks `argument`'s label and value against `parameter`.
-    private func check(_ argument: Argument, against parameter: Parameter) -> CheckedExpr? {
+    private func check(_ argument: some CallArgument, against parameter: Parameter) -> CheckedExpr? {
         // A label other than the parameter's is reported, and fails the argument once its value is checked.
         let isLabeledRight = argument.label == parameter.label
         if !isLabeledRight {
@@ -202,19 +225,20 @@ struct CallChecker {
 
         // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
         guard let type = parameter.type else {
-            _ = expressions.check(argument.value)
+            argument.reportErrors(by: expressions)
             return nil
         }
-        let value = expressions.check(argument.value, expecting: Expectation(type))
+        let value = argument.checked(expecting: Expectation(type), by: expressions)
         return isLabeledRight ? value : nil
     }
 
-    /// The one of `candidates` whose labels and parameter types `arguments` fit, with the arguments settled to its
-    /// parameters' types.
-    private func pick(among candidates: [Signature], for arguments: [Argument], in range: SourceRange) -> Match? {
+    /// The one of `candidates`, which the source names as `name`, whose labels and parameter types `arguments` fit,
+    /// with the arguments settled to its parameters' types.
+    private func pick(among candidates: [Signature], named name: String, for arguments: [some CallArgument],
+                      in range: SourceRange) -> Match? {
         // Check each argument on its own, since the candidate that takes it isn't known yet, so an untyped one stays
         // untyped.
-        let checked = arguments.map { expressions.value(of: $0.value) }
+        let checked = arguments.map { $0.uncheckedValue(by: expressions) }
         let values = checked.compactMap { $0 }
         // An argument that failed was reported, and without it no candidate can be picked. The other arguments'
         // literals are settled to their default types, for their own errors.
@@ -228,11 +252,11 @@ struct CallChecker {
         let remaining = remaining(of: candidates, passing: labels, values)
         // No candidate fits, which is reported with the arguments' types.
         guard !remaining.isEmpty else {
-            reportNoMatch(of: candidates[0].name, labels: labels, values: values, in: range)
+            reportNoMatch(of: name, labels: labels, values: values, in: range)
             return nil
         }
         // Where several fit and none of them is the call's, the arguments' literals are settled for their own errors.
-        guard let chosen = chosen(among: remaining, for: values, in: range) else {
+        guard let chosen = chosen(among: remaining, named: name, for: values, in: range) else {
             expressions.reportSettlingErrors(of: values)
             return nil
         }
@@ -245,8 +269,9 @@ struct CallChecker {
     }
 
     /// The one of `remaining`, the candidates that `values` fit, that the call reaches. Reports a call that several
-    /// fit, unless one of them failed, which was reported where it is declared.
-    private func chosen(among remaining: [Signature], for values: [CheckedValue], in range: SourceRange) -> Signature? {
+    /// fit, naming them as `name`, unless one of them failed, which was reported where it is declared.
+    private func chosen(among remaining: [Signature], named name: String, for values: [CheckedValue],
+                        in range: SourceRange) -> Signature? {
         // No candidate needs a conversion, so one that alone remains is the call's.
         if remaining.count == 1 { return remaining[0] }
 
@@ -264,7 +289,7 @@ struct CallChecker {
         }
 
         // Otherwise an untyped argument fits more than one of the functions the code declares.
-        errors.report(.ambiguousCall(name: remaining[0].name), at: range)
+        errors.report(.ambiguousCall(name: name), at: range)
         return nil
     }
 
@@ -275,10 +300,10 @@ struct CallChecker {
         let labeled = candidates.filter { $0.takesLabels(labels) }
         // Keep those that the typed arguments fit, so that an untyped argument is offered only the parameters of the
         // candidates the typed ones leave.
-        let typedFit = labeled.filter { $0.takes(values, where: { $0.type != nil }) }
+        let typedFit = labeled.filter { $0.takes(values, in: declarations, where: { $0.type != nil }) }
         // Each untyped argument takes each remaining candidate's parameter type, and a candidate it doesn't fit drops
         // out.
-        return typedFit.filter { $0.takes(values, where: { $0.type == nil }) }
+        return typedFit.filter { $0.takes(values, in: declarations, where: { $0.type == nil }) }
     }
 
     /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an
@@ -293,9 +318,9 @@ struct CallChecker {
     }
 
     /// Checks the values of `arguments` for their own errors, where no function's parameters take them.
-    private func checkValues(of arguments: [Argument]) {
+    private func checkValues(of arguments: [some CallArgument]) {
         for argument in arguments {
-            _ = expressions.check(argument.value)
+            argument.reportErrors(by: expressions)
         }
     }
 
