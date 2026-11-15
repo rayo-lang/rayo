@@ -7,8 +7,8 @@ public struct CheckedExpr: Sendable {
 }
 
 public indirect enum CheckedExprKind: Sendable {
-    case intLiteral(Int64)
-    case uintLiteral(UInt64)
+    /// An integer literal's value, and the integer type, the expression's, that holds it.
+    case integerLiteral(Int128, ScalarType)
     case boolLiteral(Bool)
     /// The value of a place that the source writes on its own. Lowering decides whether its position reads the
     /// value, or moves it out of the place.

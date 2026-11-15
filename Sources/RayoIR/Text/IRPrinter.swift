@@ -163,8 +163,9 @@ public enum IRPrinter {
 
     private static func text(of operand: Operand) -> String {
         switch operand {
-        case .constant(.int(let value)): "\(value)"
-        case .constant(.uint(let value)): "uint \(value)"
+        // An Int is written on its own, and an integer of another type after its type's name.
+        case .constant(.integer(let value, .int)): "\(value)"
+        case .constant(.integer(let value, let type)): "\(type) \(value)"
         case .constant(.bool(let value)): "\(value)"
         case .read(let place, let range): "read \(text(of: place)) \(text(of: range))"
         case .move(let place, let range): "move \(text(of: place)) \(text(of: range))"

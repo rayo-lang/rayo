@@ -41,14 +41,13 @@ public enum Operand: Equatable, Sendable {
 
 /// A value written into the IR itself, an integer or a Boolean, as a literal in the source gives it.
 public enum Constant: Equatable, Sendable {
-    case int(Int64)
-    case uint(UInt64)
+    /// An integer, and the integer type that holds it.
+    case integer(Int128, ScalarType)
     case bool(Bool)
 
     public var type: RayoType {
         switch self {
-        case .int: .int
-        case .uint: .uint
+        case .integer(_, let type): .scalar(type)
         case .bool: .bool
         }
     }

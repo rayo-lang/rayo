@@ -111,7 +111,7 @@ public struct CheckedPrinter: ~Copyable {
     private mutating func write(_ expression: CheckedExpr, depth: Int) {
         line("\(head(of: expression.kind)): \(expression.type) \(text(of: expression.range))", depth)
         switch expression.kind {
-        case .intLiteral, .uintLiteral, .boolLiteral:
+        case .integerLiteral, .boolLiteral:
             break
         case .place(let place), .copy(let place), .arrayCount(let place, _):
             write(place, depth: depth + 1)
@@ -133,11 +133,10 @@ public struct CheckedPrinter: ~Copyable {
         }
     }
 
-    /// What an expression of `kind` does, without the expressions it holds, such as `binary add` or `int 3`.
+    /// What an expression of `kind` does, without the expressions it holds, such as `binary add` or `integer 3`.
     private func head(of kind: CheckedExprKind) -> String {
         switch kind {
-        case .intLiteral(let value): "int \(value)"
-        case .uintLiteral(let value): "uint \(value)"
+        case .integerLiteral(let value, _): "integer \(value)"
         case .boolLiteral(let value): "bool \(value)"
         case .place: "value"
         case .copy: "copy"

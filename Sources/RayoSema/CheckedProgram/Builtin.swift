@@ -1,25 +1,28 @@
-/// A function of the prelude whose code the compiler gives, in place of a body written in Rayo. Every built-in is one
-/// of the cases.
+/// A function of the prelude whose code the compiler gives, in place of a body written in Rayo. Each built-in takes
+/// scalar types, so a new scalar type gets its built-ins from `allCases` with no new case.
 public enum Builtin: CaseIterable, Hashable, Sendable {
-    /// `print(_: Int)`, which writes the integer and a newline to standard output.
-    case printInt
-    /// `print(_: UInt)`, which writes the integer in decimal and a newline to standard output.
-    case printUInt
-    /// `print(_: Bool)`, which writes `true` or `false` and a newline to standard output.
-    case printBool
-    /// `Int(_: UInt)`, which gives the Int of the UInt's value. A value above `Int.max` panics where overflow checks
-    /// are on, and keeps its bits, which give a negative Int, where they are off.
-    case intFromUInt
-    /// `UInt(_: Int)`, which gives the UInt of the Int's value. A negative value panics where overflow checks are on,
-    /// and keeps its bits, which give a UInt above `Int.max`, where they are off.
-    case uintFromInt
+    /// `print(_: T)`, which writes the value and a newline to standard output: an integer in decimal, and a Bool as
+    /// `true` or `false`.
+    case print(ScalarType)
+    /// `T(_: U)`, which gives the value of `source`, a `U`, as a `target`, a `T`. A value that `target` can't hold
+    /// panics where overflow checks are on, and keeps the low bits that fit where they are off.
+    case conversion(from: ScalarType, to: ScalarType)
+
+    /// Every built-in the prelude declares: a `print` of each scalar type, then each type's conversions, from each
+    /// type in turn.
+    public static var allCases: [Builtin] {
+        let prints = ScalarType.prelude.map(Builtin.print)
+        let conversions = ScalarType.prelude.flatMap { target in
+            ScalarType.prelude.filter(target.converts(from:)).map { Builtin.conversion(from: $0, to: target) }
+        }
+        return prints + conversions
+    }
 
     /// Where the built-in's name lives in the prelude.
     var name: BuiltinName {
         switch self {
-        case .printInt, .printUInt, .printBool: .function("print")
-        case .intFromUInt: .initializer(of: .int)
-        case .uintFromInt: .initializer(of: .uint)
+        case .print: .function("print")
+        case .conversion(_, let target): .initializer(of: .scalar(target))
         }
     }
 
@@ -32,9 +35,7 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
     /// The parameters, in order, each with the label a call passes its argument with, or nil where it passes none.
     var parameters: [(label: String?, type: RayoType)] {
         switch self {
-        case .printInt, .uintFromInt: [(nil, .int)]
-        case .printUInt, .intFromUInt: [(nil, .uint)]
-        case .printBool: [(nil, .bool)]
+        case .print(let scalar), .conversion(let scalar, _): [(nil, .scalar(scalar))]
         }
     }
 
@@ -44,9 +45,8 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
 
     public var result: RayoType {
         switch self {
-        case .printInt, .printUInt, .printBool: .void
-        case .intFromUInt: .int
-        case .uintFromInt: .uint
+        case .print: .void
+        case .conversion(_, let target): .scalar(target)
         }
     }
 }

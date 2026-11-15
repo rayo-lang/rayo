@@ -168,20 +168,18 @@ indirect enum UntypedValue {
     /// `type`, reporting it where `type` can't hold its value.
     private static func literal(_ magnitude: UInt64, isNegative: Bool, as type: RayoType, named typeName: TypeName,
                                 at range: SourceRange, reporting errors: ErrorList) -> CheckedExpr? {
-        // Find the literal's value among the type's values.
-        let kind: CheckedExprKind? = switch type {
-        case .int: int(magnitude, isNegative: isNegative).map(CheckedExprKind.intLiteral)
-        case .uint: uint(magnitude, isNegative: isNegative).map(CheckedExprKind.uintLiteral)
-        case .bool, .void, .structure, .array:
+        // Only an integer type takes an integer literal, which fits where its value is among the type's values.
+        guard case .scalar(let scalar) = type, let values = scalar.literalRange else {
             preconditionFailure("an integer literal settles only to an integer type")
         }
+        let value = isNegative ? -Int128(magnitude) : Int128(magnitude)
 
         // A literal the type can't hold is reported.
-        guard let kind else {
+        guard values.contains(value) else {
             errors.report(.literalDoesntFit(type: typeName), at: range)
             return nil
         }
-        return CheckedExpr(kind: kind, type: type, range: range)
+        return CheckedExpr(kind: .integerLiteral(value, scalar), type: type, range: range)
     }
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
@@ -195,19 +193,5 @@ indirect enum UntypedValue {
         // An operand that failed was reported.
         guard let left, let right else { return nil }
         return CheckedExpr(kind: .binary(op, left, right), type: type, range: range)
-    }
-
-    /// The Int that a literal of `magnitude`, negated where `isNegative`, has, or nil where no Int holds it.
-    private static func int(_ magnitude: UInt64, isNegative: Bool) -> Int64? {
-        // A positive literal fits where its digits do.
-        guard isNegative else { return Int64(exactly: magnitude) }
-        // A negative literal fits one value more than a positive one: `Int.min`, whose magnitude no Int holds.
-        return magnitude == Int64.min.magnitude ? Int64.min : Int64(exactly: magnitude).map { -$0 }
-    }
-
-    /// The UInt that a literal of `magnitude`, negated where `isNegative`, has, or nil where no UInt holds it.
-    private static func uint(_ magnitude: UInt64, isNegative: Bool) -> UInt64? {
-        // Every positive literal fits, since its digits fit in 64 bits, and of the negative ones only `-0` does.
-        isNegative && magnitude != 0 ? nil : magnitude
     }
 }

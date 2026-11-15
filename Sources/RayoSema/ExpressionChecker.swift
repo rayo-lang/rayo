@@ -316,8 +316,8 @@ struct ExpressionChecker {
 
         // An integer literal is known as the program is checked, so one past the array's end is an error here; any
         // other index is checked as the program runs.
-        if case .uintLiteral(let value) = index.kind, value >= count {
-            errors.report(.indexOutOfRange(index: value, type: typeName(of: holder.type)), at: index.range)
+        if case .integerLiteral(let value, _) = index.kind, value >= count {
+            errors.report(.indexOutOfRange(index: UInt64(value), type: typeName(of: holder.type)), at: index.range)
             return nil
         }
 
@@ -425,8 +425,8 @@ struct ExpressionChecker {
     /// Whether `==` and `!=` compare values of `type`.
     private func isComparable(_ type: RayoType) -> Bool {
         switch type {
-        // Integers and Bools compare.
-        case .int, .uint, .bool: true
+        // Every scalar compares: an integer or a Bool.
+        case .scalar: true
         // A Void value holds nothing to compare, and a struct and an array have no `==`.
         case .void, .structure, .array: false
         }

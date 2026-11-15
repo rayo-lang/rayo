@@ -27,12 +27,16 @@ struct OperatorModule: ~Copyable {
     /// it has made them.
     private var operators: OperatorEmitter?
     /// The type of the integers the function that `define` is defining computes on.
-    private var integerType = RayoType.int
+    private var integerType = ScalarType.int
 
     init(for build: Build) throws(LLVMError) {
         programModule = try ProgramModule(for: build)
         types = LLVMTypes(TypeTable(structs: []), in: programModule.emitter.context)
     }
+
+    /// The LLVM types of an Int, which every function takes and returns, and of a Bool.
+    private var int64: AnyIntegerType { types.format(of: .int).type }
+    private var bool: AnyIntegerType { types.format(of: .bool).type }
 
     private var program: ProgramEmitter {
         borrow { programModule.emitter }
@@ -51,7 +55,7 @@ struct OperatorModule: ~Copyable {
         _ expression: (borrowing OperatorModule, AnyValue, AnyValue) throws -> AnyValue,
     ) rethrows -> (function: Function, givesBool: Bool) {
         // Make the function, and its operators.
-        let function = beginFunction(name, taking: [types.int64, types.int64])
+        let function = beginFunction(name, taking: [int64, int64])
         operators = OperatorEmitter(into: function, types: types)
         integerType = operands == .uints ? .uint : .int
 
@@ -72,7 +76,7 @@ struct OperatorModule: ~Copyable {
     func defineCall(_ name: String, of function: Function, _ left: Int64, _ right: Int64) -> Function {
         let caller = beginFunction(name, taking: [])
         // Every operator gives a value, so the call does too.
-        let result = program.builder.call(function, [types.int64.constant(left), types.int64.constant(right)])!
+        let result = program.builder.call(function, [int64.constant(left), int64.constant(right)])!
         program.builder.return(result)
         return caller
     }
@@ -91,7 +95,7 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `left op right`, where `right` is a constant of the function's integer type, given by its bits.
     func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
-        try self(op, left, types.int64.constant(right).anyValue)
+        try self(op, left, int64.constant(right).anyValue)
     }
 
     /// Emits `op operand`, on an integer of the function's integer type or a Bool.
@@ -99,19 +103,22 @@ struct OperatorModule: ~Copyable {
         try operators!.emit(op, on: operand, of: type(of: operand), at: Self.range, in: program)
     }
 
-    /// Emits the conversion of `value`, an integer of the function's integer type, to the other integer type.
-    func convert(_ value: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emitConversion(of: value, at: Self.range, in: program)
+    /// Emits the conversion of `value`, an integer of the function's integer type, to `target`, Int or UInt, or, where
+    /// none is given, to the other of the two.
+    func convert(_ value: AnyValue, to target: ScalarType? = nil) throws(LLVMError) -> AnyValue {
+        let other: ScalarType = integerType == .int ? .uint : .int
+        return try operators!.emitConversion(of: value, from: integerType, to: target ?? other, at: Self.range,
+                                             in: program)
     }
 
     /// The Rayo type of `value`, an integer of the function's integer type or a Bool.
     private func type(of value: AnyValue) -> RayoType {
-        IntValue<I1>(value) == nil ? integerType : .bool
+        IntValue<I1>(value) == nil ? .scalar(integerType) : .bool
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.
     private func beginFunction(_ name: String, taking parameters: [any TypeHandle]) -> Function {
-        let type = program.context.functionType(returning: types.int64, taking: parameters)
+        let type = program.context.functionType(returning: int64, taking: parameters)
         let function = program.module.addFunction(named: name, type: type)
         program.builder.position(atEndOf: program.context.appendBlock(named: "entry", to: function))
         return function
@@ -121,11 +128,11 @@ struct OperatorModule: ~Copyable {
     private func narrowed(_ parameter: IntValue<I64>, to operands: Operands) -> AnyValue {
         // A Bool is the Int's low bit.
         guard operands == .bools else { return parameter.anyValue }
-        return program.builder.truncate(parameter, to: types.bool).anyValue
+        return program.builder.truncate(parameter, to: bool).anyValue
     }
 
     /// `value`, a Bool, as the Int 0 or 1.
     private func widened(_ value: IntValue<I1>) -> AnyValue {
-        program.builder.zeroExtend(value, to: types.int64).anyValue
+        program.builder.zeroExtend(value, to: int64).anyValue
     }
 }

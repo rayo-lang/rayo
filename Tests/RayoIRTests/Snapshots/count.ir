@@ -9,12 +9,12 @@ bb0:
   declare %0
   %0 @2:9-2:10 = array of Int(1, 2) @2:13-2:19
   _ = operand read %0 @3:11-3:18 @3:11-3:18
-  _ = call builtin "print(_: UInt)"(uint 2) @3:5-3:19
+  _ = call builtin "print(_: UInt)"(UInt 2) @3:5-3:19
   %1 @4:11-4:17 = call "made()"() @4:11-4:17
   %3 @4:18-4:25 = call "index()"() @4:18-4:25
   %2 @4:18-4:25 = index read %3 @4:18-4:25 below 2 @4:18-4:25
   _ = operand read %1[%2] @4:11-4:32 @4:11-4:32
-  _ = call builtin "print(_: UInt)"(uint 3) @4:5-4:33
+  _ = call builtin "print(_: UInt)"(UInt 3) @4:5-4:33
   return
 }
 
@@ -33,7 +33,7 @@ bb1:
 
 func "index()"() -> UInt {
 bb0:
-  return uint 1
+  return UInt 1
 bb1:
   unreachable
 }

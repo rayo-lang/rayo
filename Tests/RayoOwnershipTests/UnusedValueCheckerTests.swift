@@ -172,9 +172,9 @@ struct UnusedValueCheckerTests {
             bb0:
               %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
               %7 @2:1-2:1 = array of Hit(read %4 @1:1-1:1, read %4 @1:1-1:1) @1:1-1:1
-              %8 @1:1-1:1 = index uint 0 below 2 @1:1-1:1
+              %8 @1:1-1:1 = index UInt 0 below 2 @1:1-1:1
               %7[%8] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
-              %8 @1:1-1:1 = index uint 1 below 2 @1:1-1:1
+              %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %7[%8].0 @2:3-2:3) @1:1-1:1
               return
             """

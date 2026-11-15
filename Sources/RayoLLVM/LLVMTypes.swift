@@ -6,8 +6,6 @@ import RayoSema
 struct LLVMTypes {
     /// The program's structs, which the types follow.
     let table: TypeTable
-    let int64: IntegerType<I64>
-    let bool: IntegerType<I1>
     private let int8: IntegerType<I8>
     private let void: AnyType
     /// Makes each struct's LLVM type when it is first needed.
@@ -17,18 +15,20 @@ struct LLVMTypes {
 
     init(_ table: TypeTable, in context: borrowing Context) {
         self.table = table
-        int64 = context.integerType(I64.self)
-        bool = context.integerType(I1.self)
         int8 = context.integerType(I8.self)
         void = context.voidType
         maker = context.typeMaker
     }
 
+    /// How LLVM holds a value of `scalar`.
+    func format(of scalar: ScalarType) -> NumberFormat {
+        NumberFormat(of: scalar, with: maker)
+    }
+
     /// The LLVM type that holds a value of `type`, or that a function returns when it returns nothing.
     func llvmType(_ type: RayoType) -> AnyType {
         switch type {
-        case .int, .uint: int64.anyType
-        case .bool: bool.anyType
+        case .scalar(let scalar): format(of: scalar).type.anyType
         case .void: void
         case .structure: llvmStruct(type).anyType
         // An LLVM array's elements lie end to end, as each element type's size apart, which is its layout's size.
@@ -63,7 +63,7 @@ struct LLVMTypes {
     func scalars(of type: RayoType) -> [Scalar] {
         switch type {
         // An integer or a Bool is a scalar of its own.
-        case .int, .uint, .bool:
+        case .scalar:
             [Scalar(steps: [], type: type)]
 
         // Void holds nothing.
@@ -88,7 +88,7 @@ struct LLVMTypes {
     /// array of any count, since it counts an element's scalars once.
     func scalarCount(of type: RayoType) -> Int {
         switch type {
-        case .int, .uint, .bool: 1
+        case .scalar: 1
         case .void: 0
         case .structure: table.fields(of: type).reduce(0) { $0.addingSaturated(scalarCount(of: $1.type)) }
         case .array(let count, let element): count.multipliedSaturated(by: scalarCount(of: element))

@@ -21,9 +21,10 @@ struct Declarations {
     /// The structs that can be laid out, which lay out every type that holds them; nil until the structs are
     /// checked, while their fields' types are resolved.
     private var layouts: TypeTable?
-    private static let preludeTypes: [String: RayoType] = [
-        "Int": .int, "UInt": .uint, "Bool": .bool, "Void": .void,
-    ]
+    /// The types the prelude declares, each scalar type and Void, by their names.
+    private static let preludeTypes = Dictionary(
+        uniqueKeysWithValues: (ScalarType.prelude.map(RayoType.scalar) + [.void]).map { ($0.description, $0) },
+    )
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
     init(names: TopLevelNames) {
@@ -139,7 +140,7 @@ struct Declarations {
         // A struct is the file's own, so its name alone tells it apart.
         case .structure: .named(name)
         // A prelude type is shadowed where a type or a function of the file has its name.
-        case .int, .uint, .bool, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
+        case .scalar, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
         // An array is named by its count and its element's name.
         case .array(let count, let element): .named("[\(count) of \(typeName(of: element))]")
         }

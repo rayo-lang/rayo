@@ -109,10 +109,23 @@ struct UIntTests {
     }
 
     @Test(arguments: [
-        ("let u: UInt = 1\nprint(UInt(u))", ErrorCode.typeMismatch(expected: "Int", found: "UInt")),
-        ("let i = 1\nprint(Int(i))", .typeMismatch(expected: "UInt", found: "Int")),
+        "let u: UInt = 1\nprint(UInt(u))",
+        "let i = 1\nprint(Int(i))",
+        "let i: Int = Int(1 + 2)\nprint(i)",
+        "let u: UInt = UInt(1 + 2)\nprint(u)",
     ])
-    func `a conversion takes the other integer type`(body: String, expected: ErrorCode) {
-        #expect(errors(mainSource(body)) == [expected])
+    func `a conversion takes a value of its own type, and an untyped one as its type's default`(body: String) {
+        #expect(errors(mainSource(body)) == [])
+    }
+
+    @Test func `a conversion takes no Bool`() {
+        let expected = ErrorCode.noMatchingFunction(name: "Int", arguments: "Bool")
+        #expect(errors(mainSource("print(Int(true))")) == [expected])
+    }
+
+    @Test func `'Bool' has no initializer, so a call of it reports a missing member`() {
+        let (codes, covered) = codesAndCoverage(inMain: "let b = Bool(true)")
+        #expect(codes == [.noSuchMember(type: "Bool", name: "init")])
+        #expect(covered == ["Bool"])
     }
 }

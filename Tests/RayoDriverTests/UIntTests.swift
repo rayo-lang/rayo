@@ -79,8 +79,10 @@ struct UIntTests {
         ("i: Int", "UInt(i)", "9223372036854775807"),
         ("u: UInt", "Int(u)", "9223372036854775807"),
         ("i: Int", "UInt(i)", "0"),
+        ("i: Int", "Int(i)", "-9223372036854775808"),
+        ("u: UInt", "UInt(u)", "18446744073709551615"),
     ])
-    func `a conversion between Int and UInt keeps a value that fits`(
+    func `a conversion between integer types keeps a value that fits`(
         parameter: String, expression: String, value: String,
     ) {
         let source = "func main() { show(\(value)) }\nfunc show(_ \(parameter)) { print(\(expression)) }"
