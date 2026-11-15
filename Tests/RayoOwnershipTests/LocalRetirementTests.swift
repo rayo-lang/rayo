@@ -107,7 +107,7 @@ struct LocalRetirementTests {
             bb0:
               declare %0
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call builtin "print(_: Int)"(a0) @1:1-1:1
               return
             """
@@ -115,7 +115,7 @@ struct LocalRetirementTests {
             bb0:
               declare %0
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call builtin "print(_: Int)"(a0) @1:1-1:1
               end a0
               retire %0

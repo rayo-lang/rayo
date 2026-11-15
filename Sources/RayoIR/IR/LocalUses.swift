@@ -23,10 +23,6 @@ public struct LocalUses {
         case .end(let id):
             [accessedLocal(of: id)]
 
-        // A dependence ties the value at its place to the access, whose place must outlast the value's uses.
-        case .depend(let place, let id):
-            Self.locals(of: place) + [accessedLocal(of: id)]
-
         case .declare, .retire:
             []
         }

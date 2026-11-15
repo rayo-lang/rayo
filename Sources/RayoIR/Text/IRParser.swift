@@ -17,8 +17,8 @@ public struct IRParser: ~Copyable {
     var blockReferences: [(block: BlockID, token: IRToken)] = []
     /// The accesses the function being read begins so far.
     var begunAccesses: Set<AccessID> = []
-    /// Each access the function being read passes, ends or depends on, and the token that names it, to check once its
-    /// blocks are read.
+    /// Each access the function being read passes or ends, and the token that names it, to check once its blocks are
+    /// read.
     var accessReferences: [(access: AccessID, token: IRToken)] = []
 
     /// Starts at the first of `tokens`, with the structs and functions they declare at the top level numbered in

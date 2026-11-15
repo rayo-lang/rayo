@@ -61,8 +61,8 @@ struct AccessConflicts {
             guard let destination else { return }
             check(.change, of: destination.place, at: destination.range, against: liveAfter)
 
-        // A declaration, a retirement, the end of an access and a dependence reach no place.
-        case .declare, .retire, .end, .depend:
+        // A declaration, a retirement and the end of an access reach no place.
+        case .declare, .retire, .end:
             break
         }
     }

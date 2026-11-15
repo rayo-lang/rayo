@@ -82,7 +82,7 @@ bb15:
   declare %12
   %12 @11:11-11:16 = add checked read %2 @11:11-11:12, read %4 @11:15-11:16 @11:11-11:16
   %11 @11:11-11:22 = add checked read %12 @11:11-11:16, read %3.0 @11:19-11:22 @11:11-11:22
-  begin a0 read static %11 @11:11-11:22
+  begin a0 read %11 @11:11-11:22
   _ = call builtin "print(_: Int)"(a0) @11:5-11:23
   return
 bb16:

@@ -24,7 +24,7 @@ struct LocalUseState: DataflowState {
         case .declare(let local), .retire(let local):
             locals.remove(local)
 
-        case .compute, .begin, .end, .depend:
+        case .compute, .begin, .end:
             locals.formUnion(uses.locals(usedBy: statement))
         }
     }

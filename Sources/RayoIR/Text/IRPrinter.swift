@@ -28,7 +28,7 @@ import RayoSource
 ///   branch read %1 @3:4-3:9, bb1, bb2
 /// bb1:
 ///   retire %1
-///   begin a0 read static %0 @4:11-4:12
+///   begin a0 read %0 @4:11-4:12
 ///   _ = call "show(_: Int)"(a0) @4:6-4:13
 ///   end a0
 ///   retire %0
@@ -96,14 +96,12 @@ public enum IRPrinter {
             "begin \(text(of: id)) \(text(of: access))"
         case .end(let id):
             "end \(text(of: id))"
-        case .depend(let place, let id):
-            "depend \(text(of: place)) on \(text(of: id))"
         }
     }
 
-    /// What an access does, how it is enforced, and the place it reaches, such as `read static %0.1 @2:3-2:6`.
+    /// What an access does, and the place it reaches, such as `read %0.1 @2:3-2:6`.
     private static func text(of access: Access) -> String {
-        "\(access.kind.rawValue) \(access.enforcement.rawValue) \(text(of: access.place)) \(text(of: access.range))"
+        "\(access.kind.rawValue) \(text(of: access.place)) \(text(of: access.range))"
     }
 
     /// An access as its number, such as `a2`.

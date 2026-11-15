@@ -114,10 +114,8 @@ struct FunctionEmitter {
         case .compute(let destination, let rvalue, let range):
             emit(rvalue, into: destination?.place, at: range, in: program)
 
-        // A static access is its place's address, found once where it begins. Only an object's value takes a dynamic
-        // access, and the IR has no objects.
+        // An access is its place's address, found once where it begins.
         case .begin(let id, let access):
-            guard access.enforcement == .static else { preconditionFailure("the IR has no objects") }
             accesses[id] = BegunAccess(place: access.place, address: address(of: access.place, with: program.builder))
 
         // A declaration starts the life of its local's slot, and a retirement ends it, so that slots whose lives don't
@@ -127,9 +125,9 @@ struct FunctionEmitter {
         case .retire(let local) where local != returned:
             program.builder.endLife(of: places[local.index])
 
-        // The local the function returns lies in its caller's slot, whose life the caller marks. The end of a static
-        // access, and a dependence, emit nothing: only the ownership stage looks at them.
-        case .declare, .retire, .end, .depend:
+        // The local the function returns lies in its caller's slot, whose life the caller marks. The end of an access
+        // emits nothing, since an access is only its place's address.
+        case .declare, .retire, .end:
             break
         }
     }

@@ -42,7 +42,7 @@ bb5:
   %7 @10:7-10:28 = operand read %4 @10:25-10:26 @10:25-10:26
   goto bb6
 bb6:
-  begin a0 read static %7 @10:7-10:28
+  begin a0 read %7 @10:7-10:28
   _ = call builtin "print(_: Int)"(a0) @10:1-10:29
   return
 }

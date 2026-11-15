@@ -96,7 +96,7 @@ private let uncheckedIndices = [
         local: "temp %1: UInt",
         store: """
             %1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
-              begin a0 modify static %1 @1:1-1:2
+              begin a0 modify %1 @1:1-1:2
               _ = call "change(_: UInt)"(a0) @1:1-1:2
             """,
         message: "the IR indexes an array of 2 elements at %1, which it changes without checking it is below 2",

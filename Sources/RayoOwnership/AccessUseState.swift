@@ -1,10 +1,9 @@
 import RayoIR
 
-/// What code after a point uses: the accesses it passes or makes a value depend on, and the values it reads. An
-/// access is live at the point when code after it uses the access, or reads a value that depends on it.
+/// What code after a point uses: the accesses it passes, and the values it reads. An access is live at the point when
+/// code after it uses the access.
 struct AccessUseState: DataflowState {
-    /// The accesses that some code after the point passes to a call or makes a value depend on, before any statement
-    /// begins them again.
+    /// The accesses that some code after the point passes to a call, before any statement begins them again.
     private(set) var accesses: Set<AccessID> = []
     /// The values that some code after the point reads.
     private(set) var values = LivenessState()
@@ -36,10 +35,6 @@ struct AccessUseState: DataflowState {
         // Code before an access begins can't use it, whatever the code after it does.
         case .begin(let id, _):
             accesses.remove(id)
-
-        // A dependence uses the access, which must still be live where a value comes to depend on it.
-        case .depend(_, let id):
-            accesses.insert(id)
 
         case .declare, .retire, .end:
             break

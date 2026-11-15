@@ -1,7 +1,7 @@
 import RayoIR
 
-/// Statements that run on one edge from a block to a successor, such as the ends of what is held as the edge leaves
-/// the block and not as it enters the successor.
+/// Statements that run on one edge from a block to a successor, such as the ends of the accesses live as the edge
+/// leaves the block and not as it enters the successor.
 struct EdgeStatements {
     var source: BlockID
     /// The edge's place among `source`'s successors.

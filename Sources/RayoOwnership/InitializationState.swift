@@ -62,8 +62,8 @@ struct InitializationState: DataflowState {
         case .begin(_, let access):
             visitUse(of: access.place, at: access.range, use: use)
 
-        // Ending an access, or depending on one, uses no place.
-        case .end, .depend:
+        // Ending an access uses no place.
+        case .end:
             break
         }
     }
