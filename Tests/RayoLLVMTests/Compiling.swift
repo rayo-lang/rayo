@@ -41,6 +41,11 @@ func llvmTool(_ tool: String, _ arguments: [String]) throws -> String {
     return written
 }
 
+/// The names of the symbols `llvm-nm` lists in `objectCode`, given `options`.
+func symbols(_ options: [String], in objectCode: [UInt8]) throws -> [String] {
+    try llvmTool("llvm-nm", options + ["--format=just-symbols"], on: objectCode).split(separator: "\n").map(String.init)
+}
+
 #if os(macOS)
 let hostFormat = "Mach-O"
 #elseif os(Linux)

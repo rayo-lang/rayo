@@ -59,8 +59,7 @@ struct StackSafetyTests {
         #if os(Windows)
         // Windows probes a frame by a call to `__chkstk`, which touches each of its pages in turn, so the object
         // needs that function from the C runtime.
-        let undefined = try llvmTool("llvm-nm", ["--undefined-only", "--format=just-symbols"], on: objectCode)
-        #expect(undefined.split(separator: "\n").contains("__chkstk"))
+        #expect(try symbols(["--undefined-only"], in: objectCode).contains("__chkstk"))
         #else
         let disassembly = try llvmTool("llvm-objdump", ["--disassemble"], on: objectCode)
         #expect(disassembly.contains(pageProbe))

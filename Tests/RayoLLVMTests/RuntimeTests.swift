@@ -143,11 +143,6 @@ private func declaredTypes(in context: borrowing Context) -> [String: String] {
     })
 }
 
-/// The names of the symbols `llvm-nm` lists in `objectCode`, given `options`.
-private func symbols(_ options: [String], in objectCode: [UInt8]) throws -> [String] {
-    try llvmTool("llvm-nm", options + ["--format=just-symbols"], on: objectCode).split(separator: "\n").map(String.init)
-}
-
 private extension String {
     /// The name a C program gives this symbol, without the underscore Mach-O puts before every C name.
     var cSymbol: String {
