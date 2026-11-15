@@ -3,7 +3,7 @@ import LLVM
 import RayoLLVMTestSupport
 
 /// A module run in this process, with a call to the runtime's `rayo.panic` ending the call that reached it instead of
-/// the process.
+/// the process, and each call to one of the runtime's print functions adding to the call's output instead of printing.
 struct InProcessJIT: ~Copyable {
     /// What a call came to: the value it returned, or the message of the panic that ended it.
     enum Call {
@@ -11,13 +11,23 @@ struct InProcessJIT: ~Copyable {
         case panicked(String)
     }
 
+    /// What a run of a program came to: the text it printed, and the message of the panic that ended it, if one did.
+    struct Run: Equatable {
+        var printed: String
+        var panic: String?
+    }
+
     private let jit: JIT
 
-    /// Takes `module`, which leaves `rayo.panic` undefined.
+    /// Takes `module`, which leaves the runtime's functions undefined.
     init(running module: consuming Module) throws(LLVMError) {
-        // Run `module` in a JIT where `rayo.panic` is the stand-in that ends a call with its message.
+        // Run `module` in a JIT where `rayo.panic` is the stand-in that ends a call with its message, and each print
+        // function is the stand-in that adds to the call's output.
         let jit = try JIT()
         try jit.define(RuntimeFunction.panic.symbol, at: rayo_test_panic_address())
+        try jit.define(RuntimeFunction.print(.int).symbol, at: rayo_test_print_int_address())
+        try jit.define(RuntimeFunction.print(.uint).symbol, at: rayo_test_print_uint_address())
+        try jit.define(RuntimeFunction.print(.bool).symbol, at: rayo_test_print_bool_address())
         try jit.add(module)
         self.jit = jit
     }
@@ -30,9 +40,26 @@ struct InProcessJIT: ~Copyable {
 
         // A call that returned comes to its value.
         guard outcome.panicked else { return .returned(outcome.value) }
+        return .panicked(Self.message(of: outcome))
+    }
 
+    /// Runs the program's entry function, `rayo.main`, which takes and returns nothing.
+    func runMain() throws(LLVMError) -> Run {
+        // Compile the entry function, and call it where a panic ends the call.
+        let address = try jit.address(of: RuntimeFunction.main.symbol)
+        let outcome = rayo_run_catching_panic(unsafeBitCast(address, to: (@convention(c) () -> Void).self))
+
+        // The output is a fixed buffer, of which the run filled only the start.
+        let printed = withUnsafeBytes(of: outcome.output) { output in
+            String(decoding: output.prefix(Int(outcome.outputLength)), as: UTF8.self)
+        }
+        return Run(printed: printed, panic: outcome.panicked ? Self.message(of: outcome) : nil)
+    }
+
+    /// The message of the panic that ended the call `outcome` records.
+    private static func message(of outcome: RayoCaughtCall) -> String {
         // A panic's message lives in the JIT's memory, so it is copied out while the JIT still holds it.
         let message = UnsafeRawBufferPointer(start: outcome.message, count: Int(outcome.length))
-        return .panicked(String(decoding: message, as: UTF8.self))
+        return String(decoding: message, as: UTF8.self)
     }
 }

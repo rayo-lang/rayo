@@ -24,8 +24,8 @@ static _Thread_local Call *current;
 // Runs `call` on this thread, and records its value once it returns.
 static void run(Call *call) {
     current = call;
-    int64_t value = call->function(call->left, call->right);
-    call->outcome = (RayoCaughtCall){.panicked = false, .value = value};
+    // The output the call printed is in its outcome already, so only its value is set.
+    call->outcome.value = call->function(call->left, call->right);
 }
 
 #ifdef _WIN32
@@ -84,11 +84,76 @@ static _Noreturn void panic(const char *message, int64_t length) {
         abort();
     }
 
-    // A panic inside a call ends that call with its message.
-    current->outcome = (RayoCaughtCall){.panicked = true, .message = message, .length = length};
+    // A panic inside a call ends that call with its message, after the output it printed.
+    current->outcome.panicked = true;
+    current->outcome.message = message;
+    current->outcome.length = length;
     endCall();
 }
 
 const void *rayo_test_panic_address(void) {
     return (const void *)(uintptr_t)&panic;
+}
+
+// Calls the entry function at `main`, which comes as an integer so that the call has the shape of every call under
+// test.
+static int64_t callMain(int64_t main, int64_t unused) {
+    (void)unused;
+    ((void (*)(void))(uintptr_t)main)();
+    return 0;
+}
+
+RayoCaughtCall rayo_run_catching_panic(void (*main)(void)) {
+    return rayo_call_catching_panic(callMain, (int64_t)(uintptr_t)main, 0);
+}
+
+// Adds the `length` bytes at `text` to the output of the call this thread runs.
+static void print(const char *text, int length) {
+    // Only code under test prints, inside a call.
+    if (current == NULL) {
+        fputs("rayo_call_catching_panic: a print outside a call\n", stderr);
+        abort();
+    }
+    // An output past its capacity has nowhere to go.
+    if (length < 0 || current->outcome.outputLength + length > RAYO_TEST_OUTPUT_CAPACITY) {
+        fputs("rayo_call_catching_panic: a call printed more than its output holds\n", stderr);
+        abort();
+    }
+    for (int index = 0; index < length; index++) {
+        current->outcome.output[current->outcome.outputLength + index] = text[index];
+    }
+    current->outcome.outputLength += length;
+}
+
+// Each stand-in below prints its value as the runtime's print function does, on a line of its own.
+
+static void printInt(int64_t value) {
+    char line[32];
+    print(line, snprintf(line, sizeof line, "%lld\n", (long long)value));
+}
+
+static void printUInt(uint64_t value) {
+    char line[32];
+    print(line, snprintf(line, sizeof line, "%llu\n", (unsigned long long)value));
+}
+
+// The Bool comes as an `i1`, whose caller may leave the bits above the lowest as they were.
+static void printBool(uint32_t value) {
+    if (value & 1) {
+        print("true\n", 5);
+    } else {
+        print("false\n", 6);
+    }
+}
+
+const void *rayo_test_print_int_address(void) {
+    return (const void *)(uintptr_t)&printInt;
+}
+
+const void *rayo_test_print_uint_address(void) {
+    return (const void *)(uintptr_t)&printUInt;
+}
+
+const void *rayo_test_print_bool_address(void) {
+    return (const void *)(uintptr_t)&printBool;
 }
