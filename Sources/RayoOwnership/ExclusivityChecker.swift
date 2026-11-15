@@ -20,7 +20,7 @@ enum ExclusivityChecker {
         let extents = AccessExtents(places, uses: uses)
         let blocks = places.body.blocks.indices.map { BlockID(index: $0) }
         let live = blocks.map { extents.live(in: $0) }
-        let held = zip(blocks, live).map { block, live in live.map { extents.held(in: block, live: $0) } }
+        let held = zip(blocks, live).map { block, blockLive in blockLive.map { extents.held(in: block, live: $0) } }
 
         // Check each block that a path reaches; one that none reaches runs no access.
         var conflicts = AccessConflicts(places: places, accesses: accesses)

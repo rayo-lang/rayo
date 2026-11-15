@@ -29,9 +29,9 @@ struct AccessExtents {
         let points = body.blocks[block.index].statements.count + 2
 
         // Walk back through what later code uses, keeping at each point the accesses it uses and the locals it reads.
-        var used = Array(repeating: (accesses: Set<AccessID>(), readLocals: Set<LocalID>()), count: points)
+        var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: points)
         let reached = uses.walk(block) { point, state in
-            used[point] = (state.accesses, state.values.readLocals)
+            used[point] = LaterUses(accesses: state.accesses, readLocals: state.values.readLocals)
         }
         guard reached else { return nil }
 
@@ -46,6 +46,7 @@ struct AccessExtents {
     /// Of the accesses `live` at each point of `block`, those that every path there has begun. Only they can end
     /// there, since a path that hasn't begun an access has nothing to end.
     func held(in block: BlockID, live: [Set<AccessID>]) -> [Set<AccessID>] {
+        // `live` holds a block that some path reaches, so the walk visits each of its points.
         var held = live
         unbegun.walk(block) { point, state in
             held[point] = live[point].filter { !state.accesses.contains($0) }
@@ -53,12 +54,9 @@ struct AccessExtents {
         return held
     }
 
-    /// The accesses live at a point where later code uses `uses.accesses` and reads values inside `uses.readLocals`,
-    /// and values depend on what `dependencies` holds: those the code uses, those they depend on, and those that the
-    /// values it reads depend on.
-    private static func live(
-        using uses: (accesses: Set<AccessID>, readLocals: Set<LocalID>), dependingOn dependencies: DependencyState,
-    ) -> Set<AccessID> {
+    /// The accesses live at a point where later code does what `uses` holds, and values depend on what `dependencies`
+    /// holds: those the code uses, those they depend on, and those that the values it reads depend on.
+    private static func live(using uses: LaterUses, dependingOn dependencies: DependencyState) -> Set<AccessID> {
         var live = uses.accesses
         for access in uses.accesses {
             live.formUnion(dependencies.dependencies(of: access))
@@ -68,4 +66,10 @@ struct AccessExtents {
         }
         return live
     }
+}
+
+/// What the code after a point uses: the accesses it uses, and the locals it reads a value inside.
+private struct LaterUses {
+    var accesses: Set<AccessID>
+    var readLocals: Set<LocalID>
 }

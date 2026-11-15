@@ -102,8 +102,8 @@ struct OwnershipCheckTests {
         ])
     }
 
-    @Test func `a function of 8000 statements is checked in well under a second`() throws {
-        let program = try program(of: [longFunction(rounds: 2000)] + callees)
+    @Test func `a function of 16000 statements is checked in well under a second`() throws {
+        let program = try program(of: [longFunction(rounds: 4000)] + callees)
 
         let clock = ContinuousClock()
         let start = clock.now
@@ -111,7 +111,7 @@ struct OwnershipCheckTests {
         let elapsed = clock.now - start
 
         #expect(errors.isEmpty)
-        #expect(elapsed < .milliseconds(500))
+        #expect(elapsed < .seconds(1))
     }
 }
 

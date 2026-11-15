@@ -18,9 +18,10 @@ enum UnusedValueChecker {
     private static func unreadParameters(
         of body: IRBody, uses: DataflowResults<AccessUseAnalysis>,
     ) -> [Diagnostic] {
+        // What code reads from the entry on, which every path through the function starts at, is the state at the
+        // first point of the first block.
         var unread: [Diagnostic] = []
         uses.walk(BlockID(index: 0)) { point, state in
-            // What code reads from the entry on, which every path through the function starts at.
             guard point == 0 else { return }
             unread = body.locals.indices.compactMap { index in
                 guard case .source(let name, .parameter(let convention), _, let range) = body.locals[index],

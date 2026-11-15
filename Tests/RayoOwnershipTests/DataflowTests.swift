@@ -6,15 +6,17 @@ import Testing
 struct DataflowTests {
     @Test func `going forward, a block's entry holds what every path into it brings`() throws {
         let results = try solve(EvaluatedOperands(direction: .forward), diamond, result: "Int")
-        #expect(states(of: results, in: 3)?[0] == EvaluatedOperands.State([1, 2, 3]))
-        #expect(states(of: results, in: 3)?[1] == EvaluatedOperands.State([1, 2, 3, 4]))
-        #expect(states(of: results, in: 3)?[2] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
+        let join = try #require(states(of: results, in: 3))
+        #expect(join[0] == EvaluatedOperands.State([1, 2, 3]))
+        #expect(join[1] == EvaluatedOperands.State([1, 2, 3, 4]))
+        #expect(join[2] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
     }
 
     @Test func `going backward, a block's exit holds what every path out of it brings`() throws {
         let results = try solve(EvaluatedOperands(direction: .backward), diamond, result: "Int")
-        #expect(states(of: results, in: 0)?[2] == EvaluatedOperands.State([2, 3, 4, 5]))
-        #expect(states(of: results, in: 0)?[0] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
+        let branch = try #require(states(of: results, in: 0))
+        #expect(branch[2] == EvaluatedOperands.State([2, 3, 4, 5]))
+        #expect(branch[0] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
         #expect(states(of: results, in: 3)?[0] == EvaluatedOperands.State([4, 5]))
     }
 

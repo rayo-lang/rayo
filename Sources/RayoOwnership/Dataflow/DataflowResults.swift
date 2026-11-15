@@ -25,8 +25,8 @@ struct DataflowResults<Analysis: DataflowAnalysis> {
     /// Walks `block` from its boundary in the analysis's direction, and lends `visit` the state at each point in turn,
     /// with the point. Returns whether a state reaches the block; where none does, it visits no point.
     ///
-    /// The walk changes one state in place as it crosses each statement. So `visit` keeps only what it works out from
-    /// a state, never the state itself, or the next statement would copy the whole of it.
+    /// The walk changes one state in place as it crosses each statement. A `visit` that keeps the state itself makes
+    /// the next statement copy the whole of it, so a check keeps only what it works out from each state.
     @discardableResult
     func walk(_ block: BlockID, visit: (_ point: Int, _ state: Analysis.State) -> Void) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
