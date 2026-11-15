@@ -7,7 +7,7 @@ struct MoveTests {
         #expect(diagnostics(source).map(\.code) == [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
-    // A field taken from a `copy` moves out of the copy, so the local or parameter it copies keeps it.
+    // The local or parameter that was copied keeps the field.
     @Test(arguments: [
         "func f() -> Int {\n    let e = E(a: S(n: 1))\n    let s = (copy e).a\n    return e.a.n + s.n\n}",
         "func f(e: E) -> S { (copy e).a }",

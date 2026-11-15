@@ -15,9 +15,9 @@ struct FieldMoveTests {
     func `a field moved out of a local holds its value, and the struct's other fields keep theirs, in both builds`(
         mode: [String],
     ) {
-        // `e` is a `var`, whose other fields are copied, assigned and moved in turn, and `l` a `let`; `copied` moves out
-        // of a copy of `l`, which keeps its own, `l`'s `hp` moves out of the struct inside it, `made`'s `stats` out of a
-        // call's result, and `statsOf` returns a local's.
+        // `e` is a `var`, whose other fields are copied, assigned and moved in turn, and `l` a `let`. `copied` moves
+        // `stats` out of a copy of `l`, and `l` keeps its own. `l`'s `hp` moves out of the struct inside it, `made`'s
+        // `stats` out of a call's result, and `statsOf` returns a local's.
         let source = """
             func main() {
                 var e = enemy()
