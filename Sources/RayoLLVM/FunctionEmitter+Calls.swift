@@ -68,7 +68,7 @@ extension FunctionEmitter {
             case .operand(let operand): operand.place
             case .access(let id): begun(id).place as Place?
             }
-            return place?.overlaps(destination) ?? false
+            return place?.mayOverlap(destination) ?? false
         }
     }
 

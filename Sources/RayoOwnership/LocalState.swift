@@ -85,7 +85,7 @@ struct LocalState: Equatable {
 
     /// The first part, in the order of its steps, that may have been moved out from inside `place`.
     private func movedPart(inside place: Place) -> MissingValue? {
-        let inside = movedParts.filter { $0.key.steps.count > place.steps.count && place.contains($0.key) }
+        let inside = movedParts.filter { $0.key.steps.count > place.steps.count && place.mustContain($0.key) }
         // A place with no part moved out from inside it holds all of its value.
         guard let first = inside.min(by: { $0.key.steps.lexicographicallyPrecedes($1.key.steps) }) else { return nil }
         return MissingValue(kind: .insidePlace, place: first.key, state: first.value)
@@ -93,6 +93,6 @@ struct LocalState: Equatable {
 
     /// Forgets what `place` and each part inside it held, where a move or an assignment replaces it.
     private mutating func forgetParts(inside place: Place) {
-        movedParts = movedParts.filter { !place.contains($0.key) }
+        movedParts = movedParts.filter { !place.mustContain($0.key) }
     }
 }

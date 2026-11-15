@@ -15,7 +15,7 @@ func at(_ column: Int) -> SourceRange {
 /// The program `text` writes, which must read as Rayo IR and keep the IR's types.
 func parsedIR(_ text: String) throws -> IRProgram {
     let program = try IRParser.program(from: text)
-    if let violation = IRVerifier.verify(program) { throw violation }
+    if let violation = IRVerifier.verify(program, from: .lowering) { throw violation }
     return program
 }
 

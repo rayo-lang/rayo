@@ -43,16 +43,18 @@ public struct Place: Hashable, Sendable {
         return type
     }
 
-    /// Whether `other` is this place or lies inside it, by the same steps. So an element at an index a local holds
-    /// contains only the places that step through it by the same local.
-    public func contains(_ other: Place) -> Bool {
+    /// Whether `other` is certainly this place or a part inside it: it starts from the same local and takes the same
+    /// steps first. A store asks this to find which values it replaces. So `a[%8]` certainly contains neither `a[%9]`
+    /// nor `a[0]`, though it may overlap both.
+    public func mustContain(_ other: Place) -> Bool {
         root == other.root && other.steps.starts(with: steps)
     }
 
-    /// Whether this place and `other` may overlap: whether one may lie inside the other. Two fields of one value lie
-    /// apart, and so do two elements of one array at different indices the IR writes, and the places inside each.
-    /// An element at an index a local holds may be any element of its array.
-    public func overlaps(_ other: Place) -> Bool {
+    /// Whether this place and `other` may overlap: whether one may lie inside the other when the code runs. A rule
+    /// that must hold of every place that might share memory, such as which accesses conflict, asks this. Two fields
+    /// of one value lie apart, and so do two elements of one array at different indices the IR writes, and the places
+    /// inside each. An element at an index a local holds may be any element of its array.
+    public func mayOverlap(_ other: Place) -> Bool {
         root == other.root && zip(steps, other.steps).allSatisfy { $0.mayLeadToSamePart(as: $1) }
     }
 }

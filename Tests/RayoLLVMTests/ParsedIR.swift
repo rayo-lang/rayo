@@ -5,7 +5,7 @@ import Testing
 /// fails the test where it names no function a run starts at.
 func executable(_ text: String) throws -> IRExecutable {
     let program = try IRParser.program(from: text)
-    if let violation = IRVerifier.verify(program) { throw violation }
+    if let violation = IRVerifier.verify(program, from: .ownership) { throw violation }
     return try #require(IRExecutable(program))
 }
 

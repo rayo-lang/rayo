@@ -17,7 +17,7 @@ struct IllTypedIRTests {
     @Test(arguments: illTypedIR)
     func `is a violation that names its function and says what is wrong`(ir: IllTypedIR) throws {
         let program = try IRParser.program(from: ir.text)
-        #expect(IRVerifier.verify(program) == IRViolation(function: ir.function, message: ir.message))
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: ir.function, message: ir.message))
     }
 
     @Test func `IR that keeps its types has no violation`() throws {
@@ -32,7 +32,7 @@ struct IllTypedIRTests {
                 print(pair.flag)
             }
             """)
-        #expect(IRVerifier.verify(program) == nil)
+        #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
     @Test func `a primary initializer with a body, or that makes another type than its struct, is a violation`()
@@ -45,7 +45,8 @@ struct IllTypedIRTests {
         var withBody = program
         withBody.bodies[initializer] = program.bodies[FunctionID(index: 0)]
         let hasBody = "the IR gives the primary initializer of 'Pair' a body"
-        #expect(IRVerifier.verify(withBody) == IRViolation(function: "Pair(count: Int)", message: hasBody))
+        let hasBodyViolation = IRViolation(function: "Pair(count: Int)", message: hasBody)
+        #expect(IRVerifier.verify(withBody, from: .lowering) == hasBodyViolation)
 
         var functions = FunctionTable()
         _ = functions.declare(program.functions[FunctionID(index: 0)])
@@ -55,7 +56,8 @@ struct IllTypedIRTests {
         var makingBool = program
         makingBool.functions = functions
         let makesBool = "the IR's primary initializer of 'Pair' makes Bool, where it makes Pair"
-        #expect(IRVerifier.verify(makingBool) == IRViolation(function: "Pair(count: Int)", message: makesBool))
+        let makesBoolViolation = IRViolation(function: "Pair(count: Int)", message: makesBool)
+        #expect(IRVerifier.verify(makingBool, from: .lowering) == makesBoolViolation)
     }
 
     @Test func `an array of elements of another type than it names is a violation`() throws {
@@ -63,20 +65,20 @@ struct IllTypedIRTests {
             "array of Int(read %0 @1:1-1:2, read %1 @1:1-1:2)", on: ["Int", "Bool"], into: "[2 of Int]",
         ))
         let message = "the IR makes an array of Int from an element of type Bool"
-        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `an array is of its element type, and of as many elements as it is made from`() throws {
         let program = try IRParser.program(from: computing("array of Int(1, 2)", on: [], into: "[3 of Int]"))
         let message = "the IR stores a value of type [2 of Int] in a place of type [3 of Int]"
-        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `a filled array is of its value's type, and of as many elements as it says`() throws {
         let filling = computing("fill 2 of read %0 @1:1-1:2", on: ["Bool"], into: "[2 of Int]")
         let program = try IRParser.program(from: filling)
         let message = "the IR stores a value of type [2 of Bool] in a place of type [2 of Int]"
-        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `a wrapping operator is named as one`() throws {
@@ -89,7 +91,7 @@ struct IllTypedIRTests {
               return
             """))
         let message = "the IR gives 'wrapping +' an operand of type Bool, where it takes Int or UInt"
-        #expect(IRVerifier.verify(program) == IRViolation(function: "main()", message: message))
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
     }
 }
 
@@ -389,6 +391,19 @@ private let illTypedIR = [
             """),
         function: "f(_: Int)",
         message: "the IR declares %0 as no parameter, where its function declares a parameter of Int",
+    ),
+    IllTypedIR(
+        testDescription: "a declaration of a parameter, whose argument holds its value from the start",
+        text: main("bb0:\n  return", after: """
+            func "f(_: Int)"(_: Int) -> Void {
+              param %0 n: Int @1:1-1:2
+            bb0:
+              declare %0
+              return
+            }
+            """),
+        function: "f(_: Int)",
+        message: "the IR declares the parameter %0 in its function's body",
     ),
     IllTypedIR(
         testDescription: "a call that passes an access to an owned parameter",

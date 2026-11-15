@@ -34,10 +34,10 @@ extension Compiler {
     /// Lowers `checked` to Rayo IR, and runs the ownership checks on it, adding their errors to `errors`. It gives the
     /// IR the emitter receives, without the bodies of the functions a check found failed.
     static func ir(of checked: CheckedProgram, errors: inout [Diagnostic]) throws(CompilationError) -> IRProgram {
-        let lowered = try verified(Lowering.lower(checked))
+        let lowered = try verified(Lowering.lower(checked), from: .lowering)
         // The ownership stage writes the end of each access into the IR, which is verified again, since it is no
         // longer lowering's.
-        return try verified(owned(lowered, errors: &errors))
+        return try verified(owned(lowered, errors: &errors), from: .ownership)
     }
 
     /// The bytes of the source file at `path`, which `readFile` reads. A file it can't read stops the compile.
@@ -73,12 +73,13 @@ extension Compiler {
         return owned
     }
 
-    /// `program`, once a debug build of `rayoc` has checked that it keeps the IR's types.
-    static func verified(_ program: IRProgram) throws(CompilationError) -> IRProgram {
+    /// `program`, which `stage` gave, once a debug build of `rayoc` has checked it keeps the IR's rules: its types, the
+    /// checks of the indices it finds elements by, and, for the ownership stage's IR, where its accesses end.
+    static func verified(_ program: IRProgram, from stage: IRStage) throws(CompilationError) -> IRProgram {
         // A release build of `rayoc` takes its stages' IR on trust, and spends no time checking it.
         #if DEBUG
-        // IR that breaks its types is a fault in `rayoc`, never in the program.
-        if let violation = IRVerifier.verify(program) { throw .failed("internal error: \(violation)") }
+        // IR that breaks its rules is a fault in `rayoc`, never in the program.
+        if let violation = IRVerifier.verify(program, from: stage) { throw .failed("internal error: \(violation)") }
         #endif
         return program
     }

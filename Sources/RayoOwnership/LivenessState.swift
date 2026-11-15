@@ -67,7 +67,7 @@ struct LivenessState: DataflowState {
         guard stored.indexLocals.isEmpty else { return }
 
         // The store replaces the place's value, and the values of the parts inside it.
-        live = live.filter { !stored.contains($0.place) }
+        live = live.filter { !stored.mustContain($0.place) }
         narrowHolders(of: stored, in: places)
     }
 
@@ -75,7 +75,7 @@ struct LivenessState: DataflowState {
     /// at each level, since a store to `stored` leaves only their values for that read.
     private mutating func narrowHolders(of stored: Place, in places: PlaceTypes) {
         // A read that already skips the element `stored` lies in leaves it to a later store, and stays as it is.
-        let holders = live.filter { $0.place.contains(stored) && $0.mayReach(stored) }
+        let holders = live.filter { $0.place.mustContain(stored) && $0.mayReach(stored) }
         for holder in holders {
             live.remove(holder)
 
@@ -139,11 +139,11 @@ private struct LiveRead: Hashable {
     /// Whether the read may reach the value that a store to `stored` leaves: whether `stored` may overlap the place,
     /// outside the skipped elements.
     func mayReach(_ stored: Place) -> Bool {
-        guard place.overlaps(stored) else { return false }
+        guard place.mayOverlap(stored) else { return false }
 
-        // A store into a skipped element, by the same steps as the place, is replaced again before the read.
+        // A store into a skipped element, which the place must contain, is replaced again before the read.
         let depth = place.steps.count
-        guard stored.steps.count > depth, case .element(let index) = stored.steps[depth], stored.prefix(depth) == place
+        guard place.mustContain(stored), stored.steps.count > depth, case .element(let index) = stored.steps[depth]
         else { return true }
         return !skippedElements.contains(index)
     }

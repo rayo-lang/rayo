@@ -20,17 +20,17 @@ struct IRVerificationTests {
         let returnsBool = try program(endingIn: "return true")
         let violation = "the IR returns a value of type Bool from a function that returns Void"
         let message = "internal error: in 'main()': \(violation)"
-        #expect(throws: CompilationError.failed(message)) { try Compiler.verified(returnsBool) }
+        #expect(throws: CompilationError.failed(message)) { try Compiler.verified(returnsBool, from: .ownership) }
     }
     #else
     @Test func `in a release build, IR that breaks its types goes on unchecked`() throws {
         let returnsBool = try program(endingIn: "return true")
-        #expect(try Compiler.verified(returnsBool) == returnsBool)
+        #expect(try Compiler.verified(returnsBool, from: .ownership) == returnsBool)
     }
     #endif
 
     @Test func `IR that keeps its types goes on as it is`() throws {
         let returnsNothing = try program(endingIn: "return")
-        #expect(try Compiler.verified(returnsNothing) == returnsNothing)
+        #expect(try Compiler.verified(returnsNothing, from: .ownership) == returnsNothing)
     }
 }

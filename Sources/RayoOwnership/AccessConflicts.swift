@@ -82,7 +82,7 @@ struct AccessConflicts {
     private mutating func check(_ reach: Reach, of place: Place, at range: SourceRange, against live: Set<AccessID>) {
         for id in live.sorted() {
             guard let held = accesses[id] else { preconditionFailure("a\(id.index) is live, but nothing begins it") }
-            guard held.place.overlaps(place), reach.kind == .modify || held.kind == .modify else { continue }
+            guard held.place.mayOverlap(place), reach.kind == .modify || held.kind == .modify else { continue }
 
             // A live modify access forbids any other access, and a live read access forbids a change or a move.
             let (name, borrowed) = (name(of: place), name(of: held.place))

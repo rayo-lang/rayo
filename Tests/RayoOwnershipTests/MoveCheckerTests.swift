@@ -75,7 +75,12 @@ struct MoveCheckerTests {
 
     @Test(arguments: ["%3[1]", "%3[%4]", "%3[0].0", "%5[0][1]", "%5[%4][1]"])
     func `a move out of an array's element, or out of a part of one, is reported at the move`(place: String) throws {
-        let blocks = "bb0:\n  _ = operand move \(place) @2:1-2:1 @1:1-1:1\n  return"
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
+              _ = operand move \(place) @2:1-2:1 @1:1-1:1
+              return
+            """
         #expect(try checked(takingIntAndShot(blocks)).errors == [Diagnostic(.moveFromElement, at: at(1))])
     }
 
