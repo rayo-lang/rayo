@@ -102,17 +102,37 @@ struct OwnershipCheckTests {
         ])
     }
 
-    @Test func `a function of 16000 statements is checked in well under a second`() throws {
-        let program = try program(of: [longFunction(rounds: 4000)] + callees)
+    @Test func `checking a function four times as long takes well under sixteen times as long`() throws {
+        let short = try program(of: [longFunction(rounds: 1000)] + callees)
+        let long = try program(of: [longFunction(rounds: 4000)] + callees)
 
-        let clock = ContinuousClock()
-        let start = clock.now
-        let (_, errors) = OwnershipChecker.check(program)
-        let elapsed = clock.now - start
+        // Each length is timed at its fastest of a few runs, taken in turn, so that a runner busy with other work
+        // during one run slows neither length's time.
+        var shortTimes: [Duration] = []
+        var longTimes: [Duration] = []
+        for _ in 0..<3 {
+            shortTimes.append(try timeToCheck(short))
+            longTimes.append(try timeToCheck(long))
+        }
 
-        #expect(errors.isEmpty)
-        #expect(elapsed < .seconds(1))
+        // A check that grows in line with the length takes about four times as long, and one that grows with its
+        // square sixteen times; eight lies twice as far from each.
+        let shortTime = try #require(shortTimes.min())
+        let longTime = try #require(longTimes.min())
+        #expect(longTime < shortTime * 8)
     }
+}
+
+/// How long the ownership checks take over `program`. It requires that they find no error, since a check that stops
+/// short of the whole function would time less than all of it.
+private func timeToCheck(_ program: IRProgram) throws -> Duration {
+    let clock = ContinuousClock()
+    let start = clock.now
+    let (_, errors) = OwnershipChecker.check(program)
+    let elapsed = clock.now - start
+
+    try #require(errors.isEmpty)
+    return elapsed
 }
 
 /// The function `long()`, which takes `rounds` turns, four statements each, at storing in `s` (`%0`) a new value
