@@ -38,15 +38,15 @@ public enum Driver {
             // Arguments that start with no command `rayo` knows ask for nothing it does.
             guard let command = arguments.first.flatMap(Command.init(rawValue:)) else { throw .usage }
 
-            // Read each option before the file, each at most once.
+            // `check` builds nothing, so it takes no option, only the file.
             var operands = arguments.dropFirst()
+            if command == .check, operands.count > 1 { throw .usage }
+
+            // Read each option of a build before the file, each at most once.
             var mode: BuildMode?
             var linker: Linker?
             while operands.count > 1, let option = operands.first {
-                if command == .check {
-                    // `check` builds nothing, so it takes no option.
-                    throw .usage
-                } else if let newMode = BuildMode(rawValue: option), mode == nil {
+                if let newMode = BuildMode(rawValue: option), mode == nil {
                     // A build mode says how the program is built.
                     mode = newMode
                 } else if let name = Self.value(of: option, named: "--linker"), linker == nil {

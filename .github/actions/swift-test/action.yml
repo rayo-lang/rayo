@@ -126,7 +126,7 @@ runs:
           *) swift test $ARGUMENTS --filter "$SELECTION" ;;
         esac
     # The tests run rayo and rayoc in debug, where checks that a release build leaves out still run, such as the
-    # check of the LLVM module rayoc makes. So the release build users run is built and run here too, and its
+    # check of the Rayo IR each stage gives. So the release build users run is built and run here too, and its
     # products are saved with the build, so a pull request rebuilds only what it changed.
     - name: Run the proof programs with release rayo
       if: inputs.release-proof-programs == 'true'
