@@ -443,6 +443,46 @@ struct InitializationCheckerTests {
     }
 
     @Test(arguments: [
+        // As `if c { x = 1 } else { return }`, then a use of `x`.
+        """
+        bb0:
+          declare %0
+          branch true, bb1, bb2
+        bb1:
+          %0 @1:1-1:1 = operand 1 @1:1-1:1
+          goto bb3
+        bb2:
+          return
+        bb3:
+          _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+          return
+        """,
+        // As `while true { if c { x = 1; break } }`, then a use of `x`.
+        """
+        bb0:
+          declare %0
+          goto bb1
+        bb1:
+          goto bb2
+        bb2:
+          branch true, bb3, bb4
+        bb3:
+          %0 @1:1-1:1 = operand 1 @1:1-1:1
+          goto bb5
+        bb4:
+          goto bb1
+        bb5:
+          _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
+          return
+        """,
+    ])
+    func `a local that every path to a use assigns holds a value there, though another path returns or loops`(
+        blocks: String,
+    ) throws {
+        #expect(try checked(function(blocks)).errors == [])
+    }
+
+    @Test(arguments: [
         // A loop that assigns the local in its body.
         ("bb1:\n  branch true, bb2, bb3\nbb2:\n  %0 @1:1-1:1 = operand 1 @1:1-1:1\n  goto bb1", "bb3"),
         // A loop whose body may `continue` before it assigns the local.

@@ -41,21 +41,4 @@ struct ArrayCountTests {
         let expected = "3\n0\n3\n0\n2\n0\n2\n4\n0\n7\n5\n7\n0\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
     }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `a loop runs a UInt counter up to an array's count`(mode: [String]) {
-        let source = """
-            func main() {
-                let a = [3, 4, 5]
-                var i: UInt = 0
-                var sum = 0
-                while i < a.count {
-                    sum += a[i]
-                    i += 1
-                }
-                print(sum)
-            }
-            """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "12\n", errors: ""))
-    }
 }

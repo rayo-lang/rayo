@@ -28,4 +28,8 @@ struct InitializationTests {
     func severalBindings() {
         #expect(errors("func main() {\nlet a = b, b = 1\n}") == [.notDeclared(name: "b")])
     }
+
+    @Test func `a later binding of a declaration takes an earlier one's value`() {
+        #expect(errors("func main() {\nlet a = 1, b = copy a + 1, c: Int\nc = 3\nprint(a + b + c)\n}") == [])
+    }
 }

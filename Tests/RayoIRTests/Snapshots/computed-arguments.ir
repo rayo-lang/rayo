@@ -1,0 +1,30 @@
+main "main()"
+
+func "main()"() -> Void {
+  temp %0: Int
+  temp %1: Int
+bb0:
+  %0 @1:20-1:28 = call "shown(_: Int)"(1) @1:20-1:28
+  %1 @1:30-1:38 = call "shown(_: Int)"(2) @1:30-1:38
+  begin a0 read static %0 @1:20-1:28
+  begin a1 read static %1 @1:30-1:38
+  _ = call "pair(_: Int, _: Int)"(a0, a1) @1:15-1:39
+  return
+}
+
+func "pair(_: Int, _: Int)"(Int, Int) -> Void {
+  param %0 a: Int
+  param %1 b: Int
+bb0:
+  return
+}
+
+func "shown(_: Int)"(Int) -> Int {
+  param %0 n: Int
+  temp %1: Int
+bb0:
+  %1 @3:31-3:37 = operand read %0 @3:31-3:37 @3:31-3:37
+  return read %1 @3:31-3:37
+bb1:
+  unreachable
+}

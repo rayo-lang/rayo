@@ -33,6 +33,46 @@ struct CheckedProgramTests {
             """, toMatch: "functions")
     }
 
+    @Test func `a call resolves to the function of its name whose labels and types its arguments fit`() throws {
+        try expectChecking(of: """
+            func main() {
+                print(kind(5))
+                print(kind(true))
+                print(kind(of: 5))
+                print(kind())
+            }
+            func kind(_ x: Int) { 1 }
+            func kind(_ b: Bool) -> Int { 2 }
+            func kind(of x: Int) -> Int { 3 }
+            func kind() -> Int { 4 }
+            """, toMatch: "overloads")
+    }
+
+    @Test func `a call reaches the functions of its name past a local, a parameter or a struct of that name`() throws {
+        // Every use of a shared name other than a call or a type annotation refers to the local or the parameter.
+        try expectChecking(of: """
+            func main() {
+                var print: Int
+                print = 3
+                print(print)
+                let main = copy print
+                print(next(main))
+                print(sum(3))
+                show(print: 7)
+                let S = 2
+                var s: S
+                print(S)
+            }
+            func next(_ next: Int) -> Int { copy next + 1 }
+            func sum(_ sum: Int) -> Int {
+                if sum == 0 { return 0 }
+                return sum + sum(sum - 1)
+            }
+            func show(print: Int) { print(print) }
+            struct S(var a: Int)
+            """, toMatch: "shared-names")
+    }
+
     @Test func `each operator on Ints and Bools has the type of its value`() throws {
         try expectChecking(of: """
             func main() {

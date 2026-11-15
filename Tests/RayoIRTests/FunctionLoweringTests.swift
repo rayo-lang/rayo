@@ -34,6 +34,33 @@ struct FunctionLoweringTests {
         try expectLowering(of: source, toMatch: "copied-argument")
     }
 
+    @Test func `a copy is made before a later operand or argument changes the place it copies`() throws {
+        // Each `if` assigns the copied place, after the copy, so the copy holds the value from before; the value
+        // assigned to `x` is never read.
+        let source = """
+            func main() {
+                var x = 1
+                let y = (copy x) + if true { x = 10; 1 } else { 2 }
+                print(y)
+                var p = P(hp: 1)
+                show(copy p, if true { p.hp = 7; 0 } else { 0 })
+                print(p.hp)
+            }
+            func show(_ a: P, _ b: Int) {}
+            struct P(var hp: Int)
+            """
+        try expectLowering(of: source, toMatch: "copy-before-change")
+    }
+
+    @Test func `a call's arguments are computed left to right, each into its temporary, before the call`() throws {
+        let source = """
+            func main() { pair(shown(1), shown(2)) }
+            func pair(_ a: Int, _ b: Int) {}
+            func shown(_ n: Int) -> Int { copy n }
+            """
+        try expectLowering(of: source, toMatch: "computed-arguments")
+    }
+
     @Test func `the program's table declares each function, by its ID in source order`() throws {
         try expectLowering(of: "func main() {}\nfunc double(_ n: Int, by: Bool) -> Int { n * 2 }", toMatch: "functions")
     }

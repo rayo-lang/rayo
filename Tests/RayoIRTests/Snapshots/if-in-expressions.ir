@@ -1,0 +1,108 @@
+struct Point {
+  let x: Int
+}
+
+main "main()"
+
+init "Point(x: Int)"(Int) -> Point
+
+func "main()"() -> Void {
+  let %0 c: Bool
+  var %1 x: Int
+  let %2 y: Int
+  let %3 p: Point
+  let %4 z: Int
+  temp %5: Int
+  temp %6: Int
+  temp %7: Int
+  temp %8: Int
+  temp %9: Int
+  temp %10: Int
+  temp %11: Int
+  temp %12: Int
+bb0:
+  declare %0
+  %0 @2:9-2:10 = operand true @2:13-2:17
+  declare %1
+  branch read %0 @3:20-3:21, bb1, bb2
+bb1:
+  %5 @3:17-3:38 = operand 2 @3:24-3:25
+  goto bb3
+bb2:
+  %5 @3:17-3:38 = operand 3 @3:35-3:36
+  goto bb3
+bb3:
+  %1 @3:9-3:10 = add checked 1, read %5 @3:17-3:38 @3:13-3:38
+  branch read %0 @4:13-4:14, bb4, bb5
+bb4:
+  %6 @4:10-4:31 = operand 4 @4:17-4:18
+  goto bb6
+bb5:
+  %6 @4:10-4:31 = operand 5 @4:28-4:29
+  goto bb6
+bb6:
+  %1 @4:5-4:6 = add checked read %1 @4:5-4:6, read %6 @4:10-4:31 @4:5-4:6
+  declare %2
+  branch read %0 @5:17-5:18, bb7, bb8
+bb7:
+  %7 @5:14-5:40 = operand read %1 @5:21-5:27 @5:21-5:27
+  goto bb9
+bb8:
+  %7 @5:14-5:40 = operand 6 @5:37-5:38
+  goto bb9
+bb9:
+  %2 @5:9-5:10 = negate checked read %7 @5:14-5:40 @5:13-5:40
+  declare %3
+  branch read %0 @6:25-6:26, bb10, bb11
+bb10:
+  %8 @6:22-6:43 = operand 7 @6:29-6:30
+  goto bb12
+bb11:
+  %8 @6:22-6:43 = operand 8 @6:40-6:41
+  goto bb12
+bb12:
+  %3 @6:9-6:10 = call "Point(x: Int)"(read %8 @6:22-6:43) @6:13-6:44
+  declare %4
+  branch read %0 @7:16-7:17, bb13, bb14
+bb13:
+  branch read %0 @7:23-7:24, bb16, bb17
+bb14:
+  _ = call builtin "print(_: Int)"(1) @8:9-8:17
+  %9 @7:13-10:6 = operand 11 @9:9-9:11
+  goto bb15
+bb15:
+  %4 @7:9-7:10 = operand read %9 @7:13-10:6 @7:13-10:6
+  %12 @11:11-11:16 = add checked read %2 @11:11-11:12, read %4 @11:15-11:16 @11:11-11:16
+  %11 @11:11-11:22 = add checked read %12 @11:11-11:16, read %3.0 @11:19-11:22 @11:11-11:22
+  begin a0 read static %11 @11:11-11:22
+  _ = call builtin "print(_: Int)"(a0) @11:5-11:23
+  return
+bb16:
+  %10 @7:20-7:42 = operand 9 @7:27-7:28
+  goto bb18
+bb17:
+  %10 @7:20-7:42 = operand 10 @7:38-7:40
+  goto bb18
+bb18:
+  %9 @7:13-10:6 = operand read %10 @7:20-7:42 @7:20-7:42
+  goto bb15
+}
+
+func "sign(_: Int)"(Int) -> Int {
+  param %0 n: Int
+  temp %1: Int
+  temp %2: Bool
+bb0:
+  %2 @13:40-13:45 = less read %0 @13:40-13:41, 0 @13:40-13:45
+  branch read %2 @13:40-13:45, bb1, bb2
+bb1:
+  %1 @13:37-13:63 = operand -1 @13:48-13:50
+  goto bb3
+bb2:
+  %1 @13:37-13:63 = operand 1 @13:60-13:61
+  goto bb3
+bb3:
+  return read %1 @13:37-13:63
+bb4:
+  unreachable
+}

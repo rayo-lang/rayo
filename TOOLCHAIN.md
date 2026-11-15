@@ -179,7 +179,7 @@ LLD is the default because it is the same linker, from the same LLVM, on every m
 | `Tests/RayoSyntaxTests` | The lexer's and the parser's tests |
 | `Tests/RayoSemaTests` | The tests of the errors and warnings checking reports, of the type table's layouts, of which kind of declaration each top-level name belongs to, and of the checked program each construct makes, as snapshots of its text, over parsed files |
 | `Tests/RayoCompilerTests` | The tests of `rayoc`'s command line, of which stages its pipeline runs, and of where the program's errors end the compile, over files held in memory |
-| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors |
+| `Tests/RayoDriverTests` | The commands' tests, which run each command with the built `rayoc` on files in a temporary directory, and check its exit code, output and errors: its command line, the tools it finds and links with, the files it writes and the streams it passes on; for each feature, one program that it builds and runs; and the proof programs |
 | `Tests/ToolStandIn` | What a stand-in for a tool `rayo` runs does in the driver tests, and how a test installs one: a few steps, such as writing to standard error, then an exit, a signal, or a hand-off to the real tool |
 | `Tests/tool-stand-in` | The executable that acts as the stand-in installed at the path it was started as, in the driver tests |
 | `Tests/LLVMTests` | The binding's tests, which build small functions with it, run some through its JIT, and check what they return and what LLVM prints and reports |

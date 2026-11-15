@@ -59,6 +59,27 @@ struct FieldAssignmentTests {
         #expect(coveredText(reported, in: source) == [covered])
     }
 
+    @Test(arguments: [
+        ("b.stats.hp = 1", ErrorCode.assignToLetField(field: "stats"), "stats"),
+        ("b.level *= 2", .assignToLetField(field: "level"), "level"),
+        ("b.stats.hp /= 2", .assignToLetField(field: "stats"), "stats"),
+    ])
+    func `a 'let' field anywhere on the target's path rules out an assignment or a compound one`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = """
+            func main() {
+            var b = Boss(stats: Stats(alive: true, hp: 1), level: 4)
+            \(body)
+            }
+            struct Boss(let stats: Stats, let level: Int)
+            """ + enemyAndStats
+
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
     @Test func `a 'let' declared without a value is given one whole, never field by field`() {
         let source = "func main() {\nlet l: Enemy\nl.armor = 1\n}" + enemyAndStats
         #expect(errors(source) == [.assignToPartOfLet(name: "l")])

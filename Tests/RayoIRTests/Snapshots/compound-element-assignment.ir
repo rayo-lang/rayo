@@ -1,0 +1,40 @@
+main "main()"
+
+func "main()"() -> Void {
+  var %0 grid: [2 of [2 of Int]]
+  temp %1: [2 of Int]
+  temp %2: [2 of Int]
+  temp %3: UInt
+  temp %4: UInt
+  temp %5: UInt
+  temp %6: UInt
+  temp %7: Int
+bb0:
+  declare %0
+  %1 @2:17-2:23 = array of Int(1, 2) @2:17-2:23
+  %2 @2:25-2:31 = array of Int(3, 4) @2:25-2:31
+  %0 @2:9-2:13 = array of [2 of Int](read %1 @2:17-2:23, read %2 @2:25-2:31) @2:16-2:32
+  %4 @3:10-3:17 = call "index()"() @3:10-3:17
+  %3 @3:10-3:17 = index read %4 @3:10-3:17 below 2 @3:10-3:17
+  %6 @3:19-3:26 = call "index()"() @3:19-3:26
+  %5 @3:19-3:26 = index read %6 @3:19-3:26 below 2 @3:19-3:26
+  %7 @3:31-3:38 = call "value()"() @3:31-3:38
+  %0[%3][%5] @3:5-3:27 = add checked read %0[%3][%5] @3:5-3:27, read %7 @3:31-3:38 @3:5-3:27
+  begin a0 read static %0[1][0] @4:11-4:21
+  _ = call builtin "print(_: Int)"(a0) @4:5-4:22
+  return
+}
+
+func "index()"() -> UInt {
+bb0:
+  return UInt 1
+bb1:
+  unreachable
+}
+
+func "value()"() -> Int {
+bb0:
+  return 6
+bb1:
+  unreachable
+}

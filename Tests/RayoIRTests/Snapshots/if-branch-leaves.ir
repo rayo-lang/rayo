@@ -1,0 +1,103 @@
+main "main()"
+
+func "main()"() -> Void {
+  var %0 i: Int
+  let %1 odd: Int
+  let %2 next: Int
+  temp %3: Int
+  temp %4: Bool
+  temp %5: Int
+  temp %6: Int
+  temp %7: Bool
+bb0:
+  declare %0
+  %0 @2:9-2:10 = operand 0 @2:13-2:14
+  goto bb1
+bb1:
+  goto bb2
+bb2:
+  %0 @4:9-4:10 = add checked read %0 @4:9-4:10, 1 @4:9-4:10
+  declare %1
+  %5 @5:22-5:27 = remainder read %0 @5:22-5:23, 2 @5:22-5:27
+  %4 @5:22-5:32 = equal read %5 @5:22-5:27, 0 @5:22-5:32
+  branch read %4 @5:22-5:32, bb4, bb5
+bb3:
+  return
+bb4:
+  goto bb1
+bb5:
+  %3 @5:19-5:61 = operand read %0 @5:53-5:59 @5:53-5:59
+  goto bb6
+bb6:
+  %1 @5:13-5:16 = operand read %3 @5:19-5:61 @5:19-5:61
+  declare %2
+  %7 @6:23-6:30 = greater read %1 @6:23-6:26, 7 @6:23-6:30
+  branch read %7 @6:23-6:30, bb8, bb9
+bb7:
+  goto bb6
+bb8:
+  goto bb3
+bb9:
+  %6 @6:20-6:53 = operand move %1 @6:48-6:51 @6:48-6:51
+  goto bb10
+bb10:
+  %2 @6:13-6:17 = operand read %6 @6:20-6:53 @6:20-6:53
+  begin a0 read static %2 @7:15-7:19
+  _ = call builtin "print(_: Int)"(a0) @7:9-7:20
+  goto bb1
+bb11:
+  goto bb10
+}
+
+func "half(_: Int)"(Int) -> Int {
+  param %0 n: Int
+  let %1 even: Int
+  temp %2: Int
+  temp %3: Bool
+  temp %4: Int
+  temp %5: Int
+bb0:
+  declare %1
+  %4 @11:19-11:24 = remainder read %0 @11:19-11:20, 2 @11:19-11:24
+  %3 @11:19-11:29 = equal read %4 @11:19-11:24, 0 @11:19-11:29
+  branch read %3 @11:19-11:29, bb1, bb2
+bb1:
+  %2 @11:16-11:59 = operand read %0 @11:32-11:38 @11:32-11:38
+  goto bb3
+bb2:
+  return -1
+bb3:
+  %1 @11:9-11:13 = operand read %2 @11:16-11:59 @11:16-11:59
+  %5 @12:12-12:20 = divide checked read %1 @12:12-12:16, 2 @12:12-12:20
+  return read %5 @12:12-12:20
+bb4:
+  goto bb3
+bb5:
+  unreachable
+}
+
+func "pick(_: Bool)"(Bool) -> Int {
+  param %0 c: Bool
+  temp %1: Int
+bb0:
+  _ = call builtin "print(_: Int)"(0) @15:5-15:13
+  branch read %0 @16:13-16:14, bb1, bb2
+bb1:
+  return 1
+bb2:
+  return 2
+bb3:
+  begin a0 read static %1 @16:10-16:45
+  _ = call "show(_: Int)"(a0) @16:5-16:46
+  unreachable
+bb4:
+  goto bb3
+bb5:
+  goto bb3
+}
+
+func "show(_: Int)"(Int) -> Void {
+  param %0 n: Int
+bb0:
+  return
+}

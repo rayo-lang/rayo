@@ -55,6 +55,56 @@ struct ObjectCodeTests {
         #expect(try compile(holdingOneLocal("declare %0"), for: build) == compile(holdingOneLocal(""), for: build))
     }
 
+    @Test(.timeLimit(.minutes(1)), arguments: Build.allCases)
+    func `a program that fills, passes and returns arrays of a hundred thousand elements compiles quickly`(
+        build: Build,
+    ) throws {
+        // `main` fills an array of Ints and an array of arrays of Trios, and hands each through a function that
+        // returns a copy of what it borrows. A third function relays an array of arrays of Pairs, which no code calls.
+        let text = programStructs + """
+            main "main()"
+            func "main()"() -> Void {
+              var %0 ints: [100000 of Int]
+              var %1 trio: Trio
+              temp %2: [100 of Trio]
+              var %3 trios: [1000 of [100 of Trio]]
+            bb0:
+              %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
+              %0 @1:1-1:2 = call "relay(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
+              \(printInt("%0[99999]"))
+              %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(2, 3, true) @1:1-1:2
+              %2 @1:1-1:2 = fill 100 of read %1 @1:1-1:2 @1:1-1:2
+              %3 @1:1-1:2 = fill 1000 of read %2 @1:1-1:2 @1:1-1:2
+              %3 @1:1-1:2 = call "relay(_: [1000 of [100 of Trio]])"(read %3 @1:1-1:2) @1:1-1:2
+              \(printInt("%3[999][99].0"))
+              return
+            }
+            func "relay(_: [100000 of Int])"([100000 of Int]) -> [100000 of Int] {
+              param %0 a: [100000 of Int]
+              temp %1: [100000 of Int]
+            bb0:
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
+              return move %1 @1:1-1:2
+            }
+            func "relay(_: [1000 of [100 of Trio]])"([1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
+              param %0 a: [1000 of [100 of Trio]]
+              temp %1: [1000 of [100 of Trio]]
+            bb0:
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
+              return move %1 @1:1-1:2
+            }
+            func "relay(_: [100000 of [2 of Pair]])"([100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
+              param %0 a: [100000 of [2 of Pair]]
+              temp %1: [100000 of [2 of Pair]]
+            bb0:
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
+              return move %1 @1:1-1:2
+            }
+            """
+        let objectCode = try compile(executable(text), for: build)
+        #expect(!objectCode.isEmpty)
+    }
+
     @Test func `a debug build checks integer arithmetic for overflow, and a release build emits no check`() throws {
         let overflows = try printing("add checked 9223372036854775807, 1")
         let report = Array("panic: integer overflow".utf8)

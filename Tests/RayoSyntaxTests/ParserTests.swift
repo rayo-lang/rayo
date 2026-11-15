@@ -74,6 +74,7 @@ struct ParserErrorTests {
     func parameters() {
         #expect(errors("func f(_ a: Int, in b: Bool, c: Int,) { f(1, in: true, c: 2,) }") == [])
         #expect(errors("func f(if x: Int) { f(if: 1) }") == [])
+        #expect(errors("func f(if x: Int, else y: Int) { f(if: 1, else: 2) }") == [])
         #expect(errors("func f(a: Int,, b: Int) {}") == [.missingParameterName(found: .token(","))])
         #expect(errors("func f(a b c: Int) {}") == [.missingParameterType(found: .token("c"))])
     }

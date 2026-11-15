@@ -18,13 +18,4 @@ struct UnusedValueTests {
             """
         #expect(run(source) == CommandResult(exitCode: 0, output: "1\n2\n", errors: ""))
     }
-
-    @Test("computing a dropped value still panics", arguments: [
-        ("let z = 0\n_ = 1 / z", ["--release"], "division by zero"),
-        ("let z = 0\n_ = 1 % z", ["--release"], "remainder by zero"),
-        ("let big = 9223372036854775807\n_ = big + 1", ["--debug"], "integer overflow"),
-    ])
-    func droppedPanics(body: String, mode: [String], reason: String) {
-        #expect(panic(in: run("func main() {\n\(body)\n}", options: mode)) == Panic(reason: reason))
-    }
 }
