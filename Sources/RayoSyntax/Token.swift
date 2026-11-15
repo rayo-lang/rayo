@@ -3,12 +3,13 @@ public import RayoSource
 /// Reserved words. Other words, such as `keep`, lex as identifiers.
 public enum Keyword: String, Sendable {
     case `let`, `var`, `func`, `struct`, `if`, `else`, `while`, `break`, `continue`, `return`, copy, `true`, `false`
+    case `self`, mutable, owned, mutating
 }
 
 /// Punctuation and operators. The lexer takes the longest match.
 public enum Punct: String, Sendable, CaseIterable {
     case lparen = "(", rparen = ")", lbrace = "{", rbrace = "}", lbracket = "[", rbracket = "]"
-    case comma = ",", colon = ":", semicolon = ";", bang = "!", dot = "."
+    case comma = ",", colon = ":", semicolon = ";", bang = "!", dot = ".", ampersand = "&"
     case arrow = "->", assign = "="
     case plus = "+", minus = "-", star = "*", slash = "/", percent = "%"
     case less = "<", greater = ">", lessEqual = "<=", greaterEqual = ">="

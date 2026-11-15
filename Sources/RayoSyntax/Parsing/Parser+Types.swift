@@ -22,14 +22,6 @@ extension Parser {
         return .named(name, range: range(from: start))
     }
 
-    /// Whether a type can start with `token`.
-    func startsType(_ token: Token) -> Bool {
-        switch token.kind {
-        case .identifier, .punct(.lparen), .punct(.lbracket): true
-        default: false
-        }
-    }
-
     /// After the `[` at `start`: the count, `of`, the element's type and the `]`.
     private mutating func parseArrayType(from start: SourceRange) throws(ParseFailure) -> TypeExpr {
         // The count is an integer literal.

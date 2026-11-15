@@ -30,6 +30,17 @@ struct TokenTests {
         #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
     }
 
+    @Test func `'self', 'mutable', 'owned' and 'mutating' are keywords`() {
+        let (lexed, _) = Lexer.tokenize("self mutable owned mutating")
+        #expect(lexed.map(\.kind) == [
+            .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .eof,
+        ])
+    }
+
+    @Test func `a '&' is a token of its own, and '&&' stays one token`() {
+        #expect(tokens("f(&x) && y") == ["f", "(", "&", "x", ")", "&&", "y"])
+    }
+
     @Test("comments nest")
     func nestedComments() {
         #expect(tokens("a /* x /* y */ z */ b") == ["a", "b"])

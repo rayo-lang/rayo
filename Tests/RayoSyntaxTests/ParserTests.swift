@@ -42,6 +42,20 @@ struct ParserErrorTests {
         #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
 
+    @Test(arguments: ["self", "mutable", "owned", "mutating"])
+    func `a reserved word can't name a binding or a parameter`(word: String) {
+        #expect(errors("func f() { let \(word) = 1 }") == [.missingBindingName(found: .token(word))])
+        #expect(errors("func f(\(word): Int) {}") == [.missingParameterName(found: .token(word))])
+    }
+
+    @Test func `a convention needs a type after it`() {
+        #expect(errors("func f(x: owned) {}") == [.missingType(found: .token(")"))])
+    }
+
+    @Test func `a '&' is reported where an expression is expected`() {
+        #expect(errors("func f() {\n    g(&x)\n}") == [.missingExpression(found: .token("&"))])
+    }
+
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
         #expect(errors("func f() {\n    x = 1\n") == [.unclosedBlock(found: .endOfFile)])
