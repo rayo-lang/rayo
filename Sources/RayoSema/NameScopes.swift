@@ -77,7 +77,7 @@ final class NameScopes {
     }
 
     /// The field of `self` called `name`, or nil where the body has no `self` or its type has no such field. A field
-    /// is the one instance member a type has.
+    /// is the one instance member a struct has.
     private func instanceField(named name: String) -> NameMatch? {
         guard let selfParameter,
               case .field(let index, let field)? = file.declarations.member(named: name, of: self[selfParameter].type)
