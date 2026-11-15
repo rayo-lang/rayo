@@ -32,9 +32,11 @@ struct Signature: CustomStringConvertible {
         if case .callee(.builtin) = target { true } else { false }
     }
 
-    /// Whether the parameters have exactly `types`, in order.
+    /// Whether values of `types`, in order, fit the parameters. A parameter whose type isn't known takes none.
     func takes(_ types: [RayoType]) -> Bool {
-        parameters.map(\.type) == types
+        parameters.count == types.count && zip(parameters, types).allSatisfy { parameter, type in
+            parameter.type.map { TypeFit.fits(type, $0) } ?? false
+        }
     }
 
     /// Whether a call may pass arguments with these labels, in this order.
