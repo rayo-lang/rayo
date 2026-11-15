@@ -18,8 +18,7 @@ struct StatementLoweringTests {
         try expectLowering(ofMain: "let a: Int, b: Int\na = 1\nb = 2", toMatch: "declarations-without-values")
     }
 
-    @Test func `a declaration of several locals declares and stores each in turn, so a later one reads an earlier`()
-        throws {
+    @Test func `a later local of a declaration is declared after, and reads, an earlier one`() throws {
         let body = "let a = 1, b = copy a + 1, c: Int\nc = 3\nprint(a + b + c)"
         try expectLowering(ofMain: body, toMatch: "several-bindings")
     }
