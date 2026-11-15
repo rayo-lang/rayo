@@ -67,6 +67,50 @@ struct ErrorContainmentTests {
         #expect(errors(source) == expected)
     }
 
+    @Test func `an unused value leaves its body's meaning whole, so the ownership checks still run on it`() {
+        let source = """
+            func g() -> Int { return 1 }
+            func main() {
+                g()
+                let x = 5
+                let y = x
+                print(x)
+                print(y)
+            }
+            """
+        #expect(errors(source) == [.unusedValue(type: "Int"), .usedAfterMove(name: "x")])
+    }
+
+    @Test(arguments: [
+        ("let a = [1, 2, 3]\n    _ = copy a[3]", ErrorCode.indexOutOfRange(index: 3, type: "[3 of Int]")),
+        ("var a = [1, 2, 3]\n    a[3] = 4\n    _ = a", .indexOutOfRange(index: 3, type: "[3 of Int]")),
+        ("let n: Int = 9223372036854775808\n    _ = n", .literalDoesntFit(type: "Int")),
+        ("let u: UInt = -1\n    _ = u", .literalDoesntFit(type: "UInt")),
+        ("let n = 9223372036854775808\n    _ = n", .literalDoesntFit(type: "Int")),
+        ("let a = [1, 2, 3]\n    _ = copy a[-1]", .literalDoesntFit(type: "UInt")),
+        ("var a = [1, 2, 3]\n    a[-1] = 4\n    _ = a", .literalDoesntFit(type: "UInt")),
+        // An unused local is read where it stands, never moved, so a later use of it reports nothing more.
+        ("let a = [1, 2, 3]\n    a\n    _ = a", .unusedValue(type: "[3 of Int]")),
+    ])
+    func `an error that leaves a body's meaning whole lets the ownership checks run on it`(
+        body: String, error: ErrorCode,
+    ) {
+        #expect(errors("func main() {\n    \(body)\n\(ownershipErrors)\n}") == [error, .usedUninitialized(name: "x")])
+    }
+
+    @Test(arguments: [
+        ("let a = 3 $ 4", [ErrorCode.unexpectedCharacter(character: "$")]),
+        ("let a: Int = )", [.missingExpression(found: .token(")"))]),
+        ("let b = 1, a = 2 3", [.unendedStatement(found: .token("3"))]),
+        ("let a: [9223372036854775807 of Int] = .init(repeating: 0)", [.arrayTooLarge]),
+        ("let a: Nope = .init(repeating: 0)", [.notAType(name: "Nope")]),
+    ])
+    func `a local whose declaration fails reports nothing more where it is used`(
+        declaration: String, expected: [ErrorCode],
+    ) {
+        #expect(errors("func main() {\n    \(declaration)\n    print(a)\n}") == expected)
+    }
+
     @Test func `a function that calls one whose body is tainted is checked as any other`() {
         let source = "func main() {\n\(ownershipErrors)\n    tainted()\n}\nfunc tainted() {\n    let = 1\n}"
         #expect(errors(source) == [.usedUninitialized(name: "x"), .missingBindingName(found: .token("="))])

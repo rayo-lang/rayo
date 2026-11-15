@@ -1,8 +1,10 @@
 /// The function bodies of a check that are tainted, and so have no body in the checked program.
 ///
-/// A body is tainted when checking it reports an error, holds a statement that failed to parse, or reaches a
-/// declaration that failed, whose error was reported there. A tainted body may report no error of its own, so its
-/// taint is recorded as it is checked.
+/// A body is tainted when checking it reports an error that leaves it without a meaning, such as a name that names
+/// nothing, holds a statement that failed to parse, or reaches a declaration that failed, whose error was reported
+/// there. An error the checker still gives a meaning, such as a value no code uses, taints nothing, so the stages
+/// after checking report their errors in the body too. A tainted body may report no error of its own, so its taint is
+/// recorded as it is checked.
 final class TaintedBodies {
     /// The functions whose bodies are tainted.
     private(set) var functions: Set<FunctionID> = []

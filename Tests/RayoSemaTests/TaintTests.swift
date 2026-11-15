@@ -36,6 +36,34 @@ struct TaintTests {
         #expect(program.withBodies == ["clean()", "callsTainted()"])
     }
 
+    @Test func `an error that leaves a body's meaning whole taints nothing, unless what it is in fails`() {
+        let program = checked("""
+            func unused() -> Int { 1 }
+            func unusedValue() {
+                unused()
+                print(1)
+            }
+            func literal() {
+                let n: Int = 9223372036854775808
+                print(n)
+            }
+            func index() {
+                let a = [1, 2]
+                print(copy a[2])
+            }
+            func noMatch() {
+                overloaded(9223372036854775808)
+                print(1)
+            }
+            struct Flag(var on: Bool)
+            func overloaded(_ b: Bool) {}
+            func overloaded(_ f: Flag) {}
+            """)
+        #expect(program.withBodies == [
+            "unused()", "unusedValue()", "literal()", "index()", "overloaded(_: Bool)", "overloaded(_: Flag)",
+        ])
+    }
+
     @Test func `a function whose declaration fails to check keeps its ID, with no declaration`() {
         let program = Checker.check(Parser.parse("func a(_ n: Nope) {}\nfunc b() {}").file).program
         #expect(program.functions.ids.map(\.index) == [1])

@@ -18,8 +18,9 @@ public indirect enum StmtKind: Sendable {
     case breakStmt
     case continueStmt
     case returnStmt(Expr?)
-    /// A statement that failed to parse, whose syntax error was reported.
-    case error
+    /// A statement that failed to parse, whose syntax error was reported, with the names its `let` or `var` binds
+    /// before the error, which the code after it may still use.
+    case error(boundNames: [String])
 }
 
 /// `name: Type = value`, where the type and the value are optional.
