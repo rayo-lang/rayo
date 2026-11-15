@@ -20,13 +20,15 @@ struct FunctionVerifier {
     }
 
     /// Throws the first violation in the body: of its types, in the order of its blocks, and in each of its statements
-    /// and then its terminator; then, where the ownership stage gave it, of where its accesses end.
+    /// and then its terminator; then of the checks of the indices it steps into elements at; then, where the ownership
+    /// stage gave it, of where its accesses end.
     func verify() throws(IRViolation) {
         try verifyParameterLocals()
         for block in body.blocks {
             for statement in block.statements { try verify(statement) }
             try verify(block.terminator)
         }
+        try ElementIndexVerifier(body: body, of: declaration.name, types: types).verify()
 
         // Lowering writes no end, so only the ownership stage's IR ends its accesses.
         guard stage == .ownership else { return }
