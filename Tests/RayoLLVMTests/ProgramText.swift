@@ -1,0 +1,31 @@
+/// The structs the programs that the tests run build, with their primary initializers: a Pair of two Ints, which
+/// passes and returns as its two scalars; a Trio of two Ints and a Bool, which is large, so it passes as a pointer and
+/// returns through a slot; and a Box of a Pair and three Ints, whose fields lead to places of several steps.
+let programStructs = """
+    struct Pair {
+      a: Int
+      b: Int
+    }
+    struct Trio {
+      a: Int
+      b: Int
+      c: Bool
+    }
+    struct Box {
+      pair: Pair
+      items: [3 of Int]
+    }
+    init "Pair(a: Int, b: Int)"(Int, Int) -> Pair
+    init "Trio(a: Int, b: Int, c: Bool)"(Int, Int, Bool) -> Trio
+
+    """
+
+/// The IR statement that prints the Int that `place` holds, such as `%0.1`.
+func printInt(_ place: String) -> String {
+    #"_ = call builtin "print(_: Int)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+}
+
+/// The IR statement that prints the Bool that `place` holds.
+func printBool(_ place: String) -> String {
+    #"_ = call builtin "print(_: Bool)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+}
