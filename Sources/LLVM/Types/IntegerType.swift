@@ -1,7 +1,9 @@
 package import CLLVM
 
 /// An LLVM integer type of `Width`.
-public struct IntegerType<Width: IntegerWidth>: TypeHandle, Equatable {
+public struct IntegerType<Width: IntegerWidth>: IntegerTypeHandle, Equatable {
+    public typealias Value = IntValue<Width>
+
     package let ref: LLVMTypeRef
 
     package init(_ ref: LLVMTypeRef) {

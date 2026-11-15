@@ -14,6 +14,11 @@ public struct TypeMaker {
         StructType(LLVMStructCreateNamed(context.ref, name))
     }
 
+    /// The integer type of `bitWidth` bits.
+    public func integerType(bitWidth: Int) -> AnyIntegerType {
+        AnyIntegerType(LLVMIntTypeInContext(context.ref, UInt32(bitWidth)))
+    }
+
     public func arrayType(of element: some TypeHandle, count: Int) -> AnyType {
         AnyType(LLVMArrayType2(element.anyType.ref, UInt64(count)))
     }

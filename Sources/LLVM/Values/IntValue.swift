@@ -1,7 +1,7 @@
 package import CLLVM
 
 /// An LLVM integer value of `Width`.
-public struct IntValue<Width: IntegerWidth>: ValueHandle, Equatable {
+public struct IntValue<Width: IntegerWidth>: IntegerHandle, Equatable {
     package let ref: LLVMValueRef
 
     /// Takes `ref` as an integer of `Width`, which it must be.

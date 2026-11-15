@@ -16,6 +16,18 @@ struct TypeTests {
         let bytes = bench.context.constant(bytes: Array("hi".utf8))
 
         #expect(IntValue<I8>(bytes) == nil)
+        #expect(AnyIntValue(bytes) == nil)
+    }
+
+    @Test(arguments: [1, 8, 32, 64])
+    func `an integer value of any width converts to an integer whose width it carries`(width: Int) throws {
+        let bench = Workbench()
+        let type = bench.context.typeMaker.integerType(bitWidth: width)
+        let value = try #require(AnyIntValue(type.constant(1)))
+
+        #expect(value.bitWidth == width)
+        #expect(type.bitWidth == width)
+        #expect(type.anyType.text == "i\(width)")
     }
 
     @Test func `a struct or an array converts to an aggregate, and an integer doesn't`() {

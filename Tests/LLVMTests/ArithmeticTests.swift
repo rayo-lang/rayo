@@ -105,4 +105,40 @@ struct ArithmeticTests {
               ret i64 %2
             """))
     }
+
+    @Test func `an integer whose width the program decides builds the instructions one of a fixed width does`() throws {
+        let bench = Workbench()
+        let int32 = bench.context.typeMaker.integerType(bitWidth: 32)
+        let function = bench.function(named: "f", returning: bench.bool, taking: [int32, int32])
+        let left = try #require(AnyIntValue(function.parameter(at: 0)))
+        let right = try #require(AnyIntValue(function.parameter(at: 1)))
+        let sum = bench.builder.add(left, int32.constant(-1))
+        let product = bench.builder.multiply(sum, right)
+        bench.builder.return(bench.builder.compare(.signedLess, product, right))
+
+        try bench.module.verify()
+        #expect(function.text.contains("""
+              %2 = add i32 %0, -1
+              %3 = mul i32 %2, %1
+              %4 = icmp slt i32 %3, %1
+            """))
+    }
+
+    @Test func `an integer whose width the program decides truncates, and extends with zeros or its sign`() throws {
+        let bench = Workbench()
+        let int16 = bench.context.typeMaker.integerType(bitWidth: 16)
+        let int64 = bench.context.typeMaker.integerType(bitWidth: 64)
+        let function = bench.function(named: "f", returning: int64, taking: [int64])
+        let low = bench.builder.truncate(try #require(AnyIntValue(function.parameter(at: 0))), to: int16)
+        let signed = bench.builder.signExtend(low, to: int64)
+        bench.builder.return(bench.builder.or(signed, bench.builder.zeroExtend(low, to: int64)))
+
+        try bench.module.verify()
+        #expect(function.text.contains("""
+              %1 = trunc i64 %0 to i16
+              %2 = sext i16 %1 to i64
+              %3 = zext i16 %1 to i64
+              %4 = or i64 %2, %3
+            """))
+    }
 }
