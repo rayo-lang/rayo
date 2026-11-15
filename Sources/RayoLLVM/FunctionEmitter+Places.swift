@@ -7,7 +7,6 @@ extension FunctionEmitter {
     /// Emits, in the entry block, the place of each local, and returns the pointers to them in the locals' order. A
     /// parameter's place holds its argument.
     func makePlaces(with builder: borrowing Builder) -> [PointerValue] {
-        let returned = returnedLocal()
         var places: [PointerValue] = []
         for (index, local) in body.locals.enumerated() {
             let place = if index < declaration.parameters.count {

@@ -129,9 +129,88 @@ struct StackSlotTests {
         #expect(stackBytes <= 2 * largeArrayBytes + smallFrameBytes)
     }
 
-    @Test func `a slot that one operation builds a value in lives only while the operation uses it`() throws {
-        // A struct and an array built from parts of the places they replace are each built in a slot of their own,
-        // then copied in, and the loop that fills an array counts in a slot of its own.
+    @Test func `the results of two calls that temporaries hold one after the other share one slot, in a release build`()
+        throws {
+        // Each temporary holds an array `filled` makes, whose sum `main` prints, and retires once `sum` has read it.
+        // Each sum reads the whole array, so optimising keeps each array in memory.
+        let program = """
+            main "main()"
+            func "filled(_: UInt)"(_: UInt) -> [100000 of Int] {
+              param %0 i: UInt @1:1-1:2
+              var %1 a: [100000 of Int] @1:1-1:2
+              temp %2: UInt
+            bb0:
+              declare %1
+              %1 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
+              declare %2
+              %2 @1:1-1:2 = index read %0 @1:1-1:2 below 100000 @1:1-1:2
+              %1[%2] @1:1-1:2 = add checked read %1[%2] @1:1-1:2, 1 @1:1-1:2
+              retire %2
+              return move %1 @1:1-1:2
+            }
+            func "sum(_: [100000 of Int])"(_: [100000 of Int]) -> Int {
+              param %0 a: [100000 of Int] @1:1-1:2
+              var %1 total: Int @1:1-1:2
+              var %2 j: UInt @1:1-1:2
+              temp %3: Bool
+              temp %4: UInt
+            bb0:
+              declare %1
+              %1 @1:1-1:2 = operand 0 @1:1-1:2
+              declare %2
+              %2 @1:1-1:2 = operand UInt 0 @1:1-1:2
+              goto bb1
+            bb1:
+              declare %3
+              %3 @1:1-1:2 = less read %2 @1:1-1:2, UInt 100000 @1:1-1:2
+              branch read %3 @1:1-1:2, bb2, bb3
+            bb2:
+              retire %3
+              declare %4
+              %4 @1:1-1:2 = index read %2 @1:1-1:2 below 100000 @1:1-1:2
+              %1 @1:1-1:2 = add checked read %1 @1:1-1:2, read %0[%4] @1:1-1:2 @1:1-1:2
+              retire %4
+              %2 @1:1-1:2 = add checked read %2 @1:1-1:2, UInt 1 @1:1-1:2
+              goto bb1
+            bb3:
+              retire %3
+              retire %2
+              return read %1 @1:1-1:2
+            }
+            func "main()"() -> Void {
+              temp %0: [100000 of Int]
+              temp %1: Int
+              temp %2: [100000 of Int]
+              temp %3: Int
+            bb0:
+              declare %0
+              %0 @1:1-1:2 = call "filled(_: UInt)"(UInt 3) @1:1-1:2
+              declare %1
+              %1 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
+              retire %0
+              declare %2
+              %2 @1:1-1:2 = call "filled(_: UInt)"(UInt 5) @1:1-1:2
+              declare %3
+              %3 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %2 @1:1-1:2) @1:1-1:2
+              retire %2
+              \(printInt("%1"))
+              retire %1
+              \(printInt("%3"))
+              retire %3
+              return
+            }
+            """
+
+        // One array lives at a time, never two.
+        let (run, stackBytes) = try runMeasuringStack(program, in: .release)
+        #expect(run == InProcessJIT.Run(printed: "100001\n100001\n", panic: nil))
+        #expect(stackBytes <= largeArrayBytes + smallFrameBytes)
+    }
+
+    @Test func `every slot a function has, but a parameter's, lives only while what it holds is in use`() throws {
+        // `p` and `a` lie in slots of their own, from their declarations to their retirements. A struct and an array
+        // built from parts of the places they replace are each built in a slot of their own, then copied in, and the
+        // loop that fills an array counts in a slot of its own.
         let program = try executable(programStructs + """
             main "main()"
             func "main()"() -> Void {
@@ -141,18 +220,21 @@ struct StackSlotTests {
               declare %0
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
+              retire %0
               declare %1
               %1 @1:1-1:2 = fill 2 of 0 @1:1-1:2
               %1 @1:1-1:2 = array of Int(read %1[1] @1:1-1:2, read %1[0] @1:1-1:2) @1:1-1:2
+              retire %1
               return
             }
             """)
 
         try withEmitted(program) { module in
             let main = try function(named: RuntimeFunction.main.symbol, in: module)
-            let started = slots(markedBy: "llvm.lifetime.start", in: main)
-            #expect(started.count == 3)
-            #expect(Set(started) == Set(slots(markedBy: "llvm.lifetime.end", in: main)))
+            let allocated = instructions(.allocate, in: main).map { String($0.anyValue.text.split(separator: " ")[0]) }
+            #expect(Set(slots(markedBy: "llvm.lifetime.start", in: main)) == Set(allocated))
+            #expect(Set(slots(markedBy: "llvm.lifetime.end", in: main)) == Set(allocated))
+            #expect(allocated.count == 5)
         }
     }
 

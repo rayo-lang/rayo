@@ -48,6 +48,8 @@ struct FunctionEmitter {
     let operators: OperatorEmitter
     /// The block that holds every stack slot, and goes on to the first IR block.
     let entry: LLVM.BasicBlock
+    /// The local that every `return` returns whole, which lies in the caller's result slot, or nil where there is none.
+    var returned: LocalID?
     /// The pointer to each local's place, indexed by `LocalID`.
     var places: [PointerValue] = []
     var blocks: [LLVM.BasicBlock] = []
@@ -78,6 +80,7 @@ struct FunctionEmitter {
     /// Emits the body into the function, in `program`'s module.
     mutating func emit(in program: borrowing ProgramEmitter) {
         program.builder.position(atEndOf: entry)
+        returned = returnedLocal()
         places = makePlaces(with: program.builder)
         blocks = body.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 
@@ -117,8 +120,15 @@ struct FunctionEmitter {
             guard access.enforcement == .static else { preconditionFailure("the IR has no objects") }
             accesses[id] = BegunAccess(place: access.place, address: address(of: access.place, with: program.builder))
 
-        // A declaration emits nothing: the program reads a place only once a statement has stored to it. Nor does
-        // the end of a static access, or a dependence, which only the ownership stage looks at.
+        // A declaration starts the life of its local's slot, and a retirement ends it, so that slots whose lives don't
+        // overlap may share memory.
+        case .declare(let local) where local != returned:
+            program.builder.startLife(of: places[local.index])
+        case .retire(let local) where local != returned:
+            program.builder.endLife(of: places[local.index])
+
+        // The local the function returns lies in its caller's slot, whose life the caller marks. The end of a static
+        // access, and a dependence, emit nothing: only the ownership stage looks at them.
         case .declare, .retire, .end, .depend:
             break
         }
