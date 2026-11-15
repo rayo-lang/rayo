@@ -46,6 +46,28 @@ struct ArrayTests {
             """
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "3\n6\n0\n0\n7\n", errors: ""))
     }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
+    func `arrays of a hundred thousand elements live on a linked program's stack, beside functions that pass them`(
+        mode: [String],
+    ) {
+        // Only a linked program runs with the stack the platform gives it, which these arrays fill much of.
+        let source = """
+            func main() {
+                var a: [100000 of Int] = .init(repeating: 0)
+                print(a[0] + a[99999])
+                a = .init(repeating: 1)
+                let hits: [1000 of [100 of Hit]] = .init(repeating: .init(repeating: Hit(damage: 2, crit: true)))
+                print(a[0] + a[99999])
+                print(hits[0][0].damage + hits[999][99].damage)
+            }
+            func relay(_ a: [100000 of Int]) -> [100000 of Int] { copy a }
+            func relayAll(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(copy a) }
+            func relay(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { copy a }
+            struct Hit(var damage: Int, let crit: Bool)
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n2\n4\n", errors: ""))
+    }
 }
 
 /// A function that prints each element of an array of three Ints, which the program below uses.

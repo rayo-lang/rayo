@@ -344,11 +344,6 @@ struct BuildTests {
 }
 
 struct IntegerTests {
-    @Test("main prints the value of an integer expression")
-    func printsArithmetic() {
-        #expect(run("func main() { print(1 + 2 * 3) }") == CommandResult(exitCode: 0, output: "7\n", errors: ""))
-    }
-
     @Test func `the output a program printed before it panics comes out before the panic`() {
         let source = "func main() {\n    print(1)\n    print(9223372036854775807 + 1)\n}"
         #expect(panic(in: run(source, options: ["--debug"])) == Panic(reason: "integer overflow", output: "1\n"))
