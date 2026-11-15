@@ -31,8 +31,7 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
         if case .scalar(let scalar) = self { scalar.isInteger } else { false }
     }
 
-    /// Whether the type's values carry a sign, which prefix `-` needs: negating an unsigned value overflows for
-    /// every value but 0.
+    /// Whether the type's values carry a sign, as a signed integer type's do.
     public var isSigned: Bool {
         if case .scalar(let scalar) = self { scalar.isSigned } else { false }
     }

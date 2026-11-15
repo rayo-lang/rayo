@@ -70,15 +70,15 @@ indirect enum UntypedValue {
     /// Settles `-operand`, which the source gives at `range`, to `type`, reporting it where `type` has no sign.
     private static func negation(_ operand: UntypedValue, as type: RayoType, named typeName: TypeName,
                                  at range: SourceRange, reporting errors: ErrorList) -> CheckedExpr? {
-        // The operand settles first, so its own errors are reported.
-        let operand = operand.settled(to: type, named: typeName, reporting: errors)
-
-        // Negating an unsigned value overflows for every value but 0, so only a signed type has `-`.
+        // Negating an unsigned value overflows for every value but 0, so only a signed type has `-`. The operand
+        // isn't settled then, since a negation inside it would report the same mistake again.
         guard type.isSigned else {
             errors.report(.signedOperand(op: UnaryOperator.negate.rawValue, found: typeName), at: range)
             return nil
         }
-        return operand.map { CheckedExpr(kind: .unary(.negate, $0), type: type, range: range) }
+        return operand.settled(to: type, named: typeName, reporting: errors).map {
+            CheckedExpr(kind: .unary(.negate, $0), type: type, range: range)
+        }
     }
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.

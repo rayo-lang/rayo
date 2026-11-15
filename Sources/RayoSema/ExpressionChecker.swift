@@ -173,7 +173,7 @@ struct ExpressionChecker {
 
     /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is signed.
     private func negation(of operand: CheckedExpr, in range: SourceRange) -> CheckedValue? {
-        // An operand of a type without a sign is reported.
+        // Negating an unsigned value overflows for every value but 0, so only a signed type has `-`.
         guard operand.type.isSigned else {
             errors.report(.signedOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
                           at: range)

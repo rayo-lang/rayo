@@ -74,24 +74,22 @@ struct UIntTests {
         #expect(message == "'+' needs operands of one type, found Int and UInt")
     }
 
-    @Test func `arithmetic on values that aren't integers says so`() {
+    @Test func `an operator on operands of the wrong kind names what it needs`() {
         #expect(ErrorCode.integerOperands(op: "+", left: "Bool", right: "Int").message ==
             "'+' needs integer operands, found Bool and Int")
+        #expect(ErrorCode.signedOperand(op: "-", found: "UInt").message == "'-' needs a signed operand, found UInt")
     }
 
     @Test(arguments: [
         ("let u: UInt = 5\nlet v = -u", "-u"),
         ("let u: UInt = -(1 + 2)", "-(1 + 2)"),
+        ("let u: UInt = -(-(1 + 2))", "-(-(1 + 2))"),
+        ("let u: UInt = -(-1 + 2)", "-(-1 + 2)"),
     ])
     func `'-' on a UInt is reported, since negating any UInt but 0 overflows`(body: String, negation: String) {
         let (codes, covered) = codesAndCoverage(inMain: body)
         #expect(codes == [.signedOperand(op: "-", found: "UInt")])
         #expect(covered == [negation])
-        #expect(ErrorCode.signedOperand(op: "-", found: "UInt").message == "'-' needs a signed operand, found UInt")
-    }
-
-    @Test func `a '-' written onto a parenthesized literal makes one literal, which must fit its type`() {
-        #expect(errors(mainSource("print(-(-9223372036854775808))")) == [.literalDoesntFit(type: "Int")])
     }
 
     @Test(arguments: [

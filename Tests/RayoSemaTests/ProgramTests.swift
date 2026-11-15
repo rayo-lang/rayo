@@ -4,6 +4,7 @@ import RayoDiagnostics
 struct ProgramTests {
     @Test("a program that checks reports nothing", arguments: [
         "func main() { print(-9223372036854775808) }",
+        "func main() { print(-(9223372036854775808)) }",
         "func main() -> Void {}",
         "func main() -> () {}",
     ])
