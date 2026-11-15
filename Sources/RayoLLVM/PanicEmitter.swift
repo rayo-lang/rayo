@@ -29,7 +29,8 @@ struct PanicEmitter {
         program.builder.position(atEndOf: panicBlock)
         let message = Array("\(program.sourcePath):\(range.start): panic: \(reason.rawValue)\n".utf8)
         let bytes = program.context.constant(bytes: message)
-        let text = program.module.addGlobal(named: "panic_message", initializer: bytes)
+        // A name with a dot is none that the runtime or the C library defines.
+        let text = program.module.addGlobal(named: "panic.message", initializer: bytes)
         text.setConstant()
         text.setUnnamedAddress()
         let length = types.format(of: .int).constant(Int128(message.count))

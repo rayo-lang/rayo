@@ -1,7 +1,7 @@
 import RayoSema
 
-/// A function that one side of a program and its runtime defines and the other calls: one the runtime defines for the
-/// program's code to call, or the program's `main`, which the runtime's entry point calls.
+/// A function that crosses between a program and its runtime: one the runtime defines for the program's code to call,
+/// or the program's `main`, which the runtime's entry point calls.
 enum RuntimeFunction: CaseIterable {
     /// The program's `main`, which takes nothing and returns nothing.
     case main
