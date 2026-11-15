@@ -81,11 +81,20 @@ struct LLVMTypes {
                 scalars(of: field.type).map { Scalar(steps: [.field(index)] + $0.steps, type: $0.type) }
             }
 
-        // An array is the scalars of each element in turn, each lying inside its element.
+        // An array is the scalars of each element in turn.
         case .array(let count, let element):
-            (0..<count).flatMap { index in
-                scalars(of: element).map { Scalar(steps: [.element(index)] + $0.steps, type: $0.type) }
-            }
+            scalars(ofArrayOf: count, element)
+        }
+    }
+
+    /// The scalars of an array of `count` values of `element`: each element's in turn, each lying inside its element.
+    private func scalars(ofArrayOf count: Int, _ element: RayoType) -> [Scalar] {
+        // An element with no scalars leaves none to list, however many elements there are, so they aren't walked.
+        let elementScalars = scalars(of: element)
+        guard !elementScalars.isEmpty else { return [] }
+
+        return (0..<count).flatMap { index in
+            elementScalars.map { Scalar(steps: [.element(index)] + $0.steps, type: $0.type) }
         }
     }
 

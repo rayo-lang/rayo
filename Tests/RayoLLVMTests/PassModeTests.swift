@@ -286,6 +286,14 @@ struct SignatureLoweringTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func `an array of values with no scalars passes in none, decided in the same time for any count`() throws {
+        // Four billion Empties split into no scalars, so the array is small, and walking each element takes too long.
+        try withModes { mode in
+            #expect(mode(.borrowed, .array(count: 4_000_000_000, element: emptyType)) == .direct([]))
+        }
+    }
+
     /// A Trio of two Ints and a Bool, which splits into three scalars, and an Empty, which splits into none.
     private let table = TypeTable(structs: [
         StructType(name: "Trio", fields: [
