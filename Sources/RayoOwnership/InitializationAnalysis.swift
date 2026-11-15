@@ -6,9 +6,9 @@ struct InitializationAnalysis: DataflowAnalysis {
     let direction = DataflowDirection.forward
     let startState: InitializationState
 
-    /// The analysis of `body`, whose first `parameterCount` locals are its function's parameters.
-    init(_ body: IRBody, parameterCount: Int) {
-        startState = InitializationState(entering: body, parameterCount: parameterCount)
+    /// The analysis of `body`.
+    init(_ body: IRBody) {
+        startState = InitializationState(entering: body)
     }
 
     func apply(_ statement: Statement, to state: inout InitializationState) {

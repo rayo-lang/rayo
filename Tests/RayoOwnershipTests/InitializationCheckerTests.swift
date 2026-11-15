@@ -64,13 +64,17 @@ struct InitializationCheckerTests {
         #expect(try checked(function(blocks)).errors == [])
     }
 
-    @Test func `a parameter holds its argument from the function's entry`() throws {
-        let blocks = """
+    @Test(arguments: ["Int", "owned Int", "mutable Int"])
+    func `a parameter holds its argument from the function's entry, whatever its convention`(parameter: String) throws {
+        let function = (name: "f(_: Int)", text: """
+            func "f(_: Int)"(_: \(parameter)) -> Void {
+              param %0 n: \(parameter) @1:1-1:1
             bb0:
               _ = call builtin "print(_: Int)"(read %0 @2:1-2:1) @1:1-1:1
               return
-            """
-        #expect(try checked(function(blocks, parameters: "Int")).errors == [])
+            }
+            """)
+        #expect(try checked(function).errors == [])
     }
 
     @Test(arguments: [

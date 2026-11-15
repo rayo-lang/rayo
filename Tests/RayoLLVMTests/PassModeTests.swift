@@ -44,8 +44,8 @@ struct PassModeTests {
               end a0
               return
             }
-            func "first(_: Trio)"(Trio) -> Int {
-              param %0 t: Trio
+            func "first(_: Trio)"(_: Trio) -> Int {
+              param %0 t: Trio @1:1-1:1
               temp %1: Int
             bb0:
               %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2
@@ -199,9 +199,9 @@ struct PassModeTests {
           var a: Int
           var b: Int
         }
-        init "Trio(a: Int, b: Int, c: Bool)"(Int, Int, Bool) -> Trio
-        init "Holder(trio: Trio, flag: Bool)"(Trio, Bool) -> Holder
-        init "Ints(a: Int, b: Int)"(Int, Int) -> Ints
+        init "Trio(a: Int, b: Int, c: Bool)"(a: owned Int, b: owned Int, c: owned Bool) -> Trio
+        init "Holder(trio: Trio, flag: Bool)"(trio: owned Trio, flag: owned Bool) -> Holder
+        init "Ints(a: Int, b: Int)"(a: owned Int, b: owned Int) -> Ints
 
         """
 
@@ -213,8 +213,8 @@ struct PassModeTests {
     private func relaying(_ type: String) -> String {
         """
 
-        func "relay(_: \(type))"(\(type)) -> \(type) {
-          param %0 value: \(type)
+        func "relay(_: \(type))"(_: \(type)) -> \(type) {
+          param %0 value: \(type) @1:1-1:2
         bb0:
           return read %0 @1:1-1:2
         }
@@ -305,9 +305,8 @@ struct SignatureLoweringTests {
         try withProgramModule(for: .debug) { programModule in
             let lowering = SignatureLowering(types: LLVMTypes(table, in: programModule.emitter.context))
             try body { convention, type in
-                let parameter = FunctionSignature.Parameter(convention: convention, type: type)
-                let signature = FunctionSignature(parameters: [parameter], result: .void)
-                return lowering.lower(signature, in: programModule.emitter.context).parameters[0]
+                let parameter = FunctionParameter(label: nil, convention: convention, type: type)
+                return lowering.lower([parameter], returning: .void, in: programModule.emitter.context).parameters[0]
             }
         }
     }

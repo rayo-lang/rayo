@@ -78,15 +78,15 @@ final class FileChecker {
     /// A struct that can't be laid out has none, since no call reaches it.
     private func declarePrimaryInitializers(of ids: [TypeID?], in types: TypeTable) {
         for case .structure(let id)? in ids where !declarations.types.hasFailed(named: id.name) {
-            // The initializer takes each field's value, labeled by its name, and makes the struct.
+            // The initializer takes each field's value, owned and labeled by its name, and makes the struct.
             let initializer = FunctionID(index: functions.count)
             let parameters = types[id].fields.map { field in
-                Parameter(label: field.name, type: field.type, spelledType: "\(field.type)")
+                Parameter(FunctionParameter(label: field.name, convention: .owned, type: field.type))
             }
             let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,
                                       result: .type(.named(.structure(id))))
             functions.append(DeclaredFunction(signature: signature, kind: .primaryInitializer(id)))
-            declarations.declarePrimaryInitializer(initializer, of: id)
+            declarations.declarePrimaryInitializer(signature, of: id)
         }
     }
 
@@ -151,7 +151,8 @@ final class FileChecker {
             errors.report(.voidParameter(type: declarations.typeName(of: .void)), at: parameter.type.range)
             type = nil
         }
-        return Parameter(label: parameter.label, type: type, spelledType: parameter.type.spelling)
+        return Parameter(label: parameter.label, convention: .borrowed, type: type,
+                         spelledType: parameter.type.spelling)
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.
@@ -206,7 +207,7 @@ final class FileChecker {
     /// one of its parameters isn't known, which fails it.
     private func declaration(of id: FunctionID) -> FunctionDeclaration? {
         let function = functions[id.index]
-        let parameters = function.signature.parameters.compactMap(\.type)
+        let parameters = function.signature.parameters.compactMap(\.declared)
         // A function whose result type or one of whose parameters' types isn't known fails.
         guard let result = body(of: id).result, parameters.count == function.signature.parameters.count else {
             return nil
@@ -244,7 +245,7 @@ final class FileChecker {
     /// that `signature` declares.
     private func checkBody(of function: FuncDecl, as signature: Signature) -> BodyCheck {
         // Give the body a checker of its own.
-        let body = BodyChecker(file: self, parameters: function.parameters, types: signature.parameters.map(\.type),
+        let body = BodyChecker(file: self, parameters: function.parameters, declaredAs: signature.parameters,
                                result: signature.result.type)
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.

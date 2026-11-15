@@ -6,15 +6,15 @@ import RayoSyntax
 struct BodyChecker {
     private let expressions: ExpressionChecker
 
-    /// A checker of the body of a function whose result type is `result`, with `parameters`, whose types are
-    /// `types`, as its first locals, reporting what in them can't be declared.
-    init(file: FileChecker, parameters: [Param], types: [RayoType?], result: RayoType?) {
+    /// A checker of the body of a function whose result type is `result`, with `parameters`, which `signature`
+    /// declares, as its first locals, reporting what in them can't be declared.
+    init(file: FileChecker, parameters: [Param], declaredAs signature: [Parameter], result: RayoType?) {
         // Give the body names of its own, which every checker it builds shares.
         self.init(expressions: ExpressionChecker(file: file, names: NameScopes(file: file),
                                                  jumps: JumpTargets(result: result)))
 
         // Declare the parameters in the scope around the body's blocks.
-        bindingChecker.declare(parameters, types: types)
+        bindingChecker.declare(parameters, declaredAs: signature)
     }
 
     /// A checker of statements whose expressions `expressions` checks.

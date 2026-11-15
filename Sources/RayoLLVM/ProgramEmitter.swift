@@ -83,7 +83,7 @@ struct ProgramEmitter: ~Copyable {
         let (name, signature) = if id == executable.main {
             (RuntimeFunction.main.symbol, runtimeDeclarations.mainSignature)
         } else {
-            (function.name, lowering.lower(FunctionSignature(of: function), in: context))
+            (function.name, lowering.lower(function.parameters, returning: function.result, in: context))
         }
         let llvmFunction = module.addFunction(named: name, type: signature.type,
                                               parameterAttributes: signature.parameterAttributes)

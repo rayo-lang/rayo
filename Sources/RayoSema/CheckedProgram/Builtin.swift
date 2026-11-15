@@ -33,15 +33,12 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
         return type
     }
 
-    /// The parameters, in order, each with the label a call passes its argument with, or nil where it passes none.
-    var parameters: [(label: String?, type: RayoType)] {
+    /// The parameters, in order. Each borrows a scalar, which a call passes with no label.
+    public var parameters: [FunctionParameter] {
         switch self {
-        case .print(let scalar), .conversion(let scalar, _): [(nil, .scalar(scalar))]
+        case .print(let scalar), .conversion(let scalar, _):
+            [FunctionParameter(label: nil, convention: .borrowed, type: .scalar(scalar))]
         }
-    }
-
-    public var parameterTypes: [RayoType] {
-        parameters.map(\.type)
     }
 
     public var result: RayoType {

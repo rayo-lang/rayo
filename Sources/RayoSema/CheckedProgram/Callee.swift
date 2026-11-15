@@ -12,11 +12,10 @@ public enum Callee: Hashable, Sendable {
         }
     }
 
-    /// The types of the parameters of what the call calls, in order, where `functions` declares the program's
-    /// functions.
-    public func parameters(in functions: FunctionTable) -> [RayoType] {
+    /// The parameters of what the call calls, in order, where `functions` declares the program's functions.
+    public func parameters(in functions: FunctionTable) -> [FunctionParameter] {
         switch self {
-        case .builtin(let builtin): builtin.parameterTypes
+        case .builtin(let builtin): builtin.parameters
         case .function(let id): functions[id].parameters
         }
     }

@@ -7,7 +7,7 @@ struct ComputeTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 5 @1:1-1:2
               \(printInt("%0"))
@@ -23,7 +23,7 @@ struct ComputeTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 p: Pair
+              var %0 p: Pair @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %0.1 @1:1-1:2 = operand 7 @1:1-1:2
@@ -39,7 +39,7 @@ struct ComputeTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
+              var %0 a: [3 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %0[1] @1:1-1:2 = operand 9 @1:1-1:2
@@ -56,7 +56,7 @@ struct ComputeTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
+              var %0 a: [3 of Int] @1:1-1:1
               temp %1: UInt
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
@@ -76,7 +76,7 @@ struct ComputeTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 box: Box
+              var %0 box: Box @1:1-1:1
             bb0:
               %0.0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %0.1 @1:1-1:2 = array of Int(3, 4, 5) @1:1-1:2
@@ -99,7 +99,7 @@ struct DroppedValueTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 5 @1:1-1:2
               _ = operand read %0 @1:1-1:2 @1:1-1:2
@@ -118,7 +118,7 @@ struct DroppedValueTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 i: UInt
+              var %0 i: UInt @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand UInt 5 @1:1-1:2
               _ = index read %0 @1:1-1:2 below 3 @2:3-2:4
@@ -136,7 +136,7 @@ struct DroppedValueTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
               _ = call builtin "UInt(_: Int)"(read %0 @1:1-1:2) @2:3-2:4
@@ -163,7 +163,7 @@ struct DroppedValueTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand \(operand) @1:1-1:2
               _ = \(operation), read %0 @1:1-1:2 @3:7-3:12
@@ -181,7 +181,7 @@ struct OwnershipStatementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              let %0 x: Int
+              let %0 x: Int @1:1-1:1
             bb0:
               declare %0
               %0 @1:1-1:2 = operand 4 @1:1-1:2
@@ -196,7 +196,7 @@ struct OwnershipStatementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 4 @1:1-1:2
               begin a0 read static %0 @1:1-1:2
@@ -204,8 +204,16 @@ struct OwnershipStatementTests {
               end a0
               %0 @1:1-1:2 = operand 5 @1:1-1:2
               begin a1 modify static %0 @1:1-1:2
-              _ = call builtin "print(_: Int)"(a1) @1:1-1:2
+              _ = call "show(_: Int)"(a1) @1:1-1:2
               end a1
+              return
+            }
+            func "show(_: Int)"(_: mutable Int) -> Void {
+              param %0 n: mutable Int @1:1-1:1
+            bb0:
+              begin a0 read static %0 @1:1-1:2
+              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
+              end a0
               return
             }
             """
@@ -217,7 +225,7 @@ struct OwnershipStatementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 4 @1:1-1:2

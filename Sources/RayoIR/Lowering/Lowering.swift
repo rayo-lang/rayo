@@ -7,18 +7,17 @@ public enum Lowering {
         // Lower each body, which ends as the result type of its function says.
         var bodies: [FunctionID: IRBody] = [:]
         for (id, body) in program.bodies {
-            bodies[id] = lower(body, returning: program.functions[id].result, among: program.functions)
+            bodies[id] = lower(body, returning: program.functions[id].result)
         }
 
         return IRProgram(types: program.types, functions: program.functions, bodies: bodies, main: program.main,
                          mainMayHaveFailed: program.mainMayHaveFailed)
     }
 
-    /// Lowers `body`, the body of a function whose result type is `result`, in a program whose functions `functions`
-    /// declares.
-    static func lower(_ body: CheckedBody, returning result: RayoType, among functions: FunctionTable) -> IRBody {
+    /// Lowers `body`, the body of a function whose result type is `result`.
+    static func lower(_ body: CheckedBody, returning result: RayoType) -> IRBody {
         let builder = FunctionBuilder(locals: body.locals.map(IRLocal.init))
-        var lowering = FunctionLowering(builder: builder, functions: functions)
+        var lowering = FunctionLowering(builder: builder)
         lowering.lower(body.statements)
         return lowering.body(returning: result)
     }
@@ -26,6 +25,6 @@ public enum Lowering {
 
 private extension IRLocal {
     init(_ local: CheckedLocal) {
-        self = .source(name: local.name, kind: local.kind, type: local.type)
+        self = .source(name: local.name, kind: local.kind, type: local.type, range: local.range)
     }
 }

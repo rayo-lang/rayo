@@ -9,14 +9,17 @@ struct SignatureLowering {
 
     let types: LLVMTypes
 
-    /// How a function of `signature` passes each parameter and its result, and its LLVM type, made in `context`.
-    func lower(_ signature: FunctionSignature, in context: borrowing Context) -> LoweredSignature {
-        let parameters = signature.parameters.map(passing(of:))
-        let result = passing(ofResult: signature.result)
+    /// How a function that takes `parameters` and returns a value of `resultType` passes each parameter and its
+    /// result, and its LLVM type, made in `context`.
+    func lower(
+        _ parameters: [FunctionParameter], returning resultType: RayoType, in context: borrowing Context,
+    ) -> LoweredSignature {
+        let passings = parameters.map(passing(of:))
+        let result = passing(ofResult: resultType)
         let returnedStruct = returnedStruct(for: result, in: context)
-        let type = functionType(passing: parameters, returning: result, as: returnedStruct, in: context)
+        let type = functionType(passing: passings, returning: result, as: returnedStruct, in: context)
         return LoweredSignature(
-            signature, parameters: parameters, result: result, type: type, returnedStruct: returnedStruct,
+            parameters: passings, resultType: resultType, result: result, type: type, returnedStruct: returnedStruct,
         )
     }
 
@@ -27,7 +30,7 @@ struct SignatureLowering {
     }
 
     /// How `parameter` is passed.
-    private func passing(of parameter: FunctionSignature.Parameter) -> ParameterPassing {
+    private func passing(of parameter: FunctionParameter) -> ParameterPassing {
         let type = parameter.type
         // A mutable argument is changed in the caller's place, whatever its size.
         if parameter.convention == .mutable { return .callerPlace(pointerAttributes(to: type, access: [.noAlias])) }

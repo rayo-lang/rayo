@@ -273,7 +273,7 @@ struct EmittedTypeTests {
           var flag: Bool
           var count: Int
         }
-        init "Pair(flag: Bool, count: Int)"(Bool, Int) -> Pair
+        init "Pair(flag: Bool, count: Int)"(flag: owned Bool, count: owned Int) -> Pair
 
         """
 
@@ -292,9 +292,9 @@ struct EmittedTypeTests {
         let locals = temporaries.enumerated().map { "  temp %\($0 + 2): \($1)\n" }.joined()
         return """
 
-            func "pick(_: Int, _: Bool)"(Int, Bool) -> \(result) {
-              param %0 n: Int
-              param %1 b: Bool
+            func "pick(_: Int, _: Bool)"(_: Int, _: Bool) -> \(result) {
+              param %0 n: Int @1:1-1:1
+              param %1 b: Bool @1:1-1:1
             \(locals)bb0:
               return read %\(result == "Int" ? 0 : 1) @1:1-1:2
             }

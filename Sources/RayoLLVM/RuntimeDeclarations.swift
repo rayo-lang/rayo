@@ -15,10 +15,11 @@ struct RuntimeDeclarations {
     /// Lowers the signature of each runtime function with `lowering`, in `context`.
     init(lowering: SignatureLowering, in context: borrowing Context) {
         let prints = ScalarType.prelude.map { scalar in
-            (scalar, lowering.lower(FunctionSignature(of: .print(scalar)), in: context))
+            let print = Builtin.print(scalar)
+            return (scalar, lowering.lower(print.parameters, returning: print.result, in: context))
         }
         printSignatures = Dictionary(uniqueKeysWithValues: prints)
-        mainSignature = lowering.lower(FunctionSignature(parameters: [], result: .void), in: context)
+        mainSignature = lowering.lower([], returning: .void, in: context)
         let length = lowering.types.format(of: .int).type
         panicType = context.functionType(returning: context.voidType, taking: [context.pointerType, length])
     }

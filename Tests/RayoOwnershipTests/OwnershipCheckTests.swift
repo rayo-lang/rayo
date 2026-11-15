@@ -30,12 +30,12 @@ struct OwnershipCheckTests {
     }
 
     @Test func `a use of a local that holds no value isn't checked for conflicting accesses`() throws {
-        // As `g(&x, x)` lowers, where nothing has assigned `x`.
+        // As `change(&x, x)` lowers, where nothing has assigned `x`.
         let blocks = """
             bb0:
               begin a0 modify static %0 @2:3-2:3
               begin a1 read static %0 @2:6-2:6
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
         // Both accesses use `x` with the same cause, so only the first is reported.
@@ -43,13 +43,13 @@ struct OwnershipCheckTests {
     }
 
     @Test func `a function whose accesses conflict isn't checked for values no code reads`() throws {
-        // As `g(&x, x)` lowers, then `y = 1`, which no code reads.
+        // As `change(&x, x)` lowers, then `y = 1`, which no code reads.
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify static %0 @2:3-2:3
               begin a1 read static %0 @2:6-2:6
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               %1 @2:9-2:9 = operand 1 @1:1-1:1
               return
             """
@@ -106,8 +106,8 @@ struct OwnershipCheckTests {
 /// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
 private func takingInt(_ blocks: String) -> (name: String, text: String) {
     let text = """
-        func "f(_: Int)"(Int) -> Void {
-          param %0 n: Int
+        func "f(_: Int)"(_: Int) -> Void {
+          param %0 n: Int @1:1-1:1
         \(blocks)
         }
         """

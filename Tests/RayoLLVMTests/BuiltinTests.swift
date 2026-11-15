@@ -50,7 +50,7 @@ struct ConversionTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 u: UInt
+              var %0 u: UInt @1:1-1:1
               temp %1: Int
               temp %2: UInt
             bb0:
@@ -69,7 +69,7 @@ struct ConversionTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: UInt
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
@@ -85,7 +85,7 @@ struct ConversionTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 u: UInt
+              var %0 u: UInt @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand UInt 18446744073709551615 @1:1-1:2

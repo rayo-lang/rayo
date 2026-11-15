@@ -28,7 +28,7 @@ struct ControlFlowTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 b: Bool
+              var %0 b: Bool @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand \(condition) @1:1-1:2
               branch read %0 @1:1-1:2, bb1, bb2
@@ -49,7 +49,7 @@ struct ControlFlowTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 i: Int
+              var %0 i: Int @1:1-1:1
               temp %1: Bool
             bb0:
               %0 @1:1-1:2 = operand 0 @1:1-1:2
@@ -85,7 +85,7 @@ struct ControlFlowTests {
               unreachable
             }
             func "seven()"() -> Int {
-              let %0 x: Int
+              let %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 7 @1:1-1:2
               return move %0 @1:1-1:2
@@ -155,8 +155,8 @@ struct ReturnTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
-              var %1 u: Trio
+              var %0 t: Trio @1:1-1:1
+              var %1 u: Trio @1:1-1:1
               temp %2: Trio
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
@@ -167,10 +167,10 @@ struct ReturnTests {
               \(printBool("%2.2"))
               return
             }
-            func "pick(_: Bool, _: Trio, _: Trio)"(Bool, Trio, Trio) -> Trio {
-              param %0 first: Bool
-              param %1 t: Trio
-              param %2 u: Trio
+            func "pick(_: Bool, _: Trio, _: Trio)"(_: Bool, _: Trio, _: Trio) -> Trio {
+              param %0 first: Bool @1:1-1:1
+              param %1 t: Trio @1:1-1:1
+              param %2 u: Trio @1:1-1:1
             bb0:
               branch read %0 @1:1-1:2, bb1, bb2
             bb1:
@@ -196,9 +196,9 @@ struct ReturnTests {
               \(printBool("%0.2"))
               return
             }
-            func "make(_: Bool)"(Bool) -> Trio {
-              param %0 flag: Bool
-              var %1 t: Trio
+            func "make(_: Bool)"(_: Bool) -> Trio {
+              param %0 flag: Bool @1:1-1:1
+              var %1 t: Trio @1:1-1:1
             bb0:
               %1.0 @1:1-1:2 = operand 5 @1:1-1:2
               %1.1 @1:1-1:2 = operand 6 @1:1-1:2

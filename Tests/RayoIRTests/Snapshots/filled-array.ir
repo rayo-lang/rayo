@@ -5,13 +5,13 @@ struct Enemy {
 
 main "main()"
 
-init "Enemy(hp: Int, armor: Int)"(Int, Int) -> Enemy
+init "Enemy(hp: Int, armor: Int)"(hp: owned Int, armor: owned Int) -> Enemy
 
 func "main()"() -> Void {
-  let %0 e: Enemy
-  let %1 a: [3 of Enemy]
-  let %2 b: [2 of [1 of Int]]
-  let %3 c: [0 of Enemy]
+  let %0 e: Enemy @2:5-2:6
+  let %1 a: [3 of Enemy] @3:5-3:6
+  let %2 b: [2 of [1 of Int]] @4:5-4:6
+  let %3 c: [0 of Enemy] @5:5-5:6
   temp %4: [1 of Int]
 bb0:
   declare %0

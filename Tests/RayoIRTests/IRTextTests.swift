@@ -41,7 +41,7 @@ struct IRTextTests {
             main "main()"
 
             func "main()"() -> Void {
-              var %0 x: UInt
+              var %0 x: UInt @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand UInt 18446744073709551615 @1:1-1:2
@@ -56,12 +56,37 @@ struct IRTextTests {
         #expect(IRPrinter.text(of: program) == text)
     }
 
+    @Test func `each parameter's label and convention, and where the source declares each local, read back the same`()
+        throws {
+        let text = """
+            main "main()"
+
+            func "main()"() -> Void {
+            bb0:
+              return
+            }
+
+            func "f(_: Int, by: Int, into: Int)"(_: Int, by: owned Int, into: mutable Int) -> Void {
+              param %0 x: Int @1:8-1:9
+              param %1 y: owned Int @1:20-1:21
+              param %2 z: mutable Int @1:36-1:37
+              let %3 k: Int @2:7-2:8
+              temp %4: Int
+            bb0:
+              return
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+    }
+
     @Test func `an access begun, passed to a call, depended on and ended reads back the same`() throws {
         let text = """
             main "main()"
 
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 1 @1:1-1:2
@@ -115,7 +140,7 @@ struct IRTextTests {
             main "main()"
 
             func "main()"() -> Void {
-              var %0 a: [2 of Int]
+              var %0 a: [2 of Int] @1:1-1:1
               temp %1: [0 of Grid]
             bb0:
               %0 @1:1-1:2 = array of Int(1, move %0 @2:3-2:4) @1:1-1:2
@@ -144,7 +169,7 @@ struct IRTextTests {
             main "main()"
 
             func "main()"() -> Void {
-              let %0 a: Int
+              let %0 a: Int @1:1-1:1
               temp %1: [3 of Int]
               temp %2: [0 of [3 of Int]]
             bb0:
@@ -171,7 +196,7 @@ struct IRTextTests {
             main "main()"
 
             func "main()"() -> Void {
-              var %0 grid: [2 of [3 of Int]]
+              var %0 grid: [2 of [3 of Int]] @1:1-1:1
               temp %1: UInt
               temp %2: Int
             bb0:

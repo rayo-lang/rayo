@@ -5,9 +5,9 @@ bb0:
   return
 }
 
-func "double(_: Int, by: Bool)"(Int, Bool) -> Int {
-  param %0 n: Int
-  param %1 by: Bool
+func "double(_: Int, by: Bool)"(_: Int, by: Bool) -> Int {
+  param %0 n: Int @2:15-2:16
+  param %1 by: Bool @2:23-2:25
   temp %2: Int
 bb0:
   %2 @2:42-2:47 = multiply checked read %0 @2:42-2:43, 2 @2:42-2:47

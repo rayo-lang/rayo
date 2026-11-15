@@ -4,12 +4,12 @@ struct P {
 
 main "main()"
 
-init "P(hp: Int)"(Int) -> P
+init "P(hp: Int)"(hp: owned Int) -> P
 
 func "main()"() -> Void {
-  var %0 x: Int
-  let %1 y: Int
-  var %2 p: P
+  var %0 x: Int @2:9-2:10
+  let %1 y: Int @3:9-3:10
+  var %2 p: P @5:9-5:10
   temp %3: Int
   temp %4: Int
   temp %5: P
@@ -51,9 +51,9 @@ bb6:
   return
 }
 
-func "show(_: P, _: Int)"(P, Int) -> Void {
-  param %0 a: P
-  param %1 b: Int
+func "show(_: P, _: Int)"(_: P, _: Int) -> Void {
+  param %0 a: P @9:13-9:14
+  param %1 b: Int @9:21-9:22
 bb0:
   return
 }

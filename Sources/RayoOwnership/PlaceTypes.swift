@@ -16,7 +16,7 @@ struct PlaceTypes {
     /// source for the index.
     func sourceName(of place: Place) -> String? {
         // A temporary has no name in the source.
-        guard case .source(var name, _, _) = body.locals[place.root.index] else { return nil }
+        guard case .source(var name, _, _, _) = body.locals[place.root.index] else { return nil }
 
         // Each field takes its name from the struct that holds it, and each element its index, where the IR writes it.
         for depth in place.steps.indices {

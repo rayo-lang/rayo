@@ -123,7 +123,7 @@ extension FunctionLowering {
             .binary(IRBinaryOperator(op), operand(of: left, as: .read), operand(of: right, as: .read))
         // So are the arguments of a call, from first to last.
         case .call(let callee, let arguments):
-            .call(callee, arguments: passed(arguments, to: callee))
+            .call(callee, arguments: passed(arguments))
         // An array takes its elements, from first to last, as a primary initializer takes its fields.
         case .arrayLiteral(let elements):
             .array(elements.map { operand(of: $0, as: .take) }, of: arrayShape(of: expr).element)
@@ -142,20 +142,28 @@ extension FunctionLowering {
         return (count, element)
     }
 
-    /// Lowers `arguments`, those of a call of `callee`, to what the call passes. A primary initializer takes each, as
-    /// its struct's field. Any other function borrows each: a constant is passed as it is, and any other value through
-    /// a read access to the place that holds it.
-    private mutating func passed(_ arguments: [CheckedExpr], to callee: Callee) -> [CallArgument] {
-        if case .function(let id) = callee, case .primaryInitializer = functions[id].kind {
-            return arguments.map { .operand(operand(of: $0, as: .take)) }
-        }
-
-        // Every argument is evaluated, left to right, before any of the call's borrows begins: they begin together
+    /// Lowers `arguments`, those of a call, to what the call passes, as each parameter's convention takes it: an owned
+    /// value as an operand that takes it, a borrowed value as a constant or a read access to the place that holds it,
+    /// and a mutable place as a modify access to it.
+    private mutating func passed(_ arguments: [CheckedArgument]) -> [CallArgument] {
+        // Every argument is evaluated, left to right, before any of the call's accesses begins: they begin together
         // as the call begins, in the order of the arguments.
-        let operands = arguments.map { operand(of: $0, as: .read) }
-        return operands.map { operand in
-            guard case .read(let place, let range) = operand else { return .operand(operand) }
-            return .access(builder.begin(Access(.read, .static, to: place, at: range)))
+        let evaluated = arguments.map { evaluate($0) }
+        return evaluated.map { argument in
+            switch argument {
+            case .value(let operand): .operand(operand)
+            case .place(let place, let range, let kind):
+                .access(builder.begin(Access(kind, .static, to: place, at: range)))
+            }
+        }
+    }
+
+    /// Evaluates `argument`, and returns what the call passes for it, before the call's accesses begin.
+    private mutating func evaluate(_ argument: CheckedArgument) -> EvaluatedArgument {
+        switch argument {
+        case .borrowed(let value): .borrowing(operand(of: value, as: .read))
+        case .owned(let value): .value(operand(of: value, as: .take))
+        case .mutable(let place): .place(self.place(of: place), at: place.range, .modify)
         }
     }
 
@@ -228,5 +236,21 @@ extension FunctionLowering {
         builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
+    }
+}
+
+/// A call's argument once it is evaluated, before the call's accesses begin: what the call passes for it.
+private enum EvaluatedArgument {
+    /// A value the call passes as it is.
+    case value(Operand)
+    /// A place the call reaches through an access of the kind, which begins with the call's other accesses, and
+    /// which the source names at the range.
+    case place(Place, at: SourceRange, AccessKind)
+
+    /// What the call passes for a borrowed argument whose value `operand` gives: a constant as it is, and the place
+    /// any other value lies in, through a read access.
+    static func borrowing(_ operand: Operand) -> EvaluatedArgument {
+        guard case .read(let place, let range) = operand else { return .value(operand) }
+        return .place(place, at: range, .read)
     }
 }

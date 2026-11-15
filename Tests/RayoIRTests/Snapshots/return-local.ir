@@ -6,7 +6,7 @@ bb0:
 }
 
 func "seven()"() -> Int {
-  let %0 x: Int
+  let %0 x: Int @3:5-3:6
 bb0:
   declare %0
   %0 @3:5-3:6 = operand 7 @3:9-3:10

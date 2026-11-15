@@ -12,6 +12,6 @@ struct AccessUseAnalysis: DataflowAnalysis {
     }
 
     func apply(_ terminator: Terminator, to state: inout AccessUseState) {
-        state.apply(backwardsThrough: terminator)
+        state.apply(backwardsThrough: terminator, of: places.body)
     }
 }

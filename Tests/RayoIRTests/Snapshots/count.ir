@@ -1,7 +1,7 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 a: [2 of Int]
+  let %0 a: [2 of Int] @2:9-2:10
   temp %1: [2 of [3 of Int]]
   temp %2: UInt
   temp %3: UInt

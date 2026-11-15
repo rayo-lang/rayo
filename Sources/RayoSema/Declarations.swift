@@ -11,7 +11,7 @@ struct Declarations {
     /// The file's types of every kind.
     var types = NamedTypes()
     /// The primary initializer of each struct that can be laid out.
-    private var primaryInitializers: [StructID: FunctionID] = [:]
+    private var primaryInitializers: [StructID: Signature] = [:]
     /// The names of the functions that failed to parse, whose uses report nothing more.
     private var unparsedFunctions: Set<String> = []
 
@@ -40,8 +40,8 @@ struct Declarations {
         unparsedFunctions.contains(name)
     }
 
-    /// Declares the function `initializer` as the primary initializer of the struct `id`.
-    mutating func declarePrimaryInitializer(_ initializer: FunctionID, of id: StructID) {
+    /// Declares the function whose signature is `initializer` as the primary initializer of the struct `id`.
+    mutating func declarePrimaryInitializer(_ initializer: Signature, of id: StructID) {
         primaryInitializers[id] = initializer
     }
 
@@ -65,7 +65,7 @@ struct Declarations {
     }
 
     /// The primary initializer of the struct `id`, which must be laid out.
-    func primaryInitializer(of id: StructID) -> FunctionID {
+    func primaryInitializer(of id: StructID) -> Signature {
         // The checker declares the primary initializer of every struct that can be laid out before it checks a body,
         // and a body reaches no struct that can't.
         guard let initializer = primaryInitializers[id] else {

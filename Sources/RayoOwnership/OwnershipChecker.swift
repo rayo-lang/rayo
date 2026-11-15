@@ -14,7 +14,7 @@ public enum OwnershipChecker {
         var errors: [FunctionID: [Diagnostic]] = [:]
         for (id, body) in program.definedFunctions {
             let places = PlaceTypes(body: body, types: program.types)
-            let (ended, found) = check(places, parameterCount: program.functions[id].parameters.count)
+            let (ended, found) = check(places)
             checked.bodies[id] = ended
             // The sort is stable, so errors at one place keep the order the check gives them, such as a compound
             // assignment's use of a local before its store to it.
@@ -23,12 +23,11 @@ public enum OwnershipChecker {
         return (checked, errors)
     }
 
-    /// Runs the checks in turn on the body whose places `places` gives the types of, and whose first `parameterCount`
-    /// locals are its function's parameters. It stops at the first check that finds errors, so that no later check
-    /// reports the same mistake again, and gives those errors, without the body. Every diagnostic these checks report
-    /// is an error, so any of them fails the function. A body that passes every check comes
-    /// back with the end of each access written in.
-    private static func check(_ places: PlaceTypes, parameterCount: Int) -> (body: IRBody?, errors: [Diagnostic]) {
+    /// Runs the checks in turn on the body whose places `places` gives the types of. It stops at the first check that
+    /// finds errors, so that no later check reports the same mistake again, and gives those errors, without the body.
+    /// Every diagnostic these checks report is an error, so any of them fails the function. A body that passes every
+    /// check comes back with the end of each access written in.
+    private static func check(_ places: PlaceTypes) -> (body: IRBody?, errors: [Diagnostic]) {
         // A use of a place after a move out of a borrowed parameter or element isn't reported again as a use after a
         // move.
         let moves = MoveChecker.errors(in: places)
@@ -36,7 +35,7 @@ public enum OwnershipChecker {
 
         // A misused local, such as a `let` assigned twice, isn't reported again for the accesses it is in, or for the
         // values it leaves unread.
-        let missing = InitializationChecker.errors(in: places, parameterCount: parameterCount)
+        let missing = InitializationChecker.errors(in: places)
         guard missing.isEmpty else { return (nil, missing) }
 
         // What code after each point uses is solved once, and serves both where accesses end and which values no

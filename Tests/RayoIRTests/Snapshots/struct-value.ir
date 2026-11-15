@@ -5,11 +5,11 @@ struct Enemy {
 
 main "main()"
 
-init "Enemy(hp: Int, armor: Int)"(Int, Int) -> Enemy
+init "Enemy(hp: Int, armor: Int)"(hp: owned Int, armor: owned Int) -> Enemy
 
 func "main()"() -> Void {
-  let %0 hp: Int
-  let %1 e: Enemy
+  let %0 hp: Int @2:5-2:7
+  let %1 e: Enemy @3:5-3:6
 bb0:
   declare %0
   %0 @2:5-2:7 = operand 1 @2:10-2:11

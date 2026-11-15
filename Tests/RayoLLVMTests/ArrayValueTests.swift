@@ -7,8 +7,8 @@ struct ArrayLiteralTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
-              var %1 b: [2 of Bool]
+              var %0 a: [3 of Int] @1:1-1:1
+              var %1 b: [2 of Bool] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int(4, 5, 6) @1:1-1:2
               %1 @1:1-1:2 = array of Bool(false, true) @1:1-1:2
@@ -27,10 +27,10 @@ struct ArrayLiteralTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 p: Pair
-              var %1 t: Trio
-              var %2 pairs: [2 of Pair]
-              var %3 trios: [2 of Trio]
+              var %0 p: Pair @1:1-1:1
+              var %1 t: Trio @1:1-1:1
+              var %2 pairs: [2 of Pair] @1:1-1:1
+              var %3 trios: [2 of Trio] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, true) @1:1-1:2
@@ -52,8 +52,8 @@ struct ArrayLiteralTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 row: [2 of Int]
-              var %1 grid: [2 of [2 of Int]]
+              var %0 row: [2 of Int] @1:1-1:1
+              var %1 grid: [2 of [2 of Int]] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2) @1:1-1:2
               %1 @1:1-1:2 = array of [2 of Int](read %0 @1:1-1:2, read %0 @1:1-1:2) @1:1-1:2
@@ -72,7 +72,7 @@ struct ArrayLiteralTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [0 of Int]
+              var %0 a: [0 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int() @1:1-1:2
               _ = call builtin "print(_: Int)"(1) @1:1-1:2
@@ -88,7 +88,7 @@ struct ArrayLiteralTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
+              var %0 a: [3 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
               %0 @1:1-1:2 = array of Int(read %0[1] @1:1-1:2, read %0[0] @1:1-1:2, 9) @1:1-1:2
@@ -108,7 +108,7 @@ struct FilledArrayTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
+              var %0 a: [3 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 3 of 7 @1:1-1:2
               %0[1] @1:1-1:2 = operand 8 @1:1-1:2
@@ -125,8 +125,8 @@ struct FilledArrayTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
-              var %1 trios: [2 of Trio]
+              var %0 t: Trio @1:1-1:1
+              var %1 trios: [2 of Trio] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               %1 @1:1-1:2 = fill 2 of read %0 @1:1-1:2 @1:1-1:2
@@ -146,7 +146,7 @@ struct FilledArrayTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [0 of Int]
+              var %0 a: [0 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 0 of 7 @1:1-1:2
               _ = call builtin "print(_: Int)"(1) @1:1-1:2

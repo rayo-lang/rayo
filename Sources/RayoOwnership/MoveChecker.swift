@@ -2,11 +2,12 @@ import RayoDiagnostics
 import RayoIR
 import RayoSema
 
-/// Checks that a program moves no value out of a place that can't give it up: a borrowed parameter, whose caller
-/// still owns the value, or an array's element, which its array holds for as long as the array holds a value.
+/// Checks that a program moves no value out of a place that can't give it up: a parameter whose value is its caller's,
+/// or an array's element, which its array holds for as long as the array holds a value.
 enum MoveChecker {
-    /// Reports each move out of a borrowed parameter, out of an array's element, or out of a part inside either, in
-    /// every block of the body whose places `places` gives the types of, whether or not a path reaches it.
+    /// Reports each move out of a parameter whose value is its caller's, out of an array's element, or out of a part
+    /// inside either, in every block of the body whose places `places` gives the types of, whether or not a path
+    /// reaches it.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
         places.body.blocks.flatMap(\.operands).compactMap { error(at: $0, in: places) }
     }
@@ -19,8 +20,9 @@ enum MoveChecker {
         // An element, wherever its array lies, is the array's for as long as the array holds a value.
         if place.steps.contains(where: \.isElement) { return Diagnostic(.moveFromElement, at: range) }
 
-        // A borrowed parameter's value is its caller's.
-        guard case .source(let parameter, .parameter, _) = places.body.locals[place.root.index] else { return nil }
+        // A parameter that doesn't own its value can't give it up.
+        guard case .source(let parameter, .parameter(let convention), _, _) = places.body.locals[place.root.index],
+              !convention.allowsMove else { return nil }
 
         // A parameter is a local of the source, which names each place inside it.
         guard let name = places.sourceName(of: place) else {

@@ -12,10 +12,10 @@ struct InitializationState: DataflowState {
     /// Indexed by `LocalID`.
     private var locals: [LocalState]
 
-    /// The state on entry to `body`, where its first `parameterCount` locals, its function's parameters, hold their
-    /// arguments, and its other locals hold nothing yet.
-    init(entering body: IRBody, parameterCount: Int) {
-        locals = body.locals.indices.map { $0 < parameterCount ? .initialized : .declared }
+    /// The state on entry to `body`, where its function's parameters hold their arguments, and its other locals hold
+    /// nothing yet.
+    init(entering body: IRBody) {
+        locals = body.locals.map { $0.parameterConvention != nil ? .initialized : .declared }
     }
 
     func merged(with other: InitializationState) -> InitializationState {

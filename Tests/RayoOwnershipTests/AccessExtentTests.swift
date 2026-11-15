@@ -7,13 +7,13 @@ import Testing
 @Suite("Where accesses end, and which of them conflict")
 struct AccessExtentTests {
     @Test func `a modify access and a read access of one place, live across one call, conflict`() throws {
-        // As `g(&x, x)` lowers: the modify access is still live where the read access begins.
+        // As `change(&x, x)` lowers: the modify access is still live where the read access begins.
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify static %0 @2:3-2:3
               begin a1 read static %0 @2:6-2:6
-              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
         let expected = Diagnostic(
@@ -29,7 +29,7 @@ struct AccessExtentTests {
             \(storeShot())
               begin a0 modify static %5.0 @2:3-2:3
               begin a1 read static %5.1 @2:6-2:6
-              _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -43,7 +43,7 @@ struct AccessExtentTests {
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               begin a0 modify static %7[0].0 @2:3-2:3
               begin a1 read static %7[1] @2:6-2:6
-              _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
         #expect(try checked(function(blocks)).errors == [])
@@ -65,7 +65,7 @@ struct AccessExtentTests {
               %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               begin a0 modify static \(modified) @2:3-2:3
               begin a1 read static \(read) @2:6-2:6
-              _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
+              _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
         let expected = Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])
@@ -113,7 +113,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 modify static %0 @2:3-2:3
               %1 @1:1-1:1 = operand read %0 @2:6-2:6 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
+              _ = call "change(_: Int, _: Int)"(a0, 1) @1:1-1:1
               return
             """
         let expected = Diagnostic(

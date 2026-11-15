@@ -93,7 +93,7 @@ extension FunctionEmitter {
 
         // Any other result is written to a new slot, since the call reads the arguments as it writes the result, and
         // copied into its destination, if any, once the call returns.
-        let slot = newSlot(of: target.signature.source.result, with: builder)
+        let slot = newSlot(of: target.signature.resultType, with: builder)
         emitCall(of: target, passing: arguments, resultSlot: slot, with: builder)
         guard let address else { return }
         copy(.place(slot), to: address, with: builder)

@@ -7,10 +7,10 @@ struct ValueCopyTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
-              var %1 y: Int
-              var %2 z: Int
-              var %3 b: Bool
+              var %0 x: Int @1:1-1:1
+              var %1 y: Int @1:1-1:1
+              var %2 z: Int @1:1-1:1
+              var %3 b: Bool @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 3 @1:1-1:2
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
@@ -30,9 +30,9 @@ struct ValueCopyTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 p: Pair
-              var %1 q: Pair
-              var %2 r: Pair
+              var %0 p: Pair @1:1-1:1
+              var %1 q: Pair @1:1-1:1
+              var %2 r: Pair @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
@@ -52,9 +52,9 @@ struct ValueCopyTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
-              var %1 u: Trio
-              var %2 v: Trio
+              var %0 t: Trio @1:1-1:1
+              var %1 u: Trio @1:1-1:1
+              var %2 v: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
@@ -74,8 +74,8 @@ struct ValueCopyTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 box: Box
-              var %1 p: Pair
+              var %0 box: Box @1:1-1:1
+              var %1 p: Pair @1:1-1:1
             bb0:
               %0.0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %1 @1:1-1:2 = operand read %0.0 @1:1-1:2 @1:1-1:2

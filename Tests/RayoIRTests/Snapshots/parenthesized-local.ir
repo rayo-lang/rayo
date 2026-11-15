@@ -1,8 +1,8 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 a: Int
-  let %1 b: Int
+  let %0 a: Int @2:5-2:6
+  let %1 b: Int @3:5-3:6
 bb0:
   declare %0
   %0 @2:5-2:6 = operand 1 @2:9-2:10

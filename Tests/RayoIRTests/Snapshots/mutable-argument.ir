@@ -1,0 +1,19 @@
+main "main()"
+
+func "main()"() -> Void {
+  var %0 x: Int @2:9-2:10
+bb0:
+  declare %0
+  %0 @2:9-2:10 = operand 1 @2:13-2:14
+  begin a0 modify static %0 @3:10-3:11
+  _ = call "bump(_: Int)"(a0) @3:5-3:12
+  begin a1 read static %0 @4:11-4:12
+  _ = call builtin "print(_: Int)"(a1) @4:5-4:13
+  return
+}
+
+func "bump(_: Int)"(_: mutable Int) -> Void {
+  param %0 n: mutable Int @6:13-6:14
+bb0:
+  return
+}

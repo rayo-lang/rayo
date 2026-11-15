@@ -20,10 +20,38 @@ struct FunctionVerifier {
     /// Throws the first violation in the body, in the order of its blocks, and in each of its statements and then its
     /// terminator.
     func verify() throws(IRViolation) {
+        try verifyParameterLocals()
         for block in body.blocks {
             for statement in block.statements { try verify(statement) }
             try verify(block.terminator)
         }
+    }
+
+    /// Throws where the body's first locals aren't its function's parameters, in order, each of its parameter's
+    /// convention and type, or where a later local is a parameter. The ownership stage reads a parameter's convention
+    /// from its local, and the emitter from the declaration, so the two must agree.
+    private func verifyParameterLocals() throws(IRViolation) {
+        // Each side is a parameter's convention and type, without the label, which no local holds, or nil where it is
+        // no parameter.
+        let parameters = declaration.parameters.map { parameter in
+            FunctionParameter(label: nil, convention: parameter.convention, type: parameter.type)
+        }
+        let locals = body.locals.map { local in
+            local.parameterConvention.map { FunctionParameter(label: nil, convention: $0, type: local.type) }
+        }
+        for index in 0..<max(locals.count, parameters.count) {
+            let local = index < locals.count ? locals[index] : nil
+            let parameter = index < parameters.count ? parameters[index] : nil
+            guard local != parameter else { continue }
+            throw violation("the IR declares %\(index) as \(Self.text(of: local)), where its function declares "
+                + Self.text(of: parameter))
+        }
+    }
+
+    /// `parameter` as a violation of a body's parameters names it, such as `a parameter of owned Int`, or `no
+    /// parameter` where it is nil.
+    private static func text(of parameter: FunctionParameter?) -> String {
+        parameter.map { "a parameter of \($0.convention.spelling(of: $0.type))" } ?? "no parameter"
     }
 
     private func verify(_ statement: Statement) throws(IRViolation) {
@@ -184,15 +212,40 @@ struct FunctionVerifier {
             throw violation("the IR passes '\(name)' \(counts), where it takes \(parameters.count)")
         }
 
-        // Each argument is of its parameter's type.
+        // Each argument is of its parameter's type, and passed as its parameter's convention takes it.
         for (argument, parameter) in zip(arguments, parameters) {
             let argumentType = try type(of: argument)
-            guard argumentType == parameter else {
+            guard argumentType == parameter.type else {
                 let passed = "an argument of type \(argumentType)"
-                throw violation("the IR passes '\(name)' \(passed), where it takes \(parameter)")
+                throw violation("the IR passes '\(name)' \(passed), where it takes \(parameter.type)")
             }
+            try verify(argument, passedTo: parameter.convention, of: name)
         }
         return callee.result(in: functions)
+    }
+
+    /// Throws where `argument` isn't passed as a parameter of `convention` of the function `name` takes it: a value or
+    /// a read access where the parameter borrows, a value where it owns, and a modify access where it is mutable.
+    private func verify(
+        _ argument: CallArgument, passedTo convention: ParameterConvention, of name: String,
+    ) throws(IRViolation) {
+        // A value passes through no access.
+        let accessKind: AccessKind? = if let id = argument.access { try access(id).kind } else { nil }
+        let accepted: [AccessKind?] = switch convention {
+        case .borrowed: [nil, .read]
+        case .owned: [nil]
+        case .mutable: [.modify]
+        }
+        guard !accepted.contains(accessKind) else { return }
+
+        let takes = accepted.map(Self.passing(through:)).joined(separator: " or ")
+        throw violation("the IR passes '\(name)' \(Self.passing(through: accessKind)), where it takes \(takes)")
+    }
+
+    /// What an argument passed through an access of `kind` passes, or through none where `kind` is nil, as a
+    /// violation names it.
+    private static func passing(through kind: AccessKind?) -> String {
+        kind.map { "a \($0.rawValue) access" } ?? "a value"
     }
 
     /// The type of the value `argument` passes: its operand's, or that of the place its access reaches. Throws where

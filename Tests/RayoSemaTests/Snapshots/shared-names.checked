@@ -4,13 +4,13 @@ struct S {
 
 main "main()"
 
-init "S(a: Int)"(Int) -> S
+init "S(a: Int)"(a: owned Int) -> S
 
 func "main()"() -> Void {
-  var %0 print: Int
-  let %1 main: Int
-  let %2 S: Int
-  var %3 s: S
+  var %0 print: Int @2:9-2:14
+  let %1 main: Int @5:9-5:13
+  let %2 S: Int @9:9-9:10
+  var %3 s: S @10:9-10:10
   bind %0 @2:9-2:14
   assign
     place %0 @3:5-3:10
@@ -43,8 +43,8 @@ func "main()"() -> Void {
         place %2 @11:11-11:12
 }
 
-func "next(_: Int)"(Int) -> Int {
-  param %0 next: Int
+func "next(_: Int)"(_: Int) -> Int {
+  param %0 next: Int @13:13-13:17
   return
     binary add: Int @13:33-13:46
       copy: Int @13:33-13:42
@@ -52,8 +52,8 @@ func "next(_: Int)"(Int) -> Int {
       integer 1: Int @13:45-13:46
 }
 
-func "sum(_: Int)"(Int) -> Int {
-  param %0 sum: Int
+func "sum(_: Int)"(_: Int) -> Int {
+  param %0 sum: Int @14:12-14:15
   expression
     if: Void @15:5-15:29
       binary equal: Bool @15:8-15:16
@@ -75,8 +75,8 @@ func "sum(_: Int)"(Int) -> Int {
           integer 1: Int @16:28-16:29
 }
 
-func "show(print: Int)"(Int) -> Void {
-  param %0 print: Int
+func "show(print: Int)"(print: Int) -> Void {
+  param %0 print: Int @18:11-18:16
   return
     call builtin "print(_: Int)": Void @18:25-18:37
       value: Int @18:31-18:36

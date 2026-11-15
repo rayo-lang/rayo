@@ -1,7 +1,7 @@
 main "main()"
 
 func "main()"() -> Void {
-  var %0 x: Int
+  var %0 x: Int @2:5-2:6
 bb0:
   declare %0
   %0 @2:5-2:6 = operand 9 @2:9-2:10

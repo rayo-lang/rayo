@@ -52,7 +52,8 @@ struct InitializerChecker {
         guard let values, hasEveryField, isInOrder, given.allSatisfy(\.isLabeledRight) else { return nil }
         let initializer = expressions.file.declarations.primaryInitializer(of: id)
         let type = RayoType.named(.structure(id))
-        return CheckedExpr(kind: .call(.function(initializer), arguments: values), type: type, range: range)
+        let call = initializer.target.call(passing: values, to: initializer.parameters)
+        return CheckedExpr(kind: call, type: type, range: range)
     }
 
     /// Finds the field each argument gives a value for. An argument whose label names a field gives that field, and
