@@ -1,4 +1,4 @@
-@testable import RayoOwnership
+import RayoOwnership
 import RayoDiagnostics
 import RayoIR
 import RayoSema
@@ -19,7 +19,7 @@ struct AccessExtentTests {
         let expected = Diagnostic(
             .usedWhileMutablyBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
         )
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `accesses to two fields of one value don't conflict, whatever they do`() throws {
@@ -32,19 +32,21 @@ struct AccessExtentTests {
               _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
-        #expect(try checked(blocks).errors == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test func `accesses to two elements at different indices the IR writes don't conflict, whatever they do`() throws {
         // As `take(&a[0].damage, a[1])` lowers.
         let blocks = """
             bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               begin a0 modify static %7[0].0 @2:3-2:3
               begin a1 read static %7[1] @2:6-2:6
               _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
-        #expect(try checked(blocks).errors == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -58,6 +60,8 @@ struct AccessExtentTests {
         // As `take(&a[i].damage, a[1])` lowers, where the local `%8` holds `i`'s value.
         let blocks = """
             bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               begin a0 modify static \(modified) @2:3-2:3
               begin a1 read static \(read) @2:6-2:6
@@ -65,7 +69,7 @@ struct AccessExtentTests {
               return
             """
         let expected = Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `two read accesses of one place don't conflict`() throws {
@@ -77,7 +81,7 @@ struct AccessExtentTests {
               _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
-        #expect(try checked(blocks).errors == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -98,7 +102,7 @@ struct AccessExtentTests {
               _ = call "take(_: Int, _: Hit)"(1, a0) @1:1-1:1
               return
             """
-        #expect(try checked(blocks).errors == [Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])])
     }
 
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
@@ -113,7 +117,7 @@ struct AccessExtentTests {
         let expected = Diagnostic(
             .usedWhileMutablyBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
         )
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `a change after an access's last use, or a store of what its call gives, conflicts with none`() throws {
@@ -123,11 +127,12 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read static %0 @2:3-2:3
               %0 @2:5-2:5 = call "double(_: Int)"(a0) @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
               %0 @2:6-2:6 = operand 2 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
+              _ = call "g(_: Int, _: Int)"(read %0 @1:1-1:1, 2) @1:1-1:1
               return
             """
-        #expect(try checked(blocks).errors == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test func `an access ends after its last use, the latest begun first`() throws {
@@ -174,7 +179,7 @@ struct AccessExtentTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               goto bb3
@@ -187,7 +192,7 @@ struct AccessExtentTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               end a0
@@ -206,7 +211,7 @@ struct AccessExtentTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               goto bb2
@@ -217,7 +222,7 @@ struct AccessExtentTests {
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb3
+              branch true, bb1, bb3
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               end a0
@@ -238,7 +243,7 @@ struct AccessExtentTests {
               goto bb1
             bb1:
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb0, bb2
+              branch true, bb0, bb2
             bb2:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               return
@@ -249,7 +254,7 @@ struct AccessExtentTests {
               goto bb1
             bb1:
               begin a0 read static %0 @1:1-1:1
-              branch read %6 @1:1-1:1, bb3, bb2
+              branch true, bb3, bb2
             bb2:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               end a0
@@ -265,7 +270,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               begin a0 read static %0 @1:1-1:1
               %1 @1:1-1:1 = operand 2 @1:1-1:1
@@ -281,7 +286,7 @@ struct AccessExtentTests {
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               begin a0 read static %0 @1:1-1:1
               %1 @1:1-1:1 = operand 2 @1:1-1:1
@@ -303,7 +308,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch read %6 @1:1-1:1, bb1, bb2
+              branch true, bb1, bb2
             bb1:
               begin a0 read static %0 @2:3-2:3
               %1 @1:1-1:1 = operand 2 @1:1-1:1
@@ -320,7 +325,7 @@ struct AccessExtentTests {
         let expected = Diagnostic(
             .changedWhileBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
         )
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `an access begun in a loop's body ends in the body, on each pass`() throws {
@@ -329,7 +334,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb1:
-              branch read %6 @1:1-1:1, bb2, bb3
+              branch true, bb2, bb3
             bb2:
               begin a0 read static %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -342,7 +347,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb1:
-              branch read %6 @1:1-1:1, bb2, bb3
+              branch true, bb2, bb3
             bb2:
               begin a0 read static %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -397,48 +402,41 @@ struct AccessExtentTests {
         let expected = Diagnostic(
             .changedWhileBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
         )
-        #expect(try checked(blocks).errors == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `a value assigned anew no longer depends on the access, which then ends`() throws {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
+              %3 @1:1-1:1 = operand 2 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              depend %1 on a0
-              %1 @1:1-1:1 = operand 5 @1:1-1:1
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
+              depend %3 on a0
+              %3 @1:1-1:1 = operand 5 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %3 @1:1-1:1) @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
+              %3 @1:1-1:1 = operand 2 @1:1-1:1
               begin a0 read static %0 @1:1-1:1
-              depend %1 on a0
+              depend %3 on a0
               end a0
-              %1 @1:1-1:1 = operand 5 @1:1-1:1
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
+              %3 @1:1-1:1 = operand 5 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %3 @1:1-1:1) @1:1-1:1
               return
             """))
     }
 }
 
-/// What the check makes of a `main` of `blocks`, with the locals `function` gives it: its body with the ends of its
-/// accesses written in, and the conflicts between them.
-private func checked(_ blocks: String) throws -> (body: IRBody, errors: [Diagnostic]) {
-    let places = try placesOfFirstFunction(in: try program(of: [function(blocks, named: "main()")] + callees))
-    let (body, errors) = ExclusivityChecker.check(places, uses: laterUses(in: places))
-    return (body, errors.inSourceOrder)
-}
-
-/// The body of a `main` of `blocks` once the check has written the ends of its accesses into it.
+/// The body of a function of `blocks`, with the locals `function` gives it, once the ownership stage has written the ends
+/// of its accesses into it, or nil where a check fails.
 private func ended(_ blocks: String) throws -> IRBody? {
-    try checked(blocks).body
+    try checked(function(blocks)).body
 }
 
-/// The body of a `main` of `blocks`, as the text writes it.
+/// The body of a function of `blocks`, as the text writes it.
 private func body(of blocks: String) throws -> IRBody? {
-    try program(of: [function(blocks, named: "main()")] + callees).bodies[FunctionID(index: 0)]
+    try program(of: [function(blocks)] + callees).bodies[FunctionID(index: 0)]
 }

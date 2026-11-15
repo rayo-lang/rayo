@@ -14,7 +14,7 @@ struct OwnershipCheckTests {
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try errors(in: withParameter(blocks)) == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
+        #expect(try checked(withParameter(blocks)).errors == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
     @Test func `a 'let' assigned twice isn't reported again for the first value, which no code reads`() throws {
@@ -26,7 +26,7 @@ struct OwnershipCheckTests {
               _ = call builtin "print(_: Int)"(read %2 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: function(blocks)) == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.letAssignedTwice(name: "k"), at: at(2))])
     }
 
     @Test func `a use of a local that holds no value isn't checked for conflicting accesses`() throws {
@@ -39,7 +39,7 @@ struct OwnershipCheckTests {
               return
             """
         // Both accesses use `x` with the same cause, so only the first is reported.
-        #expect(try errors(in: function(blocks)) == [Diagnostic(.usedUninitialized(name: "x"), at: at(3))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedUninitialized(name: "x"), at: at(3))])
     }
 
     @Test func `a function whose accesses conflict isn't checked for values no code reads`() throws {
@@ -56,7 +56,7 @@ struct OwnershipCheckTests {
         let expected = Diagnostic(
             .usedWhileMutablyBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
         )
-        #expect(try errors(in: function(blocks)) == [expected])
+        #expect(try checked(function(blocks)).errors == [expected])
     }
 
     @Test func `a function a check fails has no body, and one that passes has its accesses' ends written in`() throws {
@@ -112,9 +112,4 @@ private func withParameter(_ blocks: String) -> (name: String, text: String) {
         }
         """
     return ("f(_: Int)", text)
-}
-
-/// The errors the ownership checks report in a program of `function`.
-private func errors(in function: (name: String, text: String)) throws -> [Diagnostic] {
-    OwnershipChecker.check(try program(of: [function] + callees)).errors[FunctionID(index: 0)] ?? []
 }
