@@ -165,6 +165,67 @@ struct UnusedValueCheckerTests {
         #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
     }
 
+    @Test(arguments: [
+        // A read of the other element reads what the array was filled with there, but not the store.
+        ([#"_ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1"#], "a[0]", 2),
+        // A store to the same element replaces the first store's value before any code reads it.
+        (
+            [#"%7[0] @1:1-1:1 = call "Hit(damage: Int)"(4) @1:1-1:1"#, "_ = operand read %7 @1:1-1:1 @1:1-1:1"],
+            "a[0]", 2,
+        ),
+        // A store to each element replaces the whole of what the array was filled with.
+        (
+            [#"%7[1] @1:1-1:1 = call "Hit(damage: Int)"(4) @1:1-1:1"#, "_ = operand read %7 @1:1-1:1 @1:1-1:1"],
+            "a", 1,
+        ),
+    ])
+    func `a value stored in an element is read by a later read of the element, or of the array`(
+        later: [String], name: String, column: Int,
+    ) throws {
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @2:1-2:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
+              %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+            \(later.map { "  \($0)" }.joined(separator: "\n"))
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: name), at: at(column))])
+    }
+
+    @Test func `a compound assignment reads the value it replaces, and stores one that code must read`() throws {
+        // As `x += 1` lowers, after a read of `x`, and with nothing after it.
+        let blocks = """
+            bb0:
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+              %0 @2:2-2:2 = add checked read %0 @1:1-1:1, 1 @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(2))])
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func `an element of an array of a billion is stored to in the time one of a small array takes`() throws {
+        // A store at an index a local holds may reach any element, and a later store to the same element replaces
+        // the first one's value unread.
+        let function = (name: "f()", text: """
+            func "f()"() -> Void {
+              var %0 a: [1000000000 of Int]
+              temp %1: UInt
+            bb0:
+              %0 @1:1-1:1 = fill 1000000000 of 0 @1:1-1:1
+              %1 @1:1-1:1 = index UInt 5 below 1000000000 @1:1-1:1
+              %0[%1] @1:1-1:1 = operand 3 @1:1-1:1
+              %0[0] @2:1-2:1 = operand 1 @1:1-1:1
+              %0[0] @2:2-2:2 = operand 2 @1:1-1:1
+              _ = operand read %0 @1:1-1:1 @1:1-1:1
+              return
+            }
+            """)
+        #expect(try checked(function).errors == [Diagnostic(.unreadValue(name: "a[0]"), at: at(1))])
+    }
+
     @Test func `a store to an element at an index a local holds leaves a later read through that local reading`()
         throws {
         // The temporary holds a new index by the time the read goes through it, so the read may reach an element the

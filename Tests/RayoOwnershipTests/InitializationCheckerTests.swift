@@ -14,7 +14,9 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1])),
+        ])
     }
 
     @Test func `a move uses the local as a read does, so moving it again is reported there`() throws {
@@ -25,7 +27,9 @@ struct InitializationCheckerTests {
               %1 @1:1-1:1 = operand move %0 @2:2-2:2 @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1])),
+        ])
     }
 
     @Test
@@ -90,7 +94,9 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(expected, at: at(3), labeling: moves(at: moveColumns))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(expected, at: at(3), labeling: moves(at: moveColumns)),
+        ])
     }
 
     @Test(arguments: [
@@ -154,7 +160,9 @@ struct InitializationCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:4-2:4) @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1]))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(.usedAfterMove(name: "x"), at: at(2), labeling: moves(at: [1])),
+        ])
     }
 
     @Test func `a use that other moves reach is reported again`() throws {
@@ -342,7 +350,9 @@ struct InitializationCheckerTests {
               return
             """
         // The read after the store has the same cause as the store, so the store alone is reported.
-        #expect(try checked(function(blocks)).errors == [Diagnostic(expected, at: at(2), labeling: moves(at: moveColumns))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(expected, at: at(2), labeling: moves(at: moveColumns)),
+        ])
     }
 
     @Test func `a store to a field leaves its local holding its value, which a move may then take`() throws {
@@ -354,7 +364,9 @@ struct InitializationCheckerTests {
               _ = operand read %5 @2:3-2:3 @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2]))])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2])),
+        ])
     }
 }
 
@@ -408,6 +420,56 @@ struct FieldMoveTests {
               return
             """
         #expect(try checked(function(blocks)).errors == [])
+    }
+
+    @Test func `a local that is declared and never used needs no value`() throws {
+        let blocks = "bb0:\n  declare %0\n  declare %6\n  return"
+        #expect(try checked(function(blocks)).errors == [])
+    }
+
+    @Test(arguments: [
+        ("declare %7", Diagnostic(.usedUninitialized(name: "a"), at: at(2))),
+        (
+            "_ = operand move %7 @2:1-2:1 @1:1-1:1",
+            Diagnostic(.usedAfterMove(name: "a"), at: at(2), labeling: moves(at: [1])),
+        ),
+    ])
+    func `a store to an element uses its array, which must hold a value`(
+        emptying: String, expected: Diagnostic,
+    ) throws {
+        // The array is filled, then left without a value before one of its elements is assigned.
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
+              \(emptying)
+              %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[0].0 @2:3-2:3) @1:1-1:1
+              return
+            """
+        // The read after the store has the same cause, so the store alone is reported.
+        #expect(try checked(function(blocks)).errors == [expected])
+    }
+
+    @Test func `a compound assignment's use comes before its store, so the errors about both come in that order`()
+        throws {
+        // As `k += 1` lowers where `k`, a `let`, was assigned on one path only.
+        let blocks = """
+            bb0:
+              declare %2
+              branch true, bb1, bb2
+            bb1:
+              %2 @1:1-1:1 = operand 1 @1:1-1:1
+              goto bb2
+            bb2:
+              %2 @2:1-2:1 = add checked read %2 @2:1-2:1, 1 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %2 @1:1-1:1) @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(.usedMaybeUninitialized(name: "k"), at: at(1)),
+            Diagnostic(.letMaybeAssignedTwice(name: "k"), at: at(1)),
+        ])
     }
 
     @Test func `a field is assigned only where the field that holds it holds a value`() throws {

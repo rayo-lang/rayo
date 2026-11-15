@@ -1,0 +1,52 @@
+struct Enemy {
+  slots: [2 of Int]
+}
+
+main "main()"
+
+init "Enemy(slots: [2 of Int])"([2 of Int]) -> Enemy
+
+func "main()"() -> Void {
+  var %0 a: [2 of Int]
+  var %1 e: Enemy
+  let %2 x: Int
+  temp %3: [2 of Int]
+  temp %4: UInt
+  temp %5: UInt
+  temp %6: UInt
+  temp %7: UInt
+  temp %8: Int
+bb0:
+  declare %0
+  %0 @2:9-2:10 = array of Int(1, 2) @2:13-2:19
+  declare %1
+  %3 @3:26-3:32 = array of Int(3, 4) @3:26-3:32
+  %1 @3:9-3:10 = call "Enemy(slots: [2 of Int])"(read %3 @3:26-3:32) @3:13-3:33
+  declare %2
+  %2 @4:9-4:10 = operand 5 @4:13-4:14
+  %5 @5:7-5:14 = call "index()"() @5:7-5:14
+  %4 @5:7-5:14 = index read %5 @5:7-5:14 below 2 @5:7-5:14
+  %0[%4] @5:5-5:15 = call "value()"() @5:18-5:25
+  %0[0] @6:5-6:9 = add checked read %0[0] @6:5-6:9, 1 @6:5-6:9
+  %7 @7:13-7:20 = call "index()"() @7:13-7:20
+  %6 @7:13-7:20 = index read %7 @7:13-7:20 below 2 @7:13-7:20
+  %1.0[%6] @7:5-7:21 = operand move %2 @7:24-7:25 @7:24-7:25
+  %8 @8:11-8:28 = add checked read %0[0] @8:11-8:15, read %1.0[1] @8:18-8:28 @8:11-8:28
+  begin a0 read static %8 @8:11-8:28
+  _ = call builtin "print(_: Int)"(a0) @8:5-8:29
+  return
+}
+
+func "index()"() -> UInt {
+bb0:
+  return UInt 1
+bb1:
+  unreachable
+}
+
+func "value()"() -> Int {
+bb0:
+  return 6
+bb1:
+  unreachable
+}

@@ -60,6 +60,20 @@ struct FunctionLoweringTests {
         try expectLowering(of: "func main() {}\nfunc seven() -> Int {\nlet x = 7\nreturn x\n}", toMatch: "return-local")
     }
 
+    @Test func `a body's one expression, and a 'return' of a field, move their place out as the result`() throws {
+        let source = """
+            func main() {}
+            func given(_ n: Int) -> Int { n }
+            func stats(_ e: Enemy) -> Stats {
+                let f = copy e
+                return f.stats
+            }
+            struct Stats(let hp: Int)
+            struct Enemy(let stats: Stats)
+            """
+        try expectLowering(of: source, toMatch: "returned-places")
+    }
+
     @Test func `a 'return' of a Void value computes it, and returns nothing`() throws {
         try expectLowering(ofMain: "return print(1)", toMatch: "return-void-value")
     }

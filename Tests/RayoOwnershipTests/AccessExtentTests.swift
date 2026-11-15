@@ -102,7 +102,9 @@ struct AccessExtentTests {
               _ = call "take(_: Int, _: Hit)"(1, a0) @1:1-1:1
               return
             """
-        #expect(try checked(function(blocks)).errors == [Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))])])
+        #expect(try checked(function(blocks)).errors == [
+            Diagnostic(code, at: at(6), labeling: [.init(.borrowed, at: at(3))]),
+        ])
     }
 
     @Test func `a read of a place that a live modify access overlaps conflicts with it`() throws {
@@ -430,8 +432,8 @@ struct AccessExtentTests {
     }
 }
 
-/// The body of a function of `blocks`, with the locals `function` gives it, once the ownership stage has written the ends
-/// of its accesses into it, or nil where a check fails.
+/// The body of a function of `blocks`, with the locals `function` gives it, once the ownership stage has written the
+/// ends of its accesses into it, or nil where a check fails.
 private func ended(_ blocks: String) throws -> IRBody? {
     try checked(function(blocks)).body
 }
