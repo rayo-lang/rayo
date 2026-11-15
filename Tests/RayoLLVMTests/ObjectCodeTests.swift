@@ -64,10 +64,10 @@ struct ObjectCodeTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 ints: [100000 of Int]
-              var %1 trio: Trio
+              var %0 ints: [100000 of Int] @1:1-1:1
+              var %1 trio: Trio @1:1-1:1
               temp %2: [100 of Trio]
-              var %3 trios: [1000 of [100 of Trio]]
+              var %3 trios: [1000 of [100 of Trio]] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
               %0 @1:1-1:2 = call "relay(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
@@ -79,22 +79,22 @@ struct ObjectCodeTests {
               \(printInt("%3[999][99].0"))
               return
             }
-            func "relay(_: [100000 of Int])"([100000 of Int]) -> [100000 of Int] {
-              param %0 a: [100000 of Int]
+            func "relay(_: [100000 of Int])"(_: [100000 of Int]) -> [100000 of Int] {
+              param %0 a: [100000 of Int] @1:1-1:1
               temp %1: [100000 of Int]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return move %1 @1:1-1:2
             }
-            func "relay(_: [1000 of [100 of Trio]])"([1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
-              param %0 a: [1000 of [100 of Trio]]
+            func "relay(_: [1000 of [100 of Trio]])"(_: [1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
+              param %0 a: [1000 of [100 of Trio]] @1:1-1:1
               temp %1: [1000 of [100 of Trio]]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return move %1 @1:1-1:2
             }
-            func "relay(_: [100000 of [2 of Pair]])"([100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
-              param %0 a: [100000 of [2 of Pair]]
+            func "relay(_: [100000 of [2 of Pair]])"(_: [100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
+              param %0 a: [100000 of [2 of Pair]] @1:1-1:1
               temp %1: [100000 of [2 of Pair]]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2

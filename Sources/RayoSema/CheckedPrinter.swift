@@ -62,7 +62,8 @@ public struct CheckedPrinter: ~Copyable {
 
         lines.append(header + " {")
         for (index, local) in body.locals.enumerated() {
-            lines.append("  \(keyword(of: local.kind)) %\(index) \(local.name): \(local.type)")
+            let declared = "\(local.kind.keyword) %\(index) \(local.name): \(local.kind.spelling(of: local.type))"
+            lines.append("  \(declared) \(text(of: local.range))")
         }
         write(body.statements, depth: 1)
         lines += ["}", ""]
@@ -159,6 +160,21 @@ public struct CheckedPrinter: ~Copyable {
         }
     }
 
+    /// Writes a call's argument: a borrowed value as its expression, and an owned value or a mutable place under
+    /// `owned` or `mutable`, as the source would write the parameter that takes it.
+    private mutating func write(_ argument: CheckedArgument, depth: Int) {
+        switch argument {
+        case .borrowed(let value):
+            write(value, depth: depth)
+        case .owned(let value):
+            line("owned", depth)
+            write(value, depth: depth + 1)
+        case .mutable(let place):
+            line("mutable", depth)
+            write(place, depth: depth + 1)
+        }
+    }
+
     /// Writes a place as its root, then each step and where the source names the place it leads to, such as
     /// `place %0 @3:1-3:2 .1 @3:1-3:7 [of 4] @3:1-3:10`. A value that no local holds is written under the line, and
     /// each element's index under it in turn.
@@ -186,14 +202,6 @@ public struct CheckedPrinter: ~Copyable {
     /// Adds `text` as a line, indented two spaces for each level of `depth`.
     private mutating func line(_ text: String, _ depth: Int) {
         lines.append(String(repeating: "  ", count: depth) + text)
-    }
-
-    private func keyword(of kind: LocalKind) -> String {
-        switch kind {
-        case .let: "let"
-        case .var: "var"
-        case .parameter: "param"
-        }
     }
 
     private func text(of range: SourceRange) -> String {

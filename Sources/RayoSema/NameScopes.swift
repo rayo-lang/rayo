@@ -61,7 +61,7 @@ final class NameScopes {
 
         // Add the local to the body's, under its name in the innermost block.
         let local = LocalID(index: locals.count)
-        locals.append(CheckedLocal(name: name, type: type, kind: kind))
+        locals.append(CheckedLocal(name: name, type: type, kind: kind, range: range))
         blocks[blocks.count - 1][name] = .local(local)
         return local
     }

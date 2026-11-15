@@ -4,7 +4,8 @@ import RayoSource
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.
 ///
 /// The text gives the program's structs, then the function it starts at, then each function, in the order of their
-/// IDs. A struct's primary initializer is declared with `init`, and has no body:
+/// IDs. A function's parameters are written as the source writes them, each with its label and its convention, which a
+/// borrowed parameter leaves out. A struct's primary initializer is declared with `init`, and has no body:
 ///
 /// ```
 /// struct Pair {
@@ -14,10 +15,10 @@ import RayoSource
 ///
 /// main "main()"
 ///
-/// init "Pair(count: Int, flag: Bool)"(Int, Bool) -> Pair
+/// init "Pair(count: Int, flag: Bool)"(count: owned Int, flag: owned Bool) -> Pair
 ///
 /// func "main()"() -> Void {
-///   var %0 x: Int
+///   var %0 x: Int @2:9-2:10
 ///   temp %1: Bool
 /// bb0:
 ///   declare %0
@@ -33,7 +34,8 @@ import RayoSource
 /// ```
 ///
 /// Each local, access and block is numbered by its ID, and a source range is written `line:column-line:column` after
-/// an `@`. A statement's own range comes last on its line, after its destination's and its operands'.
+/// an `@`. A local the source declares ends in where it declares its name. A statement's own range comes last on its
+/// line, after its destination's and its operands'.
 public enum IRPrinter {
     /// `program` as text.
     public static func text(of program: IRProgram) -> String {
@@ -69,19 +71,13 @@ public enum IRPrinter {
         return "\(header) {\n\(locals)\(blocks.joined())}\n"
     }
 
+    /// A local's declaration, such as `param %0 x: owned Int @1:8-1:9` or `temp %1: Bool`.
     private static func text(of local: IRLocal, id: Int) -> String {
         switch local {
-        case .source(let name, let kind, let type): "\(keyword(of: kind)) %\(id) \(name): \(type)"
-        case .temporary(let type): "temp %\(id): \(type)"
-        }
-    }
-
-    /// The word a local's declaration starts with, for the kind the source declares it with.
-    private static func keyword(of kind: LocalKind) -> String {
-        switch kind {
-        case .let: "let"
-        case .var: "var"
-        case .parameter: "param"
+        case .source(let name, let kind, let type, let range):
+            "\(kind.keyword) %\(id) \(name): \(kind.spelling(of: type)) \(text(of: range))"
+        case .temporary(let type):
+            "temp %\(id): \(type)"
         }
     }
 

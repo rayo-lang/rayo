@@ -4,14 +4,14 @@ struct Point {
 
 main "main()"
 
-init "Point(x: Int)"(Int) -> Point
+init "Point(x: Int)"(x: owned Int) -> Point
 
 func "main()"() -> Void {
-  let %0 c: Bool
-  var %1 x: Int
-  let %2 y: Int
-  let %3 p: Point
-  let %4 z: Int
+  let %0 c: Bool @2:9-2:10
+  var %1 x: Int @3:9-3:10
+  let %2 y: Int @5:9-5:10
+  let %3 p: Point @6:9-6:10
+  let %4 z: Int @7:9-7:10
   temp %5: Int
   temp %6: Int
   temp %7: Int
@@ -88,8 +88,8 @@ bb18:
   goto bb15
 }
 
-func "sign(_: Int)"(Int) -> Int {
-  param %0 n: Int
+func "sign(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @13:13-13:14
   temp %1: Int
   temp %2: Bool
 bb0:

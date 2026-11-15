@@ -1,7 +1,7 @@
 main "main()"
 
 func "main()"() -> Void {
-  var %0 grid: [2 of [2 of Int]]
+  var %0 grid: [2 of [2 of Int]] @2:5-2:9
   temp %1: [2 of Int]
   temp %2: [2 of Int]
 bb0:

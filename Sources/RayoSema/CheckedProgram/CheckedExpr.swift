@@ -21,7 +21,7 @@ public indirect enum CheckedExprKind: Sendable {
     case arrayCount(CheckedPlace, count: Int)
     case unary(CheckedUnaryOperator, CheckedExpr)
     case binary(CheckedBinaryOperator, CheckedExpr, CheckedExpr)
-    case call(Callee, arguments: [CheckedExpr])
+    case call(Callee, arguments: [CheckedArgument])
     /// Runs `then` when the Bool `condition` is true, and `otherwise` when it is false, and gives the value of the
     /// branch that runs.
     case `if`(condition: CheckedExpr, then: CheckedBranch, otherwise: CheckedBranch)

@@ -14,9 +14,9 @@ func "main()"() -> Void {
     call "greet()": Void @4:5-4:12
 }
 
-func "add(_: Int, to: Int)"(Int, Int) -> Int {
-  param %0 a: Int
-  param %1 b: Int
+func "add(_: Int, to: Int)"(_: Int, to: Int) -> Int {
+  param %0 a: Int @6:12-6:13
+  param %1 b: Int @6:23-6:24
   return
     binary add: Int @6:40-6:45
       value: Int @6:40-6:41
@@ -25,8 +25,8 @@ func "add(_: Int, to: Int)"(Int, Int) -> Int {
         place %1 @6:44-6:45
 }
 
-func "isZero(_: Int)"(Int) -> Bool {
-  param %0 n: Int
+func "isZero(_: Int)"(_: Int) -> Bool {
+  param %0 n: Int @7:15-7:16
   return
     binary equal: Bool @8:12-8:18
       value: Int @8:12-8:13

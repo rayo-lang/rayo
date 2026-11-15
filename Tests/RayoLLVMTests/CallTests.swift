@@ -22,7 +22,7 @@ struct CallTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 p: Pair
+              var %0 p: Pair @1:1-1:1
               temp %1: Pair
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
@@ -39,7 +39,7 @@ struct CallTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
+              var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "trio(_: Int)"(5) @1:1-1:2
               \(printInt("%0.0"))
@@ -56,7 +56,7 @@ struct CallTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
+              var %0 t: Trio @1:1-1:1
               temp %1: Int
               temp %2: Int
             bb0:
@@ -82,7 +82,7 @@ struct CallTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
+              var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               %0 @1:1-1:2 = call "swapped(_: Trio)"(read %0 @1:1-1:2) @1:1-1:2
@@ -115,23 +115,23 @@ struct CallTests {
     /// an Int, the next Int and true; and `sum`, which returns the sum of a Trio's Ints.
     private let functions = """
 
-        func "double(_: Int)"(Int) -> Int {
-          param %0 x: Int
+        func "double(_: Int)"(_: Int) -> Int {
+          param %0 x: Int @1:1-1:1
           temp %1: Int
         bb0:
           \(printInt("%0"))
           %1 @1:1-1:2 = add checked read %0 @1:1-1:2, read %0 @1:1-1:2 @1:1-1:2
           return read %1 @1:1-1:2
         }
-        func "swapped(_: Pair)"(Pair) -> Pair {
-          param %0 p: Pair
+        func "swapped(_: Pair)"(_: Pair) -> Pair {
+          param %0 p: Pair @1:1-1:1
           temp %1: Pair
         bb0:
           %1 @1:1-1:2 = call "Pair(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2
           return move %1 @1:1-1:2
         }
-        func "trio(_: Int)"(Int) -> Trio {
-          param %0 x: Int
+        func "trio(_: Int)"(_: Int) -> Trio {
+          param %0 x: Int @1:1-1:1
           temp %1: Int
           temp %2: Trio
         bb0:
@@ -139,15 +139,15 @@ struct CallTests {
           %2 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(read %0 @1:1-1:2, read %1 @1:1-1:2, true) @1:1-1:2
           return move %2 @1:1-1:2
         }
-        func "sum(_: Trio)"(Trio) -> Int {
-          param %0 t: Trio
+        func "sum(_: Trio)"(_: Trio) -> Int {
+          param %0 t: Trio @1:1-1:1
           temp %1: Int
         bb0:
           %1 @1:1-1:2 = add checked read %0.0 @1:1-1:2, read %0.1 @1:1-1:2 @1:1-1:2
           return read %1 @1:1-1:2
         }
-        func "swapped(_: Trio)"(Trio) -> Trio {
-          param %0 t: Trio
+        func "swapped(_: Trio)"(_: Trio) -> Trio {
+          param %0 t: Trio @1:1-1:1
           temp %1: Trio
         bb0:
           %1 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2, false) @1:1-1:2
@@ -162,7 +162,7 @@ struct InitializerCallTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 t: Trio
+              var %0 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(1, 2, true) @1:1-1:2
               \(printInt("%0.0"))
@@ -183,8 +183,8 @@ struct InitializerCallTests {
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
-              var %0 p: Pair
-              var %1 t: Trio
+              var %0 p: Pair @1:1-1:1
+              var %1 t: Trio @1:1-1:1
             bb0:
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(1, 2) @1:1-1:2
               %0 @1:1-1:2 = call "Pair(a: Int, b: Int)"(read %0.1 @1:1-1:2, read %0.0 @1:1-1:2) @1:1-1:2

@@ -19,16 +19,18 @@ public enum IRVerifier {
     }
 
     /// The violation of the function `id` of `program`, where it is a primary initializer that a call can't build its
-    /// struct by: one that takes other types than its struct's fields', in order, or makes another type than its
-    /// struct, or has a body, or that a run starts at.
+    /// struct by: one that takes anything but its struct's fields, in order, each owned and labeled by its name, or
+    /// makes another type than its struct, or has a body, or that a run starts at.
     private static func initializerViolation(of id: FunctionID, in program: IRProgram) -> IRViolation? {
         let declaration = program.functions[id]
         guard case .primaryInitializer(let structID) = declaration.kind else { return nil }
-        let fields = program.types[structID].fields.map(\.type)
+        let fields = program.types[structID].fields.map { field in
+            FunctionParameter(label: field.name, convention: .owned, type: field.type)
+        }
         let initializer = "primary initializer of '\(structID.name)'"
 
         let message: String? = if declaration.parameters != fields {
-            "the IR's \(initializer) takes (\(list(declaration.parameters))), where its fields are (\(list(fields)))"
+            "the IR's \(initializer) takes (\(list(declaration.parameters))), where it takes (\(list(fields)))"
         } else if declaration.result != .named(.structure(structID)) {
             "the IR's \(initializer) makes \(declaration.result), where it makes \(structID.name)"
         } else if program.bodies[id] != nil {
@@ -41,7 +43,7 @@ public enum IRVerifier {
         return message.map { IRViolation(function: declaration.name, message: $0) }
     }
 
-    private static func list(_ types: [RayoType]) -> String {
-        types.map(\.description).joined(separator: ", ")
+    private static func list(_ parameters: [FunctionParameter]) -> String {
+        parameters.map(\.description).joined(separator: ", ")
     }
 }

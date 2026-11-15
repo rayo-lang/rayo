@@ -78,7 +78,7 @@ struct CompilerTests {
             main "main()"
 
             func "main()"() -> Void {
-              let %0 x: Int
+              let %0 x: Int @2:9-2:10
             bb0:
               declare %0
               %0 @2:9-2:10 = operand 1 @2:13-2:14

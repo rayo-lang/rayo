@@ -7,7 +7,7 @@ struct UnaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 5 @1:1-1:2
@@ -24,7 +24,7 @@ struct UnaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: UInt
+              var %0 x: UInt @1:1-1:1
               temp %1: UInt
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
@@ -43,7 +43,7 @@ struct UnaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: UInt
+              var %0 x: UInt @1:1-1:1
               temp %1: UInt
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
@@ -62,7 +62,7 @@ struct UnaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 b: Bool
+              var %0 b: Bool @1:1-1:1
               temp %1: Bool
               temp %2: Bool
             bb0:
@@ -84,7 +84,7 @@ struct BinaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
               temp %2: Int
             bb0:
@@ -104,8 +104,8 @@ struct BinaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
-              var %1 y: UInt
+              var %0 x: Int @1:1-1:1
+              var %1 y: UInt @1:1-1:1
               temp %2: Bool
               temp %3: Bool
             bb0:
@@ -125,7 +125,7 @@ struct BinaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 9223372036854775807 @1:1-1:2
@@ -143,7 +143,7 @@ struct BinaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 x: Int
+              var %0 x: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 9223372036854775807 @1:1-1:2
@@ -160,7 +160,7 @@ struct BinaryOperationTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 zero: Int
+              var %0 zero: Int @1:1-1:1
               temp %1: Int
             bb0:
               %0 @1:1-1:2 = operand 0 @1:1-1:2

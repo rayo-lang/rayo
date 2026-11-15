@@ -1,7 +1,7 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 c: Bool
+  let %0 c: Bool @2:5-2:6
   temp %1: Int
 bb0:
   declare %0
@@ -19,8 +19,8 @@ bb3:
   return
 }
 
-func "show(_: Int)"(Int) -> Void {
-  param %0 n: Int
+func "show(_: Int)"(_: Int) -> Void {
+  param %0 n: Int @5:13-5:14
 bb0:
   return
 }

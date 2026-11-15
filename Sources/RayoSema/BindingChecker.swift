@@ -50,12 +50,13 @@ struct BindingChecker {
     private var names: NameScopes { expressions.names }
     private var errors: ErrorList { expressions.file.errors }
 
-    /// Declares `parameters`, whose types are `types`, as the function's first locals, in order.
-    func declare(_ parameters: [Param], types: [RayoType?]) {
-        for (parameter, type) in zip(parameters, types) {
+    /// Declares `parameters`, which `signature` declares, as the function's first locals, in order.
+    func declare(_ parameters: [Param], declaredAs signature: [Parameter]) {
+        for (parameter, declared) in zip(parameters, signature) {
             // A parameter named `_` is reported, and declares no local.
             guard errors.isNaming(parameter.name, at: parameter.nameRange) else { continue }
-            _ = names.declare(parameter.name, type: type, kind: .parameter, at: parameter.nameRange)
+            _ = names.declare(parameter.name, type: declared.type, kind: .parameter(declared.convention),
+                              at: parameter.nameRange)
         }
     }
 

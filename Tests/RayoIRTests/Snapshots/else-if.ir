@@ -1,8 +1,8 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 n: Int
-  let %1 sign: Int
+  let %0 n: Int @2:5-2:6
+  let %1 sign: Int @4:5-4:9
   temp %2: Bool
   temp %3: Bool
   temp %4: Int

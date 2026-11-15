@@ -1,15 +1,15 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 x: Int
+  let %0 x: Int @2:5-2:6
 bb0:
   declare %0
   %0 @2:5-2:6 = call "double(_: Int)"(3) @2:9-2:18
   return
 }
 
-func "double(_: Int)"(Int) -> Int {
-  param %0 n: Int
+func "double(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @4:15-4:16
   temp %1: Int
 bb0:
   %1 @4:32-4:37 = multiply checked read %0 @4:32-4:33, 2 @4:32-4:37

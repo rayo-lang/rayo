@@ -21,8 +21,15 @@ struct LivenessState: DataflowState {
         live.contains { $0.mayReach(place) }
     }
 
-    /// Takes the state after `terminator` back to the state before it.
-    mutating func apply(backwardsThrough terminator: Terminator) {
+    /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
+    mutating func apply(backwardsThrough terminator: Terminator, of body: IRBody) {
+        // A return reads each parameter whose value the caller reads once the function returns.
+        if case .return = terminator {
+            for (index, local) in body.locals.enumerated() where local.parameterConvention?.isReadAtReturn == true {
+                read(Place(root: LocalID(index: index)))
+            }
+        }
+
         // A terminator without an operand reads no place.
         guard let operand = terminator.operand else { return }
         apply(operand)

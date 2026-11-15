@@ -24,6 +24,20 @@ extension IRParser {
         return type
     }
 
+    /// Reads a parameter's type, after the convention where the parameter doesn't borrow, and returns both.
+    mutating func conventionAndType() throws(IRTextError) -> (ParameterConvention, RayoType) {
+        // A word is a convention only where a type follows it, as the source reads it, so it may still name a struct.
+        // `borrowed` is never written, since a parameter borrows where it names no convention.
+        let next = tokens[min(position + 1, tokens.count - 1)].kind
+        let startsType = if case .word = next { true } else { next == .symbol("[") }
+        guard case .word(let word) = current.kind, startsType, word != ParameterConvention.borrowed.rawValue,
+              let convention = ParameterConvention(rawValue: word) else {
+            return (.borrowed, try type())
+        }
+        advance()
+        return (convention, try type())
+    }
+
     /// The integer type the prelude declares as `name`, or nil where it declares none.
     private static func integerType(named name: String) -> ScalarType? {
         ScalarType.named(name).flatMap { $0.isInteger ? $0 : nil }

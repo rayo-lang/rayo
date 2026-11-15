@@ -1,9 +1,9 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 a: Int
-  let %1 b: Int
-  let %2 c: Int
+  let %0 a: Int @2:5-2:6
+  let %1 b: Int @2:12-2:13
+  let %2 c: Int @2:28-2:29
   temp %3: Int
   temp %4: Int
   temp %5: Int

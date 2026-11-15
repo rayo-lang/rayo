@@ -8,8 +8,8 @@ struct ElementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
-              var %1 i: UInt
+              var %0 a: [3 of Int] @1:1-1:1
+              var %1 i: UInt @1:1-1:1
               temp %2: UInt
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
@@ -28,8 +28,8 @@ struct ElementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
-              var %1 i: UInt
+              var %0 a: [3 of Int] @1:1-1:1
+              var %1 i: UInt @1:1-1:1
               temp %2: UInt
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2
@@ -53,8 +53,8 @@ struct ElementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [2 of Int]
-              var %1 b: [2 of Int]
+              var %0 a: [2 of Int] @1:1-1:1
+              var %1 b: [2 of Int] @1:1-1:1
               temp %2: UInt
               temp %3: Int
             bb0:
@@ -69,8 +69,8 @@ struct ElementTests {
               \(printInt("%1[1]"))
               return
             }
-            func "total(_: [2 of Int])"([2 of Int]) -> Int {
-              param %0 a: [2 of Int]
+            func "total(_: [2 of Int])"(_: [2 of Int]) -> Int {
+              param %0 a: [2 of Int] @1:1-1:1
               temp %1: Int
             bb0:
               %1 @1:1-1:2 = add checked read %0[0] @1:1-1:2, read %0[1] @1:1-1:2 @1:1-1:2
@@ -87,8 +87,8 @@ struct ElementTests {
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 a: [3 of Int]
-              var %1 i: UInt
+              var %0 a: [3 of Int] @1:1-1:1
+              var %1 i: UInt @1:1-1:1
               temp %2: UInt
             bb0:
               %0 @1:1-1:2 = array of Int(1, 2, 3) @1:1-1:2

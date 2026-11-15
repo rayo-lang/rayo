@@ -1,7 +1,7 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 x: Int
+  let %0 x: Int @2:9-2:10
   temp %1: Int
 bb0:
   declare %0
@@ -13,10 +13,10 @@ bb0:
   return
 }
 
-func "add(_: Int, _: Int, _: Int)"(Int, Int, Int) -> Void {
-  param %0 a: Int
-  param %1 b: Int
-  param %2 c: Int
+func "add(_: Int, _: Int, _: Int)"(_: Int, _: Int, _: Int) -> Void {
+  param %0 a: Int @5:12-5:13
+  param %1 b: Int @5:22-5:23
+  param %2 c: Int @5:32-5:33
 bb0:
   return
 }

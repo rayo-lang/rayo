@@ -1,9 +1,9 @@
 main "main()"
 
 func "main()"() -> Void {
-  var %0 i: Int
-  let %1 odd: Int
-  let %2 next: Int
+  var %0 i: Int @2:9-2:10
+  let %1 odd: Int @5:13-5:16
+  let %2 next: Int @6:13-6:17
   temp %3: Int
   temp %4: Bool
   temp %5: Int
@@ -49,9 +49,9 @@ bb11:
   goto bb10
 }
 
-func "half(_: Int)"(Int) -> Int {
-  param %0 n: Int
-  let %1 even: Int
+func "half(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @10:13-10:14
+  let %1 even: Int @11:9-11:13
   temp %2: Int
   temp %3: Bool
   temp %4: Int
@@ -76,8 +76,8 @@ bb5:
   unreachable
 }
 
-func "pick(_: Bool)"(Bool) -> Int {
-  param %0 c: Bool
+func "pick(_: Bool)"(_: Bool) -> Int {
+  param %0 c: Bool @14:13-14:14
   temp %1: Int
 bb0:
   _ = call builtin "print(_: Int)"(0) @15:5-15:13
@@ -96,8 +96,8 @@ bb5:
   goto bb3
 }
 
-func "show(_: Int)"(Int) -> Void {
-  param %0 n: Int
+func "show(_: Int)"(_: Int) -> Void {
+  param %0 n: Int @18:13-18:14
 bb0:
   return
 }

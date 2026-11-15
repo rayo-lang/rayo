@@ -18,20 +18,20 @@ func "main()"() -> Void {
       call "kind()": Int @5:11-5:17
 }
 
-func "kind(_: Int)"(Int) -> Int {
-  param %0 x: Int
+func "kind(_: Int)"(_: Int) -> Int {
+  param %0 x: Int @7:13-7:14
   return
     integer 1: Int @7:23-7:24
 }
 
-func "kind(_: Bool)"(Bool) -> Int {
-  param %0 b: Bool
+func "kind(_: Bool)"(_: Bool) -> Int {
+  param %0 b: Bool @8:13-8:14
   return
     integer 2: Int @8:31-8:32
 }
 
-func "kind(of: Int)"(Int) -> Int {
-  param %0 x: Int
+func "kind(of: Int)"(of: Int) -> Int {
+  param %0 x: Int @9:14-9:15
   return
     integer 3: Int @9:31-9:32
 }

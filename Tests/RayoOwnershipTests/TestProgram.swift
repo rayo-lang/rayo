@@ -32,28 +32,27 @@ func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
         }
         main "\(functions[0].name)"
         \(functions.map(\.text).joined(separator: "\n"))
-        init "Shot(range: Int, hit: Hit)"(Int, Hit) -> Shot
-        init "Hit(damage: Int)"(Int) -> Hit
+        init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
+        init "Hit(damage: Int)"(damage: owned Int) -> Hit
         """)
 }
 
 /// The function `name`, made of `blocks`, whose locals are the `var`s `x` (`%0`) and `y` (`%1`), the `let` `k` (`%2`)
 /// and a temporary (`%3`), all Ints, then the `var`s `h` (`%4`), a `Hit`, `s` (`%5`), a `Shot`, `b` (`%6`), a Bool,
-/// and `a` (`%7`), two `Hit`s, and a UInt temporary (`%8`). It returns `result`, and its parameters are of
-/// `parameters`' types, which its first locals hold.
+/// and `a` (`%7`), two `Hit`s, and a UInt temporary (`%8`). It takes no parameters, and returns `result`.
 func function(
-    _ blocks: String, named name: String = "f()", parameters: String = "", result: String = "Void",
+    _ blocks: String, named name: String = "f()", result: String = "Void",
 ) -> (name: String, text: String) {
     let text = """
-        func "\(name)"(\(parameters)) -> \(result) {
-          var %0 x: Int
-          var %1 y: Int
-          let %2 k: Int
+        func "\(name)"() -> \(result) {
+          var %0 x: Int @1:1-1:1
+          var %1 y: Int @1:1-1:1
+          let %2 k: Int @1:1-1:1
           temp %3: Int
-          var %4 h: Hit
-          var %5 s: Shot
-          var %6 b: Bool
-          var %7 a: [2 of Hit]
+          var %4 h: Hit @1:1-1:1
+          var %5 s: Shot @1:1-1:1
+          var %6 b: Bool @1:1-1:1
+          var %7 a: [2 of Hit] @1:1-1:1
           temp %8: UInt
         \(blocks)
         }
@@ -71,9 +70,12 @@ func storeShot(at column: Int? = nil) -> String {
         """
 }
 
-/// The functions that the tests' blocks call, which have no bodies.
+/// The functions that the tests' blocks call, which have no bodies. Each `change` may change its first argument, and
+/// the others borrow theirs.
 let callees = [
-    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(Int, Int) -> Void"#),
-    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(Int, Hit) -> Void"#),
-    (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
+    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(_: Int, _: Int) -> Void"#),
+    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(_: Int, _: Hit) -> Void"#),
+    (name: "double(_: Int)", text: #"func "double(_: Int)"(_: Int) -> Int"#),
+    (name: "change(_: Int, _: Int)", text: #"func "change(_: Int, _: Int)"(_: mutable Int, _: Int) -> Void"#),
+    (name: "change(_: Int, _: Hit)", text: #"func "change(_: Int, _: Hit)"(_: mutable Int, _: Hit) -> Void"#),
 ]

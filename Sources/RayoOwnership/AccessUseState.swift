@@ -19,9 +19,9 @@ struct AccessUseState: DataflowState {
         return merged
     }
 
-    /// Takes the state after `terminator` back to the state before it.
-    mutating func apply(backwardsThrough terminator: Terminator) {
-        values.apply(backwardsThrough: terminator)
+    /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
+    mutating func apply(backwardsThrough terminator: Terminator, of body: IRBody) {
+        values.apply(backwardsThrough: terminator, of: body)
     }
 
     /// Takes the state after `statement`, a statement of the function whose places `places` gives the types of, back

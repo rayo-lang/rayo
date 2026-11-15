@@ -4,13 +4,13 @@ struct Stats {
 
 main "main()"
 
-init "Stats(hp: Int)"(Int) -> Stats
+init "Stats(hp: Int)"(hp: owned Int) -> Stats
 
 func "main()"() -> Void {
-  let %0 a: [1 of Stats]
-  let %1 i: UInt
-  let %2 x: Int
-  let %3 grid: [1 of [2 of Int]]
+  let %0 a: [1 of Stats] @2:9-2:10
+  let %1 i: UInt @3:9-3:10
+  let %2 x: Int @4:9-4:10
+  let %3 grid: [1 of [2 of Int]] @5:9-5:13
   temp %4: Stats
   temp %5: UInt
   temp %6: [2 of Int]

@@ -1,9 +1,9 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 grid: [2 of [3 of Int]]
-  let %1 i: UInt
-  let %2 n: UInt
+  let %0 grid: [2 of [3 of Int]] @2:9-2:13
+  let %1 i: UInt @3:9-3:10
+  let %2 n: UInt @6:9-6:10
   bind %0 @2:9-2:13
     array: [2 of [3 of Int]] @2:16-2:38
       array: [3 of Int] @2:17-2:26

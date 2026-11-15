@@ -1,10 +1,10 @@
 main "main()"
 
 func "main()"() -> Void {
-  let %0 a: Bool
-  let %1 b: Bool
-  let %2 c: Bool
-  let %3 d: Bool
+  let %0 a: Bool @2:5-2:6
+  let %1 b: Bool @3:5-3:6
+  let %2 c: Bool @4:5-4:6
+  let %3 d: Bool @5:5-5:6
   temp %4: Bool
   temp %5: Bool
 bb0:

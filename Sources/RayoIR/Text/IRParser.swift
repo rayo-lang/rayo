@@ -159,11 +159,20 @@ public struct IRParser: ~Copyable {
         return id
     }
 
-    /// Reads a function's quoted name, then its parameters' types between parentheses.
-    private mutating func nameAndParameters() throws(IRTextError) -> (name: String, parameters: [RayoType]) {
+    /// Reads a function's quoted name, then its parameters between parentheses.
+    private mutating func nameAndParameters() throws(IRTextError) -> (name: String, parameters: [FunctionParameter]) {
         guard case .string(let name) = current.kind else { throw expected("a function's quoted name") }
         advance()
-        let parameters = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.type() }
+        let parameters = try parenthesized { (parser: inout IRParser) throws(IRTextError) in try parser.parameter() }
         return (name, parameters)
+    }
+
+    /// Reads `label: Type`, with `_` for no label, and the type after `owned` or `mutable` where the parameter
+    /// doesn't borrow.
+    private mutating func parameter() throws(IRTextError) -> FunctionParameter {
+        let label = try word()
+        try expect(":")
+        let (convention, type) = try conventionAndType()
+        return FunctionParameter(label: label == "_" ? nil : label, convention: convention, type: type)
     }
 }

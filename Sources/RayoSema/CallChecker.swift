@@ -156,7 +156,8 @@ struct CallChecker {
 
         // A result type that isn't known was reported in the function that gives it, or here as a cycle.
         guard let result = expressions.file.result(of: match.signature, calledAt: range) else { return nil }
-        return CheckedExpr(kind: match.signature.target.call(passing: match.arguments), type: result, range: range)
+        let call = match.signature.target.call(passing: match.arguments, to: match.signature.parameters)
+        return CheckedExpr(kind: call, type: result, range: range)
     }
 
     /// The value of `arguments` where they are one unlabeled integer literal, or nil where they are anything else.

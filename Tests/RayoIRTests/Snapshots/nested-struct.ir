@@ -9,12 +9,12 @@ struct Hit {
 
 main "main()"
 
-init "Shot(range: Int, hit: Hit)"(Int, Hit) -> Shot
+init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
 
-init "Hit(damage: Int)"(Int) -> Hit
+init "Hit(damage: Int)"(damage: owned Int) -> Hit
 
 func "main()"() -> Void {
-  let %0 s: Shot
+  let %0 s: Shot @2:5-2:6
   temp %1: Hit
 bb0:
   declare %0

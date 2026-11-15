@@ -2,12 +2,12 @@
 public struct FunctionDeclaration: Equatable, Sendable {
     /// The function's name and parameters, such as `f(_: Int)`, which no other function of the program has.
     public var name: String
-    /// The parameters' types, in order.
-    public var parameters: [RayoType]
+    /// The parameters, in order.
+    public var parameters: [FunctionParameter]
     public var result: RayoType
     public var kind: FunctionKind
 
-    public init(name: String, parameters: [RayoType], result: RayoType, kind: FunctionKind) {
+    public init(name: String, parameters: [FunctionParameter], result: RayoType, kind: FunctionKind) {
         self.name = name
         self.parameters = parameters
         self.result = result

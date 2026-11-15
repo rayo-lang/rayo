@@ -7,9 +7,9 @@ import RayoSource
 /// `let` at most once on each path.
 enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
-    /// assigned, in `places.body`, whose first `parameterCount` locals are its function's parameters.
-    static func errors(in places: PlaceTypes, parameterCount: Int) -> [Diagnostic] {
-        let analysis = InitializationAnalysis(places.body, parameterCount: parameterCount)
+    /// assigned, in `places.body`.
+    static func errors(in places: PlaceTypes) -> [Diagnostic] {
+        let analysis = InitializationAnalysis(places.body)
         var results = DataflowSolver.solve(analysis, in: places.body)
         var errors = FunctionErrors(places: places)
         for index in places.body.blocks.indices {
@@ -79,7 +79,7 @@ private struct FunctionErrors {
     }
 
     mutating func store(to destination: Destination, holding state: PlaceState) {
-        guard case .source(let name, .let, _) = places.body.locals[destination.place.root.index] else { return }
+        guard case .source(let name, .let, _, _) = places.body.locals[destination.place.root.index] else { return }
         guard state.isAssignedOnSomePath else { return }
         stores.append(Diagnostic(storeError(naming: name, holding: state), at: destination.range))
     }

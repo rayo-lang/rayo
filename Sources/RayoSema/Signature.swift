@@ -59,15 +59,14 @@ struct Signature: CustomStringConvertible {
 extension Signature {
     /// The signature of a built-in function, under the name a call writes to reach it.
     init(of builtin: Builtin) {
-        let parameters = builtin.parameters.map { Parameter(label: $0.label, type: $0.type, spelledType: "\($0.type)") }
-        self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)), parameters: parameters,
-                  result: .type(builtin.result))
+        self.init(name: builtin.name.spelling, target: .callee(.builtin(builtin)),
+                  parameters: builtin.parameters.map(Parameter.init), result: .type(builtin.result))
     }
 
     /// The signature of `init(repeating:)` of the array of `count` values of `element`, which makes the array with
-    /// each element a copy of its argument.
+    /// each element a copy of the argument it borrows.
     init(fillingArrayOf count: Int, _ element: RayoType) {
-        let parameter = Parameter(label: "repeating", type: element, spelledType: "\(element)")
+        let parameter = Parameter(FunctionParameter(label: "repeating", convention: .borrowed, type: element))
         self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
                   result: .type(.array(count: count, element: element)))
     }

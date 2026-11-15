@@ -33,17 +33,12 @@ extension IRParser {
         return IRBody(locals: locals, blocks: blocks)
     }
 
-    /// Reads `kind %N name: Type`, or `temp %N: Type`, where `N` is the local's ID; or nil where the current token
-    /// starts no local.
+    /// Reads `kind %N name: Type @range`, or `temp %N: Type`, where `N` is the local's ID; or nil where the current
+    /// token starts no local.
     private mutating func local() throws(IRTextError) -> IRLocal? {
-        guard case .word(let keyword) = current.kind else { return nil }
-        let kind: LocalKind? = switch keyword {
-        case "let": .let
-        case "var": .var
-        case "param": .parameter
-        default: nil
+        guard case .word(let keyword) = current.kind, ["let", "var", "param", "temp"].contains(keyword) else {
+            return nil
         }
-        guard kind != nil || keyword == "temp" else { return nil }
         advance()
 
         // The local's number is its ID, so the locals come in order.
@@ -51,14 +46,24 @@ extension IRParser {
         let number = current
         guard try integer() == localCount else { throw IRTextError(at: number, "expected the local %\(localCount)") }
 
-        // A temporary has a type alone, and a local the source declares a name before it.
-        guard let kind else {
+        // A temporary has a type alone, and a local the source declares a name before it and where it declares the
+        // name after it.
+        guard keyword != "temp" else {
             try expect(":")
             return .temporary(try type())
         }
         let name = try word()
         try expect(":")
-        return .source(name: name, kind: kind, type: try type())
+        let (kind, type) = try kindAndType(declaredBy: keyword)
+        return .source(name: name, kind: kind, type: type, range: try range())
+    }
+
+    /// Reads the type of a local that `keyword` declares, after its convention where it is a parameter, and returns
+    /// the local's kind with it.
+    private mutating func kindAndType(declaredBy keyword: String) throws(IRTextError) -> (LocalKind, RayoType) {
+        guard keyword == "param" else { return (keyword == "let" ? .let : .var, try type()) }
+        let (convention, type) = try conventionAndType()
+        return (.parameter(convention), type)
     }
 
     /// Reads `bbN:`, then the block's statements, then its terminator.
