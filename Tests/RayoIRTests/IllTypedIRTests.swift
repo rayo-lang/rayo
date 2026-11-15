@@ -45,7 +45,8 @@ struct IllTypedIRTests {
         var withBody = program
         withBody.bodies[initializer] = program.bodies[FunctionID(index: 0)]
         let hasBody = "the IR gives the primary initializer of 'Pair' a body"
-        #expect(IRVerifier.verify(withBody, from: .lowering) == IRViolation(function: "Pair(count: Int)", message: hasBody))
+        let hasBodyViolation = IRViolation(function: "Pair(count: Int)", message: hasBody)
+        #expect(IRVerifier.verify(withBody, from: .lowering) == hasBodyViolation)
 
         var functions = FunctionTable()
         _ = functions.declare(program.functions[FunctionID(index: 0)])
@@ -55,7 +56,8 @@ struct IllTypedIRTests {
         var makingBool = program
         makingBool.functions = functions
         let makesBool = "the IR's primary initializer of 'Pair' makes Bool, where it makes Pair"
-        #expect(IRVerifier.verify(makingBool, from: .lowering) == IRViolation(function: "Pair(count: Int)", message: makesBool))
+        let makesBoolViolation = IRViolation(function: "Pair(count: Int)", message: makesBool)
+        #expect(IRVerifier.verify(makingBool, from: .lowering) == makesBoolViolation)
     }
 
     @Test func `an array of elements of another type than it names is a violation`() throws {

@@ -19,6 +19,7 @@ struct AccessScopeVerifier {
         // The accesses held where each block begins, or nil where the walk hasn't reached it yet.
         var entered: [Set<AccessID>?] = Array(repeating: nil, count: body.blocks.count)
         entered[0] = []
+
         // The walk runs each block in the order it reaches them, breadth first, so the paths into a join usually reach
         // it before it runs, and a difference between them is reported at the join.
         var reached: [(block: BlockID, held: Set<AccessID>)] = [(BlockID(index: 0), [])]

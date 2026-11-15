@@ -22,8 +22,7 @@ struct ElementIndexVerifier {
         checkedCounts = Self.checkedCounts(in: body)
     }
 
-    /// Throws for the first element step, in the order the body names its places, whose index isn't checked
-    /// against its array's count.
+    /// Throws for the first element step found whose index isn't checked against its array's count.
     func verify() throws(IRViolation) {
         for place in Self.places(in: body) {
             try verifyIndices(in: place)
@@ -81,20 +80,18 @@ struct ElementIndexVerifier {
         return counts
     }
 
-    /// The places that `body` names, in the order of its blocks, and in each of its statements and then its
-    /// terminator.
+    /// The places that `body` names: those its operands read or move, then those its statements store to, begin an
+    /// access to, or make depend on an access.
     private static func places(in body: IRBody) -> [Place] {
-        body.blocks.flatMap { block in
-            let named = block.statements.flatMap { statement -> [Place] in
-                switch statement {
-                case .compute(let destination, let value, _): ([destination?.place] + value.operands.map(\.place))
-                    .compactMap(\.self)
-                case .begin(_, let access): [access.place]
-                case .depend(let place, _): [place]
-                case .declare, .end: []
-                }
+        let read = body.blocks.flatMap(\.operands).compactMap(\.place)
+        let reached = body.blocks.flatMap(\.statements).compactMap { statement -> Place? in
+            switch statement {
+            case .compute(let destination, _, _): destination?.place
+            case .begin(_, let access): access.place
+            case .depend(let place, _): place
+            case .declare, .end: nil
             }
-            return named + [block.terminator.operand?.place].compactMap(\.self)
         }
+        return read + reached
     }
 }
