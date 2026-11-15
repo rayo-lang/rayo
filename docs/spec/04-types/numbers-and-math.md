@@ -56,22 +56,28 @@ let g: Int64 = d                 // error: Int and Int64 never convert implicitl
 **Every other conversion between number types is explicit.** Each explicit form says what it does with a value the target type can't hold exactly. Together they have a defined result for every input but one (below):
 
 - **Between integer types.** The unlabeled form, such as `Int32(x)`, checks that the value fits. It panics where overflow checks are on, and keeps the low bits where they are off ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)). The `truncating:` form always keeps the low bits, and the `clamping:` form saturates.
-- **From a floating-point value.** `Int(f)` rounds toward zero. It panics in every build on NaN, an infinity, or a value whose integer part doesn't fit, a negative one converted to an unsigned type included, since targets' conversion instructions disagree on those. `Int(clamping: f)` saturates, and maps NaN to `0`.
+- **From a floating-point value.** `Int(f)` rounds toward zero, and panics in every build on a value it can't convert ([below](#float-to-integer-panics)). It panics even where overflow checks are off, since targets' conversion instructions disagree on those inputs. `Int(clamping: f)` saturates, and maps NaN to `0`.
 - **To a floating-point type.** `Float(d)` of an `Int`, `Float(x)` of a `Double` and `Half(f)` of a `Float` round to nearest. An out-of-range value becomes an infinity of its sign, as IEEE 754 defines.
 
-**A float-to-integer conversion panics with one of two texts, since each names a different bug:**
+**The one input without a defined result is NaN or an out-of-range value, converted from a float to an integer inside an `unchecked` block**, which removes the conversion's check ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)). Unchecked, that conversion's failure is undefined behavior ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)).
+
+#### Float-to-integer panics
+
+**An unlabeled float-to-integer conversion panics with one of two texts, since each names a different bug:**
 
 - `float to integer conversion of NaN`, where the value is NaN;
-- `float to integer conversion out of range`, where it is an infinity or its integer part doesn't fit.
+- `float to integer conversion out of range`, where it is an infinity or its integer part doesn't fit the integer type.
+
+A negative value whose integer part isn't 0 never fits an unsigned type, so `UInt` of it is out of range.
 
 ```swift
-let a = Int(-2.9)               // -2: rounds toward zero
-let b = UInt(-0.5)              // 0: rounding toward zero gives a value that fits
-let c = UInt(-1.0)              // panics: float to integer conversion out of range
-let d = Int(0.0 / 0.0)          // panics: float to integer conversion of NaN
+let x = -2.9
+let zero = 0.0
+let a = Int(x)                  // -2: rounds toward zero
+let b = UInt(x + 2.5)           // 0: about -0.4, which rounds toward zero to 0
+let c = UInt(x)                 // panics: float to integer conversion out of range
+let d = Int(zero / zero)        // panics: float to integer conversion of NaN
 ```
-
-**The one input without a defined result is NaN or an out-of-range value, converted from a float to an integer inside an `unchecked` block**, which removes the conversion's check ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)). Unchecked, that conversion's failure is undefined behavior ([10](../10-errors-and-safety/checks-and-build-modes.md#the-checks)).
 
 ### Integer overflow, division and shifts
 

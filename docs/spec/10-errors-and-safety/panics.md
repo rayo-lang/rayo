@@ -36,8 +36,8 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 **Arithmetic:**
 
 - integer overflow, including unary `-` and `Int.min / -1`, an unlabeled integer conversion whose value doesn't fit, and an imported bitfield write that doesn't fit its width ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)), only where overflow checks are on ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
-- integer division or remainder by zero;
-- converting NaN or an out-of-range floating-point value to an integer with the unlabeled form, which panics with `float to integer conversion of NaN` or `float to integer conversion out of range` ([04](../04-types/numbers-and-math.md#conversions)).
+- integer division or remainder by zero ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
+- converting NaN or an out-of-range floating-point value to an integer with the unlabeled form, which panics with `float to integer conversion of NaN` or `float to integer conversion out of range` ([04](../04-types/numbers-and-math.md#float-to-integer-panics)).
 
 **Uses out of bounds, or outside a value's life:**
 

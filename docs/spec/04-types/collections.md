@@ -282,6 +282,7 @@ protocol Formattable { func format(into sink: mutable some TextSink) where sink 
 ```swift
 func print(_ value: some Formattable)
 
+let hp = 7
 print(42)               // 42
 print(hp > 0)           // true
 print("hp \(hp)")       // hp 7
@@ -298,12 +299,14 @@ print(0.1 + 0.2)        // 0.30000000000000004
 
 **A `Half`, `Float` or `Double` formats as the shortest decimal that reads back as the same value.** So `0.1` prints `0.1`, though no binary float is exactly one tenth, and every printed float converts back to the bits it came from. Where several decimals of that length read back as the value, it writes the one nearest the value's exact binary value, and of two as near, the one whose last digit is even.
 
-**That decimal is written plainly or with an exponent, depending on its magnitude.** Each type has an upper bound: 2^11 for `Half`, 2^24 for `Float` and 2^53 for `Double`. Up to its bound, a type holds every integer exactly, so a whole number keeps all its digits. Past it, a float holds only some of the integers, and writing every digit would claim a precision the value doesn't have:
+**That decimal is written plainly or with an exponent, depending on its magnitude.** `Float` has an upper bound of 2^24, and `Double` one of 2^53. Up to its bound, each holds every integer exactly, so a whole number keeps all its digits. Past it, a float holds only some of the integers, and writing every digit would claim a precision the value doesn't have:
 
 - **Plain.** A decimal at least `0.0001` in magnitude, of a value no larger than its type's bound in magnitude, is written without an exponent, and always with a fraction: `1.0`, `0.5`, `100.0`, `0.0001`.
 - **Exponent.** Any other is written as one digit, then any further digits after a point, then `e`, the exponent's sign and at least two of its digits: `1e-05`, `3.3554432e+07`, `1e+16`.
 
-**Zeros, infinities and NaN have fixed texts:** `0.0` and `-0.0`, `inf` and `-inf`, and `nan`. Every NaN prints `nan`, whatever its sign or payload, since which NaN a result is stays open ([Floating point](numbers-and-math.md#floating-point)). So a NaN prints the same text on every target.
+`Half` takes `Float`'s bound, which is above its largest finite value, 65504, so a whole `Half` always keeps its digits.
+
+**Zeros, infinities and NaN have fixed texts:** `0.0` and `-0.0`, `inf` and `-inf`, and `nan`. Every NaN prints `nan`, whatever its sign or payload, since which NaN a result is stays open ([Floating point](numbers-and-math.md#floating-point)).
 
 ```swift
 print(Float(16777216))                // 16777216.0: 2^24, the last Float written plainly

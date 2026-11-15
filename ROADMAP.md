@@ -31,7 +31,7 @@ v0.1 adds:
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
 - `copy` of a field of a local or a borrowed parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
-- `print(Int)`, and `print(Bool)`, which prints `true` or `false`.
+- `print(Int)`, and `print(Bool)`, which prints `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
 
 ## v0.2: `UInt` and inline arrays
 
@@ -90,6 +90,7 @@ Declarations and types:
 - the wrapping, saturating, bitwise and shift operators ([04](docs/spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
 - SIMD vectors ([04](docs/spec/04-types/numbers-and-math.md#simd-and-math));
 - text ([04](docs/spec/04-types/collections.md#strings));
+- `print` of any other `Formattable`, such as text, an interpolated literal or `Half` ([04](docs/spec/04-types/collections.md#printing)): v0.1, v0.2 and v0.2.5 print `Int`, `Bool`, `UInt`, `Float` and `Double` alone;
 - backtick identifiers ([12](docs/spec/12-grammar/lexical.md#lexical)).
 
 Statements and control flow:
