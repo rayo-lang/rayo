@@ -25,8 +25,8 @@ struct AssignmentChecker {
 
     /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. A
     /// value property, such as an array's count, never changes, whatever holds it, so a target that names one or goes
-    /// on from one is reported as that, ahead of anything the rules would refuse in the place that holds it. So the
-    /// root of a target that changes part of it is checked once the rest of the target is.
+    /// on from one is reported as that, ahead of anything the rules would refuse in the place that holds it. So a
+    /// target that changes part of its root has its root checked last.
     private func changedPlace(_ target: Expr) -> TypedPlace? {
         // A target that failed was reported.
         guard let changed = expressions.place(target, under: self) else { return nil }
@@ -72,9 +72,9 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// Finds the local that an assignment's target starts from. A local the assignment changes whole is checked for
-    /// whether it may change; one it changes part by part is checked once the rest of the target is. Returns nil once
-    /// it has reported why the local can't change, or that no local has the name.
+    /// Finds the local that an assignment's target starts from. Where the assignment changes the local whole, this
+    /// checks that the local may change; where it changes only part of it, the check comes last, after the rest of the
+    /// target. Returns nil once it has reported why the local can't change, or that no local has the name.
     private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
         // A name that names no local was reported.
         guard let local = local(named: name, at: range) else { return nil }
@@ -100,7 +100,7 @@ struct AssignmentChecker {
 
     /// Checks a target's root that is no name, such as a call. Where the target names the root whole, it is refused
     /// at once. Where the target goes on from it, it is checked as a value that no local holds, so a value property
-    /// along the target is reported first, and the root is refused once the rest of the target is checked.
+    /// along the target is reported first, and the root is refused last.
     private func nonLocalRoot(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
         // A value that failed was reported.

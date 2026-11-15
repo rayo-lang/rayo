@@ -15,7 +15,8 @@ struct BuiltinTests {
         } else {
             declarations.functions(named: builtin.name.spelling)
         }
-        #expect(found.map(\.isBuiltin) == found.map { _ in true })
+        let isEachBuiltin = found.allSatisfy(\.isBuiltin)
+        #expect(isEachBuiltin)
         #expect(found.map(\.description).contains(Signature(of: builtin).description))
     }
 

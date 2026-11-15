@@ -28,6 +28,7 @@ struct FieldAssignmentTests {
         ("Enemy.armor = 1", .assignToType(name: "Enemy"), "Enemy"),
         ("made.armor = 1", .assignToFunction(name: "made"), "made"),
         ("nope.armor = 1", .notDeclared(name: "nope"), "nope"),
+        ("Int.armor = 1", .assignToType(name: "Int"), "Int"),
     ])
     func `a field's assignment needs a 'var' local or a 'var' field, and a value of its type`(
         body: String, expected: ErrorCode, covered: String,
@@ -35,6 +36,23 @@ struct FieldAssignmentTests {
         let source = source(running: body)
 
         // The one error covers the binding, the field or the value that is wrong.
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test(arguments: [
+        ("l.mana = 1", ErrorCode.noSuchField(type: "Enemy", field: "mana"), "mana"),
+        ("p.mana = 1", .noSuchField(type: "Enemy", field: "mana"), "mana"),
+        ("l.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
+        ("made().mana = 1", .noSuchField(type: "Enemy", field: "mana"), "mana"),
+        ("nope().armor = 1", .notDeclared(name: "nope"), "nope"),
+    ])
+    func `what a target names is checked before whether its root may change part by part`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = source(running: body)
+
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [expected])
         #expect(coveredText(reported, in: source) == [covered])

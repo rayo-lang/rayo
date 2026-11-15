@@ -11,7 +11,7 @@ extension Declarations {
 
     /// The member of the struct `id` called `name`: one of its fields, or its primary initializer.
     private func structMember(named name: String, of id: StructID) -> Member? {
-        if name == "init" { return .initializers(.primary(id)) }
+        if name == Member.initializerName { return .initializers(.primary(id)) }
         let fields = fields(of: id)
         return fields.firstIndex { $0.name == name }.map { .field(index: $0, fields[$0]) }
     }
@@ -20,14 +20,15 @@ extension Declarations {
     private func arrayMember(named name: String, count: Int, _ element: RayoType) -> Member? {
         switch name {
         case "count": .count(count)
-        case "init": .initializers(.overloads([Signature(fillingArrayOf: count, element)]))
+        case Member.initializerName: .initializers(.overloads([Signature(fillingArrayOf: count, element)]))
         default: nil
         }
     }
 
     /// The member of the prelude type `type` called `name`: the built-ins that initialize it, where it has any.
     private func preludeMember(named name: String, of type: RayoType) -> Member? {
+        guard name == Member.initializerName else { return nil }
         let initializers = Builtin.allCases.filter { $0.initializedType == type }.map(Signature.init(of:))
-        return name == "init" && !initializers.isEmpty ? .initializers(.overloads(initializers)) : nil
+        return initializers.isEmpty ? nil : .initializers(.overloads(initializers))
     }
 }

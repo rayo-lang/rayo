@@ -77,7 +77,8 @@ struct ImplicitMember {
             expressions.settled(value, expecting: expected)
         }
 
-        func value(by expressions: ExpressionChecker) -> CheckedValue? {
+        /// The value, which was checked on its own already, as the member's arguments are.
+        func uncheckedValue(by _: ExpressionChecker) -> CheckedValue? {
             value
         }
 
@@ -99,7 +100,9 @@ struct ImplicitMember {
         arguments?.map(\.value) ?? []
     }
 
-    /// Whether a position that expects `type` takes an implicit member, which only an array's does.
+    /// Whether a position that expects `type` takes an implicit member, which only an array's does: of the spec's
+    /// implicit members, rayoc builds only an array's `.init(repeating:)`, so another type's are reported as
+    /// unsupported rather than looked up.
     static func isSupported(in type: RayoType) -> Bool {
         if case .array = type { true } else { false }
     }

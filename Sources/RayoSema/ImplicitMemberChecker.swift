@@ -36,7 +36,8 @@ struct ImplicitMemberChecker {
     private func initializerCall(_ member: ImplicitMember, of initializers: Member.Initializers) -> CheckedExpr? {
         // An initializer makes a value only when it is called.
         guard let arguments = member.arguments else { return failed(member, reporting: .uncalledInitializer) }
-        // An array's `.init(each:)`, which calls a function for each element, isn't supported.
+        // An array's `.init(each:)`, which calls a function for each element, is an initializer of the spec that
+        // rayoc doesn't build, so it is reported as unsupported rather than as a call that fits no initializer.
         if arguments.count == 1, arguments[0].label == "each" {
             return failed(member, reporting: .unsupportedEachInitializer)
         }

@@ -66,7 +66,7 @@ extension Signature {
     /// each element a copy of its argument.
     init(fillingArrayOf count: Int, _ element: RayoType) {
         let parameter = Parameter(label: "repeating", type: element, spelledType: "\(element)")
-        self.init(name: "init", target: .filledArray, parameters: [parameter],
+        self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
                   result: .type(.array(count: count, element: element)))
     }
 }

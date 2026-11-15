@@ -12,9 +12,9 @@ protocol CallArgument {
     /// Checks the value against the type of the parameter that takes it, which `expected` names.
     func checked(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr?
 
-    /// Checks the value on its own, before the call has chosen the parameter that takes it, so an untyped value stays
-    /// untyped. Returns nil once it has reported a mistake.
-    func value(by expressions: ExpressionChecker) -> CheckedValue?
+    /// The value checked on its own, before the call has chosen the parameter that takes it, so an untyped value
+    /// stays untyped and no parameter's type has settled it. Returns nil once it has reported a mistake.
+    func uncheckedValue(by expressions: ExpressionChecker) -> CheckedValue?
 
     /// Reports the value's own errors, where no parameter takes it.
     func reportErrors(by expressions: ExpressionChecker)

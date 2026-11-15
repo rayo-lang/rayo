@@ -24,7 +24,7 @@ struct CallChecker {
         case .name(let name):
             call(named: name, at: callee.range, arguments, in: range).map { .typed($0) }
 
-        // A member names a member of the value its base gives, which no type has a method among.
+        // A member call calls a method of its base's type, and no type has methods yet.
         case .member(let base, let name, let nameRange):
             memberCall(named: name, at: nameRange, of: base, calledAt: callee.range, passing: arguments)
 
@@ -69,8 +69,9 @@ struct CallChecker {
     private func typeCall(of type: RayoType, named name: String, at nameRange: SourceRange,
                           passing arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
         // A type without initializers makes no value by a call.
-        guard case .initializers(let initializers)? = declarations.member(named: "init", of: type) else {
-            let code = ErrorCode.noSuchMember(type: expressions.typeName(of: type), name: "init")
+        let initializerName = Member.initializerName
+        guard case .initializers(let initializers)? = declarations.member(named: initializerName, of: type) else {
+            let code = ErrorCode.noSuchMember(type: expressions.typeName(of: type), name: initializerName)
             return reachingNothing(reporting: code, at: nameRange, passing: arguments)
         }
 
@@ -237,7 +238,7 @@ struct CallChecker {
                       in range: SourceRange) -> Match? {
         // Check each argument on its own, since the candidate that takes it isn't known yet, so an untyped one stays
         // untyped.
-        let checked = arguments.map { $0.value(by: expressions) }
+        let checked = arguments.map { $0.uncheckedValue(by: expressions) }
         let values = checked.compactMap { $0 }
         // An argument that failed was reported, and without it no candidate can be picked. The other arguments'
         // literals are settled to their default types, for their own errors.

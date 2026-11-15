@@ -6,7 +6,7 @@ extension Argument: CallArgument {
         expressions.check(value, expecting: expected)
     }
 
-    func value(by expressions: ExpressionChecker) -> CheckedValue? {
+    func uncheckedValue(by expressions: ExpressionChecker) -> CheckedValue? {
         expressions.value(of: value)
     }
 
