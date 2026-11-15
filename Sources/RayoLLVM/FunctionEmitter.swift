@@ -49,7 +49,7 @@ struct FunctionEmitter {
     /// The block that holds every stack slot, and goes on to the first IR block.
     let entry: LLVM.BasicBlock
     /// The local that every `return` returns whole, which lies in the caller's result slot, or nil where there is none.
-    var returned: LocalID?
+    let returned: LocalID?
     /// The pointer to each local's place, indexed by `LocalID`.
     var places: [PointerValue] = []
     var blocks: [LLVM.BasicBlock] = []
@@ -69,6 +69,7 @@ struct FunctionEmitter {
         self.declaration = declaration
         llvmFunction = declared.function
         signature = declared.signature
+        returned = Self.returnedLocal(of: body, declaredAs: declaration, passing: declared.signature.result)
         self.callTargets = callTargets
         self.lowering = lowering
         self.runtimeDeclarations = runtimeDeclarations
@@ -80,7 +81,6 @@ struct FunctionEmitter {
     /// Emits the body into the function, in `program`'s module.
     mutating func emit(in program: borrowing ProgramEmitter) {
         program.builder.position(atEndOf: entry)
-        returned = returnedLocal()
         places = makePlaces(with: program.builder)
         blocks = body.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 

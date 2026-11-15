@@ -31,7 +31,9 @@ RayoCaughtCall rayo_run_catching_panic(void (*main)(void));
 #define RAYO_TEST_MEASURED_STACK_BYTES (16 * 1024 * 1024)
 
 /// Calls `main` as `rayo_run_catching_panic` does, on a thread of its own, and returns what the call came to, with
-/// `stackBytes` set to the bytes of the thread's stack that the call used. A call that panicked sets it to 0.
+/// `stackBytes` set to how far down the thread's stack the call reached, in bytes from its top. A call that panicked
+/// sets it to 0. On Windows a frame's pages are each touched as it is made, so this is the depth of the deepest frame;
+/// elsewhere it is the deepest byte the call wrote, so a slot no code writes doesn't count.
 RayoCaughtCall rayo_run_measuring_stack(void (*main)(void), size_t *stackBytes);
 
 /// The address of the function that stands in for the runtime's `rayo.panic`: it ends the call that

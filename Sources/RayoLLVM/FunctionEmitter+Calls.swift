@@ -111,8 +111,8 @@ extension FunctionEmitter {
         var filledSlots: [PointerValue] = []
         for (argument, passing) in zip(arguments, target.signature.parameters) {
             let passed = pass(argument, as: passing, with: builder)
-            llvmArguments += passed
-            if case .filledSlot = passing { filledSlots += passed.compactMap(PointerValue.init) }
+            llvmArguments += passed.arguments
+            if let slot = passed.filledSlot { filledSlots.append(slot) }
         }
         let result = builder.call(target.function, llvmArguments,
                                   parameterAttributes: target.signature.parameterAttributes)
@@ -124,14 +124,18 @@ extension FunctionEmitter {
         return result
     }
 
-    /// Emits the instructions that pass `argument` as `passing` says, and returns the LLVM arguments that pass it.
+    /// Emits the instructions that pass `argument` as `passing` says, and returns the LLVM arguments that pass it, and
+    /// the slot it fills to pass the argument, where it fills one.
     private func pass(
         _ argument: OperandValue, as passing: ParameterPassing, with builder: borrowing Builder,
-    ) -> [AnyValue] {
+    ) -> (arguments: [AnyValue], filledSlot: PointerValue?) {
         switch passing {
-        case .direct: scalars(of: argument, with: builder)
-        case .callerPlace: [placePointer(of: argument)]
-        case .filledSlot: [filledSlot(holding: argument, with: builder)]
+        case .direct:
+            (scalars(of: argument, with: builder), nil)
+        case .callerPlace:
+            ([placePointer(of: argument)], nil)
+        case .filledSlot:
+            filledSlot(holding: argument, with: builder)
         }
     }
 
@@ -145,11 +149,14 @@ extension FunctionEmitter {
         return address.pointer.anyValue
     }
 
-    /// Emits the copy of `argument` into a new slot, whose life starts here, and returns the pointer to the slot.
-    private func filledSlot(holding argument: OperandValue, with builder: borrowing Builder) -> AnyValue {
+    /// Emits the copy of `argument` into a new slot, whose life starts here, and returns the LLVM argument that passes
+    /// it, the pointer to the slot, and the slot.
+    private func filledSlot(
+        holding argument: OperandValue, with builder: borrowing Builder,
+    ) -> (arguments: [AnyValue], filledSlot: PointerValue?) {
         let slot = newTemporarySlot(of: argument.type, with: builder)
         copy(argument, to: slot, with: builder)
-        return slot.pointer.anyValue
+        return ([slot.pointer.anyValue], slot.pointer)
     }
 
     /// Emits the stores of `result`, which a call returns directly, in the place at `destination`, where there is

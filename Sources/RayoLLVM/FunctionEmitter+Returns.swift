@@ -52,12 +52,14 @@ extension FunctionEmitter {
         builder.returnVoid()
     }
 
-    /// The local that every `return` returns whole, whose place is then the caller's result slot, so the value
-    /// is built where the caller takes it. Nil where the result isn't written to a slot, or the returns return
-    /// different values.
-    func returnedLocal() -> LocalID? {
+    /// The local of `body`, the body of `declaration`, that every `return` returns whole, whose place is then the
+    /// caller's result slot, so the value is built where the caller takes it. Nil where the result isn't written to a
+    /// slot, as `result` says, or the returns return different values.
+    static func returnedLocal(
+        of body: IRBody, declaredAs declaration: FunctionDeclaration, passing result: ResultPassing,
+    ) -> LocalID? {
         // A result returned directly has no slot to build it in.
-        guard case .slot = signature.result else { return nil }
+        guard case .slot = result else { return nil }
 
         // Gather what each `return` gives the whole of: a local, or nil for anything else.
         var returned: Set<LocalID?> = []
