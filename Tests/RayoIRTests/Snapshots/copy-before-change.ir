@@ -1,0 +1,59 @@
+struct P {
+  var hp: Int
+}
+
+main "main()"
+
+init "P(hp: Int)"(Int) -> P
+
+func "main()"() -> Void {
+  var %0 x: Int
+  let %1 y: Int
+  var %2 p: P
+  temp %3: Int
+  temp %4: Int
+  temp %5: P
+  temp %6: Int
+bb0:
+  declare %0
+  %0 @2:9-2:10 = operand 1 @2:13-2:14
+  declare %1
+  %3 @3:13-3:21 = operand read %0 @3:13-3:21 @3:13-3:21
+  branch true, bb1, bb2
+bb1:
+  %0 @3:34-3:35 = operand 10 @3:38-3:40
+  %4 @3:24-3:56 = operand 1 @3:42-3:43
+  goto bb3
+bb2:
+  %4 @3:24-3:56 = operand 2 @3:53-3:54
+  goto bb3
+bb3:
+  %1 @3:9-3:10 = add checked read %3 @3:13-3:21, read %4 @3:24-3:56 @3:13-3:56
+  begin a0 read static %1 @4:11-4:12
+  _ = call builtin "print(_: Int)"(a0) @4:5-4:13
+  declare %2
+  %2 @5:9-5:10 = call "P(hp: Int)"(1) @5:13-5:21
+  %5 @6:10-6:16 = operand read %2 @6:10-6:16 @6:10-6:16
+  branch true, bb4, bb5
+bb4:
+  %2.0 @6:28-6:32 = operand 7 @6:35-6:36
+  %6 @6:18-6:52 = operand 0 @6:38-6:39
+  goto bb6
+bb5:
+  %6 @6:18-6:52 = operand 0 @6:49-6:50
+  goto bb6
+bb6:
+  begin a1 read static %5 @6:10-6:16
+  begin a2 read static %6 @6:18-6:52
+  _ = call "show(_: P, _: Int)"(a1, a2) @6:5-6:53
+  begin a3 read static %2.0 @7:11-7:15
+  _ = call builtin "print(_: Int)"(a3) @7:5-7:16
+  return
+}
+
+func "show(_: P, _: Int)"(P, Int) -> Void {
+  param %0 a: P
+  param %1 b: Int
+bb0:
+  return
+}
