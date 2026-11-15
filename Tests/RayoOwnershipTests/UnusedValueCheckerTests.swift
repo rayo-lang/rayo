@@ -263,9 +263,10 @@ struct UnusedValueCheckerTests {
 
     @Test(.timeLimit(.minutes(1)))
     func `stores to a different element on each of many paths are checked in the time one path takes`() throws {
-        // As `if c > 0 { a[i] = 0 }` for each index `i` below 24, then a borrow of the whole array. The paths store to
-        // 2^24 different sets of elements, and the borrow reads each of them.
-        let conditionalStores = (0..<24).map { index in
+        // As `if … { a[i] = 0 }` for each index `i` below the branch count, then a borrow of the whole array. The paths
+        // store to 2^24 different sets of elements, and the borrow reads each of them.
+        let branchCount = 24
+        let conditionalStores = (0..<branchCount).map { index in
             """
             bb\(2 * index + 1):
               branch true, bb\(2 * index + 2), bb\(2 * index + 3)
@@ -281,7 +282,7 @@ struct UnusedValueCheckerTests {
               %0 @1:1-1:1 = fill 32 of 0 @1:1-1:1
               goto bb1
             \(conditionalStores.joined(separator: "\n"))
-            bb49:
+            bb\(2 * branchCount + 1):
               begin a0 read static %0 @1:1-1:1
               _ = call "use(_: [32 of Int])"(a0) @1:1-1:1
               return

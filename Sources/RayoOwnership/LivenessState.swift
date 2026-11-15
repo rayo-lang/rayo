@@ -4,7 +4,7 @@ import RayoSema
 /// Which locals, and which parts inside them, hold a value that some code reads later, at a point.
 struct LivenessState: DataflowState {
     /// The places whose values some code reads later, each but the elements that stores replace before every read.
-    /// A place has one read, whatever paths lead to the reads it stands for, so the state grows with the places a
+    /// Each place keeps one read, which stands for the reads on every path, so the state grows with the places a
     /// function names and not with its paths.
     private var live: [Place: LiveRead] = [:]
 
@@ -165,7 +165,7 @@ private struct LiveRead: Equatable {
         return narrowed
     }
 
-    /// Widens the read to cover `other`, a read of the same place, too. An element stays skipped only where both skip
+    /// Widens the read to also cover `other`, a read of the same place. An element stays skipped only where both skip
     /// it, since a store must replace it before each of them to leave its value unread.
     mutating func cover(_ other: LiveRead) {
         skippedElements.formIntersection(other.skippedElements)
