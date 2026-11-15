@@ -1,4 +1,3 @@
-import RayoSource
 import RayoSyntax
 
 /// Which kind of declaration each of a file's top-level names belongs to. A name names one type, or functions: it
@@ -11,39 +10,21 @@ struct TopLevelNames {
         case functions
     }
 
-    /// Where the first type of each name starts.
-    private let firstTypes: [String: SourceLocation]
-    /// Where the first function of each name starts.
-    private let firstFunctions: [String: SourceLocation]
+    private let kinds: [String: Kind]
 
     /// The names of `file`'s declarations, those that failed to parse with a name among them.
     init(of file: SourceFile) {
-        firstTypes = Self.firstStarts(of: TypeDeclaration.all(in: file).map { ($0.name, $0.nameRange.start) })
-        let functions = file.functions.map { ($0.name, $0.nameRange.start) } + Self.unparsedFunctions(of: file)
-        firstFunctions = Self.firstStarts(of: functions)
-    }
-
-    /// The names of `file`'s functions that failed to parse after their names, and where each name starts.
-    private static func unparsedFunctions(of file: SourceFile) -> [(String, SourceLocation)] {
-        file.failedDeclarations.compactMap { declaration in
-            guard declaration.kind == .function, let name = declaration.name, let nameRange = declaration.nameRange
-            else { return nil }
-            return (name, nameRange.start)
+        var kinds: [String: Kind] = [:]
+        // The file's declarations are in source order, so the first to declare a name gives it its kind.
+        for declaration in file.declarations {
+            guard let name = declaration.name, kinds[name] == nil else { continue }
+            kinds[name] = declaration.declaresType ? .type : .functions
         }
+        self.kinds = kinds
     }
 
     /// The kind `name` belongs to, nil when no type or function has it.
     func kind(of name: String) -> Kind? {
-        switch (firstTypes[name], firstFunctions[name]) {
-        case (nil, nil): nil
-        case (.some, nil): .type
-        case (nil, .some): .functions
-        case (let typeStart?, let functionStart?): typeStart < functionStart ? .type : .functions
-        }
-    }
-
-    /// Maps each name in `declarations`, which give names and starts, to the start of its first declaration.
-    private static func firstStarts(of declarations: [(String, SourceLocation)]) -> [String: SourceLocation] {
-        Dictionary(declarations, uniquingKeysWith: min)
+        kinds[name]
     }
 }

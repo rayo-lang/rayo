@@ -35,7 +35,7 @@ struct LLVMTypes {
         switch type {
         case .scalar(let scalar): format(of: scalar).type.anyType
         case .void: void
-        case .structure: llvmStruct(type).anyType
+        case .named(.structure): llvmStruct(type).anyType
         // An LLVM array's elements lie end to end, as each element type's size apart, which is its layout's size.
         case .array(let count, let element): maker.arrayType(of: llvmType(element), count: count)
         }
@@ -76,7 +76,7 @@ struct LLVMTypes {
             []
 
         // A struct is the scalars of each field in turn, each lying inside its field.
-        case .structure:
+        case .named(.structure):
             table.fields(of: type).enumerated().flatMap { index, field in
                 scalars(of: field.type).map { Scalar(steps: [.field(index)] + $0.steps, type: $0.type) }
             }
@@ -95,7 +95,7 @@ struct LLVMTypes {
         switch type {
         case .scalar: 1
         case .void: 0
-        case .structure: table.fields(of: type).reduce(0) { $0.addingSaturated(scalarCount(of: $1.type)) }
+        case .named(.structure): table.fields(of: type).reduce(0) { $0.addingSaturated(scalarCount(of: $1.type)) }
         case .array(let count, let element): count.multipliedSaturated(by: scalarCount(of: element))
         }
     }

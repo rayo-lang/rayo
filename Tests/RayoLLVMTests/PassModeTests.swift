@@ -175,29 +175,29 @@ struct PassModeTests {
     /// of two Bools, and an Ints of two Ints, with the primary initializers of those the tests make.
     private let structs = """
         struct Pair {
-          flag: Bool
-          count: Int
+          var flag: Bool
+          var count: Int
         }
         struct Trio {
-          a: Int
-          b: Int
-          c: Bool
+          var a: Int
+          var b: Int
+          var c: Bool
         }
         struct Holder {
-          trio: Trio
-          flag: Bool
+          var trio: Trio
+          var flag: Bool
         }
         struct Flags {
-          a: Bool
-          b: Bool
+          var a: Bool
+          var b: Bool
         }
         struct Nested {
-          flag: Bool
-          flags: Flags
+          var flag: Bool
+          var flags: Flags
         }
         struct Ints {
-          a: Int
-          b: Int
+          var a: Int
+          var b: Int
         }
         init "Trio(a: Int, b: Int, c: Bool)"(Int, Int, Bool) -> Trio
         init "Holder(trio: Trio, flag: Bool)"(Trio, Bool) -> Holder
@@ -289,13 +289,15 @@ struct SignatureLoweringTests {
     /// A Trio of two Ints and a Bool, which splits into three scalars, and an Empty, which splits into none.
     private let table = TypeTable(structs: [
         StructType(name: "Trio", fields: [
-            Field(name: "a", type: .int), Field(name: "b", type: .int), Field(name: "c", type: .bool),
+            Field(name: "a", isVariable: true, type: .int),
+            Field(name: "b", isVariable: true, type: .int),
+            Field(name: "c", isVariable: true, type: .bool),
         ]),
         StructType(name: "Empty", fields: []),
     ])
 
-    private var trioType: RayoType { .structure(StructID(index: 0, name: "Trio")) }
-    private var emptyType: RayoType { .structure(StructID(index: 1, name: "Empty")) }
+    private var trioType: RayoType { .named(.structure(StructID(index: 0, name: "Trio"))) }
+    private var emptyType: RayoType { .named(.structure(StructID(index: 1, name: "Empty"))) }
 
     /// Runs `body` with a function that says how a parameter of a convention and a type passes, under Rayo's
     /// convention, in a program whose structs are `table`'s.

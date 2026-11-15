@@ -40,7 +40,7 @@ public struct TypeTable: Equatable, Sendable {
 
     /// The fields of `type`, which must be a struct, in the order it declares them.
     public func fields(of type: RayoType) -> [Field] {
-        guard case .structure(let id) = type else { preconditionFailure("only a struct holds fields") }
+        guard case .named(.structure(let id)) = type else { preconditionFailure("only a struct holds fields") }
         return self[id].fields
     }
 
@@ -81,7 +81,7 @@ public struct TypeTable: Equatable, Sendable {
     private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout? {
         switch type {
         case .scalar(let scalar): scalar.layout
-        case .structure: structLayout(of: type, inside: enclosing)?.layout
+        case .named(.structure): structLayout(of: type, inside: enclosing)?.layout
         case .array(let count, let element): layout(of: element, inside: enclosing)?.array(of: count)
         case .void: preconditionFailure("no value of type Void lies in memory")
         }

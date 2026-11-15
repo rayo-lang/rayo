@@ -77,9 +77,9 @@ final class NameScopes {
         let declarations = file.declarations
         let functions = declarations.functions(named: name)
         let declaredFunctions = functions.isEmpty ? nil : NameMatch.functions(functions)
-        let declaredType = declarations.type(named: name).map(NameMatch.init(type:))
+        let declaredType = declarations.types.type(named: name).map(NameMatch.type)
         let functionMatch = match(declaredFunctions, unlessFailed: declarations.hasFailedFunction(named: name))
-        let typeMatch = match(declaredType, unlessFailed: declarations.hasFailedType(named: name))
+        let typeMatch = match(declaredType, unlessFailed: declarations.types.hasFailed(named: name))
 
         // A call finds the functions, so a function whose name a type took still answers its calls; any other use
         // finds the type first where the type declares the name first.

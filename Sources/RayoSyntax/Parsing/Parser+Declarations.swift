@@ -1,26 +1,31 @@
 internal import RayoDiagnostics
 internal import RayoSource
 
-/// Parses a file's declarations: its functions with their parameters, and its structs with their fields.
+/// Parses declarations: functions with their parameters, and structs with their fields and members.
 extension Parser {
     mutating func parseFile() -> SourceFile {
         var declarations: [Declaration] = []
         while true {
             // Parse declarations up to the end of the file or a `}` that closes no block.
-            declarations += parseLines(ifUnended: ErrorCode.unendedDeclaration) { parser throws(DeclarationFailure) in
-                try parser.parseDeclaration()
-            } ifFailed: { failure, range in
-                // A declaration that failed is kept as a failed one of its kind; text that began none keeps nothing.
-                failure.kind.map {
-                    .failed(FailedDecl(kind: $0, name: failure.name, nameRange: failure.nameRange, range: range))
-                }
-            }
+            declarations += parseDeclarations()
             // The declarations run to the end of the file.
-            if atEnd { return SourceFile(declarations) }
+            if atEnd { return SourceFile(declarations: declarations) }
 
             // A `}` that closes no block ends the sequence early; it is reported, and the declarations go on after it.
             report(.unmatchedBrace)
             advance()
+        }
+    }
+
+    /// Parses declarations, one to a line, up to the end of the file or a `}`.
+    private mutating func parseDeclarations() -> [Declaration] {
+        parseLines(ifUnended: ErrorCode.unendedDeclaration) { parser throws(DeclarationFailure) in
+            try parser.parseDeclaration()
+        } ifFailed: { failure, range in
+            // A declaration that failed is kept as a failed one of its kind; text that began none keeps nothing.
+            failure.kind.map {
+                .failed(FailedDecl(kind: $0, name: failure.name, nameRange: failure.nameRange, range: range))
+            }
         }
     }
 
@@ -103,8 +108,8 @@ extension Parser {
         return convention
     }
 
-    /// After the `struct`: `identifier ('(' fields ')')? ('{' '}')?`. A struct that fails throws its name, where it
-    /// read it.
+    /// After the `struct`: `identifier ('(' fields ')')? ('{' declarations '}')?`. A struct that fails throws its name,
+    /// where it read it.
     private mutating func parseStruct() throws(DeclarationFailure) -> StructDecl {
         var name: (text: String, range: SourceRange)?
         do throws(ParseFailure) {
@@ -114,23 +119,18 @@ extension Parser {
             let fields = consume(.lparen) ? try parseFields() : []
 
             // A struct may leave its body out.
-            if consume(.lbrace) { try parseEmptyBody() }
-            return StructDecl(name: readName, nameRange: nameRange, fields: fields)
+            let members = consume(.lbrace) ? try parseMembers() : []
+            return StructDecl(name: readName, nameRange: nameRange, fields: fields, members: members)
         } catch {
             throw DeclarationFailure(kind: .structure, name: name?.text, nameRange: name?.range)
         }
     }
 
-    /// After the `{` of a struct's body: the `}` that closes it. Each item in the body, which holds nothing, is
-    /// reported.
-    private mutating func parseEmptyBody() throws(ParseFailure) {
-        // Each item fails, so the sequence reports it and skips it up to the next.
-        let _: [Never] = parseLines(ifUnended: ErrorCode.unclosedStructBody) { parser throws(ParseFailure) in
-            throw parser.fail(ErrorCode.unclosedStructBody)
-        } ifFailed: { _, _ in
-            nil
-        }
+    /// After the `{` of a struct's body: its members, which are declarations, and the `}` that closes it.
+    private mutating func parseMembers() throws(ParseFailure) -> [Declaration] {
+        let members = parseDeclarations()
         try expect(.rbrace, else: ErrorCode.unclosedStructBody)
+        return members
     }
 
     /// After the `(` of a struct's header: its fields and the `)`.
@@ -163,37 +163,5 @@ extension Parser {
             // Any other token begins no field.
             throw fail(ErrorCode.missingFieldKind)
         }
-    }
-}
-
-/// A declaration at a file's top level.
-private enum Declaration {
-    case function(FuncDecl)
-    case structure(StructDecl)
-    case failed(FailedDecl)
-
-    /// The function the declaration declares, if it declares one.
-    var function: FuncDecl? {
-        if case .function(let function) = self { function } else { nil }
-    }
-
-    /// The struct the declaration declares, if it declares one.
-    var structure: StructDecl? {
-        if case .structure(let structure) = self { structure } else { nil }
-    }
-
-    /// The declaration, if it failed to parse.
-    var failed: FailedDecl? {
-        if case .failed(let failed) = self { failed } else { nil }
-    }
-}
-
-private extension SourceFile {
-    /// The file that `declarations` make, each kind in source order.
-    init(_ declarations: [Declaration]) {
-        self.init(
-            functions: declarations.compactMap(\.function), structs: declarations.compactMap(\.structure),
-            failedDeclarations: declarations.compactMap(\.failed),
-        )
     }
 }

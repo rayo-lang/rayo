@@ -264,12 +264,12 @@ struct ExpressionChecker {
         guard let holder = place(base, under: rules, holdsParts: true) else { return nil }
 
         switch file.declarations.member(named: name, of: holder.type) {
-        // A field is the part of its base's place that holds it. A field whose declaration failed was reported there,
-        // and one the rules don't admit here.
+        // A field is the part of its base's place that holds it, where the rules admit it here; one they don't was
+        // reported.
         case .field(let index, let field)?:
-            guard let type = field.type, rules.admits(field, at: nameRange) else { return nil }
+            guard rules.admits(field, at: nameRange) else { return nil }
             let place = holder.place.appending(.field(index, range: range))
-            return CheckedExpr(kind: .place(place), type: type, range: range)
+            return CheckedExpr(kind: .place(place), type: field.type, range: range)
 
         // An array's count is a UInt that the array's type fixes.
         case .count(let count)?:
@@ -415,7 +415,7 @@ struct ExpressionChecker {
         // Every scalar compares: an integer or a Bool.
         case .scalar: true
         // A Void value holds nothing to compare, and a struct and an array have no `==`.
-        case .void, .structure, .array: false
+        case .void, .named, .array: false
         }
     }
 
@@ -475,7 +475,7 @@ extension ExpressionChecker: PlaceRules {
         }
     }
 
-    func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool {
+    func admits(_ field: Field, at nameRange: SourceRange) -> Bool {
         true
     }
 

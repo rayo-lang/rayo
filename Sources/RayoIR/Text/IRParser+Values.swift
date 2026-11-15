@@ -18,7 +18,9 @@ extension IRParser {
         let token = current
         let name = try word()
         // A name the prelude gives no type names a struct.
-        guard let type = RayoType.prelude(named: name) else { return .structure(try structID(named: name, at: token)) }
+        guard let type = RayoType.prelude(named: name) else {
+            return .named(.structure(try structID(named: name, at: token)))
+        }
         return type
     }
 

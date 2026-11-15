@@ -3,7 +3,7 @@ extension Declarations {
     /// `init`.
     func member(named name: String, of type: RayoType) -> Member? {
         switch type {
-        case .structure(let id): structMember(named: name, of: id)
+        case .named(.structure(let id)): structMember(named: name, of: id)
         case .array(let count, let element): arrayMember(named: name, count: count, element)
         case .scalar, .void: preludeMember(named: name, of: type)
         }
@@ -12,7 +12,7 @@ extension Declarations {
     /// The member of the struct `id` called `name`: one of its fields, or its primary initializer.
     private func structMember(named name: String, of id: StructID) -> Member? {
         if name == Member.initializerName { return .initializers(.primary(id)) }
-        let fields = fields(of: id)
+        let fields = types.fields(of: id)
         return fields.firstIndex { $0.name == name }.map { .field(index: $0, fields[$0]) }
     }
 

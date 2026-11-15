@@ -96,7 +96,7 @@ struct IllTypedIRTests {
 private func main(_ body: String, after functions: String = "") -> String {
     """
     struct Pair {
-      count: Int
+      var count: Int
     }
     main "main()"
     func "main()"() -> Void {
@@ -347,7 +347,7 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a run that starts at a primary initializer",
-        text: "struct Pair {\n  count: Int\n}\nmain \"Pair(count: Int)\"\ninit \"Pair(count: Int)\"(Int) -> Pair",
+        text: "struct Pair {\n  var count: Int\n}\nmain \"Pair(count: Int)\"\ninit \"Pair(count: Int)\"(Int) -> Pair",
         function: "Pair(count: Int)",
         message: "the IR starts a run at the primary initializer of 'Pair', which has no body",
     ),

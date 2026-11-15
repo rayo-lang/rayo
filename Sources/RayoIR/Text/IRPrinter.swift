@@ -50,7 +50,7 @@ public enum IRPrinter {
 
     /// A struct's declaration, a line for each field.
     private static func text(of type: StructType) -> String {
-        let fields = type.fields.map { "  \($0.name): \($0.type)\n" }.joined()
+        let fields = type.fields.map { "  \($0.isVariable ? "var" : "let") \($0.name): \($0.type)\n" }.joined()
         return "struct \(type.name) {\n\(fields)}\n"
     }
 

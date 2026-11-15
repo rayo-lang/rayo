@@ -98,18 +98,26 @@ public struct IRParser: ~Copyable {
         return IRProgram(types: TypeTable(structs: structs), functions: functions, bodies: bodies, main: main)
     }
 
-    /// Reads `struct Name { field: Type ... }`.
+    /// Reads `struct Name { (var | let) field: Type ... }`.
     private mutating func structDeclaration() throws(IRTextError) -> StructType {
         try expect(word: "struct")
         let name = try word()
         try expect("{")
         var fields: [Field] = []
         while !consume("}") {
+            let isVariable = try fieldKind()
             let fieldName = try word()
             try expect(":")
-            fields.append(Field(name: fieldName, type: try type()))
+            fields.append(Field(name: fieldName, isVariable: isVariable, type: try type()))
         }
         return StructType(name: name, fields: fields)
+    }
+
+    /// Reads the `var` or `let` that begins a field, and returns whether it is a `var`.
+    private mutating func fieldKind() throws(IRTextError) -> Bool {
+        if consume(word: "var") { return true }
+        if consume(word: "let") { return false }
+        throw expected("'var' or 'let'")
     }
 
     /// Reads `main "name"`, the function a run starts at.
@@ -137,7 +145,7 @@ public struct IRParser: ~Copyable {
         let (name, parameters) = try nameAndParameters()
         try expect("->")
         let id = try madeStruct()
-        return FunctionDeclaration(name: name, parameters: parameters, result: .structure(id),
+        return FunctionDeclaration(name: name, parameters: parameters, result: .named(.structure(id)),
                                    kind: .primaryInitializer(id))
     }
 
@@ -145,7 +153,7 @@ public struct IRParser: ~Copyable {
     private mutating func madeStruct() throws(IRTextError) -> StructID {
         let token = current
         let type = try type()
-        guard case .structure(let id) = type else {
+        guard case .named(.structure(let id)) = type else {
             throw IRTextError(at: token, "\(type) isn't a struct, so no primary initializer makes it")
         }
         return id

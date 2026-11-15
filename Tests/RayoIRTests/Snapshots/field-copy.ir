@@ -1,6 +1,6 @@
 struct Enemy {
-  hp: Int
-  armor: Int
+  var hp: Int
+  let armor: Int
 }
 
 main "main()"

@@ -26,7 +26,7 @@ final class FileChecker {
         declarations = Declarations(names: TopLevelNames(of: file))
         // A function that failed to parse is declared before any other, so every use of its name finds it. A type that
         // failed to parse is declared with the other types' names.
-        for declaration in file.failedDeclarations where declaration.kind == .function {
+        for case .failed(let declaration) in file.declarations where declaration.kind == .function {
             if let name = declaration.name { declarations.declareUnparsedFunction(named: name) }
         }
     }
@@ -38,9 +38,8 @@ final class FileChecker {
         // is declared before any struct's fields are checked, since a field's type may name a struct declared further
         // down the file.
         let typeIDs = TypeNameChecker(errors: errors).declare(file, in: &declarations)
-        let types = StructChecker(errors: errors).declare(file.structs, withIDs: typeIDs.structs, in: &declarations)
-        declarations.declareLayouts(types)
-        declarePrimaryInitializers(of: typeIDs.structs.compactMap(\.self), in: types)
+        let types = StructChecker(errors: errors).declare(file, withIDs: typeIDs, in: &declarations)
+        declarePrimaryInitializers(of: typeIDs, in: types)
         let main = declareFunctions()
         for index in functions.indices { _ = body(of: FunctionID(index: index)) }
 
@@ -75,17 +74,17 @@ final class FileChecker {
         }
     }
 
-    /// Declares the primary initializer of each of `structs` that can be laid out, whose fields `types` gives. A
-    /// struct that can't be laid out has none, since no call reaches it.
-    private func declarePrimaryInitializers(of structs: [StructID], in types: TypeTable) {
-        for id in structs where !declarations.hasFailedType(named: id.name) {
+    /// Declares the primary initializer of each struct among `ids` that can be laid out, whose fields `types` gives.
+    /// A struct that can't be laid out has none, since no call reaches it.
+    private func declarePrimaryInitializers(of ids: [TypeID?], in types: TypeTable) {
+        for case .structure(let id)? in ids where !declarations.types.hasFailed(named: id.name) {
             // The initializer takes each field's value, labeled by its name, and makes the struct.
             let initializer = FunctionID(index: functions.count)
             let parameters = types[id].fields.map { field in
                 Parameter(label: field.name, type: field.type, spelledType: "\(field.type)")
             }
             let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,
-                                      result: .type(.structure(id)))
+                                      result: .type(.named(.structure(id))))
             functions.append(DeclaredFunction(signature: signature, kind: .primaryInitializer(id)))
             declarations.declarePrimaryInitializer(initializer, of: id)
         }
@@ -96,7 +95,7 @@ final class FileChecker {
     private func declareFunctions() -> FunctionID? {
         // Declare each function, and note the first `main` declared, which is where the program starts.
         var main: FunctionID?
-        for function in file.functions {
+        for case .function(let function) in file.declarations {
             let (id, isDeclared) = declare(function)
             // A function that isn't declared, or isn't a `main`, starts nothing.
             guard isDeclared, function.name == "main" else { continue }
@@ -197,7 +196,10 @@ final class FileChecker {
     /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
     /// named `main`.
     private var mainMayHaveFailed: Bool {
-        file.failedDeclarations.contains { $0.kind == .function && ($0.name == nil || $0.name == "main") }
+        file.declarations.contains { declaration in
+            guard case .failed(let failed) = declaration else { return false }
+            return failed.kind == .function && (failed.name == nil || failed.name == "main")
+        }
     }
 
     /// The declaration of the function `id`, whose body is checked already; nil when its result type or the type of
@@ -234,7 +236,7 @@ final class FileChecker {
         // A function the source writes has the body its declaration holds.
         case .written(let declaration): checkBody(of: declaration, as: function.signature)
         // A primary initializer has no body, and makes its struct.
-        case .primaryInitializer(let id): BodyCheck(result: .structure(id), body: nil)
+        case .primaryInitializer(let id): BodyCheck(result: .named(.structure(id)), body: nil)
         }
     }
 

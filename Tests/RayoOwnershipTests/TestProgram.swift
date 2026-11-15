@@ -24,11 +24,11 @@ func parsedIR(_ text: String) throws -> IRProgram {
 func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
     try parsedIR("""
         struct Shot {
-          range: Int
-          hit: Hit
+          var range: Int
+          var hit: Hit
         }
         struct Hit {
-          damage: Int
+          var damage: Int
         }
         main "\(functions[0].name)"
         \(functions.map(\.text).joined(separator: "\n"))

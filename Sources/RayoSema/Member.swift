@@ -13,7 +13,7 @@ enum Member {
 
     /// A struct's field, a place property: it names a part of the place that holds the struct. It is the field at
     /// `index` in the struct's declaration.
-    case field(index: Int, DeclaredField)
+    case field(index: Int, Field)
     /// An array's count, a value property: a UInt that the array's type fixes, which names no place.
     case count(Int)
     /// The type's initializers, under the member name `init`.
