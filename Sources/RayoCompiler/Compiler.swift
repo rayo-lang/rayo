@@ -8,22 +8,21 @@ import RayoSyntax
 /// for the host.
 public enum Compiler {
     static let usage = """
-        usage: rayoc [--warnings-as-errors] --check [--] <file>
-               rayoc [--warnings-as-errors] --emit=checked|ir [--] <file>
-               rayoc [--warnings-as-errors] [--debug | --release] -o <object file> [--] <file>
+        usage: rayoc --check [--] <file>
+               rayoc --emit=checked|ir [--] <file>
+               rayoc [--debug | --release] -o <object file> [--] <file>
 
         options:
-          --check               check the file and report its errors and warnings, writing nothing
-          --emit=checked        check the file, and print its checked program
-          --emit=ir             check the file, and print its Rayo IR
-          -o                    compile the file to object code for the host, and write it to the object file
-          --warnings-as-errors  fail the compile on a warning, as on an error
-          --                    end the options, so that the file may be named like one
+          --check         check the file and report its errors and warnings, writing nothing
+          --emit=checked  check the file, and print its checked program
+          --emit=ir       check the file, and print its Rayo IR
+          -o              compile the file to object code for the host, and write it to the object file
+          --              end the options, so that the file may be named like one
 
         build modes, with -o:
-          --debug               integer overflow panics, and the object code isn't optimised
-          --release             integer overflow wraps, and the object code is optimised; a compile that names no
-                                mode is a release compile
+          --debug         integer overflow panics, and the object code isn't optimised
+          --release       integer overflow wraps, and the object code is optimised; a compile that names no mode
+                          is a release compile
 
         """
 
@@ -61,8 +60,6 @@ public enum Compiler {
 
         var output: Output
         var path: String
-        /// Whether a warning fails the compile, as an error does.
-        var warningsAreErrors = false
 
         init(_ arguments: [String]) throws(UsageError) {
             // Read each option before the file, each at most once.
@@ -82,8 +79,6 @@ public enum Compiler {
                 } else if let newDump = Dump(option: option), dump == nil {
                     // `--emit` asks for what a stage makes of the file to be printed.
                     dump = newDump
-                } else if option == "--warnings-as-errors", !warningsAreErrors {
-                    warningsAreErrors = true
                 } else if let newBuild = Build(option: option), build == nil {
                     // A build mode says how the object code is built.
                     build = newBuild
@@ -124,7 +119,7 @@ public enum Compiler {
 
         /// Whether `operand` is one of `rayoc`'s options, which leaves the arguments without a file.
         private static func isOption(_ operand: String) -> Bool {
-            ["--check", "-o", "--", "--warnings-as-errors"].contains(operand) || Dump(option: operand) != nil
+            ["--check", "-o", "--"].contains(operand) || Dump(option: operand) != nil
                 || Build(option: operand) != nil
         }
     }
@@ -182,56 +177,55 @@ public enum Compiler {
         errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let path = invocation.path
-        let strict = invocation.warningsAreErrors
         return switch invocation.output {
         case .check:
-            try check(path, readFile: readFile, warningsAreErrors: strict, errors: &errors)
+            try check(path, readFile: readFile, errors: &errors)
         case .dump(.checked):
-            try checkedProgramText(of: path, readFile: readFile, warningsAreErrors: strict, errors: &errors)
+            try checkedProgramText(of: path, readFile: readFile, errors: &errors)
         case .dump(.ir):
-            try irText(of: path, readFile: readFile, warningsAreErrors: strict, errors: &errors)
+            try irText(of: path, readFile: readFile, errors: &errors)
         case .objectFile(let objectPath, let build):
             try writeObjectCode(of: path, to: objectPath, build: build, readFile: readFile, writeFile: writeFile,
-                                warningsAreErrors: strict, errors: &errors)
+                                errors: &errors)
         }
     }
 
     /// Checks the source file at `path`, and prints nothing.
     private static func check(
-        _ path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        _ path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        _ = try accepted(program, errors: errors, warningsAreErrors: warningsAreErrors)
+        _ = try accepted(program, errors: errors)
         return ""
     }
 
     /// The checked program of the source file at `path`, as text, once the stages after checking accept it too.
     private static func checkedProgramText(
-        of path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        of path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let checked = try checkedProgram(path, readFile: readFile, errors: &errors)
         // The stages after checking run only for the errors they find, which keep the program from being printed.
         if let checked { _ = try ir(of: checked, errors: &errors) }
-        return CheckedPrinter.text(of: try accepted(checked, errors: errors, warningsAreErrors: warningsAreErrors))
+        return CheckedPrinter.text(of: try accepted(checked, errors: errors))
     }
 
     /// The Rayo IR of the source file at `path`, as text, once it checks.
     private static func irText(
-        of path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        of path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        return IRPrinter.text(of: try accepted(program, errors: errors, warningsAreErrors: warningsAreErrors))
+        return IRPrinter.text(of: try accepted(program, errors: errors))
     }
 
     /// Compiles the source file at `path` as `build` asks, writes its object code to the file at `objectPath`, and
     /// prints nothing.
     private static func writeObjectCode(
         of path: String, to objectPath: String, build: Build, readFile: (String) -> [UInt8]?,
-        writeFile: (String, [UInt8]) -> Bool, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        writeFile: (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
         let executable = program.flatMap { Self.executable(of: $0, errors: &errors) }
-        let accepted = try accepted(executable, errors: errors, warningsAreErrors: warningsAreErrors)
+        let accepted = try accepted(executable, errors: errors)
         try write(objectCode(of: accepted, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
         return ""
     }

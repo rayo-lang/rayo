@@ -24,46 +24,36 @@ private func emptyMain(_ path: String) -> [UInt8]? {
 
 struct PipelineTests {
     @Test func `accepting a stage's result gives it on when the program has no errors`() throws {
-        #expect(try Compiler.accepted(">", errors: [], warningsAreErrors: false) == ">")
+        #expect(try Compiler.accepted(">", errors: []) == ">")
     }
 
     @Test func `accepting a stage's result ends the compile with every error gathered, in source order`() {
         let errors = [error(on: 3), error(on: 1), error(on: 2)]
         let gathered = [error(on: 1), error(on: 2), error(on: 3)]
         #expect(throws: CompilationError.rejected(gathered)) {
-            try Compiler.accepted(">", errors: errors, warningsAreErrors: false)
+            try Compiler.accepted(">", errors: errors)
         }
     }
 
     @Test func `accepting a stage's result gives it on past warnings`() throws {
-        #expect(try Compiler.accepted(">", errors: [warning(on: 1)], warningsAreErrors: false) == ">")
-    }
-
-    @Test func `when warnings are errors, accepting a stage's result ends the compile on a warning`() {
-        let gathered = [warning(on: 1), warning(on: 3)]
-        #expect(throws: CompilationError.rejected(gathered)) {
-            try Compiler.accepted(">", errors: [warning(on: 3), warning(on: 1)], warningsAreErrors: true)
-        }
+        #expect(try Compiler.accepted(">", errors: [warning(on: 1)]) == ">")
     }
 
     @Test func `a stage that gives nothing ends the compile with the errors gathered`() {
         let nothing: String? = nil
         #expect(throws: CompilationError.rejected([error(on: 1)])) {
-            try Compiler.accepted(nothing, errors: [error(on: 1)], warningsAreErrors: false)
+            try Compiler.accepted(nothing, errors: [error(on: 1)])
         }
     }
 
-    @Test(arguments: [(false, 0), (true, 1)])
-    func `a warning is shown as one, and fails the compile only when warnings are errors`(
-        warningsAreErrors: Bool, exitCode: Int32,
-    ) {
+    @Test func `a warning is shown as one, and doesn't fail the compile`() {
         let result = Compiler.result(compiling: "a.rayo") { errors throws(CompilationError) in
             let program = try Compiler.frontEnd("a.rayo", readFile: emptyMain, errors: &errors)
             errors.append(warning(on: 1))
-            _ = try Compiler.accepted(program, errors: errors, warningsAreErrors: warningsAreErrors)
+            _ = try Compiler.accepted(program, errors: errors)
             return ""
         }
-        #expect(result.exitCode == exitCode)
+        #expect(result.exitCode == 0)
         #expect(result.diagnostics == [warning(on: 1)])
         #expect(result.errors == """
             a.rayo:1:1: warning[E0201]: the file has no 'main' function, so it can't be built into an \

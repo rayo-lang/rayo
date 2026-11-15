@@ -8,7 +8,7 @@ import RayoSyntax
 
 /// The stages a compile runs, and the checks between them, each a function that takes what the stage before it
 /// gives. A stage adds the errors and warnings it finds in the program to the compile's list, and throws only when
-/// `rayoc` itself can't go on. `accepted(_:errors:warningsAreErrors:)` alone ends a compile for the program's errors.
+/// `rayoc` itself can't go on. `accepted(_:errors:)` alone ends a compile for the program's errors.
 extension Compiler {
     /// Reads the source file at `path` through `readFile`, checks it, lowers it to Rayo IR, and runs the ownership
     /// checks on the IR, adding the program's errors and warnings to `errors`. It gives the IR the emitter receives,
@@ -101,13 +101,10 @@ extension Compiler {
         return executable
     }
 
-    /// `value`, unless `errors` end the compile: any error, or any warning where `warningsAreErrors`. The compile
-    /// then ends with every error and warning in `errors`, in source order. A stage gives nil only when the program
-    /// has errors, so a nil `value` ends the compile too.
-    static func accepted<Value>(
-        _ value: Value?, errors: [Diagnostic], warningsAreErrors: Bool,
-    ) throws(CompilationError) -> Value {
-        let endsCompile = errors.contains { $0.severity == .error || warningsAreErrors }
+    /// `value`, unless `errors` hold an error, which ends the compile with every error and warning in `errors`, in
+    /// source order. A stage gives nil only when the program has errors, so a nil `value` ends the compile too.
+    static func accepted<Value>(_ value: Value?, errors: [Diagnostic]) throws(CompilationError) -> Value {
+        let endsCompile = errors.contains { $0.severity == .error }
         guard !endsCompile, let value else { throw .rejected(errors.inSourceOrder) }
         return value
     }
