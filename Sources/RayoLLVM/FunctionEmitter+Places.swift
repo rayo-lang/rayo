@@ -66,6 +66,15 @@ extension FunctionEmitter {
         return Address(pointer: slot, type: type)
     }
 
+    /// Emits, in the entry block, a stack slot for a value of `type` that one operation uses, and the start of the
+    /// slot's life at the builder's position, and returns its address. The caller ends the slot's life once the
+    /// operation is done with it, so that slots whose lives don't overlap may share memory.
+    func newTemporarySlot(of type: RayoType, with builder: borrowing Builder) -> Address {
+        let slot = newSlot(of: type, with: builder)
+        builder.startLife(of: slot.pointer)
+        return slot
+    }
+
     /// Emits the instructions that point at `place`, a local's place or a part inside it, and returns its address.
     func address(of place: Place, with builder: borrowing Builder) -> Address {
         let local = Address(pointer: places[place.root.index], type: body.locals[place.root.index].type)

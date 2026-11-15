@@ -18,6 +18,27 @@ struct MemoryTests {
             """))
     }
 
+    @Test func `a stack slot's life starts and ends where calls of LLVM's lifetime markers say`() throws {
+        let bench = Workbench()
+        let function = bench.function(named: "f", returning: bench.int64, taking: [bench.int64])
+        let slot = bench.builder.allocate(bench.int64, alignment: 8)
+        bench.builder.startLife(of: slot)
+        bench.builder.store(function.parameter(at: 0), to: slot, alignment: 8)
+        let value = bench.builder.load(bench.int64, from: slot, alignment: 8)
+        bench.builder.endLife(of: slot)
+        bench.builder.return(value)
+
+        try bench.module.verify()
+        #expect(function.text.contains("""
+              %1 = alloca i64, align 8
+              call void @llvm.lifetime.start.p0(ptr %1)
+              store i64 %0, ptr %1, align 8
+              %2 = load i64, ptr %1, align 8
+              call void @llvm.lifetime.end.p0(ptr %1)
+              ret i64 %2
+            """))
+    }
+
     @Test func `a global's pointer is what code loads its value through`() throws {
         let bench = Workbench()
         let limit = bench.module.addGlobal(named: "limit", initializer: bench.int64.constant(10))
