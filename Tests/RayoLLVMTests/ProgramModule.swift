@@ -23,9 +23,14 @@ struct ProgramModule: ~Copyable {
         emitter.takeModule()
     }
 
+    /// Ends the program module, handing on the LLVM module it emits into, with the runtime linked in.
+    consuming func linkedModule() throws(LLVMError) -> Module {
+        try emitter.linkedModule()
+    }
+
     /// Emits `executable` into the module, as the build does.
-    func emit(_ executable: IRExecutable) throws(LLVMError) {
-        try emitter.emit(executable)
+    func emit(_ executable: IRExecutable) {
+        emitter.emit(executable)
     }
 }
 

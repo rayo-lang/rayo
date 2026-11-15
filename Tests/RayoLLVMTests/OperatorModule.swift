@@ -23,6 +23,8 @@ struct OperatorModule: ~Copyable {
 
     private let programModule: ProgramModule
     private let types: LLVMTypes
+    /// The runtime's functions, which an operator's panic calls.
+    private let runtimeDeclarations: RuntimeDeclarations
     /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
     /// it has made them.
     private var operators: OperatorEmitter?
@@ -32,6 +34,8 @@ struct OperatorModule: ~Copyable {
     init(for build: Build) throws(LLVMError) {
         programModule = try ProgramModule(for: build)
         types = LLVMTypes(TypeTable(structs: []), in: programModule.emitter.context)
+        let lowering = SignatureLowering(types: types)
+        runtimeDeclarations = RuntimeDeclarations(lowering: lowering, in: programModule.emitter.context)
     }
 
     /// The LLVM types of an Int, which every function takes and returns, and of a Bool.
@@ -48,22 +52,21 @@ struct OperatorModule: ~Copyable {
     }
 
     /// Defines `name(i64, i64) -> i64`, which takes its parameters as the type `operands` names and returns what
-    /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool, or rethrows
-    /// what `expression` throws.
+    /// `expression` makes of them, a Bool as 0 or 1. Returns the function, and whether it returns a Bool.
     mutating func define(
         _ name: String, on operands: Operands,
-        _ expression: (borrowing OperatorModule, AnyValue, AnyValue) throws -> AnyValue,
-    ) rethrows -> (function: Function, givesBool: Bool) {
+        _ expression: (borrowing OperatorModule, AnyValue, AnyValue) -> AnyValue,
+    ) -> (function: Function, givesBool: Bool) {
         // Make the function, and its operators.
         let function = beginFunction(name, taking: [int64, int64])
-        operators = OperatorEmitter(into: function, types: types)
+        operators = makeOperators(into: function)
         integerType = operands == .uints ? .uint : .int
 
         // Emit the operators on the parameters, narrowed to Bools where the operands are. The function takes Ints, so
         // each parameter is one.
         let ints = (0..<2).map { IntValue<I64>(function.parameter(at: $0))! }
         let parameters = ints.map { narrowed($0, to: operands) }
-        let value = try expression(self, parameters[0], parameters[1])
+        let value = expression(self, parameters[0], parameters[1])
 
         // Return the result, widened to an Int where it is a Bool.
         let boolResult = IntValue<I1>(value)
@@ -89,38 +92,36 @@ struct OperatorModule: ~Copyable {
     }
 
     /// Emits `left op right`, on two integers of the function's integer type or two Bools.
-    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, left, right, of: type(of: left), at: Self.range, in: program)
+    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue) -> AnyValue {
+        operators!.emit(op, left, right, of: type(of: left), at: Self.range, in: program)
     }
 
     /// Emits `left op right`, where `right` is a constant of the function's integer type, given by its bits.
-    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
-        try self(op, left, int64.constant(Int128(right)).anyValue)
+    func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) -> AnyValue {
+        self(op, left, int64.constant(Int128(right)).anyValue)
     }
 
     /// Emits `op operand`, on an integer of the function's integer type or a Bool.
-    func callAsFunction(_ op: IRUnaryOperator, _ operand: AnyValue) throws(LLVMError) -> AnyValue {
-        try operators!.emit(op, on: operand, of: type(of: operand), at: Self.range, in: program)
+    func callAsFunction(_ op: IRUnaryOperator, _ operand: AnyValue) -> AnyValue {
+        operators!.emit(op, on: operand, of: type(of: operand), at: Self.range, in: program)
     }
 
     /// Emits the conversion of `value`, an integer of the function's integer type, to the other integer type.
-    func convert(_ value: AnyValue) throws(LLVMError) -> AnyValue {
+    func convert(_ value: AnyValue) -> AnyValue {
         let other: ScalarType = integerType == .int ? .uint : .int
-        return try operators!.emitConversion(of: value, from: integerType, to: other, at: Self.range, in: program)
+        return operators!.emitConversion(of: value, from: integerType, to: other, at: Self.range, in: program)
     }
 
     /// Defines `name(i64, i64) -> i64`, which converts the low bits of its first parameter, an integer of `source`,
     /// to the integer type `target`, and returns the result widened to 64 bits as `target`'s signedness says.
-    mutating func defineConversion(
-        _ name: String, from source: ScalarType, to target: ScalarType,
-    ) throws(LLVMError) -> Function {
+    mutating func defineConversion(_ name: String, from source: ScalarType, to target: ScalarType) -> Function {
         let function = beginFunction(name, taking: [int64, int64])
-        operators = OperatorEmitter(into: function, types: types)
+        operators = makeOperators(into: function)
 
         // The parameter's low bits are the value to convert, and the converted value is returned as an Int's bits.
         let value = resized(AnyIntValue(function.parameter(at: 0))!, from: .int, to: source)
-        let converted = try operators!.emitConversion(of: value.anyValue, from: source, to: target, at: Self.range,
-                                                      in: program)
+        let converted = operators!.emitConversion(of: value.anyValue, from: source, to: target, at: Self.range,
+                                                  in: program)
         program.builder.return(resized(AnyIntValue(converted)!, from: target, to: .int))
         return function
     }
@@ -143,6 +144,12 @@ struct OperatorModule: ~Copyable {
     /// The Rayo type of `value`, an integer of the function's integer type or a Bool.
     private func type(of value: AnyValue) -> RayoType {
         IntValue<I1>(value) == nil ? .scalar(integerType) : .bool
+    }
+
+    /// The operators of `function`, whose panics call the runtime's panic.
+    private func makeOperators(into function: Function) -> OperatorEmitter {
+        let panics = PanicEmitter(into: function, runtimeDeclarations: runtimeDeclarations, types: types)
+        return OperatorEmitter(types: types, panics: panics)
     }
 
     /// Adds `name`, returning an Int, and positions the builder at the end of its entry block.

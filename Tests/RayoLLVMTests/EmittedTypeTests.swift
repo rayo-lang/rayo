@@ -18,7 +18,7 @@ struct EmittedTypeTests {
 
     @Test func `a function that returns nothing is declared returning void`() throws {
         try withEmitted(executable(emptyMain)) { module in
-            let signature = try signature(of: "rayo.main", in: module)
+            let signature = try signature(of: RuntimeFunction.main.symbol, in: module)
             #expect(signature.parameters.map(\.text) == [])
             #expect(signature.result.text == "void")
         }
@@ -49,7 +49,7 @@ struct EmittedTypeTests {
 
         // The emitted `main` aligns the Bool's slot to 1, and the Pair's and the Int's to 8.
         try withEmitted(executable(pair + main)) { module in
-            let slots = instructions(.allocate, in: try function(named: "rayo.main", in: module))
+            let slots = instructions(.allocate, in: try function(named: RuntimeFunction.main.symbol, in: module))
             #expect(slots.map(\.alignment) == [1, 8, 8])
         }
     }
@@ -69,7 +69,7 @@ struct EmittedTypeTests {
 
         // The emitted copy reads and writes 8-byte-aligned memory.
         try withEmitted(executable(pair + main)) { module in
-            let llvmMain = try function(named: "rayo.main", in: module)
+            let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(instructions(.load, in: llvmMain).map(\.alignment) == [8])
             #expect(instructions(.store, in: llvmMain).map(\.alignment) == [8])
         }
@@ -91,7 +91,7 @@ struct EmittedTypeTests {
 
         // The Bool goes in the second element and the Int in the first, each stored in the Pair's slot.
         try withEmitted(executable(pair + main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 1
                   %4 = load i1, ptr %0, align 1
@@ -118,7 +118,7 @@ struct EmittedTypeTests {
 
         // The Int goes in the first element, and the 7 in the second, an Int's size after it.
         try withEmitted(executable(main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %2 = getelementptr inbounds i64, ptr %1, i64 0
                   %3 = load i64, ptr %0, align 8
@@ -144,7 +144,7 @@ struct EmittedTypeTests {
 
         // The loop counts the elements from 0, and stops at the count, once it has stored the Int in each.
         try withEmitted(executable(main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   store i64 0, ptr %2, align 8
                   br label %fill.header
@@ -183,7 +183,7 @@ struct EmittedTypeTests {
 
         // The read loads one byte from the Pair's second element.
         try withEmitted(executable(pair + main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %2 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
                   %3 = load i1, ptr %2, align 1
@@ -207,7 +207,7 @@ struct EmittedTypeTests {
         // The Holder lays its Pair out first, and the Pair its Bool second, so the read steps into the first element
         // of the one and the second of the other.
         try withEmitted(executable(pair + holder + main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %2 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
                   %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 1
@@ -231,7 +231,7 @@ struct EmittedTypeTests {
 
         // The store writes one byte to the Pair's second element.
         try withEmitted(executable(pair + main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %2 = getelementptr inbounds nuw %Pair, ptr %0, i32 0, i32 1
                   %3 = load i1, ptr %1, align 1
@@ -256,7 +256,7 @@ struct EmittedTypeTests {
         // The Holder lays its Pair out first, and the Pair its Int first too, so the store steps into the first
         // element of each.
         try withEmitted(executable(pair + holder + main)) { module in
-            let text = try function(named: "rayo.main", in: module).text
+            let text = try function(named: RuntimeFunction.main.symbol, in: module).text
             #expect(text.contains("""
                   %2 = getelementptr inbounds nuw %Holder, ptr %0, i32 0, i32 0
                   %3 = getelementptr inbounds nuw %Pair, ptr %2, i32 0, i32 0

@@ -24,26 +24,13 @@ struct Runtime: ~Copyable {
 
         // Define the constant the runtime reads in the program.
         let exitCode = context.integerType(I32.self).constant(Int64(ProgramRuntime.panicExitCode))
-        program.addGlobal(named: "rayo.panic_exit_code", initializer: exitCode).setConstant()
+        program.addGlobal(named: RuntimeConstant.panicExitCode.symbol, initializer: exitCode).setConstant()
         module = runtime
     }
 
     /// Links the runtime into `program`, the module it was parsed for.
     consuming func link(into program: borrowing Module) throws(LLVMError) {
         try program.link(module)
-    }
-
-    /// Declares the runtime's function `symbol` in `program`, unless it is declared there already, and returns it.
-    /// Throws where the runtime defines no such function.
-    func function(named symbol: String, in program: borrowing Module) throws(LLVMError) -> Function {
-        // A function that an earlier call declared is returned as it is, so each is declared once.
-        if let declared = program.function(named: symbol) { return declared }
-
-        // A function the runtime doesn't define is a fault in the runtime rayoc carries.
-        guard let definition = module.function(named: symbol) else {
-            throw LLVMError(message: "the runtime defines no function '\(symbol)'")
-        }
-        return program.addFunction(named: definition.name, type: definition.type)
     }
 
     /// Sets `module` to build for `program`'s target and data layout.

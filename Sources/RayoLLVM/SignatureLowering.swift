@@ -1,8 +1,8 @@
 import LLVM
 import RayoSema
 
-/// Decides how a function's parameters and result are passed, and the LLVM signature that follows, for its calling
-/// convention, and which values are small.
+/// Decides how a function's parameters and result are passed in Rayo's calling convention, which nothing outside the
+/// program sees, and the LLVM signature that follows, and which values are small.
 struct SignatureLowering {
     /// The most scalars a small value splits into.
     static let smallValueScalarLimit = 2
@@ -11,8 +11,8 @@ struct SignatureLowering {
 
     /// How a function of `signature` passes each parameter and its result, and its LLVM type, made in `context`.
     func lower(_ signature: FunctionSignature, in context: borrowing Context) -> LoweredSignature {
-        let parameters = signature.parameters.map { passing(of: $0, in: signature.convention) }
-        let result = passing(ofResult: signature.result, in: signature.convention)
+        let parameters = signature.parameters.map(passing(of:))
+        let result = passing(ofResult: signature.result)
         let returnedStruct = returnedStruct(for: result, in: context)
         let type = functionType(passing: parameters, returning: result, as: returnedStruct, in: context)
         return LoweredSignature(
@@ -26,24 +26,8 @@ struct SignatureLowering {
         types.scalarCount(of: type) <= Self.smallValueScalarLimit
     }
 
-    /// How `parameter` is passed in `convention`.
-    private func passing(
-        of parameter: FunctionSignature.Parameter, in convention: CallingConvention,
-    ) -> ParameterPassing {
-        switch convention {
-        case .rayo: rayoPassing(of: parameter)
-        }
-    }
-
-    /// How a result of `type` comes back in `convention`.
-    private func passing(ofResult type: RayoType, in convention: CallingConvention) -> ResultPassing {
-        switch convention {
-        case .rayo: rayoPassing(ofResult: type)
-        }
-    }
-
-    /// How Rayo's convention passes `parameter`.
-    private func rayoPassing(of parameter: FunctionSignature.Parameter) -> ParameterPassing {
+    /// How `parameter` is passed.
+    private func passing(of parameter: FunctionSignature.Parameter) -> ParameterPassing {
         let type = parameter.type
         // A mutable argument is changed in the caller's place, whatever its size.
         if parameter.convention == .mutable { return .callerPlace(pointerAttributes(to: type, access: [.noAlias])) }
@@ -72,8 +56,8 @@ struct SignatureLowering {
         return holdsSynchronized ? [] : [.noAlias, .readOnly]
     }
 
-    /// How Rayo's convention returns a result of `type`.
-    private func rayoPassing(ofResult type: RayoType) -> ResultPassing {
+    /// How a result of `type` comes back.
+    private func passing(ofResult type: RayoType) -> ResultPassing {
         // Void and a small value are returned in their scalars, which LLVM returns in registers.
         if type == .void || isSmall(type) { return .direct(types.scalars(of: type)) }
 

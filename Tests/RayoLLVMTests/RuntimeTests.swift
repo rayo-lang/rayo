@@ -1,6 +1,7 @@
 import LLVM
 import Testing
-import RayoLLVM
+@testable import RayoLLVM
+import RayoSema
 import RayoRuntime
 #if os(Windows)
 import RayoLLVMTestSupport
@@ -14,7 +15,8 @@ struct RuntimeTests {
         #expect(try symbols(["--undefined-only"], in: dividesByZero).filter { $0.contains("rayo.") } == [])
         // The exit code, a private constant, has no symbol of its own in an ELF object, so only the function is
         // counted.
-        #expect(try symbols(["--defined-only"], in: dividesByZero).count(where: { $0.hasSuffix("rayo.panic") }) == 1)
+        let panic = RuntimeFunction.panic.symbol
+        #expect(try symbols(["--defined-only"], in: dividesByZero).count(where: { $0.hasSuffix(panic) }) == 1)
     }
 
     @Test(arguments: Build.allCases)
@@ -58,8 +60,7 @@ struct RuntimeTests {
             """)
 
         try withEmitted(printsTwice) { module in
-            let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
-            #expect(runtimeFunctions == ["rayo.print_int"])
+            #expect(calledRuntimeFunctions(in: module) == [RuntimeFunction.print(.int).symbol])
         }
     }
 
@@ -76,16 +77,28 @@ struct RuntimeTests {
             """)
 
         try withEmitted(dividesTwice) { module in
-            let runtimeFunctions = module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != "rayo.main" }
-            #expect(runtimeFunctions == ["rayo.panic"])
+            #expect(calledRuntimeFunctions(in: module) == [RuntimeFunction.panic.symbol])
         }
+    }
+
+    @Test func `every runtime function is one the linked runtime has, of the type a program declares it with`() throws {
+        let programModule = try ProgramModule(for: .debug)
+        let declared = declaredTypes(in: programModule.emitter.context)
+
+        // The runtime that rayoc links defines each function the program calls, and declares the program's `main`.
+        let linked = try programModule.linkedModule()
+        let resolved = Dictionary(uniqueKeysWithValues: RuntimeFunction.allCases.map {
+            ($0.symbol, linked.function(named: $0.symbol)?.type.anyType.text ?? "none")
+        })
+        #expect(resolved == declared)
     }
 
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
         let empty = try executable(emptyMain)
 
         // A program that calls nothing in the runtime keeps the runtime's panic in debug, and none of it in release.
-        #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix("rayo.panic") })
+        let panic = RuntimeFunction.panic.symbol
+        #expect(try symbols([], in: compile(empty, for: .debug)).contains { $0.hasSuffix(panic) })
         #expect(try symbols([], in: compile(empty, for: .release)).filter { $0.contains("rayo.") } == [])
     }
 
@@ -113,6 +126,22 @@ private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> I
     SetThreadStackGuarantee($0) ? 1 : 0
 }
 #endif
+
+/// The symbols of the runtime functions that `module` declares for its code to call: every one but the program's
+/// `main`.
+private func calledRuntimeFunctions(in module: borrowing Module) -> [String] {
+    module.functions.map(\.name).filter { $0.hasPrefix("rayo.") && $0 != RuntimeFunction.main.symbol }
+}
+
+/// The type a program declares each runtime function with, in `context`, as LLVM IR writes it, by the function's
+/// symbol.
+private func declaredTypes(in context: borrowing Context) -> [String: String] {
+    let lowering = SignatureLowering(types: LLVMTypes(TypeTable(structs: []), in: context))
+    let functions = RuntimeDeclarations(lowering: lowering, in: context)
+    return Dictionary(uniqueKeysWithValues: RuntimeFunction.allCases.map {
+        ($0.symbol, functions.type(of: $0).anyType.text)
+    })
+}
 
 /// The names of the symbols `llvm-nm` lists in `objectCode`, given `options`.
 private func symbols(_ options: [String], in objectCode: [UInt8]) throws -> [String] {

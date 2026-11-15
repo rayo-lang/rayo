@@ -36,17 +36,15 @@ struct ProgramEmitter: ~Copyable {
         return module
     }
 
-    /// The runtime's function `symbol`, declared in the module. Throws where the runtime defines no such function.
-    func runtimeFunction(named symbol: String) throws(LLVMError) -> Function {
-        try runtime.function(named: symbol, in: module)
-    }
-
     /// Defines the program's functions in the module, its structs as named LLVM types. `executable` must keep the
-    /// IR's types. Throws where the runtime defines no function that the program calls.
-    func emit(_ executable: IRExecutable) throws(LLVMError) {
+    /// IR's types.
+    func emit(_ executable: IRExecutable) {
         let program = executable.program
         let lowering = SignatureLowering(types: LLVMTypes(program.types, in: context))
-        let callTargets = program.functions.ids.map { target(of: $0, in: executable, using: lowering) }
+        let runtimeDeclarations = RuntimeDeclarations(lowering: lowering, in: context)
+        let callTargets = program.functions.ids.map {
+            target(of: $0, in: executable, using: lowering, runtimeDeclarations: runtimeDeclarations)
+        }
 
         // Emit the bodies once every function is declared, so a body can call a function that comes after it.
         for (id, body) in program.definedFunctions {
@@ -55,8 +53,9 @@ struct ProgramEmitter: ~Copyable {
                 preconditionFailure("a primary initializer has no body")
             }
             var emitter = FunctionEmitter(body: body, of: program.functions[id], into: declared,
-                                          callTargets: callTargets, lowering: lowering, in: self)
-            try emitter.emit(in: self)
+                                          callTargets: callTargets, lowering: lowering,
+                                          runtimeDeclarations: runtimeDeclarations, in: self)
+            emitter.emit(in: self)
         }
     }
 
@@ -64,22 +63,28 @@ struct ProgramEmitter: ~Copyable {
     /// initializer, the struct its calls build in place.
     private func target(
         of id: FunctionID, in executable: IRExecutable, using lowering: SignatureLowering,
+        runtimeDeclarations: RuntimeDeclarations,
     ) -> CallTarget {
         switch executable.program.functions[id].kind {
-        case .written: .function(declare(id, of: executable, using: lowering))
+        case .written: .function(declare(id, of: executable, using: lowering, runtimeDeclarations: runtimeDeclarations))
         case .primaryInitializer(let structID): .primaryInitializer(structID)
         }
     }
 
-    /// Declares the function `id`: the program's `main` as `rayo.main`, which the runtime's C entry point runs, and
-    /// any other function by its name and parameters, such as `f(_: Int)`.
+    /// Declares the function `id`: the program's `main` as the runtime function that the runtime's C entry point runs,
+    /// with the signature it runs it by, and any other function by its name and parameters, such as `f(_: Int)`.
     private func declare(
         _ id: FunctionID, of executable: IRExecutable, using lowering: SignatureLowering,
+        runtimeDeclarations: RuntimeDeclarations,
     ) -> DeclaredFunction {
         let function = executable.program.functions[id]
+        // Checking passes only a `main` that takes nothing and returns nothing, the signature the runtime runs it by.
         // A name with parentheses is none that the runtime or the C library defines or calls.
-        let name = id == executable.main ? "rayo.main" : function.name
-        let signature = lowering.lower(FunctionSignature(of: function), in: context)
+        let (name, signature) = if id == executable.main {
+            (RuntimeFunction.main.symbol, runtimeDeclarations.mainSignature)
+        } else {
+            (function.name, lowering.lower(FunctionSignature(of: function), in: context))
+        }
         let llvmFunction = module.addFunction(named: name, type: signature.type,
                                               parameterAttributes: signature.parameterAttributes)
         return DeclaredFunction(function: llvmFunction, signature: signature)

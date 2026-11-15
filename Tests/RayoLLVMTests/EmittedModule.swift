@@ -6,7 +6,7 @@ import Testing
 /// Emits `executable` into a new module for the host, as a debug build does, and runs `checks` on the module.
 func withEmitted(_ executable: IRExecutable, _ checks: (borrowing Module) throws -> Void) throws {
     try withProgramModule(for: .debug) { programModule in
-        try programModule.emit(executable)
+        programModule.emit(executable)
         try checks(programModule.emitter.module)
     }
 }

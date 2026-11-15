@@ -6,14 +6,14 @@ import RayoSource
 /// Calls, which pass their arguments and take their result as the called function's signature says.
 extension FunctionEmitter {
     /// Emits a call of `callee` with `arguments`, which the source makes at `range`, and stores its result in
-    /// `destination` when there is one. Throws where the runtime lacks the function that a built-in calls.
+    /// `destination` when there is one.
     func call(
         _ callee: Callee, passing arguments: [CallArgument], into destination: Place?, at range: SourceRange,
         in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) {
+    ) {
         switch callee {
         case .builtin(let builtin):
-            try call(builtin, passing: arguments, into: destination, at: range, in: program)
+            call(builtin, passing: arguments, into: destination, at: range, in: program)
         case .function(let id):
             call(callTargets[id.index], passing: arguments, into: destination, with: program.builder)
         }

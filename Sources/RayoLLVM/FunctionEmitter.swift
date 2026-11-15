@@ -41,6 +41,10 @@ struct FunctionEmitter {
     let callTargets: [CallTarget]
     /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
+    /// The runtime's functions, which the body declares in the module as it calls them.
+    let runtimeDeclarations: RuntimeDeclarations
+    /// The panics the body emits, each a call of the runtime's panic.
+    let panics: PanicEmitter
     let operators: OperatorEmitter
     /// The block that holds every stack slot, and goes on to the first IR block.
     let entry: LLVM.BasicBlock
@@ -56,7 +60,8 @@ struct FunctionEmitter {
 
     init(
         body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction,
-        callTargets: [CallTarget], lowering: SignatureLowering, in program: borrowing ProgramEmitter,
+        callTargets: [CallTarget], lowering: SignatureLowering, runtimeDeclarations: RuntimeDeclarations,
+        in program: borrowing ProgramEmitter,
     ) {
         self.body = body
         self.declaration = declaration
@@ -64,19 +69,20 @@ struct FunctionEmitter {
         signature = declared.signature
         self.callTargets = callTargets
         self.lowering = lowering
-        operators = OperatorEmitter(into: declared.function, types: lowering.types)
+        self.runtimeDeclarations = runtimeDeclarations
+        panics = PanicEmitter(into: declared.function, runtimeDeclarations: runtimeDeclarations, types: lowering.types)
+        operators = OperatorEmitter(types: lowering.types, panics: panics)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
     }
 
-    /// Emits the body into the function, in `program`'s module. Throws where the runtime lacks a function the body
-    /// calls.
-    mutating func emit(in program: borrowing ProgramEmitter) throws(LLVMError) {
+    /// Emits the body into the function, in `program`'s module.
+    mutating func emit(in program: borrowing ProgramEmitter) {
         program.builder.position(atEndOf: entry)
         places = makePlaces(with: program.builder)
         blocks = body.blocks.indices.map { program.context.appendBlock(named: "bb\($0)", to: llvmFunction) }
 
         for (block, llvmBlock) in zip(body.blocks, blocks) {
-            try emit(block, into: llvmBlock, in: program)
+            emit(block, into: llvmBlock, in: program)
         }
 
         enterFirstBlock(with: program.builder)
@@ -91,19 +97,19 @@ struct FunctionEmitter {
 
     private mutating func emit(
         _ block: RayoIR.BasicBlock, into llvmBlock: LLVM.BasicBlock, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) {
+    ) {
         program.builder.position(atEndOf: llvmBlock)
         for statement in block.statements {
-            try emit(statement, in: program)
+            emit(statement, in: program)
         }
         // The terminator ends the block that the statements leave the builder in.
-        try emit(block.terminator, in: program)
+        emit(block.terminator, in: program)
     }
 
-    private mutating func emit(_ statement: Statement, in program: borrowing ProgramEmitter) throws(LLVMError) {
+    private mutating func emit(_ statement: Statement, in program: borrowing ProgramEmitter) {
         switch statement {
         case .compute(let destination, let rvalue, let range):
-            try emit(rvalue, into: destination?.place, at: range, in: program)
+            emit(rvalue, into: destination?.place, at: range, in: program)
 
         // A static access is its place's address, found once where it begins. Only an object's value takes a dynamic
         // access, and the IR has no objects.
@@ -122,7 +128,7 @@ struct FunctionEmitter {
     /// is one.
     private func emit(
         _ rvalue: Rvalue, into destination: Place?, at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) {
+    ) {
         switch rvalue {
         // An operand's value is copied as it is.
         case .operand(let operand):
@@ -131,18 +137,17 @@ struct FunctionEmitter {
         // An operator computes on its operands' values, as their type says.
         case .unary(let op, let operand):
             let type = operand.type(in: body, types: types.table)
-            let value = try operators.emit(op, on: read(operand, with: program.builder), of: type, at: range,
-                                           in: program)
+            let value = operators.emit(op, on: read(operand, with: program.builder), of: type, at: range, in: program)
             keep(value, in: destination, with: program.builder)
         case .binary(let op, let left, let right):
             let type = left.type(in: body, types: types.table)
             let operands = (read(left, with: program.builder), read(right, with: program.builder))
-            let value = try operators.emit(op, operands.0, operands.1, of: type, at: range, in: program)
+            let value = operators.emit(op, operands.0, operands.1, of: type, at: range, in: program)
             keep(value, in: destination, with: program.builder)
 
         // A call passes its arguments as its function's signature says, or builds a struct from them.
         case .call(let callee, let arguments):
-            try call(callee, passing: arguments, into: destination, at: range, in: program)
+            call(callee, passing: arguments, into: destination, at: range, in: program)
 
         // An array is built from its elements' values.
         case .array(let elements, _):
@@ -154,8 +159,8 @@ struct FunctionEmitter {
 
         // An index is checked against its array's count before any code finds the element.
         case .index(let operand, let count):
-            let value = try operators.emitIndex(read(operand, with: program.builder), below: count, at: range,
-                                                in: program)
+            let value = read(operand, with: program.builder)
+            checkIndex(value, below: count, at: range, in: program)
             keep(value, in: destination, with: program.builder)
         }
     }
@@ -177,7 +182,7 @@ struct FunctionEmitter {
         store(value, at: address(of: destination, with: builder), with: builder)
     }
 
-    private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) throws(LLVMError) {
+    private func emit(_ terminator: Terminator, in program: borrowing ProgramEmitter) {
         switch terminator {
         // A `goto` branches to the LLVM block made for its target.
         case .goto(let target):

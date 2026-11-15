@@ -10,7 +10,7 @@ package enum LLVMEmitter {
         let target = try TargetMachine(optimizes: build.optimizes)
         let program = try ProgramEmitter(sourcePath: sourcePath, for: target, build: build)
 
-        try program.emit(executable)
+        program.emit(executable)
         let module = try program.linkedModule()
         try ready(module, for: target, exporting: [Runtime.entryPoint])
         return try writeObjectCode(of: module, for: target)
