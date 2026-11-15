@@ -1,5 +1,7 @@
 import RayoIR
 import RayoSema
+import RayoSyntax
+import SnapshotTesting
 import Testing
 
 @Suite("Lowering functions")
@@ -19,6 +21,23 @@ struct FunctionLoweringTests {
             func add(_ a: Int, _ b: Int, _ c: Int) {}
             """
         try expectLowering(of: source, toMatch: "borrowed-arguments")
+    }
+
+    @Test func `a mutable argument is a modify access to the place it names, begun as the call begins`() throws {
+        // Checking takes no `mutable` parameter from the source yet, so the test makes `bump`'s parameter mutable in
+        // the checked program, and passes `x` to it as a mutable place.
+        let source = "func main() {\n    var x = 1\n    bump(x)\n    print(x)\n}\nfunc bump(_ n: Int) {}"
+        let (file, _) = Parser.parse(source)
+        var checked = Checker.check(file).program
+        let bump = FunctionID(index: 1)
+        checked.functions = checked.functions.changingFirstParameter(of: bump, to: .mutable)
+        checked.bodies[bump]?.locals[0].kind = .parameter(.mutable)
+        let main = try #require(checked.bodies[FunctionID(index: 0)])
+        checked.bodies[FunctionID(index: 0)]?.statements[1] = try passingMutablePlace(main.statements[1])
+
+        let program = Lowering.lower(checked)
+        Snapshot("mutable-argument.ir").expect(IRPrinter.text(of: program))
+        #expect(IRVerifier.verify(program) == nil)
     }
 
     @Test func `a copied argument is made in a temporary where the source writes it, and the call borrows that`()
@@ -116,5 +135,31 @@ struct FunctionLoweringTests {
 
     @Test func `a 'return' of a Void value computes it, and returns nothing`() throws {
         try expectLowering(ofMain: "return print(1)", toMatch: "return-void-value")
+    }
+}
+
+/// `statement`, an expression statement that calls a function with one argument, a place passed borrowed, with the
+/// place passed as a mutable one instead.
+private func passingMutablePlace(_ statement: CheckedStmt) throws -> CheckedStmt {
+    guard case .expression(var call) = statement, case .call(let callee, let arguments) = call.kind,
+          case .borrowed(let value) = try #require(arguments.first), case .place(let place) = value.kind
+    else { throw ChangeFailure() }
+    call.kind = .call(callee, arguments: [.mutable(place)])
+    return .expression(call)
+}
+
+/// What a test throws where the checked program isn't shaped as it expects.
+private struct ChangeFailure: Error {}
+
+private extension FunctionTable {
+    /// The table with the first parameter of the function `id` taking its argument as `convention`.
+    func changingFirstParameter(of id: FunctionID, to convention: ParameterConvention) -> FunctionTable {
+        var changed = FunctionTable()
+        for declared in ids {
+            var declaration = self[declared]
+            if declared == id { declaration.parameters[0].convention = convention }
+            _ = changed.declare(declaration)
+        }
+        return changed
     }
 }

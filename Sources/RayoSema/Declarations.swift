@@ -40,7 +40,7 @@ struct Declarations {
         unparsedFunctions.contains(name)
     }
 
-    /// Declares the function `initializer` signs as the primary initializer of the struct `id`.
+    /// Declares the function whose signature is `initializer` as the primary initializer of the struct `id`.
     mutating func declarePrimaryInitializer(_ initializer: Signature, of id: StructID) {
         primaryInitializers[id] = initializer
     }

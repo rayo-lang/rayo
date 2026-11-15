@@ -8,18 +8,13 @@ struct Parameter {
     var type: RayoType?
     /// The type as the declaration writes it.
     var spelledType: String
+}
 
+extension Parameter {
     /// The parameter of a function the program declares, which the parameter becomes once its type is known.
     init(_ parameter: FunctionParameter) {
         self.init(label: parameter.label, convention: parameter.convention, type: parameter.type,
                   spelledType: "\(parameter.type)")
-    }
-
-    init(label: String?, convention: ParameterConvention, type: RayoType?, spelledType: String) {
-        self.label = label
-        self.convention = convention
-        self.type = type
-        self.spelledType = spelledType
     }
 
     /// The parameter as the checked program declares it, or nil where its type isn't known.

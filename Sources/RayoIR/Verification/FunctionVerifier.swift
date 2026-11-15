@@ -31,18 +31,27 @@ struct FunctionVerifier {
     /// convention and type, or where a later local is a parameter. The ownership stage reads a parameter's convention
     /// from its local, and the emitter from the declaration, so the two must agree.
     private func verifyParameterLocals() throws(IRViolation) {
-        // Each side is spelled as a parameter's convention and type, such as `owned Int`, or nil where it is none.
-        let parameters = declaration.parameters.map { $0.convention.spelling(of: $0.type) }
-        let locals = body.locals.map { local in local.parameterConvention.map { $0.spelling(of: local.type) } }
+        // Each side is a parameter's convention and type, without the label, which no local holds, or nil where it is
+        // no parameter.
+        let parameters = declaration.parameters.map { parameter in
+            FunctionParameter(label: nil, convention: parameter.convention, type: parameter.type)
+        }
+        let locals = body.locals.map { local in
+            local.parameterConvention.map { FunctionParameter(label: nil, convention: $0, type: local.type) }
+        }
         for index in 0..<max(locals.count, parameters.count) {
             let local = index < locals.count ? locals[index] : nil
             let parameter = index < parameters.count ? parameters[index] : nil
             guard local != parameter else { continue }
-
-            let declared = local.map { "a parameter of \($0)" } ?? "no parameter"
-            let expected = parameter.map { "a parameter of \($0)" } ?? "no parameter"
-            throw violation("the IR declares %\(index) as \(declared), where its function declares \(expected)")
+            throw violation("the IR declares %\(index) as \(Self.text(of: local)), where its function declares "
+                + Self.text(of: parameter))
         }
+    }
+
+    /// `parameter` as a violation of a body's parameters names it, such as `a parameter of owned Int`, or `no
+    /// parameter` where it is nil.
+    private static func text(of parameter: FunctionParameter?) -> String {
+        parameter.map { "a parameter of \($0.convention.spelling(of: $0.type))" } ?? "no parameter"
     }
 
     private func verify(_ statement: Statement) throws(IRViolation) {
@@ -222,14 +231,14 @@ struct FunctionVerifier {
     ) throws(IRViolation) {
         // A value passes through no access.
         let accessKind: AccessKind? = if let id = argument.access { try access(id).kind } else { nil }
-        let taken: [AccessKind?] = switch convention {
+        let accepted: [AccessKind?] = switch convention {
         case .borrowed: [nil, .read]
         case .owned: [nil]
         case .mutable: [.modify]
         }
-        guard !taken.contains(accessKind) else { return }
+        guard !accepted.contains(accessKind) else { return }
 
-        let takes = taken.map(Self.passing(through:)).joined(separator: " or ")
+        let takes = accepted.map(Self.passing(through:)).joined(separator: " or ")
         throw violation("the IR passes '\(name)' \(Self.passing(through: accessKind)), where it takes \(takes)")
     }
 

@@ -3,6 +3,11 @@ extension IRParser {
         tokens[position]
     }
 
+    /// The token after the current one, or the end of the text where the current token ends it.
+    var next: IRToken {
+        tokens[min(position + 1, tokens.count - 1)]
+    }
+
     /// Moves past the current token, unless it ends the text.
     mutating func advance() {
         if current.kind != .end { position += 1 }

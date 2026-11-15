@@ -149,19 +149,21 @@ extension FunctionLowering {
         // Every argument is evaluated, left to right, before any of the call's accesses begins: they begin together
         // as the call begins, in the order of the arguments.
         let evaluated = arguments.map { evaluate($0) }
-        return evaluated.map { operand, accessKind in
-            guard let accessKind, case .read(let place, let range) = operand else { return .operand(operand) }
-            return .access(builder.begin(Access(accessKind, .static, to: place, at: range)))
+        return evaluated.map { argument in
+            switch argument {
+            case .value(let operand): .operand(operand)
+            case .place(let place, let range, let kind):
+                .access(builder.begin(Access(kind, .static, to: place, at: range)))
+            }
         }
     }
 
-    /// Evaluates `argument`, and returns the operand that gives its value, and the kind of access the call reaches
-    /// the operand's place through, or nil where the call takes the operand as it is.
-    private mutating func evaluate(_ argument: CheckedArgument) -> (operand: Operand, accessKind: AccessKind?) {
+    /// Evaluates `argument`, and returns what the call passes for it, before the call's accesses begin.
+    private mutating func evaluate(_ argument: CheckedArgument) -> EvaluatedArgument {
         switch argument {
-        case .borrowed(let value): (operand(of: value, as: .read), .read)
-        case .owned(let value): (operand(of: value, as: .take), nil)
-        case .mutable(let place): (.read(self.place(of: place), at: place.range), .modify)
+        case .borrowed(let value): .borrowing(operand(of: value, as: .read))
+        case .owned(let value): .value(operand(of: value, as: .take))
+        case .mutable(let place): .place(self.place(of: place), at: place.range, .modify)
         }
     }
 
@@ -234,5 +236,21 @@ extension FunctionLowering {
         builder.emit(.operand(rightValue), into: result, range: range)
         builder.end(with: .goto(join), continuingIn: join)
         return resultValue
+    }
+}
+
+/// A call's argument once it is evaluated, before the call's accesses begin: what the call passes for it.
+private enum EvaluatedArgument {
+    /// A value the call passes as it is.
+    case value(Operand)
+    /// A place the call reaches through an access of the kind, which begins with the call's other accesses, and
+    /// which the source names at the range.
+    case place(Place, at: SourceRange, AccessKind)
+
+    /// What the call passes for a borrowed argument whose value `operand` gives: a constant as it is, and the place
+    /// any other value lies in, through a read access.
+    static func borrowing(_ operand: Operand) -> EvaluatedArgument {
+        guard case .read(let place, let range) = operand else { return .value(operand) }
+        return .place(place, at: range, .read)
     }
 }

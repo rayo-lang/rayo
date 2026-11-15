@@ -26,16 +26,23 @@ extension IRParser {
 
     /// Reads a parameter's type, after the convention where the parameter doesn't borrow, and returns both.
     mutating func conventionAndType() throws(IRTextError) -> (ParameterConvention, RayoType) {
-        // A word is a convention only where a type follows it, as the source reads it, so it may still name a struct.
-        // `borrowed` is never written, since a parameter borrows where it names no convention.
-        let next = tokens[min(position + 1, tokens.count - 1)].kind
-        let startsType = if case .word = next { true } else { next == .symbol("[") }
-        guard case .word(let word) = current.kind, startsType, word != ParameterConvention.borrowed.rawValue,
-              let convention = ParameterConvention(rawValue: word) else {
-            return (.borrowed, try type())
-        }
+        guard let convention = writtenConvention() else { return (.borrowed, try type()) }
         advance()
         return (convention, try type())
+    }
+
+    /// The convention the current token writes before a parameter's type, or nil where it writes none, as for a
+    /// parameter that borrows, which names no convention.
+    private func writtenConvention() -> ParameterConvention? {
+        guard case .word(let word) = current.kind, word != ParameterConvention.borrowed.rawValue else { return nil }
+        // A word is a convention only where a type follows it, so `owned` can still name a struct when nothing does.
+        guard nextStartsType else { return nil }
+        return ParameterConvention(rawValue: word)
+    }
+
+    /// Whether the token after the current one starts a type: a name, or the `[` of an array type.
+    private var nextStartsType: Bool {
+        if case .word = next.kind { true } else { next.kind == .symbol("[") }
     }
 
     /// The integer type the prelude declares as `name`, or nil where it declares none.

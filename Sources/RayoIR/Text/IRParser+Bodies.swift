@@ -36,9 +36,10 @@ extension IRParser {
     /// Reads `kind %N name: Type @range`, or `temp %N: Type`, where `N` is the local's ID; or nil where the current
     /// token starts no local.
     private mutating func local() throws(IRTextError) -> IRLocal? {
-        guard case .word(let keyword) = current.kind, ["let", "var", "param", "temp"].contains(keyword) else {
-            return nil
-        }
+        guard case .word(let keyword) = current.kind else { return nil }
+        // A parameter's convention follows its name, so its keyword stands for a parameter of any convention.
+        let kind = [LocalKind.let, .var, .parameter(.borrowed)].first { $0.keyword == keyword }
+        guard kind != nil || keyword == "temp" else { return nil }
         advance()
 
         // The local's number is its ID, so the locals come in order.
@@ -48,20 +49,20 @@ extension IRParser {
 
         // A temporary has a type alone, and a local the source declares a name before it and where it declares the
         // name after it.
-        guard keyword != "temp" else {
+        guard let kind else {
             try expect(":")
             return .temporary(try type())
         }
         let name = try word()
         try expect(":")
-        let (kind, type) = try kindAndType(declaredBy: keyword)
-        return .source(name: name, kind: kind, type: type, range: try range())
+        let (declaredKind, type) = try kindAndType(of: kind)
+        return .source(name: name, kind: declaredKind, type: type, range: try range())
     }
 
-    /// Reads the type of a local that `keyword` declares, after its convention where it is a parameter, and returns
-    /// the local's kind with it.
-    private mutating func kindAndType(declaredBy keyword: String) throws(IRTextError) -> (LocalKind, RayoType) {
-        guard keyword == "param" else { return (keyword == "let" ? .let : .var, try type()) }
+    /// Reads the type of a local of `kind`, after its convention where it is a parameter, and returns the local's
+    /// kind, with that convention, and the type.
+    private mutating func kindAndType(of kind: LocalKind) throws(IRTextError) -> (LocalKind, RayoType) {
+        guard case .parameter = kind else { return (kind, try type()) }
         let (convention, type) = try conventionAndType()
         return (.parameter(convention), type)
     }
