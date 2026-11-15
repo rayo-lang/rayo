@@ -23,6 +23,31 @@ struct ControlFlowLoweringTests {
         try expectLowering(ofMain: "let c = true\nlet y = if c { 1 } else { 2 }", toMatch: "if-into-local")
     }
 
+    @Test
+    func `an 'if' whose branch ends in 'return', 'break' or 'continue' leaves, and the other gives its value`() throws {
+        let source = """
+            func main() {
+                var i = 0
+                while true {
+                    i += 1
+                    let odd = if i % 2 == 0 { continue } else { copy i }
+                    let next = if odd > 7 { break } else { odd }
+                    print(next)
+                }
+            }
+            func half(_ n: Int) -> Int {
+                let even = if n % 2 == 0 { copy n } else { return -1 }
+                return even / 2
+            }
+            func pick(_ c: Bool) -> Int {
+                print(0)
+                show(if c { return 1 } else { return 2 })
+            }
+            func show(_ n: Int) {}
+            """
+        try expectLowering(of: source, toMatch: "if-branch-leaves")
+    }
+
     @Test func `an 'if' whose value is dropped computes each branch's value for what it does`() throws {
         try expectLowering(ofMain: "let c = true\n_ = if c { print(1) } else { print(2) }", toMatch: "if-dropped")
     }

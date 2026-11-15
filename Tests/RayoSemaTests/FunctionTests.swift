@@ -36,6 +36,29 @@ struct FunctionTests {
             [.voidLocal(type: "Void"), .unusedValue(type: "Int")])
     }
 
+    @Test(arguments: [
+        "if 1 < 2 { return 1 } else if true { return 2 } else { return 3 }",
+        "return 1\nprint(2)",
+        "if true { } else { }\nvar i = 0\nwhile (true) {\ni += 1\nif i == 1 { return copy i }\n}",
+        "while true {\nwhile true { break }\nif 2 > 1 { return 1 }\n}",
+    ])
+    func `a function with a result may end every path in 'return', or in a loop that never ends`(body: String) {
+        #expect(errors("func main() { print(f()) }\nfunc f() -> Int {\n\(body)\n}") == [])
+    }
+
+    @Test func `a function without '->' whose body is one expression returns that expression's type`() {
+        let source = """
+            func main() {
+                if positive() { print(seven()) }
+                say()
+            }
+            func positive() { seven() > 0 }
+            func seven() { 3 + 4 }
+            func say() { print(1) }
+            """
+        #expect(errors(source) == [])
+    }
+
     @Test("a result type that depends on itself is an error at the call that closes the cycle", arguments: [
         ("func f() { f() }", "f()", "f()"),
         ("func f() { g() + 1 }\nfunc g() { f() }", "f()", "f()"),
@@ -84,6 +107,10 @@ struct FunctionTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.notAType(name: type)])
         #expect(coveredText(reported, in: source) == [type])
+    }
+
+    @Test func `a function whose name no prelude type has leaves every type as it was`() {
+        #expect(errors("func main() {\n    let x: Bool = Flag()\n    print(x)\n}\nfunc Flag() -> Bool { true }") == [])
     }
 
     @Test func `an error names a prelude type that a function shadows as the prelude's`() {

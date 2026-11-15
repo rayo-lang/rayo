@@ -65,6 +65,19 @@ struct ElementLoweringTests {
         try expectLowering(of: source, toMatch: "element-part-move")
     }
 
+    @Test func `a compound assignment finds each index of its element once, before it evaluates its value`() throws {
+        let source = """
+            func main() {
+                var grid = [[1, 2], [3, 4]]
+                grid[index()][index()] += value()
+                print(grid[1][0])
+            }
+            func index() -> UInt { 1 }
+            func value() -> Int { 6 }
+            """
+        try expectLowering(of: source, toMatch: "compound-element-assignment")
+    }
+
     @Test func `an element of an element is assigned where it lies`() throws {
         let body = "var grid = [[1, 2], [3, 4]]\ngrid[0][1] = 5\nprint(grid[0][1])"
         try expectLowering(ofMain: body, toMatch: "nested-element-assignment")

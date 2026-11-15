@@ -45,6 +45,42 @@ struct ElementTests {
     }
 
     @Test(arguments: [Build.debug, .release])
+    func `an array read whole after one of its elements changes holds the new element beside the others`(
+        build: Build,
+    ) throws {
+        // The element at index 1 changes twice, the second time in place, then the array is passed whole to `total`
+        // and moved whole into another local.
+        let text = """
+            main "main()"
+            func "main()"() -> Void {
+              var %0 a: [2 of Int]
+              var %1 b: [2 of Int]
+              temp %2: UInt
+              temp %3: Int
+            bb0:
+              %0 @1:1-1:2 = array of Int(1, 2) @1:1-1:2
+              %2 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
+              %0[%2] @1:1-1:2 = operand 7 @1:1-1:2
+              %0[%2] @1:1-1:2 = add checked read %0[%2] @1:1-1:2, 10 @1:1-1:2
+              %3 @1:1-1:2 = call "total(_: [2 of Int])"(read %0 @1:1-1:2) @1:1-1:2
+              \(printInt("%3"))
+              %1 @1:1-1:2 = operand move %0 @1:1-1:2 @1:1-1:2
+              \(printInt("%1[0]"))
+              \(printInt("%1[1]"))
+              return
+            }
+            func "total(_: [2 of Int])"([2 of Int]) -> Int {
+              param %0 a: [2 of Int]
+              temp %1: Int
+            bb0:
+              %1 @1:1-1:2 = add checked read %0[0] @1:1-1:2, read %0[1] @1:1-1:2 @1:1-1:2
+              return read %1 @1:1-1:2
+            }
+            """
+        #expect(try run(text, in: build) == .init(printed: "18\n1\n17\n"))
+    }
+
+    @Test(arguments: [Build.debug, .release])
     func `an index outside the array panics before the element it would reach is written`(build: Build) throws {
         // The index is checked in the statement before the store whose place leads through it, so the panic comes
         // before the store, and before the print after it.

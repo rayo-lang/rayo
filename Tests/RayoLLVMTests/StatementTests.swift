@@ -150,21 +150,28 @@ struct DroppedValueTests {
         #expect(try run(text, in: build) == expected)
     }
 
-    @Test(arguments: [Build.debug, .release])
-    func `a dropped operator is still computed, so one that panics panics, in every build`(build: Build) throws {
-        // The divisor is a local's, so the division is computed when the program runs.
+    @Test(arguments: [
+        (Build.debug, "divide checked 1", 0, "division by zero"),
+        (.release, "divide checked 1", 0, "division by zero"),
+        (.release, "remainder 1", 0, "remainder by zero"),
+        (.debug, "add checked 1", 9_223_372_036_854_775_807, "integer overflow"),
+    ])
+    func `a dropped operator is still computed, so one that panics panics, in the builds where it panics`(
+        build: Build, operation: String, operand: Int64, reason: String,
+    ) throws {
+        // The right operand is a local's, so the operator is computed when the program runs.
         let text = """
             main "main()"
             func "main()"() -> Void {
-              var %0 zero: Int
+              var %0 x: Int
             bb0:
-              %0 @1:1-1:2 = operand 0 @1:1-1:2
-              _ = divide checked 1, read %0 @1:1-1:2 @3:7-3:12
+              %0 @1:1-1:2 = operand \(operand) @1:1-1:2
+              _ = \(operation), read %0 @1:1-1:2 @3:7-3:12
               _ = call builtin "print(_: Int)"(1) @1:1-1:2
               return
             }
             """
-        #expect(try run(text, in: build) == .init(printed: "", panic: "main.rayo:3:7: panic: division by zero\n"))
+        #expect(try run(text, in: build) == .init(printed: "", panic: "main.rayo:3:7: panic: \(reason)\n"))
     }
 }
 
