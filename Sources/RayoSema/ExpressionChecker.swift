@@ -158,24 +158,24 @@ struct ExpressionChecker {
     }
 
     /// Checks `-operandExpr`, which negates an untyped operand to an untyped value, and a typed one only where it is
-    /// an integer, to a value of its type.
+    /// signed, to a value of its type.
     private func negation(of operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         // An operand that failed was reported already.
         guard let operand = value(of: operandExpr) else { return nil }
         return switch operand {
         // An untyped operand gives an untyped negation.
-        case .waiting(let untyped as UntypedValue): .waiting(UntypedValue.negation(untyped, range: range))
+        case .waiting(let untyped as UntypedValue): .waiting(untyped.negated(at: range))
         case .typed(let typed): negation(of: typed, in: range)
         // Any other value that waits settles as it would where its position gives no type.
         case .waiting: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
         }
     }
 
-    /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is an integer.
+    /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is signed.
     private func negation(of operand: CheckedExpr, in range: SourceRange) -> CheckedValue? {
-        // An operand of a type that isn't an integer is reported.
-        guard operand.type.isInteger else {
-            errors.report(.integerOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
+        // An operand of a type without a sign is reported.
+        guard operand.type.isSigned else {
+            errors.report(.signedOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
                           at: range)
             return nil
         }

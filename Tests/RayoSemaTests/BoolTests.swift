@@ -9,7 +9,7 @@ struct BoolTests {
         ("let b = true < false", .integerOperands(op: "<", left: "Bool", right: "Bool")),
         ("let b = 1 && true", .operandTypes(op: "&&", needs: "Bool", left: "Int", right: "Bool")),
         ("let b = !1", .typeMismatch(expected: "Bool", found: "Int")),
-        ("let b = -true", .integerOperand(op: "-", found: "Bool")),
+        ("let b = -true", .signedOperand(op: "-", found: "Bool")),
         ("let b = print(1) == print(2)", .incomparable(op: "==", type: "Void")),
     ])
     func rejected(body: String, expected: ErrorCode) {
