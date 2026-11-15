@@ -1,30 +1,36 @@
 import RayoSema
 
-/// Checks that one function's body keeps the IR's types.
+/// Checks that one function's body keeps the IR's types, and what the stage that gave it promises of its accesses.
 struct FunctionVerifier {
     private let body: IRBody
     private let declaration: FunctionDeclaration
+    private let stage: IRStage
     private let types: TypeTable
     private let functions: FunctionTable
     /// The access each statement of the body that begins one begins, by its ID.
     private let accesses: [AccessID: Access]
 
-    init(body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram) {
+    init(body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram, from stage: IRStage) {
         self.body = body
+        self.stage = stage
         accesses = body.begunAccesses
         self.declaration = declaration
         types = program.types
         functions = program.functions
     }
 
-    /// Throws the first violation in the body, in the order of its blocks, and in each of its statements and then its
-    /// terminator.
+    /// Throws the first violation in the body: of its types, in the order of its blocks, and in each of its statements
+    /// and then its terminator; then, where the ownership stage gave it, of where its accesses end.
     func verify() throws(IRViolation) {
         try verifyParameterLocals()
         for block in body.blocks {
             for statement in block.statements { try verify(statement) }
             try verify(block.terminator)
         }
+
+        // Lowering writes no end, so only the ownership stage's IR ends its accesses.
+        guard stage == .ownership else { return }
+        try AccessScopeVerifier(body: body, of: declaration.name).verify()
     }
 
     /// Throws where the body's first locals aren't its function's parameters, in order, each of its parameter's

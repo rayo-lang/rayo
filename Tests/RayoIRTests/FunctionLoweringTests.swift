@@ -37,7 +37,7 @@ struct FunctionLoweringTests {
 
         let program = Lowering.lower(checked)
         Snapshot("mutable-argument.ir").expect(IRPrinter.text(of: program))
-        #expect(IRVerifier.verify(program) == nil)
+        #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
 
     @Test func `a copied argument is made in a temporary where the source writes it, and the call borrows that`()

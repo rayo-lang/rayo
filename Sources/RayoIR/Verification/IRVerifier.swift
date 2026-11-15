@@ -1,17 +1,18 @@
 import RayoSema
 
-/// Checks that IR keeps its types, which code generation takes as given.
+/// Checks that IR keeps its types, and that the IR a stage gives keeps what that stage promises of its accesses, which
+/// code generation takes as given.
 public enum IRVerifier {
-    /// The first declaration or operation in `program` that breaks the IR's types, or nil where none does: each
-    /// primary initializer's declaration in the order of its ID, then each body in the order of its function's ID and
-    /// of its blocks.
-    public static func verify(_ program: IRProgram) -> IRViolation? {
+    /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
+    /// none does: each primary initializer's declaration in the order of its ID, then each body in the order of its
+    /// function's ID.
+    public static func verify(_ program: IRProgram, from stage: IRStage) -> IRViolation? {
         for id in program.functions.ids {
             if let violation = initializerViolation(of: id, in: program) { return violation }
         }
 
         for (id, body) in program.definedFunctions {
-            let verifier = FunctionVerifier(body: body, of: program.functions[id], in: program)
+            let verifier = FunctionVerifier(body: body, of: program.functions[id], in: program, from: stage)
             // The first violation found ends the check.
             do { try verifier.verify() } catch { return error }
         }
