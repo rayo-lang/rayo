@@ -9,49 +9,53 @@ enum UnusedValueChecker {
     /// place that assigns a local, or a field inside one, a value that no code reads, in the body whose places
     /// `places` gives the types of, where `uses` says what code after each of its points uses.
     static func errors(in places: PlaceTypes, uses: DataflowResults<AccessUseAnalysis>) -> [Diagnostic] {
-        var results = uses
-        let parameters = unreadParameters(of: places.body, results: &results)
-        return parameters
-            + places.body.blocks.indices.flatMap { errors(in: BlockID(index: $0), of: places, results: &results) }
+        unreadParameters(of: places.body, uses: uses)
+            + places.body.blocks.indices.flatMap { errors(in: BlockID(index: $0), of: places, uses: uses) }
     }
 
     /// The parameters whose values the function's entry stores and no code reads, each reported where the source
-    /// declares it, where `results` say what code reads after each point of `body`.
+    /// declares it, where `uses` says what code reads after each point of `body`.
     private static func unreadParameters(
-        of body: IRBody, results: inout DataflowResults<AccessUseAnalysis>,
+        of body: IRBody, uses: DataflowResults<AccessUseAnalysis>,
     ) -> [Diagnostic] {
-        // What code reads from the entry on, which every path through the function starts at.
-        guard let entry = results.state(before: 0, in: BlockID(index: 0)) else { return [] }
-        return body.locals.indices.compactMap { index in
-            guard case .source(let name, .parameter(let convention), _, let range) = body.locals[index],
-                  convention.isStoredAtEntry, !entry.values.reads(Place(root: LocalID(index: index)))
-            else { return nil }
-            return Diagnostic(.unreadValue(name: name), at: range)
+        var unread: [Diagnostic] = []
+        uses.walk(BlockID(index: 0)) { point, state in
+            // What code reads from the entry on, which every path through the function starts at.
+            guard point == 0 else { return }
+            unread = body.locals.indices.compactMap { index in
+                guard case .source(let name, .parameter(let convention), _, let range) = body.locals[index],
+                      convention.isStoredAtEntry, !state.values.reads(Place(root: LocalID(index: index)))
+                else { return nil }
+                return Diagnostic(.unreadValue(name: name), at: range)
+            }
         }
+        return unread
     }
 
-    /// The stores in `block` of a value that no code reads, where `results` say what code reads after each of them.
+    /// The stores in `block` of a value that no code reads, where `uses` says what code reads after each of them. A
+    /// block that no path reaches has no state, and nothing in it is checked.
     private static func errors(
-        in block: BlockID, of places: PlaceTypes, results: inout DataflowResults<AccessUseAnalysis>,
+        in block: BlockID, of places: PlaceTypes, uses: DataflowResults<AccessUseAnalysis>,
     ) -> [Diagnostic] {
-        // Asking from the last statement back walks the block once, the way liveness flows.
-        let indices = places.body.blocks[block.index].statements.indices.reversed()
-        return indices.compactMap { error(at: $0, in: block, of: places, results: &results) }
+        let statements = places.body.blocks[block.index].statements
+        var errors: [Diagnostic] = []
+        uses.walk(block) { point, state in
+            // The state after a statement is the one at the point after it; the first point follows none.
+            guard point > 0, point <= statements.count else { return }
+            if let error = error(at: statements[point - 1], followedBy: state, in: places) { errors.append(error) }
+        }
+        return errors
     }
 
-    /// The error at the statement at `index` in `block`, where it stores a value that no code reads, or nil where it
-    /// doesn't.
+    /// The error at `statement` where it stores a value that no code reads, where the code after it uses what `uses`
+    /// holds, or nil where it doesn't.
     private static func error(
-        at index: Int, in block: BlockID, of places: PlaceTypes, results: inout DataflowResults<AccessUseAnalysis>,
+        at statement: Statement, followedBy uses: AccessUseState, in places: PlaceTypes,
     ) -> Diagnostic? {
         // Only a computation with a destination stores a value.
-        guard case .compute(let destination?, _, _) = places.body.blocks[block.index].statements[index] else {
-            return nil
-        }
-        // A block that no path reaches has no state, and nothing in it is checked.
-        guard let state = results.state(after: index, in: block) else { return nil }
+        guard case .compute(let destination?, _, _) = statement else { return nil }
         // A store that some code reads leaves nothing to report.
-        guard !state.values.reads(destination.place) else { return nil }
+        guard !uses.values.reads(destination.place) else { return nil }
         // Lowering reads each temporary it writes, so only a local of the source leaves a value unread.
         guard let name = places.sourceName(of: destination.place) else { return nil }
         return Diagnostic(.unreadValue(name: name), at: destination.range)

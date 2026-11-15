@@ -23,6 +23,11 @@ struct LivenessState: DataflowState {
         live.values.contains { $0.mayReach(place) }
     }
 
+    /// The locals that some code reads a value inside later: those whose stores `reads(_:)` finds some code reads.
+    var readLocals: Set<LocalID> {
+        Set(live.map(\.place.root))
+    }
+
     /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
     mutating func apply(backwardsThrough terminator: Terminator, of body: IRBody) {
         // A return reads each parameter whose value the caller reads once the function returns.

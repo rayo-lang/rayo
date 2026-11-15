@@ -101,6 +101,47 @@ struct OwnershipCheckTests {
             FunctionID(index: 0): [6, 7], FunctionID(index: 1): [5],
         ])
     }
+
+    @Test func `a function of 8000 statements is checked in well under a second`() throws {
+        let program = try program(of: [longFunction(rounds: 2000)] + callees)
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        let (_, errors) = OwnershipChecker.check(program)
+        let elapsed = clock.now - start
+
+        #expect(errors.isEmpty)
+        #expect(elapsed < .milliseconds(500))
+    }
+}
+
+/// The function `long()`, which takes `rounds` turns, four statements each, at storing in `s` (`%0`) a new value
+/// worked out from the old one through a `let` and a temporary of the turn's own, then prints `s`.
+private func longFunction(rounds: Int) -> (name: String, text: String) {
+    let locals = (0..<rounds).map { round in
+        "  let %\(2 * round + 1) x\(round): Int @1:1-1:1\n  temp %\(2 * round + 2): Int"
+    }
+    let statements = (0..<rounds).map { round in
+        let (value, temporary) = (2 * round + 1, 2 * round + 2)
+        return """
+              begin a\(round) read static %0 @1:1-1:1
+              %\(temporary) @1:1-1:1 = call "double(_: Int)"(a\(round)) @1:1-1:1
+              %\(value) @1:1-1:1 = add checked move %\(temporary) @1:1-1:1, \(round) @1:1-1:1
+              %0 @1:1-1:1 = operand move %\(value) @1:1-1:1 @1:1-1:1
+            """
+    }
+    let text = """
+        func "long()"() -> Void {
+          var %0 s: Int @1:1-1:1
+        \(locals.joined(separator: "\n"))
+        bb0:
+          %0 @1:1-1:1 = operand 0 @1:1-1:1
+        \(statements.joined(separator: "\n"))
+          _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+          return
+        }
+        """
+    return ("long()", text)
 }
 
 /// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.

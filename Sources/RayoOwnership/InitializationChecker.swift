@@ -10,31 +10,26 @@ enum InitializationChecker {
     /// assigned, in `places.body`.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
         let analysis = InitializationAnalysis(places.body)
-        var results = DataflowSolver.solve(analysis, in: places.body)
+        let results = DataflowSolver.solve(analysis, in: places.body)
         var errors = FunctionErrors(places: places)
-        for index in places.body.blocks.indices {
-            check(BlockID(index: index), of: places.body, results: &results, into: &errors)
+        for (index, block) in places.body.blocks.enumerated() {
+            // A block that no path reaches has no state, and nothing in it is checked.
+            guard let entry = results.boundaryState(of: BlockID(index: index)) else { continue }
+            check(block, from: entry, into: &errors)
         }
         return errors.diagnostics
     }
 
-    /// Hands `errors` what each statement of `block`, and its terminator, may find missing, where `results` say what
-    /// the locals hold just before it.
-    private static func check(
-        _ block: BlockID, of body: IRBody, results: inout DataflowResults<InitializationAnalysis>,
-        into errors: inout FunctionErrors,
-    ) {
-        let basicBlock = body.blocks[block.index]
-        for (index, statement) in basicBlock.statements.enumerated() {
-            // A block that no path reaches has no state, and nothing in it is checked.
-            guard let state = results.state(before: index, in: block) else { return }
-            state.inspect(
+    /// Hands `errors` what each statement of `block`, and its terminator, may find missing, where the locals hold
+    /// `state` on entry to the block. It carries that one state through the block, so no statement copies it.
+    private static func check(_ block: BasicBlock, from state: InitializationState, into errors: inout FunctionErrors) {
+        var state = state
+        for statement in block.statements {
+            state.apply(
                 statement, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
             )
         }
-
-        guard let state = results.state(before: basicBlock.statements.count, in: block) else { return }
-        state.inspect(basicBlock.terminator) { errors.use($0, at: $1, missing: $2) }
+        state.apply(block.terminator) { errors.use($0, at: $1, missing: $2) }
     }
 }
 

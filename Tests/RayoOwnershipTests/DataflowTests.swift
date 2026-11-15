@@ -5,17 +5,17 @@ import Testing
 
 struct DataflowTests {
     @Test func `going forward, a block's entry holds what every path into it brings`() throws {
-        var results = try solve(EvaluatedOperands(direction: .forward), diamond, result: "Int")
-        #expect(results.state(before: 0, in: BlockID(index: 3)) == EvaluatedOperands.State([1, 2, 3]))
-        #expect(results.state(after: 0, in: BlockID(index: 3)) == EvaluatedOperands.State([1, 2, 3, 4]))
-        #expect(results.state(after: 1, in: BlockID(index: 3)) == EvaluatedOperands.State([1, 2, 3, 4, 5]))
+        let results = try solve(EvaluatedOperands(direction: .forward), diamond, result: "Int")
+        #expect(states(of: results, in: 3)?[0] == EvaluatedOperands.State([1, 2, 3]))
+        #expect(states(of: results, in: 3)?[1] == EvaluatedOperands.State([1, 2, 3, 4]))
+        #expect(states(of: results, in: 3)?[2] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
     }
 
     @Test func `going backward, a block's exit holds what every path out of it brings`() throws {
-        var results = try solve(EvaluatedOperands(direction: .backward), diamond, result: "Int")
-        #expect(results.state(after: 1, in: BlockID(index: 0)) == EvaluatedOperands.State([2, 3, 4, 5]))
-        #expect(results.state(before: 0, in: BlockID(index: 0)) == EvaluatedOperands.State([1, 2, 3, 4, 5]))
-        #expect(results.state(before: 0, in: BlockID(index: 3)) == EvaluatedOperands.State([4, 5]))
+        let results = try solve(EvaluatedOperands(direction: .backward), diamond, result: "Int")
+        #expect(states(of: results, in: 0)?[2] == EvaluatedOperands.State([2, 3, 4, 5]))
+        #expect(states(of: results, in: 0)?[0] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
+        #expect(states(of: results, in: 3)?[0] == EvaluatedOperands.State([4, 5]))
     }
 
     @Test(arguments: [
@@ -39,8 +39,8 @@ struct DataflowTests {
               \(printing(4))
               return
             """
-        var results = try solve(EvaluatedOperands(direction: direction), blocks)
-        #expect(results.state(before: statement, in: BlockID(index: 1)) == EvaluatedOperands.State(expected))
+        let results = try solve(EvaluatedOperands(direction: direction), blocks)
+        #expect(states(of: results, in: 1)?[statement] == EvaluatedOperands.State(expected))
     }
 
     @Test func `going backward, a loop that no path leaves starts from the start state`() throws {
@@ -52,9 +52,9 @@ struct DataflowTests {
               \(printing(2))
               goto bb1
             """
-        var results = try solve(EvaluatedOperands(direction: .backward), blocks)
-        #expect(results.state(before: 0, in: BlockID(index: 1)) == EvaluatedOperands.State([2]))
-        #expect(results.state(before: 0, in: BlockID(index: 0)) == EvaluatedOperands.State([1, 2]))
+        let results = try solve(EvaluatedOperands(direction: .backward), blocks)
+        #expect(states(of: results, in: 1)?[0] == EvaluatedOperands.State([2]))
+        #expect(states(of: results, in: 0)?[0] == EvaluatedOperands.State([1, 2]))
     }
 
     @Test(arguments: [
@@ -71,16 +71,16 @@ struct DataflowTests {
               \(printing(2))
               goto bb0
             """
-        var results = try solve(EvaluatedOperands(direction: direction), blocks)
-        #expect(results.state(before: 0, in: BlockID(index: 1)) == nil)
+        let results = try solve(EvaluatedOperands(direction: direction), blocks)
+        #expect(states(of: results, in: 1) == nil)
     }
 
     @Test(arguments: [
-        (DataflowDirection.forward, [Set([1, 2]), Set([1]), Set([1])]),
-        (DataflowDirection.backward, [Set([3]), Set([2, 3]), Set([2, 3])]),
+        (DataflowDirection.forward, [0, 1, 2, 3], [Set(), Set([1]), Set([1, 2]), Set([1, 2, 3])]),
+        (DataflowDirection.backward, [3, 2, 1, 0], [Set(), Set([3]), Set([2, 3]), Set([1, 2, 3])]),
     ])
-    func `the states asked about a block in any order are those of its points, in either direction`(
-        direction: DataflowDirection, expected: [Set<Int>],
+    func `a walk lends the state at each point of a block once, in the analysis's direction`(
+        direction: DataflowDirection, points: [Int], expected: [Set<Int>],
     ) throws {
         let blocks = """
             bb0:
@@ -88,12 +88,11 @@ struct DataflowTests {
               \(printing(2))
               return read %0 @2:3-2:3
             """
-        var results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
-        let states = [
-            results.state(after: 1, in: BlockID(index: 0)), results.state(before: 1, in: BlockID(index: 0)),
-            results.state(after: 0, in: BlockID(index: 0)),
-        ]
-        #expect(states == expected.map { EvaluatedOperands.State($0) })
+        let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
+        var visited: [(point: Int, state: EvaluatedOperands.State)] = []
+        results.walk(BlockID(index: 0)) { visited.append(($0, $1)) }
+        #expect(visited.map(\.point) == points)
+        #expect(visited.map(\.state) == expected.map { EvaluatedOperands.State($0) })
     }
 
     // The solver checks its merges only in a debug build, which is how the tests run.
@@ -202,4 +201,12 @@ private func solve(
     // The program's one function has a body.
     let body = try #require(program.bodies[FunctionID(index: 0)])
     return DataflowSolver.solve(analysis, in: body)
+}
+
+/// The state at each point of the block at `index`, which `results` settle on, in the order of the points; nil where no
+/// state reaches the block.
+private func states(of results: DataflowResults<EvaluatedOperands>, in index: Int) -> [EvaluatedOperands.State]? {
+    var states: [Int: EvaluatedOperands.State] = [:]
+    guard results.walk(BlockID(index: index), visit: { states[$0] = $1 }) else { return nil }
+    return states.sorted { $0.key < $1.key }.map(\.value)
 }

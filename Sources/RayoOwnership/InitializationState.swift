@@ -34,28 +34,18 @@ struct InitializationState: DataflowState {
         apply(terminator, use: { _, _, _ in })
     }
 
-    /// Hands `use` each operand of `statement` that names a place that may hold no value, and its destination where
-    /// that lies inside a local that may not hold the rest of its value; hands `store` its destination where that is
-    /// a whole local. `statement` runs just after this state, and each operand sees the moves of those before it.
-    func inspect(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
-        var state = self
-        state.apply(statement, use: use, store: store)
-    }
-
-    /// Hands `use` the operand of `terminator`, which runs just after this state, where it names a place that may
+    /// Applies what `terminator` does to the locals, and hands `use` its operand where that names a place that may
     /// hold no value.
-    func inspect(_ terminator: Terminator, use: UseVisitor) {
-        var state = self
-        state.apply(terminator, use: use)
-    }
-
-    private mutating func apply(_ terminator: Terminator, use: UseVisitor) {
+    mutating func apply(_ terminator: Terminator, use: UseVisitor) {
         // A terminator without an operand uses no place.
         guard let operand = terminator.operand else { return }
         apply(operand, use: use)
     }
 
-    private mutating func apply(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
+    /// Applies what `statement` does to the locals. On the way, it hands `use` each operand that names a place that
+    /// may hold no value, and its destination where that lies inside a local that may not hold the rest of its value,
+    /// and hands `store` its destination where that is a whole local. Each operand sees the moves of those before it.
+    mutating func apply(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
         switch statement {
         // A computation uses its operands, in order, before it stores to its destination.
         case .compute(let destination, let value, _):
