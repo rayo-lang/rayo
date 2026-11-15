@@ -54,18 +54,26 @@ struct StackSafetyTests {
               return
             }
             """)
-        let disassembly = try llvmTool("llvm-objdump", ["--disassemble", "--reloc"], on: compile(program, for: build))
+        let objectCode = try compile(program, for: build)
+
+        #if os(Windows)
+        // Windows probes a frame by a call to `__chkstk`, which touches each of its pages in turn, so the object
+        // needs that function from the C runtime.
+        let undefined = try llvmTool("llvm-nm", ["--undefined-only", "--format=just-symbols"], on: objectCode)
+        #expect(undefined.split(separator: "\n").contains("__chkstk"))
+        #else
+        let disassembly = try llvmTool("llvm-objdump", ["--disassemble"], on: objectCode)
         #expect(disassembly.contains(pageProbe))
+        #endif
     }
 }
 
-#if os(Windows)
-/// The call that probes a frame on Windows, to the function that touches each of its pages in turn.
-private let pageProbe = "__chkstk"
-#elseif arch(arm64)
+#if !os(Windows)
+#if arch(arm64)
 /// The load that probes one page of a frame, at the stack pointer, on arm64.
 private let pageProbe = "ldr\txzr, [sp]"
 #elseif arch(x86_64)
 /// The store that probes one page of a frame, at the stack pointer, on x86-64.
 private let pageProbe = "movq\t$0x0, (%rsp)"
+#endif
 #endif
