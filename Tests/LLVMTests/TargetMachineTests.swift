@@ -1,4 +1,4 @@
-import LLVM
+@testable import LLVM
 import Testing
 
 struct TargetMachineTests {
@@ -54,4 +54,31 @@ struct TargetMachineTests {
         #expect(bench.module.functions.map(\.name) == ["answer"])
         #expect(bench.module.text.contains("ret i64 42"))
     }
+
+    #if arch(arm64)
+    @Test func `only a machine for Windows on arm64 limits a function's fixed frame, to under 256 MiB`() throws {
+        #expect(try TargetMachine(optimizes: false, triple: "aarch64-pc-windows-msvc").largestFrame == (1 << 28) - 1)
+        #expect(try TargetMachine(optimizes: false, triple: "aarch64-unknown-linux-gnu").largestFrame == nil)
+        #expect(try TargetMachine(optimizes: false, triple: "arm64-apple-macosx").largestFrame == nil)
+    }
+
+    @Test(arguments: [false, true])
+    func `a slot of 6 GiB outside the fixed frame compiles for Windows on arm64, optimised or not`(
+        optimizes: Bool,
+    ) throws {
+        // In the fixed frame, a slot of 256 MiB or more would end the process inside LLVM.
+        let machine = try TargetMachine(optimizes: optimizes, triple: "aarch64-pc-windows-msvc")
+        let bench = Workbench()
+        machine.configure(bench.module)
+        _ = bench.function(named: "framed", returning: bench.context.voidType)
+        let bytes = bench.context.typeMaker.arrayType(of: bench.int64, count: 3 << 28)
+        let slot = bench.builder.allocateOutsideFrame(bytes, alignment: 8)
+        bench.builder.store(bench.int64.constant(1), to: slot, alignment: 8)
+        bench.builder.returnVoid()
+
+        // Optimising leaves the slot outside the frame, since its count is read through a volatile load.
+        if optimizes { try machine.optimize(bench.module) }
+        #expect(try !machine.objectCode(of: bench.module).isEmpty)
+    }
+    #endif
 }

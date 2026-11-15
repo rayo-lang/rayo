@@ -8,6 +8,7 @@ struct AssignmentChecker {
 
     private var names: NameScopes { expressions.names }
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
 
     /// Checks an assignment, or a compound assignment such as `+=`. The value is checked even when the target can't
     /// be assigned, so mistakes in it are still reported.
@@ -101,9 +102,10 @@ extension AssignmentChecker: PlaceRules {
     /// along the target is reported first, and the root is refused last.
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
-        // A value that failed was reported.
-        guard let value = expressions.check(expr) else { return nil }
-        return (CheckedPlace(root: .temporary(value)), value.type)
+        // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
+        guard let value = expressions.check(expr),
+              let held = declarations.fittingOnStack(value, reporting: errors) else { return nil }
+        return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
     /// Whether an assignment may change `local` as its target asks. A target that changes the local whole has it

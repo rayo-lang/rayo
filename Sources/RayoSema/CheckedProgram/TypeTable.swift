@@ -66,6 +66,16 @@ public struct TypeTable: Equatable, Sendable {
         layout(of: type, inside: []) != nil
     }
 
+    /// The most bytes one value on the stack may take: `CPtrDiff.max` on a target with 32-bit pointers, so that a
+    /// program whose values fit on one target's stack fits on every target's.
+    static let largestStackValue = Int(Int32.max)
+
+    /// Whether a value of `type`, which fits in memory, may lie on the stack: it is Void, or its size is at most
+    /// `largestStackValue`.
+    func fitsOnStack(_ type: RayoType) -> Bool {
+        type == .void || layout(of: type).size <= Self.largestStackValue
+    }
+
     /// The structs laid out so far.
     var laidOut: Set<RayoType> {
         layouts.cache.withLock { Set($0.keys) }

@@ -12,6 +12,9 @@ struct ProgramEmitter: ~Copyable {
     let sourcePath: String
     /// The build the program's code is emitted for.
     let build: Build
+    /// The most bytes of stack slots one function's fixed frame may hold on the target, or nil where it may hold any
+    /// number. A slot past them is allocated as the function runs.
+    let fixedFrameRoom: Int?
     /// The attributes every function the module defines carries, which the target needs of each.
     private let functionAttributes: [FunctionAttribute]
     private let runtime: Runtime
@@ -25,6 +28,9 @@ struct ProgramEmitter: ~Copyable {
         let functionAttributes = Self.functionAttributes(for: target)
         runtime = try Runtime(in: context, for: module, functionAttributes: functionAttributes)
         self.functionAttributes = functionAttributes
+        // Beside its slots, a fixed frame holds the registers a function saves and the values it spills, which take
+        // far less than the mebibyte left for them here.
+        fixedFrameRoom = target.largestFrame.map { $0 - (1 << 20) }
         self.sourcePath = sourcePath
         self.build = build
     }

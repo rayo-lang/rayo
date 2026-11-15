@@ -12,7 +12,7 @@ let names = alloc ["ana", "bo"]              // a List: a fixed-size value, with
 let first: StringView = names[0]             // a pointer and a length, whatever the text's length
 ```
 
-**Every type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live on the stack, in a field, in an array or in a register, and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
+**Every type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live in a field, in an array or in a register, and on the stack up to a bound ([below](#the-largest-value-on-the-stack)), and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
 
 **An `@opaque` type is the one exception.** It is a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)). So it has no values, and `T.size` and `T.alignment` on it are compile errors. Only an `@opaque` type parameter may stand for one, and its body is checked as though its type were one, so it is the one type parameter whose body may not rely on a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
 
@@ -20,6 +20,26 @@ let first: StringView = names[0]             // a pointer and a length, whatever
 
 - **an owner**, such as a `List`, a `String` or a `TrailingArray`, holds them in storage it allocated ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc));
 - **a view**, such as a `Span` or a `StringView`, holds a pointer to them and their count, and lends them from wherever they lie ([02](../02-views-and-dependencies.md)).
+
+### The largest value on the stack
+
+```swift
+func main() {
+    let grid: [268435456 of Int] = .init(repeating: 0)   // error: 2^31 bytes, one more than a value on the stack takes
+    let row: [1024 of Int] = .init(repeating: 0)          // fine: 8 KiB
+}
+```
+
+**One value on the stack takes at most 2^31 − 1 bytes.** That is `CPtrDiff.max` on a target with 32-bit pointers ([11](../11-compilation-model.md#what-a-target-must-provide)). So a program whose values fit on one target's stack fits on every target's. The values on the stack are a function's:
+
+- locals;
+- parameters;
+- result, which lies on its caller's stack;
+- temporaries, each of which holds a value that no local holds, such as a call's result whose field the code reads, or the value that `_ =` drops.
+
+**A larger value is a compile error where the source gives its type**: at a local's type annotation, or at its value where it has none, and at a parameter's or a result's written type. A temporary's error is at the expression that makes it. A type may still be larger than the bound, since a value of it that never lies on the stack takes no stack.
+
+**A function's values together have no bound.** A run that has too little stack left for them ends the program, as any running out of stack does ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
 
 ## Plain data: `Pod` and bit casts
 

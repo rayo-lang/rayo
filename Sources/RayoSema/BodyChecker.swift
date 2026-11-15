@@ -26,6 +26,7 @@ struct BodyChecker {
     var locals: [CheckedLocal] { expressions.names.locals }
 
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
     private var jumps: JumpTargets { expressions.jumps }
     private var bindingChecker: BindingChecker { BindingChecker(expressions: expressions) }
     private var assignmentChecker: AssignmentChecker { AssignmentChecker(expressions: expressions) }
@@ -59,7 +60,7 @@ struct BodyChecker {
         case .expression(let expr):
             return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
-            return [expressions.check(value).map { .expression($0) }]
+            return [checkDropped(value).map { .expression($0) }]
         case .assign(let target, let op, let value):
             return [assignmentChecker.assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let ifExpr):
@@ -127,6 +128,14 @@ struct BodyChecker {
         errors.reportKeepingMeaning(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
         guard case .place(let place) = value.kind else { return value }
         return CheckedExpr(kind: .copy(place), type: value.type, range: value.range)
+    }
+
+    /// Checks `expr` as the value of `_ =`, which a temporary holds until the statement drops it.
+    private func checkDropped(_ expr: Expr) -> CheckedExpr? {
+        // An expression that failed was reported.
+        guard let value = expressions.check(expr) else { return nil }
+        // A temporary lies on the stack, so one too large for it is reported.
+        return declarations.fittingOnStack(value, reporting: errors)
     }
 
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.

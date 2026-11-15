@@ -60,7 +60,16 @@ extension FunctionEmitter {
         // A slot in the entry block is allocated once, however often a loop runs the code that uses it.
         let current = builder.insertionBlock
         builder.position(atEndOf: entry)
-        let slot = builder.allocate(types.llvmType(type), alignment: types.alignment(of: type))
+        let llvmType = types.llvmType(type)
+        let alignment = types.alignment(of: type)
+
+        // A slot that the fixed frame has no room for grows the stack as the function begins, outside that frame.
+        let slot = if fixedFrame.makesRoom(for: types.layout(of: type).size, alignment: alignment) {
+            builder.allocate(llvmType, alignment: alignment)
+        } else {
+            builder.allocateOutsideFrame(llvmType, alignment: alignment)
+        }
+
         builder.position(atEndOf: current)
         return Address(pointer: slot, type: type)
     }

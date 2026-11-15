@@ -162,6 +162,21 @@ public struct Builder: ~Copyable {
         return PointerValue(slot)
     }
 
+    /// Builds an `alloca` of one value of `type`, aligned to `alignment` bytes, that LLVM leaves out of the function's
+    /// fixed frame: it grows the stack where it runs, and the stack shrinks back as the function returns. Its count
+    /// of 1 is read back through a volatile load, which LLVM can't fold, so LLVM never makes the slot a fixed one.
+    public func allocateOutsideFrame(_ type: some TypeHandle, alignment: Int) -> PointerValue {
+        let int64 = LLVMInt64TypeInContext(context.ref)!
+        let countSlot = LLVMBuildAlloca(ref, int64, "")!
+        LLVMBuildStore(ref, LLVMConstInt(int64, 1, 0), countSlot)
+        let count = LLVMBuildLoad2(ref, int64, countSlot, "")!
+        LLVMSetVolatile(count, 1)
+
+        let slot = LLVMBuildArrayAlloca(ref, type.anyType.ref, count, "")!
+        LLVMSetAlignment(slot, UInt32(alignment))
+        return PointerValue(slot)
+    }
+
     /// Builds `load`, which gives the value of `type` that `pointer` points to, aligned to `alignment` bytes.
     public func load(_ type: some TypeHandle, from pointer: PointerValue, alignment: Int) -> AnyValue {
         let load = LLVMBuildLoad2(ref, type.anyType.ref, pointer.ref, "")!

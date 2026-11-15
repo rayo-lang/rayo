@@ -107,6 +107,20 @@ struct Declarations {
         }
     }
 
+    /// Whether a value of `type`, which the source gives at `range`, may lie on the stack, reporting it where it is
+    /// too large to.
+    func fitsOnStack(_ type: RayoType, at range: SourceRange, reporting errors: ErrorList) -> Bool {
+        if types.fitsOnStack(type) { return true }
+        errors.report(.tooLargeForStack(type: typeName(of: type)), at: range)
+        return false
+    }
+
+    /// `value`, where a value of its type may lie on the stack, or nil after reporting it, at its own range, where it
+    /// is too large to.
+    func fittingOnStack(_ value: CheckedExpr, reporting errors: ErrorList) -> CheckedExpr? {
+        fitsOnStack(value.type, at: value.range, reporting: errors) ? value : nil
+    }
+
     /// The array of `count` values of the type `element` names, which the source writes at `range`, or nil after
     /// reporting an element type that names no type or names Void, or an array whose size in bytes doesn't fit in
     /// an Int.

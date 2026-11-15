@@ -8,10 +8,15 @@ struct ProgramModule: ~Copyable {
     let target: TargetMachine
     let emitter: ProgramEmitter
 
-    init(for build: Build) throws(LLVMError) {
+    /// A program's emitter for `triple`, which names the host's processor, or for the host itself where it is nil.
+    init(for build: Build, triple: String? = nil) throws(LLVMError) {
         // Make the build's machine and the program's emitter for it. Each can throw, so both come before any field is
         // set: Swift can't track a field that isn't copyable set on one path only.
-        let target = try TargetMachine(optimizes: build.optimizes)
+        let target = if let triple {
+            try TargetMachine(optimizes: build.optimizes, triple: triple)
+        } else {
+            try TargetMachine(optimizes: build.optimizes)
+        }
         let emitter = try ProgramEmitter(sourcePath: "main.rayo", for: target, build: build)
 
         self.emitter = emitter
