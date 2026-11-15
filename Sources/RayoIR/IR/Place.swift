@@ -1,4 +1,5 @@
 import RayoSema
+import RayoSource
 
 /// A local, or a part of one that steps from the local lead to. Two places are equal where they take the same steps
 /// from the same local, wherever the source names each.
@@ -29,6 +30,12 @@ public struct Place: Hashable, Sendable {
             guard case .elementAt(let local) = step else { return nil }
             return local
         }
+    }
+
+    /// The reads that finding the place makes, where the source names it at `range`: one of each local that holds an
+    /// index it finds an element by, in the order of its steps.
+    func indexReads(at range: SourceRange) -> [Effect] {
+        indexLocals.map { .read(Place(root: $0), at: range) }
     }
 
     /// The type of the value at the place in `body`, a body of a program whose structs `types` holds, and which holds
