@@ -119,12 +119,14 @@ struct BodyChecker {
     private func checkUnused(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported.
         guard let value = expressions.check(expr) else { return nil }
-        // A value that no code uses is a mistake, unless `_ =` drops it on purpose. It is dropped all the same, so
-        // the statement still means what it would with `_ =`.
-        if !TypeFit.fits(value.type, .void) {
-            errors.reportKeepingMeaning(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
-        }
-        return value
+        guard !TypeFit.fits(value.type, .void) else { return value }
+
+        // A value that no code uses is a mistake, unless `_ =` drops it on purpose. The statement keeps a meaning all
+        // the same: a place it names is only read, so the mistake moves nothing out of it, and any other value is
+        // dropped as `_ =` drops it.
+        errors.reportKeepingMeaning(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
+        guard case .place(let place) = value.kind else { return value }
+        return CheckedExpr(kind: .copy(place), type: value.type, range: value.range)
     }
 
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.

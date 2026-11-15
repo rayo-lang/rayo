@@ -71,12 +71,14 @@ indirect enum UntypedValue {
         guard case .scalar(let scalar) = type, let values = scalar.literalRange else {
             preconditionFailure("an integer literal settles only to an integer type")
         }
-        let value = value(magnitude, isNegative: isNegative)
+        let literalValue = value(magnitude, isNegative: isNegative)
 
-        // A literal the type can't hold is reported. It keeps the value it writes, which no stage after checking reads,
-        // since the error ends the compile before the program is emitted, so the body keeps its meaning.
-        if !values.contains(value) { errors.reportKeepingMeaning(.literalDoesntFit(type: typeName), at: range) }
-        return CheckedExpr(kind: .integerLiteral(value, scalar), type: type, range: range)
+        // A literal the type can't hold is reported. It keeps the value it writes, so lowering and the ownership checks
+        // still pass over the body. The value is never emitted, since the error ends the compile before emitting.
+        if !values.contains(literalValue) {
+            errors.reportKeepingMeaning(.literalDoesntFit(type: typeName), at: range)
+        }
+        return CheckedExpr(kind: .integerLiteral(literalValue, scalar), type: type, range: range)
     }
 
     /// Settles `-operand`, which the source gives at `range`, to `type`, reporting it where `type` has no sign.
@@ -121,22 +123,23 @@ extension UntypedValue: WaitingValue {
     /// Settles the value to `type` where it fits it, and to its default type where it doesn't or `type` is nil.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
         let errors = expressions.file.errors
+        let defaultType = RayoType.scalar(Self.integerDefault)
 
-        // A position whose type fits the value settles it to that type. A literal the type can't hold is reported,
-        // and keeps its value, since the position takes a value of that type all the same.
-        if let type, fits(type, in: expressions.file.declarations) {
-            return settled(to: type, named: expressions.typeName(of: type), reporting: errors)
+        // A position whose type fits the value settles it to that type, and one that gives no type settles it to the
+        // default. A literal that type can't hold is reported, and keeps its value, since the value has that type.
+        guard let type, !fits(type, in: expressions.file.declarations) else {
+            let settledType = type ?? defaultType
+            return settled(to: settledType, named: expressions.typeName(of: settledType), reporting: errors)
         }
 
-        // Elsewhere the value settles to the default, which the code that reads it may not take, as a parameter that
-        // a call fits no function for. A literal the default can't hold fails there, so the value is reported alone,
-        // and its body is tainted, since no checked value stands for it.
-        let defaultType = RayoType.scalar(Self.integerDefault)
-        let settled = settled(to: defaultType, named: expressions.typeName(of: defaultType), reporting: errors)
+        // A position whose type takes no integer settles the value to the default, and reports it as a mismatch. A
+        // literal the default can't hold is reported instead, as the only error. The value then fails, and the body
+        // is tainted, since no checked value stands for it.
+        let defaulted = settled(to: defaultType, named: expressions.typeName(of: defaultType), reporting: errors)
         guard let values = Self.integerDefault.literalRange, holdsLiterals(values) else {
             errors.taints.taint()
             return nil
         }
-        return settled
+        return defaulted
     }
 }

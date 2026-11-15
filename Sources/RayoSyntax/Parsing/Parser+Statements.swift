@@ -30,7 +30,7 @@ extension Parser {
         let kind = if let bindingKind = consumeBindingKeyword() {
             StmtKind.declaration(bindingKind, try parseBindings())
         } else {
-            try parseUnboundStatement()
+            try parseNonDeclaration()
         }
         return Stmt(kind: kind, range: range(from: start))
     }
@@ -41,38 +41,33 @@ extension Parser {
         if consume(.let) { .let } else if consume(.var) { .var } else { nil }
     }
 
-    /// Parses a statement other than a declaration, which binds no name, so its failure carries none.
-    private mutating func parseUnboundStatement() throws(StatementFailure) -> StmtKind {
-        do {
-            return try parseStatementKind()
+    /// Parses a statement other than a declaration. It binds no name, so its failure carries none.
+    private mutating func parseNonDeclaration() throws(StatementFailure) -> StmtKind {
+        do throws(ParseFailure) {
+            return if consume(.if) {
+                // An `if` takes a condition, a block, and maybe an `else`.
+                .ifStmt(try parseIf())
+            } else if consume(.while) {
+                // A `while` takes a condition and the loop's body.
+                .whileStmt(condition: try parseExpression(), body: try parseBlock())
+            } else if consume(.break) {
+                // A `break` is the whole statement.
+                .breakStmt
+            } else if consume(.continue) {
+                // So is a `continue`.
+                .continueStmt
+            } else if consume(.return) {
+                // A `return` takes a value, unless its statement ends right after it.
+                .returnStmt(atStatementEnd ? nil : try parseExpression())
+            } else if consumeDrop() {
+                // `_ =` drops the value after it.
+                .drop(try parseExpression())
+            } else {
+                // A statement that starts with none of these is an expression, or an assignment to one.
+                try parseExpressionStatement()
+            }
         } catch {
             throw StatementFailure()
-        }
-    }
-
-    /// Parses what follows the start of a statement other than a declaration.
-    private mutating func parseStatementKind() throws(ParseFailure) -> StmtKind {
-        if consume(.if) {
-            // An `if` takes a condition, a block, and maybe an `else`.
-            .ifStmt(try parseIf())
-        } else if consume(.while) {
-            // A `while` takes a condition and the loop's body.
-            .whileStmt(condition: try parseExpression(), body: try parseBlock())
-        } else if consume(.break) {
-            // A `break` is the whole statement.
-            .breakStmt
-        } else if consume(.continue) {
-            // So is a `continue`.
-            .continueStmt
-        } else if consume(.return) {
-            // A `return` takes a value, unless its statement ends right after it.
-            .returnStmt(atStatementEnd ? nil : try parseExpression())
-        } else if consumeDrop() {
-            // `_ =` drops the value after it.
-            .drop(try parseExpression())
-        } else {
-            // A statement that starts with none of these is an expression, or an assignment to one.
-            try parseExpressionStatement()
         }
     }
 
