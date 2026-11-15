@@ -14,11 +14,12 @@ struct AccessExtents {
     /// The accesses that some path to each point has not begun, carried forward.
     private var unbegun: DataflowResults<UnbegunAccessAnalysis>
 
-    /// The extents of the accesses of `places.body`, the body whose places `places` gives the types of.
-    init(_ places: PlaceTypes) {
+    /// The extents of the accesses of `places.body`, the body whose places `places` gives the types of, where `uses`
+    /// says what code after each of its points uses.
+    init(_ places: PlaceTypes, uses: DataflowResults<AccessUseAnalysis>) {
         body = places.body
         dependencies = DataflowSolver.solve(DependencyAnalysis(), in: places.body)
-        uses = DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
+        self.uses = uses
         unbegun = DataflowSolver.solve(UnbegunAccessAnalysis(places.body), in: places.body)
     }
 

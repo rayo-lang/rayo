@@ -1,6 +1,6 @@
+@testable import RayoOwnership
 import RayoDiagnostics
 import RayoIR
-import RayoOwnership
 import RayoSema
 import Testing
 
@@ -432,15 +432,18 @@ private let callees = [
     (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
 ]
 
-/// What the check makes of a `main` of `blocks`, with the locals `function` gives it.
-private func checked(_ blocks: String) throws -> (program: IRProgram, errors: [Diagnostic]) {
-    let (program, errors) = ExclusivityChecker.check(try program(of: [function(blocks, named: "main()")] + callees))
-    return (program, errors[FunctionID(index: 0)] ?? [])
+/// What the check makes of a `main` of `blocks`, with the locals `function` gives it: its body with the ends of its
+/// accesses written in, and the conflicts between them.
+private func checked(_ blocks: String) throws -> (body: IRBody, errors: [Diagnostic]) {
+    let places = try placesOfFirstFunction(in: try program(of: [function(blocks, named: "main()")] + callees))
+    let uses = DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
+    let (body, errors) = ExclusivityChecker.check(places, uses: uses)
+    return (body, errors.inSourceOrder)
 }
 
 /// The body of a `main` of `blocks` once the check has written the ends of its accesses into it.
 private func ended(_ blocks: String) throws -> IRBody? {
-    try checked(blocks).program.bodies[FunctionID(index: 0)]
+    try checked(blocks).body
 }
 
 /// The body of a `main` of `blocks`, as the text writes it.

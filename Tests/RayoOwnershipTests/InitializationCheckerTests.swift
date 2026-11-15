@@ -1,7 +1,7 @@
+@testable import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
-import RayoOwnership
 import RayoSema
 import RayoSource
 
@@ -355,31 +355,6 @@ struct InitializationCheckerTests {
             """
         #expect(try errors(in: blocks) == [Diagnostic(.usedAfterMove(name: "s"), at: at(3), labeling: moves(at: [2]))])
     }
-
-    @Test func `each function's errors come under its ID, and a function without any has none`() throws {
-        // The first function's error comes after the second's in the source.
-        let usesLate = function("""
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:6-2:6) @1:1-1:1
-              return
-            """, named: "late()")
-        let usesEarly = function("""
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand move %0 @2:2-2:2 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %0 @2:5-2:5) @1:1-1:1
-              return
-            """, named: "early()")
-
-        let clean = function("bb0:\n  return", named: "clean()")
-
-        let reported = InitializationChecker.check(try program(of: [usesLate, usesEarly, clean]))
-        #expect(reported.mapValues { $0.map(\.range.start.column) } == [
-            FunctionID(index: 0): [6], FunctionID(index: 1): [5],
-        ])
-    }
 }
 
 struct FieldMoveTests {
@@ -514,5 +489,7 @@ private func moves(at columns: [Int]) -> [Diagnostic.LabeledRange] {
 /// parameters are of `parameters`' types.
 private func errors(in blocks: String, parameters: String = "", result: String = "Void") throws -> [Diagnostic] {
     let program = try program(of: [function(blocks, parameters: parameters, result: result)])
-    return InitializationChecker.check(program)[FunctionID(index: 0)] ?? []
+    let places = try placesOfFirstFunction(in: program)
+    let parameterCount = program.functions[FunctionID(index: 0)].parameters.count
+    return InitializationChecker.errors(in: places, parameterCount: parameterCount).inSourceOrder
 }

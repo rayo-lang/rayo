@@ -133,8 +133,7 @@ public enum Compiler {
     /// `readFile`, which returns nil for a file it can't read, and writes the object file through `writeFile`,
     /// which returns whether it wrote it.
     public static func run(
-        _ arguments: [String], readFile: @escaping (String) -> [UInt8]?,
-        writeFile: @escaping (String, [UInt8]) -> Bool,
+        _ arguments: [String], readFile: (String) -> [UInt8]?, writeFile: (String, [UInt8]) -> Bool,
     ) -> CompilerResult {
         // Read what the arguments ask for.
         let invocation: Invocation
@@ -179,8 +178,8 @@ public enum Compiler {
     /// Each stage skips only what an earlier stage found failed, and the compile ends on the program's errors only
     /// before it prints or writes anything. So every error that every stage finds is reported together.
     private static func compile(
-        _ invocation: Invocation, readFile: @escaping (String) -> [UInt8]?,
-        writeFile: @escaping (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
+        _ invocation: Invocation, readFile: (String) -> [UInt8]?, writeFile: (String, [UInt8]) -> Bool,
+        errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let path = invocation.path
         let strict = invocation.warningsAreErrors
@@ -199,105 +198,41 @@ public enum Compiler {
 
     /// Checks the source file at `path`, and prints nothing.
     private static func check(
-        _ path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        _ path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        _ = try errorFreeFrontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors).run(path, errors: &errors)
+        let program = try frontEnd(path, readFile: readFile, errors: &errors)
+        _ = try accepted(program, errors: errors, warningsAreErrors: warningsAreErrors)
         return ""
     }
 
     /// The checked program of the source file at `path`, as text, once the stages after checking accept it too.
     private static func checkedProgramText(
-        of path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        of path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let checkedStages = pipeline {
-            lowering
-            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
-        }
-        // A file that can't be read as text checks to no program, and its errors end the compile.
-        guard let checked = try checking(readFile: readFile).run(path, errors: &errors) else {
-            try checkedStages.skip(errors: errors)
-            return ""
-        }
-        _ = try checkedStages.run(checked, errors: &errors)
-        return CheckedPrinter.text(of: checked)
+        let checked = try checkedProgram(path, readFile: readFile, errors: &errors)
+        if let checked { _ = try ir(of: checked, errors: &errors) }
+        return CheckedPrinter.text(of: try accepted(checked, errors: errors, warningsAreErrors: warningsAreErrors))
     }
 
     /// The Rayo IR of the source file at `path`, as text, once it checks.
     private static func irText(
-        of path: String, readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        of path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        let program = try errorFreeFrontEnd(readFile: readFile, warningsAreErrors: warningsAreErrors)
-            .run(path, errors: &errors)
-        return program.map(IRPrinter.text(of:)) ?? ""
+        let program = try frontEnd(path, readFile: readFile, errors: &errors)
+        return IRPrinter.text(of: try accepted(program, errors: errors, warningsAreErrors: warningsAreErrors))
     }
 
     /// Compiles the source file at `path` as `build` asks, writes its object code to the file at `objectPath`, and
     /// prints nothing.
     private static func writeObjectCode(
-        of path: String, to objectPath: String, build: Build, readFile: @escaping (String) -> [UInt8]?,
-        writeFile: @escaping (String, [UInt8]) -> Bool, warningsAreErrors: Bool, errors: inout [Diagnostic],
+        of path: String, to objectPath: String, build: Build, readFile: (String) -> [UInt8]?,
+        writeFile: (String, [UInt8]) -> Bool, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
-        _ = try pipeline {
-            frontEnd(readFile: readFile)
-            RequireMain()
-            StopOnErrors<IRExecutable>(warningsAreErrors: warningsAreErrors)
-            Emit(build: build, sourcePath: path)
-            WriteObject(path: objectPath, writeFile: writeFile)
-        }.run(path, errors: &errors)
+        let program = try frontEnd(path, readFile: readFile, errors: &errors)
+        let found = program.flatMap { executable(of: $0, errors: &errors) }
+        let executable = try accepted(found, errors: errors, warningsAreErrors: warningsAreErrors)
+        try write(objectCode(of: executable, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
         return ""
-    }
-
-    /// The step that reads the source file at a path through `readFile`, checks it, and lowers it to Rayo IR. It
-    /// gives the program on with its errors and warnings, without the bodies of the functions a stage found failed.
-    static func frontEnd(readFile: @escaping (String) -> [UInt8]?) -> some CompilationStep<String, IRProgram> {
-        pipeline {
-            checking(readFile: readFile)
-            lowering
-        }
-    }
-
-    /// The front end, which ends the compile when the program has errors, or any warning where `warningsAreErrors`,
-    /// and otherwise gives its IR.
-    private static func errorFreeFrontEnd(
-        readFile: @escaping (String) -> [UInt8]?, warningsAreErrors: Bool,
-    ) -> some CompilationStep<String, IRProgram> {
-        pipeline {
-            frontEnd(readFile: readFile)
-            StopOnErrors<IRProgram>(warningsAreErrors: warningsAreErrors)
-        }
-    }
-
-    /// The step that reads the source file at a path through `readFile`, and checks it. It gives the program on with
-    /// its errors and warnings, without the bodies of the functions that are tainted.
-    private static func checking(
-        readFile: @escaping (String) -> [UInt8]?,
-    ) -> some CompilationStep<String, CheckedProgram> {
-        pipeline {
-            ReadSource(readFile: readFile)
-            Parse()
-            Check()
-        }
-    }
-
-    /// The step that lowers a checked program to Rayo IR, checks what its functions do with their locals, and ends
-    /// each access where the ownership stage finds its last use. It gives the program on with its errors and
-    /// warnings, without the bodies of the functions a check found failed.
-    private static var lowering: some CompilationStep<CheckedProgram, IRProgram> {
-        pipeline {
-            Lower()
-            VerifyIR()
-            // Only a function that moves out of no borrowed parameter or element is checked for where its locals hold a
-            // value, so a use of a place after such a move isn't reported again as a use after a move.
-            CheckMoves()
-            // Only a function whose locals hold a value at each use is checked for values no code reads, so a
-            // misused local, such as a `let` assigned twice, isn't reported again for the values it leaves unread.
-            CheckOwnership()
-            // The ownership stage writes the end of each access into the IR that the emitter receives, which is
-            // verified again, since it is no longer lowering's.
-            CheckExclusivity()
-            VerifyIR()
-            CheckUnusedValues()
-        }
     }
 
     /// Returns what `rayoc` gives when a compile of the file at `path` stops with `error`, after finding `warnings`.

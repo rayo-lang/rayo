@@ -1,4 +1,7 @@
+import Testing
+@testable import RayoOwnership
 import RayoIR
+import RayoSema
 import RayoSource
 
 // The tests write their IR as text. A test names the source ranges it checks on line 2, each at the column it numbers
@@ -67,4 +70,10 @@ func storeShot(at column: Int? = nil) -> String {
           %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
           %5 \(range) = call "Shot(range: Int, hit: Hit)"(4, move %4 \(range)) @1:1-1:1
         """
+}
+
+/// The types of the places of `program`'s first function, which a check of that function reads.
+func placesOfFirstFunction(in program: IRProgram) throws -> PlaceTypes {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    return PlaceTypes(body: body, types: program.types)
 }
