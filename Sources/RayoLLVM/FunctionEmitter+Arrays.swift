@@ -61,7 +61,7 @@ extension FunctionEmitter {
         // An array is built in its destination, unless an element reads it, which an element written before would
         // change. Such an array is built in a new slot, then copied in.
         let address = address(of: destination, with: builder)
-        let readsDestination = elements.contains { $0.place?.overlaps(destination) ?? false }
+        let readsDestination = elements.contains { $0.place?.mayOverlap(destination) ?? false }
         let target = readsDestination ? newSlot(of: address.type, with: builder) : address
         for (index, value) in values.enumerated() {
             copy(value, to: elementAddress(of: index, in: target, with: builder), with: builder)
