@@ -14,6 +14,7 @@ struct StackSizeTests {
         ("let b = Big(a: .init(repeating: 1))", "Big", "Big(a: .init(repeating: 1))"),
         ("print(Big(a: .init(repeating: 1)).a[0])", "Big", "Big(a: .init(repeating: 1))"),
         ("_ = Big(a: .init(repeating: 1))", "Big", "Big(a: .init(repeating: 1))"),
+        ("Big(a: .init(repeating: 1)).a[0] = 2", "Big", "Big(a: .init(repeating: 1))"),
     ])
     func `a local or a temporary too large for the stack is reported once, where its type comes from`(
         body: String, type: TypeName, covered: String,

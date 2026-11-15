@@ -70,18 +70,21 @@ struct StackSafetyTests {
     func `a frame of more than 4 GiB, of values that each fit on the stack, compiles in debug and in release`(
         build: Build,
     ) throws {
-        // Each array takes 2147483640 bytes, within the bound on one value, so the two take more than 4 GiB. LLVM
-        // warns of a frame that large, which fails nothing: the frame is made, probed, like any other.
+        // Each array takes 2147483640 bytes, within the bound on one value, so the three take about 6 GiB. LLVM
+        // warns of a frame of more than 4 GiB, which fails nothing: the frame is made, probed, like any other.
         let program = try executable("""
             main "main()"
             func "main()"() -> Void {
               var %0 a: [268435455 of Int] @1:1-1:1
               var %1 b: [268435455 of Int] @1:1-1:1
+              var %2 c: [268435455 of Int] @1:1-1:1
             bb0:
               %0 @1:1-1:2 = fill 268435455 of 1 @1:1-1:2
               %1 @1:1-1:2 = fill 268435455 of 2 @1:1-1:2
+              %2 @1:1-1:2 = fill 268435455 of 3 @1:1-1:2
               \(printInt("%0[268435454]"))
               \(printInt("%1[0]"))
+              \(printInt("%2[0]"))
               return
             }
             """)

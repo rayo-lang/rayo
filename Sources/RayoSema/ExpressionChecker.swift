@@ -472,8 +472,8 @@ extension ExpressionChecker: PlaceRules {
         guard let value = check(expr) else { return nil }
         if case .place(let place) = value.kind { return (place, value.type) }
         // A temporary lies on the stack, so one too large for it is reported.
-        guard file.declarations.fitsOnStack(value.type, at: value.range, reporting: errors) else { return nil }
-        return (CheckedPlace(root: .temporary(value)), value.type)
+        guard let held = file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
+        return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
     func admits(_ field: Field, at nameRange: SourceRange) -> Bool {

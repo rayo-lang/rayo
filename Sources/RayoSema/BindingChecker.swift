@@ -49,6 +49,7 @@ struct BindingChecker {
 
     private var names: NameScopes { expressions.names }
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
 
     /// Declares `parameters`, which `signature` declares, as the function's first locals, in order.
     func declare(_ parameters: [Param], declaredAs signature: [Parameter]) {
@@ -93,12 +94,12 @@ struct BindingChecker {
         // A binding may leave its type to its value.
         guard let annotation = binding.type else { return .absent }
         // A name that names no type was reported.
-        guard let type = expressions.file.declarations.resolve(annotation, reporting: errors) else { return .failed }
+        guard let type = declarations.resolve(annotation, reporting: errors) else { return .failed }
         return .resolved(type, range: annotation.range)
     }
 
-    /// Checks that `declared` gives the local `binding` declares a type other than Void, reporting it when it
-    /// doesn't, and returns that type.
+    /// Checks that `declared` gives the local `binding` declares a type other than Void, which fits on the stack,
+    /// reporting it when it doesn't, and returns that type.
     private func checkLocalType(_ declared: Declared, of binding: Binding) -> RayoType? {
         switch declared {
         // No local holds a Void value.
@@ -108,8 +109,7 @@ struct BindingChecker {
 
         // Any other type is the local's, where the local fits on the stack.
         case .typed(let type, let typeRange, _):
-            let fits = expressions.file.declarations.fitsOnStack(type, at: typeRange, reporting: errors)
-            return fits ? type : nil
+            return declarations.fitsOnStack(type, at: typeRange, reporting: errors) ? type : nil
 
         // Without an annotation or a value, nothing gives the local a type.
         case .untyped:

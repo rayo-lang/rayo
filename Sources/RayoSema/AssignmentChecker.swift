@@ -103,9 +103,10 @@ struct AssignmentChecker {
     /// along the target is reported first, and the root is refused last.
     private func nonLocalRoot(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
-        // A value that failed was reported.
-        guard let value = expressions.check(expr) else { return nil }
-        return (CheckedPlace(root: .temporary(value)), value.type)
+        // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
+        guard let value = expressions.check(expr),
+              let held = expressions.file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
+        return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
     /// Reports why an assignment's target can't change, and returns nil in place of the target.

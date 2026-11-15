@@ -171,6 +171,45 @@ struct PassModeTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1)), arguments: Build.allCases)
+    func `a function that takes four billion values with no scalars compiles at once, taking them as none`(
+        build: Build,
+    ) throws {
+        // `main` fills an array of four billion Es, which take no memory, and passes it to `f`, which returns its
+        // count. Walking each element to find the array's scalars would take minutes.
+        let program = try executable("""
+            struct E {
+            }
+            main "main()"
+            init "E()"() -> E
+            func "main()"() -> Void {
+              let %0 a: [4000000000 of E] @1:1-1:1
+              temp %1: E
+              temp %2: UInt
+            bb0:
+              declare %0
+              %1 @1:1-1:2 = call "E()"() @1:1-1:2
+              %0 @1:1-1:2 = fill 4000000000 of read %1 @1:1-1:2 @1:1-1:2
+              begin a0 read static %0 @1:1-1:2
+              %2 @1:1-1:2 = call "f(_: [4000000000 of E])"(a0) @1:1-1:2
+              end a0
+              \(printUInt("%2"))
+              return
+            }
+            func "f(_: [4000000000 of E])"(_: [4000000000 of E]) -> UInt {
+              param %0 a: [4000000000 of E] @1:1-1:1
+            bb0:
+              return UInt 4000000000
+            }
+            """)
+
+        try withEmitted(program) { module in
+            let type = try function(named: "f(_: [4000000000 of E])", in: module).type
+            #expect(type.parameters.isEmpty)
+        }
+        #expect(try !compile(program, for: build).isEmpty)
+    }
+
     /// The structs the tests pass: a Pair of two scalars, a Trio and a Nested of three, a Holder of a Trio, a Flags
     /// of two Bools, and an Ints of two Ints, with the primary initializers of those the tests make.
     private let structs = """

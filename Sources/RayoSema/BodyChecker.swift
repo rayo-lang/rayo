@@ -26,6 +26,7 @@ struct BodyChecker {
     var locals: [CheckedLocal] { expressions.names.locals }
 
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
     private var jumps: JumpTargets { expressions.jumps }
     private var bindingChecker: BindingChecker { BindingChecker(expressions: expressions) }
     private var assignmentChecker: AssignmentChecker { AssignmentChecker(expressions: expressions) }
@@ -130,8 +131,7 @@ struct BodyChecker {
         // An expression that failed was reported.
         guard let value = expressions.check(expr) else { return nil }
         // A temporary lies on the stack, so one too large for it is reported.
-        let fits = expressions.file.declarations.fitsOnStack(value.type, at: value.range, reporting: errors)
-        return fits ? value : nil
+        return declarations.fittingOnStack(value, reporting: errors)
     }
 
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.

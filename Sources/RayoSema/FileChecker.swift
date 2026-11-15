@@ -215,7 +215,6 @@ final class FileChecker {
     /// body gives no result type, which fails it.
     private func declaration(of id: FunctionID) -> FunctionDeclaration? {
         let function = functions[id.index]
-        // A function whose signature failed, or whose body gives no result type, fails.
         guard !function.signature.hasFailed, let result = body(of: id).result else { return nil }
         let parameters = function.signature.parameters.compactMap(\.declared)
         return FunctionDeclaration(name: "\(function.signature)", parameters: parameters, result: result,
@@ -256,7 +255,7 @@ final class FileChecker {
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
-            let returned = body.returned(value).flatMap { fittingResult($0, of: signature) }
+            let returned = body.returned(value).flatMap { fittingWhereGivenByBody($0, of: signature) }
             let statements: [CheckedStmt] = returned.map { [.returnStmt($0)] } ?? []
             return BodyCheck(result: bodyResult(of: signature, returning: returned),
                              body: CheckedBody(locals: body.locals, statements: statements))
@@ -270,10 +269,10 @@ final class FileChecker {
 
     /// `returned`, the single expression the body of the function that `signature` declares returns, or nil where
     /// it gives the function's result type and is too large for the stack, which is reported.
-    private func fittingResult(_ returned: CheckedExpr, of signature: Signature) -> CheckedExpr? {
+    private func fittingWhereGivenByBody(_ returned: CheckedExpr, of signature: Signature) -> CheckedExpr? {
         // A written result type was checked where it is written.
         guard case .givenByBody = signature.result else { return returned }
-        return declarations.fitsOnStack(returned.type, at: returned.range, reporting: errors) ? returned : nil
+        return declarations.fittingOnStack(returned, reporting: errors)
     }
 
     /// The result type of the function that `signature` declares, whose body is a single expression that checks to
