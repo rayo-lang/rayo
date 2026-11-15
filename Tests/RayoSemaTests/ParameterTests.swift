@@ -61,20 +61,12 @@ struct ParameterTests {
          ["_ x: owned Int"]),
         ("func f(x: mutable Int) {}", [.unsupportedConvention(convention: "mutable")], ["x: mutable Int"]),
         ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
-        ("func f(owned: Int) { print(owned) }", [], []),
-        ("func f(x: owned) {}", [.notAType(name: "owned")], ["owned"]),
     ])
     func unsupported(declaration: String, expected: [ErrorCode], covered: [String]) {
         let source = "func main() {}\n" + declaration
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == expected)
         #expect(coveredText(reported, in: source) == covered)
-    }
-
-    @Test("an argument isn't lent with '&'")
-    func noAmpersand() {
-        #expect(errors("func main() {\n    var x = 1\n    f(&x)\n}\nfunc f(x: Int) {}") ==
-            [.unexpectedCharacter(character: "&")])
     }
 
     @Test("a parameter can't have type Void, and the error covers its type, whether or not the function is called",

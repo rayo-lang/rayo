@@ -26,8 +26,15 @@ struct TokenTests {
     }
 
     @Test func `keywords and identifiers`() {
-        let (lexed, _) = Lexer.tokenize("let keep copy struct")
-        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
+        let (lexed, _) = Lexer.tokenize("let keep copy struct self mutable owned mutating")
+        #expect(lexed.map(\.kind) == [
+            .keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct),
+            .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .eof,
+        ])
+    }
+
+    @Test func `a '&' is a token of its own, and '&&' stays one token`() {
+        #expect(tokens("f(&x) && y") == ["f", "(", "&", "x", ")", "&&", "y"])
     }
 
     @Test("comments nest")

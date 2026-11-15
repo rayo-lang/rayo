@@ -94,18 +94,12 @@ extension Parser {
         return spelling
     }
 
-    /// `mutable` or `owned`, which are names everywhere but before a parameter's type.
+    /// `mutable` or `owned`, before a parameter's type, when one is written.
     private mutating func parseConvention() -> ParamConvention? {
+        if consume(.mutable) { return .mutable }
+        if consume(.owned) { return .owned }
         // Any other token starts the type.
-        guard case .identifier(let word) = current.kind, let convention = ParamConvention(rawValue: word) else {
-            return nil
-        }
-        // Without a type after it, the word is the type's name.
-        guard startsType(peek()) else { return nil }
-
-        // A type after the word makes the word the parameter's convention.
-        advance()
-        return convention
+        return nil
     }
 
     /// After the `struct`: `identifier ('(' fields ')')? ('{' declarations '}')?`. A struct that fails throws its name,

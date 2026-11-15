@@ -42,6 +42,28 @@ struct ParserErrorTests {
         #expect(errors("func f() {\n    print(\"}\")\n    print(1)\n}") == [.unexpectedCharacter(character: "\"")])
     }
 
+    @Test(arguments: ["self", "mutable", "owned", "mutating"])
+    func `a reserved word names nothing`(word: String) {
+        let found = FoundToken.token(word)
+        #expect(errors("func f() { let \(word) = 1 }") == [.missingBindingName(found: found)])
+        #expect(errors("func f() { var \(word) = 1 }") == [.missingBindingName(found: found)])
+        #expect(errors("func f(\(word): Int) {}") == [.missingParameterName(found: found)])
+        #expect(errors("func \(word)() {}") == [.missingFunctionName(found: found)])
+        #expect(errors("struct \(word) {}") == [.missingStructName(found: found)])
+        #expect(errors("struct S(let \(word): Int)") == [.missingFieldName(found: found)])
+        #expect(errors("func f(x: Int) -> \(word) { x }") == [.missingType(found: found)])
+    }
+
+    @Test func `a convention needs a type after it`() {
+        #expect(errors("func f(x: owned) {}") == [.missingType(found: .token(")"))])
+    }
+
+    @Test func `a '&' is reported wherever it stands, since nothing takes it`() {
+        #expect(errors("func f() {\n    g(&x)\n}") == [.missingExpression(found: .token("&"))])
+        #expect(errors("func f() {\n    x = &y\n}") == [.missingExpression(found: .token("&"))])
+        #expect(errors("func f() {\n    a & b\n}") == [.unendedStatement(found: .token("&"))])
+    }
+
     @Test("an unclosed block is reported at the end of the file")
     func unclosed() {
         #expect(errors("func f() {\n    x = 1\n") == [.unclosedBlock(found: .endOfFile)])
