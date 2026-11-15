@@ -13,7 +13,8 @@ protocol WaitingValue {
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool
 
     /// Settles the value toward `type`: to `type` where it can, and otherwise as it would where its position gives
-    /// no type. Reports what keeps it from settling, and returns nil then.
+    /// no type. Reports what keeps it from settling, and returns nil then. An error that still leaves the value a
+    /// meaning, such as a literal that `type` can't hold, is reported, and the value settles all the same.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr?
 
     /// Settles the value to the type `expected` names, reporting each part of it that can't take that type with the

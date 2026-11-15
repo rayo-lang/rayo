@@ -267,7 +267,7 @@ struct CallChecker {
             parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
                 ?? expressions.settled(value, toward: nil)
         }
-        // An argument whose literal its parameter's type can't hold was reported.
+        // An argument that failed to settle to its parameter's type was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)
     }

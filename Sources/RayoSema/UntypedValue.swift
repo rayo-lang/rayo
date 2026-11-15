@@ -29,7 +29,21 @@ indirect enum UntypedValue {
     }
 
     /// The type the value settles to where nothing else gives it one.
-    private static let integerDefault = RayoType.int
+    private static let integerDefault = ScalarType.int
+
+    /// Whether `values`, those an integer type holds, include the value of each literal in the value.
+    private func holdsLiterals(_ values: ClosedRange<Int128>) -> Bool {
+        switch self {
+        case .integer(let magnitude, let isNegative, _): values.contains(Self.value(magnitude, isNegative: isNegative))
+        case .negation(let operand, _): operand.holdsLiterals(values)
+        case .arithmetic(_, let left, let right, _): left.holdsLiterals(values) && right.holdsLiterals(values)
+        }
+    }
+
+    /// The value of the integer literal of `magnitude`, negated where `isNegative`.
+    private static func value(_ magnitude: UInt64, isNegative: Bool) -> Int128 {
+        isNegative ? -Int128(magnitude) : Int128(magnitude)
+    }
 
     /// Settles the value to `type`, which it fits, reporting each literal whose value `type` can't hold. An error
     /// names `type` as `typeName`.
@@ -57,13 +71,11 @@ indirect enum UntypedValue {
         guard case .scalar(let scalar) = type, let values = scalar.literalRange else {
             preconditionFailure("an integer literal settles only to an integer type")
         }
-        let value = isNegative ? -Int128(magnitude) : Int128(magnitude)
+        let value = value(magnitude, isNegative: isNegative)
 
-        // A literal the type can't hold is reported.
-        guard values.contains(value) else {
-            errors.report(.literalDoesntFit(type: typeName), at: range)
-            return nil
-        }
+        // A literal the type can't hold is reported. It keeps the value it writes, which no stage after checking reads,
+        // since the error ends the compile before the program is emitted, so the body keeps its meaning.
+        if !values.contains(value) { errors.reportKeepingMeaning(.literalDoesntFit(type: typeName), at: range) }
         return CheckedExpr(kind: .integerLiteral(value, scalar), type: type, range: range)
     }
 
@@ -99,7 +111,7 @@ extension UntypedValue: WaitingValue {
     /// None: the value has no type until its position gives one.
     var type: RayoType? { nil }
 
-    var defaultType: RayoType? { Self.integerDefault }
+    var defaultType: RayoType? { .scalar(Self.integerDefault) }
 
     /// Whether the value can settle to `type`. An integer literal fits every integer type, and nothing else.
     func fits(_ type: RayoType, in _: Declarations) -> Bool {
@@ -108,12 +120,23 @@ extension UntypedValue: WaitingValue {
 
     /// Settles the value to `type` where it fits it, and to its default type where it doesn't or `type` is nil.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
-        let settledType = if let type, fits(type, in: expressions.file.declarations) {
-            type
-        } else {
-            Self.integerDefault
+        let errors = expressions.file.errors
+
+        // A position whose type fits the value settles it to that type. A literal the type can't hold is reported,
+        // and keeps its value, since the position takes a value of that type all the same.
+        if let type, fits(type, in: expressions.file.declarations) {
+            return settled(to: type, named: expressions.typeName(of: type), reporting: errors)
         }
-        let typeName = expressions.typeName(of: settledType)
-        return settled(to: settledType, named: typeName, reporting: expressions.file.errors)
+
+        // Elsewhere the value settles to the default, which the code that reads it may not take, as a parameter that
+        // a call fits no function for. A literal the default can't hold fails there, so the value is reported alone,
+        // and its body is tainted, since no checked value stands for it.
+        let defaultType = RayoType.scalar(Self.integerDefault)
+        let settled = settled(to: defaultType, named: expressions.typeName(of: defaultType), reporting: errors)
+        guard let values = Self.integerDefault.literalRange, holdsLiterals(values) else {
+            errors.taints.taint()
+            return nil
+        }
+        return settled
     }
 }

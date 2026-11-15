@@ -111,7 +111,7 @@ final class NameScopes {
     }
 
     /// Declares `name` in the innermost block as a failed declaration, whose uses report nothing more.
-    private func declareFailed(_ name: String) {
+    func declareFailed(_ name: String) {
         blocks[blocks.count - 1][name] = .failed
     }
 

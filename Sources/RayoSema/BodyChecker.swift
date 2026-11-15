@@ -74,9 +74,11 @@ struct BodyChecker {
             return [returned(value).map { .returnStmt($0) }]
         case .returnStmt(nil):
             return [checkEmptyReturn(at: statement.range)]
-        // A statement that failed to parse was reported there, and leaves the body tainted.
-        case .error:
+        // A statement that failed to parse was reported there, and leaves the body tainted. The names it binds are
+        // declared as failed, so their uses report nothing more.
+        case .error(let boundNames):
             errors.taints.taint()
+            for name in boundNames { expressions.names.declareFailed(name) }
             return []
         }
     }
@@ -117,10 +119,10 @@ struct BodyChecker {
     private func checkUnused(_ expr: Expr) -> CheckedExpr? {
         // An expression that failed was reported.
         guard let value = expressions.check(expr) else { return nil }
-        // A value that no code uses is a mistake, unless `_ =` drops it on purpose.
-        guard TypeFit.fits(value.type, .void) else {
-            errors.report(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
-            return nil
+        // A value that no code uses is a mistake, unless `_ =` drops it on purpose. It is dropped all the same, so
+        // the statement still means what it would with `_ =`.
+        if !TypeFit.fits(value.type, .void) {
+            errors.reportKeepingMeaning(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
         }
         return value
     }

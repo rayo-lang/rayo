@@ -76,11 +76,17 @@ struct BindingChecker {
         let annotation = resolveAnnotation(of: binding)
         // Without a value, the annotation alone gives the local's type.
         guard let valueExpr = binding.value else { return Declared(annotation) }
-        // A value that failed, or that has another type than the annotation names, was reported.
-        let value = expressions.check(valueExpr, expecting: annotation.expected)
-        guard let value else { return .failed }
-        // So was an annotation that failed; otherwise the value has the local's type.
-        if case .failed = annotation { return .failed }
+
+        // An annotation that failed was reported, and leaves the value no type to settle to, so the value reports only
+        // the errors it has on its own, and not those the missing type would bring, such as an implicit member's.
+        if case .failed = annotation {
+            expressions.reportSettlingErrors(of: [expressions.value(of: valueExpr)])
+            return .failed
+        }
+
+        // A value that failed, or that has another type than the annotation names, was reported; otherwise the value
+        // has the local's type.
+        guard let value = expressions.check(valueExpr, expecting: annotation.expected) else { return .failed }
         return .typed(value.type, typeRange: value.range, value: value)
     }
 
