@@ -10,7 +10,7 @@ Rayo's [spec](docs/spec/README.md) defines the whole language, and `rayoc` build
 
 **A version that builds part of a spec feature leaves the rest mapped in [Not yet planned](#not-yet-planned)**, so every feature of the spec is in a version or in that list.
 
-**A half version, such as v0.1.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
+**A half version, such as v0.2.5, adds one small feature.** It has no proof program of its own: it extends the program of the version before it.
 
 **A finished version is tagged**, as `v0.1.0`, with short release notes, and the tag marks it done. A version ships no binaries, and is built from source as [TOOLCHAIN.md](TOOLCHAIN.md) says.
 
@@ -31,15 +31,7 @@ v0.1 adds:
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
 - `copy` of a field of a local or a borrowed parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
 - assigning and compound-assigning a field of a `var` local, as `e.hp -= 5`, and moving a field out, which leaves the struct unusable until the field is assigned again ([01](docs/spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from));
-- `print(Int)`, and `print(Bool)`, which prints `true` or `false`.
-
-## v0.1.5: Float
-
-v0.1.5 adds:
-
-- `Float`, with its literals, arithmetic and comparisons;
-- the conversions `Float(i)` and `Int(f)`;
-- `print(Float)`.
+- `print(Int)`, and `print(Bool)`, which prints `true` or `false` ([04](docs/spec/04-types/collections.md#printing)).
 
 ## v0.2: `UInt` and inline arrays
 
@@ -52,6 +44,19 @@ v0.2 adds:
 - reading, copying, assigning and compound-assigning an element as `a[i]`, through fields and nested arrays, with a `UInt` index ([04](docs/spec/04-types/collections.md#inline-array-elements));
 - `a.count`, a `UInt`;
 - the `index out of range` panic in every build, and a compile error for an integer literal index out of range.
+
+## v0.2.5: `Float` and `Double`
+
+v0.2.5 adds:
+
+- `Float` and `Double`, with their literals, the arithmetic operators `+`, `-`, `*` and `/`, unary `-`, and the comparisons, each one IEEE 754 operation ([04](docs/spec/04-types/numbers-and-math.md#floating-point));
+- a float literal that nothing gives another type, such as `0.5` in `let x = 0.5`, as a `Double` ([04](docs/spec/04-types/numbers-and-math.md#numbers));
+- the conversions between every pair of `Int`, `UInt`, `Float` and `Double` that v0.2 doesn't build, as `Double(i)`, `Float(d)` and `Int(f)` ([04](docs/spec/04-types/numbers-and-math.md#conversions)):
+    - a float to an integer rounds toward zero, and panics in every build with `float to integer conversion of NaN` or `float to integer conversion out of range`;
+    - an integer to a float, and a `Double` to a `Float`, round to nearest, and a value too large for a `Float` becomes an infinity;
+- `print(Float)` and `print(Double)`, which print the shortest decimal that reads back as the same value ([04](docs/spec/04-types/collections.md#printing)).
+
+Its proof program extends v0.2's.
 
 ## v0.3: changing values in place
 
@@ -67,7 +72,7 @@ This list maps every feature of the spec that no version has finished, in no dec
 Declarations and types:
 
 - struct initializers other than the primary one ([04](docs/spec/04-types/structs.md#initializers)): v0.1 builds the primary initializer alone;
-- `.init(…)` and the other implicit members, such as `.zero` ([05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.1 makes a struct only by naming its type;
+- `.init(…)` and the other implicit members, such as `.zero` ([05](docs/spec/05-protocols-generics-and-closures/operators.md#operators)): v0.1 makes a struct only by naming its type, and v0.2 builds `.init(repeating:)` of an inline array alone;
 - methods, `self`, static members and computed properties, and subscripts ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)): v0.3 adds `mutating func` alone;
 - default arguments and field defaults ([01](docs/spec/01-values-and-ownership/parameters.md#default-arguments), [04](docs/spec/04-types/structs.md#initializers)): v0.1's calls and initializers take every argument written out;
 - `deinit` and move-only structs ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction), [01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types));
@@ -78,11 +83,14 @@ Declarations and types:
 - `.init(each:)` and `[_ of T]` ([04](docs/spec/04-types/collections.md#tuples-ranges-and-arrays)): v0.2 builds `[N of T]`, made by a literal or by `.init(repeating:)`;
 - enums and optionals, and `when` with a subject ([04](docs/spec/04-types/enums.md#enums));
 - untagged unions ([04](docs/spec/04-types/enums.md#untagged-unions));
-- the other number types, and implicit widening between them ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.1 builds `Int`, v0.1.5 `Float` and v0.2 `UInt`, and v0.2's array literals wait on the rest to widen their elements;
+- the other number types, and implicit widening between them ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.1 builds `Int`, v0.2 `UInt`, and v0.2.5 `Float` and `Double`, all without implicit widening, and v0.2's array literals wait on the rest to widen their elements;
 - `Int.min`, `Int.max`, `min` and `max` ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#static-and-instance-members), [05](docs/spec/05-protocols-generics-and-closures/operators.md#equality-and-ordering)): v0.1 builds `Int` without them;
+- `Int(clamping: f)` and the other clamping conversions of a float ([04](docs/spec/04-types/numbers-and-math.md#conversions)): v0.2.5 builds the unlabeled form alone;
+- named functions for a float's truncated remainder and its IEEE 754 remainder, which stand in for `%`, since floats have none ([04](docs/spec/04-types/numbers-and-math.md#floating-point));
 - the wrapping, saturating, bitwise and shift operators ([04](docs/spec/04-types/numbers-and-math.md#integer-overflow-division-and-shifts));
 - SIMD vectors ([04](docs/spec/04-types/numbers-and-math.md#simd-and-math));
 - text ([04](docs/spec/04-types/collections.md#strings));
+- `print` of any other `Formattable`, such as text, an interpolated literal or `Half` ([04](docs/spec/04-types/collections.md#printing)): v0.1, v0.2 and v0.2.5 print `Int`, `Bool`, `UInt`, `Float` and `Double` alone;
 - backtick identifiers ([12](docs/spec/12-grammar/lexical.md#lexical)).
 
 Statements and control flow:
