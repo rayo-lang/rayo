@@ -333,6 +333,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(274, error: "index {index} is out of range for a {type}")
     case indexOutOfRange(index: UInt64, type: TypeName)
 
+    @Code(275, error: "a struct's members aren't supported")
+    case unsupportedMember
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")

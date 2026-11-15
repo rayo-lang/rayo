@@ -1,9 +1,9 @@
 struct Stats {
-  hp: Int
+  let hp: Int
 }
 
 struct Enemy {
-  stats: Stats
+  let stats: Stats
 }
 
 main "main()"

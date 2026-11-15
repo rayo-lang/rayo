@@ -19,24 +19,34 @@ struct FailedSyntaxTests {
     ) throws {
         let text = "func g() {}\n" + source
         let file = Parser.parse(text).file
-        let failed = try #require(file.failedDeclarations.first)
-        #expect(file.failedDeclarations.count == 1)
+        try #require(file.declarations.count == 2)
+        guard case .failed(let failed) = file.declarations[1] else {
+            Issue.record("expected a failed declaration, found \(file.declarations[1])")
+            return
+        }
         #expect((failed.kind, failed.name) == (kind, name))
         #expect(covered(by: failed, in: text) == coveredText)
         // The declaration before it is parsed as usual.
-        #expect(file.functions.map(\.name) == ["g"])
+        guard case .function(let function) = file.declarations[0] else {
+            Issue.record("expected a function, found \(file.declarations[0])")
+            return
+        }
+        #expect(function.name == "g")
     }
 
     @Test func `text that begins no declaration leaves nothing in the tree`() {
         let file = Parser.parse("let x = 1\nfunc g() {}").file
-        #expect(file.failedDeclarations.isEmpty)
-        #expect(file.functions.map(\.name) == ["g"])
+        #expect(file.declarations.map(\.name) == ["g"])
     }
 
     @Test(arguments: ["let = 1", "print(1) 2", "x = )"])
     func `a statement that fails to parse leaves an error statement in its place`(statement: String) throws {
         let file = Parser.parse("func f() {\n    print(0)\n    \(statement)\n    print(2)\n}").file
-        let statements = try #require(file.functions.first).body.statements
+        guard case .function(let function)? = file.declarations.first else {
+            Issue.record("expected a function, found \(file.declarations)")
+            return
+        }
+        let statements = function.body.statements
         try #require(statements.count == 3)
         guard case .error = statements[1].kind else {
             Issue.record("expected an error statement, found \(statements[1].kind)")

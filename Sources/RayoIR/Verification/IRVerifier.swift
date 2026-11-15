@@ -29,7 +29,7 @@ public enum IRVerifier {
 
         let message: String? = if declaration.parameters != fields {
             "the IR's \(initializer) takes (\(list(declaration.parameters))), where its fields are (\(list(fields)))"
-        } else if declaration.result != .structure(structID) {
+        } else if declaration.result != .named(.structure(structID)) {
             "the IR's \(initializer) makes \(declaration.result), where it makes \(structID.name)"
         } else if program.bodies[id] != nil {
             "the IR gives the \(initializer) a body"

@@ -26,7 +26,7 @@ public enum PlaceStep: Hashable, Comparable, Sendable, CustomStringConvertible {
     /// other type.
     public func type(from holder: RayoType, in body: IRBody, types: TypeTable) -> RayoType? {
         switch (self, holder) {
-        case (.field(let index), .structure(let id)):
+        case (.field(let index), .named(.structure(let id))):
             types[id].fields.indices.contains(index) ? types[id].fields[index].type : nil
         case (.element(let index), .array(let count, let element)):
             (0..<count).contains(index) ? element : nil

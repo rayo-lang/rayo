@@ -40,42 +40,25 @@ struct InitializerChecker {
     /// an error about it names the field. Every argument is checked, even when the call as a whole doesn't fit.
     func checkCall(making id: StructID, passing arguments: [some CallArgument],
                    in range: SourceRange) -> CheckedExpr? {
-        let fields = expressions.file.declarations.fields(of: id)
-
-        // When a field's own declaration has an error, such as a type that doesn't exist, the call can't be checked
-        // against the struct's fields. Each argument is still checked by itself, so mistakes inside it are reported,
-        // but the call adds no error of its own: the struct's mistake gives one error, not one more at every call.
-        guard let types = knownTypes(of: fields) else {
-            for argument in arguments { argument.reportErrors(by: expressions) }
-            return nil
-        }
+        let fields = expressions.file.declarations.types.fields(of: id)
 
         // Match each argument to its field, and check its value against the field's type.
         let given = fieldsGiven(by: arguments, among: fields, of: id)
-        let values = values(of: arguments, givenTo: given, among: fields, ofTypes: types)
+        let values = values(of: arguments, givenTo: given, among: fields)
         let hasEveryField = reportLeftOut(of: fields, given: given, in: range)
         let isInOrder = reportOutOfOrder(given, by: arguments, among: fields)
 
         // A call that fails any of these was reported.
         guard let values, hasEveryField, isInOrder, given.allSatisfy(\.isLabeledRight) else { return nil }
         let initializer = expressions.file.declarations.primaryInitializer(of: id)
-        return CheckedExpr(kind: .call(.function(initializer), arguments: values), type: .structure(id), range: range)
-    }
-
-    /// The type of each field, in order, or nil when the type of any field isn't known.
-    private func knownTypes(of fields: [DeclaredField]) -> [RayoType]? {
-        var types: [RayoType] = []
-        for field in fields {
-            guard let type = field.type else { return nil }
-            types.append(type)
-        }
-        return types
+        let type = RayoType.named(.structure(id))
+        return CheckedExpr(kind: .call(.function(initializer), arguments: values), type: type, range: range)
     }
 
     /// Finds the field each argument gives a value for. An argument whose label names a field gives that field, and
     /// one without such a label gives the field at its own place in the call. Reports an argument that gives no
     /// field, or a field an earlier argument gave already, and an argument whose label isn't its field's name.
-    private func fieldsGiven(by arguments: [some CallArgument], among fields: [DeclaredField],
+    private func fieldsGiven(by arguments: [some CallArgument], among fields: [Field],
                              of id: StructID) -> [GivenField] {
         // Give each argument whose label names a field that field, unless an argument before it gave the field.
         var given: [GivenField?] = Array(repeating: nil, count: arguments.count)
@@ -115,8 +98,8 @@ struct InitializerChecker {
     /// Reports an argument that gives none of the struct's fields, naming its label where it has one.
     private func reportNoField(for argument: some CallArgument, of id: StructID) {
         let code: ErrorCode = switch argument.label {
-        case let label?: .noSuchField(type: expressions.typeName(of: .structure(id)), field: label)
-        case nil: .argumentNamesNoField(type: expressions.typeName(of: .structure(id)))
+        case let label?: .noSuchField(type: expressions.typeName(of: .named(.structure(id))), field: label)
+        case nil: .argumentNamesNoField(type: expressions.typeName(of: .named(.structure(id))))
         }
         errors.report(code, at: argument.range)
     }
@@ -124,8 +107,7 @@ struct InitializerChecker {
     /// Checks each argument's value against the type of the field it gives; the struct takes the value as its own.
     /// Returns the checked values, or nil when any value has a mistake or gives no field.
     private func values(
-        of arguments: [some CallArgument], givenTo given: [GivenField], among fields: [DeclaredField],
-        ofTypes types: [RayoType],
+        of arguments: [some CallArgument], givenTo given: [GivenField], among fields: [Field],
     ) -> [CheckedExpr]? {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
@@ -135,7 +117,7 @@ struct InitializerChecker {
                 argument.reportErrors(by: expressions)
                 continue
             }
-            let expected = Expectation(types[field]) {
+            let expected = Expectation(fields[field].type) {
                 .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1)
             }
             // A value that failed, or that has another type than its field's, was reported.
@@ -146,7 +128,7 @@ struct InitializerChecker {
     }
 
     /// Reports each field that no argument gives a value for, and returns whether every field has one.
-    private func reportLeftOut(of fields: [DeclaredField], given: [GivenField], in range: SourceRange) -> Bool {
+    private func reportLeftOut(of fields: [Field], given: [GivenField], in range: SourceRange) -> Bool {
         let givenFields = Set(given.compactMap(\.field))
         let leftOut = fields.indices.filter { !givenFields.contains($0) }
         for field in leftOut {
@@ -158,7 +140,7 @@ struct InitializerChecker {
     /// Reports each argument that gives a field out of the struct's order: one the struct declares before a field
     /// an earlier argument gave. Returns whether the fields come in order.
     private func reportOutOfOrder(_ given: [GivenField], by arguments: [some CallArgument],
-                                  among fields: [DeclaredField]) -> Bool {
+                                  among fields: [Field]) -> Bool {
         var latest: Int?
         var isInOrder = true
         for (argument, given) in zip(arguments, given) {

@@ -270,8 +270,8 @@ struct EmittedTypeTests {
     /// primary initializer.
     private let pair = """
         struct Pair {
-          flag: Bool
-          count: Int
+          var flag: Bool
+          var count: Int
         }
         init "Pair(flag: Bool, count: Int)"(Bool, Int) -> Pair
 
@@ -280,8 +280,8 @@ struct EmittedTypeTests {
     /// A struct of a Bool and a Pair, which lies as the Pair, then the Bool.
     private let holder = """
         struct Holder {
-          flag: Bool
-          pair: Pair
+          var flag: Bool
+          var pair: Pair
         }
 
         """

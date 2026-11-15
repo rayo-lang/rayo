@@ -91,10 +91,25 @@ struct IRTextTests {
         #expect(statements[6] == .end(AccessID(index: 1)))
     }
 
+    @Test func `a struct's 'var' and 'let' fields read back the same`() throws {
+        let text = """
+            struct Enemy {
+              var hp: Int
+              let armor: UInt
+            }
+
+            """
+        let program = try IRParser.program(from: text)
+        #expect(IRPrinter.text(of: program) == text)
+        #expect(program.types.structs.first?.fields == [
+            Field(name: "hp", kind: .var, type: .int), Field(name: "armor", kind: .let, type: .uint),
+        ])
+    }
+
     @Test func `array types, and an array made of its elements, read back the same`() throws {
         let text = """
             struct Grid {
-              rows: [2 of [3 of Bool]]
+              var rows: [2 of [3 of Bool]]
             }
 
             main "main()"
@@ -194,8 +209,8 @@ private func range(_ startLine: Int, _ startColumn: Int, _ endLine: Int, _ endCo
 private let malformedIR = [
     MalformedIR(
         testDescription: "a character no token starts with",
-        text: "struct Pair {\n  count: Int#\n}",
-        error: IRTextError(line: 2, column: 13, message: "unexpected character '#'"),
+        text: "struct Pair {\n  var count: Int#\n}",
+        error: IRTextError(line: 2, column: 17, message: "unexpected character '#'"),
     ),
     MalformedIR(
         testDescription: "a quoted name with no closing quote",
@@ -209,8 +224,13 @@ private let malformedIR = [
     ),
     MalformedIR(
         testDescription: "a type no struct declares",
-        text: "struct Pair {\n  count: Count\n}",
-        error: IRTextError(line: 2, column: 10, message: "no type is named 'Count'"),
+        text: "struct Pair {\n  var count: Count\n}",
+        error: IRTextError(line: 2, column: 14, message: "no type is named 'Count'"),
+    ),
+    MalformedIR(
+        testDescription: "a field that is neither a 'var' nor a 'let'",
+        text: "struct Pair {\n  count: Int\n}",
+        error: IRTextError(line: 2, column: 3, message: "expected 'var' or 'let', found 'count'"),
     ),
     MalformedIR(
         testDescription: "an element step without its ']'",
@@ -219,8 +239,8 @@ private let malformedIR = [
     ),
     MalformedIR(
         testDescription: "an array type without 'of'",
-        text: "struct Pair {\n  counts: [2 Int]\n}",
-        error: IRTextError(line: 2, column: 14, message: "expected 'of', found 'Int'"),
+        text: "struct Pair {\n  var counts: [2 Int]\n}",
+        error: IRTextError(line: 2, column: 18, message: "expected 'of', found 'Int'"),
     ),
     MalformedIR(
         testDescription: "a struct declared twice",

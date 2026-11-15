@@ -2,7 +2,8 @@ import RayoDiagnostics
 import RayoSyntax
 
 /// Checks a file's structs, whose names are declared already: that their fields have names of their own and types
-/// that hold values, and that none contains itself. It declares each struct's fields and lays out its type.
+/// that hold values, that none contains itself, and that their bodies declare no members, which rayoc doesn't support.
+/// It declares the table of the structs that can be laid out, with their fields.
 struct StructChecker {
     /// A struct whose declaration took its name, with what checking each of its fields found, in declaration order.
     private struct DeclaredStruct {
@@ -21,34 +22,35 @@ struct StructChecker {
 
     let errors: ErrorList
 
-    /// Checks each struct's fields, declares them, and returns the types the structs make. The IDs follow the order
-    /// of the structs, with nil for a struct whose name couldn't be declared. A struct that can't be laid out is
-    /// declared as such, and makes no type.
-    func declare(
-        _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: inout Declarations,
-    ) -> TypeTable {
-        let declared = checkStructs(structs, withIDs: ids, in: declarations)
-        declareFields(of: declared, in: &declarations)
+    /// Checks the fields and members of each of `file`'s structs, declares the table of the types they make, and
+    /// returns it. `ids` gives the ID of the type each of the file's declarations declares, nil for a struct whose
+    /// name couldn't be declared. A struct that can't be laid out is declared as such, and makes no type.
+    func declare(_ file: SourceFile, withIDs ids: [TypeID?], in declarations: inout Declarations) -> TypeTable {
+        let declared = checkStructs(of: file, withIDs: ids, in: declarations)
 
         // Only once every struct's fields are known can the structs that fail be told, and only once those are left
         // out can the others be laid out, to tell those too large to lie in memory.
         let failed = failedStructs(among: declared)
         let tooLarge = tooLargeStructs(among: declared, besides: failed)
         let unlaidOut = failed.union(tooLarge)
-        for id in unlaidOut { declarations.declareUnlaidOut(id) }
-        return types(of: declared, besides: unlaidOut)
+        for id in unlaidOut { declarations.types.declareUnlaidOut(.structure(id)) }
+        let table = types(of: declared, besides: unlaidOut)
+        declarations.types.declare(table)
+        return table
     }
 
-    /// Checks every struct's fields, and returns each struct that has an ID, with what checking its fields found.
-    /// The IDs follow the order of the structs.
+    /// Checks every struct's fields and members, and returns each struct that has an ID, with what checking its
+    /// fields found. `ids` follows the order of the file's declarations.
     private func checkStructs(
-        _ structs: [StructDecl], withIDs ids: [StructID?], in declarations: Declarations,
+        of file: SourceFile, withIDs ids: [TypeID?], in declarations: Declarations,
     ) -> [DeclaredStruct] {
         var declared: [DeclaredStruct] = []
-        for (declaration, id) in zip(structs, ids) {
+        for (declaration, id) in zip(file.declarations, ids) {
+            guard case .structure(let declaration) = declaration else { continue }
             let fields = checkFields(of: declaration, in: declarations)
-            // A struct with no ID has its fields checked, and is declared no further.
-            guard let id else { continue }
+            reportMembers(of: declaration)
+            // A struct with no ID has its fields and members checked, and is declared no further.
+            guard case .structure(let id)? = id else { continue }
             // IDs number the structs that have them in order, so each struct lies at its ID's index.
             precondition(id.index == declared.count, "a declared struct lies at its ID's index")
             declared.append(DeclaredStruct(id: id, declaration: declaration, fields: fields))
@@ -68,16 +70,13 @@ struct StructChecker {
         return fields
     }
 
-    /// Declares each struct's fields, as a function body sees them.
-    private func declareFields(of structs: [DeclaredStruct], in declarations: inout Declarations) {
-        for structure in structs {
-            // A body sees no type for a field without a name of its own, so neither a call nor a read can pick it.
-            let fields = zip(structure.declaration.fields, structure.fields).map { declaration, checked in
-                DeclaredField(
-                    name: declaration.name, kind: declaration.kind, type: checked.hasOwnName ? checked.type : nil,
-                )
-            }
-            declarations.declare(fields, of: structure.id)
+    /// Reports each member that `declaration`'s body declares, at its name, since rayoc doesn't support a struct's
+    /// members.
+    private func reportMembers(of declaration: StructDecl) {
+        for member in declaration.members {
+            // A member that failed to parse was reported already.
+            if case .failed = member { continue }
+            if let nameRange = member.nameRange { errors.report(.unsupportedMember, at: nameRange) }
         }
     }
 
@@ -149,7 +148,9 @@ struct StructChecker {
         var unvisited = [structure]
         while let next = unvisited.popLast() {
             for field in next.fields {
-                guard let type = field.type, case .structure(let id) = innermostElement(of: type) else { continue }
+                guard let type = field.type, case .named(.structure(let id)) = innermostElement(of: type) else {
+                    continue
+                }
                 // A struct found for the first time has its own fields searched in turn.
                 if found.insert(id.index).inserted { unvisited.append(structs[id.index]) }
             }
@@ -161,7 +162,7 @@ struct StructChecker {
     /// Int, leaving out those of `failed`, which can't be laid out at all.
     private func tooLargeStructs(among structs: [DeclaredStruct], besides failed: Set<StructID>) -> Set<StructID> {
         let table = types(of: structs, besides: failed)
-        let tooLarge = structs.filter { !failed.contains($0.id) && !table.fitsInMemory(.structure($0.id)) }
+        let tooLarge = structs.filter { !failed.contains($0.id) && !table.fitsInMemory(.named(.structure($0.id))) }
         for structure in tooLarge { reportTooLarge(structure, laidOutIn: table) }
         return Set(tooLarge.map(\.id))
     }
@@ -186,6 +187,14 @@ struct StructChecker {
         }
     }
 
+    /// The kind of field that `field`'s keyword declares.
+    private func kind(of field: FieldDecl) -> Field.Kind {
+        switch field.kind {
+        case .var: .var
+        case .let: .let
+        }
+    }
+
     /// The innermost element type of `type`, where it is an array, of arrays at any depth, and otherwise `type`.
     private func innermostElement(of type: RayoType) -> RayoType {
         guard case .array(_, let element) = type else { return type }
@@ -200,7 +209,7 @@ struct StructChecker {
     /// The type `structure` makes, or nil where the type of one of its fields isn't known.
     private func type(of structure: DeclaredStruct) -> StructType? {
         let fields = zip(structure.declaration.fields, structure.fields).compactMap { field, checked in
-            checked.type.map { Field(name: field.name, type: $0) }
+            checked.type.map { Field(name: field.name, kind: kind(of: field), type: $0) }
         }
         // A field whose type isn't known is left out, so the struct has fewer fields than it declares.
         guard fields.count == structure.fields.count else { return nil }

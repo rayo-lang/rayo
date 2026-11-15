@@ -36,7 +36,7 @@ public struct CheckedPrinter: ~Copyable {
     private mutating func writeProgram() {
         for type in program.types.structs {
             lines.append("struct \(type.name) {")
-            lines += type.fields.map { "  \($0.name): \($0.type)" }
+            lines += type.fields.map { "  \($0.kind.rawValue) \($0.name): \($0.type)" }
             lines += ["}", ""]
         }
         if let main = program.main {

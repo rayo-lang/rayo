@@ -2,25 +2,18 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// The names a function body sees beyond its own locals: the file's own types, with each struct's fields,
-/// and functions, and the prelude's functions and types that none of them shadows.
+/// The names a function body sees beyond its own locals: the file's own types and functions, and the prelude's
+/// functions and types that none of them shadows.
 struct Declarations {
     /// The file's top-level names, known before any of its declarations is declared.
     private let names: TopLevelNames
     private var functions: [String: [Signature]] = [:]
-    /// The file's types of every kind, which share one namespace.
-    private var types: [String: DeclaredType] = [:]
+    /// The file's types of every kind.
+    var types = NamedTypes()
     /// The primary initializer of each struct that can be laid out.
     private var primaryInitializers: [StructID: FunctionID] = [:]
-    /// Each struct's fields, in the order the struct declares them.
-    private var fields: [StructID: [DeclaredField]] = [:]
-    /// The structs that can't be laid out, whose uses report nothing more.
-    private var unlaidOutStructs: Set<StructID> = []
     /// The names of the functions that failed to parse, whose uses report nothing more.
     private var unparsedFunctions: Set<String> = []
-    /// The structs that can be laid out, which lay out every type that holds them; nil until the structs are
-    /// checked, while their fields' types are resolved.
-    private var layouts: TypeTable?
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
     init(names: TopLevelNames) {
@@ -37,22 +30,6 @@ struct Declarations {
         return true
     }
 
-    /// Declares `type` by its name, which no other type has.
-    mutating func declare(_ type: DeclaredType) {
-        types[type.name] = type
-    }
-
-    /// Declares the struct `id` as one that can't be laid out, whose uses report nothing more.
-    mutating func declareUnlaidOut(_ id: StructID) {
-        unlaidOutStructs.insert(id)
-    }
-
-    /// Declares `types`, the structs that can be laid out, so that each type resolved from here on is checked to
-    /// fit in memory.
-    mutating func declareLayouts(_ types: TypeTable) {
-        layouts = types
-    }
-
     /// Declares `name` as the name of a function that failed to parse, whose uses report nothing more.
     mutating func declareUnparsedFunction(named name: String) {
         unparsedFunctions.insert(name)
@@ -61,20 +38,6 @@ struct Declarations {
     /// Whether a function called `name` failed to parse.
     func hasFailedFunction(named name: String) -> Bool {
         unparsedFunctions.contains(name)
-    }
-
-    /// Whether the type called `name` failed to parse, or is a struct that can't be laid out.
-    func hasFailedType(named name: String) -> Bool {
-        switch types[name] {
-        case .failed: true
-        case .structure(let id): unlaidOutStructs.contains(id)
-        case nil: false
-        }
-    }
-
-    /// Declares `fields` as the fields of the struct `id`, in the order it declares them.
-    mutating func declare(_ fields: [DeclaredField], of id: StructID) {
-        self.fields[id] = fields
     }
 
     /// Declares the function `initializer` as the primary initializer of the struct `id`.
@@ -111,21 +74,10 @@ struct Declarations {
         return initializer
     }
 
-    func type(named name: String) -> DeclaredType? {
-        types[name]
-    }
-
     /// The prelude type called `name`, or nil where no prelude type has the name or a type or a function of the file
     /// shadows it.
     func preludeType(named name: String) -> RayoType? {
         kind(of: name) == nil ? RayoType.prelude(named: name) : nil
-    }
-
-    /// The fields of the struct `id`, whose fields must be declared already.
-    func fields(of id: StructID) -> [DeclaredField] {
-        // The checker declares every struct's fields before it checks a body, which alone asks for them.
-        guard let fields = fields[id] else { preconditionFailure("'\(id.name)' has no fields declared") }
-        return fields
     }
 
     /// The name an error gives `type`, which tells a prelude type apart from the file's declaration of its name.
@@ -133,8 +85,8 @@ struct Declarations {
         let name = type.description
 
         return switch type {
-        // A struct is the file's own, so its name alone tells it apart.
-        case .structure: .named(name)
+        // A named type is the file's own, so its name alone tells it apart.
+        case .named: .named(name)
         // A prelude type is shadowed where a type or a function of the file has its name.
         case .scalar, .void: kind(of: name) == nil ? .named(name) : .shadowedPrelude(name)
         // An array is named by its count and its element's name.
@@ -170,9 +122,9 @@ struct Declarations {
         }
 
         // An array's size in bytes must fit in an Int, which counts its elements too, even ones that take no memory.
-        // A field's array is resolved before the structs are laid out, so its size is checked with its struct's.
+        // A field's array is resolved before the types are laid out, so its size is checked with its type's.
         let array = Int(exactly: count).map { RayoType.array(count: $0, element: elementType) }
-        guard let array, layouts?.fitsInMemory(array) ?? true else {
+        guard let array, types.fitsInMemory(array) else {
             errors.report(.arrayTooLarge, at: range)
             return nil
         }
@@ -183,14 +135,14 @@ struct Declarations {
     /// reports that `name`, written at `range`, names neither, and returns nil.
     private func resolve(named name: String, at range: SourceRange, reporting errors: ErrorList) -> RayoType? {
         // A type of the file shadows the prelude's type of its name. One that failed names no type, and taints the body
-        // that names it, which reports nothing more.
-        if let declared = types[name] {
-            // A struct that can't be laid out has a type, which no stage after checking can use, so it names none.
-            guard !hasFailedType(named: name) else {
+        // that names it, which reports nothing more. A type that can't be laid out has a type, which no stage after
+        // checking can use, so it names none either.
+        if types.isDeclared(name) {
+            guard let type = types.type(named: name), !types.hasFailed(named: name) else {
                 errors.taints.taint()
                 return nil
             }
-            return declared.type
+            return type
         }
         // A function shadows it too, though it names no type. The file's names are known before any is declared, so
         // a type written before the function is declared, such as a field's, is shadowed as well. Such a name, and

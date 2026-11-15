@@ -1,7 +1,8 @@
 import RayoSyntax
 
 /// Where a run of a function body can go, worked out from its syntax alone, so a statement that fails to check still
-/// counts for what it does.
+/// counts for what it does. Only the forms that change where a run goes are told apart; every other form completes,
+/// and leaves a loop, as its parts do.
 enum Reachability {
     /// Whether a run can reach the end of `block`.
     static func canComplete(_ block: Block) -> Bool {
@@ -31,12 +32,8 @@ enum Reachability {
             return canComplete(condition)
 
         // Any other statement completes once the values it evaluates do.
-        case .declaration(_, let bindings):
-            return bindings.allSatisfy { $0.value.map(canComplete) ?? true }
-        case .assign(let target, _, let value):
-            return canComplete(target) && canComplete(value)
-        case .drop(let value), .expression(let value):
-            return canComplete(value)
+        default:
+            return statement.children.allSatisfy(canComplete)
         }
     }
 
@@ -56,15 +53,16 @@ enum Reachability {
         case .if(let ifExpr): canComplete(ifExpr)
         // `&&` and `||` evaluate their right operand on some runs only, so their left operand decides.
         case .binary(.and, let left, _), .binary(.or, let left, _): canComplete(left)
-        // Every other operation evaluates each of its operands.
-        case .binary(_, let left, let right): canComplete(left) && canComplete(right)
-        case .element(let base, let index): canComplete(base) && canComplete(index)
-        case .unary(_, let operand): canComplete(operand)
-        case .call(let callee, let arguments): canComplete(callee) && arguments.allSatisfy { canComplete($0.value) }
-        case .arrayLiteral(let elements): elements.allSatisfy { canComplete($0) }
-        case .member(let base, _, _), .copy(let base): canComplete(base)
-        // A literal or a name evaluates nothing.
-        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember: true
+        // Every other expression evaluates each of its operands.
+        default: expr.children.allSatisfy(canComplete)
+        }
+    }
+
+    /// Whether a run can go on past `child`, a part of a statement or an expression that evaluates it whole.
+    private static func canComplete(_ child: SyntaxChild) -> Bool {
+        switch child {
+        case .expression(let expr): canComplete(expr)
+        case .block(let block): canComplete(block)
         }
     }
 
@@ -78,35 +76,25 @@ enum Reachability {
         switch statement.kind {
         // A `break` leaves the loop.
         case .breakStmt: true
-        // So does one in a branch of an `if`, or of an `if` among a statement's values.
-        case .ifStmt(let ifExpr): breaks(ifExpr)
-        case .declaration(_, let bindings): bindings.contains { $0.value.map(breaks) ?? false }
-        case .assign(let target, _, let value): breaks(target) || breaks(value)
-        case .drop(let value), .expression(let value), .returnStmt(let value?): breaks(value)
         // A loop's condition runs outside the loop, but a `break` in its body leaves the nested loop.
         case .whileStmt(let condition, _): breaks(condition)
-        // Nothing else leaves a loop; a statement that failed to parse is taken to leave none, so the loop isn't
-        // taken to complete, and no missing `return` is reported after it.
-        case .continueStmt, .returnStmt(nil), .error: false
+        // Any other statement leaves the loop where one of its parts does. A statement that failed to parse has none,
+        // so it is taken to leave no loop, the loop isn't taken to complete, and no missing `return` is reported
+        // after it.
+        default: statement.children.contains(where: breaks)
         }
-    }
-
-    /// Whether a `break` in `ifExpr`, outside any loop nested in it, leaves the loop the `if` belongs to.
-    private static func breaks(_ ifExpr: IfExpr) -> Bool {
-        breaks(ifExpr.condition) || breaks(ifExpr.then) || (ifExpr.otherwise.map(breaks) ?? false)
     }
 
     /// Whether a `break` in a branch of an `if` inside `expr` leaves the loop the expression belongs to.
     private static func breaks(_ expr: Expr) -> Bool {
-        switch expr.kind {
-        case .if(let ifExpr): breaks(ifExpr)
-        case .unary(_, let operand): breaks(operand)
-        case .binary(_, let left, let right): breaks(left) || breaks(right)
-        case .element(let base, let index): breaks(base) || breaks(index)
-        case .call(let callee, let arguments): breaks(callee) || arguments.contains { breaks($0.value) }
-        case .arrayLiteral(let elements): elements.contains { breaks($0) }
-        case .member(let base, _, _), .copy(let base): breaks(base)
-        case .intLiteral, .negativeIntLiteral, .boolLiteral, .name, .implicitMember: false
+        expr.children.contains(where: breaks)
+    }
+
+    /// Whether a `break` in `child`, outside any loop nested in it, leaves the loop the child belongs to.
+    private static func breaks(_ child: SyntaxChild) -> Bool {
+        switch child {
+        case .expression(let expr): breaks(expr)
+        case .block(let block): breaks(block)
         }
     }
 }

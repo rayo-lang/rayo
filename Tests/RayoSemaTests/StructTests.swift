@@ -92,6 +92,21 @@ struct StructDeclarationTests {
     }
 
     @Test(arguments: [
+        ("struct S(var a: Int) {\n    func f() {}\n}", ["f"]),
+        ("struct S {\n    struct T\n    func f(x: S) -> T {}\n}", ["T", "f"]),
+        ("struct S {\n    func f(x) {}\n    func g() {}\n}", ["g"]),
+    ])
+    func `a member in a struct's body is reported at its name, and one that failed to parse isn't`(
+        declaration: String, covered: [String],
+    ) {
+        let source = "func main() {}\n" + declaration
+
+        // Each member that parsed has the one error, at its name; a member that failed has its syntax error alone.
+        let reported = diagnostics(source).filter { $0.code == .unsupportedMember }
+        #expect(coveredText(reported, in: source) == covered)
+    }
+
+    @Test(arguments: [
         "struct S\nstruct S(var a: Int)", "struct S\nfunc S() {}", "func S() {}\nstruct S",
     ])
     func `a name at a file's top level names one struct, or functions, and the error covers the later name`(

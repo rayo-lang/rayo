@@ -127,16 +127,17 @@ struct ParserErrorTests {
         ("struct S(var a: Int b: Int)", .unclosedFields(found: .token("b"))),
         ("struct S(var a: Int,, var b: Int)", .missingFieldKind(found: .token(","))),
         ("struct S(var a:)", .missingType(found: .token(")"))),
-        ("struct S { func f() {} }", .unclosedStructBody(found: .token("func"))),
+        ("struct S { let x = 1 }", .missingDeclaration(found: .token("let"))),
+        ("struct S { func f() {}", .unclosedStructBody(found: .endOfFile)),
         ("struct S {}\nlet x = 1", .missingDeclaration(found: .token("let"))),
     ])
     func `malformed struct declarations`(source: String, expected: ErrorCode) {
         #expect(errors(source) == [expected])
     }
 
-    @Test func `each item in a struct's body is reported, and the parser goes on after the body`() {
-        #expect(errors("struct S {\n    func f() {}\n    let x = 1\n}\nfunc g() { copy }") == [
-            .unclosedStructBody(found: .token("func")), .unclosedStructBody(found: .token("let")),
+    @Test func `each item in a struct's body that begins no declaration is reported, and the parser goes on`() {
+        #expect(errors("struct S {\n    func f() {}\n    let x = 1\n    var y\n}\nfunc g() { copy }") == [
+            .missingDeclaration(found: .token("let")), .missingDeclaration(found: .token("var")),
             .missingCopiedName(found: .token("}")),
         ])
     }

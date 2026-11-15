@@ -3,7 +3,8 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
     /// A number or a truth value, one of the prelude's scalar types.
     case scalar(ScalarType)
     case void
-    case structure(StructID)
+    /// A type the program declares by name, such as a struct.
+    case named(TypeID)
     /// `[count of element]`: `count` values of the element's type, which lie end to end.
     case array(count: Int, element: RayoType)
 
@@ -20,7 +21,7 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
         switch self {
         case .scalar(let scalar): scalar.name
         case .void: "Void"
-        case .structure(let id): id.name
+        case .named(let id): id.name
         case .array(let count, let element): "[\(count) of \(element)]"
         }
     }

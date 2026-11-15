@@ -15,7 +15,7 @@ struct IRTypeTests {
             }
             """)
         let main = program.body(at: try #require(program.main).index)
-        let pair = RayoType.structure(StructID(index: 0, name: "Pair"))
+        let pair = RayoType.named(.structure(StructID(index: 0, name: "Pair")))
 
         // Each computation in `main`, in order, and the type of the value it makes.
         let values = main.blocks.flatMap(\.statements).compactMap { statement -> Rvalue? in

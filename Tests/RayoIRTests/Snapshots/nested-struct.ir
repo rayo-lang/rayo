@@ -1,10 +1,10 @@
 struct Shot {
-  range: Int
-  hit: Hit
+  let range: Int
+  var hit: Hit
 }
 
 struct Hit {
-  damage: Int
+  var damage: Int
 }
 
 main "main()"

@@ -1,5 +1,5 @@
 struct Hit {
-  damage: Int
+  var damage: Int
 }
 
 main "main()"

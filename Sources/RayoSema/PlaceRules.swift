@@ -14,7 +14,7 @@ protocol PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace?
 
     /// Whether a place may go into a field, reporting why where it may not.
-    func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool
+    func admits(_ field: Field, at nameRange: SourceRange) -> Bool
 
     /// The place that holds `property`, the value of a value property whose name the source writes at `nameRange`,
     /// where the source names it as a place or goes on from it, as in `copy a.count`. Returns nil once it has reported

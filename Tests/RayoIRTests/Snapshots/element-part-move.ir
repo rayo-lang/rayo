@@ -1,5 +1,5 @@
 struct Stats {
-  hp: Int
+  var hp: Int
 }
 
 main "main()"
