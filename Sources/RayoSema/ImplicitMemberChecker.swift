@@ -1,8 +1,8 @@
 import RayoDiagnostics
 import RayoSource
 
-/// Settles an implicit member to the member it names of the type its position expects. An array's one member is
-/// `.init(repeating: value)`, which fills it with copies of the value, and no other type has implicit members.
+/// Settles an implicit member to the member it names of the type its position expects, as the type's members give
+/// it. Only an array has implicit members, and the one it has is `.init(repeating: value)`, a call of its initializer.
 struct ImplicitMemberChecker {
     let expressions: ExpressionChecker
 
@@ -10,58 +10,38 @@ struct ImplicitMemberChecker {
 
     /// Settles `member` to the member of `type` it names, reporting it where `type` is nil or has no such member.
     func settled(_ member: ImplicitMember, toward type: RayoType?) -> CheckedExpr? {
-        switch type {
-        // An array's member makes the array.
-        case .array(let count, let element)?:
-            arrayMember(member, makingArrayOf: count, element)
-
         // A position that gives no type gives no type to find the member in.
-        case nil:
-            failed(member, reporting: .implicitMemberWithoutType(name: member.name), at: member.nameRange)
+        guard let type else {
+            return failed(member, reporting: .implicitMemberWithoutType(name: member.name), at: member.nameRange)
+        }
+        // A type other than an array has no implicit members.
+        guard ImplicitMember.isSupported(in: type) else {
+            let code = ErrorCode.unsupportedImplicitMember(type: expressions.typeName(of: type))
+            return failed(member, reporting: code, at: member.nameRange)
+        }
 
-        // Any other type has no implicit members.
-        case let type?:
-            failed(member, reporting: .unsupportedImplicitMember(type: expressions.typeName(of: type)),
-                   at: member.nameRange)
+        switch expressions.file.declarations.member(named: member.name, of: type) {
+        // The type's initializers make a value of it.
+        case .initializers(let initializers)?:
+            return initializerCall(member, of: initializers)
+
+        // A property belongs to a value of the type, so it is no implicit member, nor is a name the type lacks.
+        case .field?, .count?, nil:
+            let code = ErrorCode.noSuchMember(type: expressions.typeName(of: type), name: member.name)
+            return failed(member, reporting: code, at: member.nameRange)
         }
     }
 
-    /// Checks `member` as a member of the array of `count` values of `element`. The array's one member,
-    /// `.init(repeating: value)`, makes the array with each element a copy of the value.
-    private func arrayMember(_ member: ImplicitMember, makingArrayOf count: Int, _ element: RayoType) -> CheckedExpr? {
-        let type = RayoType.array(count: count, element: element)
-
-        // `.init(repeating: value)` makes the array from its value, which an element's type must hold.
-        guard let filling = member.fillingValue else { return misused(member, of: type, element) }
-        return expressions.settled(filling, expecting: Expectation(element)).map {
-            CheckedExpr(kind: .filledArray($0), type: type, range: member.range)
-        }
-    }
-
-    /// Reports `member`, a member of the array `type` of `element` values other than `.init(repeating:)`, for what is
-    /// wrong with it, and returns nil.
-    private func misused(_ member: ImplicitMember, of type: RayoType, _ element: RayoType) -> CheckedExpr? {
-        // An array has no member but its initializer, which makes a value only when it is called.
-        guard member.name == "init" else {
-            let typeName = expressions.typeName(of: type)
-            return failed(member, reporting: .noSuchMember(type: typeName, name: member.name), at: member.nameRange)
-        }
+    /// Checks `member`, which names `initializers`, as a call of one of them.
+    private func initializerCall(_ member: ImplicitMember, of initializers: Member.Initializers) -> CheckedExpr? {
+        // An initializer makes a value only when it is called.
         guard let arguments = member.arguments else { return failed(member, reporting: .uncalledInitializer) }
-
-        // The initializer takes one argument.
-        guard arguments.count == 1 else {
-            let code = ErrorCode.argumentCount(name: ".init", takes: 1, passes: arguments.count)
-            return failed(member, reporting: code)
+        // An array's `.init(each:)`, which calls a function for each element, isn't supported.
+        if arguments.count == 1, arguments[0].label == "each" {
+            return failed(member, reporting: .unsupportedEachInitializer)
         }
-        let argument = arguments[0]
-        // `.init(each:)`, which calls a function for each element, isn't supported.
-        guard argument.label != "each" else { return failed(member, reporting: .unsupportedEachInitializer) }
-
-        // Any other label is wrong, and the value is still checked as an element's, for its own errors.
-        let expected = ArgumentLabel(ImplicitMember.fillingLabel)
-        errors.report(.argumentLabel(expected: expected, found: ArgumentLabel(argument.label)), at: argument.range)
-        _ = expressions.settled(argument.value, expecting: Expectation(element))
-        return nil
+        return CallChecker(expressions: expressions)
+            .call(initializers, named: ".\(member.name)", passing: arguments, in: member.range)
     }
 
     /// Reports `code` at `range`, or at the whole member where there is none, settles `member`'s arguments for their

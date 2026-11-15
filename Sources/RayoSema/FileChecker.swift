@@ -84,7 +84,7 @@ final class FileChecker {
             let parameters = types[id].fields.map { field in
                 Parameter(label: field.name, type: field.type, spelledType: "\(field.type)")
             }
-            let signature = Signature(name: id.name, callee: .function(initializer), parameters: parameters,
+            let signature = Signature(name: id.name, target: .callee(.function(initializer)), parameters: parameters,
                                       result: .type(.structure(id)))
             functions.append(DeclaredFunction(signature: signature, kind: .primaryInitializer(id)))
             declarations.declarePrimaryInitializer(initializer, of: id)
@@ -117,7 +117,7 @@ final class FileChecker {
         // Give the function its ID and its signature, and add it to the checker's functions.
         let id = FunctionID(index: functions.count)
         let parameters = function.parameters.map(parameter(from:))
-        let signature = Signature(name: function.name, callee: .function(id), parameters: parameters,
+        let signature = Signature(name: function.name, target: .callee(.function(id)), parameters: parameters,
                                   result: declaredResult(of: function, id))
         functions.append(DeclaredFunction(signature: signature, kind: .written(function)))
 

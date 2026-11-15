@@ -38,14 +38,15 @@ struct InitializerChecker {
     /// Checks a call that makes a struct, such as `Enemy(hp: 100, armor: 5)`, and returns the checked call, or nil
     /// when it has a mistake, which is reported. Each argument is matched to the field it gives a value for, so that
     /// an error about it names the field. Every argument is checked, even when the call as a whole doesn't fit.
-    func checkCall(making id: StructID, passing arguments: [Argument], in range: SourceRange) -> CheckedExpr? {
+    func checkCall(making id: StructID, passing arguments: [some CallArgument],
+                   in range: SourceRange) -> CheckedExpr? {
         let fields = expressions.file.declarations.fields(of: id)
 
         // When a field's own declaration has an error, such as a type that doesn't exist, the call can't be checked
         // against the struct's fields. Each argument is still checked by itself, so mistakes inside it are reported,
         // but the call adds no error of its own: the struct's mistake gives one error, not one more at every call.
         guard let types = knownTypes(of: fields) else {
-            for argument in arguments { _ = expressions.check(argument.value) }
+            for argument in arguments { argument.reportErrors(by: expressions) }
             return nil
         }
 
@@ -74,7 +75,8 @@ struct InitializerChecker {
     /// Finds the field each argument gives a value for. An argument whose label names a field gives that field, and
     /// one without such a label gives the field at its own place in the call. Reports an argument that gives no
     /// field, or a field an earlier argument gave already, and an argument whose label isn't its field's name.
-    private func fieldsGiven(by arguments: [Argument], among fields: [DeclaredField], of id: StructID) -> [GivenField] {
+    private func fieldsGiven(by arguments: [some CallArgument], among fields: [DeclaredField],
+                             of id: StructID) -> [GivenField] {
         // Give each argument whose label names a field that field, unless an argument before it gave the field.
         var given: [GivenField?] = Array(repeating: nil, count: arguments.count)
         var taken: Set<Int> = []
@@ -111,7 +113,7 @@ struct InitializerChecker {
     }
 
     /// Reports an argument that gives none of the struct's fields, naming its label where it has one.
-    private func reportNoField(for argument: Argument, of id: StructID) {
+    private func reportNoField(for argument: some CallArgument, of id: StructID) {
         let code: ErrorCode = switch argument.label {
         case let label?: .noSuchField(type: expressions.typeName(of: .structure(id)), field: label)
         case nil: .argumentNamesNoField(type: expressions.typeName(of: .structure(id)))
@@ -122,17 +124,22 @@ struct InitializerChecker {
     /// Checks each argument's value against the type of the field it gives; the struct takes the value as its own.
     /// Returns the checked values, or nil when any value has a mistake or gives no field.
     private func values(
-        of arguments: [Argument], givenTo given: [GivenField], among fields: [DeclaredField], ofTypes types: [RayoType],
+        of arguments: [some CallArgument], givenTo given: [GivenField], among fields: [DeclaredField],
+        ofTypes types: [RayoType],
     ) -> [CheckedExpr]? {
         // Check every argument, so each one's errors are reported, before any failure fails the call.
         var values: [CheckedExpr] = []
         for (argument, given) in zip(arguments, given) {
-            let expected = given.field.map { field in
-                Expectation(types[field]) { .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1) }
+            // An argument that gives no field was reported, and its value is checked on its own for its own errors.
+            guard let field = given.field else {
+                argument.reportErrors(by: expressions)
+                continue
             }
-            let value = expressions.check(argument.value, expecting: expected)
-            // A value that failed, that has another type than its field's, or that gives no field, was reported.
-            guard let value, given.field != nil else { continue }
+            let expected = Expectation(types[field]) {
+                .fieldTypeMismatch(field: fields[field].name, expected: $0, found: $1)
+            }
+            // A value that failed, or that has another type than its field's, was reported.
+            guard let value = argument.checked(expecting: expected, by: expressions) else { continue }
             values.append(value)
         }
         return values.count == arguments.count ? values : nil
@@ -150,7 +157,7 @@ struct InitializerChecker {
 
     /// Reports each argument that gives a field out of the struct's order: one the struct declares before a field
     /// an earlier argument gave. Returns whether the fields come in order.
-    private func reportOutOfOrder(_ given: [GivenField], by arguments: [Argument],
+    private func reportOutOfOrder(_ given: [GivenField], by arguments: [some CallArgument],
                                   among fields: [DeclaredField]) -> Bool {
         var latest: Int?
         var isInOrder = true

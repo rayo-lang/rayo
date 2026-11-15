@@ -120,4 +120,30 @@ struct FunctionTests {
         #expect(reported.map(\.code) == expected)
         #expect(coveredText(reported, in: source) == covered)
     }
+
+    @Test(arguments: [
+        ("e.hp()", ErrorCode.notAFunction(name: "hp"), "hp"),
+        ("let a = [1, 2]\nprint(a.count())", .notAFunction(name: "count"), "count"),
+    ])
+    func `a property is no function, so a call of one is reported at its name`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = "func main() {\nlet e = Enemy(hp: 1)\n\(body)\n}\nstruct Enemy(var hp: Int)"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test(arguments: [
+        ("let i = Int", ErrorCode.typeAsValue(name: "Int"), "Int"),
+        ("print(Bool(true))", .noSuchMember(type: "Bool", name: "init"), "Bool"),
+    ])
+    func `a prelude type's name names the type, and a call of it reaches the type's initializers`(
+        body: String, expected: ErrorCode, covered: String,
+    ) {
+        let source = "func main() {\n\(body)\n}"
+        let reported = diagnostics(source)
+        #expect(reported.map(\.code) == [expected])
+        #expect(coveredText(reported, in: source) == [covered])
+    }
 }

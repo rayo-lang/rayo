@@ -5,8 +5,8 @@ import RayoSyntax
 typealias TypedPlace = (place: CheckedPlace, type: RayoType)
 
 /// What a position asks of a place the source names there, such as one an expression reads or one an assignment
-/// changes: which roots it may start from, which fields it may step into, and whether it may name an array's count.
-/// Every position may step into an array's element.
+/// changes: which roots it may start from, which fields it may step into, and whether a place may hold the value of
+/// a value property, such as an array's count. Every position may step into an array's element.
 protocol PlaceRules {
     /// Checks the expression a place starts from, such as the local `e` in `e.stats.hp`. The flag says whether the
     /// place goes on into a field or an element of it. Returns the start as a place, or nil once it has reported why it
@@ -16,7 +16,8 @@ protocol PlaceRules {
     /// Whether a place may go into a field, reporting why where it may not.
     func admits(_ field: DeclaredField, at nameRange: SourceRange) -> Bool
 
-    /// Whether a place may name an array's count, whose name the source writes at `nameRange`, reporting why where it
-    /// may not.
-    func admitsCount(at nameRange: SourceRange) -> Bool
+    /// The place that holds `property`, the value of a value property whose name the source writes at `nameRange`,
+    /// where the source names it as a place or goes on from it, as in `copy a.count`. Returns nil once it has reported
+    /// why the position can't name it.
+    func place(holding property: CheckedExpr, at nameRange: SourceRange) -> TypedPlace?
 }

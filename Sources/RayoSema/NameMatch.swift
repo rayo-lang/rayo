@@ -4,8 +4,8 @@ enum NameMatch {
     case inScope(ScopeEntry)
     /// The module's functions of that name, the prelude's among them.
     case functions([Signature])
-    /// The module's struct of that name.
-    case structure(StructID)
+    /// The module's type of that name, or the prelude's that no type or function of the module shadows.
+    case type(RayoType)
     /// A function or a type of the module whose declaration failed, which was reported there, so its uses report
     /// nothing more.
     case failed
@@ -13,7 +13,7 @@ enum NameMatch {
     /// What a use of the name of `type`, one of the module's types, stands for.
     init(type: DeclaredType) {
         switch type {
-        case .structure(let id): self = .structure(id)
+        case .structure(let id): self = .type(.structure(id))
         case .failed: self = .failed
         }
     }
@@ -25,7 +25,7 @@ enum NameMatch {
         case .failed: true
         // A call might have meant any of the functions, so one that failed is reached among them.
         case .functions(let functions): functions.contains(where: \.hasFailed)
-        case .inScope, .structure: false
+        case .inScope, .type: false
         }
     }
 }

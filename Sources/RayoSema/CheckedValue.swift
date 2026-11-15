@@ -34,13 +34,13 @@ enum CheckedValue {
 
     /// Whether a parameter of `type` takes the value: a typed value of that type, an untyped one that fits it, an
     /// array literal of the type's count whose elements each fit the type's element type, or an implicit member that
-    /// makes a value of the type.
-    func fits(_ type: RayoType) -> Bool {
+    /// makes a value of the type. `declarations` gives the members an implicit member names.
+    func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         switch self {
         case .typed(let value): value.type == type
         case .untyped(let value): value.fits(type)
-        case .arrayLiteral(let literal): literal.fits(type)
-        case .implicitMember(let member): member.fits(type)
+        case .arrayLiteral(let literal): literal.fits(type, in: declarations)
+        case .implicitMember(let member): member.fits(type, in: declarations)
         }
     }
 }
@@ -57,10 +57,10 @@ struct ArrayLiteral {
     }
 
     /// Whether the literal can settle to `type`: an array of as many elements as the literal, each of which fits
-    /// its element type.
-    func fits(_ type: RayoType) -> Bool {
+    /// its element type, where `declarations` gives the members an implicit member names.
+    func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
         guard case .array(let count, let element) = type, count == elements.count else { return false }
-        return elements.allSatisfy { $0.fits(element) }
+        return elements.allSatisfy { $0.fits(element, in: declarations) }
     }
 }
 
@@ -68,14 +68,23 @@ struct ArrayLiteral {
 /// checked on its own.
 struct ImplicitMember {
     /// An argument of the call: its label, its value checked on its own, and where the source writes both.
-    struct Argument {
+    struct Argument: CallArgument {
         var label: String?
         var value: CheckedValue
         var range: SourceRange
-    }
 
-    /// The label of the argument whose value `.init(repeating:)`, the one member an array has, fills the array with.
-    static let fillingLabel = "repeating"
+        func checked(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
+            expressions.settled(value, expecting: expected)
+        }
+
+        func value(by expressions: ExpressionChecker) -> CheckedValue? {
+            value
+        }
+
+        func reportErrors(by expressions: ExpressionChecker) {
+            expressions.reportSettlingErrors(of: [value])
+        }
+    }
 
     var name: String
     /// Where the source writes the `.` and the name.
@@ -90,19 +99,21 @@ struct ImplicitMember {
         arguments?.map(\.value) ?? []
     }
 
-    /// The value that `.init(repeating: value)`, the one member an array has, fills it with; nil for any other member.
-    /// An array's members are told apart here alone, so checking a member and picking among overloads agree.
-    var fillingValue: CheckedValue? {
-        guard name == "init", let arguments, arguments.count == 1, arguments[0].label == Self.fillingLabel else {
-            return nil
-        }
-        return arguments[0].value
+    /// Whether a position that expects `type` takes an implicit member, which only an array's does.
+    static func isSupported(in type: RayoType) -> Bool {
+        if case .array = type { true } else { false }
     }
 
-    /// Whether the member makes a value of `type`: an array, filled with a value that fits its element type.
-    func fits(_ type: RayoType) -> Bool {
-        guard case .array(_, let element) = type, let fillingValue else { return false }
-        return fillingValue.fits(element)
+    /// Whether the member makes a value of `type`, among whose members `declarations` finds it: a call of one of the
+    /// type's initializers whose labels and parameter types the call's arguments fit.
+    func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
+        guard Self.isSupported(in: type), let arguments,
+              case .initializers(.overloads(let candidates))? = declarations.member(named: name, of: type)
+        else { return false }
+        let labels = arguments.map(\.label)
+        return candidates.contains {
+            $0.takesLabels(labels) && $0.takes(argumentValues, in: declarations, where: { _ in true })
+        }
     }
 }
 
