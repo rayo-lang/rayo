@@ -30,4 +30,9 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
     public var isInteger: Bool {
         if case .scalar(let scalar) = self { scalar.isInteger } else { false }
     }
+
+    /// Whether the type's values carry a sign, as a signed integer type's do.
+    public var isSigned: Bool {
+        if case .scalar(let scalar) = self { scalar.isSigned } else { false }
+    }
 }

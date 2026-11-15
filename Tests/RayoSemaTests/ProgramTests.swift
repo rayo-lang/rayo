@@ -4,6 +4,7 @@ import RayoDiagnostics
 struct ProgramTests {
     @Test("a program that checks reports nothing", arguments: [
         "func main() { print(-9223372036854775808) }",
+        "func main() { print(-(9223372036854775808)) }",
         "func main() -> Void {}",
         "func main() -> () {}",
     ])
@@ -40,7 +41,7 @@ struct ProgramTests {
     @Test("an integer literal must fit in an Int, and the error covers the literal", arguments: [
         ("print(9223372036854775808)", "9223372036854775808"),
         ("print(-9223372036854775809)", "-9223372036854775809"),
-        ("print(-(9223372036854775808))", "(9223372036854775808)"),
+        ("print(-(9223372036854775809))", "-(9223372036854775809)"),
         ("print(0xFFFFFFFFFFFFFFFF)", "0xFFFFFFFFFFFFFFFF"),
     ])
     func literals(body: String, literal: String) {

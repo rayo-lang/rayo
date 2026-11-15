@@ -90,6 +90,17 @@ func pack(_ b: UInt8, _ n: Int, _ bit: UInt8) {
     - A left shift drops bits past the top whatever the sign, so it never overflows.
     - The masking shifts `&<<` and `&>>` use only the count's low bits, `count & (bitWidth - 1)`, as an unsigned amount.
 
+**Prefix `-` belongs to the signed integer types and the floating-point types alone.** Negating an unsigned value overflows for every value but 0, so `-u` on a `UInt` is a compile error rather than a panic when the program runs. A `-` on an untyped value other than a literal, such as `-(1 + 2)`, is untyped too and takes the type its context gives it, which must then be signed. A `-` on a literal is part of the literal, so the literal's own check decides whether it fits ([Literals](collections.md#literals)):
+
+```swift
+func flip(_ i: Int, _ u: UInt) {
+    let a = -i              // an Int, which overflows only for Int.min
+    let b = -u              // error: '-' needs a signed operand, found UInt
+    let c: UInt = -(1 + 2)  // error: '-' needs a signed operand, found UInt
+    let d: UInt = -(1)      // error: the literal doesn't fit in a UInt
+}
+```
+
 **An integer operation that the target's processor has no instruction for is computed another way: by a sequence of instructions, or by a software routine where none serves, with the result this section gives.** A 64-bit addition on a 32-bit processor takes a few instructions, where `Int` and `UInt` are still 64 bits ([Numbers](#numbers)). Any division on a Cortex-M0, and a 64-bit division on many 32-bit processors, take a software routine. So the hardware changes how long an integer operation takes, never its result, as it does for a floating-point one ([below](#floating-point)).
 
 **`x.trailingZeroCount` is the number of zero bits below `x`'s lowest set bit, as a `UInt`**, for every integer type. When `x` is 0 it is the bit width, so `UInt64(0).trailingZeroCount` is 64.

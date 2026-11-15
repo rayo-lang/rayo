@@ -1,5 +1,6 @@
 import RayoDiagnostics
 import RayoSource
+import RayoSyntax
 
 /// A value with no type of its own until one settles it: an integer literal, or a negation or arithmetic on untyped
 /// values.
@@ -17,6 +18,16 @@ indirect enum UntypedValue {
         }
     }
 
+    /// `-self`, which the source gives at `range`. A `-` written onto a literal, as in `-(1)`, makes one literal of
+    /// the opposite sign, so the literal's own range check decides whether a type holds it.
+    func negated(at range: SourceRange) -> UntypedValue {
+        if case .integer(let magnitude, let isNegative, _) = self {
+            .integer(magnitude: magnitude, isNegative: !isNegative, range: range)
+        } else {
+            .negation(self, range: range)
+        }
+    }
+
     /// The type the value settles to where nothing else gives it one.
     private static let integerDefault = RayoType.int
 
@@ -28,11 +39,9 @@ indirect enum UntypedValue {
         case .integer(let magnitude, let isNegative, let range):
             Self.literal(magnitude, isNegative: isNegative, as: type, named: typeName, at: range, reporting: errors)
 
-        // A negation's operand settles to the negation's type.
+        // A negation's operand settles to the negation's type, which must be signed.
         case .negation(let operand, let range):
-            operand.settled(to: type, named: typeName, reporting: errors).map {
-                CheckedExpr(kind: .unary(.negate, $0), type: type, range: range)
-            }
+            Self.negation(operand, as: type, named: typeName, at: range, reporting: errors)
 
         // Both operands settle to the operator's type.
         case .arithmetic(let op, let left, let right, let range):
@@ -56,6 +65,20 @@ indirect enum UntypedValue {
             return nil
         }
         return CheckedExpr(kind: .integerLiteral(value, scalar), type: type, range: range)
+    }
+
+    /// Settles `-operand`, which the source gives at `range`, to `type`, reporting it where `type` has no sign.
+    private static func negation(_ operand: UntypedValue, as type: RayoType, named typeName: TypeName,
+                                 at range: SourceRange, reporting errors: ErrorList) -> CheckedExpr? {
+        // Negating an unsigned value overflows for every value but 0, so only a signed type has `-`. The operand
+        // isn't settled then, since a negation inside it would report the same mistake again.
+        guard type.isSigned else {
+            errors.report(.signedOperand(op: UnaryOperator.negate.rawValue, found: typeName), at: range)
+            return nil
+        }
+        return operand.settled(to: type, named: typeName, reporting: errors).map {
+            CheckedExpr(kind: .unary(.negate, $0), type: type, range: range)
+        }
     }
 
     /// Settles `left op right`, which the source gives at `range`, to `type`, settling both operands to it.
