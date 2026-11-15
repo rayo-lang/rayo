@@ -5,7 +5,7 @@ The Rayo toolchain is a Swift package at the root of this repository. It builds 
 - **SwiftPM only.** No Xcode project files, and no Apple-only frameworks: the compiler reaches the C library through `Glibc`, `Musl`, `Darwin` or `CRT`.
 - **Swift 6.4, and macOS 27 or later**, whose standard library has the spans and the unique-ownership types the code-style rules call for. Linux and Windows need no particular release.
 - **One package dependency, `swift-syntax`,** which the macros that build the table of diagnostic codes are written with.
-- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, and on macOS with the runner's Xcode that holds Swift 6.4. On Windows it tests x64 and arm64, each built natively, with Swift 6.4 and the build of LLVM that LLVM publishes for it. Code must pass on all four. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
+- **CI tests on Linux, macOS and Windows**: on Linux in the `swift:6.4-noble` container, and on macOS with the runner's Xcode that holds Swift 6.4. On Windows it tests x64 and arm64, each built natively, with Swift 6.4 and the build of LLVM that LLVM publishes for it. Code must pass on all four. On Linux, CI also builds `rayo` and `rayoc` in release, as [Build it](#build-it) does, and runs each version's proof program with them, in debug and in release builds. A pull request runs only the test targets that its changes reach through the manifest's dependencies, and a push to `main` runs them all.
 - **LLVM is the backend.** `rayoc` builds each program's module through LLVM's C API and has LLVM write the object code. It never writes LLVM IR as text, and the only such text it reads is the program runtime's.
 
 ## Build it
@@ -62,12 +62,12 @@ python3 scripts/check_imports.py
 
 | Command line | Does |
 | --- | --- |
-| `rayoc [--warnings-as-errors] --check [--] <file>` | Checks the file, a program or a library, and writes no file |
-| `rayoc [--warnings-as-errors] --emit=checked [--] <file>` | Checks the file, and prints its checked program as text |
-| `rayoc [--warnings-as-errors] --emit=ir [--] <file>` | Checks the file, and prints its Rayo IR as text, which reads back into the same IR |
-| `rayoc [--warnings-as-errors] [--debug \| --release] -o <object file> [--] <file>` | Compiles the file, which must have a `main`, to object code for the host, in release mode where no mode is named, and writes it to the object file |
+| `rayoc --check [--] <file>` | Checks the file, a program or a library, and writes no file |
+| `rayoc --emit=checked [--] <file>` | Checks the file, and prints its checked program as text |
+| `rayoc --emit=ir [--] <file>` | Checks the file, and prints its Rayo IR as text, which reads back into the same IR |
+| `rayoc [--debug \| --release] -o <object file> [--] <file>` | Compiles the file, which must have a `main`, to object code for the host, in release mode where no mode is named, and writes it to the object file |
 
-`--` ends the options, so the file after it may be named like one; `rayo` always passes it. A program with only warnings compiles, unless `--warnings-as-errors` makes a warning fail the compile as an error does; `rayo check`, `rayo build` and `rayo run` take it too, and pass it on.
+`--` ends the options, so the file after it may be named like one; `rayo` always passes it. A program with only warnings compiles.
 
 `rayoc` exits with 0 when it checked, printed or compiled the file, 1 when the program has errors or is a library given to `-o`, or `rayoc` couldn't go on, and 2 when the arguments name no compile. It writes the program's errors and warnings, each followed by a `note:` line for each place it labels, or why it stopped, to its standard error, and `rayo` passes on what it writes there as it is.
 

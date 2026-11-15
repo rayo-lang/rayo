@@ -172,6 +172,9 @@ jobs:
           platform: linux
           llvm-version: ${{ steps.llvm.outputs.version }}
           changed-paths: ${{ needs.changes.outputs.test-paths }}
+          # One platform builds the release toolchain users run, and runs the proof programs with it; what differs
+          # between platforms the debug tests cover on each.
+          release-proof-programs: "true"
       # A target can import a module through a dependency it doesn't name, so the check reads the imports
       # themselves: of LLVM's C module, and of syntax after semantic checking. They are the same on every platform,
       # so it runs here alone, whether or not the tests passed. It runs once LLVM is installed, since LLVM's
