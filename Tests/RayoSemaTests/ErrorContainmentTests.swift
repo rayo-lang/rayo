@@ -1,12 +1,15 @@
 import Testing
 import RayoDiagnostics
+import RayoSema
+import RayoSyntax
 
-/// A body whose errors only the ownership checks, which run after checking, would report: a use of a local that
-/// holds no value, and, were that checked no further, a value no code reads.
-private let ownershipErrors = """
-        let x: Int
-        let unread = x
-    """
+/// The codes of the errors and warnings that checking `source` reports, and whether the checked program holds a body
+/// for its `main`, which the stages after checking would go on to check, or nil where it declares no `main`.
+private func checked(_ source: String) -> (errors: [ErrorCode], mainHasBody: Bool?) {
+    let program = Checker.check(Parser.parse(source).file).program
+    let main = program.functions.ids.first { program.functions[$0].name == "main()" }
+    return (errors(source), main.map { program.bodies[$0] != nil })
+}
 
 struct ErrorContainmentTests {
     @Test(arguments: [
@@ -25,8 +28,9 @@ struct ErrorContainmentTests {
     func `a call to a function whose declaration failed reports nothing more, and taints its caller`(
         declaration: String, expected: [ErrorCode],
     ) {
-        let source = "func main() {\n\(ownershipErrors)\n    broken(x)\n}\n" + declaration
-        #expect(errors(source) == expected)
+        let reported = checked("func main() {\n    broken(1)\n}\n" + declaration)
+        #expect(reported.errors == expected)
+        #expect(reported.mainHasBody == false)
     }
 
     @Test(arguments: [
@@ -40,9 +44,9 @@ struct ErrorContainmentTests {
     func `a use of a struct whose declaration failed reports nothing more, and taints the body`(
         declaration: String, expected: [ErrorCode],
     ) {
-        let source = "func main() {\n\(ownershipErrors)\n    let b: Broken = Broken(x: x)\n    print(b)\n}\n"
-            + declaration
-        #expect(errors(source) == expected)
+        let reported = checked("func main() {\n    let b: Broken = Broken(x: 1)\n    print(b)\n}\n" + declaration)
+        #expect(reported.errors == expected)
+        #expect(reported.mainHasBody == false)
     }
 
     @Test func `no missing 'return' is reported after a statement that failed to parse`() {
