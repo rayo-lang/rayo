@@ -18,6 +18,7 @@ struct FieldAssignmentTests {
     @Test(arguments: [
         ("l.armor = 1", ErrorCode.assignToPartOfLet(name: "l"), "l"),
         ("l.stats.hp += 1", .assignToPartOfLet(name: "l"), "l"),
+        ("l.stats = Stats(alive: true, hp: 50)", .assignToPartOfLet(name: "l"), "l"),
         ("p.stats.hp = 1", .assignToParameter(name: "p"), "p"),
         ("e.stats.alive = false", .assignToLetField(field: "alive"), "alive"),
         ("e.stats.mana = 1", .noSuchField(type: "Stats", field: "mana"), "mana"),

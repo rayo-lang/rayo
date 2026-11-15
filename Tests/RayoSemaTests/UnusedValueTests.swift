@@ -44,7 +44,7 @@ struct UnusedValueTests {
         #expect(errors("func main() {\n\(body)\n}") == expected)
     }
 
-    @Test("a dropped value is checked, a local's value is moved, and '_' declares nothing", arguments: [
+    @Test("a dropped value is checked, and '_' declares nothing", arguments: [
         ("_ = nope", [ErrorCode.notDeclared(name: "nope")]),
         ("_ = _", [.underscoreValue]),
         ("_ == 1", [.underscoreValue]),

@@ -14,7 +14,7 @@ struct OwnershipCheckTests {
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try checked(withParameter(blocks)).errors == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
+        #expect(try checked(takingInt(blocks)).errors == [Diagnostic(.moveFromParameter(name: "n"), at: at(1))])
     }
 
     @Test func `a 'let' assigned twice isn't reported again for the first value, which no code reads`() throws {
@@ -104,7 +104,7 @@ struct OwnershipCheckTests {
 }
 
 /// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
-private func withParameter(_ blocks: String) -> (name: String, text: String) {
+private func takingInt(_ blocks: String) -> (name: String, text: String) {
     let text = """
         func "f(_: Int)"(Int) -> Void {
           param %0 n: Int

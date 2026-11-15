@@ -1,13 +1,11 @@
 import Testing
 
-/// Structs that hold arrays, in a `var` field and in a `let` one, and functions that make an array and borrow an Int,
-/// which the bodies below use.
+/// A struct that holds arrays, in a `var` field and in a `let` one, and functions that make an array and borrow an
+/// Int, which the bodies below use.
 private let declarations = """
-    struct Stats(var hp: Int)
     struct Enemy(var slots: [2 of Int], let fixed: [2 of Int])
     func made() -> [2 of Int] { [1, 2] }
     func take(_ n: Int) {}
-    func total(_ a: [2 of Int]) -> Int { a[0] + a[1] }
     """
 
 /// The errors that `body`, as the body of a function that borrows the array `p`, reports, each as its position, code

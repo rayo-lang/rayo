@@ -1,9 +1,8 @@
 import Testing
 
-/// A struct, another that holds an array, and a function that borrows an Int, which the bodies below use.
+/// A struct, and a function that borrows an Int, which the bodies below use.
 private let declarations = """
     struct Stats(var hp: Int)
-    struct Enemy(var slots: [2 of Int])
     func take(_ n: Int) {}
     """
 

@@ -6,9 +6,10 @@ import RayoSyntax
 /// The codes of the errors and warnings that checking `source` reports, and whether the checked program holds a body
 /// for its `main`, which the stages after checking would go on to check, or nil where it declares no `main`.
 private func checked(_ source: String) -> (errors: [ErrorCode], mainHasBody: Bool?) {
-    let program = Checker.check(Parser.parse(source).file).program
+    let (file, syntaxErrors) = Parser.parse(source)
+    let (program, checkErrors) = Checker.check(file)
     let main = program.functions.ids.first { program.functions[$0].name == "main()" }
-    return (errors(source), main.map { program.bodies[$0] != nil })
+    return ((syntaxErrors + checkErrors).inSourceOrder.map(\.code), main.map { program.bodies[$0] != nil })
 }
 
 struct ErrorContainmentTests {
