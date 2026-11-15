@@ -17,6 +17,15 @@ struct TargetMachineTests {
         #endif
     }
 
+    @Test func `the host's machine compiles for Windows only on Windows`() throws {
+        let compilesForWindows = try TargetMachine(optimizes: false).compilesForWindows
+        #if os(Windows)
+        #expect(compilesForWindows)
+        #else
+        #expect(!compilesForWindows)
+        #endif
+    }
+
     @Test(arguments: [false, true])
     func `the object code of a module names the functions it defines`(optimizes: Bool) throws {
         let machine = try TargetMachine(optimizes: optimizes)

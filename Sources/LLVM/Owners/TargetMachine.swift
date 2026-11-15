@@ -5,6 +5,8 @@ public struct TargetMachine: ~Copyable {
     private let ref: LLVMTargetMachineRef
     /// The host's triple, which names what the machine compiles for.
     public let triple: String
+    /// Whether the machine compiles for Windows, which its triple names as the operating system.
+    public var compilesForWindows: Bool { triple.contains("-windows") }
     /// Whether the machine optimises the machine code it generates. `optimize(_:)` optimises a module's IR either way.
     public let optimizes: Bool
 

@@ -12,7 +12,7 @@ struct Runtime: ~Copyable {
     /// Parses the runtime into `context`, its functions carrying `functionAttributes`, and defines in `program`, a
     /// module of that context, the constant the runtime reads.
     init(
-        in context: borrowing Context, for program: borrowing Module, giving functionAttributes: [FunctionAttribute],
+        in context: borrowing Context, for program: borrowing Module, functionAttributes: [FunctionAttribute],
     ) throws(LLVMError) {
         // Link the runtime's files together, in a module of their own for the program's target, so that it links
         // into the program's.

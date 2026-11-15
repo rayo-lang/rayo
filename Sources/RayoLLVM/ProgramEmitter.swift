@@ -22,8 +22,8 @@ struct ProgramEmitter: ~Copyable {
         module = context.makeModule(named: sourcePath)
         builder = context.makeBuilder()
         target.configure(module)
-        let functionAttributes = Self.functionAttributes(for: target.triple)
-        runtime = try Runtime(in: context, for: module, giving: functionAttributes)
+        let functionAttributes = Self.functionAttributes(for: target)
+        runtime = try Runtime(in: context, for: module, functionAttributes: functionAttributes)
         self.functionAttributes = functionAttributes
         self.sourcePath = sourcePath
         self.build = build
@@ -94,12 +94,12 @@ struct ProgramEmitter: ~Copyable {
         return DeclaredFunction(function: llvmFunction, signature: signature)
     }
 
-    /// The attributes every function needs on the target `triple` names, so that a frame of any size is made safely
-    /// there, and the system can walk the stack through the function.
-    private static func functionAttributes(for triple: String) -> [FunctionAttribute] {
+    /// The attributes every function needs on `target`, so that a frame of any size is made safely there, and the
+    /// system can walk the stack through the function.
+    private static func functionAttributes(for target: borrowing TargetMachine) -> [FunctionAttribute] {
         // Windows already probes a frame larger than a page, through `__chkstk`, and its unwinder walks the stack
         // through a function only by the function's unwind table. Elsewhere a large frame is probed only where a
         // function asks for it.
-        triple.contains("-windows") ? [.unwindTable] : [.inlineStackProbes]
+        target.compilesForWindows ? [.unwindTable] : [.inlineStackProbes]
     }
 }

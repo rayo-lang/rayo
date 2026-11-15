@@ -12,7 +12,7 @@ public enum FunctionAttribute: Equatable {
     /// How LLVM spells an attribute: as a kind it knows by name, holding a number, or as a string key, holding a
     /// string.
     private enum Spelling {
-        case known(String, UInt64)
+        case known(String, Int)
         case string(String, String)
     }
 
@@ -28,7 +28,7 @@ public enum FunctionAttribute: Equatable {
     func ref(in context: LLVMContextRef) -> LLVMAttributeRef {
         switch spelling {
         case .known(let name, let value):
-            LLVMCreateEnumAttribute(context, Self.kind(named: name), value)
+            Attribute.enumAttribute(name, value, in: context)
         case .string(let key, let value):
             LLVMCreateStringAttribute(context, key, UInt32(key.utf8.count), value, UInt32(value.utf8.count))
         }
@@ -38,8 +38,8 @@ public enum FunctionAttribute: Equatable {
     func isCarried(by function: LLVMValueRef) -> Bool {
         switch spelling {
         case .known(let name, let value):
-            let carried = LLVMGetEnumAttributeAtIndex(function, Self.functionIndex, Self.kind(named: name))
-            return carried.map { LLVMGetEnumAttributeValue($0) == value } ?? false
+            let carried = LLVMGetEnumAttributeAtIndex(function, Self.functionIndex, Attribute.kind(named: name))
+            return carried.map { LLVMGetEnumAttributeValue($0) == UInt64(value) } ?? false
         case .string(let key, let value):
             let carried = LLVMGetStringAttributeAtIndex(function, Self.functionIndex, key, UInt32(key.utf8.count))
             return carried.map { Self.stringValue(of: $0) == value } ?? false
@@ -48,11 +48,6 @@ public enum FunctionAttribute: Equatable {
 
     /// The index LLVM gives the whole function among the places that carry attributes: ~0, which C's enum spells -1.
     static let functionIndex = LLVMAttributeIndex(bitPattern: Int32(LLVMAttributeFunctionIndex))
-
-    /// The number LLVM knows the attribute `name` by.
-    private static func kind(named name: String) -> UInt32 {
-        LLVMGetEnumAttributeKindForName(name, name.utf8.count)
-    }
 
     /// The string a string attribute holds.
     private static func stringValue(of attribute: LLVMAttributeRef) -> String {
