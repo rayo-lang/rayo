@@ -75,6 +75,7 @@ enum NavMode: Int32 { case walk, fly }
 - a way to park a thread on an address and wake it, which blocking primitives wait with ([07](../07-concurrency/synchronization.md#parking-and-waking-a-thread));
 - a monotonic clock with nanosecond counts, which `MonotonicClock` reads for timeouts and task deadlines ([07](../07-concurrency/synchronization.md#time-duration-and-instant)). On every target, a read of it is whole, and never returns less than a read that happens before it, on any thread;
 - random bytes for the process seed (below);
+- the program's standard output, which `print` writes to ([04](../04-types/collections.md#printing));
 - a way to report a panic ([10](../10-errors-and-safety/panics.md#panics)).
 
 **The process seed's bytes must be ones nobody outside the program can predict**, since `Map` and `Set` hash with seeds derived from it by default ([04](../04-types/collections.md#hash-maps-and-sets)). A platform with no source of randomness, such as a small embedded target, takes them from elsewhere:
