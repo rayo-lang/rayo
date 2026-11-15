@@ -1,0 +1,136 @@
+import Testing
+
+struct IfExpressionTests {
+    @Test("an 'if' used for its value needs an 'else' on every path, reported at the 'if' that lacks one", arguments: [
+        ("let y = if c { 1 }", "3:9: error[E0253]: an 'if' used for its value needs an 'else'"),
+        ("let y = if c { 1 } else if !c { 2 }", "3:25: error[E0253]: an 'if' used for its value needs an 'else'"),
+        ("print(if c { 1 })", "3:7: error[E0253]: an 'if' used for its value needs an 'else'"),
+    ])
+    func needsElse(body: String, expected: String) {
+        #expect(errorLines(inMain: "let c = true\n\(body)") == [expected])
+    }
+
+    @Test("where the position expects no type, a branch of another type than the typed ones is an error naming both",
+          arguments: [
+        ("let y = if c { 1 } else { true }",
+         "3:16: error[E0254]: the 'if' gives Bool in one branch and Int in another"),
+        ("let y = if c { true } else if !c { 1 } else { false }",
+         "3:36: error[E0254]: the 'if' gives Bool in one branch and Int in another"),
+        ("let y = if c { } else { 1 }", "3:25: error[E0254]: the 'if' gives Void in one branch and Int in another"),
+        ("let y = (if c { 1 } else { c }) + 1",
+         "3:17: error[E0254]: the 'if' gives Bool in one branch and Int in another"),
+        ("let i = 1\nlet u: UInt = 2\nlet y = if c { u } else { i }",
+         "5:27: error[E0254]: the 'if' gives UInt in one branch and Int in another"),
+        ("let i = 1\nlet u: UInt = 2\nlet y = if c { 1 } else if !c { i } else { u }",
+         "5:44: error[E0254]: the 'if' gives Int in one branch and UInt in another"),
+        ("let y = if c { if !c { 1 } else { true } } else { 2 }",
+         "3:35: error[E0254]: the 'if' gives Int in one branch and Bool in another"),
+        ("let u: UInt = 2\nlet y = if c { if !c { 1 } else { true } } else { u }",
+         "4:35: error[E0254]: the 'if' gives UInt in one branch and Bool in another"),
+    ])
+    func branchesDiffer(body: String, expected: String) {
+        #expect(errorLines(inMain: "let c = true\n\(body)") == [expected])
+    }
+
+    @Test(arguments: [
+        "let y = if c { 1 } else { u }\ntake(y)",
+        "let y = if c { u } else { 1 }\ntake(y)",
+        "let y = if c { 1 + 2 } else if !c { u } else { -0 }\ntake(y)",
+        "let y = if c { [1, 2] } else { [u, 3] }\ntake(y[0])",
+        "take((if c { 1 } else { u }) + 1)",
+    ])
+    func `where the position expects no type, an untyped branch takes the type of the typed ones`(body: String) {
+        #expect(errorLines(inMain: "let c = true\nlet u: UInt = 3\n\(body)", beside: "func take(_ n: UInt) {}") == [])
+    }
+
+    @Test(arguments: [
+        "var v = u\nv += if c { 1 } else { 2 }\ntake(v)",
+        "let a: [2 of UInt] = [if c { 1 } else { 2 }, u]\ntake(a[0])",
+        "take(u + if c { 1 } else { 2 })",
+        "pick(if c { 1 } else { 2 })\ntake(u)",
+        "take(if c { if !c { 1 } else { 2 } } else { 3 })\ntake(u)",
+        "let y = if c { u } else if !c { 1 } else { 2 }\ntake(y)",
+    ])
+    func `an 'if' whose branches all wait for a type waits too, wherever it is used`(body: String) {
+        let declarations = "func take(_ n: UInt) {}\nfunc pick(_ n: UInt) {}\nfunc pick(_ b: Bool) {}"
+        #expect(errorLines(inMain: "let c = true\nlet u: UInt = 3\n\(body)", beside: declarations) == [])
+    }
+
+    @Test("branches that all wait for a type and are used where none is expected take one default together",
+          arguments: [
+        ("let y = if c { 1 } else { 2 }\ntake(y)", "4:6: error[E0213]: expected UInt, found Int"),
+        ("let y = if c { 1 } else { 9223372036854775808 }\nprint(y)",
+         "3:27: error[E0217]: the literal doesn't fit in an Int"),
+    ])
+    func waitingIfDefault(body: String, expected: String) {
+        #expect(errorLines(inMain: "let c = true\n\(body)", beside: "func take(_ n: UInt) {}") == [expected])
+    }
+
+    @Test("where the position expects a type, each branch of another type is an error at the branch", arguments: [
+        ("let y: Int = if c { true } else { false }", [
+            "3:21: error[E0213]: expected Int, found Bool", "3:35: error[E0213]: expected Int, found Bool",
+        ]),
+        ("show(if c { 1 } else { true })", ["3:24: error[E0213]: expected Int, found Bool"]),
+        ("var y = 1\nprint(y)\ny = if c { true } else { 2 }", ["5:12: error[E0213]: expected Int, found Bool"]),
+        ("let p = Point(x: if c { 1 } else { true })\nprint(p.x)",
+         ["3:36: error[E0248]: the field 'x' takes Int, found Bool"]),
+    ])
+    func expectedType(body: String, expected: [String]) {
+        let source = "func main() {\nlet c = true\n\(body)\n}\nstruct Point(var x: Int)\nfunc show(_ n: Int) {}"
+        #expect(diagnostics(source).map(\.description) == expected)
+    }
+
+    @Test func `an 'if' passed to a call that fails still reports its branches' errors`() {
+        #expect(errorLines(inMain: "let c = true\nnothing(if c { 1 } else { true })") == [
+            "3:1: error[E0206]: 'nothing' isn't declared",
+            "3:16: error[E0254]: the 'if' gives Bool in one branch and Int in another",
+        ])
+    }
+
+    @Test func `a 'return' expects the function's result type of each branch`() {
+        let source = "func main() {}\nfunc f(_ c: Bool) -> Int {\nreturn if c { 1 } else { false }\n}"
+        #expect(diagnostics(source).map(\.description) == ["3:26: error[E0213]: expected Int, found Bool"])
+    }
+
+    @Test("a branch that ends in 'return', 'break' or 'continue' fits the type of the other", arguments: [
+        "let y = if c { return } else { 1 }\nprint(y)",
+        "let y: Bool = if c { true } else { return }\nprint(y)",
+        "while true {\nlet y = if c { break } else { 1 }\nprint(y)\n}",
+        "while c {\nprint(if c { continue } else { true })\n}",
+        "let y = if c { if !c { return } else { return } } else { 1 }\nprint(y)",
+        "let y = if c { let z: Int = if !c { return } else { return } } else { 1 }\nprint(y)",
+        "show(if c { return } else { return })",
+    ])
+    func leavingBranches(body: String) {
+        #expect(errors("func main() {\nlet c = true\n\(body)\n}\nfunc show(_ n: Int) {}") == [])
+    }
+
+    @Test("an 'if' that every branch leaves has no value where the position expects no type", arguments: [
+        ("let y = if c { return } else { return }", "3:9"),
+        ("print(if c { return } else { return })", "3:7"),
+        ("while true {\nprint(if c { break } else { break })\n}", "4:7"),
+    ])
+    func everyBranchLeaves(body: String, position: String) {
+        #expect(errorLines(inMain: "let c = true\n\(body)") == [
+            "\(position): error[E0255]: no branch of the 'if' runs to its end, so the 'if' has no value",
+        ])
+    }
+
+    @Test func `code after an 'if' that every branch leaves can't run, so it needs no 'return'`() {
+        let function = "func f(_ c: Bool) -> Int {\nprint(0)\nshow(if c { return 1 } else { return 2 })\n}"
+        #expect(errors("func main() {}\n\(function)\nfunc show(_ n: Int) {}") == [])
+    }
+
+    @Test func `a 'break' in a branch of an 'if' leaves the loop, so code after the loop can run`() {
+        let source = "func main() {}\nfunc f(_ c: Bool) -> Int {\nwhile true {\nlet y = if c { break } else { 1 }\n}\n}"
+        #expect(diagnostics(source).map(\.description) == [
+            "6:1: error[E0226]: 'f(_: Bool)' can reach its end without returning a value",
+        ])
+    }
+
+    @Test func `as a statement, an 'if''s branches needn't agree, and each value they leave unused is reported`() {
+        #expect(errorLines(inMain: "let c = true\nif c { 1 } else { true }") == [
+            "3:8: error[E0235]: the Int value isn't used", "3:19: error[E0235]: the Bool value isn't used",
+        ])
+    }
+}

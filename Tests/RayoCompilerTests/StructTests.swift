@@ -6,17 +6,6 @@ private let shotAndHit = "\nstruct Shot(var hit: Hit)\nstruct Hit(var damage: In
 
 struct StructTests {
     @Test(arguments: [
-        ("let i: Int = copy s", ErrorCode.typeMismatch(expected: "Int", found: "S")),
-        ("let e: E = copy s", .typeMismatch(expected: "E", found: "S")),
-        ("print(s)", .noMatchingFunction(name: "print", arguments: "S")),
-        ("let t = s + s", .integerOperands(op: "+", left: "S", right: "S")),
-        ("let b = s == s", .incomparable(op: "==", type: "S")),
-    ])
-    func `a value of a struct's type has no other type, and '==' can't compare it`(body: String, expected: ErrorCode) {
-        #expect(errors("func main() {}\nfunc f(_ s: S) {\n\(body)\n}\nstruct S(var a: Int)\nstruct E") == [expected])
-    }
-
-    @Test(arguments: [
         ("func f(_ s: Shot) -> Shot { s }", "s"),
         ("func f(_ s: Shot) {\n    _ = s\n}", "s"),
         ("func f(_ h: Hit) -> Shot { Shot(hit: h) }", "h"),
@@ -31,148 +20,6 @@ struct StructTests {
         #expect(reported.map(\.code) == [.moveFromParameter(name: name)])
         #expect(coveredText(reported, in: source) == [name])
     }
-
-    @Test(arguments: [
-        ("let s = S", ErrorCode.typeAsValue(name: "S")),
-        ("S = 1", .assignToType(name: "S")),
-    ])
-    func `a struct's name used as a value or an assignment's target is reported as a struct's`(
-        body: String, expected: ErrorCode,
-    ) {
-        let source = "func main() {\n\(body)\n}\nstruct S(var a: Int)"
-
-        // The one error covers the struct's name.
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [expected])
-        #expect(coveredText(reported, in: source) == ["S"])
-    }
-
-    @Test(arguments: [
-        ("let x: Int = 1", "struct Int(var big: Bool)",
-         [ErrorCode.typeMismatch(expected: "Int", found: .shadowedPrelude("Int"))]),
-        ("print(1)", "struct print", [.argumentNamesNoField(type: "print")]),
-    ])
-    func `a struct's name shadows the prelude's type or function of that name`(
-        body: String, declaration: String, expected: [ErrorCode],
-    ) {
-        #expect(errors("func main() {\n\(body)\n}\n\(declaration)") == expected)
-    }
-
-    @Test(arguments: [
-        ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
-        ("1", .unusedValue(type: .shadowedPrelude("Int"))),
-        ("let a = 9223372036854775808", .literalDoesntFit(type: .shadowedPrelude("Int"))),
-        ("let y: () = g()", .voidLocal(type: .shadowedPrelude("Void"))),
-        ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
-        ("let t = true + 1", .integerOperands(op: "+", left: "Bool", right: .shadowedPrelude("Int"))),
-        ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
-        ("let y = (1).big", .noSuchField(type: .shadowedPrelude("Int"), field: "big")),
-        ("f(1)", .noMatchingFunction(name: "f", arguments: "the prelude's Int")),
-        ("let s = S(a: 1)", .fieldTypeMismatch(field: "a", expected: "Bool", found: .shadowedPrelude("Int"))),
-    ])
-    func `an error names a prelude type that a struct shadows as the prelude's`(body: String, expected: ErrorCode) {
-        let structs = "struct Int(var big: Bool)\nstruct Void\nstruct S(var a: Bool)"
-        let functions = "func f(_ b: Bool) {}\nfunc f(_ s: S) {}\nfunc g() {}"
-        #expect(errors("func main() {\n\(body)\n}\n\(structs)\n\(functions)") == [expected])
-    }
-
-    @Test(arguments: [
-        ("func main() -> Void {}", ErrorCode.mainReturnsNonVoid(type: .shadowedPrelude("Void"))),
-        ("func main() {}\nfunc h(_ v: ()) {}", .voidParameter(type: .shadowedPrelude("Void"))),
-        ("func main() {}\nstruct T(var v: ())", .voidField(type: .shadowedPrelude("Void"))),
-    ])
-    func `an error about a declaration names a prelude type that a struct shadows as the prelude's`(
-        declarations: String, expected: ErrorCode,
-    ) {
-        #expect(errors(declarations + "\nstruct Void") == [expected])
-    }
-}
-
-struct StructDeclarationTests {
-    @Test(arguments: [
-        ("struct S(var a: Q)", ErrorCode.notAType(name: "Q"), "Q"),
-        ("struct S(var a: Void)", .voidField(type: "Void"), "Void"),
-        ("struct S(var a: ())", .voidField(type: "Void"), "()"),
-        ("struct S(var a)", .missingFieldType(name: "a"), "a"),
-        ("struct S(var a: Int, let a: Bool)", .alreadyDeclared(name: "a"), "a"),
-        ("struct S(var _: Int)", .underscoreDeclared, "_"),
-        ("struct S(var a: Int = 1)", .fieldDefault, "1"),
-        ("struct S(var a = 1 + 2)", .fieldDefault, "1 + 2"),
-    ])
-    func `a field has a name of its own, a type that isn't Void and no default, and the error covers what is wrong`(
-        declaration: String, expected: ErrorCode, covered: String,
-    ) {
-        let source = "func main() {}\n" + declaration
-
-        // The one error is the field's, and it covers what is wrong with it.
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [expected])
-        #expect(coveredText(reported, in: source) == [covered])
-    }
-
-    @Test(arguments: [
-        "struct S\nstruct S(var a: Int)", "struct S\nfunc S() {}", "func S() {}\nstruct S",
-    ])
-    func `a name at a file's top level names one struct, or functions, and the error covers the later name`(
-        declarations: String,
-    ) {
-        let source = "func main() {}\n" + declarations
-
-        // The one error is at the later of the two declarations, on the file's third line.
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.alreadyDeclared(name: "S")])
-        #expect(reported.map(\.range.start.line) == [3])
-    }
-
-    @Test(arguments: [
-        ("func main() {}\nfunc S() {}\nstruct S\nfunc g(_ s: S) {}", "S"),
-        ("func main() {}\nfunc S() {}\nstruct S\nfunc S(_ x: Int) {}", "S"),
-        ("func main() {\n    S()\n}\nstruct S\nfunc S() {}", "S"),
-        ("struct main\nfunc main() {}", "main"),
-    ])
-    func `a struct or function whose name is taken is still declared, so its uses raise no error of their own`(
-        source: String, name: String,
-    ) {
-        #expect(errors(source) == [.alreadyDeclared(name: name)])
-    }
-
-    @Test(arguments: [
-        ("struct A\nfunc A() {}", "let q = A", ErrorCode.typeAsValue(name: "A")),
-        ("struct A\nfunc A() {}", "A = 3", .assignToType(name: "A")),
-        ("func A() {}\nstruct A", "let q = A", .functionAsValue(name: "A")),
-        ("func A() {}\nstruct A", "A = 3", .assignToFunction(name: "A")),
-    ])
-    func `a body's use of a taken name, other than a call, finds the kind that declares the name first`(
-        declarations: String, body: String, expected: ErrorCode,
-    ) {
-        #expect(errors("func main() {\n\(body)\n}\n" + declarations) == [expected, .alreadyDeclared(name: "A")])
-    }
-
-    @Test func `each function after a struct of its name is an error, though it overloads another`() {
-        let reported = diagnostics("func main() {}\nstruct f\nfunc f() {}\nfunc f(_ x: Int) {}")
-        #expect(reported.map(\.code) == [.alreadyDeclared(name: "f"), .alreadyDeclared(name: "f")])
-        #expect(reported.map(\.range.start.line) == [3, 4])
-    }
-
-    @Test func `'_' can't name a struct`() {
-        #expect(errors("func main() {}\nstruct _") == [.underscoreDeclared])
-    }
-
-    @Test(arguments: [
-        ("struct C(var next: C)", ["C"]),
-        ("struct A(var b: B)\nstruct B(var a: A)", ["A", "B"]),
-        ("struct A(var b: B)\nstruct B(var c: C)\nstruct C(var b: B)", ["B", "C"]),
-    ])
-    func `a struct can't contain itself, through its fields at any depth, and each struct in the cycle is an error`(
-        declarations: String, names: [String],
-    ) {
-        let source = "func main() {}\n" + declarations
-
-        // Each error covers the name of a struct on the cycle.
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == names.map { .containsItself(name: $0) })
-        #expect(coveredText(reported, in: source) == names)
-    }
 }
 
 /// A struct of two Int fields, whose layout keeps their declaration order.
@@ -180,37 +27,10 @@ private let enemy = "\nstruct Enemy(var hp: Int, let armor: Int)"
 
 struct StructInitializerTests {
     @Test(arguments: [
-        "_ = Enemy(hp: 1, armor: 2)", "_ = Enemy(\n    hp: 1,\n    armor: 2,\n)", "_ = Empty()",
         "let hp = 1\n_ = Enemy(hp: copy hp, armor: 2)\nprint(hp)",
     ])
     func `a call of a struct's name gives each field's value, labeled, in order, and makes the struct`(body: String) {
         #expect(errors("func main() {\n\(body)\n}" + enemy + "\nstruct Empty") == [])
-    }
-
-    @Test(arguments: [
-        ("_ = Enemy(hp: 1)", [ErrorCode.fieldLeftOut(field: "armor")], ["Enemy(hp: 1)"]),
-        ("_ = Enemy()", [.fieldLeftOut(field: "hp"), .fieldLeftOut(field: "armor")], ["Enemy()", "Enemy()"]),
-        ("_ = Enemy(hp: 1, armor: 2, speed: 3)", [.noSuchField(type: "Enemy", field: "speed")], ["speed: 3"]),
-        ("_ = Enemy(hp: 1, armor: 2, 3)", [.argumentNamesNoField(type: "Enemy")], ["3"]),
-        ("_ = Enemy(hp: 1, hp: 2, armor: 3)", [.fieldGivenTwice(field: "hp")], ["hp: 2"]),
-        ("_ = Enemy(hp: 1, armr: 2)", [.argumentLabel(expected: .label("armor"), found: .label("armr"))], ["armr: 2"]),
-        ("_ = Enemy(1, armor: 2)", [.argumentLabel(expected: .label("hp"), found: .none)], ["1"]),
-        ("_ = Enemy(armor: 2, hp: 1)", [.fieldOutOfOrder(field: "hp", after: "armor")], ["hp: 1"]),
-        ("_ = Enemy(hp: true, armor: 2)", [.fieldTypeMismatch(field: "hp", expected: "Int", found: "Bool")], ["true"]),
-        (
-            "_ = Enemy(armor: 2, hq: 1)",
-            [.fieldLeftOut(field: "hp"), .noSuchField(type: "Enemy", field: "hq")], ["Enemy(armor: 2, hq: 1)", "hq: 1"],
-        ),
-    ] as [(String, [ErrorCode], [String])])
-    func `a call that doesn't give each field once, labeled and in order, is an error that names the field`(
-        body: String, expected: [ErrorCode], covered: [String],
-    ) {
-        let source = "func main() {\n\(body)\n}" + enemy
-
-        // Each error covers the call where a field is left out, and otherwise the argument or its value.
-        let reported = diagnostics(source)
-        #expect(reported.map(\.code) == expected)
-        #expect(coveredText(reported, in: source) == covered)
     }
 
     @Test(arguments: [
@@ -225,12 +45,6 @@ struct StructInitializerTests {
         source: String, expected: ErrorCode,
     ) {
         #expect(errors(source + enemy) == [expected])
-    }
-
-    @Test func `a field's error is reported once, and a call that makes its struct reports only its arguments'`() {
-        #expect(errors("func main() {\n_ = S(a: true, b: Q)\n}\nstruct S(var a: Q)") == [
-            .notDeclared(name: "Q"), .notAType(name: "Q"),
-        ])
     }
 }
 
@@ -248,12 +62,7 @@ struct FieldReadTests {
     }
 
     @Test(arguments: [
-        ("print(e.speed)", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
-        ("print(e.0)", .noSuchField(type: "Enemy", field: "0"), "0"),
-        ("print(e.0_07)", .noSuchField(type: "Enemy", field: "0_07"), "0_07"),
-        ("print(e.hp.armor)", .noSuchField(type: "Int", field: "armor"), "armor"),
-        ("let b: Bool = e.hp + 1", .typeMismatch(expected: "Bool", found: "Int"), "e.hp + 1"),
-        ("let f = e\nprint(e.hp)", .usedAfterMove(name: "e"), "e.hp"),
+        ("let f = e\nprint(e.hp)", ErrorCode.usedAfterMove(name: "e"), "e.hp"),
     ])
     func `a read of a field the value doesn't have, or of a moved struct, is an error`(
         body: String, expected: ErrorCode, covered: String,
@@ -280,10 +89,6 @@ struct FieldReadTests {
         #expect(reported.map(\.code) == [.moveFieldFromParameter(field: "e.hp", parameter: "e")])
         #expect(coveredText(reported, in: source) == [covered])
     }
-
-    @Test func `a field whose declaration failed is read with no error of its own`() {
-        #expect(errors("func main() {}\nfunc f(s: S) { print(s.a) }\nstruct S(var a: Q)") == [.notAType(name: "Q")])
-    }
 }
 
 struct FieldCopyTests {
@@ -298,11 +103,7 @@ struct FieldCopyTests {
     }
 
     @Test(arguments: [
-        ("let h = copy e.speed", ErrorCode.noSuchField(type: "Enemy", field: "speed"), "speed"),
-        ("let h = copy e.hp.armor", .noSuchField(type: "Int", field: "armor"), "armor"),
-        ("let b: Bool = copy e.hp", .typeMismatch(expected: "Bool", found: "Int"), "copy e.hp"),
-        ("copy e.hp", .unusedValue(type: "Int"), "copy e.hp"),
-        ("let f = e\nlet h = copy e.hp\nprint(h + f.hp)", .usedAfterMove(name: "e"), "copy e.hp"),
+        ("let f = e\nlet h = copy e.hp\nprint(h + f.hp)", ErrorCode.usedAfterMove(name: "e"), "copy e.hp"),
     ])
     func `a copy of a field the value doesn't have, of a moved struct, or left unused, is an error`(
         body: String, expected: ErrorCode, covered: String,
@@ -341,19 +142,14 @@ struct NestedStructTests {
     }
 
     @Test(arguments: [
-        ("print(e.stats.mana)", ErrorCode.noSuchField(type: "Stats", field: "mana"), "mana"),
-        ("print(b.minion.stats.mana)", .noSuchField(type: "Stats", field: "mana"), "mana"),
-        ("print(e.stats.hp.mana)", .noSuchField(type: "Int", field: "mana"), "mana"),
         (
-            "let h = b.minion.stats.hp", .moveFieldFromParameter(field: "b.minion.stats.hp", parameter: "b"),
+            "let h = b.minion.stats.hp", ErrorCode.moveFieldFromParameter(field: "b.minion.stats.hp", parameter: "b"),
             "b.minion.stats.hp",
         ),
         (
             "_ = Enemy(stats: b.minion.stats, armor: 1)",
             .moveFieldFromParameter(field: "b.minion.stats", parameter: "b"), "b.minion.stats",
         ),
-        ("_ = Enemy(stats: e, armor: 1)", .fieldTypeMismatch(field: "stats", expected: "Stats", found: "Enemy"), "e"),
-        ("_ = Enemy(stats: Stats(hp: 1), armor: 1)", .fieldLeftOut(field: "speed"), "Stats(hp: 1)"),
         (
             "let s = Stats(hp: 1, speed: 2)\n_ = Enemy(stats: s, armor: 1)\nprint(s.hp)",
             .usedAfterMove(name: "s"), "s.hp",

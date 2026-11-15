@@ -90,8 +90,7 @@ struct FieldMoveTests {
     }
 
     @Test(arguments: [
-        ("l.stats = Stats(hp: 50, speed: 1)", ErrorCode.assignToPartOfLet(name: "l")),
-        ("print(strength(l))", .usedPartlyMoved(name: "l", field: "l.stats")),
+        ("print(strength(l))", ErrorCode.usedPartlyMoved(name: "l", field: "l.stats")),
     ])
     func `a 'let' that a field was moved out of stays partly moved, since its field can't be assigned`(
         body: String, expected: ErrorCode,

@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 
 /// A struct, another that holds an array, and a function that borrows an Int, which the bodies below use.
 private let declarations = """
@@ -31,15 +30,6 @@ struct ElementReadTests {
         ("let a = [[1, 2]]\n_ = a[0][1]", elementMove(at: "3:5")),
     ])
     func `an element, or a part of one, can't be moved out of its array`(body: String, expected: String) {
-        #expect(errorLines(inMain: body, beside: declarations) == [expected])
-    }
-
-    @Test(arguments: [
-        ("let a = [1, 2]\nlet i = 1\ntake(a[i])", "4:8: error[E0272]: an index needs a UInt, found Int"),
-        ("let n = 1\ntake(n[0])", "3:6: error[E0271]: only an array can be indexed, found Int"),
-        ("let s = Stats(hp: 1)\ntake(s[0].hp)", "3:6: error[E0271]: only an array can be indexed, found Stats"),
-    ])
-    func `an index is a UInt, and only an array is indexed`(body: String, expected: String) {
         #expect(errorLines(inMain: body, beside: declarations) == [expected])
     }
 

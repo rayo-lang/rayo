@@ -182,7 +182,8 @@ let package = Package(
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .target(name: "SnapshotTesting", path: "Tests/SnapshotTesting"),
         .testTarget(
-            name: "RayoSemaTests", dependencies: ["RayoSema", "RayoSyntax", "SnapshotTesting"], exclude: ["Snapshots"],
+            name: "RayoSemaTests", dependencies: ["RayoDiagnostics", "RayoSema", "RayoSyntax", "SnapshotTesting"],
+            exclude: ["Snapshots"],
         ),
         .testTarget(name: "RayoCompilerTests", dependencies: [
             "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource",

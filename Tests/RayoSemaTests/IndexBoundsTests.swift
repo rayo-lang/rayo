@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 
 /// A struct that holds an array, and functions that give an index and borrow an Int, which the bodies below use.
 private let declarations = """
