@@ -9,9 +9,11 @@ struct Runtime: ~Copyable {
     /// The runtime's files, linked together.
     private let module: Module
 
-    /// Parses the runtime into `context`, and defines in `program`, a module of that context, the constant the
-    /// runtime reads.
-    init(in context: borrowing Context, for program: borrowing Module) throws(LLVMError) {
+    /// Parses the runtime into `context`, its functions carrying `functionAttributes`, and defines in `program`, a
+    /// module of that context, the constant the runtime reads.
+    init(
+        in context: borrowing Context, for program: borrowing Module, giving functionAttributes: [FunctionAttribute],
+    ) throws(LLVMError) {
         // Link the runtime's files together, in a module of their own for the program's target, so that it links
         // into the program's.
         let runtime = context.makeModule(named: "runtime")
@@ -21,6 +23,9 @@ struct Runtime: ~Copyable {
             Self.matchTarget(of: parsed, to: program)
             try runtime.link(parsed)
         }
+
+        // Give each function the runtime defines the attributes the target needs of every function.
+        for function in runtime.functions where !function.isDeclaration { function.add(functionAttributes) }
 
         // Define the constant the runtime reads in the program.
         let exitCode = context.integerType(I32.self).constant(Int64(ProgramRuntime.panicExitCode))
