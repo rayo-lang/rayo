@@ -16,4 +16,11 @@ struct MoveTests {
         let source = "func main() {}\n\(function)\nstruct E(var a: S)\nstruct S(var n: Int)"
         #expect(errors(source) == [])
     }
+
+    // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
+    // copies the element instead.
+    @Test func `an element taken from a copy can't be moved out of the copy`() {
+        let source = "func main() {}\nfunc f(a: [2 of S]) -> S { (copy a)[0] }\nstruct S(var n: Int)"
+        #expect(errors(source) == [.moveFromElement])
+    }
 }
