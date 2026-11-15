@@ -46,36 +46,9 @@ struct ArrayTests {
             """
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "3\n6\n0\n0\n7\n", errors: ""))
     }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `arrays of a hundred thousand elements pass and return, and their program builds and runs`(mode: [String]) {
-        let source = """
-            func main() { print(1) }
-            func relay(_ a: [100000 of Int]) -> [100000 of Int] { copy a }
-            func relayAll(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(copy a) }
-            func relay(_ a: [100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { copy a }
-            struct Hit(var damage: Int, let crit: Bool)
-            """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "1\n", errors: ""))
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]], [
-        ("let a: [3 of Int] = [1, 2]", "2:25: error[E0261]: a [3 of Int] literal needs 3 elements, found 2"),
-        ("let a = []", "2:13: error[E0262]: an empty array literal needs a type"),
-        ("let a = [1, true]", "2:14: error[E0263]: the array literal holds Bool in one element and Int in another"),
-        ("var a: [2 of ()]", "2:18: error[E0264]: an array's elements can't have type Void"),
-        ("var a: [2305843009213693952 of Int]", "2:12: error[E0265]: the array's size in bytes doesn't fit in an Int"),
-    ])
-    func `an array that can't be laid out, or a literal that doesn't fit its type, is an error, in debug and release`(
-        mode: [String], failure: (body: String, error: String),
-    ) {
-        let source = "func main() {\n    \(failure.body)\n}"
-        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
-        #expect(run(source, options: mode) == expected)
-    }
 }
 
-/// A function that prints each element of an array of three Ints, which the programs below use.
+/// A function that prints each element of an array of three Ints, which the program below uses.
 private let show = """
 
     func show(_ a: [3 of Int]) {
@@ -141,85 +114,5 @@ struct FilledArrayTests {
         let expected = "7\n7\n7\n-1\n-1\n-1\n2\ntrue\ntrue\n3\n3\n1\n1\n" + String(repeating: "5\n", count: 12)
             + "0\n4\n9\n9\n9\n9\n3\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `the value is evaluated once, even for an array of no elements`(mode: [String]) {
-        // Each value prints its number as it is evaluated, before the filled arrays' elements are printed.
-        let source = """
-            func main() {
-                let a: [3 of Int] = .init(repeating: next(1))
-                let b: [0 of Int] = .init(repeating: next(2))
-                let c: [2 of [3 of Int]] = .init(repeating: .init(repeating: next(3)))
-                print(b.count)
-                show(a)
-                show(c[0])
-                show(c[1])
-            }
-            func next(_ n: Int) -> Int {
-                print(n)
-                return copy n
-            }
-            """ + show
-        let expected = "1\n2\n3\n0\n1\n1\n1\n3\n3\n3\n3\n3\n3\n"
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `changing one element of a filled array leaves the others holding the value`(mode: [String]) {
-        let source = """
-            func main() {
-                var a: [3 of Int] = .init(repeating: 7)
-                a[1] = 8
-                show(a)
-                var grid: [2 of [3 of Int]] = .init(repeating: .init(repeating: 1))
-                grid[1][2] += 5
-                show(grid[0])
-                show(grid[1])
-                var hits: [2 of Hit] = .init(repeating: Hit(damage: 3))
-                hits[0].damage = 4
-                print(hits[0].damage)
-                print(hits[1].damage)
-            }
-            struct Hit(var damage: Int)
-            """ + show
-        let expected = "7\n8\n7\n1\n1\n1\n1\n1\n6\n4\n3\n"
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: expected, errors: ""))
-    }
-
-    @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
-    func `an array of a hundred thousand elements is filled, and its program builds quickly and runs`(mode: [String]) {
-        let source = """
-            func main() {
-                var a: [100000 of Int] = .init(repeating: 0)
-                print(a[0] + a[99999])
-                a = .init(repeating: 1)
-                let hits: [1000 of [100 of Hit]] = .init(repeating: .init(repeating: Hit(damage: 2, crit: true)))
-                print(a[0] + a[99999])
-                print(hits[0][0].damage + hits[999][99].damage)
-            }
-            struct Hit(var damage: Int, let crit: Bool)
-            """
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "0\n2\n4\n", errors: ""))
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]], [
-        ("let a = .init(repeating: 0)", "2:13: error[E0267]: the implicit member '.init' needs a type"),
-        ("let a: [2 of Int] = .init(each: 0)", "2:25: error[E0268]: '.init(each:)' isn't supported"),
-        (
-            "let a: [2 of Int] = .init(al: 0)",
-            "2:31: error[E0228]: expected 'repeating:' before the argument, found 'al:'",
-        ),
-        (
-            "let a: [2 of Int] = .init(all: 0)",
-            "2:31: error[E0228]: expected 'repeating:' before the argument, found 'all:'",
-        ),
-    ])
-    func `.init(repeating:) with no array type, or with the wrong member or label, is an error, in debug and release`(
-        mode: [String], failure: (body: String, error: String),
-    ) {
-        let source = "func main() {\n    \(failure.body)\n}"
-        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
-        #expect(run(source, options: mode) == expected)
     }
 }

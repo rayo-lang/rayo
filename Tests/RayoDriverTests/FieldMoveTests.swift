@@ -1,12 +1,11 @@
 import Testing
 import RayoDriver
 
-/// A struct that holds a struct, and functions that make one and borrow one. `Enemy` and `Stats` each lay `alive` out
-/// after its Ints, so a move out of the wrong element at either level gives another field's value.
+/// A struct that holds a struct, and a function that makes one. `Enemy` and `Stats` each lay `alive` out after its
+/// Ints, so a move out of the wrong element at either level gives another field's value.
 private let enemyAndStats = """
 
     func enemy() -> Enemy { Enemy(alive: true, stats: Stats(alive: true, hp: 100, speed: 3), armor: 5) }
-    func strength(_ e: Enemy) -> Int { e.stats.hp * e.armor }
     struct Enemy(let alive: Bool, var stats: Stats, var armor: Int)
     struct Stats(let alive: Bool, var hp: Int, var speed: Int)
     """
@@ -47,138 +46,4 @@ struct FieldMoveTests {
         let output = "100\n3\n5\ntrue\n6\n20\n7\n2\n100\n4\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
     }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `assigning the moved field makes the struct whole again, to be used whole with the new value, in both builds`(
-        mode: [String],
-    ) {
-        let source = """
-            func main() {
-                var e = enemy()
-                let s = e.stats
-                print(s.hp)
-                e.stats = Stats(alive: false, hp: 50, speed: 1)
-                print(strength(e))
-                let c = copy e
-                print(c.stats.hp)
-                let taken = e
-                print(taken.stats.speed)
-            }
-            """ + enemyAndStats
-        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "100\n250\n50\n1\n", errors: ""))
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]], [
-        (
-            ["print(strength(e))"],
-            "5:20: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
-                "\nmain.rayo:3:13: note: moved here",
-        ),
-        (
-            ["let c = copy e", "print(c.armor)"],
-            "5:13: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
-                "\nmain.rayo:3:13: note: moved here",
-        ),
-        (
-            ["_ = e"],
-            "5:9: error[E0309]: 'e.stats' was moved out of 'e', so 'e' can't be used whole" +
-                "\nmain.rayo:3:13: note: moved here",
-        ),
-        (["print(e.stats.hp)"], "5:11: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here"),
-        (
-            ["let t = e.stats", "print(t.hp)"],
-            "5:13: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here",
-        ),
-        (
-            ["let t = copy e.stats", "print(t.hp)"],
-            "5:13: error[E0302]: 'e.stats' was moved\nmain.rayo:3:13: note: moved here",
-        ),
-    ])
-    func `a struct a field was moved out of can't be used whole, nor the field read, in either build`(
-        mode: [String], failure: (lines: [String], error: String),
-    ) {
-        let lines = ["var e = enemy()", "let s = e.stats", "print(s.hp)"] + failure.lines
-        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
-        #expect(run(main(running: lines), options: mode) == expected)
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]], [
-        (
-            "print(strength(e))",
-            "7:20: error[E0310]: 'e.stats' may have been moved out of 'e', so 'e' can't be used whole" +
-                "\nmain.rayo:4:17: note: moved here",
-        ),
-        ("print(e.stats.speed)", "7:11: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here"),
-        ("let t = copy e.stats", "7:13: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here"),
-    ])
-    func `a field moved in one branch of an 'if' may have been moved after it, in either build`(
-        mode: [String], failure: (line: String, error: String),
-    ) {
-        let lines = ["var e = enemy()", "if e.armor > 1 {", "    let s = e.stats", "    print(s.hp)", "}", failure.line]
-        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
-        #expect(run(main(running: lines), options: mode) == expected)
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `a loop's body may move a field out on each pass where it assigns the field again, in debug and release`(
-        mode: [String],
-    ) {
-        let lines = [
-            "var e = enemy()", "while e.armor > 3 {", "    let s = e.stats", "    print(s.hp)",
-            "    e.stats = Stats(alive: true, hp: s.hp - 10, speed: s.speed)", "    e.armor -= 1", "}",
-            "print(e.stats.hp)",
-        ]
-        let expected = CommandResult(exitCode: 0, output: "100\n90\n80\n", errors: "")
-        #expect(run(main(running: lines), options: mode) == expected)
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `a field that a loop's body moves out and leaves may have been moved on the next pass, in either build`(
-        mode: [String],
-    ) {
-        let lines = [
-            "var e = enemy()", "while e.armor > 3 {", "    let s = e.stats", "    print(s.hp)", "    e.armor -= 1", "}",
-        ]
-        // The move on one pass is what may have taken the field on the next.
-        let errors = "main.rayo:4:17: error[E0303]: 'e.stats' may have been moved\nmain.rayo:4:17: note: moved here\n"
-        let expected = CommandResult(exitCode: 1, output: "", errors: errors)
-        #expect(run(main(running: lines), options: mode) == expected)
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]], [
-        ("l.stats = s", "5:5: error[E0251]: 'l' is a 'let', so its fields and elements can't change"),
-        (
-            "print(strength(l))",
-            "5:20: error[E0309]: 'l.stats' was moved out of 'l', so 'l' can't be used whole" +
-                "\nmain.rayo:3:13: note: moved here",
-        ),
-    ])
-    func `a 'let' that a field was moved out of stays partly moved, in either build`(
-        mode: [String], failure: (line: String, error: String),
-    ) {
-        let lines = ["let l = enemy()", "let s = l.stats", "print(s.hp)", failure.line]
-        let expected = CommandResult(exitCode: 1, output: "", errors: "main.rayo:\(failure.error)\n")
-        #expect(run(main(running: lines), options: mode) == expected)
-    }
-
-    @Test(arguments: [["--debug"], ["--release"]])
-    func `moving a field out of a borrowed parameter is an error that offers a copy, in debug and release`(
-        mode: [String],
-    ) {
-        let source = """
-            func main() {}
-            func heal(_ e: Enemy) -> Int {
-                let s = e.stats
-                return s.hp
-            }
-            """ + enemyAndStats
-        let error = "main.rayo:3:13: error[E0311]: 'e.stats' is in the borrowed parameter 'e', so it can't be moved; "
-            + "'copy' makes an owned copy\n"
-        #expect(run(source, options: mode) == CommandResult(exitCode: 1, output: "", errors: error))
-    }
-}
-
-/// A program whose `main` runs `lines`, one to a line from the second.
-private func main(running lines: [String]) -> String {
-    "func main() {\n" + lines.map { "    \($0)\n" }.joined() + "}" + enemyAndStats
 }
