@@ -28,7 +28,7 @@ import RayoSource
 ///   branch read %1 @3:4-3:9, bb1, bb2
 /// bb1:
 ///   retire %1
-///   begin a0 read static %0 @4:11-4:12
+///   begin a0 read %0 @4:11-4:12
 ///   _ = call "show(_: Int)"(a0) @4:6-4:13
 ///   end a0
 ///   retire %0
