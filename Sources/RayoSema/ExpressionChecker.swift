@@ -466,13 +466,12 @@ extension ExpressionChecker: PlaceRules {
         // A name roots the place in the local it names.
         if case .name(let name) = expr.kind { return local(named: name, at: expr.range) }
 
-        // Any other value roots it in a temporary that holds the value, unless the value is a place itself, such as a
-        // `copy` of one. A value that failed was reported.
+        // Any other value roots it in a temporary that holds the value, unless the value is a place itself. A `copy`
+        // of a place is a value like any other, so a part taken from it moves out of the copy and leaves the place
+        // whole. A value that failed was reported.
         guard let value = check(expr) else { return nil }
-        switch value.kind {
-        case .place(let place), .copy(let place): return (place, value.type)
-        default: return (CheckedPlace(root: .temporary(value)), value.type)
-        }
+        if case .place(let place) = value.kind { return (place, value.type) }
+        return (CheckedPlace(root: .temporary(value)), value.type)
     }
 
     func admits(_ field: Field, at nameRange: SourceRange) -> Bool {
