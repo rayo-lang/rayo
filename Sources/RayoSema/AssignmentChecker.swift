@@ -73,18 +73,6 @@ struct AssignmentChecker {
         return .compoundAssign(place.place, op, value)
     }
 
-    /// Finds the local that an assignment's target starts from. Where the assignment changes the local whole, this
-    /// checks that the local may change; where it changes only part of it, the check comes last, after the rest of the
-    /// target. Returns nil once it has reported why the local can't change, or that no local has the name.
-    private func changedLocal(named name: String, at range: SourceRange, holdsParts: Bool) -> TypedPlace? {
-        // A name that names no local was reported.
-        guard let local = local(named: name, at: range) else { return nil }
-
-        // A local whose value can't change whole is reported.
-        if !holdsParts, let refusal = refusal(toChange: local, holdsParts: false) { return refuse(refusal, at: range) }
-        return (CheckedPlace(root: .local(local, range: range)), names[local].type)
-    }
-
     /// The error to report when an assignment may not change a local, whole or part by part as it asks, or nil
     /// when it may.
     private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
@@ -99,10 +87,20 @@ struct AssignmentChecker {
         }
     }
 
+    /// Reports why an assignment's target can't change, and returns nil in place of the target.
+    private func refuse(_ error: ErrorCode, at range: SourceRange) -> TypedPlace? {
+        errors.report(error, at: range)
+        return nil
+    }
+}
+
+/// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
+/// declared with `var`, never into a value property such as an array's count.
+extension AssignmentChecker: PlaceRules {
     /// Checks a target's root that is no name, such as a call. Where the target names the root whole, it is refused
     /// at once. Where the target goes on from it, it is checked as a value that no local holds, so a value property
     /// along the target is reported first, and the root is refused last.
-    private func nonLocalRoot(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
+    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
         guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
         // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
         guard let value = expressions.check(expr),
@@ -110,58 +108,20 @@ struct AssignmentChecker {
         return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
-    /// Reports why an assignment's target can't change, and returns nil in place of the target.
-    private func refuse(_ error: ErrorCode, at range: SourceRange) -> TypedPlace? {
-        errors.report(error, at: range)
-        return nil
+    /// Whether an assignment may change `local` as its target asks. A target that changes the local whole has it
+    /// checked here; one that changes only part of it has it checked last, after the rest of the target.
+    func admits(_ local: LocalID, at range: SourceRange, holdsParts: Bool) -> Bool {
+        guard !holdsParts, let refusal = refusal(toChange: local, holdsParts: holdsParts) else { return true }
+        errors.report(refusal, at: range)
+        return false
     }
 
-    /// The local that an assignment's target names. When the name is something else, or nothing, it reports so and
-    /// returns nil, unless the error was already reported where the name is declared.
-    private func local(named name: String, at range: SourceRange) -> LocalID? {
-        switch names.lookUp(name, for: .ordinary) {
-        // A local is the assignment's.
-        case .inScope(.local(let local)):
-            return local
-
-        // A local, a function or a type whose declaration failed was reported there.
-        case .inScope(.failed), .failed:
-            return nil
-
-        // A function can't be assigned.
-        case .functions:
-            errors.report(.assignToFunction(name: name), at: range)
-            return nil
-
-        // A type's name can't be assigned.
-        case .type:
-            errors.report(.assignToType(name: name), at: range)
-            return nil
-
-        // Nothing has the name.
-        case nil:
-            errors.report(.notDeclared(name: name), at: range)
-            return nil
-        }
-    }
-}
-
-/// The rules for the place an assignment changes: it starts from a local that may change, and goes only into fields
-/// declared with `var`, never into a value property such as an array's count.
-extension AssignmentChecker: PlaceRules {
-    func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        switch expr.kind {
+    func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
+        switch nonPlace {
         // `_` names no place; it only drops a value.
-        case .name("_"):
-            refuse(.assignToNonLocal, at: expr.range)
-
-        // A local's name roots the place in the local.
-        case .name(let name):
-            changedLocal(named: name, at: expr.range, holdsParts: holdsParts)
-
-        // Anything but a name, a member or an element names no place.
-        default:
-            nonLocalRoot(expr, holdsParts: holdsParts)
+        case .underscore: .assignToNonLocal
+        case .function: .assignToFunction(name: name)
+        case .type: .assignToType(name: name)
         }
     }
 

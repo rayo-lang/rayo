@@ -1,10 +1,13 @@
 import RayoDiagnostics
 import RayoSource
 
-/// The names a function body sees: its locals and parameters, block by block, the module's functions and types,
-/// and the prelude's that the module leaves free.
+/// The names a function body sees: its locals and parameters, block by block, the fields of its `self`, the module's
+/// functions and types, and the prelude's that the module leaves free.
 final class NameScopes {
     private let file: FileChecker
+    /// The parameter that holds the body's `self`, whose fields the body names by their bare names, or nil where the
+    /// body has no `self`. A free function's body has none.
+    private let selfParameter: LocalID? = nil
     /// The body's locals, indexed by `LocalID`.
     private(set) var locals: [CheckedLocal] = []
     /// The names each enclosing block declares, innermost last, inside the scope of the function's parameters.
@@ -27,18 +30,21 @@ final class NameScopes {
         blocks.removeLast()
     }
 
-    /// Looks `name` up among the body's locals and parameters, innermost block first, and among the module's
-    /// functions and types. A call gets the module's functions or type where it has either; any other use gets the
-    /// local or parameter where there is one. A name that reaches a declaration that failed taints the body.
+    /// Looks `name` up among the body's locals and parameters, innermost block first, among the fields of its
+    /// `self`, and among the module's functions and types. A call gets the module's functions or type where it has
+    /// either; any other use takes the first of the three levels that has the name. A name that reaches a declaration
+    /// that failed taints the body.
     func lookUp(_ name: String, for use: NameUse) -> NameMatch? {
-        // Find the name in scope and in the module; the use picks between them.
+        // Find the name at each level; the use picks among them.
         let inScope = scopeEntry(for: name).map { NameMatch.inScope($0) }
+        let instance = instanceField(named: name)
         let module = moduleMatch(for: name, use: use)
         let match = switch use {
-        // No local can be called, so a function or a type wins even over a local whose declaration failed.
-        case .call: module ?? inScope
-        // A local or parameter shadows the module's functions and types.
-        case .ordinary: inScope ?? module
+        // A call skips what can't be called, and no local or field can be, so a function or a type wins even over a
+        // local whose declaration failed.
+        case .call: module ?? inScope ?? instance
+        // A local or parameter shadows the fields of `self`, and both shadow the module's functions and types.
+        case .ordinary: inScope ?? instance ?? module
         }
 
         if match?.reachesFailedDeclaration == true { file.errors.taints.taint() }
@@ -68,6 +74,15 @@ final class NameScopes {
 
     private func scopeEntry(for name: String) -> ScopeEntry? {
         blocks.reversed().lazy.compactMap { $0[name] }.first
+    }
+
+    /// The field of `self` called `name`, or nil where the body has no `self` or its type has no such field. A field
+    /// is the one instance member a struct has.
+    private func instanceField(named name: String) -> NameMatch? {
+        guard let selfParameter,
+              case .field(let index, let field)? = file.declarations.member(named: name, of: self[selfParameter].type)
+        else { return nil }
+        return .instanceField(selfParameter: selfParameter, index: index, field)
     }
 
     /// The module's functions or type called `name` that `use` finds, or the prelude's type of the name where the

@@ -158,24 +158,24 @@ struct ExpressionChecker {
     }
 
     /// Checks `-operandExpr`, which negates an untyped operand to an untyped value, and a typed one only where it is
-    /// an integer, to a value of its type.
+    /// signed, to a value of its type.
     private func negation(of operandExpr: Expr, in range: SourceRange) -> CheckedValue? {
         // An operand that failed was reported already.
         guard let operand = value(of: operandExpr) else { return nil }
         return switch operand {
         // An untyped operand gives an untyped negation.
-        case .waiting(let untyped as UntypedValue): .waiting(UntypedValue.negation(untyped, range: range))
+        case .waiting(let untyped as UntypedValue): .waiting(untyped.negated(at: range))
         case .typed(let typed): negation(of: typed, in: range)
         // Any other value that waits settles as it would where its position gives no type.
         case .waiting: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
         }
     }
 
-    /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is an integer.
+    /// Checks `-operand`, where the operand is typed, which negates it to a value of its type where it is signed.
     private func negation(of operand: CheckedExpr, in range: SourceRange) -> CheckedValue? {
-        // An operand of a type that isn't an integer is reported.
-        guard operand.type.isInteger else {
-            errors.report(.integerOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
+        // Negating an unsigned value overflows for every value but 0, so only a signed type has `-`.
+        guard operand.type.isSigned else {
+            errors.report(.signedOperand(op: UnaryOperator.negate.rawValue, found: typeName(of: operand.type)),
                           at: range)
             return nil
         }
@@ -238,10 +238,70 @@ struct ExpressionChecker {
         case .element(let base, let index):
             element(at: index, of: base, in: expr.range, under: rules)
 
+        // A bare name roots the place in what it names.
+        case .name(let name):
+            place(named: name, at: expr.range, under: rules, holdsParts: holdsParts)
+
         // Anything else is the place's root.
         default:
             rules.root(expr, holdsParts: holdsParts)
         }
+    }
+
+    /// Checks a bare name, which the source writes at `range`, as a place under the given rules: a local, or a field
+    /// of `self`, which is the same place as `self.name`. Reports a name that names no place, and a place the rules
+    /// refuse. The flag says whether the place goes on into a field or an element of it.
+    private func place(named name: String, at range: SourceRange, under rules: some PlaceRules,
+                       holdsParts: Bool) -> TypedPlace? {
+        // `_` names no place; it only drops a value, or leaves a parameter unnamed.
+        if name == "_" { return noPlace(reporting: rules.error(naming: .underscore, name), at: range) }
+
+        return switch names.lookUp(name, for: .ordinary) {
+        // A local is the place's root.
+        case .inScope(.local(let local)):
+            localPlace(local, at: range, under: rules, holdsParts: holdsParts)
+
+        // A field of `self` goes on from `self`, so the rules check both, as they would in `self.name`.
+        case .instanceField(let selfParameter, let index, let field):
+            instanceFieldPlace(index, field, of: selfParameter, at: range, under: rules)
+
+        // A local, a function or a type whose declaration failed was reported there.
+        case .inScope(.failed), .failed:
+            nil
+
+        // A function or a type is no place.
+        case .functions:
+            noPlace(reporting: rules.error(naming: .function, name), at: range)
+        case .type:
+            noPlace(reporting: rules.error(naming: .type, name), at: range)
+
+        // Nothing has the name.
+        case nil:
+            noPlace(reporting: .notDeclared(name: name), at: range)
+        }
+    }
+
+    /// The whole of `local`, which the source names at `range`, as a place under the given rules, or nil where they
+    /// refuse it. The flag says whether the place goes on into a field or an element of it.
+    private func localPlace(_ local: LocalID, at range: SourceRange, under rules: some PlaceRules,
+                            holdsParts: Bool) -> TypedPlace? {
+        guard rules.admits(local, at: range, holdsParts: holdsParts) else { return nil }
+        return (CheckedPlace(root: .local(local, range: range)), names[local].type)
+    }
+
+    /// The field at `index` of the `self` that `selfParameter` holds, which the source names by its bare name at
+    /// `range`, as a place under the given rules, or nil where they refuse `self` or the field.
+    private func instanceFieldPlace(_ index: Int, _ field: Field, of selfParameter: LocalID, at range: SourceRange,
+                                    under rules: some PlaceRules) -> TypedPlace? {
+        guard let holder = localPlace(selfParameter, at: range, under: rules, holdsParts: true) else { return nil }
+        guard rules.admits(field, at: range) else { return nil }
+        return (holder.place.appending(.field(index, range: range)), field.type)
+    }
+
+    /// Reports why a bare name names no place, and returns nil in place of the place.
+    private func noPlace(reporting error: ErrorCode, at range: SourceRange) -> TypedPlace? {
+        errors.report(error, at: range)
+        return nil
     }
 
     /// Checks `base.name`, which the source writes at `range`, as a place under the given rules: the place of a
@@ -321,40 +381,6 @@ struct ExpressionChecker {
             .noSuchField(type: typeName(of: type), field: name)
         }
         errors.report(code, at: nameRange)
-    }
-
-    /// The whole local called `name`, which the source names at `range`, as a place an expression reads. Reports it
-    /// where no local has the name.
-    private func local(named name: String, at range: SourceRange) -> TypedPlace? {
-        // `_` names no value; it only drops one, or leaves a parameter unnamed.
-        if name == "_" {
-            errors.report(.underscoreValue, at: range)
-            return nil
-        }
-        switch names.lookUp(name, for: .ordinary) {
-        // A local is the place.
-        case .inScope(.local(let local)):
-            return (CheckedPlace(root: .local(local, range: range)), names[local].type)
-
-        // A local, a function or a type whose declaration failed was reported there.
-        case .inScope(.failed), .failed:
-            return nil
-
-        // A function is no value.
-        case .functions:
-            errors.report(.functionAsValue(name: name), at: range)
-            return nil
-
-        // A type's name is no value.
-        case .type:
-            errors.report(.typeAsValue(name: name), at: range)
-            return nil
-
-        // Nothing has the name.
-        case nil:
-            errors.report(.notDeclared(name: name), at: range)
-            return nil
-        }
     }
 
     /// Checks `left op right`, where the source `spelled` the operator as written, such as `+=` for a
@@ -463,10 +489,7 @@ private extension CheckedBinaryOperator {
 /// from any value property, whose value it holds as a call's result.
 extension ExpressionChecker: PlaceRules {
     func root(_ expr: Expr, holdsParts: Bool) -> TypedPlace? {
-        // A name roots the place in the local it names.
-        if case .name(let name) = expr.kind { return local(named: name, at: expr.range) }
-
-        // Any other value roots it in a temporary that holds the value, unless the value is a place itself. A `copy`
+        // A value roots the place in a temporary that holds the value, unless the value is a place itself. A `copy`
         // of a place is a value like any other, so a part taken from it moves out of the copy and leaves the place
         // whole. A value that failed was reported.
         guard let value = check(expr) else { return nil }
@@ -474,6 +497,19 @@ extension ExpressionChecker: PlaceRules {
         // A temporary lies on the stack, so one too large for it is reported.
         guard let held = file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
         return (CheckedPlace(root: .temporary(held)), held.type)
+    }
+
+    func admits(_ local: LocalID, at range: SourceRange, holdsParts: Bool) -> Bool {
+        true
+    }
+
+    func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
+        switch nonPlace {
+        // `_` names no value; it only drops one, or leaves a parameter unnamed.
+        case .underscore: .underscoreValue
+        case .function: .functionAsValue(name: name)
+        case .type: .typeAsValue(name: name)
+        }
     }
 
     func admits(_ field: Field, at nameRange: SourceRange) -> Bool {

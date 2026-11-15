@@ -285,8 +285,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(258, error: "'{op}' needs integer operands, found {left} and {right}")
     case integerOperands(op: String, left: TypeName, right: TypeName)
 
-    @Code(259, error: "'{op}' needs an integer operand, found {found}")
-    case integerOperand(op: String, found: TypeName)
+    @Code(259, error: "'{op}' needs a signed operand, found {found}")
+    case signedOperand(op: String, found: TypeName)
 
     @Code(260, error: "the call fits more than one '{name}'")
     case ambiguousCall(name: String)
