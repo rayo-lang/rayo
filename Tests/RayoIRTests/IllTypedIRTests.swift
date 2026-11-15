@@ -242,7 +242,7 @@ private let illTypedIR = [
         text: main("""
               temp %0: Bool
             bb0:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call builtin "print(_: Int)"(a0) @1:1-1:2
               return
             """),
@@ -250,23 +250,11 @@ private let illTypedIR = [
         message: "the IR passes 'print(_: Int)' an argument of type Bool, where it takes Int",
     ),
     IllTypedIR(
-        testDescription: "a dynamic access, which only an object's value takes",
-        text: main("""
-              temp %0: Int
-            bb0:
-              begin a0 read dynamic %0 @1:1-1:2
-              end a0
-              return
-            """),
-        function: "main()",
-        message: "the IR takes a dynamic access to a place that is no object's value",
-    ),
-    IllTypedIR(
         testDescription: "an access to a field that its place's value doesn't have",
         text: main("""
               temp %0: Int
             bb0:
-              begin a0 read static %0.0 @1:1-1:2
+              begin a0 read %0.0 @1:1-1:2
               return
             """),
         function: "main()",
@@ -420,7 +408,7 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call that passes an access to an owned parameter",
-        text: passing("begin a0 read static %0 @1:1-1:2", "a0", to: "owned Int"),
+        text: passing("begin a0 read %0 @1:1-1:2", "a0", to: "owned Int"),
         function: "main()",
         message: "the IR passes 'f(_: Int)' a read access, where it takes a value",
     ),
@@ -432,7 +420,7 @@ private let illTypedIR = [
     ),
     IllTypedIR(
         testDescription: "a call that passes a modify access to a borrowed parameter",
-        text: passing("begin a0 modify static %0 @1:1-1:2", "a0", to: "Int"),
+        text: passing("begin a0 modify %0 @1:1-1:2", "a0", to: "Int"),
         function: "main()",
         message: "the IR passes 'f(_: Int)' a modify access, where it takes a value or a read access",
     ),

@@ -62,7 +62,7 @@ struct CallTests {
             bb0:
               %0 @1:1-1:2 = call "Trio(a: Int, b: Int, c: Bool)"(3, 4, false) @1:1-1:2
               %1 @1:1-1:2 = call "sum(_: Trio)"(read %0 @1:1-1:2) @1:1-1:2
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               %2 @1:1-1:2 = call "sum(_: Trio)"(a0) @1:1-1:2
               end a0
               \(printInt("%1"))

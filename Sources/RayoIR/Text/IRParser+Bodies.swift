@@ -80,15 +80,14 @@ extension IRParser {
         return BasicBlock(statements: statements, terminator: try terminator())
     }
 
-    /// Reads `declare %N`, `retire %N`, `destination = value @range`, `begin aN access`, `end aN` or `depend place on
-    /// aN`; or nil where the current token starts no statement.
+    /// Reads `declare %N`, `retire %N`, `destination = value @range`, `begin aN access` or `end aN`; or nil where the
+    /// current token starts no statement.
     private mutating func statement() throws(IRTextError) -> Statement? {
         switch current.kind {
         case .word("declare"): try declaration()
         case .word("retire"): try retirement()
         case .word("begin"): try accessBeginning()
         case .word("end"): try accessEnd()
-        case .word("depend"): try dependence()
         // A computation stores its value in a place, or drops it where the text writes `_`.
         case .word("_"), .symbol("%"): try computation()
         default: nil
@@ -107,8 +106,8 @@ extension IRParser {
         return .retire(try localReference())
     }
 
-    /// Reads `begin aN kind enforcement place @range`, where `N` is the access's ID, which no other statement of the
-    /// function begins.
+    /// Reads `begin aN kind place @range`, where `N` is the access's ID, which no other statement of the function
+    /// begins.
     private mutating func accessBeginning() throws(IRTextError) -> Statement {
         try expect(word: "begin")
         let token = current
@@ -117,32 +116,20 @@ extension IRParser {
         return .begin(id, try access())
     }
 
-    /// Reads `kind enforcement place @range`: what an access does, how it is enforced, and the place it reaches.
+    /// Reads `kind place @range`: what an access does, and the place it reaches.
     private mutating func access() throws(IRTextError) -> Access {
         let kindToken = current
         guard let kind = AccessKind(rawValue: try word()) else {
             throw IRTextError(at: kindToken, "expected 'read' or 'modify'")
         }
-        let enforcementToken = current
-        guard let enforcement = Enforcement(rawValue: try word()) else {
-            throw IRTextError(at: enforcementToken, "expected 'static' or 'dynamic'")
-        }
         let place = try place()
-        return Access(kind, enforcement, to: place, at: try range())
+        return Access(kind, to: place, at: try range())
     }
 
     /// Reads `end aN`.
     private mutating func accessEnd() throws(IRTextError) -> Statement {
         try expect(word: "end")
         return .end(try accessReference())
-    }
-
-    /// Reads `depend place on aN`.
-    private mutating func dependence() throws(IRTextError) -> Statement {
-        try expect(word: "depend")
-        let place = try place()
-        try expect(word: "on")
-        return .depend(place, on: try accessReference())
     }
 
     /// Reads `aN`, an access that a statement of the function must begin.

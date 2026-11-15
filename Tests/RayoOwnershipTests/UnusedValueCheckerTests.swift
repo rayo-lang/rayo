@@ -226,10 +226,10 @@ struct UnusedValueCheckerTests {
         // Each store is read by the borrow of the whole array after it, through the call.
         (
             [
-                "%0[0] @1:1-1:1 = operand 1 @1:1-1:1", "begin a0 read static %0 @1:1-1:1", totalOfArray("a0"),
-                "%0[%1] @1:1-1:1 = operand 2 @1:1-1:1", "begin a1 read static %0 @1:1-1:1", totalOfArray("a1"),
+                "%0[0] @1:1-1:1 = operand 1 @1:1-1:1", "begin a0 read %0 @1:1-1:1", totalOfArray("a0"),
+                "%0[%1] @1:1-1:1 = operand 2 @1:1-1:1", "begin a1 read %0 @1:1-1:1", totalOfArray("a1"),
                 "%0[0] @1:1-1:1 = add checked read %0[0] @1:1-1:1, 3 @1:1-1:1",
-                "begin a2 read static %0 @1:1-1:1", totalOfArray("a2"),
+                "begin a2 read %0 @1:1-1:1", totalOfArray("a2"),
             ],
             [Diagnostic](),
         ),
@@ -237,7 +237,7 @@ struct UnusedValueCheckerTests {
         (
             [
                 "%0[0] @2:1-2:1 = operand 1 @1:1-1:1", "%0[0] @1:1-1:1 = operand 2 @1:1-1:1",
-                "begin a0 read static %0 @1:1-1:1", totalOfArray("a0"),
+                "begin a0 read %0 @1:1-1:1", totalOfArray("a0"),
             ],
             [Diagnostic(.unreadValue(name: "a[0]"), at: at(1))],
         ),
@@ -283,7 +283,7 @@ struct UnusedValueCheckerTests {
               goto bb1
             \(conditionalStores.joined(separator: "\n"))
             bb\(2 * branchCount + 1):
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call "use(_: [32 of Int])"(a0) @1:1-1:1
               return
             }

@@ -32,14 +32,14 @@ struct PassModeTests {
     }
 
     @Test func `a large borrowed argument passes a pointer to the place its access reaches, with no copy`() throws {
-        // `main` passes its Trio to `first` through a static access, and `first` reads the Trio's first Int.
+        // `main` passes its Trio to `first` through an access, and `first` reads the Trio's first Int.
         let functions = """
             main "main()"
             func "main()"() -> Void {
               temp %0: Trio
               temp %1: Int
             bb0:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               %1 @1:1-1:2 = call "first(_: Trio)"(a0) @1:1-1:2
               end a0
               return

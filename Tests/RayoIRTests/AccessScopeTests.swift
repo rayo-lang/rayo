@@ -22,11 +22,10 @@ struct AccessScopeTests {
 
     @Test func `an access that ends once on every path from its beginning is no violation`() throws {
         let program = try IRParser.program(from: borrowing("""
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call "f(_: Int)"(a0) @1:1-1:2
               branch true, bb1, bb2
             bb1:
-              depend %0 on a0
               end a0
               goto bb3
             bb2:
@@ -40,7 +39,7 @@ struct AccessScopeTests {
 
     @Test func `an access begun again while it is held is a violation`() throws {
         var program = try IRParser.program(from: borrowing("""
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               end a0
               return
             """))
@@ -56,7 +55,7 @@ struct AccessScopeTests {
 
     @Test func `lowering's IR, whose ends the ownership stage writes later, ends no access`() throws {
         let program = try IRParser.program(from: borrowing("""
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call "f(_: Int)"(a0) @1:1-1:2
               return
             """))
@@ -67,7 +66,7 @@ struct AccessScopeTests {
         let program = try IRParser.program(from: borrowing("""
               return
             bb1:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               return
             """))
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
@@ -93,7 +92,7 @@ private let unscopedAccesses = [
     UnscopedAccess(
         testDescription: "an access not ended before the function returns",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call "f(_: Int)"(a0) @1:1-1:2
               return
             """,
@@ -102,7 +101,7 @@ private let unscopedAccesses = [
     UnscopedAccess(
         testDescription: "an access not ended before a block that no run reaches the end of",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               unreachable
             """,
         message: "the IR leaves the function at bb0 without ending a0",
@@ -110,7 +109,7 @@ private let unscopedAccesses = [
     UnscopedAccess(
         testDescription: "an access ended on one path but not on the other",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               branch true, bb1, bb2
             bb1:
               end a0
@@ -123,7 +122,7 @@ private let unscopedAccesses = [
     UnscopedAccess(
         testDescription: "an access ended twice on a path",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               end a0
               end a0
               return
@@ -135,7 +134,7 @@ private let unscopedAccesses = [
         blocks: """
               branch true, bb1, bb2
             bb1:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               end a0
               return
             bb2:
@@ -147,7 +146,7 @@ private let unscopedAccesses = [
     UnscopedAccess(
         testDescription: "an access passed to a call after its end",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               end a0
               _ = call "f(_: Int)"(a0) @1:1-1:2
               return
@@ -155,19 +154,9 @@ private let unscopedAccesses = [
         message: "the IR uses a0 at bb0, where it isn't held",
     ),
     UnscopedAccess(
-        testDescription: "a value made to depend on an access after its end",
-        blocks: """
-              begin a0 read static %0 @1:1-1:2
-              end a0
-              depend %0 on a0
-              return
-            """,
-        message: "the IR uses a0 at bb0, where it isn't held",
-    ),
-    UnscopedAccess(
         testDescription: "a block entered holding an access on one path and not on another",
         blocks: """
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               branch true, bb1, bb2
             bb1:
               end a0
@@ -184,7 +173,7 @@ private let unscopedAccesses = [
         blocks: """
               goto bb1
             bb1:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               goto bb1
             """,
         message: "the IR enters bb1 holding a0 on one path and not on another",

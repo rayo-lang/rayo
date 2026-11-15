@@ -13,7 +13,7 @@ public struct BasicBlock: Equatable, Sendable {
         let statementOperands = statements.flatMap { statement in
             switch statement {
             case .compute(_, let value, _): value.operands
-            case .declare, .retire, .begin, .end, .depend: [Operand]()
+            case .declare, .retire, .begin, .end: [Operand]()
             }
         }
 

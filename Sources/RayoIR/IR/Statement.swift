@@ -17,8 +17,6 @@ public enum Statement: Equatable, Sendable {
     case begin(AccessID, Access)
     /// Ends the access, after which nothing reaches the place through it.
     case end(AccessID)
-    /// Makes the value at the place depend on the access too, so the access stays live while the value is used.
-    case depend(Place, on: AccessID)
 }
 
 /// The operation a statement makes its value with, from its operands.

@@ -8,8 +8,8 @@ bb0:
   %0 @1:20-1:28 = call "shown(_: Int)"(1) @1:20-1:28
   declare %1
   %1 @1:30-1:38 = call "shown(_: Int)"(2) @1:30-1:38
-  begin a0 read static %0 @1:20-1:28
-  begin a1 read static %1 @1:30-1:38
+  begin a0 read %0 @1:20-1:28
+  begin a1 read %1 @1:30-1:38
   _ = call "pair(_: Int, _: Int)"(a0, a1) @1:15-1:39
   return
 }

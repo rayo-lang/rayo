@@ -199,11 +199,11 @@ struct OwnershipStatementTests {
               var %0 x: Int @1:1-1:1
             bb0:
               %0 @1:1-1:2 = operand 4 @1:1-1:2
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call builtin "print(_: Int)"(a0) @1:1-1:2
               end a0
               %0 @1:1-1:2 = operand 5 @1:1-1:2
-              begin a1 modify static %0 @1:1-1:2
+              begin a1 modify %0 @1:1-1:2
               _ = call "show(_: Int)"(a1) @1:1-1:2
               end a1
               return
@@ -211,32 +211,12 @@ struct OwnershipStatementTests {
             func "show(_: Int)"(_: mutable Int) -> Void {
               param %0 n: mutable Int @1:1-1:1
             bb0:
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               _ = call builtin "print(_: Int)"(a0) @1:1-1:2
               end a0
               return
             }
             """
         #expect(try run(text) == .init(printed: "4\n5\n"))
-    }
-
-    @Test func `a dependence on an access changes nothing the program prints`() throws {
-        // `%1` depends on the access that reads `%0`, as a value computed from a borrow would.
-        let text = """
-            main "main()"
-            func "main()"() -> Void {
-              var %0 x: Int @1:1-1:1
-              temp %1: Int
-            bb0:
-              %0 @1:1-1:2 = operand 4 @1:1-1:2
-              begin a0 read static %0 @1:1-1:2
-              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
-              depend %1 on a0
-              end a0
-              \(printInt("%1"))
-              return
-            }
-            """
-        #expect(try run(text) == .init(printed: "4\n"))
     }
 }

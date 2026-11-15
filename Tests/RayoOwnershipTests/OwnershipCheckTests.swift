@@ -33,8 +33,8 @@ struct OwnershipCheckTests {
         // As `change(&x, x)` lowers, where nothing has assigned `x`.
         let blocks = """
             bb0:
-              begin a0 modify static %0 @2:3-2:3
-              begin a1 read static %0 @2:6-2:6
+              begin a0 modify %0 @2:3-2:3
+              begin a1 read %0 @2:6-2:6
               _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
@@ -47,8 +47,8 @@ struct OwnershipCheckTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 modify static %0 @2:3-2:3
-              begin a1 read static %0 @2:6-2:6
+              begin a0 modify %0 @2:3-2:3
+              begin a1 read %0 @2:6-2:6
               _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               %1 @2:9-2:9 = operand 1 @1:1-1:1
               return
@@ -64,14 +64,14 @@ struct OwnershipCheckTests {
         let passing = function("""
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call "double(_: Int)"(a0) @1:1-1:1
               return
             """, named: "passing()")
         let ended = function("""
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call "double(_: Int)"(a0) @1:1-1:1
               end a0
               return
@@ -124,7 +124,7 @@ private func longFunction(rounds: Int) -> (name: String, text: String) {
     let statements = (0..<rounds).map { round in
         let (value, temporary) = (2 * round + 1, 2 * round + 2)
         return """
-              begin a\(round) read static %0 @1:1-1:1
+              begin a\(round) read %0 @1:1-1:1
               %\(temporary) @1:1-1:1 = call "double(_: Int)"(a\(round)) @1:1-1:1
               %\(value) @1:1-1:1 = add checked move %\(temporary) @1:1-1:1, \(round) @1:1-1:1
               %0 @1:1-1:1 = operand move %\(value) @1:1-1:1 @1:1-1:1

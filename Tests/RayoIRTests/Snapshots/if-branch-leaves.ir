@@ -47,7 +47,7 @@ bb9:
   goto bb10
 bb10:
   %2 @6:13-6:17 = operand read %6 @6:20-6:53 @6:20-6:53
-  begin a0 read static %2 @7:15-7:19
+  begin a0 read %2 @7:15-7:19
   _ = call builtin "print(_: Int)"(a0) @7:9-7:20
   goto bb1
 bb11:
@@ -97,7 +97,7 @@ bb1:
 bb2:
   return 2
 bb3:
-  begin a0 read static %1 @16:10-16:45
+  begin a0 read %1 @16:10-16:45
   _ = call "show(_: Int)"(a0) @16:5-16:46
   unreachable
 bb4:

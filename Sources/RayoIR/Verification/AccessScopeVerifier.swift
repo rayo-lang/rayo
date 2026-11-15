@@ -62,12 +62,9 @@ struct AccessScopeVerifier {
                     throw violation("the IR ends a\(id.index) at \(label), where it isn't held")
                 }
 
-            // A call reaches its arguments' places through their accesses, and a dependence keeps its access live,
-            // so each uses an access that must be held.
+            // A call reaches its arguments' places through their accesses, each of which must be held.
             case .compute(_, let value, _):
                 for id in value.accesses where !held.contains(id) { throw unheld(id, at: label) }
-            case .depend(_, let id):
-                guard held.contains(id) else { throw unheld(id, at: label) }
 
             case .declare, .retire:
                 break

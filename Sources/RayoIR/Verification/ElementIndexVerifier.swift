@@ -90,15 +90,14 @@ struct ElementIndexVerifier {
         return .checked(below: count)
     }
 
-    /// The places that `body` names: those its operands read or move, then those its statements store to, begin an
-    /// access to, or make depend on an access.
+    /// The places that `body` names: those its operands read or move, then those its statements store to or begin an
+    /// access to.
     private static func places(in body: IRBody) -> [Place] {
         let read = body.blocks.flatMap(\.operands).compactMap(\.place)
         let reached = body.blocks.flatMap(\.statements).compactMap { statement -> Place? in
             switch statement {
             case .compute(let destination, _, _): destination?.place
             case .begin(_, let access): access.place
-            case .depend(let place, _): place
             case .declare, .retire, .end: nil
             }
         }
