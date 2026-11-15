@@ -8,6 +8,7 @@ struct AssignmentChecker {
 
     private var names: NameScopes { expressions.names }
     private var errors: ErrorList { expressions.file.errors }
+    private var declarations: Declarations { expressions.file.declarations }
 
     /// Checks an assignment, or a compound assignment such as `+=`. The value is checked even when the target can't
     /// be assigned, so mistakes in it are still reported.
@@ -105,7 +106,7 @@ struct AssignmentChecker {
         guard holdsParts else { return refuse(.assignToNonLocal, at: expr.range) }
         // A value that failed was reported, and so is one too large for the stack, where a temporary lies.
         guard let value = expressions.check(expr),
-              let held = expressions.file.declarations.fittingOnStack(value, reporting: errors) else { return nil }
+              let held = declarations.fittingOnStack(value, reporting: errors) else { return nil }
         return (CheckedPlace(root: .temporary(held)), held.type)
     }
 
