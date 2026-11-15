@@ -1,6 +1,7 @@
 import LLVM
 import Testing
-import RayoLLVM
+@testable import RayoLLVM
+import RayoSema
 import RayoRuntime
 #if os(Windows)
 import RayoLLVMTestSupport
@@ -81,6 +82,18 @@ struct RuntimeTests {
         }
     }
 
+    @Test func `every runtime function is one the linked runtime has, of the type a program declares it with`() throws {
+        let programModule = try ProgramModule(for: .debug)
+        let declared = declaredTypes(in: programModule.emitter.context)
+
+        // The runtime that rayoc links defines each function the program calls, and declares the program's `main`.
+        let linked = try programModule.linkedModule()
+        let resolved = Dictionary(uniqueKeysWithValues: RuntimeFunction.allCases.map {
+            ($0.symbol, linked.function(named: $0.symbol)?.type.anyType.text ?? "none")
+        })
+        #expect(resolved == declared)
+    }
+
     @Test func `a release build drops the runtime code a program doesn't call, and a debug build keeps it`() throws {
         let empty = try executable(emptyMain)
 
@@ -113,6 +126,16 @@ private let settingGuarantee: @convention(c) (UnsafeMutablePointer<ULONG>?) -> I
     SetThreadStackGuarantee($0) ? 1 : 0
 }
 #endif
+
+/// The type a program declares each runtime function with, in `context`, as LLVM IR writes it, by the function's
+/// symbol.
+private func declaredTypes(in context: borrowing Context) -> [String: String] {
+    let functions = RuntimeFunctions(lowering: SignatureLowering(types: LLVMTypes(TypeTable(structs: []), in: context)),
+                                     in: context)
+    return Dictionary(uniqueKeysWithValues: RuntimeFunction.allCases.map {
+        ($0.symbol, functions.type(of: $0).anyType.text)
+    })
+}
 
 /// The names of the symbols `llvm-nm` lists in `objectCode`, given `options`.
 private func symbols(_ options: [String], in objectCode: [UInt8]) throws -> [String] {

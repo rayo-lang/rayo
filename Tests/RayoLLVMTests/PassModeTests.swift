@@ -304,7 +304,7 @@ struct SignatureLoweringTests {
             let lowering = SignatureLowering(types: LLVMTypes(table, in: programModule.emitter.context))
             try body { convention, type in
                 let parameter = FunctionSignature.Parameter(convention: convention, type: type)
-                let signature = FunctionSignature(parameters: [parameter], result: .void, convention: .rayo)
+                let signature = FunctionSignature(parameters: [parameter], result: .void)
                 return lowering.lower(signature, in: programModule.emitter.context).parameters[0]
             }
         }

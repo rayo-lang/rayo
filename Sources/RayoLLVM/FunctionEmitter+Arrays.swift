@@ -1,5 +1,6 @@
 import LLVM
 import RayoIR
+import RayoSource
 
 /// Arrays, which an array operation builds in its destination one element at a time.
 extension FunctionEmitter {
@@ -38,6 +39,19 @@ extension FunctionEmitter {
 
         // The code after the array goes on once the loop has filled it.
         program.builder.position(atEndOf: end)
+    }
+
+    /// Emits the check that `value`, a UInt, is an index into an array of `count` elements, at the builder's position,
+    /// and returns the index. The check panics with `index out of range` where the value is `count` or more, in every
+    /// build, and leaves the builder in a new block.
+    func checkIndex(
+        _ value: AnyValue, below count: Int, at range: SourceRange, in program: borrowing ProgramEmitter,
+    ) -> AnyValue {
+        let format = types.indexFormat
+        let isPastEnd = program.builder.compare(.unsignedGreaterEqual, format.value(value),
+                                                format.constant(Int128(count)))
+        panics.panic(if: isPastEnd, .indexOutOfRange, at: range, in: program)
+        return value
     }
 
     /// Emits the instructions that build an array of the values of `elements`, in order, in `destination`.

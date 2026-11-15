@@ -3,30 +3,30 @@ import RayoIR
 import RayoSema
 import RayoSource
 
-/// Emits the IR's operators on scalar values into a function, each in its operands' number format, the conversions
-/// between the integer types, and the checks of indices against their arrays' counts. Integer operations panic or
-/// wrap where Rayo says they do, and so never reach LLVM's undefined cases.
+/// Emits the IR's operators on scalar values into a function, each in its operands' number format, and the
+/// conversions between the integer types. Integer operations panic or wrap where Rayo says they do, and so never reach
+/// LLVM's undefined cases.
 struct OperatorEmitter {
-    /// The function that a panic's blocks are appended to.
-    private let llvmFunction: Function
     private let types: LLVMTypes
+    /// The function's panics, which an operation emits where it fails.
+    private let panics: PanicEmitter
 
-    init(into llvmFunction: Function, types: LLVMTypes) {
-        self.llvmFunction = llvmFunction
+    init(types: LLVMTypes, panics: PanicEmitter) {
         self.types = types
+        self.panics = panics
     }
 
     /// Emits `op` on `operand`, a value of `type`, at the builder's position and returns its value. An operator that
     /// can panic leaves the builder in a new block. `op` must take an operand of `type`.
     func emit(_ op: IRUnaryOperator, on operand: AnyValue, of type: RayoType, at range: SourceRange,
-              in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
+              in program: borrowing ProgramEmitter) -> AnyValue {
         let format = format(of: type)
         let value = format.value(operand)
 
         return switch op {
         // Negation subtracts an integer from 0, so it overflows for every unsigned integer but 0.
         case .negate(let mode):
-            try emitArithmetic(.subtract, mode, format, format.constant(0), value, at: range, in: program).anyValue
+            emitArithmetic(.subtract, mode, format, format.constant(0), value, at: range, in: program).anyValue
 
         // `!` flips a Bool's one bit.
         case .not:
@@ -37,22 +37,22 @@ struct OperatorEmitter {
     /// Emits `left op right`, two values of `type`, at the builder's position and returns its value. An operator that
     /// can panic leaves the builder in a new block. `op` must take operands of `type`.
     func emit(_ op: IRBinaryOperator, _ left: AnyValue, _ right: AnyValue, of type: RayoType, at range: SourceRange,
-              in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
+              in program: borrowing ProgramEmitter) -> AnyValue {
         let format = format(of: type)
         let (left, right) = (format.value(left), format.value(right))
 
         return switch op {
         // Arithmetic panics where Rayo says it does.
         case .add(let mode):
-            try emitArithmetic(.add, mode, format, left, right, at: range, in: program).anyValue
+            emitArithmetic(.add, mode, format, left, right, at: range, in: program).anyValue
         case .subtract(let mode):
-            try emitArithmetic(.subtract, mode, format, left, right, at: range, in: program).anyValue
+            emitArithmetic(.subtract, mode, format, left, right, at: range, in: program).anyValue
         case .multiply(let mode):
-            try emitArithmetic(.multiply, mode, format, left, right, at: range, in: program).anyValue
+            emitArithmetic(.multiply, mode, format, left, right, at: range, in: program).anyValue
         case .divide(let mode):
-            try emitDivision(mode, format, left, right, at: range, in: program).anyValue
+            emitDivision(mode, format, left, right, at: range, in: program).anyValue
         case .remainder:
-            try emitRemainder(format, left, right, at: range, in: program).anyValue
+            emitRemainder(format, left, right, at: range, in: program).anyValue
 
         // A comparison orders its operands as their signedness says, and a Bool compares as its bit.
         case .equal: compare(.equal, left, right, with: program.builder)
@@ -69,7 +69,7 @@ struct OperatorEmitter {
     /// and panics where the build checks overflow and `target` can't hold the value; it then leaves the builder in a
     /// new block.
     func emitConversion(of value: AnyValue, from source: ScalarType, to target: ScalarType, at range: SourceRange,
-                        in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
+                        in program: borrowing ProgramEmitter) -> AnyValue {
         let from = types.format(of: source)
         let to = types.format(of: target)
         let integer = from.value(value)
@@ -81,7 +81,7 @@ struct OperatorEmitter {
         // A value that `target` can't hold panics where the build checks overflow.
         if program.build.checksOverflow {
             let isLost = emitLoss(of: integer, from: from, in: converted, to: to, with: program.builder)
-            try panic(if: isLost, .overflow, at: range, in: program)
+            panics.panic(if: isLost, .overflow, at: range, in: program)
         }
         return converted.anyValue
     }
@@ -98,18 +98,6 @@ struct OperatorEmitter {
         let (signed, signedFormat) = from.signedness == .signed ? (value, from) : (converted, to)
         let isNegative = builder.compare(.signedLess, signed, signedFormat.constant(0))
         return builder.or(changed, isNegative)
-    }
-
-    /// Emits the check that `value`, a UInt, is an index into an array of `count` elements, at the builder's position,
-    /// and returns the index. The check panics with `index out of range` where the value is `count` or more, in every
-    /// build, and leaves the builder in a new block.
-    func emitIndex(_ value: AnyValue, below count: Int, at range: SourceRange,
-                   in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
-        let format = types.indexFormat
-        let isPastEnd = program.builder.compare(.unsignedGreaterEqual, format.value(value),
-                                                format.constant(Int128(count)))
-        try panic(if: isPastEnd, .indexOutOfRange, at: range, in: program)
-        return value
     }
 
     /// The number format of `type`, which must be a scalar type.
@@ -137,7 +125,7 @@ struct OperatorEmitter {
     private func emitArithmetic(
         _ op: OverflowingOperation, _ mode: OverflowMode, _ format: NumberFormat, _ left: AnyIntValue,
         _ right: AnyIntValue, at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) -> AnyIntValue {
+    ) -> AnyIntValue {
         // Where overflow isn't checked, the plain instruction wraps.
         guard mode.panics(in: program.build) else { return emitWrapping(op, left, right, with: program.builder) }
 
@@ -148,7 +136,7 @@ struct OperatorEmitter {
         let call = program.builder.call(intrinsic, [left, right])!
         let pair = AggregateValue(call)!
         let overflowed = IntValue<I1>(program.builder.extractValue(from: pair, at: 1))!
-        try panic(if: overflowed, .overflow, at: range, in: program)
+        panics.panic(if: overflowed, .overflow, at: range, in: program)
         return format.value(program.builder.extractValue(from: pair, at: 0))
     }
 
@@ -165,12 +153,12 @@ struct OperatorEmitter {
     private func emitDivision(
         _ mode: OverflowMode, _ format: NumberFormat, _ left: AnyIntValue, _ right: AnyIntValue,
         at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) -> AnyIntValue {
-        try panic(ifZero: right, of: format, .divisionByZero, at: range, in: program)
+    ) -> AnyIntValue {
+        panic(ifZero: right, of: format, .divisionByZero, at: range, in: program)
 
         // No unsigned quotient overflows.
         guard format.signedness == .signed else { return program.builder.unsignedDivide(left, right) }
-        return try emitSignedDivision(mode, format, left, right, at: range, in: program)
+        return emitSignedDivision(mode, format, left, right, at: range, in: program)
     }
 
     /// Emits `left / right` on two signed integers of `format`, whose divisor isn't zero, which panics on the most
@@ -178,13 +166,13 @@ struct OperatorEmitter {
     private func emitSignedDivision(
         _ mode: OverflowMode, _ format: NumberFormat, _ left: AnyIntValue, _ right: AnyIntValue,
         at range: SourceRange, in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) -> AnyIntValue {
+    ) -> AnyIntValue {
         let isMinusOne = program.builder.compare(.equal, right, format.constant(-1))
 
         // Where overflow is checked, the most negative value divided by -1, the one quotient that overflows, panics.
         if mode.panics(in: program.build) {
             let isMin = program.builder.compare(.equal, left, mostNegative(of: format))
-            try panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
+            panics.panic(if: program.builder.and(isMin, isMinusOne), .overflow, at: range, in: program)
         }
 
         // LLVM leaves that quotient undefined, so divide by -1 as by 1 and negate, which wraps the most negative value
@@ -199,8 +187,8 @@ struct OperatorEmitter {
     private func emitRemainder(
         _ format: NumberFormat, _ left: AnyIntValue, _ right: AnyIntValue, at range: SourceRange,
         in program: borrowing ProgramEmitter,
-    ) throws(LLVMError) -> AnyIntValue {
-        try panic(ifZero: right, of: format, .remainderByZero, at: range, in: program)
+    ) -> AnyIntValue {
+        panic(ifZero: right, of: format, .remainderByZero, at: range, in: program)
         guard format.signedness == .signed else { return program.builder.unsignedRemainder(left, right) }
 
         // Every remainder by -1 is 0, but LLVM leaves the most negative value's undefined, so a divisor of -1 becomes
@@ -229,34 +217,11 @@ struct OperatorEmitter {
         builder.compare(predicate, left, right).anyValue
     }
 
+    /// Branches to a panic for `reason` where `value`, of `format`, is zero, and continues in a new block otherwise.
     private func panic(ifZero value: AnyIntValue, of format: NumberFormat, _ reason: PanicReason,
-                       at range: SourceRange, in program: borrowing ProgramEmitter) throws(LLVMError) {
+                       at range: SourceRange, in program: borrowing ProgramEmitter) {
         let isZero = program.builder.compare(.equal, value, format.constant(0))
-        try panic(if: isZero, reason, at: range, in: program)
-    }
-
-    /// Branches to a panic for `reason` when `condition` holds, and continues in a new block otherwise.
-    private func panic(if condition: IntValue<I1>, _ reason: PanicReason, at range: SourceRange,
-                       in program: borrowing ProgramEmitter) throws(LLVMError) {
-        // Split on the condition into two blocks appended at the function's end.
-        let panics = program.context.appendBlock(named: "panic", to: llvmFunction)
-        let continues = program.context.appendBlock(named: "continue", to: llvmFunction)
-        program.builder.branch(if: condition, then: panics, else: continues)
-
-        // The panic block reports the reason and the place, and never returns. The runtime takes the message's
-        // length as an Int.
-        program.builder.position(atEndOf: panics)
-        let message = Array("\(program.sourcePath):\(range.start): panic: \(reason.rawValue)\n".utf8)
-        let bytes = program.context.constant(bytes: message)
-        let text = program.module.addGlobal(named: "rayo.panic_message", initializer: bytes)
-        text.setConstant()
-        text.setUnnamedAddress()
-        let panic = try program.runtimeFunction(named: "rayo.panic")
-        let length = types.format(of: .int).constant(Int128(message.count))
-        program.builder.call(panic, [text.pointer, length])
-        program.builder.unreachable()
-
-        program.builder.position(atEndOf: continues)
+        panics.panic(if: isZero, reason, at: range, in: program)
     }
 }
 
@@ -265,14 +230,6 @@ private extension OverflowMode {
     func panics(in build: Build) -> Bool {
         self == .checked && build.checksOverflow
     }
-}
-
-/// Why an operator panics, as its panic message says.
-private enum PanicReason: String {
-    case overflow = "integer overflow"
-    case divisionByZero = "division by zero"
-    case remainderByZero = "remainder by zero"
-    case indexOutOfRange = "index out of range"
 }
 
 /// An integer operation that can overflow.

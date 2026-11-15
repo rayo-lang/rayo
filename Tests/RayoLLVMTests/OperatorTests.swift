@@ -130,32 +130,32 @@ struct OperatorTests {
 @Suite("Operators optimised as a release build is")
 struct OptimizedOperatorTests {
     @Test func `Int.max + 1 wraps below Int.max`() throws {
-        let outcome = try releaseOutcome(of: .max) { emit, a in try emit(.less, emit(.add(.checked), a, 1), a) }
+        let outcome = try releaseOutcome(of: .max) { emit, a in emit(.less, emit(.add(.checked), a, 1), a) }
         #expect(outcome == .bool(true))
     }
 
     @Test func `Int.min - 1 wraps above Int.min`() throws {
-        let outcome = try releaseOutcome(of: .min) { emit, a in try emit(.greater, emit(.subtract(.checked), a, 1), a) }
+        let outcome = try releaseOutcome(of: .min) { emit, a in emit(.greater, emit(.subtract(.checked), a, 1), a) }
         #expect(outcome == .bool(true))
     }
 
     @Test func `Int.min * 2 wraps to 0`() throws {
-        let outcome = try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.multiply(.checked), a, 2), 0) }
+        let outcome = try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.multiply(.checked), a, 2), 0) }
         #expect(outcome == .bool(true))
     }
 
     @Test func `negating Int.min wraps to Int.min`() throws {
-        let outcome = try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.negate(.checked), a), a) }
+        let outcome = try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.negate(.checked), a), a) }
         #expect(outcome == .bool(true))
     }
 
     @Test func `Int.min / -1 wraps to Int.min, where the optimiser knows the divisor`() throws {
-        let outcome = try releaseOutcome(of: .min) { emit, a in try emit(.equal, emit(.divide(.checked), a, -1), a) }
+        let outcome = try releaseOutcome(of: .min) { emit, a in emit(.equal, emit(.divide(.checked), a, -1), a) }
         #expect(outcome == .bool(true))
     }
 
     @Test func `7 / 2 rounds to 3, the quotient of a division with a remainder`() throws {
-        let outcome = try releaseOutcome(of: 7) { emit, a in try emit(.equal, emit(.divide(.checked), a, 2), 3) }
+        let outcome = try releaseOutcome(of: 7) { emit, a in emit(.equal, emit(.divide(.checked), a, 2), 3) }
         #expect(outcome == .bool(true))
     }
 
