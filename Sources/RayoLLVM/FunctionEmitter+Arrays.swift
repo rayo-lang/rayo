@@ -15,9 +15,10 @@ extension FunctionEmitter {
         guard let destination else { return }
         let array = address(of: destination, with: program.builder)
 
-        // The loop counts the elements it has filled in a slot of its own, from 0.
-        let filled = newSlot(of: .int, with: program.builder)
-        store(types.int64.constant(0).anyValue, at: filled, with: program.builder)
+        // The loop counts the elements it has filled in a slot of its own, a UInt, as an index is, from 0.
+        let format = types.indexFormat
+        let filled = newSlot(of: .uint, with: program.builder)
+        store(format.constant(0).anyValue, at: filled, with: program.builder)
         let header = program.context.appendBlock(named: "fill.header", to: llvmFunction)
         let body = program.context.appendBlock(named: "fill.body", to: llvmFunction)
         let end = program.context.appendBlock(named: "fill.end", to: llvmFunction)
@@ -25,24 +26,18 @@ extension FunctionEmitter {
 
         // The header goes on to the body while an element is left to fill, and past the loop once none is.
         program.builder.position(atEndOf: header)
-        let index = int(whole(.place(filled), with: program.builder))
-        let isFull = program.builder.compare(.unsignedGreaterEqual, index, types.int64.constant(Int64(count)))
+        let index = format.value(whole(.place(filled), with: program.builder))
+        let isFull = program.builder.compare(.unsignedGreaterEqual, index, format.constant(Int128(count)))
         program.builder.branch(if: isFull, then: end, else: body)
 
         // The body copies the value into the element at the index, and counts it.
         program.builder.position(atEndOf: body)
         copy(source, to: elementAddress(at: index, in: array, with: program.builder), with: program.builder)
-        store(program.builder.add(index, types.int64.constant(1)).anyValue, at: filled, with: program.builder)
+        store(program.builder.add(index, format.constant(1)).anyValue, at: filled, with: program.builder)
         program.builder.branch(to: header)
 
         // The code after the array goes on once the loop has filled it.
         program.builder.position(atEndOf: end)
-    }
-
-    /// `value`, an index or a count, as LLVM holds an Int.
-    private func int(_ value: AnyValue) -> IntValue<I64> {
-        guard let int = IntValue<I64>(value) else { preconditionFailure("an Int is held as an i64") }
-        return int
     }
 
     /// Emits the instructions that build an array of the values of `elements`, in order, in `destination`.

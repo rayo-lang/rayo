@@ -1,7 +1,9 @@
 package import CLLVM
 
 /// An LLVM integer type of `Width`.
-public struct IntegerType<Width: IntegerWidth>: TypeHandle, Equatable {
+public struct IntegerType<Width: IntegerWidth>: IntegerTypeHandle, Equatable {
+    public typealias Value = IntValue<Width>
+
     package let ref: LLVMTypeRef
 
     package init(_ ref: LLVMTypeRef) {
@@ -9,6 +11,8 @@ public struct IntegerType<Width: IntegerWidth>: TypeHandle, Equatable {
     }
 
     public var anyType: AnyType { AnyType(ref) }
+
+    public var bitWidth: Int { Int(Width.bitWidth) }
 
     /// The constant of this type that holds `value`'s low bits, as many as the type is wide.
     public func constant(_ value: Int64) -> IntValue<Width> {

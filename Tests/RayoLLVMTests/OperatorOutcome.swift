@@ -1,6 +1,7 @@
 import LLVM
 @testable import RayoLLVM
 import RayoIR
+import RayoSema
 
 /// What an operator came to when its emitted code ran: the value it gave, or the message of the panic it reported.
 enum OperatorOutcome: Equatable {
@@ -44,6 +45,25 @@ func unsignedOutcome(of op: IRUnaryOperator, _ operand: UInt64, in build: Build)
 func conversionOutcome(of value: Int64, from operands: OperatorModule.Operands,
                        in build: Build) throws -> OperatorOutcome {
     try outcome(value, 0, on: operands, in: build) { emit, a, _ in try emit.convert(a) }
+}
+
+/// What converting the low bits of `value`, an integer of `source`, to the integer type `target` comes to, emitted as
+/// `build` does, and run in this process. The outcome gives the converted value widened to 64 bits as `target`'s
+/// signedness says, as an Int where `target` is signed and a UInt where it isn't.
+func conversionOutcome(of value: Int64, from source: ScalarType, to target: ScalarType,
+                       in build: Build) throws -> OperatorOutcome {
+    // Emit `f`, and ready the module as the build does.
+    var module = try OperatorModule(for: build)
+    _ = try module.defineConversion("f", from: source, to: target)
+    try module.ready(exporting: ["f"])
+
+    // Run `f` in this process, and read its result as the type it converted to.
+    let jit = try InProcessJIT(running: module.takeModule())
+    return switch try jit.call("f", value, 0) {
+    case .returned(let value) where target.isSigned: .int(value)
+    case .returned(let value): .uint(UInt64(bitPattern: value))
+    case .panicked(let message): .panic(message)
+    }
 }
 
 /// What `op operand` comes to on an Int, emitted as `build` does, and run in this process.

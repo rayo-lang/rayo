@@ -13,31 +13,25 @@ extension FunctionEmitter {
     ) throws(LLVMError) {
         switch builtin {
         // A conversion between the integer types runs in place, with no call.
-        case .intFromUInt, .uintFromInt:
-            try convert(arguments[0], into: destination, at: range, in: program)
+        case .conversion(let source, let target):
+            try convert(arguments[0], from: source, to: target, into: destination, at: range, in: program)
 
-        // The runtime's prints are C functions, whose convention passes a lone integer or Bool directly, as Rayo's
-        // does.
-        case .printInt:
-            try callRuntime("rayo.print_int", in: .rayo, for: builtin, passing: arguments, into: destination,
-                            in: program)
-        case .printUInt:
-            try callRuntime("rayo.print_uint", in: .rayo, for: builtin, passing: arguments, into: destination,
-                            in: program)
-        case .printBool:
-            try callRuntime("rayo.print_bool", in: .rayo, for: builtin, passing: arguments, into: destination,
-                            in: program)
+        // The runtime prints a value of each scalar type with a C function named for the type, whose convention
+        // passes a lone integer or Bool directly, as Rayo's does.
+        case .print(let scalar):
+            try callRuntime("rayo.print_\(scalar.name.lowercased())", in: .rayo, for: builtin, passing: arguments,
+                            into: destination, in: program)
         }
     }
 
-    /// Emits the conversion of `argument`, an Int or a UInt, to the other of the two, which the source makes at
-    /// `range`, and stores the converted value in `destination` when there is one.
+    /// Emits the conversion of `argument`, an integer of type `source`, to the integer type `target`, which the source
+    /// makes at `range`, and stores the converted value in `destination` when there is one.
     private func convert(
-        _ argument: CallArgument, into destination: Place?, at range: SourceRange,
-        in program: borrowing ProgramEmitter,
+        _ argument: CallArgument, from source: ScalarType, to target: ScalarType, into destination: Place?,
+        at range: SourceRange, in program: borrowing ProgramEmitter,
     ) throws(LLVMError) {
         let integer = whole(value(of: argument, with: program.builder), with: program.builder)
-        let converted = try operators.emitConversion(of: integer, at: range, in: program)
+        let converted = try operators.emitConversion(of: integer, from: source, to: target, at: range, in: program)
         keep(converted, in: destination, with: program.builder)
     }
 

@@ -2,7 +2,7 @@ import RayoSema
 import RayoSource
 
 extension IRParser {
-    /// The type at the current token: `Int`, `UInt`, `Bool`, `Void`, a struct the text declares, or
+    /// The type at the current token: a scalar type such as `Int` or `Bool`, `Void`, a struct the text declares, or
     /// `[count of type]`.
     mutating func type() throws(IRTextError) -> RayoType {
         // A `[` starts an array type.
@@ -17,13 +17,14 @@ extension IRParser {
         // Any other type is named by a word.
         let token = current
         let name = try word()
-        return switch name {
-        case "Int": .int
-        case "UInt": .uint
-        case "Bool": .bool
-        case "Void": .void
-        default: .structure(try structID(named: name, at: token))
-        }
+        // A name the prelude gives no type names a struct.
+        guard let type = RayoType.prelude(named: name) else { return .structure(try structID(named: name, at: token)) }
+        return type
+    }
+
+    /// The integer type the prelude declares as `name`, or nil where it declares none.
+    private static func integerType(named name: String) -> ScalarType? {
+        ScalarType.named(name).flatMap { $0.isInteger ? $0 : nil }
     }
 
     /// The struct the text declares as `name`, which `token` holds.
@@ -129,21 +130,30 @@ extension IRParser {
     /// Whether the current token starts an operand.
     var startsOperand: Bool {
         switch current.kind {
-        case .integer, .symbol("-"), .word("uint"), .word("true"), .word("false"), .word("read"), .word("move"): true
+        case .integer, .symbol("-"), .word("true"), .word("false"), .word("read"), .word("move"): true
+        case .word(let word): Self.integerType(named: word) != nil
         default: false
         }
     }
 
-    /// Reads a constant, `read place @range` or `move place @range`.
+    /// Reads a constant, `read place @range` or `move place @range`. An integer constant is an Int, or, written after
+    /// the name of another integer type, such as `UInt 4`, a value of that type.
     mutating func operand() throws(IRTextError) -> Operand {
         switch current.kind {
         case .word("true"), .word("false"): .constant(.bool(boolConstant()))
-        case .integer, .symbol("-"): .constant(.int(try intConstant()))
-        case .word("uint"): .constant(.uint(try uintConstant()))
+        case .integer, .symbol("-"): .constant(try integerConstant(of: .int))
         case .word("read"): try placeOperand(Operand.read)
         case .word("move"): try placeOperand(Operand.move)
+        case .word(let word): try integerConstant(after: word)
         default: throw expected("an operand")
         }
+    }
+
+    /// Reads the integer constant after `word`, the name of its type, which the current token holds.
+    private mutating func integerConstant(after word: String) throws(IRTextError) -> Operand {
+        guard let type = Self.integerType(named: word) else { throw expected("an operand") }
+        advance()
+        return .constant(try integerConstant(of: type))
     }
 
     /// Reads `true` or `false`, which the current token holds.
@@ -153,25 +163,19 @@ extension IRParser {
         return value
     }
 
-    /// Reads an Int constant, with `-` before it where it is negative.
-    private mutating func intConstant() throws(IRTextError) -> Int64 {
+    /// Reads a constant of `type`, an integer type, with `-` before it where it is negative.
+    private mutating func integerConstant(of type: ScalarType) throws(IRTextError) -> Constant {
         let negative = consume("-")
         let token = current
         guard case .integer(let magnitude) = token.kind else { throw expected("a number") }
         advance()
 
-        // The most negative Int has a magnitude one more than the most positive.
-        let value = negative ? Int64(exactly: -Int128(magnitude)) : Int64(exactly: magnitude)
-        guard let value else { throw IRTextError(at: token, "\(negative ? "-" : "")\(magnitude) isn't an Int") }
-        return value
-    }
-
-    /// Reads `uint` and the number of a UInt constant after it, which the current token starts.
-    private mutating func uintConstant() throws(IRTextError) -> UInt64 {
-        advance()
-        guard case .integer(let value) = current.kind else { throw expected("a number") }
-        advance()
-        return value
+        // A value the type can't hold is no constant of it.
+        let value = negative ? -Int128(magnitude) : Int128(magnitude)
+        guard let values = type.literalRange, values.contains(value) else {
+            throw IRTextError(at: token, "\(type) can't hold \(value)")
+        }
+        return .integer(value, type)
     }
 
     /// Reads the word that says how an operand uses a place, then the place and where the source names it, and

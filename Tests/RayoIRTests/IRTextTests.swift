@@ -44,7 +44,7 @@ struct IRTextTests {
               var %0 x: UInt
               temp %1: Int
             bb0:
-              %0 @1:1-1:2 = operand uint 18446744073709551615 @1:1-1:2
+              %0 @1:1-1:2 = operand UInt 18446744073709551615 @1:1-1:2
               begin a0 read static %0 @2:3-2:4
               %1 @2:1-2:2 = call builtin "Int(_: UInt)"(a0) @2:1-2:2
               end a0
@@ -83,9 +83,9 @@ struct IRTextTests {
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
         let access = Access(.read, .static, to: Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4))
         #expect(statements[1] == .begin(AccessID(index: 0), access))
-        let arguments: [CallArgument] = [.access(AccessID(index: 0)), .operand(.constant(.int(2)))]
+        let arguments: [CallArgument] = [.access(AccessID(index: 0)), .operand(.constant(.integer(2, .int)))]
         #expect(statements[3] == .compute(
-            destination: nil, value: .call(.builtin(.printInt), arguments: arguments), range: range(1, 1, 1, 2),
+            destination: nil, value: .call(.builtin(.print(.int)), arguments: arguments), range: range(1, 1, 1, 2),
         ))
         #expect(statements[5] == .depend(Place(root: LocalID(index: 1)), on: AccessID(index: 1)))
         #expect(statements[6] == .end(AccessID(index: 1)))
@@ -114,7 +114,10 @@ struct IRTextTests {
 
         // The array names its element type, and holds its elements in order.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
-        let elements: [Operand] = [.constant(.int(1)), .move(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4))]
+        let elements: [Operand] = [
+            .constant(.integer(1, .int)),
+            .move(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4)),
+        ]
         #expect(statements[0] == .compute(
             destination: Destination(Place(root: LocalID(index: 0)), at: range(1, 1, 1, 2)),
             value: .array(elements, of: .int), range: range(1, 1, 1, 2),
@@ -157,7 +160,7 @@ struct IRTextTests {
               temp %1: UInt
               temp %2: Int
             bb0:
-              %1 @1:1-1:2 = index uint 4 below 3 @2:3-2:4
+              %1 @1:1-1:2 = index UInt 4 below 3 @2:3-2:4
               %2 @1:1-1:2 = operand read %0[1][%1] @1:1-1:2 @1:1-1:2
               return
             }
@@ -170,7 +173,7 @@ struct IRTextTests {
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
         #expect(statements[0] == .compute(
             destination: Destination(Place(root: LocalID(index: 1)), at: range(1, 1, 1, 2)),
-            value: .index(.constant(.uint(4)), below: 3), range: range(2, 3, 2, 4),
+            value: .index(.constant(.integer(4, .uint)), below: 3), range: range(2, 3, 2, 4),
         ))
         let element = Place(root: LocalID(index: 0), steps: [.element(1), .elementAt(LocalID(index: 1))])
         #expect(statements[1] == .compute(
@@ -283,7 +286,7 @@ private let malformedIR = [
     MalformedIR(
         testDescription: "an Int constant too large for an Int",
         text: "func \"f()\"() -> Int {\nbb0:\n  return 9223372036854775808\n}",
-        error: IRTextError(line: 3, column: 10, message: "9223372036854775808 isn't an Int"),
+        error: IRTextError(line: 3, column: 10, message: "Int can't hold 9223372036854775808"),
     ),
     MalformedIR(
         testDescription: "the function a run starts at named twice",

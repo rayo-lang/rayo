@@ -9,10 +9,6 @@ public struct Layout: Hashable, Sendable {
         self.alignment = alignment
     }
 
-    public static let int = Layout(size: 8, alignment: 8)
-    public static let uint = Layout(size: 8, alignment: 8)
-    public static let bool = Layout(size: 1, alignment: 1)
-
     /// The layout of an array of `count` values laid out as this one, or nil where its size doesn't fit in an Int.
     /// The values lie end to end, each at its index times this size, which is a multiple of the alignment, so each
     /// value is aligned.

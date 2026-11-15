@@ -1,7 +1,7 @@
 package import CLLVM
 
 /// An LLVM integer value of `Width`.
-public struct IntValue<Width: IntegerWidth>: ValueHandle, Equatable {
+public struct IntValue<Width: IntegerWidth>: IntegerHandle, Equatable {
     package let ref: LLVMValueRef
 
     /// Takes `ref` as an integer of `Width`, which it must be.
@@ -17,6 +17,8 @@ public struct IntValue<Width: IntegerWidth>: ValueHandle, Equatable {
     }
 
     public var anyValue: AnyValue { AnyValue(ref) }
+
+    public var bitWidth: Int { Int(Width.bitWidth) }
 
     /// The integer's value, sign-extended from its width, where it is a constant.
     public var constantValue: Int64? {

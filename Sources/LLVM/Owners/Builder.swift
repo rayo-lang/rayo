@@ -27,76 +27,98 @@ public struct Builder: ~Copyable {
     // MARK: Integer arithmetic
 
     /// Builds `add`, which wraps on overflow.
-    public func add<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildAdd(ref, left.ref, right.ref, ""))
+    public func add<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildAdd(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `sub`, which wraps on overflow.
-    public func subtract<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildSub(ref, left.ref, right.ref, ""))
+    public func subtract<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildSub(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `mul`, which wraps on overflow.
-    public func multiply<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildMul(ref, left.ref, right.ref, ""))
+    public func multiply<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildMul(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `sdiv`, which LLVM leaves undefined for a zero divisor and for the one quotient that overflows.
-    public func signedDivide<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildSDiv(ref, left.ref, right.ref, ""))
+    public func signedDivide<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildSDiv(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `srem`, whose result takes the dividend's sign, and which LLVM leaves undefined where `sdiv` is.
-    public func signedRemainder<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildSRem(ref, left.ref, right.ref, ""))
+    public func signedRemainder<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildSRem(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `udiv`, which LLVM leaves undefined for a zero divisor.
-    public func unsignedDivide<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildUDiv(ref, left.ref, right.ref, ""))
+    public func unsignedDivide<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildUDiv(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `urem`, which LLVM leaves undefined for a zero divisor.
-    public func unsignedRemainder<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildURem(ref, left.ref, right.ref, ""))
+    public func unsignedRemainder<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildURem(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `and`.
-    public func and<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildAnd(ref, left.ref, right.ref, ""))
+    public func and<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildAnd(ref, left.anyValue.ref, right.anyValue.ref, ""))
+    }
+
+    /// Builds `or`.
+    public func or<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildOr(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `xor`.
-    public func xor<Width>(_ left: IntValue<Width>, _ right: IntValue<Width>) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildXor(ref, left.ref, right.ref, ""))
+    public func xor<Integer: IntegerHandle>(_ left: Integer, _ right: Integer) -> Integer {
+        integer(LLVMBuildXor(ref, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `icmp`, which gives whether `predicate` holds of `left` and `right`.
-    public func compare<Width>(
-        _ predicate: IntegerPredicate, _ left: IntValue<Width>, _ right: IntValue<Width>,
+    public func compare<Integer: IntegerHandle>(
+        _ predicate: IntegerPredicate, _ left: Integer, _ right: Integer,
     ) -> IntValue<I1> {
-        IntValue(unchecked: LLVMBuildICmp(ref, predicate.llvmPredicate, left.ref, right.ref, ""))
+        IntValue(unchecked: LLVMBuildICmp(ref, predicate.llvmPredicate, left.anyValue.ref, right.anyValue.ref, ""))
     }
 
     /// Builds `select`, which gives `then` where `condition` holds and `otherwise` where it doesn't.
-    public func select<Width>(
-        _ condition: IntValue<I1>, _ then: IntValue<Width>, _ otherwise: IntValue<Width>,
-    ) -> IntValue<Width> {
-        IntValue(unchecked: LLVMBuildSelect(ref, condition.ref, then.ref, otherwise.ref, ""))
+    public func select<Integer: IntegerHandle>(
+        _ condition: IntValue<I1>, _ then: Integer, _ otherwise: Integer,
+    ) -> Integer {
+        integer(LLVMBuildSelect(ref, condition.ref, then.anyValue.ref, otherwise.anyValue.ref, ""))
     }
 
     // MARK: Integer conversions
 
     /// Builds `trunc`, which keeps the low bits of `value` that `type` holds. `type` must be narrower than `value`.
-    public func truncate<From, To>(_ value: IntValue<From>, to type: IntegerType<To>) -> IntValue<To> {
-        precondition(To.bitWidth < From.bitWidth, "LLVM truncates an integer only to a narrower one")
-        return IntValue(unchecked: LLVMBuildTrunc(ref, value.ref, type.ref, ""))
+    public func truncate<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
+        precondition(type.bitWidth < value.bitWidth, "LLVM truncates an integer only to a narrower one")
+        return integer(LLVMBuildTrunc(ref, value.anyValue.ref, type.anyType.ref, ""))
     }
 
     /// Builds `zext`, which pads `value` with zero bits to the width of `type`. `type` must be wider than `value`.
-    public func zeroExtend<From, To>(_ value: IntValue<From>, to type: IntegerType<To>) -> IntValue<To> {
-        precondition(To.bitWidth > From.bitWidth, "LLVM zero-extends an integer only to a wider one")
-        return IntValue(unchecked: LLVMBuildZExt(ref, value.ref, type.ref, ""))
+    public func zeroExtend<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
+        precondition(type.bitWidth > value.bitWidth, "LLVM zero-extends an integer only to a wider one")
+        return integer(LLVMBuildZExt(ref, value.anyValue.ref, type.anyType.ref, ""))
+    }
+
+    /// Builds `sext`, which pads `value` with copies of its top bit to the width of `type`. `type` must be wider than
+    /// `value`.
+    public func signExtend<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
+        precondition(type.bitWidth > value.bitWidth, "LLVM sign-extends an integer only to a wider one")
+        return integer(LLVMBuildSExt(ref, value.anyValue.ref, type.anyType.ref, ""))
+    }
+
+    /// The instruction `ref`, which gives an integer, as the kind of handle that holds it.
+    private func integer<Integer: IntegerHandle>(_ ref: LLVMValueRef) -> Integer {
+        // Each instruction that calls this gives an integer of its operands' width, or of the type it converts to,
+        // which the handle's Swift type was inferred from.
+        guard let integer = Integer(AnyValue(ref)) else {
+            preconditionFailure("LLVM gives an integer of another width")
+        }
+        return integer
     }
 
     // MARK: Aggregates and calls
@@ -156,9 +178,9 @@ public struct Builder: ~Copyable {
     /// Builds `getelementptr`, which gives a pointer to the element at `index` of the values of type `element` that
     /// lie end to end from where `pointer` points. The element must lie inside the memory that `pointer` reaches.
     public func elementPointer(
-        to index: IntValue<I64>, of element: some TypeHandle, at pointer: PointerValue,
+        to index: some IntegerHandle, of element: some TypeHandle, at pointer: PointerValue,
     ) -> PointerValue {
-        var indices: [LLVMValueRef?] = [index.ref]
+        var indices: [LLVMValueRef?] = [index.anyValue.ref]
         return PointerValue(LLVMBuildInBoundsGEP2(ref, element.anyType.ref, pointer.ref, &indices, 1, "")!)
     }
 

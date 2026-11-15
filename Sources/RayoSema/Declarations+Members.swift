@@ -5,7 +5,7 @@ extension Declarations {
         switch type {
         case .structure(let id): structMember(named: name, of: id)
         case .array(let count, let element): arrayMember(named: name, count: count, element)
-        case .int, .uint, .bool, .void: preludeMember(named: name, of: type)
+        case .scalar, .void: preludeMember(named: name, of: type)
         }
     }
 

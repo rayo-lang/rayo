@@ -35,12 +35,16 @@ public enum IRBinaryOperator: Hashable, Sendable, CaseIterable, CustomStringConv
         }
     }
 
-    /// The types of the operands the operator takes, both of one of them.
+    /// The types of the operands the operator takes, both of one of them: an integer type for arithmetic and the
+    /// orderings, and any scalar type for `==` and `!=`.
     public var operandTypes: [RayoType] {
-        switch self {
-        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual: [.int, .uint]
-        case .equal, .notEqual: [.int, .uint, .bool]
+        let scalars = switch self {
+        case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual:
+            ScalarType.integers
+        case .equal, .notEqual:
+            ScalarType.prelude
         }
+        return scalars.map(RayoType.scalar)
     }
 
     /// The type of the value the operator gives on operands of `type`.

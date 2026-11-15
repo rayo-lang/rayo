@@ -95,11 +95,10 @@ extension FunctionEmitter {
     }
 
     /// Emits the load of the index that `local`, a UInt local, holds, and returns it.
-    private func index(in local: LocalID, with builder: borrowing Builder) -> IntValue<I64> {
+    private func index(in local: LocalID, with builder: borrowing Builder) -> AnyIntValue {
         let value = whole(.place(Address(pointer: places[local.index], type: .uint)), with: builder)
-        // The verifier passes no IR that indexes by a local that isn't a UInt, which LLVM holds as an i64.
-        guard let index = IntValue<I64>(value) else { preconditionFailure("a UInt is held as an i64") }
-        return index
+        // The verifier passes no IR that indexes by a local that isn't a UInt.
+        return types.indexFormat.value(value)
     }
 
     /// Emits the instructions that take each of `steps`, a scalar's, in turn from the value at `address`, and returns
@@ -135,12 +134,12 @@ extension FunctionEmitter {
     /// Emits the instruction that points at the element at `index` of the array at `address`, and returns the
     /// element's address.
     func elementAddress(of index: Int, in address: Address, with builder: borrowing Builder) -> Address {
-        elementAddress(at: types.int64.constant(Int64(index)), in: address, with: builder)
+        elementAddress(at: types.indexFormat.constant(Int128(index)), in: address, with: builder)
     }
 
     /// Emits the instruction that points at the element at `index`, a value the program computes, of the array at
     /// `address`, and returns the element's address.
-    func elementAddress(at index: IntValue<I64>, in address: Address, with builder: borrowing Builder) -> Address {
+    func elementAddress(at index: AnyIntValue, in address: Address, with builder: borrowing Builder) -> Address {
         // Only an array has elements, which lie end to end from where it starts.
         guard case .array(_, let element) = address.type else { preconditionFailure("only an array has elements") }
         let pointer = builder.elementPointer(to: index, of: types.llvmType(element), at: address.pointer)
@@ -150,17 +149,13 @@ extension FunctionEmitter {
     /// Emits the instructions that find the value `operand` gives, and returns it.
     func value(of operand: Operand, with builder: borrowing Builder) -> OperandValue {
         switch operand {
-        // An Int constant is an `i64` holding the Int's bits.
-        case .constant(.int(let value)):
-            .constant(types.int64.constant(value).anyValue, .int)
+        // An integer constant holds its value's bits, in its type's format.
+        case .constant(.integer(let value, let type)):
+            .constant(types.format(of: type).constant(value).anyValue, .scalar(type))
 
-        // A UInt constant is an `i64` holding the UInt's bits.
-        case .constant(.uint(let value)):
-            .constant(types.int64.constant(Int64(bitPattern: value)).anyValue, .uint)
-
-        // A Bool constant is an `i1`, 1 for true and 0 for false.
+        // A Bool constant is 1 for true and 0 for false.
         case .constant(.bool(let value)):
-            .constant(types.bool.constant(value ? 1 : 0).anyValue, .bool)
+            .constant(types.format(of: .bool).constant(value ? 1 : 0).anyValue, .bool)
 
         // A read or a move finds the place; a move leaves it as it is, unread until assigned again.
         case .read(let place, _), .move(let place, _):

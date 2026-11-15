@@ -32,7 +32,7 @@ bb1:
 
 func "index()"() -> UInt {
 bb0:
-  return uint 1
+  return UInt 1
 bb1:
   unreachable
 }

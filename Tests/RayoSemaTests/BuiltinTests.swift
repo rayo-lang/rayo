@@ -28,9 +28,18 @@ struct BuiltinTests {
         var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
         declarations.declarePrelude()
 
-        #expect(initializers(of: .int, in: declarations).map(\.description) == ["Int(_: UInt)"])
-        #expect(initializers(of: .uint, in: declarations).map(\.description) == ["UInt(_: Int)"])
+        #expect(initializers(of: .int, in: declarations).map(\.description) == ["Int(_: Int)", "Int(_: UInt)"])
+        #expect(initializers(of: .uint, in: declarations).map(\.description) == ["UInt(_: Int)", "UInt(_: UInt)"])
+        #expect(initializers(of: .bool, in: declarations).isEmpty)
         #expect(declarations.functions(named: "Int").isEmpty)
+    }
+
+    @Test func `'print' takes each scalar type`() {
+        var declarations = Declarations(names: TopLevelNames(of: Parser.parse("").file))
+        declarations.declarePrelude()
+
+        let prints = declarations.functions(named: "print").map(\.description)
+        #expect(prints == ["print(_: Int)", "print(_: UInt)", "print(_: Bool)"])
     }
 
     @Test(arguments: ["func Int() {}", "struct Int"])

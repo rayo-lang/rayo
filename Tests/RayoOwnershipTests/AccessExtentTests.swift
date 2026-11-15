@@ -58,7 +58,7 @@ struct AccessExtentTests {
         // As `take(&a[i].damage, a[1])` lowers, where the local `%8` holds `i`'s value.
         let blocks = """
             bb0:
-              %8 @1:1-1:1 = index uint 1 below 2 @1:1-1:1
+              %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               begin a0 modify static \(modified) @2:3-2:3
               begin a1 read static \(read) @2:6-2:6
               _ = call "take(_: Int, _: Hit)"(a0, a1) @1:1-1:1

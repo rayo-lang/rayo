@@ -80,9 +80,7 @@ public struct TypeTable: Equatable, Sendable {
     /// Int.
     private func layout(of type: RayoType, inside enclosing: [RayoType]) -> Layout? {
         switch type {
-        case .int: .int
-        case .uint: .uint
-        case .bool: .bool
+        case .scalar(let scalar): scalar.layout
         case .structure: structLayout(of: type, inside: enclosing)?.layout
         case .array(let count, let element): layout(of: element, inside: enclosing)?.array(of: count)
         case .void: preconditionFailure("no value of type Void lies in memory")
