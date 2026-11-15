@@ -102,29 +102,34 @@ struct OwnershipCheckTests {
         ])
     }
 
-    @Test func `checking a function four times as long takes well under sixteen times as long`() throws {
-        let short = try program(of: [longFunction(rounds: 1000)] + callees)
+    @Test func `checking a function eight times as long takes well under sixty-four times as long`() throws {
+        let short = try program(of: [longFunction(rounds: 500)] + callees)
         let long = try program(of: [longFunction(rounds: 4000)] + callees)
 
-        // Each length is timed at its fastest of a few runs, taken in turn, so that a runner busy with other work
-        // during one run slows neither length's time.
-        var shortTimes: [Duration] = []
-        var longTimes: [Duration] = []
-        for _ in 0..<3 {
-            shortTimes.append(try timeToCheck(short))
-            longTimes.append(try timeToCheck(long))
-        }
-
-        // A check that grows in line with the length takes about four times as long, and one that grows with its
-        // square sixteen times; eight lies twice as far from each.
-        let shortTime = try #require(shortTimes.min())
-        let longTime = try #require(longTimes.min())
-        #expect(longTime < shortTime * 8)
+        // A check that grows in line with the length takes about eight times as long. One that grows with its square
+        // takes up to sixty-four times, and over thirty at these lengths, where part of its work still grows in line.
+        // Sixteen is a factor of two from each.
+        let times = try fastestTimesToCheck(short, long, runs: 3)
+        #expect(times.long < times.short * 16)
     }
 }
 
+/// The fastest time the ownership checks take over `short` and over `long`, of `runs` runs each. The runs take the
+/// two in turn, so that a runner busy with other work during one run slows neither one's time.
+private func fastestTimesToCheck(
+    _ short: IRProgram, _ long: IRProgram, runs: Int,
+) throws -> (short: Duration, long: Duration) {
+    var shortTime = Duration.seconds(Int64.max)
+    var longTime = Duration.seconds(Int64.max)
+    for _ in 0..<runs {
+        shortTime = min(shortTime, try timeToCheck(short))
+        longTime = min(longTime, try timeToCheck(long))
+    }
+    return (shortTime, longTime)
+}
+
 /// How long the ownership checks take over `program`. It requires that they find no error, since a check that stops
-/// short of the whole function would time less than all of it.
+/// at an error measures only part of the work.
 private func timeToCheck(_ program: IRProgram) throws -> Duration {
     let clock = ContinuousClock()
     let start = clock.now
