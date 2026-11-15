@@ -29,8 +29,7 @@ enum AccessEnds {
         for (index, statement) in block.statements.enumerated() {
             statements.append(statement)
 
-            // An access ends after the statement that it is live before, or that begins it, where it isn't live
-            // after.
+            // An access ends after the statement that it is live before, or that begins it, where it isn't live after.
             var ending = live[index]
             if case .begin(let id, _) = statement { ending.insert(id) }
             statements += ends(of: ending.subtracting(live[index + 1]))
