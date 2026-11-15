@@ -49,6 +49,13 @@ struct LocalTests {
         #expect(result == CommandResult(exitCode: 0, output: "2\n10\n1\n7\n", errors: ""))
     }
 
+    @Test("a value assigned after a 'copy' of the place, by a later operand, is never read by that copy")
+    func assignmentAfterCopyIsUnread() {
+        let source = "func main() {\n    var x = 1\n    print((copy x) + if true { x = 10; 1 } else { 2 })\n}"
+        let errors = "main.rayo:3:32: error[E0308]: the value assigned to 'x' is never read\n"
+        #expect(run(source) == CommandResult(exitCode: 1, output: "", errors: errors))
+    }
+
     @Test("compound assignments apply their operator", arguments: [
         ("var x = 7\nx *= 3\nprint(x)", "21\n"), ("var x = 7\nx /= 2\nprint(x)", "3\n"),
         ("var x = 7\nx %= 4\nprint(x)", "3\n"),
