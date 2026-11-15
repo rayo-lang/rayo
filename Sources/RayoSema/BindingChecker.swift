@@ -79,9 +79,13 @@ struct BindingChecker {
         // A value that failed, or that has another type than the annotation names, was reported.
         let value = expressions.check(valueExpr, expecting: annotation.expected)
         guard let value else { return .failed }
-        // So was an annotation that failed; otherwise the value has the local's type.
-        if case .failed = annotation { return .failed }
-        return .typed(value.type, typeRange: value.range, value: value)
+        // So was an annotation that failed; otherwise the value has the local's type, which the annotation gives
+        // where there is one.
+        return switch annotation {
+        case .failed: .failed
+        case .resolved(_, let range): .typed(value.type, typeRange: range, value: value)
+        case .absent: .typed(value.type, typeRange: value.range, value: value)
+        }
     }
 
     /// Resolves `binding`'s type annotation, reporting it when it names no type.
@@ -102,9 +106,10 @@ struct BindingChecker {
             errors.report(.voidLocal(type: expressions.typeName(of: .void)), at: typeRange)
             return nil
 
-        // Any other type is the local's.
-        case .typed(let type, _, _):
-            return type
+        // Any other type is the local's, where the local fits on the stack.
+        case .typed(let type, let typeRange, _):
+            let fits = expressions.file.declarations.fitsOnStack(type, at: typeRange, reporting: errors)
+            return fits ? type : nil
 
         // Without an annotation or a value, nothing gives the local a type.
         case .untyped:

@@ -55,9 +55,9 @@ final class FileChecker {
         case .type(let type):
             return type
 
-        // A written result type that failed, naming no type or one `main` can't return, was reported where it is
-        // written.
-        case .failed:
+        // A written result type that failed, naming no type, one `main` can't return or one too large for the
+        // stack, was reported where it is written.
+        case .failed, .tooLargeForStack:
             return nil
 
         // A body being checked can't give its result type to a call inside it, directly or through other calls.
@@ -151,6 +151,10 @@ final class FileChecker {
             errors.report(.voidParameter(type: declarations.typeName(of: .void)), at: parameter.type.range)
             type = nil
         }
+        // So is one too large for the stack, where the call's argument lies.
+        if let resolved = type, !declarations.fitsOnStack(resolved, at: parameter.type.range, reporting: errors) {
+            type = nil
+        }
         return Parameter(label: parameter.label, convention: .borrowed, type: type,
                          spelledType: parameter.type.spelling)
     }
@@ -169,6 +173,10 @@ final class FileChecker {
         if isMain && type != .void {
             errors.report(.mainReturnsNonVoid(type: declarations.typeName(of: .void)), at: written.range)
             return .failed
+        }
+        // A result lies on the stack of the function that calls it, so one too large for it is reported.
+        guard declarations.fitsOnStack(type, at: written.range, reporting: errors) else {
+            return .tooLargeForStack(type)
         }
         return .type(type)
     }
@@ -203,15 +211,13 @@ final class FileChecker {
         }
     }
 
-    /// The declaration of the function `id`, whose body is checked already; nil when its result type or the type of
-    /// one of its parameters isn't known, which fails it.
+    /// The declaration of the function `id`, whose body is checked already; nil when its signature failed, or its
+    /// body gives no result type, which fails it.
     private func declaration(of id: FunctionID) -> FunctionDeclaration? {
         let function = functions[id.index]
+        // A function whose signature failed, or whose body gives no result type, fails.
+        guard !function.signature.hasFailed, let result = body(of: id).result else { return nil }
         let parameters = function.signature.parameters.compactMap(\.declared)
-        // A function whose result type or one of whose parameters' types isn't known fails.
-        guard let result = body(of: id).result, parameters.count == function.signature.parameters.count else {
-            return nil
-        }
         return FunctionDeclaration(name: "\(function.signature)", parameters: parameters, result: result,
                                    kind: function.kind.functionKind)
     }
@@ -250,7 +256,7 @@ final class FileChecker {
 
         // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
-            let returned = body.returned(value)
+            let returned = body.returned(value).flatMap { fittingResult($0, of: signature) }
             let statements: [CheckedStmt] = returned.map { [.returnStmt($0)] } ?? []
             return BodyCheck(result: bodyResult(of: signature, returning: returned),
                              body: CheckedBody(locals: body.locals, statements: statements))
@@ -260,6 +266,14 @@ final class FileChecker {
         let statements = body.check(function.body)
         reportMissingReturn(from: function, as: signature)
         return BodyCheck(result: signature.result.type, body: CheckedBody(locals: body.locals, statements: statements))
+    }
+
+    /// `returned`, the single expression the body of the function that `signature` declares returns, or nil where
+    /// it gives the function's result type and is too large for the stack, which is reported.
+    private func fittingResult(_ returned: CheckedExpr, of signature: Signature) -> CheckedExpr? {
+        // A written result type was checked where it is written.
+        guard case .givenByBody = signature.result else { return returned }
+        return declarations.fitsOnStack(returned.type, at: returned.range, reporting: errors) ? returned : nil
     }
 
     /// The result type of the function that `signature` declares, whose body is a single expression that checks to

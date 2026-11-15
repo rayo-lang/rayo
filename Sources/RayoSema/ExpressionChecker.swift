@@ -470,8 +470,10 @@ extension ExpressionChecker: PlaceRules {
         // of a place is a value like any other, so a part taken from it moves out of the copy and leaves the place
         // whole. A value that failed was reported.
         guard let value = check(expr) else { return nil }
-        let place = if case .place(let place) = value.kind { place } else { CheckedPlace(root: .temporary(value)) }
-        return (place, value.type)
+        if case .place(let place) = value.kind { return (place, value.type) }
+        // A temporary lies on the stack, so one too large for it is reported.
+        guard file.declarations.fitsOnStack(value.type, at: value.range, reporting: errors) else { return nil }
+        return (CheckedPlace(root: .temporary(value)), value.type)
     }
 
     func admits(_ field: Field, at nameRange: SourceRange) -> Bool {

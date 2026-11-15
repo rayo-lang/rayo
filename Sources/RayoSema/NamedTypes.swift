@@ -55,6 +55,13 @@ struct NamedTypes {
         table?.fitsInMemory(type) ?? true
     }
 
+    /// Whether a value of `type`, which fits in memory, may lie on the stack. Only a body or a function's signature
+    /// asks, once the types are laid out.
+    func fitsOnStack(_ type: RayoType) -> Bool {
+        guard let table else { preconditionFailure("the types aren't laid out yet, so no value lies on the stack") }
+        return table.fitsOnStack(type)
+    }
+
     /// The fields of the struct `id`, which must be laid out, in the order it declares them.
     func fields(of id: StructID) -> [Field] {
         // The checker lays out the types before it checks a body, which alone asks for fields.

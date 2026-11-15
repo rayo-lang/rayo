@@ -59,7 +59,7 @@ struct BodyChecker {
         case .expression(let expr):
             return [checkUnused(expr).map { .expression($0) }]
         case .drop(let value):
-            return [expressions.check(value).map { .expression($0) }]
+            return [checkDropped(value).map { .expression($0) }]
         case .assign(let target, let op, let value):
             return [assignmentChecker.assign(value, op: op, to: target, in: statement.range)]
         case .ifStmt(let ifExpr):
@@ -123,6 +123,15 @@ struct BodyChecker {
             return nil
         }
         return value
+    }
+
+    /// Checks `expr` as the value of `_ =`, which a temporary holds until the statement drops it.
+    private func checkDropped(_ expr: Expr) -> CheckedExpr? {
+        // An expression that failed was reported.
+        guard let value = expressions.check(expr) else { return nil }
+        // A temporary lies on the stack, so one too large for it is reported.
+        let fits = expressions.file.declarations.fitsOnStack(value.type, at: value.range, reporting: errors)
+        return fits ? value : nil
     }
 
     /// Whether a loop encloses the `keyword` statement, reporting it when none does.

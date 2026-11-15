@@ -336,6 +336,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(275, error: "a struct's members aren't supported")
     case unsupportedMember
 
+    @Code(276, error: "{type.withArticle} is too large to hold on the stack")
+    case tooLargeForStack(type: TypeName)
+
     // MARK: Ownership
 
     @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
