@@ -8,6 +8,16 @@ import ToolStandIn
 /// The `rayoc` that the tests that run `rayo` in this process compile with.
 private let compiler = builtProduct("rayoc")
 
+// A test reads this code from a run of `rayo` in this process, since Foundation, which runs the built `rayo`, reports
+// an exception's code without its two highest bits.
+#if os(Windows)
+/// The exit code of a program that overflows its stack: Windows raises the exception 0xC00000FD on the guard page.
+private let stackOverflowExitCode = Int32(bitPattern: 0xC000_00FD)
+#else
+/// The exit code a shell reports for a program that overflows its stack: the guard page ends it by SIGSEGV.
+private let stackOverflowExitCode = 128 + SIGSEGV
+#endif
+
 /// Compiles `source`, saved as `main.rayo` in a directory of its own, in the build mode `options` name, and runs
 /// it, with `rayo run` in that directory. A source that can't be saved is recorded as an issue, and gives exit
 /// code -1.
@@ -319,13 +329,35 @@ struct BuildTests {
                 func main() { print(deeper(0)) }
                 func deeper(_ n: Int) -> Int { deeper(n + 1) + 1 }
                 """, as: "main.rayo", in: directory)
-            // Foundation, which runs the built `rayo`, reports an exception's code without its two highest bits, so
-            // the command runs in this process.
             #expect(Driver.run(["run", "--debug", source], compiler: compiler) ==
-                CommandResult(exitCode: Int32(bitPattern: 0xC000_00FD), output: "", errors: ""))
+                CommandResult(exitCode: stackOverflowExitCode, output: "", errors: ""))
         }
     }
     #endif
+
+    @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
+    func `an array larger than the stack ends the run on the stack's guard page`(mode: [String]) throws {
+        // The array takes 32 MB, more than the main thread's stack on any host, and `main` reads every element, so
+        // optimising keeps the array in its frame. Unless each page of the frame is touched in turn from the top, the
+        // frame can skip past the guard page below the stack, and the program write into whatever lies there.
+        let source = """
+            func main() {
+                let a: [4000000 of Int] = .init(repeating: 1)
+                var sum = 0
+                var i: UInt = 0
+                while i < a.count {
+                    sum += a[i]
+                    i += 1
+                }
+                print(sum)
+            }
+            """
+        try withTemporaryDirectory { directory in
+            let path = try save(source, as: "main.rayo", in: directory)
+            #expect(Driver.run(["run"] + mode + [path], compiler: compiler) ==
+                CommandResult(exitCode: stackOverflowExitCode, output: "", errors: ""))
+        }
+    }
 
     @Test("build and run take a source whose path has spaces, and build writes the executable beside it")
     func pathWithSpaces() throws {

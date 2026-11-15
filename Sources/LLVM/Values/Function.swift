@@ -33,6 +33,19 @@ public struct Function: ValueHandle, GlobalValue, Equatable {
         return blocks
     }
 
+    /// Gives the function `attributes`, beside those it carries already.
+    public func add(_ attributes: [FunctionAttribute]) {
+        let context = LLVMGetModuleContext(LLVMGetGlobalParent(ref))!
+        for attribute in attributes {
+            LLVMAddAttributeAtIndex(ref, FunctionAttribute.functionIndex, attribute.ref(in: context))
+        }
+    }
+
+    /// Whether the function carries `attribute`.
+    public func carries(_ attribute: FunctionAttribute) -> Bool {
+        attribute.isCarried(by: ref)
+    }
+
     /// The function as LLVM IR writes it: its definition, or its declaration where it has no body.
     public var text: String { anyValue.text }
 }

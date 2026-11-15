@@ -24,6 +24,29 @@ struct AttributeTests {
         #expect(function.text.contains(declared))
     }
 
+    @Test func `a function carries the function attributes it is declared with, each as LLVM IR writes it`() throws {
+        let bench = Workbench()
+        let type = bench.context.functionType(returning: bench.context.voidType, taking: [])
+        let function = bench.module.addFunction(named: "f", type: type, attributes: [.unwindTable, .inlineStackProbes])
+        bench.builder.position(atEndOf: bench.context.appendBlock(named: "entry", to: function))
+        bench.builder.returnVoid()
+
+        try bench.module.verify()
+        #expect(function.text.contains("define void @f() #0"))
+        #expect(bench.module.text.contains(#"attributes #0 = { uwtable "probe-stack"="inline-asm" }"#))
+    }
+
+    @Test func `a function carries an attribute it is given later, and none it isn't given`() throws {
+        let bench = Workbench()
+        let type = bench.context.functionType(returning: bench.context.voidType, taking: [])
+        let function = bench.module.addFunction(named: "f", type: type)
+        #expect(!function.carries(.inlineStackProbes))
+
+        function.add([.inlineStackProbes])
+        #expect(function.carries(.inlineStackProbes))
+        #expect(!function.carries(.unwindTable))
+    }
+
     @Test func `a call's arguments carry the attributes it is built with`() throws {
         let bench = Workbench()
         let pointer = bench.context.pointerType

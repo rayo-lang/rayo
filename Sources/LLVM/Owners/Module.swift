@@ -78,14 +78,18 @@ public struct Module: ~Copyable {
 
     // MARK: Functions and globals
 
-    /// Declares a function named `name` of `type`, which a block appended to it defines, its parameters carrying
-    /// `parameterAttributes`, a list for each parameter in order, which may stop short of the last.
+    /// Declares a function named `name` of `type`, which a block appended to it defines. The function carries
+    /// `attributes`, and its parameters `parameterAttributes`, a list for each parameter in order, which may stop
+    /// short of the last.
     public func addFunction(
-        named name: String, type: FunctionType, parameterAttributes: [[Attribute]] = [],
+        named name: String, type: FunctionType, attributes: [FunctionAttribute] = [],
+        parameterAttributes: [[Attribute]] = [],
     ) -> Function {
         let function = LLVMAddFunction(ref, name, type.ref)!
         Attribute.forEach(of: parameterAttributes, in: context.ref) { LLVMAddAttributeAtIndex(function, $0, $1) }
-        return Function(function, type: type)
+        let declared = Function(function, type: type)
+        declared.add(attributes)
+        return declared
     }
 
     /// The function named `name` that the module declares or defines.

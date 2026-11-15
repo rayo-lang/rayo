@@ -12,6 +12,8 @@ struct ProgramEmitter: ~Copyable {
     let sourcePath: String
     /// The build the program's code is emitted for.
     let build: Build
+    /// The attributes every function the module defines carries, which the target needs of each.
+    private let functionAttributes: [FunctionAttribute]
     private let runtime: Runtime
 
     /// Makes an empty module named `sourcePath`, configured to compile as `target` does, with the runtime parsed
@@ -20,7 +22,9 @@ struct ProgramEmitter: ~Copyable {
         module = context.makeModule(named: sourcePath)
         builder = context.makeBuilder()
         target.configure(module)
-        runtime = try Runtime(in: context, for: module)
+        let functionAttributes = Self.functionAttributes(for: target)
+        runtime = try Runtime(in: context, for: module, functionAttributes: functionAttributes)
+        self.functionAttributes = functionAttributes
         self.sourcePath = sourcePath
         self.build = build
     }
@@ -85,8 +89,17 @@ struct ProgramEmitter: ~Copyable {
         } else {
             (function.name, lowering.lower(function.parameters, returning: function.result, in: context))
         }
-        let llvmFunction = module.addFunction(named: name, type: signature.type,
+        let llvmFunction = module.addFunction(named: name, type: signature.type, attributes: functionAttributes,
                                               parameterAttributes: signature.parameterAttributes)
         return DeclaredFunction(function: llvmFunction, signature: signature)
+    }
+
+    /// The attributes every function needs on `target`, so that a frame of any size is made safely there, and the
+    /// system can walk the stack through the function.
+    private static func functionAttributes(for target: borrowing TargetMachine) -> [FunctionAttribute] {
+        // Windows already probes a frame larger than a page, through `__chkstk`, and its unwinder walks the stack
+        // through a function only by the function's unwind table. Elsewhere a large frame is probed only where a
+        // function asks for it.
+        target.compilesForWindows ? [.unwindTable] : [.inlineStackProbes]
     }
 }

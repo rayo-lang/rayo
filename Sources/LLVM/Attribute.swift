@@ -42,13 +42,13 @@ public enum Attribute: Equatable {
     }
 
     /// The attribute `name`, holding `value`, made in `context`.
-    private static func enumAttribute(_ name: String, _ value: Int = 0, in context: LLVMContextRef)
+    static func enumAttribute(_ name: String, _ value: Int = 0, in context: LLVMContextRef)
         -> LLVMAttributeRef {
         LLVMCreateEnumAttribute(context, kind(named: name), UInt64(value))
     }
 
     /// The number LLVM knows the attribute `name` by.
-    private static func kind(named name: String) -> UInt32 {
+    static func kind(named name: String) -> UInt32 {
         LLVMGetEnumAttributeKindForName(name, name.utf8.count)
     }
 
