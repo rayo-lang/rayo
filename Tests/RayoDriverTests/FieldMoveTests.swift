@@ -15,8 +15,9 @@ struct FieldMoveTests {
     func `a field moved out of a local holds its value, and the struct's other fields keep theirs, in both builds`(
         mode: [String],
     ) {
-        // `e` is a `var`, whose other fields are copied, assigned and moved in turn, and `l` a `let`; `l`'s `hp` moves
-        // out of the struct inside it, `made`'s `stats` out of a call's result, and `statsOf` returns a local's.
+        // `e` is a `var`, whose other fields are copied, assigned and moved in turn, and `l` a `let`. `copied` moves
+        // `stats` out of a copy of `l`, and `l` keeps its own. `l`'s `hp` moves out of the struct inside it, `made`'s
+        // `stats` out of a call's result, and `statsOf` returns a local's.
         let source = """
             func main() {
                 var e = enemy()
@@ -30,6 +31,8 @@ struct FieldMoveTests {
                 let moved = e.armor
                 print(moved)
                 let l = Enemy(alive: false, stats: Stats(alive: true, hp: 20, speed: 7), armor: 2)
+                let copied = (copy l).stats
+                print(copied.hp)
                 let hp = l.stats.hp
                 print(hp)
                 print(l.stats.speed)
@@ -43,7 +46,7 @@ struct FieldMoveTests {
                 return e.stats
             }
             """ + enemyAndStats
-        let output = "100\n3\n5\ntrue\n6\n20\n7\n2\n100\n4\n"
+        let output = "100\n3\n5\ntrue\n6\n20\n20\n7\n2\n100\n4\n"
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: output, errors: ""))
     }
 }
