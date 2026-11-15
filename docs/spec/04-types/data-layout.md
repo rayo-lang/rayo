@@ -39,6 +39,8 @@ func main() {
 
 **A larger value is a compile error where the source gives its type**: at a local's type annotation, or at its value where it has none, and at a parameter's or a result's written type. A temporary's error is at the expression that makes it. A type may still be larger than the bound, since a value of it that never lies on the stack takes no stack.
 
+**A function's values together have no bound.** A run that has too little stack left for them ends the program, as any running out of stack does ([10](../10-errors-and-safety/panics.md#what-ends-the-program)).
+
 ## Plain data: `Pod` and bit casts
 
 **A type where any bytes make a valid value is `Pod`** ("plain old data"), so bytes from a file or a packet can be used as one:
