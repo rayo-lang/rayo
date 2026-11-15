@@ -6,6 +6,36 @@ struct ControlFlowLoweringTests {
         try expectLowering(ofMain: "let c = true\nif c { print(1) } else { print(2) }", toMatch: "if-else")
     }
 
+    @Test func `an 'else if' is an 'if' in the 'else' branch, as a statement and as a value`() throws {
+        let body = """
+            let n = 2
+            if n < 0 { print(1) } else if n == 0 { print(2) } else { print(3) }
+            let sign = if n < 0 { -1 } else if n == 0 { 0 } else { 1 }
+            print(sign)
+            """
+        try expectLowering(ofMain: body, toMatch: "else-if")
+    }
+
+    @Test func `an 'if' that is an operand, an argument, a result or a branch's value gives its value there`() throws {
+        let source = """
+            func main() {
+                let c = true
+                var x = 1 + if c { 2 } else { 3 }
+                x += if c { 4 } else { 5 }
+                let y = -if c { copy x } else { 6 }
+                let p = Point(x: if c { 7 } else { 8 })
+                let z = if c { if c { 9 } else { 10 } } else {
+                    print(1)
+                    11
+                }
+                print(y + z + p.x)
+            }
+            func sign(_ n: Int) -> Int { return if n < 0 { -1 } else { 1 } }
+            struct Point(let x: Int)
+            """
+        try expectLowering(of: source, toMatch: "if-in-expressions")
+    }
+
     @Test func `an 'if' without 'else' branches to an empty block where its condition fails`() throws {
         try expectLowering(ofMain: "let c = true\nif c { print(1) }", toMatch: "if-without-else")
     }

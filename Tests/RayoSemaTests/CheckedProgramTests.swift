@@ -33,8 +33,7 @@ struct CheckedProgramTests {
             """, toMatch: "functions")
     }
 
-    @Test func `a call resolves to the function of its name whose labels and parameter types its arguments fit`()
-        throws {
+    @Test func `a call resolves to the function of its name whose labels and types its arguments fit`() throws {
         try expectChecking(of: """
             func main() {
                 print(kind(5))
@@ -50,7 +49,7 @@ struct CheckedProgramTests {
     }
 
     @Test func `a call reaches the functions of its name past a local, a parameter or a struct of that name`() throws {
-        // Every use of a shared name but a call, and but a type, reaches the local or the parameter.
+        // Every use of a shared name other than a call or a type annotation refers to the local or the parameter.
         try expectChecking(of: """
             func main() {
                 var print: Int

@@ -48,10 +48,11 @@ struct ArrayTests {
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: [["--debug"], ["--release"]])
-    func `arrays of a hundred thousand elements live on a linked program's stack, beside functions that pass them`(
+    func `arrays of a hundred thousand elements live on a linked program's stack, and functions that pass them link`(
         mode: [String],
     ) {
-        // Only a linked program runs with the stack the platform gives it, which these arrays fill much of.
+        // Only a linked program runs with the stack the platform gives it, which these arrays fill much of. The
+        // functions that pass and return such arrays are compiled and linked, though `main` calls none of them.
         let source = """
             func main() {
                 var a: [100000 of Int] = .init(repeating: 0)

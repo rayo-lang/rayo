@@ -67,9 +67,13 @@ struct FieldAssignmentTests {
     func `a 'let' field anywhere on the target's path rules out an assignment or a compound one`(
         body: String, expected: ErrorCode, covered: String,
     ) {
-        let boss = "\nstruct Boss(let stats: Stats, let level: Int)"
-        let source = "func main() {\nvar b = Boss(stats: Stats(alive: true, hp: 1), level: 4)\n\(body)\n}" + boss
-            + enemyAndStats
+        let source = """
+            func main() {
+            var b = Boss(stats: Stats(alive: true, hp: 1), level: 4)
+            \(body)
+            }
+            struct Boss(let stats: Stats, let level: Int)
+            """ + enemyAndStats
 
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [expected])

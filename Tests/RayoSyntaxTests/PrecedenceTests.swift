@@ -7,11 +7,13 @@ private func grouping(of expression: String) throws -> String {
     let (file, diagnostics) = Parser.parse("func f() {\n    _ = \(expression)\n}")
     try #require(diagnostics.isEmpty, "\(diagnostics)")
     let statement = try #require(file.functions.first?.body.statements.first)
-    guard case .drop(let dropped) = statement.kind else {
-        Issue.record("expected '_ =', found \(statement.kind)")
-        return ""
-    }
+    guard case .drop(let dropped) = statement.kind else { throw NotADrop(kind: statement.kind) }
     return grouped(dropped)
+}
+
+/// The statement a test's source parsed to, which isn't the `_ =` the source writes.
+private struct NotADrop: Error {
+    let kind: StmtKind
 }
 
 /// `expression` as source text, with each operator and its operands in parentheses.

@@ -1,5 +1,4 @@
 import Testing
-import RayoDriver
 
 struct UIntTests {
     @Test func `'print' writes a UInt in decimal, UInt.max too`() {

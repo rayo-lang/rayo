@@ -109,7 +109,7 @@ struct FunctionTests {
         #expect(coveredText(reported, in: source) == [type])
     }
 
-    @Test func `a function whose name no prelude type has leaves every type as it was`() {
+    @Test func `a function named 'Flag', which no prelude type is named, shadows no type`() {
         #expect(errors("func main() {\n    let x: Bool = Flag()\n    print(x)\n}\nfunc Flag() -> Bool { true }") == [])
     }
 

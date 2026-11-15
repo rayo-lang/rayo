@@ -1,5 +1,4 @@
 import Testing
-import RayoDriver
 
 struct LocalTests {
     @Test("locals hold values, and a 'var' changes by assignment and compound assignment")

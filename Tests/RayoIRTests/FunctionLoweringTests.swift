@@ -34,6 +34,15 @@ struct FunctionLoweringTests {
         try expectLowering(of: source, toMatch: "copied-argument")
     }
 
+    @Test func `a call's arguments are computed left to right, each into its temporary, before the call`() throws {
+        let source = """
+            func main() { pair(shown(1), shown(2)) }
+            func pair(_ a: Int, _ b: Int) {}
+            func shown(_ n: Int) -> Int { copy n }
+            """
+        try expectLowering(of: source, toMatch: "computed-arguments")
+    }
+
     @Test func `the program's table declares each function, by its ID in source order`() throws {
         try expectLowering(of: "func main() {}\nfunc double(_ n: Int, by: Bool) -> Int { n * 2 }", toMatch: "functions")
     }

@@ -56,11 +56,11 @@ struct ObjectCodeTests {
     }
 
     @Test(.timeLimit(.minutes(1)), arguments: Build.allCases)
-    func `arrays of a hundred thousand elements are filled, passed and returned in code that compiles quickly`(
+    func `a program that fills, passes and returns arrays of a hundred thousand elements compiles quickly`(
         build: Build,
     ) throws {
         // `main` fills an array of Ints and an array of arrays of Trios, and hands each through a function that
-        // returns a copy of what it borrows.
+        // returns a copy of what it borrows. A third function relays an array of arrays of Pairs, which no code calls.
         let text = programStructs + """
             main "main()"
             func "main()"() -> Void {
@@ -89,6 +89,13 @@ struct ObjectCodeTests {
             func "relay(_: [1000 of [100 of Trio]])"([1000 of [100 of Trio]]) -> [1000 of [100 of Trio]] {
               param %0 a: [1000 of [100 of Trio]]
               temp %1: [1000 of [100 of Trio]]
+            bb0:
+              %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
+              return move %1 @1:1-1:2
+            }
+            func "relay(_: [100000 of [2 of Pair]])"([100000 of [2 of Pair]]) -> [100000 of [2 of Pair]] {
+              param %0 a: [100000 of [2 of Pair]]
+              temp %1: [100000 of [2 of Pair]]
             bb0:
               %1 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
               return move %1 @1:1-1:2
