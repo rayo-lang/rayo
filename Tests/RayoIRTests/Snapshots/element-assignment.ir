@@ -1,5 +1,5 @@
 struct Enemy {
-  slots: [2 of Int]
+  var slots: [2 of Int]
 }
 
 main "main()"
