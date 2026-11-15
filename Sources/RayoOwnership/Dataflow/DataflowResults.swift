@@ -1,24 +1,14 @@
 import RayoIR
 
-/// The settled states of a dataflow analysis through a function. They answer what the state is just before or just
-/// after any statement of a block. The terminator counts as the block's last statement, at the index one past the
-/// others.
+/// The settled states of a dataflow analysis through a function. They answer what the state is at each point of a
+/// block: point `i` lies just before the statement at `i`, the point at the number of statements just before the
+/// terminator, and the point one past that just after it.
 struct DataflowResults<Analysis: DataflowAnalysis> {
-    /// A point of a block, and the state there.
-    private struct Position {
-        var block: BlockID
-        /// How many of the block's statements run before the point. The terminator counts as the last statement.
-        var point: Int
-        var state: Analysis.State
-    }
-
     private let analysis: Analysis
     private let body: IRBody
     /// The settled state at each block's boundary, indexed by `BlockID`: at its entry going forward, and at its exit
     /// going backward. It is nil for a block that no path from the entry reaches.
     private let boundaryStates: [Analysis.State?]
-    /// The point asked about last, which the next question about the same block moves on from.
-    private var position: Position?
 
     init(_ analysis: Analysis, in body: IRBody, boundaryStates: [Analysis.State?]) {
         self.analysis = analysis
@@ -26,58 +16,39 @@ struct DataflowResults<Analysis: DataflowAnalysis> {
         self.boundaryStates = boundaryStates
     }
 
-    /// The way the analysis carries its state, which is the cheap way to ask about a block's points in turn.
-    var direction: DataflowDirection {
-        analysis.direction
+    /// The settled state at `block`'s boundary: at its entry going forward, and at its exit going backward; nil where
+    /// no state reaches the block.
+    func boundaryState(of block: BlockID) -> Analysis.State? {
+        boundaryStates[block.index]
     }
 
-    /// The state just before the statement at `index` in `block`, or before its terminator where `index` is the
-    /// number of statements; nil where no state reaches the block.
-    mutating func state(before index: Int, in block: BlockID) -> Analysis.State? {
-        state(at: index, in: block)
-    }
-
-    /// The state just after the statement at `index` in `block`, or after its terminator where `index` is the
-    /// number of statements; nil where no state reaches the block.
-    mutating func state(after index: Int, in block: BlockID) -> Analysis.State? {
-        state(at: index + 1, in: block)
-    }
-
-    /// The state at `point` of `block`, counted as `Position.point` counts it; nil where no state reaches the block.
-    private mutating func state(at point: Int, in block: BlockID) -> Analysis.State? {
-        guard var position = start(towards: point, in: block) else { return nil }
+    /// Walks `block` from its boundary in the analysis's direction, and lends `visit` the state at each point in turn,
+    /// with the point. Returns whether a state reaches the block; where none does, it visits no point.
+    ///
+    /// The walk changes one state in place as it crosses each statement. A `visit` that keeps the state itself makes
+    /// the next statement copy the whole of it, so a check keeps only what it works out from each state.
+    @discardableResult
+    func walk(_ block: BlockID, visit: (_ point: Int, _ state: Analysis.State) -> Void) -> Bool {
+        guard var state = boundaryStates[block.index] else { return false }
         let basicBlock = body.blocks[block.index]
+        // The statements, then the terminator, each crossed from the point before it to the point after it.
+        let crossings = 0...basicBlock.statements.count
 
-        // Apply the effect of each statement between there and `point`, in the analysis's direction.
-        while position.point < point {
-            analysis.apply(position.point, of: basicBlock, to: &position.state)
-            position.point += 1
-        }
-        while position.point > point {
-            position.point -= 1
-            analysis.apply(position.point, of: basicBlock, to: &position.state)
-        }
-
-        self.position = position
-        return position.state
-    }
-
-    /// Where a walk to `point` of `block` starts: the last point asked about, where the analysis's direction leads
-    /// from it to `point`, and the block's boundary otherwise; nil where no state reaches the block.
-    private func start(towards point: Int, in block: BlockID) -> Position? {
-        guard let boundaryState = boundaryStates[block.index] else { return nil }
-
-        // A walk goes only in the analysis's direction, so it starts from the last point only where that lies in the
-        // block before `point` in that direction.
-        if let position, position.block == block {
-            switch analysis.direction {
-            case .forward where position.point <= point: return position
-            case .backward where position.point >= point: return position
-            default: break
+        switch analysis.direction {
+        case .forward:
+            for index in crossings {
+                visit(index, state)
+                analysis.apply(index, of: basicBlock, to: &state)
             }
-        }
+            visit(crossings.upperBound + 1, state)
 
-        let boundary = analysis.direction == .forward ? 0 : body.blocks[block.index].statements.count + 1
-        return Position(block: block, point: boundary, state: boundaryState)
+        case .backward:
+            for index in crossings.reversed() {
+                visit(index + 1, state)
+                analysis.apply(index, of: basicBlock, to: &state)
+            }
+            visit(0, state)
+        }
+        return true
     }
 }

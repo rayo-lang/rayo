@@ -3,24 +3,30 @@ import RayoSema
 
 /// Which locals, and which parts inside them, hold a value that some code reads later, at a point.
 struct LivenessState: DataflowState {
-    /// The places whose values some code reads later, each but the elements that stores replace before every read.
-    /// Each place keeps one read, which stands for the reads on every path, so the state grows with the places a
-    /// function names and not with its paths.
-    private var live: [Place: LiveRead] = [:]
+    /// The places whose values some code reads later, each but the elements that stores replace before every read,
+    /// by the local they lie in, so that a store or a declaration changes only the reads of its own local. Each place
+    /// keeps one read, which stands for the reads on every path, so the state grows with the places a function names
+    /// and not with its paths. A local whose values no code reads later is left out.
+    private var live: [LocalID: [Place: LiveRead]] = [:]
 
     /// The state at the end of a function, after which no code reads any local.
     init() {}
 
     func merged(with other: LivenessState) -> LivenessState {
         var merged = self
-        for read in other.live.values { merged.add(read) }
+        for read in other.live.values.flatMap(\.values) { merged.add(read) }
         return merged
     }
 
     /// Whether some code reads the value that a store to `place` just before this state leaves there: a later read
     /// of the place, of a part that may lie inside it, or of a value that may hold it.
     func reads(_ place: Place) -> Bool {
-        live.values.contains { $0.mayReach(place) }
+        live[place.root]?.values.contains { $0.mayReach(place) } ?? false
+    }
+
+    /// The locals holding a value, in whole or in part, that some code reads later.
+    var readLocals: Set<LocalID> {
+        Set(live.keys)
     }
 
     /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
@@ -50,7 +56,7 @@ struct LivenessState: DataflowState {
 
         // A declaration starts its local's life, so no code before it reads a value the local holds after it.
         case .declare(let local):
-            live = live.filter { $0.key.root != local }
+            live[local] = nil
 
         // An access reaches the value its place holds, whether it reads it or changes it.
         case .begin(_, let access):
@@ -69,7 +75,7 @@ struct LivenessState: DataflowState {
         guard stored.indexLocals.isEmpty else { return }
 
         // The store replaces the place's value, and the values of the parts inside it.
-        live = live.filter { !stored.mustContain($0.key) }
+        removeReads(in: stored.root) { stored.mustContain($0.place) }
         narrowHolders(of: stored, in: places)
     }
 
@@ -77,11 +83,12 @@ struct LivenessState: DataflowState {
     /// at each level, since a store to `stored` leaves only their values for that read.
     private mutating func narrowHolders(of stored: Place, in places: PlaceTypes) {
         // A read that already skips the element `stored` lies in leaves it to a later store, and stays as it is.
-        let holders = live.values.filter { $0.place.mustContain(stored) && $0.mayReach(stored) }
+        let isHolder = { (read: LiveRead) in read.place.mustContain(stored) && read.mayReach(stored) }
+        let holders = live[stored.root]?.values.filter(isHolder) ?? []
 
         // Every holder leaves before any narrowed read joins the read live at its place, since a holder still live
         // there would cover the elements the narrowed read skips.
-        for holder in holders { live[holder.place] = nil }
+        removeReads(in: stored.root, where: isHolder)
 
         for holder in holders {
             // The holder keeps what it reads beside the path, and so does each level below it, read whole until now.
@@ -132,7 +139,14 @@ struct LivenessState: DataflowState {
 
     /// Adds `read` to the read live at its place, which then stands for both.
     private mutating func add(_ read: LiveRead) {
-        live[read.place, default: read].cover(read)
+        live[read.place.root, default: [:]][read.place, default: read].cover(read)
+    }
+
+    /// Removes the reads of places in `local` that `isRemoved` picks, and leaves the local out once none is left.
+    private mutating func removeReads(in local: LocalID, where isRemoved: (LiveRead) -> Bool) {
+        guard let reads = live.removeValue(forKey: local) else { return }
+        let kept = reads.filter { !isRemoved($0.value) }
+        if !kept.isEmpty { live[local] = kept }
     }
 }
 

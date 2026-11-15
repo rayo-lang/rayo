@@ -1,4 +1,5 @@
 import RayoIR
+import RayoSema
 
 /// Where each access of a function is live: from where it begins through the last use of the access, and of every
 /// value that depends on it, on each path. Where paths join, an access is live if it is live on any of them.
@@ -8,11 +9,11 @@ import RayoIR
 struct AccessExtents {
     private let body: IRBody
     /// What each local's value depends on at each point, carried forward.
-    private var dependencies: DataflowResults<DependencyAnalysis>
+    private let dependencies: DataflowResults<DependencyAnalysis>
     /// What code after each point uses, carried backward.
-    private var uses: DataflowResults<AccessUseAnalysis>
+    private let uses: DataflowResults<AccessUseAnalysis>
     /// The accesses that some path to each point has not begun, carried forward.
-    private var unbegun: DataflowResults<UnbegunAccessAnalysis>
+    private let unbegun: DataflowResults<UnbegunAccessAnalysis>
 
     /// The extents of the accesses of `places.body`, the body whose places `places` gives the types of, where `uses`
     /// says what code after each of its points uses.
@@ -24,47 +25,51 @@ struct AccessExtents {
     }
 
     /// The accesses live at each point of `block`; nil where no path reaches the block.
-    mutating func live(in block: BlockID) -> [Set<AccessID>]? {
-        guard let dependencyStates = states(in: block, of: &dependencies),
-              let useStates = states(in: block, of: &uses)
-        else { return nil }
-        return zip(useStates, dependencyStates).map { Self.live(using: $0, dependingOn: $1) }
-    }
+    func live(in block: BlockID) -> [Set<AccessID>]? {
+        let points = body.blocks[block.index].statements.count + 2
 
-    /// The accesses that some path to each point of `block` has not begun; nil where no path reaches the block.
-    mutating func unbegun(in block: BlockID) -> [Set<AccessID>]? {
-        states(in: block, of: &unbegun)?.map(\.accesses)
-    }
-
-    /// The states that `results` settle on at each point of `block`, asked for in the analysis's own direction, so
-    /// that it walks the block once; nil where no path reaches the block.
-    private func states<Analysis>(
-        in block: BlockID, of results: inout DataflowResults<Analysis>,
-    ) -> [Analysis.State]? {
-        let terminator = body.blocks[block.index].statements.count
-        let points = Array(0...terminator + 1)
-        let backward = results.direction == .backward
-
-        var states: [Analysis.State] = []
-        for point in backward ? points.reversed() : points {
-            let state = point <= terminator
-                ? results.state(before: point, in: block) : results.state(after: terminator, in: block)
-            guard let state else { return nil }
-            states.append(state)
+        // Walk back through what later code uses, keeping at each point the accesses it uses and the locals it reads.
+        var used = Array(repeating: LaterUses(accesses: [], readLocals: []), count: points)
+        let reached = uses.walk(block) { point, state in
+            used[point] = LaterUses(accesses: state.accesses, readLocals: state.values.readLocals)
         }
-        return backward ? states.reversed() : states
+        guard reached else { return nil }
+
+        // Walk forward through what values depend on, which carries the uses to the accesses behind them.
+        var live = Array(repeating: Set<AccessID>(), count: points)
+        dependencies.walk(block) { point, state in
+            live[point] = Self.live(using: used[point], dependingOn: state)
+        }
+        return live
     }
 
-    /// The accesses live at a point where later code uses what `uses` holds, and values depend on what
-    /// `dependencies` holds: those the code uses, those they depend on, and those that the values it reads depend on.
-    private static func live(using uses: AccessUseState, dependingOn dependencies: DependencyState) -> Set<AccessID> {
+    /// Of the accesses `live` at each point of `block`, those that every path there has begun. Only they can end
+    /// there, since a path that hasn't begun an access has nothing to end.
+    func held(in block: BlockID, live: [Set<AccessID>]) -> [Set<AccessID>] {
+        // `live` holds a block that some path reaches, so the walk visits each of its points.
+        var held = live
+        unbegun.walk(block) { point, state in
+            held[point] = live[point].filter { !state.accesses.contains($0) }
+        }
+        return held
+    }
+
+    /// The accesses live at a point where later code does what `uses` holds, and values depend on what `dependencies`
+    /// holds: those the code uses, those they depend on, and those that the values it reads depend on.
+    private static func live(using uses: LaterUses, dependingOn dependencies: DependencyState) -> Set<AccessID> {
         var live = uses.accesses
         for access in uses.accesses {
             live.formUnion(dependencies.dependencies(of: access))
         }
-        for (local, accesses) in dependencies.dependentLocals where uses.values.reads(Place(root: local)) {
-            live.formUnion(accesses)
+        for local in uses.readLocals {
+            live.formUnion(dependencies.dependentLocals[local] ?? [])
         }
         return live
     }
+}
+
+/// What the code after a point uses: the accesses it uses, and the locals it reads a value inside.
+private struct LaterUses {
+    var accesses: Set<AccessID>
+    var readLocals: Set<LocalID>
 }
