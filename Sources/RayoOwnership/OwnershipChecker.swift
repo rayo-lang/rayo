@@ -25,7 +25,8 @@ public enum OwnershipChecker {
 
     /// Runs the checks in turn on the body whose places `places` gives the types of, and whose first `parameterCount`
     /// locals are its function's parameters. It stops at the first check that finds errors, so that no later check
-    /// reports the same mistake again, and gives those errors, without the body. A body that passes every check comes
+    /// reports the same mistake again, and gives those errors, without the body. Every diagnostic these checks report
+    /// is an error, so any of them fails the function. A body that passes every check comes
     /// back with the end of each access written in.
     private static func check(_ places: PlaceTypes, parameterCount: Int) -> (body: IRBody?, errors: [Diagnostic]) {
         // A use of a place after a move out of a borrowed parameter or element isn't reported again as a use after a

@@ -210,6 +210,7 @@ public enum Compiler {
         of path: String, readFile: (String) -> [UInt8]?, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let checked = try checkedProgram(path, readFile: readFile, errors: &errors)
+        // The stages after checking run only for the errors they find, which keep the program from being printed.
         if let checked { _ = try ir(of: checked, errors: &errors) }
         return CheckedPrinter.text(of: try accepted(checked, errors: errors, warningsAreErrors: warningsAreErrors))
     }
@@ -229,9 +230,9 @@ public enum Compiler {
         writeFile: (String, [UInt8]) -> Bool, warningsAreErrors: Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        let found = program.flatMap { executable(of: $0, errors: &errors) }
-        let executable = try accepted(found, errors: errors, warningsAreErrors: warningsAreErrors)
-        try write(objectCode(of: executable, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
+        let executable = program.flatMap { Self.executable(of: $0, errors: &errors) }
+        let accepted = try accepted(executable, errors: errors, warningsAreErrors: warningsAreErrors)
+        try write(objectCode(of: accepted, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
         return ""
     }
 

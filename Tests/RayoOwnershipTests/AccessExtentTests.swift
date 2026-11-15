@@ -425,19 +425,11 @@ struct AccessExtentTests {
     }
 }
 
-/// The functions that `main`'s blocks call, which have no bodies.
-private let callees = [
-    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(Int, Int) -> Void"#),
-    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(Int, Hit) -> Void"#),
-    (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
-]
-
 /// What the check makes of a `main` of `blocks`, with the locals `function` gives it: its body with the ends of its
 /// accesses written in, and the conflicts between them.
 private func checked(_ blocks: String) throws -> (body: IRBody, errors: [Diagnostic]) {
     let places = try placesOfFirstFunction(in: try program(of: [function(blocks, named: "main()")] + callees))
-    let uses = DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
-    let (body, errors) = ExclusivityChecker.check(places, uses: uses)
+    let (body, errors) = ExclusivityChecker.check(places, uses: laterUses(in: places))
     return (body, errors.inSourceOrder)
 }
 

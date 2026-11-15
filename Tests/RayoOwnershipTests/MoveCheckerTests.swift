@@ -86,6 +86,6 @@ private func errors(in blocks: String, result: String = "Void") throws -> [Diagn
         \(blocks)
         }
         """
-    return MoveChecker.errors(in: try placesOfFirstFunction(in: try program(of: [("f(_: Int, _: Shot)", function)])))
-        .inSourceOrder
+    let places = try placesOfFirstFunction(in: try program(of: [("f(_: Int, _: Shot)", function)]))
+    return MoveChecker.errors(in: places).inSourceOrder
 }

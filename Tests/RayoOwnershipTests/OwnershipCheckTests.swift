@@ -4,8 +4,8 @@ import RayoIR
 import RayoOwnership
 import RayoSema
 
-@Suite("How the ownership checks of one function follow each other")
-struct CheckOrderTests {
+@Suite("Running the ownership checks over a program")
+struct OwnershipCheckTests {
     @Test
     func `a use of a borrowed parameter after a move out of it isn't reported again as a use after a move`() throws {
         let blocks = """
@@ -102,12 +102,6 @@ struct CheckOrderTests {
         ])
     }
 }
-
-/// The functions that the tests' blocks call, which have no bodies.
-private let callees = [
-    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(Int, Int) -> Void"#),
-    (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
-]
 
 /// The function `f(_: Int)`, made of `blocks`, whose one local is `n` (`%0`), a borrowed Int parameter.
 private func withParameter(_ blocks: String) -> (name: String, text: String) {

@@ -6,9 +6,9 @@ import RayoSema
 import RayoSource
 import RayoSyntax
 
-/// The stages a compile runs, each a function that takes what the stage before it gives. A stage adds the errors and
-/// warnings it finds in the program to the compile's list, and throws only when `rayoc` itself can't go on.
-/// `accepted(_:errors:warningsAreErrors:)` alone ends a compile for the program's errors.
+/// The stages a compile runs, and the checks between them, each a function that takes what the stage before it
+/// gives. A stage adds the errors and warnings it finds in the program to the compile's list, and throws only when
+/// `rayoc` itself can't go on. `accepted(_:errors:warningsAreErrors:)` alone ends a compile for the program's errors.
 extension Compiler {
     /// Reads the source file at `path` through `readFile`, checks it, lowers it to Rayo IR, and runs the ownership
     /// checks on the IR, adding the program's errors and warnings to `errors`. It gives the IR the emitter receives,
@@ -40,7 +40,7 @@ extension Compiler {
         return try verified(owned(lowered, errors: &errors))
     }
 
-    /// The bytes of the source file at `path`, which `readFile` reads, returning nil for a file it can't read.
+    /// The bytes of the source file at `path`, which `readFile` reads. A file it can't read stops the compile.
     private static func source(
         at path: String, readFile: (String) -> [UInt8]?,
     ) throws(CompilationError) -> [UInt8] {

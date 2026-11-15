@@ -77,3 +77,15 @@ func placesOfFirstFunction(in program: IRProgram) throws -> PlaceTypes {
     let body = try #require(program.bodies[FunctionID(index: 0)])
     return PlaceTypes(body: body, types: program.types)
 }
+
+/// What code after each point of `places.body` uses, which the exclusivity and unused-value checks read.
+func laterUses(in places: PlaceTypes) -> DataflowResults<AccessUseAnalysis> {
+    DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
+}
+
+/// The functions that the tests' blocks call, which have no bodies.
+let callees = [
+    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(Int, Int) -> Void"#),
+    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(Int, Hit) -> Void"#),
+    (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
+]

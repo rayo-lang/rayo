@@ -185,6 +185,5 @@ struct UnusedValueCheckerTests {
 /// The errors the checker reports in a program of one function, which returns `result` and is made of `blocks`.
 private func errors(in blocks: String, result: String = "Void") throws -> [Diagnostic] {
     let places = try placesOfFirstFunction(in: try program(of: [function(blocks, result: result)]))
-    let uses = DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
-    return UnusedValueChecker.errors(in: places, uses: uses).inSourceOrder
+    return UnusedValueChecker.errors(in: places, uses: laterUses(in: places)).inSourceOrder
 }
