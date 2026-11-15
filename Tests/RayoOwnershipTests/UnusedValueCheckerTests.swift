@@ -193,6 +193,22 @@ struct UnusedValueCheckerTests {
         #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: name), at: at(column))])
     }
 
+    @Test func `a value stored in an element, and one a compound assignment stores in a part of it, are read later`()
+        throws {
+        // As `a[0] = Hit(damage: 9)`, then `a[0].damage += 1`, then a read of each element.
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @2:1-2:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
+              %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+              %7[0].0 @2:3-2:3 = add checked read %7[0].0 @1:1-1:1, 1 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[0].0 @1:1-1:1) @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [])
+    }
+
     @Test func `a compound assignment reads the value it replaces, and stores one that code must read`() throws {
         // As `x += 1` lowers, after a read of `x`, and with nothing after it.
         let blocks = """
@@ -208,7 +224,7 @@ struct UnusedValueCheckerTests {
     @Test(.timeLimit(.minutes(1)))
     func `an element of an array of a billion is stored to in the time one of a small array takes`() throws {
         // A store at an index a local holds may reach any element, and a later store to the same element replaces
-        // the first one's value unread.
+        // the first one's value unread. A compound assignment reads the element it stores to.
         let function = (name: "f()", text: """
             func "f()"() -> Void {
               var %0 a: [1000000000 of Int]
@@ -219,6 +235,7 @@ struct UnusedValueCheckerTests {
               %0[%1] @1:1-1:1 = operand 3 @1:1-1:1
               %0[0] @2:1-2:1 = operand 1 @1:1-1:1
               %0[0] @2:2-2:2 = operand 2 @1:1-1:1
+              %0[0] @1:1-1:1 = add checked read %0[0] @1:1-1:1, 3 @1:1-1:1
               _ = operand read %0 @1:1-1:1 @1:1-1:1
               return
             }

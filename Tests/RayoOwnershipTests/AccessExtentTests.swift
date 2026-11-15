@@ -122,6 +122,30 @@ struct AccessExtentTests {
         #expect(try checked(function(blocks)).errors == [expected])
     }
 
+    @Test func `a change to a place before an access to it begins conflicts with none`() throws {
+        // As `g(x, if x > 0 { x = 2; 1 } else { 3 })` lowers: a branch of the second argument assigns `x` before the
+        // call's accesses begin.
+        let blocks = """
+            bb0:
+              %0 @1:1-1:1 = operand 1 @1:1-1:1
+              %6 @1:1-1:1 = greater read %0 @1:1-1:1, 0 @1:1-1:1
+              branch read %6 @1:1-1:1, bb1, bb2
+            bb1:
+              %0 @2:1-2:1 = operand 2 @1:1-1:1
+              %3 @1:1-1:1 = operand 1 @1:1-1:1
+              goto bb3
+            bb2:
+              %3 @1:1-1:1 = operand 3 @1:1-1:1
+              goto bb3
+            bb3:
+              begin a0 read static %0 @2:3-2:3
+              begin a1 read static %3 @1:1-1:1
+              _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [])
+    }
+
     @Test func `a change after an access's last use, or a store of what its call gives, conflicts with none`() throws {
         // As `x = double(x)` lowers, then a change to `x` once nothing uses the access.
         let blocks = """

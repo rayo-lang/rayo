@@ -49,4 +49,24 @@ struct ElementLoweringTests {
     @Test func `an element in a position that takes its value is moved out of its array, as a bare local is`() throws {
         try expectLowering(ofMain: "let a = [1, 2]\nlet b = a[0]", toMatch: "element-move")
     }
+
+    @Test func `a field of an element, or an element of an element, that a statement takes is moved where it lies`()
+        throws {
+        let source = """
+            func main() {
+                let a = [Stats(hp: 1)]
+                let i: UInt = 0
+                let x = a[i].hp
+                let grid = [[1, 2]]
+                _ = grid[0][1]
+            }
+            struct Stats(var hp: Int)
+            """
+        try expectLowering(of: source, toMatch: "element-part-move")
+    }
+
+    @Test func `an element of an element is assigned where it lies`() throws {
+        let body = "var grid = [[1, 2], [3, 4]]\ngrid[0][1] = 5\nprint(grid[0][1])"
+        try expectLowering(ofMain: body, toMatch: "nested-element-assignment")
+    }
 }

@@ -14,6 +14,10 @@ struct StatementLoweringTests {
         try expectLowering(ofMain: "var x: Int\nx = 1", toMatch: "declaration-without-value")
     }
 
+    @Test func `a declaration of several locals without values starts each one's life`() throws {
+        try expectLowering(ofMain: "let a: Int, b: Int\na = 1\nb = 2", toMatch: "declarations-without-values")
+    }
+
     @Test func `an assignment stores its value in the local`() throws {
         try expectLowering(ofMain: "var x = 1\nx = 2", toMatch: "assignment")
     }
