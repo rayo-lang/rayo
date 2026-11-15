@@ -34,7 +34,8 @@ struct StructLoweringTests {
         try expectLowering(withEnemy: body, toMatch: "field-move")
     }
 
-    @Test func `an initializer moves a field given bare out of its local, and reads one given 'copy' where it lies`()
+    @Test
+    func `an initializer moves a field given bare out of its local, and takes the temporary a 'copy' of one makes`()
         throws {
         let body = "let s = Shot(range: 4, hit: Hit(damage: 7))\nlet t = Shot(range: copy s.range, hit: s.hit)"
         try expectLowering(withShot: body, toMatch: "field-argument")

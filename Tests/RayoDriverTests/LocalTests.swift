@@ -31,6 +31,24 @@ struct LocalTests {
         #expect(output("var a = 1\nlet b = copy a\na = 2\nvar c: Int\nc = copy b\nprint(a + b + c)") == "4\n")
     }
 
+    @Test("'copy' makes its value where the source writes it, before a later operand or argument changes the place")
+    func copiesWhereWritten() {
+        let result = run("""
+            struct P(var hp: Int)
+            func show(_ a: P, _ b: Int) { print(a.hp) }
+            func main() {
+                var x = 1
+                let y = (copy x) + if true { x = 10; 1 } else { 2 }
+                print(y)
+                print(x)
+                var p = P(hp: 1)
+                show(copy p, if true { p.hp = 7; 0 } else { 0 })
+                print(p.hp)
+            }
+            """)
+        #expect(result == CommandResult(exitCode: 0, output: "2\n10\n1\n7\n", errors: ""))
+    }
+
     @Test("compound assignments apply their operator", arguments: [
         ("var x = 7\nx *= 3\nprint(x)", "21\n"), ("var x = 7\nx /= 2\nprint(x)", "3\n"),
         ("var x = 7\nx %= 4\nprint(x)", "3\n"),
