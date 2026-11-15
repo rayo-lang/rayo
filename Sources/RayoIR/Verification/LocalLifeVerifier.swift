@@ -50,15 +50,16 @@ struct LocalLifeVerifier {
             case .retire(let local):
                 retired.insert(local)
             case .read, .move, .store, .begin, .use, .end, .exit:
-                try verify(uses.local(usedBy: effect), isNotIn: retired, at: label)
+                guard let used = uses.local(usedBy: effect) else { continue }
+                try verify(used, isNotIn: retired, at: label)
             }
         }
         return retired
     }
 
-    /// Throws where `used`, the local an effect in the block `label` uses, where it uses one, is one of `retired`.
-    private func verify(_ used: LocalID?, isNotIn retired: Set<LocalID>, at label: String) throws(IRViolation) {
-        guard let used, retired.contains(used) else { return }
+    /// Throws where `used`, a local that the block `label` uses, is retired.
+    private func verify(_ used: LocalID, isNotIn retired: Set<LocalID>, at label: String) throws(IRViolation) {
+        guard retired.contains(used) else { return }
         throw IRViolation(function: function, message: "the IR uses %\(used.index) at \(label), where it is retired")
     }
 }

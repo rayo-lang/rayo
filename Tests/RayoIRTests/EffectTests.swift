@@ -57,7 +57,7 @@ private let statementEffects = [
         effects: ["read %0 @1:3-1:4"],
     ),
     EffectsOfText(
-        testDescription: "an operand at an index a local holds reads that local first, where the source names the place",
+        testDescription: "an operand at an index a local holds reads that local first, where the source names it",
         text: "  _ = operand read %2[%1] @1:3-1:8 @1:1-1:8",
         effects: ["read %1 @1:3-1:8", "read %2[%1] @1:3-1:8"],
     ),
@@ -67,7 +67,7 @@ private let statementEffects = [
         effects: ["read %0 @1:9-1:10", "read %1 @1:1-1:6", "store %2[%1] @1:1-1:6"],
     ),
     EffectsOfText(
-        testDescription: "a call uses the accesses it passes after it reads its operands, whatever its arguments' order",
+        testDescription: "a call uses the accesses it passes after it reads its operands, in any order of arguments",
         text: """
               begin a0 modify %0 @1:1-1:2
               _ = call "bump(_: Int, _: Int)"(a0, read %0 @1:5-1:6) @1:1-1:7
@@ -103,7 +103,11 @@ private let terminatorEffects = [
         text: "  return move %0 @1:1-1:2",
         effects: ["move %0 @1:1-1:2", "exit"],
     ),
-    EffectsOfText(testDescription: "a return without a result leaves the function", text: "  return", effects: ["exit"]),
+    EffectsOfText(
+        testDescription: "a return without a result leaves the function",
+        text: "  return",
+        effects: ["exit"],
+    ),
     EffectsOfText(testDescription: "a block no path reaches does nothing", text: "  unreachable", effects: []),
 ]
 
