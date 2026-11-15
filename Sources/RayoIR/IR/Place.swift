@@ -43,11 +43,9 @@ public struct Place: Hashable, Sendable {
         return type
     }
 
-    /// Whether `other` must be this place or lie inside it, wherever the code compares them: whether it takes the
-    /// same steps from the same local, and perhaps more after them. A rule that holds of every part a place surely
-    /// holds, such as which values a store to it replaces, asks this. An element at an index a local holds must
-    /// contain only the places that step through it by the same local, so `a[%8]` must contain neither `a[%9]` nor
-    /// `a[0]`, though it may overlap both.
+    /// Whether `other` is certainly this place or a part inside it: it starts from the same local and takes the same
+    /// steps first. A store asks this to find which values it replaces. So `a[%8]` certainly contains neither `a[%9]`
+    /// nor `a[0]`, though it may overlap both.
     public func mustContain(_ other: Place) -> Bool {
         root == other.root && other.steps.starts(with: steps)
     }

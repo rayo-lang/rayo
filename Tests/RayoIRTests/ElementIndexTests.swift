@@ -27,6 +27,25 @@ struct ElementIndexTests {
             """))
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
     }
+
+    @Test func `an index into an inner array is checked against the inner array's count`() throws {
+        let program = try IRParser.program(from: """
+            main "main()"
+            func "main()"() -> Void {
+              temp %0: [2 of [3 of Int]]
+              temp %1: UInt
+              temp %2: [3 of Int]
+            bb0:
+              %2 @1:1-1:2 = fill 3 of 0 @1:1-1:2
+              %0 @1:1-1:2 = fill 2 of read %2 @1:1-1:2 @1:1-1:2
+              %1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
+              _ = operand read %0[0][%1] @1:1-1:2 @1:1-1:2
+              return
+            }
+            """)
+        let message = "the IR indexes an array of 3 elements at %1, which it changes without checking it is below 3"
+        #expect(IRVerifier.verify(program, from: .lowering) == IRViolation(function: "main()", message: message))
+    }
 }
 
 /// A program whose `main` holds an array of two Ints in `%0` and the index `local` in `%1`, runs `store`, and then
@@ -48,6 +67,12 @@ private func indexing(_ local: String, after store: String) -> String {
 }
 
 private let uncheckedIndices = [
+    UncheckedIndex(
+        testDescription: "an index that no statement stores",
+        local: "temp %1: UInt",
+        store: "",
+        message: "the IR indexes an array of 2 elements at %1, which no statement stores",
+    ),
     UncheckedIndex(
         testDescription: "an index that a local the source declares holds",
         local: "var %1 i: UInt @1:1-1:2",

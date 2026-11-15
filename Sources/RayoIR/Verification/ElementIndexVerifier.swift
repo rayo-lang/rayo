@@ -48,14 +48,16 @@ struct ElementIndexVerifier {
         }
     }
 
-    /// Throws where `local` isn't a temporary, or a statement changes it without checking the value it stores is
-    /// below `count`.
+    /// Throws where `local` isn't a temporary, no statement stores it, or a statement changes it without checking the
+    /// value it stores is below `count`.
     private func verifyIndex(_ local: LocalID, below count: Int) throws(IRViolation) {
         let indexing = "the IR indexes an array of \(count) elements at %\(local.index)"
         guard case .temporary = body.locals[local.index] else {
             throw violation("\(indexing), which isn't a temporary")
         }
-        guard changes[local, default: []].allSatisfy({ $0 == .checked(below: count) }) else {
+        // A temporary that nothing stores holds no index at all.
+        guard let changes = changes[local] else { throw violation("\(indexing), which no statement stores") }
+        guard changes.allSatisfy({ $0 == .checked(below: count) }) else {
             throw violation("\(indexing), which it changes without checking it is below \(count)")
         }
     }

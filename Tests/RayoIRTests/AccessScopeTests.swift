@@ -1,4 +1,5 @@
 import RayoIR
+import RayoSema
 import Testing
 
 /// IR whose accesses don't end once on every path from where each begins, and what the verifier says is wrong with it
@@ -35,6 +36,22 @@ struct AccessScopeTests {
               return
             """))
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
+    }
+
+    @Test func `an access begun again while it is held is a violation`() throws {
+        var program = try IRParser.program(from: borrowing("""
+              begin a0 read static %0 @1:1-1:2
+              end a0
+              return
+            """))
+        // The IR's text can't begin an access twice, so the second beginning is written into the parsed body.
+        let main = FunctionID(index: 0)
+        var body = try #require(program.bodies[main])
+        body.blocks[0].statements.insert(body.blocks[0].statements[1], at: 2)
+        program.bodies[main] = body
+
+        let message = "the IR begins a0 at bb0, where it is already held"
+        #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "main()", message: message))
     }
 
     @Test func `lowering's IR, whose ends the ownership stage writes later, ends no access`() throws {
@@ -79,6 +96,14 @@ private let unscopedAccesses = [
               begin a0 read static %0 @1:1-1:2
               _ = call "f(_: Int)"(a0) @1:1-1:2
               return
+            """,
+        message: "the IR leaves the function at bb0 without ending a0",
+    ),
+    UnscopedAccess(
+        testDescription: "an access not ended before a block that no run reaches the end of",
+        blocks: """
+              begin a0 read static %0 @1:1-1:2
+              unreachable
             """,
         message: "the IR leaves the function at bb0 without ending a0",
     ),

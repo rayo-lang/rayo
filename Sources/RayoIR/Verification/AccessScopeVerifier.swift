@@ -13,8 +13,9 @@ struct AccessScopeVerifier {
     }
 
     /// Throws the first violation found on a walk of the blocks that a path from the entry reaches: a block that
-    /// paths enter holding different accesses, an end or a use of an access that isn't held, or a way out of the
-    /// function that leaves an access held. A block that no path reaches runs no access, so it can't break the rule.
+    /// paths enter holding different accesses, a beginning of an access that is held, an end or a use of one that
+    /// isn't, or a way out of the function that leaves an access held. A block that no path reaches runs no access, so
+    /// it can't break the rule.
     func verify() throws(IRViolation) {
         // The accesses held where each block begins, or nil where the walk hasn't reached it yet.
         var entered: [Set<AccessID>?] = Array(repeating: nil, count: body.blocks.count)
@@ -43,14 +44,17 @@ struct AccessScopeVerifier {
     }
 
     /// The accesses held as `block` reaches its terminator, where `held` are those held as it begins. Throws where it
-    /// ends or uses an access that isn't held, or leaves the function with one still held.
+    /// begins an access that is held, ends or uses one that isn't, or leaves the function with one still held.
     private func accessesHeld(after block: BlockID, entering held: Set<AccessID>) throws(IRViolation) -> Set<AccessID> {
         var held = held
         let label = "bb\(block.index)"
         for statement in body.blocks[block.index].statements {
             switch statement {
+            // A beginning starts an access that isn't held, since one statement begins each access.
             case .begin(let id, _):
-                held.insert(id)
+                guard held.insert(id).inserted else {
+                    throw violation("the IR begins a\(id.index) at \(label), where it is already held")
+                }
 
             // An end ends a held access, which isn't held after it.
             case .end(let id):
