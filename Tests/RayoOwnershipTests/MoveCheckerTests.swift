@@ -1,7 +1,7 @@
+@testable import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
-import RayoOwnership
 import RayoSema
 
 struct MoveCheckerTests {
@@ -86,5 +86,6 @@ private func errors(in blocks: String, result: String = "Void") throws -> [Diagn
         \(blocks)
         }
         """
-    return MoveChecker.check(try program(of: [("f(_: Int, _: Shot)", function)]))[FunctionID(index: 0)] ?? []
+    let places = try placesOfFirstFunction(in: try program(of: [("f(_: Int, _: Shot)", function)]))
+    return MoveChecker.errors(in: places).inSourceOrder
 }

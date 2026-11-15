@@ -1,4 +1,7 @@
+import Testing
+@testable import RayoOwnership
 import RayoIR
+import RayoSema
 import RayoSource
 
 // The tests write their IR as text. A test names the source ranges it checks on line 2, each at the column it numbers
@@ -68,3 +71,21 @@ func storeShot(at column: Int? = nil) -> String {
           %5 \(range) = call "Shot(range: Int, hit: Hit)"(4, move %4 \(range)) @1:1-1:1
         """
 }
+
+/// The types of the places of `program`'s first function, which a check of that function reads.
+func placesOfFirstFunction(in program: IRProgram) throws -> PlaceTypes {
+    let body = try #require(program.bodies[FunctionID(index: 0)])
+    return PlaceTypes(body: body, types: program.types)
+}
+
+/// What code after each point of `places.body` uses, which the exclusivity and unused-value checks read.
+func laterUses(in places: PlaceTypes) -> DataflowResults<AccessUseAnalysis> {
+    DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
+}
+
+/// The functions that the tests' blocks call, which have no bodies.
+let callees = [
+    (name: "g(_: Int, _: Int)", text: #"func "g(_: Int, _: Int)"(Int, Int) -> Void"#),
+    (name: "take(_: Int, _: Hit)", text: #"func "take(_: Int, _: Hit)"(Int, Hit) -> Void"#),
+    (name: "double(_: Int)", text: #"func "double(_: Int)"(Int) -> Int"#),
+]

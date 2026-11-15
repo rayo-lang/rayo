@@ -1,5 +1,4 @@
 @testable import RayoCompiler
-import RayoDiagnostics
 import RayoIR
 import Testing
 
@@ -21,27 +20,17 @@ struct IRVerificationTests {
         let returnsBool = try program(endingIn: "return true")
         let violation = "the IR returns a value of type Bool from a function that returns Void"
         let message = "internal error: in 'main()': \(violation)"
-        var errors: [Diagnostic] = []
-        #expect(throws: CompilationError.failed(message)) { try VerifyIR().run(returnsBool, errors: &errors) }
+        #expect(throws: CompilationError.failed(message)) { try Compiler.verified(returnsBool) }
     }
     #else
     @Test func `in a release build, IR that breaks its types goes on unchecked`() throws {
         let returnsBool = try program(endingIn: "return true")
-        var errors: [Diagnostic] = []
-        #expect(try VerifyIR().run(returnsBool, errors: &errors) == returnsBool)
+        #expect(try Compiler.verified(returnsBool) == returnsBool)
     }
     #endif
 
     @Test func `IR that keeps its types goes on as it is`() throws {
         let returnsNothing = try program(endingIn: "return")
-        var errors: [Diagnostic] = []
-        #expect(try VerifyIR().run(returnsNothing, errors: &errors) == returnsNothing)
-    }
-
-    @Test func `the front end verifies the IR that lowering gives, before any stage reads it`() {
-        // The front end's steps chain in the order it runs them, and its type names each step.
-        let frontEnd = Compiler.frontEnd(readFile: { _ in nil })
-        let steps = String(describing: type(of: frontEnd))
-        #expect(steps.contains("Lower, VerifyIR>, CheckMoves>"))
+        #expect(try Compiler.verified(returnsNothing) == returnsNothing)
     }
 }

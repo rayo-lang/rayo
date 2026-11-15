@@ -5,18 +5,10 @@ import RayoSource
 
 /// Checks that a program uses each local, and each field inside one, only where it holds a value, and assigns each
 /// `let` at most once on each path.
-public enum InitializationChecker {
+enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
-    /// assigned, under the ID of each function that has any, in source order.
-    public static func check(_ program: IRProgram) -> [FunctionID: [Diagnostic]] {
-        // Check each body, whose first locals are its function's parameters.
-        program.errors { id, body in
-            check(PlaceTypes(body: body, types: program.types), parameterCount: program.functions[id].parameters.count)
-        }
-    }
-
-    /// Checks `places.body`, whose first `parameterCount` locals are its function's parameters.
-    private static func check(_ places: PlaceTypes, parameterCount: Int) -> [Diagnostic] {
+    /// assigned, in `places.body`, whose first `parameterCount` locals are its function's parameters.
+    static func errors(in places: PlaceTypes, parameterCount: Int) -> [Diagnostic] {
         let analysis = InitializationAnalysis(places.body, parameterCount: parameterCount)
         var results = DataflowSolver.solve(analysis, in: places.body)
         var errors = FunctionErrors(places: places)
