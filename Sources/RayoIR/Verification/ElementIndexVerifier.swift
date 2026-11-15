@@ -1,25 +1,30 @@
 import RayoSema
 
-/// Checks that each step of one function's body into an element at an index a local holds needs no check of its own:
-/// the local is a temporary, and every statement that changes it stores an index that an `index` operation checked
-/// against the count of the array the step indexes. The emitter loads the index and finds the element with no check,
-/// so the `index` operation's check is the only one the program makes.
+/// Checks that one function's body finds each element at an index a local holds only where an `index` operation
+/// checked that index against the array's count. The emitter loads such an index and finds the element with no check
+/// of its own, so that operation's check is the only one the program makes.
 struct ElementIndexVerifier {
+    /// How a statement changes a local: by storing an index that an `index` operation checked against a count, or in
+    /// any other way.
+    private enum Change: Equatable {
+        case checked(below: Int)
+        case unchecked
+    }
+
     private let body: IRBody
     private let types: TypeTable
     /// The name of the function whose body this is, which a violation names.
     private let function: String
-    /// For each local that some statement changes, the count that each such statement checks the value it stores
-    /// against, or nil for one that changes the local without such a check.
-    private let checkedCounts: [LocalID: [Int?]]
+    /// How each statement that changes a local changes it, for each local that some statement changes.
+    private let changes: [LocalID: [Change]]
 
-    /// A verifier of `body`, the body of `function` in a program whose structs `types` holds, and whose types the
-    /// verifier of its types has passed.
+    /// A verifier of `body`, the body of `function` in a program whose structs `types` holds. The body's types must
+    /// already have passed their own check.
     init(body: IRBody, of function: String, types: TypeTable) {
         self.body = body
         self.types = types
         self.function = function
-        checkedCounts = Self.checkedCounts(in: body)
+        changes = Self.changes(in: body)
     }
 
     /// Throws for the first element step found whose index isn't checked against its array's count.
@@ -48,36 +53,39 @@ struct ElementIndexVerifier {
     private func verifyIndex(_ local: LocalID, below count: Int) throws(IRViolation) {
         let indexing = "the IR indexes an array of \(count) elements at %\(local.index)"
         guard case .temporary = body.locals[local.index] else {
-            throw IRViolation(function: function, message: "\(indexing), which is no temporary")
+            throw violation("\(indexing), which isn't a temporary")
         }
-        guard checkedCounts[local, default: []].allSatisfy({ $0 == count }) else {
-            let message = "\(indexing), which it changes without checking it is below \(count)"
-            throw IRViolation(function: function, message: message)
+        guard changes[local, default: []].allSatisfy({ $0 == .checked(below: count) }) else {
+            throw violation("\(indexing), which it changes without checking it is below \(count)")
         }
     }
 
-    /// For each local of `body` that a statement changes, the count that each such statement checks the value it
-    /// stores against, or nil for one that changes the local without such a check.
-    private static func checkedCounts(in body: IRBody) -> [LocalID: [Int?]] {
-        var counts: [LocalID: [Int?]] = [:]
+    /// How each statement of `body` that changes a local changes it, for each local that some statement changes.
+    private static func changes(in body: IRBody) -> [LocalID: [Change]] {
+        var changes: [LocalID: [Change]] = [:]
         for block in body.blocks {
             for statement in block.statements {
                 switch statement {
-                // A store of an index checks its value; any other store doesn't.
                 case .compute(let destination?, let value, _):
-                    let checked: Int? = if case .index(_, let count) = value { count } else { nil }
-                    counts[destination.place.root, default: []].append(checked)
+                    changes[destination.place.root, default: []].append(change(storing: value))
 
                 // A modify access lets a call store any value there.
                 case .begin(_, let access) where access.kind == .modify:
-                    counts[access.place.root, default: []].append(nil)
+                    changes[access.place.root, default: []].append(.unchecked)
 
                 default:
                     break
                 }
             }
         }
-        return counts
+        return changes
+    }
+
+    /// How a store of `value` changes the local it stores to: a store of an index checks its value, and any other
+    /// store doesn't.
+    private static func change(storing value: Rvalue) -> Change {
+        guard case .index(_, let count) = value else { return .unchecked }
+        return .checked(below: count)
     }
 
     /// The places that `body` names: those its operands read or move, then those its statements store to, begin an
@@ -93,5 +101,10 @@ struct ElementIndexVerifier {
             }
         }
         return read + reached
+    }
+
+    /// The violation that `message` says, in this function.
+    private func violation(_ message: String) -> IRViolation {
+        IRViolation(function: function, message: message)
     }
 }

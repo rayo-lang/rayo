@@ -21,8 +21,7 @@ struct ElementIndexTests {
         #expect(IRVerifier.verify(program, from: .lowering) == violation)
     }
 
-    @Test func `an index that a temporary holds, stored only by a check below the array's count, is no violation`()
-        throws {
+    @Test func `a temporary index stored only by a check below its array's count is no violation`() throws {
         let program = try IRParser.program(from: indexing("temp %1: UInt", after: """
             %1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2
             """))
@@ -53,7 +52,7 @@ private let uncheckedIndices = [
         testDescription: "an index that a local the source declares holds",
         local: "var %1 i: UInt @1:1-1:2",
         store: "%1 @1:1-1:2 = index UInt 1 below 2 @1:1-1:2",
-        message: "the IR indexes an array of 2 elements at %1, which is no temporary",
+        message: "the IR indexes an array of 2 elements at %1, which isn't a temporary",
     ),
     UncheckedIndex(
         testDescription: "an index stored without a check",

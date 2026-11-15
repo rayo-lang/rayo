@@ -73,12 +73,12 @@ extension Compiler {
         return owned
     }
 
-    /// `program`, which `stage` gave, once a debug build of `rayoc` has checked that it keeps the IR's types, and
-    /// what the IR that `stage` gives asks of its accesses.
+    /// `program`, which `stage` gave, once a debug build of `rayoc` has checked it keeps the IR's rules: its types, the
+    /// checks of the indices it finds elements by, and, for the ownership stage's IR, where its accesses end.
     static func verified(_ program: IRProgram, from stage: IRStage) throws(CompilationError) -> IRProgram {
         // A release build of `rayoc` takes its stages' IR on trust, and spends no time checking it.
         #if DEBUG
-        // IR that breaks its types is a fault in `rayoc`, never in the program.
+        // IR that breaks its rules is a fault in `rayoc`, never in the program.
         if let violation = IRVerifier.verify(program, from: stage) { throw .failed("internal error: \(violation)") }
         #endif
         return program

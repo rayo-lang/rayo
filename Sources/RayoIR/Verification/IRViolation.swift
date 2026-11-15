@@ -1,4 +1,4 @@
-/// An operation in IR that breaks the IR's types, which no lowering of a checked program makes: a fault in the
+/// An operation in IR that breaks the IR's rules, which no stage given a checked program makes: a fault in the
 /// compiler, never in the program.
 public struct IRViolation: Error, Equatable, CustomStringConvertible {
     /// The name of the function whose body holds the operation, such as `f(_: Int)`.

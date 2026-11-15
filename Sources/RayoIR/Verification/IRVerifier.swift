@@ -1,22 +1,36 @@
 import RayoSema
 
-/// Checks that IR keeps its types, and that the IR a stage gives keeps what that stage promises of its accesses, which
-/// code generation takes as given.
+/// Checks the rules of IR that code generation takes as given. The IR keeps its types, and each index it finds an
+/// element by was checked against its array's count. The IR the ownership stage gives also ends each access once on
+/// every path.
 public enum IRVerifier {
     /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
-    /// none does: each primary initializer's declaration in the order of its ID, then each body in the order of its
-    /// function's ID.
+    /// none does. Each primary initializer's declaration is checked in the order of its ID, then each body in the
+    /// order of its function's ID.
     public static func verify(_ program: IRProgram, from stage: IRStage) -> IRViolation? {
         for id in program.functions.ids {
             if let violation = initializerViolation(of: id, in: program) { return violation }
         }
 
         for (id, body) in program.definedFunctions {
-            let verifier = FunctionVerifier(body: body, of: program.functions[id], in: program, from: stage)
             // The first violation found ends the check.
-            do { try verifier.verify() } catch { return error }
+            do { try verify(body, of: program.functions[id], in: program, from: stage) } catch { return error }
         }
         return nil
+    }
+
+    /// Throws the first violation in `body`, the body of `declaration` in `program`, which `stage` gave: of its types,
+    /// then of its indices, then, for the ownership stage's IR, of where its accesses end.
+    private static func verify(
+        _ body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram, from stage: IRStage,
+    ) throws(IRViolation) {
+        // The index check takes each place's type as given, so the types are checked first.
+        try FunctionVerifier(body: body, of: declaration, in: program).verify()
+        try ElementIndexVerifier(body: body, of: declaration.name, types: program.types).verify()
+
+        // Lowering writes no end, so only the ownership stage's IR ends its accesses.
+        guard stage == .ownership else { return }
+        try AccessScopeVerifier(body: body, of: declaration.name).verify()
     }
 
     /// The violation of the function `id` of `program`, where it is a primary initializer that a call can't build its
