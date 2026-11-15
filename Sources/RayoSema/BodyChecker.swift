@@ -118,7 +118,7 @@ struct BodyChecker {
         // An expression that failed was reported.
         guard let value = expressions.check(expr) else { return nil }
         // A value that no code uses is a mistake, unless `_ =` drops it on purpose.
-        guard value.type == .void else {
+        guard TypeFit.fits(value.type, .void) else {
             errors.report(.unusedValue(type: expressions.typeName(of: value.type)), at: value.range)
             return nil
         }

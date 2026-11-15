@@ -24,33 +24,23 @@ struct ExpressionChecker {
     /// Checks `expr` as the value of a position that expects `expected` of it where it expects a type. An untyped
     /// value takes the expected type where it fits it, and its default type where it doesn't.
     func check(_ expr: Expr, expecting expected: Expectation? = nil) -> CheckedExpr? {
-        // An `if` hands its position to the branch that runs, so each branch's value is checked as the position's.
-        if case .if(let ifExpr) = expr.kind {
-            return IfChecker(expressions: self).check(ifExpr, in: expr.range, expecting: expected)
-        }
-
-        // Any other value is checked on its own, and settled toward the type the position expects.
         // A value that failed was reported.
         guard let value = value(of: expr) else { return nil }
-        // So was a literal that the type it settles to can't hold.
-        guard let settled = settled(value, toward: expected?.type) else { return nil }
-
-        // A value passes where the position expects no type.
-        guard let expected else { return settled }
-        return expect(settled.type, at: settled.range, expected) ? settled : nil
+        guard let expected else { return settled(value, toward: nil) }
+        return settled(value, expecting: expected)
     }
 
-    /// Checks `expr` on its own, leaving it untyped where it is a literal, or a negation or arithmetic on untyped
-    /// values.
+    /// Checks `expr` on its own, leaving it to wait for its position's type where it is an untyped value, an array
+    /// literal, an implicit member, or an `if`.
     func value(of expr: Expr) -> CheckedValue? {
         switch expr.kind {
         // An integer literal is untyped until its position settles it.
         case .intLiteral(let digits):
-            .untyped(.integer(magnitude: digits, isNegative: false, range: expr.range))
+            .waiting(UntypedValue.integer(magnitude: digits, isNegative: false, range: expr.range))
 
         // So is a negative one, which keeps its sign until the type that holds it is known.
         case .negativeIntLiteral(let digits):
-            .untyped(.integer(magnitude: digits, isNegative: true, range: expr.range))
+            .waiting(UntypedValue.integer(magnitude: digits, isNegative: true, range: expr.range))
 
         // `-` is untyped where its operand is, and `!` is a Bool.
         case .unary(let op, let operand):
@@ -81,7 +71,7 @@ struct ExpressionChecker {
 
         // So does an implicit member that isn't called.
         case .implicitMember(let name):
-            .implicitMember(ImplicitMember(name: name, nameRange: expr.range, arguments: nil, range: expr.range))
+            .waiting(ImplicitMember(name: name, nameRange: expr.range, arguments: nil, range: expr.range))
 
         // A `copy` copies the value of the place it names, and covers the whole `copy place`.
         case .copy(let copied):
@@ -89,9 +79,10 @@ struct ExpressionChecker {
                 .typed(CheckedExpr(kind: .copy($0.place), type: $0.type, range: expr.range))
             }
 
-        // An `if` read for its value gives the value of the branch that runs.
-        case .if:
-            check(expr).map { .typed($0) }
+        // An `if` read for its value gives the value of the branch that runs, so its branches' values wait for its
+        // position as the `if` does.
+        case .if(let ifExpr):
+            IfChecker(expressions: self).value(of: ifExpr, in: expr.range).map { .waiting($0) }
 
         // An array literal waits for its position to give it a type, which its elements settle to.
         case .arrayLiteral(let elements):
@@ -99,53 +90,49 @@ struct ExpressionChecker {
         }
     }
 
-    /// Settles `value` to `type` where it is untyped and fits `type`, and to its default type where it is untyped
-    /// otherwise. An array literal settles to `type` where it is an array, and to the type its elements give
-    /// otherwise. An implicit member names a member of `type`. A typed value is given back as it is.
+    /// Settles `value` toward `type`, where it waits for one. A typed value is given back as it is.
     func settled(_ value: CheckedValue, toward type: RayoType?) -> CheckedExpr? {
         switch value {
         case .typed(let typed): typed
-        case .untyped(let untyped): settled(untyped, toward: type)
-        case .arrayLiteral(let literal): ArrayLiteralChecker(expressions: self).settled(literal, toward: type)
-        case .implicitMember(let member): ImplicitMemberChecker(expressions: self).settled(member, toward: type)
+        case .waiting(let waiting): waiting.settled(toward: type, by: self)
         }
     }
 
-    /// Settles each of `values` that checked to its default type where it is untyped, so the literals in it that
-    /// their default type can't hold are reported, where the expression that holds them fails for another reason.
-    /// An array literal's elements are settled so, and not the literal itself, whose type the failed expression
-    /// would have given; so are an implicit member's arguments, and not the member.
+    /// Reports the errors of each of `values` that waits for a type, where the expression that holds them fails for
+    /// another reason and so never settles them.
     func reportSettlingErrors(of values: [CheckedValue?]) {
-        for value in values {
-            switch value {
-            case .untyped(let untyped)?: _ = settled(untyped, toward: nil)
-            case .arrayLiteral(let literal)?: reportSettlingErrors(of: literal.elements)
-            case .implicitMember(let member)?: reportSettlingErrors(of: member.argumentValues)
-            case .typed?, nil: break
-            }
+        for case .waiting(let waiting)? in values {
+            waiting.reportErrors(by: self)
         }
     }
 
-    /// Settles `value` toward the type `expected` names, and checks it against that type.
+    /// Settles `value` to the type `expected` names, reporting where it can't take that type.
     func settled(_ value: CheckedValue, expecting expected: Expectation) -> CheckedExpr? {
-        // A value that failed was reported.
-        guard let settled = settled(value, toward: expected.type) else { return nil }
-        return expect(settled.type, at: settled.range, expected) ? settled : nil
+        switch value {
+        case .typed(let typed): fitted(typed, to: expected)
+        case .waiting(let waiting): waiting.settled(expecting: expected, by: self)
+        }
     }
 
-    /// Whether a value of `type`, which the source gives at `range`, has the type `expected` names, reporting its
-    /// mismatch when it doesn't.
-    func expect(_ type: RayoType, at range: SourceRange, _ expected: Expectation) -> Bool {
-        // A value of the type passes.
-        if type == expected.type { return true }
-        errors.report(expected.mismatch(typeName(of: expected.type), typeName(of: type)), at: range)
+    /// Makes `value` stand where a position expects the type `expected` names, reporting its mismatch where it can't.
+    func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
+        // A value that fits stands there as the fit gives it.
+        if let fitted = TypeFit.fitted(value, to: expected.type) { return fitted }
+        reportMismatch(of: value.type, at: value.range, expected)
+        return nil
+    }
+
+    /// Whether a value of `type`, which the source gives at `range` but no expression holds, such as the Void a
+    /// branch ends in, fits the type `expected` names, reporting its mismatch when it doesn't.
+    func fits(_ type: RayoType, at range: SourceRange, _ expected: Expectation) -> Bool {
+        if TypeFit.fits(type, expected.type) { return true }
+        reportMismatch(of: type, at: range, expected)
         return false
     }
 
-    /// Settles `untyped` to `type` where it fits it, and to its default type where it doesn't or `type` is nil.
-    private func settled(_ untyped: UntypedValue, toward type: RayoType?) -> CheckedExpr? {
-        let settledType = if let type, untyped.fits(type) { type } else { untyped.defaultType }
-        return untyped.settled(to: settledType, named: typeName(of: settledType), reporting: errors)
+    /// Reports a value of `type` at `range`, where a position expects the type `expected` names, with its error.
+    private func reportMismatch(of type: RayoType, at range: SourceRange, _ expected: Expectation) {
+        errors.report(expected.mismatch(typeName(of: expected.type), typeName(of: type)), at: range)
     }
 
     /// Checks each of `elements`, those of the array literal at `range`, on its own, so that each settles to the
@@ -159,7 +146,7 @@ struct ExpressionChecker {
             reportSettlingErrors(of: values)
             return nil
         }
-        return .arrayLiteral(ArrayLiteral(elements: checked, range: range))
+        return .waiting(ArrayLiteral(elements: checked, range: range))
     }
 
     /// Checks `op operandExpr`, which is untyped where `op` is `-` and its operand is untyped.
@@ -177,11 +164,10 @@ struct ExpressionChecker {
         guard let operand = value(of: operandExpr) else { return nil }
         return switch operand {
         // An untyped operand gives an untyped negation.
-        case .untyped(let untyped): .untyped(.negation(untyped, range: range))
+        case .waiting(let untyped as UntypedValue): .waiting(UntypedValue.negation(untyped, range: range))
         case .typed(let typed): negation(of: typed, in: range)
-        // An array literal settles to the type its elements give, which no negation takes, and an implicit member
-        // to no type.
-        case .arrayLiteral, .implicitMember: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
+        // Any other value that waits settles as it would where its position gives no type.
+        case .waiting: settled(operand, toward: nil).flatMap { negation(of: $0, in: range) }
         }
     }
 
@@ -218,8 +204,9 @@ struct ExpressionChecker {
         let checkedOp = CheckedBinaryOperator(op)
 
         // Arithmetic on two untyped operands gives a value of their type, so it is untyped too.
-        if case .untyped(let untypedLeft) = left, case .untyped(let untypedRight) = right, checkedOp.isArithmetic {
-            return .untyped(.arithmetic(checkedOp, untypedLeft, untypedRight, range: range))
+        if case .waiting(let untypedLeft as UntypedValue) = left,
+           case .waiting(let untypedRight as UntypedValue) = right, checkedOp.isArithmetic {
+            return .waiting(UntypedValue.arithmetic(checkedOp, untypedLeft, untypedRight, range: range))
         }
 
         // Otherwise an untyped operand takes the type of the typed one beside it, which every operator takes on both
@@ -453,7 +440,7 @@ struct ExpressionChecker {
     private func operands(of spelled: String, _ left: CheckedExpr, _ right: CheckedExpr,
                           are type: RayoType, in range: SourceRange) -> Bool {
         // Two operands of the type pass.
-        if left.type == type && right.type == type { return true }
+        if TypeFit.fits(left.type, type) && TypeFit.fits(right.type, type) { return true }
         let code = ErrorCode.operandTypes(
             op: spelled, needs: typeName(of: type), left: typeName(of: left.type), right: typeName(of: right.type),
         )

@@ -132,7 +132,7 @@ struct CallChecker {
             ImplicitMember.Argument(label: $0.label, value: $1, range: $0.range)
         }
         let member = ImplicitMember(name: name, nameRange: nameRange, arguments: memberArguments, range: range)
-        return .implicitMember(member)
+        return .waiting(member)
     }
 
     /// Checks a call that reaches no function or struct: reports `error`, where there is one, at `range`, and the
@@ -261,8 +261,11 @@ struct CallChecker {
             return nil
         }
 
-        // The chosen candidate's parameters settle the untyped arguments.
-        let settled = zip(values, chosen.parameters).compactMap { expressions.settled($0, toward: $1.type) }
+        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
+        let settled = zip(values, chosen.parameters).compactMap { value, parameter in
+            parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
+                ?? expressions.settled(value, toward: nil)
+        }
         // An argument whose literal its parameter's type can't hold was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)
@@ -272,7 +275,7 @@ struct CallChecker {
     /// fit, naming them as `name`, unless one of them failed, which was reported where it is declared.
     private func chosen(among remaining: [Signature], named name: String, for values: [CheckedValue],
                         in range: SourceRange) -> Signature? {
-        // No candidate needs a conversion, so one that alone remains is the call's.
+        // A candidate that alone remains is the call's.
         if remaining.count == 1 { return remaining[0] }
 
         // A parameter whose type failed to resolve fits any argument, so several remain; that failure was reported
