@@ -190,7 +190,7 @@ struct PassModeTests {
               declare %0
               %1 @1:1-1:2 = call "E()"() @1:1-1:2
               %0 @1:1-1:2 = fill 4000000000 of read %1 @1:1-1:2 @1:1-1:2
-              begin a0 read static %0 @1:1-1:2
+              begin a0 read %0 @1:1-1:2
               %2 @1:1-1:2 = call "f(_: [4000000000 of E])"(a0) @1:1-1:2
               end a0
               \(printUInt("%2"))
