@@ -109,7 +109,7 @@ extension AssignmentChecker: PlaceRules {
     /// Whether an assignment may change `local` as its target asks. A target that changes the local whole has it
     /// checked here; one that changes only part of it has it checked last, after the rest of the target.
     func admits(_ local: LocalID, at range: SourceRange, holdsParts: Bool) -> Bool {
-        guard !holdsParts, let refusal = refusal(toChange: local, holdsParts: false) else { return true }
+        guard !holdsParts, let refusal = refusal(toChange: local, holdsParts: holdsParts) else { return true }
         errors.report(refusal, at: range)
         return false
     }

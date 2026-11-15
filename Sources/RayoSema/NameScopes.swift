@@ -40,7 +40,8 @@ final class NameScopes {
         let instance = instanceField(named: name)
         let module = moduleMatch(for: name, use: use)
         let match = switch use {
-        // No local or field can be called, so a function or a type wins even over a local whose declaration failed.
+        // A call skips what can't be called, and no local or field can be, so a function or a type wins even over a
+        // local whose declaration failed.
         case .call: module ?? inScope ?? instance
         // A local or parameter shadows the fields of `self`, and both shadow the module's functions and types.
         case .ordinary: inScope ?? instance ?? module
@@ -75,7 +76,8 @@ final class NameScopes {
         blocks.reversed().lazy.compactMap { $0[name] }.first
     }
 
-    /// The field of `self` called `name`, or nil where the body has no `self` or its type has no such field.
+    /// The field of `self` called `name`, or nil where the body has no `self` or its type has no such field. A field
+    /// is the one instance member a type has.
     private func instanceField(named name: String) -> NameMatch? {
         guard let selfParameter,
               case .field(let index, let field)? = file.declarations.member(named: name, of: self[selfParameter].type)

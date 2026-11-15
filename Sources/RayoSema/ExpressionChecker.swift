@@ -503,6 +503,7 @@ extension ExpressionChecker: PlaceRules {
 
     func error(naming nonPlace: NonPlaceName, _ name: String) -> ErrorCode {
         switch nonPlace {
+        // `_` names no value; it only drops one, or leaves a parameter unnamed.
         case .underscore: .underscoreValue
         case .function: .functionAsValue(name: name)
         case .type: .typeAsValue(name: name)
