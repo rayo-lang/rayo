@@ -18,6 +18,12 @@ inputs:
       runs.
     required: false
     default: ""
+  release-proof-programs:
+    description: >-
+      Whether to build rayo and rayoc in release, as users build them, and run every version's proof program with
+      them, in debug and in release builds.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -119,6 +125,35 @@ runs:
           none) swift build --build-tests ;;
           *) swift test $ARGUMENTS --filter "$SELECTION" ;;
         esac
+    # The tests run rayo and rayoc in debug, where checks that a release build leaves out still run, such as the
+    # check of the LLVM module rayoc makes. So the release build users run is built and run here too, and its
+    # products are saved with the build, so a pull request rebuilds only what it changed.
+    - name: Run the proof programs with release rayo
+      if: inputs.release-proof-programs == 'true'
+      shell: bash
+      run: |
+        swift build -c release
+        bin=$(swift build -c release --show-bin-path)
+
+        # Each run passes when it prints the output beside the program, writes no error, and exits with 0. A run
+        # that fails doesn't stop the rest, so one CI run reports every failure.
+        failed=0
+        for program in examples/v[0-9]*/*.rayo; do
+          expected=${program%.rayo}.out
+          for mode in --debug --release; do
+            status=0
+            "$bin/rayo" run "$mode" "$program" > "$RUNNER_TEMP/output" 2> "$RUNNER_TEMP/errors" || status=$?
+            if [ "$status" -eq 0 ] && [ ! -s "$RUNNER_TEMP/errors" ] \
+              && diff -u "$expected" "$RUNNER_TEMP/output"; then
+              echo "$program, $mode: passed"
+            else
+              cat "$RUNNER_TEMP/errors"
+              echo "::error file=$program::release rayo's $mode run exited with $status, or wrote other than $expected"
+              failed=1
+            fi
+          done
+        done
+        exit "$failed"
     - name: Save the build
       if: github.event_name == 'push' && steps.build.outputs.cache-hit != 'true'
       uses: actions/cache/save@v6
