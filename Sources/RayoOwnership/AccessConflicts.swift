@@ -3,8 +3,8 @@ import RayoIR
 import RayoSource
 
 /// The conflicts in one function under the law of exclusivity: two accesses live at once over overlapping places,
-/// where either changes its place. A move out of a place, and an assignment to it, change it at that point, and a
-/// read of an operand reads it there.
+/// where either changes its place. A move out of a place, and a store to it, change it at that point, and a read,
+/// whether of an operand or of a local that holds an index, reads it there.
 struct AccessConflicts {
     /// What a use does with the place it reaches, which decides the live accesses it conflicts with, and the error.
     private enum Reach {
@@ -32,48 +32,49 @@ struct AccessConflicts {
     /// Finds the conflicts at each statement of `block`, and at its terminator, where `live` holds the accesses live
     /// at each point of the block, as `AccessExtents.live(in:)` gives them.
     mutating func check(_ block: BlockID, live: [Set<AccessID>]) {
-        let basicBlock = places.body.blocks[block.index]
-        for (index, statement) in basicBlock.statements.enumerated() {
-            check(statement, liveBefore: live[index], liveAfter: live[index + 1])
+        for (index, effects) in places.body.blocks[block.index].effects.enumerated() {
+            check(effects, liveAfter: live[index + 1])
         }
-
-        // A terminator's operand is read or moved where the terminator runs.
-        guard let operand = basicBlock.terminator.operand else { return }
-        check(operand, against: live[basicBlock.statements.count])
     }
 
-    /// Finds the conflicts of `statement`, where `liveBefore` are the accesses live just before it and `liveAfter`
-    /// those live just after it.
-    private mutating func check(_ statement: Statement, liveBefore: Set<AccessID>, liveAfter: Set<AccessID>) {
-        switch statement {
+    /// Finds the conflicts of `effects`, those of one statement or terminator, where `liveAfter` are the accesses live
+    /// just after it. Each effect conflicts with the accesses live just after it: so a call's operands meet the
+    /// accesses it passes, and its store meets only those that outlive it.
+    private mutating func check(_ effects: [Effect], liveAfter: Set<AccessID>) {
+        // Walk back from the point after the statement, to find the accesses live just after each effect.
+        var live = LiveAccesses(liveAfter)
+        var liveAfterEach: [Set<AccessID>] = []
+        for effect in effects.reversed() {
+            liveAfterEach.append(live.ids)
+            live.apply(effect, in: ())
+        }
+
+        // Check the effects in their order, so that each statement's errors keep it.
+        for (effect, live) in zip(effects, liveAfterEach.reversed()) {
+            check(effect, against: live)
+        }
+    }
+
+    /// Finds the conflicts of `effect` with the accesses in `live`: a read conflicts with a live modify access, and a
+    /// move or a store, which changes its place, with any live access.
+    private mutating func check(_ effect: Effect, against live: Set<AccessID>) {
+        switch effect {
+        case .read(let place, let range):
+            check(.read, of: place, at: range, against: live)
+        case .move(let place, let range):
+            check(.move, of: place, at: range, against: live)
+        case .store(let destination):
+            check(.change, of: destination.place, at: destination.range, against: live)
+
         // An access conflicts with each other access that is live once it has begun.
         case .begin(let id, let access):
             let reach: Reach = access.kind == .read ? .read : .change
-            check(reach, of: access.place, at: access.range, against: liveAfter.subtracting([id]))
+            check(reach, of: access.place, at: access.range, against: live.subtracting([id]))
 
-        // A computation reads and moves its operands, then changes its destination, where it has one, once it has
-        // computed its value. So an access that the computation passes, and that ends with it, may reach the
-        // destination.
-        case .compute(let destination, let value, _):
-            for operand in value.operands {
-                check(operand, against: liveBefore)
-            }
-            guard let destination else { return }
-            check(.change, of: destination.place, at: destination.range, against: liveAfter)
-
-        // A declaration, a retirement and the end of an access reach no place.
-        case .declare, .retire, .end:
+        // Using or ending an access, starting or ending a local's life, and leaving the function reach no place
+        // anew.
+        case .use, .end, .declare, .retire, .exit:
             break
-        }
-    }
-
-    /// Finds the conflicts of `operand` with the accesses in `live`: a read conflicts with a live modify access, and
-    /// a move, which changes its place, with any live access.
-    private mutating func check(_ operand: Operand, against live: Set<AccessID>) {
-        switch operand {
-        case .constant: break
-        case .read(let place, let range): check(.read, of: place, at: range, against: live)
-        case .move(let place, let range): check(.move, of: place, at: range, against: live)
         }
     }
 

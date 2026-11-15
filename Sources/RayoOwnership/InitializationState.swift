@@ -24,46 +24,40 @@ struct InitializationState: DataflowState {
         return merged
     }
 
-    /// Applies what `statement` does to the locals.
-    mutating func apply(_ statement: Statement) {
-        apply(statement, use: { _, _, _ in }, store: { _, _ in })
+    var direction: DataflowDirection { .forward }
+
+    mutating func apply(_ effect: Effect, in function: Void) {
+        apply(effect, use: { _, _, _ in }, store: { _, _ in })
     }
 
-    /// Applies what `terminator` does to the locals.
-    mutating func apply(_ terminator: Terminator) {
-        apply(terminator, use: { _, _, _ in })
-    }
+    /// Applies what `effect` does to the locals. On the way, it hands `use` the place that a read, a move or an access
+    /// uses where it may hold no value, and the destination of a store where that lies inside a local that may not hold
+    /// the rest of its value, and hands `store` the destination of a store where that is a whole local.
+    mutating func apply(_ effect: Effect, use: UseVisitor, store: StoreVisitor) {
+        switch effect {
+        // A read uses the place and leaves its value in it.
+        case .read(let place, let range):
+            visitUse(of: place, at: range, use: use)
 
-    /// Applies what `terminator` does to the locals, and hands `use` its operand where that names a place that may
-    /// hold no value.
-    mutating func apply(_ terminator: Terminator, use: UseVisitor) {
-        // A terminator without an operand uses no place.
-        guard let operand = terminator.operand else { return }
-        apply(operand, use: use)
-    }
+        // A move uses the place and takes its value.
+        case .move(let place, let range):
+            visitUse(of: place, at: range, use: use)
+            locals[place.root.index].move(place, at: range)
 
-    /// Applies what `statement` does to the locals. On the way, it hands `use` each operand that names a place that
-    /// may hold no value, and its destination where that lies inside a local that may not hold the rest of its value,
-    /// and hands `store` its destination where that is a whole local. Each operand sees the moves of those before it.
-    mutating func apply(_ statement: Statement, use: UseVisitor, store: StoreVisitor) {
-        switch statement {
-        // A computation uses its operands, in order, before it stores to its destination.
-        case .compute(let destination, let value, _):
-            value.operands.forEach { apply($0, use: use) }
-            // A computation with no destination drops its value.
-            guard let destination else { return }
+        case .store(let destination):
             assign(destination, use: use, store: store)
-
-        // A declaration, or a retirement, leaves the local without a value, even one an earlier pass of a loop gave it.
-        case .declare(let local), .retire(let local):
-            locals[local.index] = .declared
 
         // An access uses its place, whose value it reads or changes, and leaves the value there.
         case .begin(_, let access):
             visitUse(of: access.place, at: access.range, use: use)
 
-        // Ending an access uses no place.
-        case .end:
+        // A declaration, or a retirement, leaves the local without a value, even one an earlier pass of a loop gave it.
+        case .declare(let local), .retire(let local):
+            locals[local.index] = .declared
+
+        // Reaching a place through an access and ending one use only the value that the access's beginning used, and
+        // leaving the function uses none.
+        case .use, .end, .exit:
             break
         }
     }
@@ -83,30 +77,8 @@ struct InitializationState: DataflowState {
         locals[place.root.index].assign(place)
     }
 
-    private mutating func apply(_ operand: Operand, use: UseVisitor) {
-        switch operand {
-        // A constant names no local.
-        case .constant:
-            break
-
-        // A read uses the place and leaves its value in it.
-        case .read(let place, let range):
-            visitUse(of: place, at: range, use: use)
-
-        // A move uses the place and takes its value.
-        case .move(let place, let range):
-            visitUse(of: place, at: range, use: use)
-            locals[place.root.index].move(place, at: range)
-        }
-    }
-
-    /// Hands `use` the place an operand names at `range`, where it may hold no value, after each local that holds an
-    /// index the place finds its elements by, where that may hold none.
+    /// Hands `use` the place that an effect uses, which the source names at `range`, where it may hold no value.
     private func visitUse(of place: Place, at range: SourceRange, use: UseVisitor) {
-        for local in place.indexLocals {
-            visitUse(of: Place(root: local), at: range, use: use)
-        }
-
         // A place that holds its whole value on every path leaves nothing to hand on.
         guard let missing = locals[place.root.index].missingValue(forUseOf: place) else { return }
         use(place, range, missing)

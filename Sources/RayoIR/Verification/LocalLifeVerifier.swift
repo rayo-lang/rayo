@@ -43,24 +43,22 @@ struct LocalLifeVerifier {
     ) throws(IRViolation) -> Set<LocalID> {
         var retired = retired
         let label = "bb\(block.index)"
-        for statement in body.blocks[block.index].statements {
-            switch statement {
+        for effect in body.blocks[block.index].effects.joined() {
+            switch effect {
             case .declare(let local):
                 retired.remove(local)
             case .retire(let local):
                 retired.insert(local)
-            case .compute, .begin, .end:
-                try verify(uses.locals(usedBy: statement), noneOf: retired, at: label)
+            case .read, .move, .store, .begin, .use, .end, .exit:
+                try verify(uses.local(usedBy: effect), isNotIn: retired, at: label)
             }
         }
-        try verify(uses.locals(usedBy: body.blocks[block.index].terminator), noneOf: retired, at: label)
         return retired
     }
 
-    /// Throws where one of `used`, the locals a statement or terminator of the block `label` uses, is one of
-    /// `retired`.
-    private func verify(_ used: [LocalID], noneOf retired: Set<LocalID>, at label: String) throws(IRViolation) {
-        guard let local = used.first(where: retired.contains) else { return }
-        throw IRViolation(function: function, message: "the IR uses %\(local.index) at \(label), where it is retired")
+    /// Throws where `used`, the local an effect in the block `label` uses, where it uses one, is one of `retired`.
+    private func verify(_ used: LocalID?, isNotIn retired: Set<LocalID>, at label: String) throws(IRViolation) {
+        guard let used, retired.contains(used) else { return }
+        throw IRViolation(function: function, message: "the IR uses %\(used.index) at \(label), where it is retired")
     }
 }

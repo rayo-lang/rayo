@@ -32,7 +32,7 @@ enum LocalRetirements {
     /// The locals of `declared` that later code in `body` uses at each point of each block, counted as
     /// `DataflowResults` counts a block's points, or nil for a block that no path reaches.
     private static func localsInUse(in body: IRBody, among declared: Set<LocalID>) -> [[Set<LocalID>]?] {
-        let uses = DataflowSolver.solve(LocalUseAnalysis(uses: LocalUses(body)), in: body)
+        let uses = DataflowSolver.solve(from: LocalUseState(), through: body, knowing: LocalUses(body))
         return body.blocks.indices.map { index in
             var inUse = Array(repeating: Set<LocalID>(), count: body.blocks[index].statements.count + 2)
             let reached = uses.walk(BlockID(index: index)) { point, state in
@@ -45,7 +45,7 @@ enum LocalRetirements {
     /// The locals that some statement of `body` declares.
     private static func declaredLocals(in body: IRBody) -> Set<LocalID> {
         var declared: Set<LocalID> = []
-        for case .declare(let local) in body.blocks.flatMap(\.statements) {
+        for case .declare(let local) in body.blocks.flatMap(\.statements).flatMap(\.effects) {
             declared.insert(local)
         }
         return declared
@@ -61,7 +61,7 @@ enum LocalRetirements {
             // A local retires after the statement that it is in use before, or that declares it, where it isn't in
             // use after.
             var retiring = inUse[index]
-            if case .declare(let local) = statement { retiring.insert(local) }
+            for case .declare(let local) in statement.effects { retiring.insert(local) }
             statements += retirements(of: retiring.subtracting(inUse[index + 1]))
         }
         return BasicBlock(statements: statements, terminator: block.terminator)

@@ -24,43 +24,39 @@ struct LivenessState: DataflowState {
         live[place.root]?.values.contains { $0.mayReach(place) } ?? false
     }
 
-    /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
-    mutating func apply(backwardsThrough terminator: Terminator, of body: IRBody) {
-        // A return reads each parameter whose value the caller reads once the function returns.
-        if case .return = terminator {
-            for (index, local) in body.locals.enumerated() where local.parameterConvention?.isReadAtReturn == true {
-                read(Place(root: LocalID(index: index)))
-            }
-        }
+    var direction: DataflowDirection { .backward }
 
-        // A terminator without an operand reads no place.
-        guard let operand = terminator.operand else { return }
-        apply(operand)
-    }
+    /// Takes the state across `effect`, an effect in the function whose places `places` gives the types of.
+    mutating func apply(_ effect: Effect, in places: PlaceTypes) {
+        switch effect {
+        // A read and a move both read the value the place holds.
+        case .read(let place, _), .move(let place, _):
+            add(LiveRead(place: place))
 
-    /// Takes the state after `statement`, a statement of the function whose places `places` gives the types of, back
-    /// to the state before it.
-    mutating func apply(backwardsThrough statement: Statement, in places: PlaceTypes) {
-        switch statement {
-        // A computation reads its operands before it stores to its destination, so going backwards it stores
-        // first.
-        case .compute(let destination, let value, _):
-            // A computation with a destination stores a value in its place.
-            if let destination { assign(destination.place, in: places) }
-            value.operands.forEach { apply($0) }
+        // An access reaches the value its place holds, whether it reads it or changes it.
+        case .begin(_, let access):
+            add(LiveRead(place: access.place))
+
+        case .store(let destination):
+            assign(destination.place, in: places)
 
         // A declaration starts its local's life, and a retirement ends it, so no code before either reads a value the
         // local holds after it.
         case .declare(let local), .retire(let local):
             live[local] = nil
 
-        // An access reaches the value its place holds, whether it reads it or changes it.
-        case .begin(_, let access):
-            read(access.place)
+        case .exit:
+            readReturnedParameters(of: places.body)
 
-        // Ending an access reads no place.
-        case .end:
+        case .use, .end:
             break
+        }
+    }
+
+    /// Reads each parameter of `body` whose value its caller reads once the function returns.
+    private mutating func readReturnedParameters(of body: IRBody) {
+        for (index, local) in body.locals.enumerated() where local.parameterConvention?.isReadAtReturn == true {
+            add(LiveRead(place: Place(root: LocalID(index: index))))
         }
     }
 
@@ -113,24 +109,6 @@ struct LivenessState: DataflowState {
                 add(LiveRead(place: read.place.appending(.field(field))))
             }
         }
-    }
-
-    private mutating func apply(_ operand: Operand) {
-        switch operand {
-        // A constant names no local.
-        case .constant:
-            break
-
-        // A read and a move both read the value the place holds.
-        case .read(let place, _), .move(let place, _):
-            read(place)
-        }
-    }
-
-    /// Reads the value at `place`, and the locals that hold the indices it finds its elements by.
-    private mutating func read(_ place: Place) {
-        add(LiveRead(place: place))
-        for local in place.indexLocals { add(LiveRead(place: Place(root: local))) }
     }
 
     /// Adds `read` to the read live at its place, which then stands for both.

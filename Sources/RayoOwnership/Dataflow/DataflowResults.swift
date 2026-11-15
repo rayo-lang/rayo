@@ -3,22 +3,24 @@ import RayoIR
 /// The settled states of a dataflow analysis through a function. They answer what the state is at each point of a
 /// block: point `i` lies just before the statement at `i`, the point at the number of statements just before the
 /// terminator, and the point one past that just after it.
-struct DataflowResults<Analysis: DataflowAnalysis> {
-    private let analysis: Analysis
-    private let body: IRBody
+struct DataflowResults<State: DataflowState> {
+    /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
+    private let effects: [[[Effect]]]
+    /// What the state needs to know of the function.
+    private let function: State.Function
     /// The settled state at each block's boundary, indexed by `BlockID`: at its entry going forward, and at its exit
     /// going backward. It is nil for a block that no path from the entry reaches.
-    private let boundaryStates: [Analysis.State?]
+    private let boundaryStates: [State?]
 
-    init(_ analysis: Analysis, in body: IRBody, boundaryStates: [Analysis.State?]) {
-        self.analysis = analysis
-        self.body = body
+    init(effects: [[[Effect]]], function: State.Function, boundaryStates: [State?]) {
+        self.effects = effects
+        self.function = function
         self.boundaryStates = boundaryStates
     }
 
     /// The settled state at `block`'s boundary: at its entry going forward, and at its exit going backward; nil where
     /// no state reaches the block.
-    func boundaryState(of block: BlockID) -> Analysis.State? {
+    func boundaryState(of block: BlockID) -> State? {
         boundaryStates[block.index]
     }
 
@@ -28,24 +30,23 @@ struct DataflowResults<Analysis: DataflowAnalysis> {
     /// The walk changes one state in place as it crosses each statement. A `visit` that keeps the state itself makes
     /// the next statement copy the whole of it, so a check keeps only what it works out from each state.
     @discardableResult
-    func walk(_ block: BlockID, visit: (_ point: Int, _ state: Analysis.State) -> Void) -> Bool {
+    func walk(_ block: BlockID, visit: (_ point: Int, _ state: State) -> Void) -> Bool {
         guard var state = boundaryStates[block.index] else { return false }
-        let basicBlock = body.blocks[block.index]
         // The statements, then the terminator, each crossed from the point before it to the point after it.
-        let crossings = 0...basicBlock.statements.count
+        let crossings = effects[block.index]
 
-        switch analysis.direction {
+        switch state.direction {
         case .forward:
-            for index in crossings {
+            for (index, crossing) in crossings.enumerated() {
                 visit(index, state)
-                analysis.apply(index, of: basicBlock, to: &state)
+                state.apply(crossing, in: function)
             }
-            visit(crossings.upperBound + 1, state)
+            visit(crossings.count, state)
 
         case .backward:
-            for index in crossings.reversed() {
+            for (index, crossing) in crossings.enumerated().reversed() {
                 visit(index + 1, state)
-                analysis.apply(index, of: basicBlock, to: &state)
+                state.apply(crossing, in: function)
             }
             visit(0, state)
         }

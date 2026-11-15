@@ -9,7 +9,7 @@ enum ExclusivityChecker {
     /// last live point on each path, and the conflicts between its accesses. `uses` says what code after each point of
     /// the body uses.
     static func check(
-        _ places: PlaceTypes, uses: DataflowResults<AccessUseAnalysis>,
+        _ places: PlaceTypes, uses: DataflowResults<AccessUseState>,
     ) -> (body: IRBody, errors: [Diagnostic]) {
         // A body that begins no access has none to end, and none that a change could conflict with.
         let accesses = places.body.begunAccesses
