@@ -21,6 +21,19 @@ struct FunctionLoweringTests {
         try expectLowering(of: source, toMatch: "borrowed-arguments")
     }
 
+    @Test func `a copied argument is made in a temporary where the source writes it, and the call borrows that`()
+        throws {
+        // The copied local is read once, for the copy, and the call borrows only the local it is given bare.
+        let source = """
+            func main() {
+                let x = 1
+                add(copy x, x)
+            }
+            func add(_ a: Int, _ b: Int) {}
+            """
+        try expectLowering(of: source, toMatch: "copied-argument")
+    }
+
     @Test func `the program's table declares each function, by its ID in source order`() throws {
         try expectLowering(of: "func main() {}\nfunc double(_ n: Int, by: Bool) -> Int { n * 2 }", toMatch: "functions")
     }

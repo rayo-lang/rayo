@@ -32,8 +32,6 @@ extension FunctionLowering {
             case .read: .read(self.place(of: place), at: expr.range)
             case .take: .move(self.place(of: place), at: expr.range)
             }
-        // A copy reads the place it copies, whatever its position does with the value.
-        case .copy(let place): .read(self.place(of: place), at: expr.range)
         // An array's count is a constant, which the type of the array it counts fixes.
         case .arrayCount(let place, let count): arrayCount(of: place, fixedAt: count, at: expr.range)
         // `&&` evaluates its right operand only when its left one is true.
@@ -42,8 +40,9 @@ extension FunctionLowering {
         // `||` evaluates its right operand only when its left one is false.
         case .binary(.or, let left, let right):
             shortCircuit(left, right, decidedWhenLeftIs: true, range: expr.range)
-        // Any other value, an `if` included, is computed into a temporary, from where it is read.
-        case .unary, .binary, .call, .if, .arrayLiteral, .filledArray:
+        // Any other value, an `if` or a copy included, is computed into a temporary, from where it is read. So a copy
+        // is made where the source writes it, and a later operand that changes the copied place leaves it as it was.
+        case .copy, .unary, .binary, .call, .if, .arrayLiteral, .filledArray:
             .read(temporary(holding: expr, as: use), at: expr.range)
         }
     }
@@ -111,9 +110,11 @@ extension FunctionLowering {
     private mutating func rvalue(of expr: CheckedExpr, as use: ValueUse) -> Rvalue {
         switch expr.kind {
         // A constant or a place is an operand as it is, and so is `&&`, `||` or an `if`, which lowers to branches.
-        case .integerLiteral, .boolLiteral, .place, .copy, .arrayCount, .binary(.and, _, _),
-             .binary(.or, _, _), .if:
+        case .integerLiteral, .boolLiteral, .place, .arrayCount, .binary(.and, _, _), .binary(.or, _, _), .if:
             .operand(operand(of: expr, as: use))
+        // A copy reads the place it copies, whatever its position does with the value.
+        case .copy(let place):
+            .operand(.read(self.place(of: place), at: expr.range))
         // A unary operation applies to its operand, computed first.
         case .unary(let op, let value):
             .unary(IRUnaryOperator(op), operand(of: value, as: .read))
