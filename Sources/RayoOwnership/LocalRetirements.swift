@@ -29,8 +29,8 @@ enum LocalRetirements {
         return EdgeStatements.written(edges, into: retired)
     }
 
-    /// The locals of `declared` that later code in `body` uses at each point of each block, counted as `DataflowResults`
-    /// counts a block's points, or nil for a block that no path reaches.
+    /// The locals of `declared` that later code in `body` uses at each point of each block, counted as
+    /// `DataflowResults` counts a block's points, or nil for a block that no path reaches.
     private static func localsInUse(in body: IRBody, among declared: Set<LocalID>) -> [[Set<LocalID>]?] {
         let uses = DataflowSolver.solve(LocalUseAnalysis(uses: LocalUses(body)), in: body)
         return body.blocks.indices.map { index in

@@ -12,197 +12,22 @@ private let smallFrameBytes = 64 * 1024
 
 struct StackSlotTests {
     @Test func `the results of calls that replace one array share one slot, in a release build`() throws {
-        // As the source lowers that replaces `a` four times a pass with what `bump` returns, which reads `a`, so each
-        // result goes to a slot of its own before it is copied into `a`. The loop goes on while `a[1]` is under 2,
-        // which only running the passes works out, so optimising leaves them in the code.
-        let calls = (0..<4).map { offset in
-            """
-              %\(offset + 3) @1:1-1:2 = add checked read %1 @1:1-1:2, UInt \(offset) @1:1-1:2
-              begin a\(2 * offset) read static %0 @1:1-1:2
-              begin a\(2 * offset + 1) read static %\(offset + 3) @1:1-1:2
-              %0 @1:1-1:2 = call "bump(_: [100000 of Int], _: UInt)"(a\(2 * offset), a\(2 * offset + 1)) @1:1-1:2
-              end a\(2 * offset + 1)
-              end a\(2 * offset)
-            """
-        }
-        let program = """
-            main "main()"
-            func "bump(_: [100000 of Int], _: UInt)"(_: [100000 of Int], _: UInt) -> [100000 of Int] {
-              param %0 a: [100000 of Int] @1:1-1:2
-              param %1 i: UInt @1:1-1:2
-              var %2 b: [100000 of Int] @1:1-1:2
-              temp %3: UInt
-            bb0:
-              declare %2
-              %2 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
-              %3 @1:1-1:2 = index read %1 @1:1-1:2 below 100000 @1:1-1:2
-              %2[%3] @1:1-1:2 = add checked read %2[%3] @1:1-1:2, 1 @1:1-1:2
-              return move %2 @1:1-1:2
-            }
-            func "main()"() -> Void {
-              var %0 a: [100000 of Int] @1:1-1:2
-              var %1 i: UInt @1:1-1:2
-              temp %2: Bool
-              temp %3: UInt
-              temp %4: UInt
-              temp %5: UInt
-              temp %6: UInt
-            bb0:
-              declare %0
-              %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
-              declare %1
-              %1 @1:1-1:2 = operand UInt 0 @1:1-1:2
-              goto bb1
-            bb1:
-              %2 @1:1-1:2 = less read %0[1] @1:1-1:2, 2 @1:1-1:2
-              branch read %2 @1:1-1:2, bb2, bb3
-            bb2:
-            \(calls.joined(separator: "\n"))
-              %1 @1:1-1:2 = add checked read %1 @1:1-1:2, UInt 1 @1:1-1:2
-              goto bb1
-            bb3:
-              begin a8 read static %0[2] @1:1-1:2
-              _ = call builtin "print(_: Int)"(a8) @1:1-1:2
-              end a8
-              return
-            }
-            """
-
         // `a` and one result live at once, never more.
-        let (run, stackBytes) = try runMeasuringStack(program, in: .release)
+        let (run, stackBytes) = try runMeasuringStack(replacingOneArray, in: .release)
         #expect(run == InProcessJIT.Run(printed: "2\n", panic: nil))
         #expect(stackBytes <= 2 * largeArrayBytes + smallFrameBytes)
     }
 
     @Test func `the copies that calls take as owned arguments share one slot, in a release build`() throws {
-        // `main` passes a copy of `a` to `bumpedSum` twice, which bumps one element of its copy and sums them all.
-        // Each sum reads the whole copy, so optimising keeps each copy in memory.
-        let program = """
-            main "main()"
-            func "bumpedSum(_: [100000 of Int], _: UInt)"(_: owned [100000 of Int], _: UInt) -> Int {
-              param %0 a: owned [100000 of Int] @1:1-1:2
-              param %1 i: UInt @1:1-1:2
-              temp %2: UInt
-              var %3 sum: Int @1:1-1:2
-              var %4 j: UInt @1:1-1:2
-              temp %5: Bool
-              temp %6: UInt
-            bb0:
-              declare %2
-              %2 @1:1-1:2 = index read %1 @1:1-1:2 below 100000 @1:1-1:2
-              %0[%2] @1:1-1:2 = add checked read %0[%2] @1:1-1:2, 1 @1:1-1:2
-              declare %3
-              %3 @1:1-1:2 = operand 0 @1:1-1:2
-              declare %4
-              %4 @1:1-1:2 = operand UInt 0 @1:1-1:2
-              goto bb1
-            bb1:
-              %5 @1:1-1:2 = less read %4 @1:1-1:2, UInt 100000 @1:1-1:2
-              branch read %5 @1:1-1:2, bb2, bb3
-            bb2:
-              %6 @1:1-1:2 = index read %4 @1:1-1:2 below 100000 @1:1-1:2
-              %3 @1:1-1:2 = add checked read %3 @1:1-1:2, read %0[%6] @1:1-1:2 @1:1-1:2
-              %4 @1:1-1:2 = add checked read %4 @1:1-1:2, UInt 1 @1:1-1:2
-              goto bb1
-            bb3:
-              return read %3 @1:1-1:2
-            }
-            func "main()"() -> Void {
-              var %0 a: [100000 of Int] @1:1-1:2
-              temp %1: Int
-              temp %2: Int
-            bb0:
-              declare %0
-              %0 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
-              %1 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 3) @1:1-1:2
-              %2 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 5) @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %1 @1:1-1:2) @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %2 @1:1-1:2) @1:1-1:2
-              _ = call builtin "print(_: Int)"(read %0[3] @1:1-1:2) @1:1-1:2
-              return
-            }
-            """
-
         // `a` and one copy live at once, never more.
-        let (run, stackBytes) = try runMeasuringStack(program, in: .release)
+        let (run, stackBytes) = try runMeasuringStack(passingOwnedCopies, in: .release)
         #expect(run == InProcessJIT.Run(printed: "100001\n100001\n1\n", panic: nil))
         #expect(stackBytes <= 2 * largeArrayBytes + smallFrameBytes)
     }
 
-    @Test func `the results of two calls that temporaries hold one after the other share one slot, in a release build`()
-        throws {
-        // Each temporary holds an array `filled` makes, whose sum `main` prints, and retires once `sum` has read it.
-        // Each sum reads the whole array, so optimising keeps each array in memory.
-        let program = """
-            main "main()"
-            func "filled(_: UInt)"(_: UInt) -> [100000 of Int] {
-              param %0 i: UInt @1:1-1:2
-              var %1 a: [100000 of Int] @1:1-1:2
-              temp %2: UInt
-            bb0:
-              declare %1
-              %1 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
-              declare %2
-              %2 @1:1-1:2 = index read %0 @1:1-1:2 below 100000 @1:1-1:2
-              %1[%2] @1:1-1:2 = add checked read %1[%2] @1:1-1:2, 1 @1:1-1:2
-              retire %2
-              return move %1 @1:1-1:2
-            }
-            func "sum(_: [100000 of Int])"(_: [100000 of Int]) -> Int {
-              param %0 a: [100000 of Int] @1:1-1:2
-              var %1 total: Int @1:1-1:2
-              var %2 j: UInt @1:1-1:2
-              temp %3: Bool
-              temp %4: UInt
-            bb0:
-              declare %1
-              %1 @1:1-1:2 = operand 0 @1:1-1:2
-              declare %2
-              %2 @1:1-1:2 = operand UInt 0 @1:1-1:2
-              goto bb1
-            bb1:
-              declare %3
-              %3 @1:1-1:2 = less read %2 @1:1-1:2, UInt 100000 @1:1-1:2
-              branch read %3 @1:1-1:2, bb2, bb3
-            bb2:
-              retire %3
-              declare %4
-              %4 @1:1-1:2 = index read %2 @1:1-1:2 below 100000 @1:1-1:2
-              %1 @1:1-1:2 = add checked read %1 @1:1-1:2, read %0[%4] @1:1-1:2 @1:1-1:2
-              retire %4
-              %2 @1:1-1:2 = add checked read %2 @1:1-1:2, UInt 1 @1:1-1:2
-              goto bb1
-            bb3:
-              retire %3
-              retire %2
-              return read %1 @1:1-1:2
-            }
-            func "main()"() -> Void {
-              temp %0: [100000 of Int]
-              temp %1: Int
-              temp %2: [100000 of Int]
-              temp %3: Int
-            bb0:
-              declare %0
-              %0 @1:1-1:2 = call "filled(_: UInt)"(UInt 3) @1:1-1:2
-              declare %1
-              %1 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
-              retire %0
-              declare %2
-              %2 @1:1-1:2 = call "filled(_: UInt)"(UInt 5) @1:1-1:2
-              declare %3
-              %3 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %2 @1:1-1:2) @1:1-1:2
-              retire %2
-              \(printInt("%1"))
-              retire %1
-              \(printInt("%3"))
-              retire %3
-              return
-            }
-            """
-
+    @Test func `two call results held in temporaries one after the other share one slot, in a release build`() throws {
         // One array lives at a time, never two.
-        let (run, stackBytes) = try runMeasuringStack(program, in: .release)
+        let (run, stackBytes) = try runMeasuringStack(summingTwoTemporaries, in: .release)
         #expect(run == InProcessJIT.Run(printed: "100001\n100001\n", panic: nil))
         #expect(stackBytes <= largeArrayBytes + smallFrameBytes)
     }
@@ -247,3 +72,182 @@ struct StackSlotTests {
         return calls.map { line in String(line.split(separator: call)[1].dropLast()) }
     }
 }
+
+/// A program that replaces its array `a` four times a pass with what `bump` returns, as the source lowers that does so.
+/// `bump` reads `a`, so each result goes to a slot of its own before it is copied into `a`. The loop goes on while
+/// `a[1]` is under 2, which only running the passes works out, so optimising leaves them in the code. It prints 2.
+private let replacingOneArray = """
+    main "main()"
+    func "bump(_: [100000 of Int], _: UInt)"(_: [100000 of Int], _: UInt) -> [100000 of Int] {
+      param %0 a: [100000 of Int] @1:1-1:2
+      param %1 i: UInt @1:1-1:2
+      var %2 b: [100000 of Int] @1:1-1:2
+      temp %3: UInt
+    bb0:
+      declare %2
+      %2 @1:1-1:2 = operand read %0 @1:1-1:2 @1:1-1:2
+      %3 @1:1-1:2 = index read %1 @1:1-1:2 below 100000 @1:1-1:2
+      %2[%3] @1:1-1:2 = add checked read %2[%3] @1:1-1:2, 1 @1:1-1:2
+      return move %2 @1:1-1:2
+    }
+    func "main()"() -> Void {
+      var %0 a: [100000 of Int] @1:1-1:2
+      var %1 i: UInt @1:1-1:2
+      temp %2: Bool
+      temp %3: UInt
+      temp %4: UInt
+      temp %5: UInt
+      temp %6: UInt
+    bb0:
+      declare %0
+      %0 @1:1-1:2 = fill 100000 of 0 @1:1-1:2
+      declare %1
+      %1 @1:1-1:2 = operand UInt 0 @1:1-1:2
+      goto bb1
+    bb1:
+      %2 @1:1-1:2 = less read %0[1] @1:1-1:2, 2 @1:1-1:2
+      branch read %2 @1:1-1:2, bb2, bb3
+    bb2:
+    \((0..<4).map(bumping).joined(separator: "\n"))
+      %1 @1:1-1:2 = add checked read %1 @1:1-1:2, UInt 1 @1:1-1:2
+      goto bb1
+    bb3:
+      begin a8 read static %0[2] @1:1-1:2
+      _ = call builtin "print(_: Int)"(a8) @1:1-1:2
+      end a8
+      return
+    }
+    """
+
+/// The statements of `replacingOneArray` that replace `a` with what `bump` returns for the element `offset` past `i`,
+/// as `a = bump(a, i + offset)` lowers.
+private func bumping(offset: Int) -> String {
+    let (array, index) = (2 * offset, 2 * offset + 1)
+    return """
+          %\(offset + 3) @1:1-1:2 = add checked read %1 @1:1-1:2, UInt \(offset) @1:1-1:2
+          begin a\(array) read static %0 @1:1-1:2
+          begin a\(index) read static %\(offset + 3) @1:1-1:2
+          %0 @1:1-1:2 = call "bump(_: [100000 of Int], _: UInt)"(a\(array), a\(index)) @1:1-1:2
+          end a\(index)
+          end a\(array)
+        """
+}
+
+/// A program that passes a copy of its array `a` to `bumpedSum` twice, which bumps one element of its copy and sums
+/// them all, then reads `a` again. Each sum reads the whole copy, so optimising keeps each copy in memory. It prints
+/// 100001 twice, then 1.
+private let passingOwnedCopies = """
+    main "main()"
+    func "bumpedSum(_: [100000 of Int], _: UInt)"(_: owned [100000 of Int], _: UInt) -> Int {
+      param %0 a: owned [100000 of Int] @1:1-1:2
+      param %1 i: UInt @1:1-1:2
+      temp %2: UInt
+      var %3 sum: Int @1:1-1:2
+      var %4 j: UInt @1:1-1:2
+      temp %5: Bool
+      temp %6: UInt
+    bb0:
+      declare %2
+      %2 @1:1-1:2 = index read %1 @1:1-1:2 below 100000 @1:1-1:2
+      %0[%2] @1:1-1:2 = add checked read %0[%2] @1:1-1:2, 1 @1:1-1:2
+      declare %3
+      %3 @1:1-1:2 = operand 0 @1:1-1:2
+      declare %4
+      %4 @1:1-1:2 = operand UInt 0 @1:1-1:2
+      goto bb1
+    bb1:
+      %5 @1:1-1:2 = less read %4 @1:1-1:2, UInt 100000 @1:1-1:2
+      branch read %5 @1:1-1:2, bb2, bb3
+    bb2:
+      %6 @1:1-1:2 = index read %4 @1:1-1:2 below 100000 @1:1-1:2
+      %3 @1:1-1:2 = add checked read %3 @1:1-1:2, read %0[%6] @1:1-1:2 @1:1-1:2
+      %4 @1:1-1:2 = add checked read %4 @1:1-1:2, UInt 1 @1:1-1:2
+      goto bb1
+    bb3:
+      return read %3 @1:1-1:2
+    }
+    func "main()"() -> Void {
+      var %0 a: [100000 of Int] @1:1-1:2
+      temp %1: Int
+      temp %2: Int
+    bb0:
+      declare %0
+      %0 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
+      %1 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 3) @1:1-1:2
+      %2 @1:1-1:2 = call "bumpedSum(_: [100000 of Int], _: UInt)"(read %0 @1:1-1:2, UInt 5) @1:1-1:2
+      \(printInt("%1"))
+      \(printInt("%2"))
+      \(printInt("%0[3]"))
+      return
+    }
+    """
+
+/// A program whose two temporaries each hold an array `filled` makes, and retire once `sum` has read it. Each sum
+/// reads the whole array, so optimising keeps each array in memory. It prints 100001 twice.
+private let summingTwoTemporaries = """
+    main "main()"
+    func "filled(_: UInt)"(_: UInt) -> [100000 of Int] {
+      param %0 i: UInt @1:1-1:2
+      var %1 a: [100000 of Int] @1:1-1:2
+      temp %2: UInt
+    bb0:
+      declare %1
+      %1 @1:1-1:2 = fill 100000 of 1 @1:1-1:2
+      declare %2
+      %2 @1:1-1:2 = index read %0 @1:1-1:2 below 100000 @1:1-1:2
+      %1[%2] @1:1-1:2 = add checked read %1[%2] @1:1-1:2, 1 @1:1-1:2
+      retire %2
+      return move %1 @1:1-1:2
+    }
+    func "sum(_: [100000 of Int])"(_: [100000 of Int]) -> Int {
+      param %0 a: [100000 of Int] @1:1-1:2
+      var %1 total: Int @1:1-1:2
+      var %2 j: UInt @1:1-1:2
+      temp %3: Bool
+      temp %4: UInt
+    bb0:
+      declare %1
+      %1 @1:1-1:2 = operand 0 @1:1-1:2
+      declare %2
+      %2 @1:1-1:2 = operand UInt 0 @1:1-1:2
+      goto bb1
+    bb1:
+      declare %3
+      %3 @1:1-1:2 = less read %2 @1:1-1:2, UInt 100000 @1:1-1:2
+      branch read %3 @1:1-1:2, bb2, bb3
+    bb2:
+      retire %3
+      declare %4
+      %4 @1:1-1:2 = index read %2 @1:1-1:2 below 100000 @1:1-1:2
+      %1 @1:1-1:2 = add checked read %1 @1:1-1:2, read %0[%4] @1:1-1:2 @1:1-1:2
+      retire %4
+      %2 @1:1-1:2 = add checked read %2 @1:1-1:2, UInt 1 @1:1-1:2
+      goto bb1
+    bb3:
+      retire %3
+      retire %2
+      return read %1 @1:1-1:2
+    }
+    func "main()"() -> Void {
+      temp %0: [100000 of Int]
+      temp %1: Int
+      temp %2: [100000 of Int]
+      temp %3: Int
+    bb0:
+      declare %0
+      %0 @1:1-1:2 = call "filled(_: UInt)"(UInt 3) @1:1-1:2
+      declare %1
+      %1 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %0 @1:1-1:2) @1:1-1:2
+      retire %0
+      declare %2
+      %2 @1:1-1:2 = call "filled(_: UInt)"(UInt 5) @1:1-1:2
+      declare %3
+      %3 @1:1-1:2 = call "sum(_: [100000 of Int])"(read %2 @1:1-1:2) @1:1-1:2
+      retire %2
+      \(printInt("%1"))
+      retire %1
+      \(printInt("%3"))
+      retire %3
+      return
+    }
+    """

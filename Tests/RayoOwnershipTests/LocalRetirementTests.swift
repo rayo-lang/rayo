@@ -27,7 +27,7 @@ struct LocalRetirementTests {
             """))
     }
 
-    @Test func `a local declared in a loop retires on each pass, and one the loop uses retires once it leaves`() throws {
+    @Test func `a local declared in a loop retires on each pass, and one the loop uses retires as it leaves`() throws {
         // As `var x = 0; while x < 3 { x += 1 }; print(x)` lowers: the condition's temporary is declared in the header.
         let blocks = """
             bb0:
