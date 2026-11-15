@@ -1,50 +1,51 @@
 import RayoSource
 
-/// An `if` used for its value, checked on its own: its condition, and each branch's statements and how the branch
-/// ends. The values the branches end in wait for the `if`'s position, which the branch that runs stands in.
+/// An `if` used for its value, checked on its own: its condition, each branch's statements and how the branch ends,
+/// and the type its branches agree on. The values the branches end in wait for the `if`'s position, which the branch
+/// that runs stands in.
 struct IfValue {
     /// A branch: the statements it runs, and how it ends.
     struct Branch {
-        /// How a branch ends.
-        enum End {
-            /// In an expression, whose value the branch gives.
-            case value(CheckedValue)
-            /// In another statement, or in none, at the given place, so the branch gives Void.
-            case void(at: SourceRange)
-            /// Nowhere: no run reaches the branch's end, so it gives no value, and fits any type.
-            case leaves
-        }
-
         var statements: [CheckedStmt]
         var end: End
+    }
+
+    /// How a branch ends.
+    enum End {
+        /// In an expression, whose value the branch gives.
+        case value(CheckedValue)
+        /// In another statement, or in none, at the given place, so the branch gives Void.
+        case void(at: SourceRange)
+        /// Nowhere: no run reaches the branch's end, so it gives no value, and fits any type.
+        case leaves
 
         /// The value the branch ends in, where it ends in one.
         var value: CheckedValue? {
-            if case .value(let value) = end { value } else { nil }
+            if case .value(let value) = self { value } else { nil }
         }
 
-        /// The type the branch's end fixes: its value's, or Void.
+        /// Whether a run reaches the end.
+        var isReached: Bool {
+            if case .leaves = self { false } else { true }
+        }
+
+        /// The type the end fixes: its value's, or Void.
         var type: RayoType? {
-            switch end {
+            switch self {
             case .value(let value): value.type
             case .void: .void
             case .leaves: nil
             }
         }
 
-        /// Whether a run reaches the branch's end.
-        var runsToEnd: Bool {
-            if case .leaves = end { false } else { true }
-        }
-
-        /// The type the branch's end fixes, or its value's default type.
+        /// The type the end fixes, or its value's default type.
         var typeOrDefault: RayoType? {
-            if case .value(let value) = end { value.typeOrDefault } else { type }
+            if case .value(let value) = self { value.typeOrDefault } else { type }
         }
 
-        /// Whether the branch's end can stand where a position expects `type`. One that no run reaches fits any type.
+        /// Whether the end can stand where a position expects `type`. One that no run reaches fits any type.
         func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
-            switch end {
+            switch self {
             case .value(let value): value.fits(type, in: declarations)
             case .void: TypeFit.fits(.void, type)
             case .leaves: true
@@ -57,26 +58,44 @@ struct IfValue {
     var otherwise: Branch
     /// Where the source writes the whole `if`.
     var range: SourceRange
+    /// The type the branches agree on that each of them can take, or nil where they agree on none that all take.
+    private(set) var agreedType: RayoType?
+
+    /// The `if` of `condition`, `then` and `otherwise` that the source gives at `range`, whose branches agree on a
+    /// type only where each can take it, as `declarations` gives the members an implicit member names.
+    init(condition: CheckedExpr, then: Branch, otherwise: Branch, range: SourceRange, in declarations: Declarations) {
+        self.condition = condition
+        self.then = then
+        self.otherwise = otherwise
+        self.range = range
+        agreedType = ruledType.flatMap { type in ends.allSatisfy { $0.fits(type, in: declarations) } ? type : nil }
+    }
 
     var branches: [Branch] { [then, otherwise] }
+
+    /// How each branch ends.
+    var ends: [End] { branches.map(\.end) }
+
+    /// The type the one rule for values side by side picks for the branches, whether or not each can take it.
+    var ruledType: RayoType? {
+        CheckedValue.agreedType(of: ends.map { ($0.type, $0.typeOrDefault) })
+    }
 }
 
 extension IfValue: WaitingValue {
-    /// The type the first branch that fixes one does, so a branch that waits takes the typed branches' type.
+    /// The type the branches agree on, where one of them fixes it, so a branch that waits takes the typed branches'
+    /// type. None where a branch can't take it, since the `if` then fails wherever it stands.
     var type: RayoType? {
-        branches.lazy.compactMap(\.type).first
+        ends.contains { $0.type != nil } ? agreedType : nil
     }
 
-    /// The one type the branches agree on.
-    var defaultType: RayoType? {
-        CheckedValue.agreedType(of: branches.map { ($0.type, $0.typeOrDefault) })
-    }
+    var defaultType: RayoType? { agreedType }
 
     /// Whether every branch that runs to its end gives a value that fits `type`. An `if` that every branch leaves
     /// gives no value, so it fits no type here, and its position reports it where it expects none.
     func fits(_ type: RayoType, in declarations: Declarations) -> Bool {
-        let completing = branches.filter(\.runsToEnd)
-        return !completing.isEmpty && completing.allSatisfy { $0.fits(type, in: declarations) }
+        let reached = ends.filter(\.isReached)
+        return !reached.isEmpty && reached.allSatisfy { $0.fits(type, in: declarations) }
     }
 
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
@@ -85,10 +104,5 @@ extension IfValue: WaitingValue {
 
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
         IfChecker(expressions: expressions).settled(self, expecting: expected)
-    }
-
-    /// Reports the errors that settling the `if` where its position gives no type reports.
-    func reportErrors(by expressions: ExpressionChecker) {
-        _ = settled(toward: nil, by: expressions)
     }
 }

@@ -85,14 +85,12 @@ extension UntypedValue: WaitingValue {
 
     /// Settles the value to `type` where it fits it, and to its default type where it doesn't or `type` is nil.
     func settled(toward type: RayoType?, by expressions: ExpressionChecker) -> CheckedExpr? {
-        let fitsType = type.map { fits($0, in: expressions.file.declarations) } ?? false
-        let settledType = if let type, fitsType { type } else { Self.integerDefault }
+        let settledType = if let type, fits(type, in: expressions.file.declarations) {
+            type
+        } else {
+            Self.integerDefault
+        }
         let typeName = expressions.typeName(of: settledType)
         return settled(to: settledType, named: typeName, reporting: expressions.file.errors)
-    }
-
-    /// Reports each literal that its default type can't hold.
-    func reportErrors(by expressions: ExpressionChecker) {
-        _ = settled(toward: nil, by: expressions)
     }
 }

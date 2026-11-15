@@ -1,6 +1,5 @@
 /// Whether a typed value can stand where a position expects a type, and the value as it stands there. This is the
-/// one place that decides it, and the one place a conversion would go in: the checker inserts none yet, so a value
-/// fits only its own type and stands there as it is.
+/// one place that decides it: a value fits only its own type, and stands there as it is.
 enum TypeFit {
     /// Whether a value of `type` can stand where a position expects `expected`.
     static func fits(_ type: RayoType, _ expected: RayoType) -> Bool {

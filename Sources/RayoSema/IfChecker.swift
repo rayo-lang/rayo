@@ -19,7 +19,7 @@ struct IfChecker {
         // An `if` without an `else` has no value to give where its condition fails, which is reported after the
         // errors in `then`.
         guard let otherwiseBlock = ifExpr.otherwise else {
-            expressions.reportSettlingErrors(of: [then?.value])
+            expressions.reportSettlingErrors(of: [then?.end.value])
             errors.report(.valueIfWithoutElse, at: range)
             return nil
         }
@@ -28,10 +28,11 @@ struct IfChecker {
         // A condition or a branch that failed was reported, and the other branch's value is settled for its own
         // errors.
         guard let condition, let then, let otherwise else {
-            expressions.reportSettlingErrors(of: [then?.value, otherwise?.value])
+            expressions.reportSettlingErrors(of: [then?.end.value, otherwise?.end.value])
             return nil
         }
-        return IfValue(condition: condition, then: then, otherwise: otherwise, range: range)
+        let declarations = expressions.file.declarations
+        return IfValue(condition: condition, then: then, otherwise: otherwise, range: range, in: declarations)
     }
 
     /// Checks `block` as a branch of an `if` used for its value, leaving the value it ends in unsettled.
@@ -57,14 +58,15 @@ struct IfChecker {
         return IfValue.Branch(statements: statements, end: .void(at: end))
     }
 
-    /// Settles `value` toward `type`: to `type` where every branch fits it, and otherwise to the one type its
-    /// branches agree on, reporting each branch of another type. Reports an `if` whose branches give no type.
+    /// Settles `value` toward `type`: to `type` where every branch fits it, and otherwise to the type the one rule
+    /// for values side by side picks for its branches, reporting each branch of another type. Reports an `if` whose
+    /// branches give no type.
     func settled(_ value: IfValue, toward type: RayoType?) -> CheckedExpr? {
         if let type, value.fits(type, in: expressions.file.declarations) {
             return settled(value, expecting: Expectation(type))
         }
-        guard let agreed = value.defaultType else { return reportNoType(of: value) }
-        return settled(value, expecting: Expectation(agreed, mismatch: ErrorCode.branchTypesDiffer))
+        guard let ruled = value.ruledType else { return reportNoType(of: value) }
+        return settled(value, expecting: Expectation(ruled, mismatch: ErrorCode.branchTypesDiffer))
     }
 
     /// Settles each branch of `value` to the type `expected` names, reporting each branch of another type there.
@@ -86,9 +88,8 @@ struct IfChecker {
                 CheckedBranch(statements: branch.statements, value: $0)
             }
 
-        // A Void branch's mismatch is reported at its end.
         case .void(let end):
-            expressions.fits(.void, at: end, expected) ? CheckedBranch(statements: branch.statements, value: nil) : nil
+            voidBranch(of: branch.statements, endingAt: end, expecting: expected)
 
         // A branch that no run gets through fits any type.
         case .leaves:
@@ -96,10 +97,18 @@ struct IfChecker {
         }
     }
 
+    /// The branch of `statements` that gives Void, where the type `expected` names takes Void. Reports the mismatch
+    /// at `end`, where the branch ends, when it doesn't.
+    private func voidBranch(of statements: [CheckedStmt], endingAt end: SourceRange,
+                            expecting expected: Expectation) -> CheckedBranch? {
+        guard expressions.fits(.void, at: end, expected) else { return nil }
+        return CheckedBranch(statements: statements, value: nil)
+    }
+
     /// Reports `value`, whose branches give no type, and returns nil. Where every branch leaves, the `if` has no
     /// value; otherwise each branch's value is settled with no type, which reports why it has none, as `[]` does.
     private func reportNoType(of value: IfValue) -> CheckedExpr? {
-        let values = value.branches.compactMap(\.value)
+        let values = value.ends.compactMap(\.value)
         if values.isEmpty { errors.report(.valueIfLeavesEveryBranch, at: value.range) }
         for branchValue in values { _ = expressions.settled(branchValue, toward: nil) }
         return nil

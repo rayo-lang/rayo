@@ -261,8 +261,11 @@ struct CallChecker {
             return nil
         }
 
-        // The chosen candidate's parameters settle the untyped arguments.
-        let settled = zip(values, chosen.parameters).compactMap { expressions.settled($0, toward: $1.type) }
+        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
+        let settled = zip(values, chosen.parameters).compactMap { value, parameter in
+            parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
+                ?? expressions.settled(value, toward: nil)
+        }
         // An argument whose literal its parameter's type can't hold was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)

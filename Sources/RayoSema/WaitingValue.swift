@@ -26,6 +26,11 @@ protocol WaitingValue {
 }
 
 extension WaitingValue {
+    /// Reports the errors that settling the value where its position gives no type reports.
+    func reportErrors(by expressions: ExpressionChecker) {
+        _ = settled(toward: nil, by: expressions)
+    }
+
     /// Settles the value toward the expected type, then makes the whole value fit it.
     func settled(expecting expected: Expectation, by expressions: ExpressionChecker) -> CheckedExpr? {
         // A value that failed to settle was reported.

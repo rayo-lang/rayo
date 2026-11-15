@@ -24,23 +24,27 @@ struct IfExpressionTests {
          "5:27: error[E0254]: the 'if' gives UInt in one branch and Int in another"),
         ("let i = 1\nlet u: UInt = 2\nlet y = if c { 1 } else if !c { i } else { u }",
          "5:44: error[E0254]: the 'if' gives Int in one branch and UInt in another"),
+        ("let y = if c { if !c { 1 } else { true } } else { 2 }",
+         "3:35: error[E0254]: the 'if' gives Int in one branch and Bool in another"),
+        ("let u: UInt = 2\nlet y = if c { if !c { 1 } else { true } } else { u }",
+         "4:35: error[E0254]: the 'if' gives UInt in one branch and Bool in another"),
     ])
     func branchesDiffer(body: String, expected: String) {
         #expect(errorLines(inMain: "let c = true\n\(body)") == [expected])
     }
 
-    @Test("where the position expects no type, an untyped branch takes the type of the typed ones", arguments: [
+    @Test(arguments: [
         "let y = if c { 1 } else { u }\ntake(y)",
         "let y = if c { u } else { 1 }\ntake(y)",
         "let y = if c { 1 + 2 } else if !c { u } else { -0 }\ntake(y)",
         "let y = if c { [1, 2] } else { [u, 3] }\ntake(y[0])",
         "take((if c { 1 } else { u }) + 1)",
     ])
-    func untypedBranchTakesTypedType(body: String) {
+    func `where the position expects no type, an untyped branch takes the type of the typed ones`(body: String) {
         #expect(errorLines(inMain: "let c = true\nlet u: UInt = 3\n\(body)", beside: "func take(_ n: UInt) {}") == [])
     }
 
-    @Test("an 'if' whose branches all wait for a type waits too, wherever it is used", arguments: [
+    @Test(arguments: [
         "var v = u\nv += if c { 1 } else { 2 }\ntake(v)",
         "let a: [2 of UInt] = [if c { 1 } else { 2 }, u]\ntake(a[0])",
         "take(u + if c { 1 } else { 2 })",
@@ -48,7 +52,7 @@ struct IfExpressionTests {
         "take(if c { if !c { 1 } else { 2 } } else { 3 })\ntake(u)",
         "let y = if c { u } else if !c { 1 } else { 2 }\ntake(y)",
     ])
-    func waitingIf(body: String) {
+    func `an 'if' whose branches all wait for a type waits too, wherever it is used`(body: String) {
         let declarations = "func take(_ n: UInt) {}\nfunc pick(_ n: UInt) {}\nfunc pick(_ b: Bool) {}"
         #expect(errorLines(inMain: "let c = true\nlet u: UInt = 3\n\(body)", beside: declarations) == [])
     }
@@ -75,6 +79,13 @@ struct IfExpressionTests {
     func expectedType(body: String, expected: [String]) {
         let source = "func main() {\nlet c = true\n\(body)\n}\nstruct Point(var x: Int)\nfunc show(_ n: Int) {}"
         #expect(diagnostics(source).map(\.description) == expected)
+    }
+
+    @Test func `an 'if' passed to a call that fails still reports its branches' errors`() {
+        #expect(errorLines(inMain: "let c = true\nnothing(if c { 1 } else { true })") == [
+            "3:1: error[E0206]: 'nothing' isn't declared",
+            "3:16: error[E0254]: the 'if' gives Bool in one branch and Int in another",
+        ])
     }
 
     @Test func `a 'return' expects the function's result type of each branch`() {
