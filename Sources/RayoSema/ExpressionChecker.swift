@@ -362,10 +362,11 @@ struct ExpressionChecker {
         guard let index else { return nil }
 
         // An integer literal is known as the program is checked, so one past the array's end is an error here; any
-        // other index is checked as the program runs.
+        // other index is checked as the program runs. The element still has a meaning, the trap that index would
+        // reach as the program runs, so the error leaves the body's meaning whole.
         if case .integerLiteral(let value, _) = index.kind, value >= count {
-            errors.report(.indexOutOfRange(index: UInt64(value), type: typeName(of: holder.type)), at: index.range)
-            return nil
+            let code = ErrorCode.indexOutOfRange(index: UInt64(value), type: typeName(of: holder.type))
+            errors.reportKeepingMeaning(code, at: index.range)
         }
 
         return (holder.place.appending(.element(index: index, count: count, range: range)), element)

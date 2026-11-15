@@ -267,7 +267,7 @@ struct CallChecker {
             parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
                 ?? expressions.settled(value, toward: nil)
         }
-        // An argument whose literal its parameter's type can't hold was reported.
+        // An argument that failed to settle to its parameter's type was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)
     }
@@ -311,12 +311,18 @@ struct CallChecker {
     }
 
     /// Reports a call of `name` whose arguments, with `labels` and `values`, fit none of its functions, unless an
-    /// untyped argument fails to settle to its default type, which is reported in its place.
+    /// untyped argument reports an error as it settles to its default type, which is reported in its place.
     private func reportNoMatch(of name: String, labels: [String?], values: [CheckedValue], in range: SourceRange) {
         // Each untyped argument takes its default type, which the error names it by.
+        let reportedBefore = errors.list.count
         let settled = values.compactMap { expressions.settled($0, toward: nil) }
-        // A literal its default type can't hold was reported.
-        guard settled.count == values.count else { return }
+
+        // An argument that reports an error as it settles, such as a literal its default type can't hold, is the
+        // error in place of the mismatch. The call still fails, so its body is tainted.
+        guard settled.count == values.count, errors.list.count == reportedBefore else {
+            errors.taints.taint()
+            return
+        }
         let typed = zip(labels, settled).map { (label: $0, type: $1.type) }
         errors.report(.noMatchingFunction(name: name, arguments: spelling(of: typed)), at: range)
     }

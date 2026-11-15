@@ -53,4 +53,24 @@ struct FailedSyntaxTests {
             return
         }
     }
+
+    @Test(arguments: [
+        ("let a = 3 $ 4", ["a"]), ("var a: Int = (1", ["a"]), ("let a, b = 1 2", ["a", "b"]),
+        ("let a, = 1", ["a"]), ("let = 1", []), ("print(1) 2", []), ("if ( {}", []),
+    ])
+    func `a statement that fails to parse keeps the names its 'let' or 'var' binds before the error`(
+        statement: String, names: [String],
+    ) throws {
+        let file = Parser.parse("func f() {\n    \(statement)\n}").file
+        guard case .function(let function)? = file.declarations.first else {
+            Issue.record("expected a function, found \(file.declarations)")
+            return
+        }
+        let failed = try #require(function.body.statements.first)
+        guard case .error(let boundNames) = failed.kind else {
+            Issue.record("expected an error statement, found \(failed.kind)")
+            return
+        }
+        #expect(boundNames == names)
+    }
 }
