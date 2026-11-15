@@ -100,9 +100,9 @@ struct ImplicitMember {
         arguments?.map(\.value) ?? []
     }
 
-    /// Whether a position that expects `type` takes an implicit member, which only an array's does: of the spec's
-    /// implicit members, rayoc builds only an array's `.init(repeating:)`, so another type's are reported as
-    /// unsupported rather than looked up.
+    /// Whether a position that expects `type` takes an implicit member, which only an array's does: of the
+    /// language's implicit members, rayoc builds only an array's `.init(repeating:)`, so another type's are reported
+    /// as unsupported rather than looked up.
     static func isSupported(in type: RayoType) -> Bool {
         if case .array = type { true } else { false }
     }
