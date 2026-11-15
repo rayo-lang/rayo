@@ -67,7 +67,7 @@ struct StackSafetyTests {
     }
 
     @Test(arguments: Build.allCases)
-    func `a frame of more than 4 GiB, of values that each fit on the stack, compiles in debug and in release`(
+    func `a frame of more than 4 GiB, of values that each fit on the stack, compiles where the target can make it`(
         build: Build,
     ) throws {
         // Each array takes 2147483640 bytes, within the bound on one value, so the three take about 6 GiB. LLVM
@@ -88,7 +88,13 @@ struct StackSafetyTests {
               return
             }
             """)
+
+        #if os(Windows) && arch(arm64)
+        // Windows on arm64 can't unwind a frame of 256 MiB or more, so the compile fails, and the process goes on.
+        #expect(throws: LLVMError.self) { try compile(program, for: build) }
+        #else
         #expect(try !compile(program, for: build).isEmpty)
+        #endif
     }
 }
 

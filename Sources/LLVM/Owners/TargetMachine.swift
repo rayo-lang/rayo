@@ -3,7 +3,8 @@ internal import CLLVM
 /// LLVM's code generator for the host, which optimises modules and writes their object code.
 public struct TargetMachine: ~Copyable {
     private let ref: LLVMTargetMachineRef
-    /// The host's triple, which names what the machine compiles for.
+    /// The triple that names what the machine compiles for, which is the host's unless the machine was made for
+    /// another.
     public let triple: String
     /// Whether the machine compiles for Windows, which its triple names as the operating system.
     public var compilesForWindows: Bool { triple.contains("-windows") }
@@ -11,11 +12,16 @@ public struct TargetMachine: ~Copyable {
     public let optimizes: Bool
 
     public init(optimizes: Bool) throws(LLVMError) {
+        try self.init(optimizes: optimizes, triple: takeMessage(LLVMGetDefaultTargetTriple()))
+    }
+
+    /// A machine that compiles for `triple`, which must name a target that the host's own registers, such as the
+    /// host's processor on another operating system.
+    init(optimizes: Bool, triple: String) throws(LLVMError) {
         // A host whose target LLVM couldn't register has no machine.
         if let nativeTargetError { throw LLVMError(message: nativeTargetError) }
 
-        // Find LLVM's target for the host's triple, or throw LLVM's reason it has none.
-        let triple = takeMessage(LLVMGetDefaultTargetTriple())
+        // Find LLVM's target for the triple, or throw LLVM's reason it has none.
         var target: LLVMTargetRef?
         var error: UnsafeMutablePointer<CChar>?
         guard LLVMGetTargetFromTriple(triple, &target, &error) == 0, let target else {
@@ -60,6 +66,9 @@ public struct TargetMachine: ~Copyable {
 
     /// Writes the object code of `module`, and returns it.
     public func objectCode(of module: borrowing Module) throws(LLVMError) -> [UInt8] {
+        // A frame larger than the machine can make would end the process inside LLVM, so it fails here first.
+        try checkFrames(of: module)
+
         // Have LLVM write the object code into a buffer of its own, and fail with its report where it can't.
         let earlierErrors = module.reportedErrorCount
         var buffer: LLVMMemoryBufferRef?
