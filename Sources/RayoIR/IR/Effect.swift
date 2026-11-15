@@ -4,8 +4,8 @@ import RayoSource
 /// One thing a statement or terminator does to a place, an access or a local's life. A statement or terminator has its
 /// effects in order, and each analysis of a function's places works out what it needs from them alone.
 public enum Effect: Equatable, Sendable {
-    /// Reads the value at the place, which keeps it. The range is where the source names the place, or the place that
-    /// the read local holds an index of.
+    /// Reads the value at the place, which keeps it. The range is where the source names the place; for a local read
+    /// for the index it holds, it is where the source names the place that the index finds an element of.
     case read(Place, at: SourceRange)
     /// Moves the value out of the place, which then holds no value until a store gives it one. The range is where the
     /// source names the place.
