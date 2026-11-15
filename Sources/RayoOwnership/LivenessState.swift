@@ -3,22 +3,24 @@ import RayoSema
 
 /// Which locals, and which parts inside them, hold a value that some code reads later, at a point.
 struct LivenessState: DataflowState {
-    /// The places whose values some code reads later, each but the elements that stores replace before the read.
-    private var live: Set<LiveRead> = []
+    /// The places whose values some code reads later, each but the elements that stores replace before every read.
+    /// Each place keeps one read, which stands for the reads on every path, so the state grows with the places a
+    /// function names and not with its paths.
+    private var live: [Place: LiveRead] = [:]
 
     /// The state at the end of a function, after which no code reads any local.
     init() {}
 
     func merged(with other: LivenessState) -> LivenessState {
         var merged = self
-        merged.live.formUnion(other.live)
+        for read in other.live.values { merged.add(read) }
         return merged
     }
 
     /// Whether some code reads the value that a store to `place` just before this state leaves there: a later read
     /// of the place, of a part that may lie inside it, or of a value that may hold it.
     func reads(_ place: Place) -> Bool {
-        live.contains { $0.mayReach(place) }
+        live.values.contains { $0.mayReach(place) }
     }
 
     /// Takes the state after `terminator`, a terminator of `body`, back to the state before it.
@@ -48,7 +50,7 @@ struct LivenessState: DataflowState {
 
         // A declaration starts its local's life, so no code before it reads a value the local holds after it.
         case .declare(let local):
-            live = live.filter { $0.place.root != local }
+            live = live.filter { $0.key.root != local }
 
         // An access reaches the value its place holds, whether it reads it or changes it.
         case .begin(_, let access):
@@ -67,7 +69,7 @@ struct LivenessState: DataflowState {
         guard stored.indexLocals.isEmpty else { return }
 
         // The store replaces the place's value, and the values of the parts inside it.
-        live = live.filter { !stored.mustContain($0.place) }
+        live = live.filter { !stored.mustContain($0.key) }
         narrowHolders(of: stored, in: places)
     }
 
@@ -75,10 +77,13 @@ struct LivenessState: DataflowState {
     /// at each level, since a store to `stored` leaves only their values for that read.
     private mutating func narrowHolders(of stored: Place, in places: PlaceTypes) {
         // A read that already skips the element `stored` lies in leaves it to a later store, and stays as it is.
-        let holders = live.filter { $0.place.mustContain(stored) && $0.mayReach(stored) }
-        for holder in holders {
-            live.remove(holder)
+        let holders = live.values.filter { $0.place.mustContain(stored) && $0.mayReach(stored) }
 
+        // Every holder leaves before any narrowed read joins the read live at its place, since a holder still live
+        // there would cover the elements the narrowed read skips.
+        for holder in holders { live[holder.place] = nil }
+
+        for holder in holders {
             // The holder keeps what it reads beside the path, and so does each level below it, read whole until now.
             keepParts(of: holder, besides: stored.steps[holder.place.steps.count], in: places)
             for depth in (holder.place.steps.count + 1)..<stored.steps.count {
@@ -97,12 +102,12 @@ struct LivenessState: DataflowState {
                 preconditionFailure("only a store at an index the IR writes narrows a read")
             }
             let narrowed = read.skipping(index)
-            if narrowed.skippedElements.count < count { live.insert(narrowed) }
+            if narrowed.skippedElements.count < count { add(narrowed) }
 
         // A struct's other fields stay live one by one.
         case let holder:
             for field in places.types.fields(of: holder).indices where PlaceStep.field(field) != step {
-                live.insert(LiveRead(place: read.place.appending(.field(field))))
+                add(LiveRead(place: read.place.appending(.field(field))))
             }
         }
     }
@@ -121,14 +126,19 @@ struct LivenessState: DataflowState {
 
     /// Reads the value at `place`, and the locals that hold the indices it finds its elements by.
     private mutating func read(_ place: Place) {
-        live.insert(LiveRead(place: place))
-        live.formUnion(place.indexLocals.map { LiveRead(place: Place(root: $0)) })
+        add(LiveRead(place: place))
+        for local in place.indexLocals { add(LiveRead(place: Place(root: local))) }
+    }
+
+    /// Adds `read` to the read live at its place, which then stands for both.
+    private mutating func add(_ read: LiveRead) {
+        live[read.place, default: read].cover(read)
     }
 }
 
 /// A later read of the value at `place`, and of every part inside it, but for the elements of the array it holds at
 /// `skippedElements`, whose values stores replace before the read.
-private struct LiveRead: Hashable {
+private struct LiveRead: Equatable {
     let place: Place
     private(set) var skippedElements: Set<Int> = []
 
@@ -153,5 +163,11 @@ private struct LiveRead: Hashable {
         var narrowed = self
         narrowed.skippedElements.insert(index)
         return narrowed
+    }
+
+    /// Widens the read to also cover `other`, a read of the same place. An element stays skipped only where both skip
+    /// it, since a store must replace it before each of them to leave its value unread.
+    mutating func cover(_ other: LiveRead) {
+        skippedElements.formIntersection(other.skippedElements)
     }
 }
