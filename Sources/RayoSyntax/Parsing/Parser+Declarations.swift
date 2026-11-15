@@ -96,14 +96,10 @@ extension Parser {
 
     /// `mutable` or `owned`, before a parameter's type, when one is written.
     private mutating func parseConvention() -> ParamConvention? {
-        let convention: ParamConvention? = switch current.kind {
-        case .keyword(.mutable): .mutable
-        case .keyword(.owned): .owned
+        if consume(.mutable) { return .mutable }
+        if consume(.owned) { return .owned }
         // Any other token starts the type.
-        default: nil
-        }
-        if convention != nil { advance() }
-        return convention
+        return nil
     }
 
     /// After the `struct`: `identifier ('(' fields ')')? ('{' declarations '}')?`. A struct that fails throws its name,

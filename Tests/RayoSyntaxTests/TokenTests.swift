@@ -26,13 +26,9 @@ struct TokenTests {
     }
 
     @Test func `keywords and identifiers`() {
-        let (lexed, _) = Lexer.tokenize("let keep copy struct")
-        #expect(lexed.map(\.kind) == [.keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct), .eof])
-    }
-
-    @Test func `'self', 'mutable', 'owned' and 'mutating' are keywords`() {
-        let (lexed, _) = Lexer.tokenize("self mutable owned mutating")
+        let (lexed, _) = Lexer.tokenize("let keep copy struct self mutable owned mutating")
         #expect(lexed.map(\.kind) == [
+            .keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.struct),
             .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .eof,
         ])
     }

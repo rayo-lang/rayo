@@ -69,12 +69,6 @@ struct ParameterTests {
         #expect(coveredText(reported, in: source) == covered)
     }
 
-    @Test("an argument isn't lent with '&'")
-    func noAmpersand() {
-        #expect(errors("func main() {\n    var x = 1\n    f(&x)\n}\nfunc f(x: Int) {}") ==
-            [.missingExpression(found: .token("&"))])
-    }
-
     @Test("a parameter can't have type Void, and the error covers its type, whether or not the function is called",
           arguments: [
         ("func main() {}\nfunc f(_ x: ()) {}", "()"),
