@@ -18,7 +18,7 @@ extension FunctionEmitter {
 
         // The runtime prints a value of each scalar type with a function of its own.
         case .print(let scalar):
-            call(runtimeFunctions.print(scalar, in: program.module), passing: arguments, into: destination,
+            call(runtimeDeclarations.print(scalar, in: program.module), passing: arguments, into: destination,
                  with: program.builder)
         }
     }

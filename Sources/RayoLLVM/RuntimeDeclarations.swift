@@ -1,13 +1,13 @@
 import LLVM
 import RayoSema
 
-/// The type of each runtime function, made once for a program. A program's module declares a runtime function with
-/// that type the first time its code calls it.
-struct RuntimeFunctions {
+/// The type of each runtime function, made once for a program, which the program's module declares the function with:
+/// the program's `main` where the module defines it, and any other the first time the program's code calls it.
+struct RuntimeDeclarations {
     /// The signature of the print of each of the prelude's scalar types, which a call passes its argument by.
     private let printSignatures: [ScalarType: LoweredSignature]
-    /// The type of the program's `main`, which takes nothing and returns nothing.
-    private let mainType: FunctionType
+    /// The signature of the program's `main`, which takes nothing and returns nothing, as the runtime calls it.
+    let mainSignature: LoweredSignature
     /// The type of the panic, which takes a pointer to its message's bytes and their count as an Int. No Rayo type
     /// is a pointer, so no Rayo signature lowers to it.
     private let panicType: FunctionType
@@ -18,7 +18,7 @@ struct RuntimeFunctions {
             (scalar, lowering.lower(FunctionSignature(of: .print(scalar)), in: context))
         }
         printSignatures = Dictionary(uniqueKeysWithValues: prints)
-        mainType = lowering.lower(FunctionSignature(parameters: [], result: .void), in: context).type
+        mainSignature = lowering.lower(FunctionSignature(parameters: [], result: .void), in: context)
         let length = lowering.types.format(of: .int).type
         panicType = context.functionType(returning: context.voidType, taking: [context.pointerType, length])
     }
@@ -26,7 +26,7 @@ struct RuntimeFunctions {
     /// The LLVM type the program declares `function` with.
     func type(of function: RuntimeFunction) -> FunctionType {
         switch function {
-        case .main: mainType
+        case .main: mainSignature.type
         case .print(let scalar): printSignature(of: scalar).type
         case .panic: panicType
         }

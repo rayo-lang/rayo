@@ -55,7 +55,7 @@ struct PassModeTests {
 
         // `main` passes the Trio's slot itself, and `first` reads the Int through the pointer, copying nothing.
         try withEmitted(executable(structs + functions)) { module in
-            let llvmMain = try function(named: "rayo.main", in: module)
+            let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(llvmMain.text.contains("call i64 @\"first(_: Trio)\"(\(borrowedPlace) %0)"))
             let llvmFirst = try function(named: "first(_: Trio)", in: module)
             #expect(instructions(.allocate, in: llvmFirst).map(\.allocatedType?.text) == ["i64"])
@@ -78,7 +78,7 @@ struct PassModeTests {
 
         // The call is passed the Trio's slot, and nothing is copied after it.
         try withEmitted(executable(structs + main + making)) { module in
-            let llvmMain = try function(named: "rayo.main", in: module)
+            let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(llvmMain.text.contains("call void @\"make()\"(\(resultSlot) %0)"))
             #expect(!llvmMain.text.contains("memcpy"))
         }
@@ -112,7 +112,7 @@ struct PassModeTests {
         // Each copy is a memcpy of the Trio's 24 bytes, and no load or store is of a Trio or a Holder.
         try withEmitted(executable(structs + main + relaying("Trio"))) { module in
             let functions = try [
-                function(named: "rayo.main", in: module), function(named: "relay(_: Trio)", in: module),
+                function(named: RuntimeFunction.main.symbol, in: module), function(named: "relay(_: Trio)", in: module),
             ]
             let copy = "call void @llvm.memcpy.p0.p0.i64(ptr align 8 %0, ptr align 8 %1, i64 24, i1 false)"
             #expect(functions[1].text.contains(copy))
@@ -137,7 +137,7 @@ struct PassModeTests {
 
         // The call writes to a slot of its own, which is copied into the Trio once the call has read it.
         try withEmitted(executable(structs + main + relaying("Trio"))) { module in
-            let llvmMain = try function(named: "rayo.main", in: module)
+            let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(instructions(.allocate, in: llvmMain).count == 2)
             #expect(llvmMain.text.contains("""
                   call void @"relay(_: Trio)"(\(resultSlot) %1, \(borrowedPlace) %0)
@@ -160,7 +160,7 @@ struct PassModeTests {
 
         // Both fields are read and stored in a slot of their own, which is then copied into the Ints whole.
         try withEmitted(executable(structs + main)) { module in
-            let llvmMain = try function(named: "rayo.main", in: module)
+            let llvmMain = try function(named: RuntimeFunction.main.symbol, in: module)
             #expect(instructions(.allocate, in: llvmMain).count == 2)
             #expect(llvmMain.text.contains("""
                   %7 = load i64, ptr %3, align 8

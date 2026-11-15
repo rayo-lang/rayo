@@ -1,4 +1,5 @@
 import LLVM
+@testable import RayoLLVM
 import RayoLLVMTestSupport
 
 /// A module run in this process, with a call to the runtime's `rayo.panic` ending the call that reached it instead of
@@ -16,7 +17,7 @@ struct InProcessJIT: ~Copyable {
     init(running module: consuming Module) throws(LLVMError) {
         // Run `module` in a JIT where `rayo.panic` is the stand-in that ends a call with its message.
         let jit = try JIT()
-        try jit.define("rayo.panic", at: rayo_test_panic_address())
+        try jit.define(RuntimeFunction.panic.symbol, at: rayo_test_panic_address())
         try jit.add(module)
         self.jit = jit
     }

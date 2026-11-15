@@ -42,7 +42,7 @@ struct FunctionEmitter {
     /// The rules that say how values are passed, and which are small.
     let lowering: SignatureLowering
     /// The runtime's functions, which the body declares in the module as it calls them.
-    let runtimeFunctions: RuntimeFunctions
+    let runtimeDeclarations: RuntimeDeclarations
     /// The panics the body emits, each a call of the runtime's panic.
     let panics: PanicEmitter
     let operators: OperatorEmitter
@@ -60,7 +60,7 @@ struct FunctionEmitter {
 
     init(
         body: IRBody, of declaration: FunctionDeclaration, into declared: DeclaredFunction,
-        callTargets: [CallTarget], lowering: SignatureLowering, runtimeFunctions: RuntimeFunctions,
+        callTargets: [CallTarget], lowering: SignatureLowering, runtimeDeclarations: RuntimeDeclarations,
         in program: borrowing ProgramEmitter,
     ) {
         self.body = body
@@ -69,8 +69,8 @@ struct FunctionEmitter {
         signature = declared.signature
         self.callTargets = callTargets
         self.lowering = lowering
-        self.runtimeFunctions = runtimeFunctions
-        panics = PanicEmitter(into: declared.function, runtimeFunctions: runtimeFunctions, types: lowering.types)
+        self.runtimeDeclarations = runtimeDeclarations
+        panics = PanicEmitter(into: declared.function, runtimeDeclarations: runtimeDeclarations, types: lowering.types)
         operators = OperatorEmitter(types: lowering.types, panics: panics)
         entry = program.context.appendBlock(named: "entry", to: declared.function)
     }
@@ -159,7 +159,8 @@ struct FunctionEmitter {
 
         // An index is checked against its array's count before any code finds the element.
         case .index(let operand, let count):
-            let value = checkIndex(read(operand, with: program.builder), below: count, at: range, in: program)
+            let value = read(operand, with: program.builder)
+            checkIndex(value, below: count, at: range, in: program)
             keep(value, in: destination, with: program.builder)
         }
     }

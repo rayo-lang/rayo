@@ -1,8 +1,8 @@
 import RayoSema
 
-/// A function that a program and the runtime it links call each other by: one the runtime defines and the program's
-/// code calls, or the program's `main`, which the runtime's entry point calls.
-enum RuntimeFunction: Hashable, CaseIterable {
+/// A function that one side of a program and its runtime defines and the other calls: one the runtime defines for the
+/// program's code to call, or the program's `main`, which the runtime's entry point calls.
+enum RuntimeFunction: CaseIterable {
     /// The program's `main`, which takes nothing and returns nothing.
     case main
     /// The function that writes a value of a scalar type and a newline to standard output, and takes the value as

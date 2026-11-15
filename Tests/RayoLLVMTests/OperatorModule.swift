@@ -24,7 +24,7 @@ struct OperatorModule: ~Copyable {
     private let programModule: ProgramModule
     private let types: LLVMTypes
     /// The runtime's functions, which an operator's panic calls.
-    private let runtimeFunctions: RuntimeFunctions
+    private let runtimeDeclarations: RuntimeDeclarations
     /// The operators of the function that `define` is defining. Only `define` hands the module to an expression, once
     /// it has made them.
     private var operators: OperatorEmitter?
@@ -35,7 +35,7 @@ struct OperatorModule: ~Copyable {
         programModule = try ProgramModule(for: build)
         types = LLVMTypes(TypeTable(structs: []), in: programModule.emitter.context)
         let lowering = SignatureLowering(types: types)
-        runtimeFunctions = RuntimeFunctions(lowering: lowering, in: programModule.emitter.context)
+        runtimeDeclarations = RuntimeDeclarations(lowering: lowering, in: programModule.emitter.context)
     }
 
     /// The LLVM types of an Int, which every function takes and returns, and of a Bool.
@@ -148,7 +148,7 @@ struct OperatorModule: ~Copyable {
 
     /// The operators of `function`, whose panics call the runtime's panic.
     private func makeOperators(into function: Function) -> OperatorEmitter {
-        let panics = PanicEmitter(into: function, runtimeFunctions: runtimeFunctions, types: types)
+        let panics = PanicEmitter(into: function, runtimeDeclarations: runtimeDeclarations, types: types)
         return OperatorEmitter(types: types, panics: panics)
     }
 
