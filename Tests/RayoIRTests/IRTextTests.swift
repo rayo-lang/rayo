@@ -114,7 +114,10 @@ struct IRTextTests {
 
         // The array names its element type, and holds its elements in order.
         let statements = try #require(program.bodies[FunctionID(index: 0)]).blocks[0].statements
-        let elements: [Operand] = [.constant(.integer(1, .int)), .move(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4))]
+        let elements: [Operand] = [
+            .constant(.integer(1, .int)),
+            .move(Place(root: LocalID(index: 0)), at: range(2, 3, 2, 4)),
+        ]
         #expect(statements[0] == .compute(
             destination: Destination(Place(root: LocalID(index: 0)), at: range(1, 1, 1, 2)),
             value: .array(elements, of: .int), range: range(1, 1, 1, 2),

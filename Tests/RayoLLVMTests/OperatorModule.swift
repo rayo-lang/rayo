@@ -76,7 +76,7 @@ struct OperatorModule: ~Copyable {
     func defineCall(_ name: String, of function: Function, _ left: Int64, _ right: Int64) -> Function {
         let caller = beginFunction(name, taking: [])
         // Every operator gives a value, so the call does too.
-        let result = program.builder.call(function, [int64.constant(left), int64.constant(right)])!
+        let result = program.builder.call(function, [int64.constant(Int128(left)), int64.constant(Int128(right))])!
         program.builder.return(result)
         return caller
     }
@@ -95,7 +95,7 @@ struct OperatorModule: ~Copyable {
 
     /// Emits `left op right`, where `right` is a constant of the function's integer type, given by its bits.
     func callAsFunction(_ op: IRBinaryOperator, _ left: AnyValue, _ right: Int64) throws(LLVMError) -> AnyValue {
-        try self(op, left, int64.constant(right).anyValue)
+        try self(op, left, int64.constant(Int128(right)).anyValue)
     }
 
     /// Emits `op operand`, on an integer of the function's integer type or a Bool.
@@ -103,12 +103,41 @@ struct OperatorModule: ~Copyable {
         try operators!.emit(op, on: operand, of: type(of: operand), at: Self.range, in: program)
     }
 
-    /// Emits the conversion of `value`, an integer of the function's integer type, to `target`, Int or UInt, or, where
-    /// none is given, to the other of the two.
-    func convert(_ value: AnyValue, to target: ScalarType? = nil) throws(LLVMError) -> AnyValue {
+    /// Emits the conversion of `value`, an integer of the function's integer type, to the other integer type.
+    func convert(_ value: AnyValue) throws(LLVMError) -> AnyValue {
         let other: ScalarType = integerType == .int ? .uint : .int
-        return try operators!.emitConversion(of: value, from: integerType, to: target ?? other, at: Self.range,
-                                             in: program)
+        return try operators!.emitConversion(of: value, from: integerType, to: other, at: Self.range, in: program)
+    }
+
+    /// Defines `name(i64, i64) -> i64`, which converts the low bits of its first parameter, an integer of `source`,
+    /// to the integer type `target`, and returns the result widened to 64 bits as `target`'s signedness says.
+    mutating func defineConversion(
+        _ name: String, from source: ScalarType, to target: ScalarType,
+    ) throws(LLVMError) -> Function {
+        let function = beginFunction(name, taking: [int64, int64])
+        operators = OperatorEmitter(into: function, types: types)
+
+        // The parameter's low bits are the value to convert, and the converted value is returned as an Int's bits.
+        let value = resized(AnyIntValue(function.parameter(at: 0))!, from: .int, to: source)
+        let converted = try operators!.emitConversion(of: value.anyValue, from: source, to: target, at: Self.range,
+                                                      in: program)
+        program.builder.return(resized(AnyIntValue(converted)!, from: target, to: .int))
+        return function
+    }
+
+    /// `value`, an integer of `source`, cut to the low bits that `target` holds, or widened to `target` as `source`'s
+    /// signedness says.
+    private func resized(_ value: AnyIntValue, from source: ScalarType, to target: ScalarType) -> AnyIntValue {
+        let type = types.format(of: target).type
+        return if type.bitWidth < value.bitWidth {
+            program.builder.truncate(value, to: type)
+        } else if type.bitWidth == value.bitWidth {
+            value
+        } else if source.isSigned {
+            program.builder.signExtend(value, to: type)
+        } else {
+            program.builder.zeroExtend(value, to: type)
+        }
     }
 
     /// The Rayo type of `value`, an integer of the function's integer type or a Bool.

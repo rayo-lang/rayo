@@ -11,6 +11,11 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
     public static let uint = RayoType.scalar(.uint)
     public static let bool = RayoType.scalar(.bool)
 
+    /// The prelude's type called `name`, a scalar type or Void, or nil where the prelude has none.
+    public static func prelude(named name: String) -> RayoType? {
+        if let scalar = ScalarType.named(name) { .scalar(scalar) } else if name == "Void" { .void } else { nil }
+    }
+
     public var description: String {
         switch self {
         case .scalar(let scalar): scalar.name

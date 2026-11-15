@@ -94,20 +94,20 @@ public struct Builder: ~Copyable {
 
     /// Builds `trunc`, which keeps the low bits of `value` that `type` holds. `type` must be narrower than `value`.
     public func truncate<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
-        precondition(width(of: type) < width(of: value), "LLVM truncates an integer only to a narrower one")
+        precondition(type.bitWidth < value.bitWidth, "LLVM truncates an integer only to a narrower one")
         return integer(LLVMBuildTrunc(ref, value.anyValue.ref, type.anyType.ref, ""))
     }
 
     /// Builds `zext`, which pads `value` with zero bits to the width of `type`. `type` must be wider than `value`.
     public func zeroExtend<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
-        precondition(width(of: type) > width(of: value), "LLVM zero-extends an integer only to a wider one")
+        precondition(type.bitWidth > value.bitWidth, "LLVM zero-extends an integer only to a wider one")
         return integer(LLVMBuildZExt(ref, value.anyValue.ref, type.anyType.ref, ""))
     }
 
     /// Builds `sext`, which pads `value` with copies of its top bit to the width of `type`. `type` must be wider than
     /// `value`.
     public func signExtend<To: IntegerTypeHandle>(_ value: some IntegerHandle, to type: To) -> To.Value {
-        precondition(width(of: type) > width(of: value), "LLVM sign-extends an integer only to a wider one")
+        precondition(type.bitWidth > value.bitWidth, "LLVM sign-extends an integer only to a wider one")
         return integer(LLVMBuildSExt(ref, value.anyValue.ref, type.anyType.ref, ""))
     }
 
@@ -115,18 +115,10 @@ public struct Builder: ~Copyable {
     private func integer<Integer: IntegerHandle>(_ ref: LLVMValueRef) -> Integer {
         // Each instruction that calls this gives an integer of its operands' width, or of the type it converts to,
         // which the handle's Swift type was inferred from.
-        guard let integer = Integer(AnyValue(ref)) else { preconditionFailure("LLVM gives an integer of another width") }
+        guard let integer = Integer(AnyValue(ref)) else {
+            preconditionFailure("LLVM gives an integer of another width")
+        }
         return integer
-    }
-
-    /// The width in bits of `value`, an integer.
-    private func width(of value: some IntegerHandle) -> UInt32 {
-        LLVMGetIntTypeWidth(LLVMTypeOf(value.anyValue.ref))
-    }
-
-    /// The width in bits of `type`, an integer type.
-    private func width(of type: some IntegerTypeHandle) -> UInt32 {
-        LLVMGetIntTypeWidth(type.anyType.ref)
     }
 
     // MARK: Aggregates and calls

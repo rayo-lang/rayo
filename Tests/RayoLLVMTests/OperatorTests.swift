@@ -1,5 +1,6 @@
 import RayoLLVM
 import RayoIR
+import RayoSema
 import Testing
 
 /// `OperatorEmitter` emits each operator here as a unit, on the parameters of a function of its own, which the test
@@ -248,4 +249,36 @@ struct UIntOperatorTests {
         #expect(try conversionOutcome(of: bits, from: from, in: .debug) == .panics("integer overflow"))
         #expect(try conversionOutcome(of: bits, from: from, in: .release) == kept)
     }
+
+    @Test(arguments: [
+        (ScalarType.int, int8, 127, 127), (.int, int8, -128, -128), (int8, .int, -5, -5), (uint8, .int, 200, 200),
+        (int16, uint8, 255, 255), (int8, int8b, -1, -1),
+    ] as [(ScalarType, ScalarType, Int64, Int64)], Build.allCases)
+    func `a conversion between integers of different widths keeps a value that both hold, in every build`(
+        conversion: (ScalarType, ScalarType, Int64, Int64), build: Build,
+    ) throws {
+        let (source, target, value, kept) = conversion
+        let expected: OperatorOutcome = target.isSigned ? .int(kept) : .uint(UInt64(bitPattern: kept))
+        #expect(try conversionOutcome(of: value, from: source, to: target, in: build) == expected)
+    }
+
+    @Test(arguments: [
+        (ScalarType.int, int8, 128, -128), (.int, int8, -129, 127), (.uint, int8, 300, 44), (int16, uint8, 256, 0),
+        (int8, .uint, -1, -1), (uint8, int8, 200, -56),
+    ] as [(ScalarType, ScalarType, Int64, Int64)])
+    func `a conversion between integers of different widths panics where overflow is checked, and keeps low bits`(
+        conversion: (ScalarType, ScalarType, Int64, Int64),
+    ) throws {
+        let (source, target, value, bits) = conversion
+        let kept: OperatorOutcome = target.isSigned ? .int(bits) : .uint(UInt64(bitPattern: bits))
+        #expect(try conversionOutcome(of: value, from: source, to: target, in: .debug) == .panics("integer overflow"))
+        #expect(try conversionOutcome(of: value, from: source, to: target, in: .release) == kept)
+    }
 }
+
+/// Integer types narrower than the prelude's, which a conversion between widths converts between. `int8b` is a second
+/// type of `int8`'s kind, as `Int64` is of `Int`'s.
+private let int8 = ScalarType(name: "Int8", kind: .integer(width: 8, isSigned: true))
+private let int8b = ScalarType(name: "Int8b", kind: .integer(width: 8, isSigned: true))
+private let uint8 = ScalarType(name: "UInt8", kind: .integer(width: 8, isSigned: false))
+private let int16 = ScalarType(name: "Int16", kind: .integer(width: 16, isSigned: true))

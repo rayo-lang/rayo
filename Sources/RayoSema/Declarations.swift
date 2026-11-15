@@ -21,10 +21,6 @@ struct Declarations {
     /// The structs that can be laid out, which lay out every type that holds them; nil until the structs are
     /// checked, while their fields' types are resolved.
     private var layouts: TypeTable?
-    /// The types the prelude declares, each scalar type and Void, by their names.
-    private static let preludeTypes = Dictionary(
-        uniqueKeysWithValues: (ScalarType.prelude.map(RayoType.scalar) + [.void]).map { ($0.description, $0) },
-    )
 
     /// Declarations of a file whose top-level names are `names`, holding none of the file's declarations yet.
     init(names: TopLevelNames) {
@@ -122,7 +118,7 @@ struct Declarations {
     /// The prelude type called `name`, or nil where no prelude type has the name or a type or a function of the file
     /// shadows it.
     func preludeType(named name: String) -> RayoType? {
-        kind(of: name) == nil ? Self.preludeTypes[name] : nil
+        kind(of: name) == nil ? RayoType.prelude(named: name) : nil
     }
 
     /// The fields of the struct `id`, whose fields must be declared already.

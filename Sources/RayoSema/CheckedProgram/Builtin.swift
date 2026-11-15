@@ -4,18 +4,19 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
     /// `print(_: T)`, which writes the value and a newline to standard output: an integer in decimal, and a Bool as
     /// `true` or `false`.
     case print(ScalarType)
-    /// `T(_: U)`, which gives the value of `source`, a `U`, as a `target`, a `T`. A value that `target` can't hold
-    /// panics where overflow checks are on, and keeps the low bits that fit where they are off.
+    /// `T(_: U)`, which gives a value of the type `from`, `U`, as a value of the type `to`, `T`. A value that `to`
+    /// can't hold panics where overflow checks are on, and keeps the low bits that fit where they are off.
     case conversion(from: ScalarType, to: ScalarType)
 
     /// Every built-in the prelude declares: a `print` of each scalar type, then each type's conversions, from each
     /// type in turn.
     public static var allCases: [Builtin] {
-        let prints = ScalarType.prelude.map(Builtin.print)
-        let conversions = ScalarType.prelude.flatMap { target in
-            ScalarType.prelude.filter(target.converts(from:)).map { Builtin.conversion(from: $0, to: target) }
-        }
-        return prints + conversions
+        ScalarType.prelude.map(Builtin.print) + ScalarType.prelude.flatMap(conversions(to:))
+    }
+
+    /// The conversions to `target`, from each scalar type it converts from.
+    private static func conversions(to target: ScalarType) -> [Builtin] {
+        ScalarType.prelude.filter(target.converts(from:)).map { .conversion(from: $0, to: target) }
     }
 
     /// Where the built-in's name lives in the prelude.

@@ -40,7 +40,7 @@ public enum IRBinaryOperator: Hashable, Sendable, CaseIterable, CustomStringConv
     public var operandTypes: [RayoType] {
         let scalars = switch self {
         case .add, .subtract, .multiply, .divide, .remainder, .less, .lessEqual, .greater, .greaterEqual:
-            ScalarType.prelude.filter(\.isInteger)
+            ScalarType.integers
         case .equal, .notEqual:
             ScalarType.prelude
         }

@@ -124,6 +124,16 @@ struct ArithmeticTests {
             """))
     }
 
+    @Test func `a constant of an integer whose width the program decides holds the low bits of its value`() {
+        let bench = Workbench()
+        let int128 = bench.context.typeMaker.integerType(bitWidth: 128)
+        let int8 = bench.context.typeMaker.integerType(bitWidth: 8)
+
+        #expect(int128.constant(Int128(1) << 100).anyValue.text == "i128 1267650600228229401496703205376")
+        #expect(int128.constant(-1).anyValue.text == "i128 -1")
+        #expect(int8.constant(200).anyValue.text == "i8 -56")
+    }
+
     @Test func `an integer whose width the program decides truncates, and extends with zeros or its sign`() throws {
         let bench = Workbench()
         let int16 = bench.context.typeMaker.integerType(bitWidth: 16)

@@ -105,7 +105,7 @@ struct OperatorEmitter {
     /// build, and leaves the builder in a new block.
     func emitIndex(_ value: AnyValue, below count: Int, at range: SourceRange,
                    in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyValue {
-        let format = types.format(of: .uint)
+        let format = types.indexFormat
         let isPastEnd = program.builder.compare(.unsignedGreaterEqual, format.value(value),
                                                 format.constant(Int128(count)))
         try panic(if: isPastEnd, .indexOutOfRange, at: range, in: program)
@@ -196,9 +196,10 @@ struct OperatorEmitter {
     }
 
     /// Emits `left % right` on two integers of `format`, which panics on a zero divisor.
-    private func emitRemainder(_ format: NumberFormat, _ left: AnyIntValue, _ right: AnyIntValue,
-                               at range: SourceRange,
-                               in program: borrowing ProgramEmitter) throws(LLVMError) -> AnyIntValue {
+    private func emitRemainder(
+        _ format: NumberFormat, _ left: AnyIntValue, _ right: AnyIntValue, at range: SourceRange,
+        in program: borrowing ProgramEmitter,
+    ) throws(LLVMError) -> AnyIntValue {
         try panic(ifZero: right, of: format, .remainderByZero, at: range, in: program)
         guard format.signedness == .signed else { return program.builder.unsignedRemainder(left, right) }
 

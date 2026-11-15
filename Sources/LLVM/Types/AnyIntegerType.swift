@@ -13,11 +13,15 @@ public struct AnyIntegerType: IntegerTypeHandle, Equatable {
 
     public var anyType: AnyType { AnyType(ref) }
 
-    /// The type's width in bits.
     public var bitWidth: Int { Int(LLVMGetIntTypeWidth(ref)) }
 
-    /// The constant of this type that holds `value`'s low bits, as many as the type is wide.
-    public func constant(_ value: Int64) -> AnyIntValue {
-        AnyIntValue(unchecked: LLVMConstInt(ref, UInt64(bitPattern: value), 1))
+    /// The constant of this type that holds `value`'s low bits, as many as the type is wide, of a width up to 128.
+    public func constant(_ value: Int128) -> AnyIntValue {
+        // LLVM reads the bits as 64-bit words, the low word first.
+        let bits = UInt128(bitPattern: value)
+        let words = [UInt64(truncatingIfNeeded: bits), UInt64(truncatingIfNeeded: bits >> 64)]
+        return AnyIntValue(unchecked: words.withUnsafeBufferPointer {
+            LLVMConstIntOfArbitraryPrecision(ref, UInt32($0.count), $0.baseAddress)
+        })
     }
 }

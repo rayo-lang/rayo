@@ -96,9 +96,9 @@ extension FunctionEmitter {
 
     /// Emits the load of the index that `local`, a UInt local, holds, and returns it.
     private func index(in local: LocalID, with builder: borrowing Builder) -> AnyIntValue {
-        // The verifier passes no IR that indexes by a local that isn't a UInt.
         let value = whole(.place(Address(pointer: places[local.index], type: .uint)), with: builder)
-        return types.format(of: .uint).value(value)
+        // The verifier passes no IR that indexes by a local that isn't a UInt.
+        return types.indexFormat.value(value)
     }
 
     /// Emits the instructions that take each of `steps`, a scalar's, in turn from the value at `address`, and returns
@@ -134,7 +134,7 @@ extension FunctionEmitter {
     /// Emits the instruction that points at the element at `index` of the array at `address`, and returns the
     /// element's address.
     func elementAddress(of index: Int, in address: Address, with builder: borrowing Builder) -> Address {
-        elementAddress(at: types.format(of: .uint).constant(Int128(index)), in: address, with: builder)
+        elementAddress(at: types.indexFormat.constant(Int128(index)), in: address, with: builder)
     }
 
     /// Emits the instruction that points at the element at `index`, a value the program computes, of the array at

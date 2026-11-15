@@ -17,13 +17,14 @@ extension IRParser {
         // Any other type is named by a word.
         let token = current
         let name = try word()
-        if let scalar = ScalarType.prelude.first(where: { $0.name == name }) { return .scalar(scalar) }
-        return name == "Void" ? .void : .structure(try structID(named: name, at: token))
+        // A name the prelude gives no type names a struct.
+        guard let type = RayoType.prelude(named: name) else { return .structure(try structID(named: name, at: token)) }
+        return type
     }
 
     /// The integer type the prelude declares as `name`, or nil where it declares none.
     private static func integerType(named name: String) -> ScalarType? {
-        ScalarType.prelude.first { $0.name == name && $0.isInteger }
+        ScalarType.named(name).flatMap { $0.isInteger ? $0 : nil }
     }
 
     /// The struct the text declares as `name`, which `token` holds.

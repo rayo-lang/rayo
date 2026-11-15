@@ -18,6 +18,8 @@ public struct IntValue<Width: IntegerWidth>: IntegerHandle, Equatable {
 
     public var anyValue: AnyValue { AnyValue(ref) }
 
+    public var bitWidth: Int { Int(Width.bitWidth) }
+
     /// The integer's value, sign-extended from its width, where it is a constant.
     public var constantValue: Int64? {
         LLVMIsAConstantInt(ref) == nil ? nil : LLVMConstIntGetSExtValue(ref)

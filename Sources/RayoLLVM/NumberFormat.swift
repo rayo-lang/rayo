@@ -16,8 +16,7 @@ struct NumberFormat: Equatable {
 
     /// The constant that holds `value`, which the format's type holds.
     func constant(_ value: Int128) -> AnyIntValue {
-        // A value the type holds lies in its low bits, which a type of 64 bits or fewer takes all of.
-        type.constant(Int64(truncatingIfNeeded: value))
+        type.constant(value)
     }
 
     /// `value`, which must be a value of this format, as LLVM holds one.
@@ -28,17 +27,4 @@ struct NumberFormat: Equatable {
         }
         return integer
     }
-}
-
-/// How an integer type's operations read its bits: as a two's complement value, which may be negative, or as one
-/// that can't be.
-enum Signedness {
-    case signed
-    case unsigned
-
-    /// The predicates that order two integers of this signedness as `<`, `<=`, `>` and `>=` do.
-    var less: IntegerPredicate { self == .signed ? .signedLess : .unsignedLess }
-    var lessEqual: IntegerPredicate { self == .signed ? .signedLessEqual : .unsignedLessEqual }
-    var greater: IntegerPredicate { self == .signed ? .signedGreater : .unsignedGreater }
-    var greaterEqual: IntegerPredicate { self == .signed ? .signedGreaterEqual : .unsignedGreaterEqual }
 }

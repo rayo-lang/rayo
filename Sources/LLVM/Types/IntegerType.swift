@@ -12,6 +12,8 @@ public struct IntegerType<Width: IntegerWidth>: IntegerTypeHandle, Equatable {
 
     public var anyType: AnyType { AnyType(ref) }
 
+    public var bitWidth: Int { Int(Width.bitWidth) }
+
     /// The constant of this type that holds `value`'s low bits, as many as the type is wide.
     public func constant(_ value: Int64) -> IntValue<Width> {
         IntValue(unchecked: LLVMConstInt(ref, UInt64(bitPattern: value), 1))

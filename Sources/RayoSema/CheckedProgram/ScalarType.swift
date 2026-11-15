@@ -14,7 +14,9 @@ public struct ScalarType: Hashable, Sendable, CustomStringConvertible {
     public let name: String
     public let kind: Kind
 
-    private init(name: String, kind: Kind) {
+    /// The scalar type called `name` whose values are of `kind`. The prelude's types are the statics below; a test
+    /// makes others, such as integers of other widths.
+    package init(name: String, kind: Kind) {
         self.name = name
         self.kind = kind
     }
@@ -25,8 +27,19 @@ public struct ScalarType: Hashable, Sendable, CustomStringConvertible {
     public static let uint = ScalarType(name: "UInt", kind: .integer(width: 64, isSigned: false))
     public static let bool = ScalarType(name: "Bool", kind: .bool)
 
-    /// The scalar types the prelude declares, in the order it declares their built-ins.
+    /// The scalar types the prelude declares, in the order it declares their built-ins. The runtime prints a value
+    /// of each with a function named for it, such as `rayo.print_uint` for UInt, which a type added here needs too.
     public static let prelude: [ScalarType] = [.int, .uint, .bool]
+
+    /// The prelude's integer types.
+    public static var integers: [ScalarType] {
+        prelude.filter(\.isInteger)
+    }
+
+    /// The prelude's scalar type called `name`, or nil where it has none.
+    public static func named(_ name: String) -> ScalarType? {
+        prelude.first { $0.name == name }
+    }
 
     public var description: String { name }
 

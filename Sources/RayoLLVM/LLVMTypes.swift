@@ -25,6 +25,11 @@ struct LLVMTypes {
         NumberFormat(of: scalar, with: maker)
     }
 
+    /// How LLVM holds an index into an array, or a count of its elements, each of which is a UInt.
+    var indexFormat: NumberFormat {
+        format(of: .uint)
+    }
+
     /// The LLVM type that holds a value of `type`, or that a function returns when it returns nothing.
     func llvmType(_ type: RayoType) -> AnyType {
         switch type {

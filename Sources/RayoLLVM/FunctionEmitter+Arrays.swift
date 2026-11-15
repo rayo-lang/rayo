@@ -16,7 +16,7 @@ extension FunctionEmitter {
         let array = address(of: destination, with: program.builder)
 
         // The loop counts the elements it has filled in a slot of its own, a UInt, as an index is, from 0.
-        let format = types.format(of: .uint)
+        let format = types.indexFormat
         let filled = newSlot(of: .uint, with: program.builder)
         store(format.constant(0).anyValue, at: filled, with: program.builder)
         let header = program.context.appendBlock(named: "fill.header", to: llvmFunction)

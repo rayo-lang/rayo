@@ -18,6 +18,5 @@ public struct AnyIntValue: IntegerHandle, Equatable {
 
     public var anyValue: AnyValue { AnyValue(ref) }
 
-    /// The integer's width in bits.
     public var bitWidth: Int { Int(LLVMGetIntTypeWidth(LLVMTypeOf(ref))) }
 }
