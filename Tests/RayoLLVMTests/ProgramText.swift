@@ -3,17 +3,17 @@
 /// returns through a slot; and a Box of a Pair and three Ints, whose fields lead to places of several steps.
 let programStructs = """
     struct Pair {
-      a: Int
-      b: Int
+      var a: Int
+      var b: Int
     }
     struct Trio {
-      a: Int
-      b: Int
-      c: Bool
+      var a: Int
+      var b: Int
+      var c: Bool
     }
     struct Box {
-      pair: Pair
-      items: [3 of Int]
+      var pair: Pair
+      var items: [3 of Int]
     }
     init "Pair(a: Int, b: Int)"(Int, Int) -> Pair
     init "Trio(a: Int, b: Int, c: Bool)"(Int, Int, Bool) -> Trio
