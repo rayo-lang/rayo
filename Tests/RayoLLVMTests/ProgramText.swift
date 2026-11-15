@@ -25,6 +25,11 @@ func printInt(_ place: String) -> String {
     #"_ = call builtin "print(_: Int)"(read \#(place) @1:1-1:2) @1:1-1:2"#
 }
 
+/// The IR statement that prints the UInt that `place` holds.
+func printUInt(_ place: String) -> String {
+    #"_ = call builtin "print(_: UInt)"(read \#(place) @1:1-1:2) @1:1-1:2"#
+}
+
 /// The IR statement that prints the Bool that `place` holds.
 func printBool(_ place: String) -> String {
     #"_ = call builtin "print(_: Bool)"(read \#(place) @1:1-1:2) @1:1-1:2"#

@@ -46,11 +46,11 @@ struct InProcessJIT: ~Copyable {
     /// Runs the program's entry function, `rayo.main`, which takes and returns nothing.
     func runMain() throws(LLVMError) -> Run {
         // Compile the entry function, and call it where a panic ends the call.
-        let main = unsafeBitCast(try jit.address(of: RuntimeFunction.main.symbol), to: (@convention(c) () -> Void).self)
-        var outcome = rayo_run_catching_panic(main)
+        let address = try jit.address(of: RuntimeFunction.main.symbol)
+        let outcome = rayo_run_catching_panic(unsafeBitCast(address, to: (@convention(c) () -> Void).self))
 
         // The output is a fixed buffer, of which the run filled only the start.
-        let printed = withUnsafeBytes(of: &outcome.output) { output in
+        let printed = withUnsafeBytes(of: outcome.output) { output in
             String(decoding: output.prefix(Int(outcome.outputLength)), as: UTF8.self)
         }
         return Run(printed: printed, panic: outcome.panicked ? Self.message(of: outcome) : nil)

@@ -58,7 +58,7 @@ struct ConversionTests {
               %1 @1:1-1:2 = call builtin "Int(_: UInt)"(read %0 @1:1-1:2) @1:1-1:2
               %2 @1:1-1:2 = call builtin "UInt(_: Int)"(read %1 @1:1-1:2) @1:1-1:2
               \(printInt("%1"))
-              _ = call builtin "print(_: UInt)"(read %2 @1:1-1:2) @1:1-1:2
+              \(printUInt("%2"))
               return
             }
             """
@@ -74,7 +74,7 @@ struct ConversionTests {
             bb0:
               %0 @1:1-1:2 = operand -1 @1:1-1:2
               %1 @1:1-1:2 = call builtin "UInt(_: Int)"(read %0 @1:1-1:2) @3:9-3:20
-              _ = call builtin "print(_: UInt)"(read %1 @1:1-1:2) @1:1-1:2
+              \(printUInt("%1"))
               return
             }
             """

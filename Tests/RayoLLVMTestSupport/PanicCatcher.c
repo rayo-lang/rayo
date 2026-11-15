@@ -109,9 +109,14 @@ RayoCaughtCall rayo_run_catching_panic(void (*main)(void)) {
 
 // Adds the `length` bytes at `text` to the output of the call this thread runs.
 static void print(const char *text, int length) {
-    // Only code under test prints, inside a call, and an output past its capacity has nowhere to go.
-    if (current == NULL || length < 0 || current->outcome.outputLength + length > RAYO_TEST_OUTPUT_CAPACITY) {
-        fputs("rayo_call_catching_panic: a print outside a call, or past the output's capacity\n", stderr);
+    // Only code under test prints, inside a call.
+    if (current == NULL) {
+        fputs("rayo_call_catching_panic: a print outside a call\n", stderr);
+        abort();
+    }
+    // An output past its capacity has nowhere to go.
+    if (length < 0 || current->outcome.outputLength + length > RAYO_TEST_OUTPUT_CAPACITY) {
+        fputs("rayo_call_catching_panic: a call printed more than its output holds\n", stderr);
         abort();
     }
     for (int index = 0; index < length; index++) {

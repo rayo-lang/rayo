@@ -129,7 +129,10 @@ struct DroppedValueTests {
         #expect(try run(text, in: build) == .init(printed: "", panic: "main.rayo:2:3: panic: index out of range\n"))
     }
 
-    @Test func `a dropped conversion that overflows still panics where overflow is checked`() throws {
+    @Test(arguments: [Build.debug, .release])
+    func `a dropped conversion that overflows still panics where overflow is checked, and goes on where it isn't`(
+        build: Build,
+    ) throws {
         let text = """
             main "main()"
             func "main()"() -> Void {
@@ -141,7 +144,10 @@ struct DroppedValueTests {
               return
             }
             """
-        #expect(try run(text) == .init(printed: "", panic: "main.rayo:2:3: panic: integer overflow\n"))
+        let expected: InProcessJIT.Run = build == .debug
+            ? .init(printed: "", panic: "main.rayo:2:3: panic: integer overflow\n")
+            : .init(printed: "1\n")
+        #expect(try run(text, in: build) == expected)
     }
 
     @Test(arguments: [Build.debug, .release])
@@ -179,7 +185,7 @@ struct OwnershipStatementTests {
         #expect(try run(text) == .init(printed: "4\n"))
     }
 
-    @Test func `a static access passed to a call passes the value of the place it reaches`() throws {
+    @Test func `a static read or modify access passed to a call passes the value of the place it reaches`() throws {
         let text = """
             main "main()"
             func "main()"() -> Void {
@@ -190,7 +196,7 @@ struct OwnershipStatementTests {
               _ = call builtin "print(_: Int)"(a0) @1:1-1:2
               end a0
               %0 @1:1-1:2 = operand 5 @1:1-1:2
-              begin a1 read static %0 @1:1-1:2
+              begin a1 modify static %0 @1:1-1:2
               _ = call builtin "print(_: Int)"(a1) @1:1-1:2
               end a1
               return

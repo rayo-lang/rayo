@@ -29,14 +29,17 @@ struct UnaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
               %1 @1:1-1:2 = negate wrapping read %0 @1:1-1:2 @1:1-1:2
-              _ = call builtin "print(_: UInt)"(read %1 @1:1-1:2) @1:1-1:2
+              \(printUInt("%1"))
               return
             }
             """
         #expect(try run(text, in: build) == .init(printed: "18446744073709551615\n"))
     }
 
-    @Test func `a checked negation of a UInt but 0 panics where the build checks overflow`() throws {
+    @Test(arguments: [Build.debug, .release])
+    func `a checked negation of a UInt but 0 panics where the build checks overflow, and wraps where it doesn't`(
+        build: Build,
+    ) throws {
         let text = """
             main "main()"
             func "main()"() -> Void {
@@ -45,11 +48,14 @@ struct UnaryOperationTests {
             bb0:
               %0 @1:1-1:2 = operand UInt 1 @1:1-1:2
               %1 @1:1-1:2 = negate checked read %0 @1:1-1:2 @4:9-4:11
-              _ = call builtin "print(_: UInt)"(read %1 @1:1-1:2) @1:1-1:2
+              \(printUInt("%1"))
               return
             }
             """
-        #expect(try run(text) == .init(printed: "", panic: "main.rayo:4:9: panic: integer overflow\n"))
+        let expected: InProcessJIT.Run = build == .debug
+            ? .init(printed: "", panic: "main.rayo:4:9: panic: integer overflow\n")
+            : .init(printed: "18446744073709551615\n")
+        #expect(try run(text, in: build) == expected)
     }
 
     @Test func `not flips a Bool`() throws {
