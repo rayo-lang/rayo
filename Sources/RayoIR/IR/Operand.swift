@@ -18,6 +18,16 @@ public enum Operand: Equatable, Sendable {
         }
     }
 
+    /// What finding the operand's value does: nothing for a constant, and otherwise the reads that finding its place
+    /// makes, then the read or the move of the place.
+    var effects: [Effect] {
+        switch self {
+        case .constant: []
+        case .read(let place, let range): place.indexReads(at: range) + [.read(place, at: range)]
+        case .move(let place, let range): place.indexReads(at: range) + [.move(place, at: range)]
+        }
+    }
+
     /// The type of the operand's value, in the given body of a program with the given structs. A place the operand
     /// names must lead only into fields that exist.
     public func type(in body: IRBody, types: TypeTable) -> RayoType {

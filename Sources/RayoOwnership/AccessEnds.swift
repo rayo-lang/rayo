@@ -31,7 +31,7 @@ enum AccessEnds {
 
             // An access ends after the statement that it is live before, or that begins it, where it isn't live after.
             var ending = live[index]
-            if case .begin(let id, _) = statement { ending.insert(id) }
+            for case .begin(let id, _) in statement.effects { ending.insert(id) }
             statements += ends(of: ending.subtracting(live[index + 1]))
         }
         return BasicBlock(statements: statements, terminator: block.terminator)

@@ -2,26 +2,37 @@ import RayoIR
 
 /// Carries a dataflow analysis's state through a function's blocks until the state at each block's boundary settles:
 /// at its entry going forward, and at its exit going backward.
-struct DataflowSolver<Analysis: DataflowAnalysis> {
-    private let analysis: Analysis
+struct DataflowSolver<State: DataflowState> {
     private let body: IRBody
+    /// The effects of each block's statements and terminator, indexed by `BlockID`, as `BasicBlock.effects` gives them.
+    private let effects: [[[Effect]]]
+    /// What the state needs to know of the function.
+    private let function: State.Function
+    private let direction: DataflowDirection
     private let order: BlockOrder
     /// The state at each block's boundary so far, indexed by `BlockID`; nil for a block that no state has reached yet,
     /// or that no path from the entry reaches.
-    private var boundaryStates: [Analysis.State?]
+    private var boundaryStates: [State?]
     /// The blocks whose boundary state has changed since the solver last carried it through them.
     private var pending: WorkQueue
 
-    /// Solves `analysis` through `body`, and returns the settled states.
-    static func solve(_ analysis: Analysis, in body: IRBody) -> DataflowResults<Analysis> {
-        var solver = DataflowSolver(analysis, in: body)
+    /// Carries the state through `body` from `start`, and returns the settled states. The walk begins on entry to the
+    /// function going forward. Going backward, `start` is the state at the exit of every block, which the states of
+    /// the paths out of the block merge into: so it is the state at the function's exits, and it must add nothing to
+    /// a merge. `function` is what the state needs to know of `body`.
+    static func solve(
+        from start: State, through body: IRBody, knowing function: State.Function,
+    ) -> DataflowResults<State> {
+        var solver = DataflowSolver(from: start, through: body, knowing: function)
         solver.settle()
-        return DataflowResults(analysis, in: body, boundaryStates: solver.boundaryStates)
+        return DataflowResults(effects: solver.effects, function: function, boundaryStates: solver.boundaryStates)
     }
 
-    private init(_ analysis: Analysis, in body: IRBody) {
-        self.analysis = analysis
+    private init(from start: State, through body: IRBody, knowing function: State.Function) {
         self.body = body
+        effects = body.blocks.map(\.effects)
+        self.function = function
+        direction = start.direction
         order = BlockOrder(body)
         boundaryStates = Array(repeating: nil, count: body.blocks.count)
 
@@ -29,13 +40,13 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
         // backward, so that a loop that no path leaves has a state too. Going forward, reverse postorder visits each
         // block after the blocks that lead to it, outside loops; going backward, postorder visits each block after
         // those it leads to.
-        switch analysis.direction {
+        switch direction {
         case .forward:
-            boundaryStates[0] = analysis.startState
+            boundaryStates[0] = start
             pending = WorkQueue(order.postorder.reversed(), blockCount: body.blocks.count)
         case .backward:
             for block in order.postorder {
-                boundaryStates[block.index] = analysis.startState
+                boundaryStates[block.index] = start
             }
             pending = WorkQueue(order.postorder, blockCount: body.blocks.count)
         }
@@ -46,7 +57,7 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
         while let block = pending.pop() {
             // A block that no state has reached yet has nothing to hand on.
             guard var state = boundaryStates[block.index] else { continue }
-            analysis.apply(across: body.blocks[block.index], to: &state)
+            state.apply(across: effects[block.index], in: function)
 
             // Each block the state flows into is pending again where the state adds to its own.
             for next in blocks(after: block) where merge(state, intoBoundaryOf: next) {
@@ -58,14 +69,14 @@ struct DataflowSolver<Analysis: DataflowAnalysis> {
     /// The blocks that `block`'s state flows into: its successors going forward, and the reached blocks that lead
     /// to it going backward.
     private func blocks(after block: BlockID) -> [BlockID] {
-        switch analysis.direction {
+        switch direction {
         case .forward: body.blocks[block.index].terminator.successors
         case .backward: order.predecessors[block.index]
         }
     }
 
     /// Merges `state` into the state at `block`'s boundary, and returns whether that changed it.
-    private mutating func merge(_ state: Analysis.State, intoBoundaryOf block: BlockID) -> Bool {
+    private mutating func merge(_ state: State, intoBoundaryOf block: BlockID) -> Bool {
         guard let previous = boundaryStates[block.index] else {
             boundaryStates[block.index] = state
             return true

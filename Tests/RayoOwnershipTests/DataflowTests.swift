@@ -7,17 +7,17 @@ struct DataflowTests {
     @Test func `going forward, a block's entry holds what every path into it brings`() throws {
         let results = try solve(EvaluatedOperands(direction: .forward), diamond, result: "Int")
         let join = try #require(states(of: results, in: 3))
-        #expect(join[0] == EvaluatedOperands.State([1, 2, 3]))
-        #expect(join[1] == EvaluatedOperands.State([1, 2, 3, 4]))
-        #expect(join[2] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
+        #expect(join[0] == [1, 2, 3])
+        #expect(join[1] == [1, 2, 3, 4])
+        #expect(join[2] == [1, 2, 3, 4, 5])
     }
 
     @Test func `going backward, a block's exit holds what every path out of it brings`() throws {
         let results = try solve(EvaluatedOperands(direction: .backward), diamond, result: "Int")
         let branch = try #require(states(of: results, in: 0))
-        #expect(branch[2] == EvaluatedOperands.State([2, 3, 4, 5]))
-        #expect(branch[0] == EvaluatedOperands.State([1, 2, 3, 4, 5]))
-        #expect(states(of: results, in: 3)?[0] == EvaluatedOperands.State([4, 5]))
+        #expect(branch[2] == [2, 3, 4, 5])
+        #expect(branch[0] == [1, 2, 3, 4, 5])
+        #expect(states(of: results, in: 3)?[0] == [4, 5])
     }
 
     @Test(arguments: [
@@ -42,7 +42,7 @@ struct DataflowTests {
               return
             """
         let results = try solve(EvaluatedOperands(direction: direction), blocks)
-        #expect(states(of: results, in: 1)?[statement] == EvaluatedOperands.State(expected))
+        #expect(states(of: results, in: 1)?[statement] == expected)
     }
 
     @Test func `going backward, a loop that no path leaves starts from the start state`() throws {
@@ -55,8 +55,8 @@ struct DataflowTests {
               goto bb1
             """
         let results = try solve(EvaluatedOperands(direction: .backward), blocks)
-        #expect(states(of: results, in: 1)?[0] == EvaluatedOperands.State([2]))
-        #expect(states(of: results, in: 0)?[0] == EvaluatedOperands.State([1, 2]))
+        #expect(states(of: results, in: 1)?[0] == [2])
+        #expect(states(of: results, in: 0)?[0] == [1, 2])
     }
 
     @Test(arguments: [
@@ -91,10 +91,10 @@ struct DataflowTests {
               return read %0 @2:3-2:3
             """
         let results = try solve(EvaluatedOperands(direction: direction), blocks, result: "Int")
-        var visited: [(point: Int, state: EvaluatedOperands.State)] = []
-        results.walk(BlockID(index: 0)) { visited.append(($0, $1)) }
+        var visited: [(point: Int, columns: Set<Int>)] = []
+        results.walk(BlockID(index: 0)) { visited.append(($0, $1.columns)) }
         #expect(visited.map(\.point) == points)
-        #expect(visited.map(\.state) == expected.map { EvaluatedOperands.State($0) })
+        #expect(visited.map(\.columns) == expected)
     }
 
     // The solver checks its merges only in a debug build, which is how the tests run.
@@ -141,7 +141,7 @@ private func printing(_ column: Int) -> String {
 
 /// The source columns of the operands that a function may evaluate before a point going forward, or after it going
 /// backward.
-private struct EvaluatedOperands: DataflowAnalysis {
+private struct EvaluatedOperands: DataflowState {
     /// How a state merges with another where two paths meet.
     enum Merge {
         /// Keeps the columns of both, which only grows the state.
@@ -150,65 +150,40 @@ private struct EvaluatedOperands: DataflowAnalysis {
         case keepingLatest
     }
 
-    struct State: DataflowState {
-        var columns: Set<Int>
-        var merge: Merge
-
-        init(_ columns: Set<Int>, merge: Merge = .union) {
-            self.columns = columns
-            self.merge = merge
-        }
-
-        func merged(with other: State) -> State {
-            switch merge {
-            case .union: State(columns.union(other.columns), merge: merge)
-            case .keepingLatest: other
-            }
-        }
-    }
-
     let direction: DataflowDirection
     var merge = Merge.union
+    var columns: Set<Int> = []
 
-    var startState: State {
-        State([], merge: merge)
-    }
-
-    func apply(_ statement: Statement, to state: inout State) {
-        // A declaration evaluates no operand.
-        guard case .compute(_, let value, _) = statement else { return }
-        state.columns.formUnion(value.operands.compactMap(Self.column))
-    }
-
-    func apply(_ terminator: Terminator, to state: inout State) {
-        if let operand = terminator.operand, let column = Self.column(of: operand) {
-            state.columns.insert(column)
+    func merged(with other: EvaluatedOperands) -> EvaluatedOperands {
+        switch merge {
+        case .union: EvaluatedOperands(direction: direction, merge: merge, columns: columns.union(other.columns))
+        case .keepingLatest: other
         }
     }
 
-    /// The column that the source names the place an operand reads at, or nil for a constant.
-    private static func column(of operand: Operand) -> Int? {
-        switch operand {
-        case .constant: nil
-        case .read(_, let range), .move(_, let range): range.start.column
+    mutating func apply(_ effect: Effect, in function: Void) {
+        // Only a read or a move evaluates an operand.
+        switch effect {
+        case .read(_, let range), .move(_, let range): columns.insert(range.start.column)
+        case .store, .begin, .use, .end, .declare, .retire, .exit: break
         }
     }
 }
 
-/// Solves `analysis` through a function that returns `result` and is made of `blocks`.
+/// Solves the walk from `start` through a function that returns `result` and is made of `blocks`.
 private func solve(
-    _ analysis: EvaluatedOperands, _ blocks: String, result: String = "Void",
+    _ start: EvaluatedOperands, _ blocks: String, result: String = "Void",
 ) throws -> DataflowResults<EvaluatedOperands> {
     let program = try program(of: [function(blocks, result: result)])
     // The program's one function has a body.
     let body = try #require(program.bodies[FunctionID(index: 0)])
-    return DataflowSolver.solve(analysis, in: body)
+    return DataflowSolver.solve(from: start, through: body, knowing: ())
 }
 
-/// The state at each point of the block at `index`, which `results` settle on, in the order of the points; nil where no
-/// state reaches the block.
-private func states(of results: DataflowResults<EvaluatedOperands>, in index: Int) -> [EvaluatedOperands.State]? {
-    var states: [Int: EvaluatedOperands.State] = [:]
-    guard results.walk(BlockID(index: index), visit: { states[$0] = $1 }) else { return nil }
+/// The columns at each point of the block at `index`, which `results` settle on, in the order of the points; nil where
+/// no state reaches the block.
+private func states(of results: DataflowResults<EvaluatedOperands>, in index: Int) -> [Set<Int>]? {
+    var states: [Int: Set<Int>] = [:]
+    guard results.walk(BlockID(index: index), visit: { states[$0] = $1.columns }) else { return nil }
     return states.sorted { $0.key < $1.key }.map(\.value)
 }

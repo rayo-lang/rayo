@@ -7,6 +7,11 @@ public struct BasicBlock: Equatable, Sendable {
         self.terminator = terminator
     }
 
+    /// The effects of each statement in turn, then those of the terminator.
+    public var effects: [[Effect]] {
+        statements.map(\.effects) + [terminator.effects]
+    }
+
     /// The operands the block uses, in the order it evaluates them: its statements' in turn, then its terminator's.
     public var operands: [Operand] {
         // A computation uses its value's operands, and no other statement uses one.

@@ -5,6 +5,8 @@ import RayoSema
 struct LocalUseState: DataflowState {
     private(set) var locals: Set<LocalID> = []
 
+    var direction: DataflowDirection { .backward }
+
     /// The state at the end of a function, after which no code uses any local.
     init() {}
 
@@ -16,21 +18,17 @@ struct LocalUseState: DataflowState {
         self.locals = locals
     }
 
-    /// Takes the state after `statement` back to the state before it, where `uses` says which locals it uses.
-    mutating func apply(backwardsThrough statement: Statement, using uses: LocalUses) {
-        switch statement {
+    /// Takes the state across `effect`, where `uses` says which local each effect in the function uses.
+    mutating func apply(_ effect: Effect, in uses: LocalUses) {
+        switch effect {
         // A declaration starts its local's life, and a retirement ends it, so no code before either uses the life
         // that comes after it.
         case .declare(let local), .retire(let local):
             locals.remove(local)
 
-        case .compute, .begin, .end:
-            locals.formUnion(uses.locals(usedBy: statement))
+        case .read, .move, .store, .begin, .use, .end, .exit:
+            guard let local = uses.local(usedBy: effect) else { return }
+            locals.insert(local)
         }
-    }
-
-    /// Takes the state after `terminator` back to the state before it, where `uses` says which locals it uses.
-    mutating func apply(backwardsThrough terminator: Terminator, using uses: LocalUses) {
-        locals.formUnion(uses.locals(usedBy: terminator))
     }
 }

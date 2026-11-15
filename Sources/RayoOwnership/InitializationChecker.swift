@@ -9,8 +9,8 @@ enum InitializationChecker {
     /// Reports the uses of places that may hold no value, and the assignments to `let`s that may already have been
     /// assigned, in `places.body`.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
-        let analysis = InitializationAnalysis(places.body)
-        let results = DataflowSolver.solve(analysis, in: places.body)
+        let start = InitializationState(entering: places.body)
+        let results = DataflowSolver.solve(from: start, through: places.body, knowing: ())
         var errors = FunctionErrors(places: places)
         for (index, block) in places.body.blocks.enumerated() {
             // A block that no path reaches has no state, and nothing in it is checked.
@@ -24,12 +24,11 @@ enum InitializationChecker {
     /// `state` on entry to the block. It carries that one state through the block, so no statement copies it.
     private static func check(_ block: BasicBlock, from state: InitializationState, into errors: inout FunctionErrors) {
         var state = state
-        for statement in block.statements {
+        for effect in block.effects.joined() {
             state.apply(
-                statement, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
+                effect, use: { errors.use($0, at: $1, missing: $2) }, store: { errors.store(to: $0, holding: $1) },
             )
         }
-        state.apply(block.terminator) { errors.use($0, at: $1, missing: $2) }
     }
 }
 

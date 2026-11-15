@@ -9,13 +9,13 @@ enum MoveChecker {
     /// inside either, in every block of the body whose places `places` gives the types of, whether or not a path
     /// reaches it.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
-        places.body.blocks.flatMap(\.operands).compactMap { error(at: $0, in: places) }
+        places.body.blocks.flatMap { $0.effects.joined() }.compactMap { error(at: $0, in: places) }
     }
 
-    /// The error at `operand` where it moves a value out of a place that can't give it up, or nil where it doesn't.
-    private static func error(at operand: Operand, in places: PlaceTypes) -> Diagnostic? {
+    /// The error at `effect` where it moves a value out of a place that can't give it up, or nil where it doesn't.
+    private static func error(at effect: Effect, in places: PlaceTypes) -> Diagnostic? {
         // Only a move takes a value out of its place.
-        guard case .move(let place, let range) = operand else { return nil }
+        guard case .move(let place, let range) = effect else { return nil }
 
         // An element, wherever its array lies, is the array's for as long as the array holds a value.
         if place.steps.contains(where: \.isElement) { return Diagnostic(.moveFromElement, at: range) }

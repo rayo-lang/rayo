@@ -40,7 +40,7 @@ public enum OwnershipChecker {
 
         // What code after each point uses is solved once, and serves both where accesses end and which values no
         // code reads.
-        let uses = DataflowSolver.solve(AccessUseAnalysis(places: places), in: places.body)
+        let uses = DataflowSolver.solve(from: AccessUseState(), through: places.body, knowing: places)
         let (ended, conflicts) = ExclusivityChecker.check(places, uses: uses)
         guard conflicts.isEmpty else { return (nil, conflicts) }
 
