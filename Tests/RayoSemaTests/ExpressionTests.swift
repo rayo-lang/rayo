@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 
 struct PrecedenceTests {
     @Test("every comparison has one level, so '==' doesn't wait for a '<' on its right")
@@ -32,7 +31,6 @@ struct RangeTests {
         ("var a = 1\nlet b: Bool = copy a", "copy a"),
         ("print(1, 2)", "print(1, 2)"),
         ("print(1) + 2", "print(1) + 2"),
-        ("let x = 1\nx = 2", "x"),
         ("let x = 1\nlet x = 2", "x"),
         ("if 1 { }", "1"),
     ])

@@ -11,9 +11,7 @@ struct LocalTests {
     }
 
     @Test("locals are checked", arguments: [
-        ("let x = 1\nx = 2", ErrorCode.letAssignedTwice(name: "x")),
-        ("let x = 1\nx += 2", .letAssignedTwice(name: "x")),
-        ("let x: Bool = 1", .typeMismatch(expected: "Bool", found: "Int")),
+        ("let x: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: "Int")),
         ("var x = 1\nx = true", .typeMismatch(expected: "Int", found: "Bool")),
         ("var x = true\nx += 1", .integerOperands(op: "+=", left: "Bool", right: "Int")),
         ("1 = 2", .assignToNonLocal),

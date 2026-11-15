@@ -1,0 +1,31 @@
+struct Stats {
+  hp: Int
+}
+
+main "main()"
+
+init "Stats(hp: Int)"(Int) -> Stats
+
+func "main()"() -> Void {
+  let %0 a: [1 of Stats]
+  let %1 i: UInt
+  let %2 x: Int
+  let %3 grid: [1 of [2 of Int]]
+  temp %4: Stats
+  temp %5: UInt
+  temp %6: [2 of Int]
+bb0:
+  declare %0
+  %4 @2:14-2:26 = call "Stats(hp: Int)"(1) @2:14-2:26
+  %0 @2:9-2:10 = array of Stats(read %4 @2:14-2:26) @2:13-2:27
+  declare %1
+  %1 @3:9-3:10 = operand UInt 0 @3:19-3:20
+  declare %2
+  %5 @4:15-4:16 = index read %1 @4:15-4:16 below 1 @4:15-4:16
+  %2 @4:9-4:10 = operand move %0[%5].0 @4:13-4:20 @4:13-4:20
+  declare %3
+  %6 @5:17-5:23 = array of Int(1, 2) @5:17-5:23
+  %3 @5:9-5:13 = array of [2 of Int](read %6 @5:17-5:23) @5:16-5:24
+  _ = operand move %3[0][1] @6:9-6:19 @6:9-6:19
+  return
+}

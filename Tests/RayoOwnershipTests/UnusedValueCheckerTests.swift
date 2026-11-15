@@ -1,4 +1,4 @@
-@testable import RayoOwnership
+import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
@@ -7,7 +7,7 @@ import RayoSema
 struct UnusedValueCheckerTests {
     @Test func `a value stored in a local that no code reads is reported at the store`() throws {
         let blocks = "bb0:\n  declare %2\n  %2 @2:1-2:1 = operand 1 @1:1-1:1\n  return"
-        #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "k"), at: at(1))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "k"), at: at(1))])
     }
 
     @Test
@@ -19,7 +19,7 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(read %0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
     }
 
     @Test func `a value read on one of the paths from its store is used, though another path overwrites it`() throws {
@@ -35,7 +35,7 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(move %0 @2:4-2:4) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -58,7 +58,7 @@ struct UnusedValueCheckerTests {
             bb3:
               return
             """
-        #expect(try errors(in: blocks) == expected)
+        #expect(try checked(function(blocks)).errors == expected)
     }
 
     @Test func `a branch's condition and a return's result read the locals they name`() throws {
@@ -70,7 +70,7 @@ struct UnusedValueCheckerTests {
               %1 @1:1-1:1 = operand 2 @1:1-1:1
               return move %1 @2:2-2:2
             """
-        #expect(try errors(in: blocks, result: "Int") == [])
+        #expect(try checked(function(blocks, result: "Int")).errors == [])
     }
 
     @Test func `a declaration starts its local's life, so a read after it reads no value stored before it`() throws {
@@ -78,14 +78,15 @@ struct UnusedValueCheckerTests {
             bb0:
               %0 @2:1-2:1 = operand 1 @1:1-1:1
               declare %0
+              %0 @1:1-1:1 = operand 2 @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @2:2-2:2) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(1))])
     }
 
     @Test func `a temporary that no code reads reports nothing, since lowering made it`() throws {
-        #expect(try errors(in: "bb0:\n  %3 @1:1-1:1 = operand 1 @1:1-1:1\n  return") == [])
+        #expect(try checked(function("bb0:\n  %3 @1:1-1:1 = operand 1 @1:1-1:1\n  return")).errors == [])
     }
 
     @Test func `a block that no path reaches reports nothing`() throws {
@@ -96,7 +97,7 @@ struct UnusedValueCheckerTests {
               %0 @2:1-2:1 = operand 1 @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -117,7 +118,7 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == expected)
+        #expect(try checked(function(blocks)).errors == expected)
     }
 
     @Test func `a store to a field leaves the struct's other fields as they were, which a later read still reads`()
@@ -130,7 +131,7 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(read %5.0 @2:4-2:4) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 
     @Test(arguments: [
@@ -150,7 +151,7 @@ struct UnusedValueCheckerTests {
               _ = operand move %5 @2:4-2:4 @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: path), at: at(2))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: path), at: at(2))])
     }
 
     @Test func `a struct's value is never read when each of its fields that code reads is replaced first`() throws {
@@ -161,7 +162,103 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(read %5.0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "s"), at: at(1))])
+    }
+
+    @Test(arguments: [
+        // A read of the other element reads what the array was filled with there, but not the store.
+        ([#"_ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1"#], "a[0]", 2),
+        // A store to the same element replaces the first store's value before any code reads it.
+        (
+            [#"%7[0] @1:1-1:1 = call "Hit(damage: Int)"(4) @1:1-1:1"#, "_ = operand read %7 @1:1-1:1 @1:1-1:1"],
+            "a[0]", 2,
+        ),
+        // A store to each element replaces the whole of what the array was filled with.
+        (
+            [#"%7[1] @1:1-1:1 = call "Hit(damage: Int)"(4) @1:1-1:1"#, "_ = operand read %7 @1:1-1:1 @1:1-1:1"],
+            "a", 1,
+        ),
+    ])
+    func `a value stored in an element is read by a later read of the element, or of the array`(
+        later: [String], name: String, column: Int,
+    ) throws {
+        let laterLines = later.map { "  \($0)" }.joined(separator: "\n")
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @2:1-2:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
+              %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+            \(laterLines)
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: name), at: at(column))])
+    }
+
+    @Test func `a value stored in an element, and one a compound assignment stores in a part of it, are read later`()
+        throws {
+        // As `a[0] = Hit(damage: 9)`, then `a[0].damage += 1`, then a read of each element.
+        let blocks = """
+            bb0:
+              %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
+              %7 @2:1-2:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
+              %7[0] @2:2-2:2 = call "Hit(damage: Int)"(9) @1:1-1:1
+              %7[0].0 @2:3-2:3 = add checked read %7[0].0 @1:1-1:1, 1 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[0].0 @1:1-1:1) @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %7[1].0 @1:1-1:1) @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [])
+    }
+
+    @Test func `a compound assignment reads the value it replaces, and stores one that code must read`() throws {
+        // As `x += 1` lowers, after a read of `x`, and with nothing after it.
+        let blocks = """
+            bb0:
+              %0 @2:1-2:1 = operand 1 @1:1-1:1
+              _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
+              %0 @2:2-2:2 = add checked read %0 @1:1-1:1, 1 @1:1-1:1
+              return
+            """
+        #expect(try checked(function(blocks)).errors == [Diagnostic(.unreadValue(name: "x"), at: at(2))])
+    }
+
+    @Test(.timeLimit(.minutes(1)), arguments: [
+        // Each store is read by the borrow of the whole array after it, through the call.
+        (
+            [
+                "%0[0] @1:1-1:1 = operand 1 @1:1-1:1", "begin a0 read static %0 @1:1-1:1", totalOfArray("a0"),
+                "%0[%1] @1:1-1:1 = operand 2 @1:1-1:1", "begin a1 read static %0 @1:1-1:1", totalOfArray("a1"),
+                "%0[0] @1:1-1:1 = add checked read %0[0] @1:1-1:1, 3 @1:1-1:1",
+                "begin a2 read static %0 @1:1-1:1", totalOfArray("a2"),
+            ],
+            [Diagnostic](),
+        ),
+        // A later store to the same element replaces the first one's value before the borrow reads it.
+        (
+            [
+                "%0[0] @2:1-2:1 = operand 1 @1:1-1:1", "%0[0] @1:1-1:1 = operand 2 @1:1-1:1",
+                "begin a0 read static %0 @1:1-1:1", totalOfArray("a0"),
+            ],
+            [Diagnostic(.unreadValue(name: "a[0]"), at: at(1))],
+        ),
+    ])
+    func `an element of an array of a billion is stored to and borrowed in the time a small array takes`(
+        statements: [String], expected: [Diagnostic],
+    ) throws {
+        // `%1` holds an index that may be any element's, so a store through it may reach any of them.
+        let body = statements.map { "  \($0)" }.joined(separator: "\n")
+        let huge = (name: "f()", text: """
+            func "f()"() -> Void {
+              var %0 a: [1000000000 of Int]
+              temp %1: UInt
+            bb0:
+              %0 @1:1-1:1 = fill 1000000000 of 0 @1:1-1:1
+              %1 @1:1-1:1 = index UInt 5 below 1000000000 @1:1-1:1
+            \(body)
+              return
+            }
+            """)
+        #expect(try checked(huge, beside: [totalOfHuge]).errors == expected)
     }
 
     @Test func `a store to an element at an index a local holds leaves a later read through that local reading`()
@@ -178,12 +275,17 @@ struct UnusedValueCheckerTests {
               _ = call builtin "print(_: Int)"(read %7[%8].0 @2:3-2:3) @1:1-1:1
               return
             """
-        #expect(try errors(in: blocks) == [])
+        #expect(try checked(function(blocks)).errors == [])
     }
 }
 
-/// The errors the checker reports in a program of one function, which returns `result` and is made of `blocks`.
-private func errors(in blocks: String, result: String = "Void") throws -> [Diagnostic] {
-    let places = try placesOfFirstFunction(in: try program(of: [function(blocks, result: result)]))
-    return UnusedValueChecker.errors(in: places, uses: laterUses(in: places)).inSourceOrder
+/// A function that takes an array of a billion Ints and gives an Int, which has no body.
+private let totalOfHuge = (
+    name: "total(_: [1000000000 of Int])",
+    text: #"func "total(_: [1000000000 of Int])"([1000000000 of Int]) -> Int"#,
+)
+
+/// The statement that passes the array of a billion Ints, through the access `access`, to `total`.
+private func totalOfArray(_ access: String) -> String {
+    #"_ = call "total(_: [1000000000 of Int])"(\#(access)) @1:1-1:1"#
 }

@@ -25,6 +25,10 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: body, toMatch: "taken-positions")
     }
 
+    @Test func `a local in parentheses is moved where the bare local would be, and read where it would be`() throws {
+        try expectLowering(ofMain: "let a = 1\nlet b = (a)\nprint((b))", toMatch: "parenthesized-local")
+    }
+
     @Test func `'!' applies to its operand as '-' does`() throws {
         try expectLowering(ofMain: "let a = true\nlet b = !a", toMatch: "not")
     }

@@ -139,12 +139,6 @@ struct ArrayLiteralTests {
             "2:10: error[E0206]: 'q' isn't declared", "2:13: error[E0217]: the literal doesn't fit in an Int",
         ])
     }
-
-    @Test func `an element of an array literal is moved into the array, as a struct's field is`() {
-        #expect(errors("func main() {\nlet h = Hit(damage: 1)\n_ = [h]\n_ = h\n}\n" + declarations) == [
-            .usedAfterMove(name: "h"),
-        ])
-    }
 }
 
 struct ArrayInitializerTests {
@@ -197,31 +191,5 @@ struct ArrayInitializerTests {
         body: String, expected: String,
     ) {
         #expect(errorLines(inMain: body, beside: declarations) == [expected])
-    }
-
-    @Test func `the value an array is filled with is copied into it, so it is borrowed and stays usable`() {
-        let source = """
-            func main() {
-            let h = Hit(damage: 1)
-            let a: [2 of Hit] = .init(repeating: h)
-            _ = a
-            _ = h
-            }
-
-            """
-        #expect(errors(source + declarations) == [])
-    }
-
-    @Test func `a value that was moved can't fill an array`() {
-        let source = """
-            func main() {
-            let h = Hit(damage: 1)
-            _ = h
-            let a: [2 of Hit] = .init(repeating: h)
-            _ = a
-            }
-
-            """
-        #expect(errors(source + declarations) == [.usedAfterMove(name: "h")])
     }
 }

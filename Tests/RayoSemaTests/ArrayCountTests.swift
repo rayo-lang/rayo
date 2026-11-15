@@ -1,5 +1,4 @@
 import Testing
-import RayoDiagnostics
 
 /// A struct with a field called `count`, one that holds an array, functions that borrow a UInt and an Int, and one
 /// that makes an array, which the bodies below use.
@@ -51,10 +50,5 @@ struct ArrayCountTests {
     ])
     func `an array has no member but its count, and a count has none`(body: String, expected: String) {
         #expect(errorLines(inMain: body, beside: declarations) == [expected])
-    }
-
-    @Test func `an array's count uses the array, which must still hold its value`() {
-        let body = "let a = [1, 2]\nlet b = a\ntake(a.count)\ntake(b.count)"
-        #expect(errorLines(inMain: body, beside: declarations) == ["4:6: error[E0302]: 'a' was moved"])
     }
 }

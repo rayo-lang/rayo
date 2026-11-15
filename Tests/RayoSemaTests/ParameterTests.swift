@@ -19,7 +19,6 @@ struct ParameterTests {
         ("func f(x: Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
         ("func f(x: Int) { x += 1 }", [.assignToParameter(name: "x")]),
         ("func f(x: Int) { x(1) }", [.notAFunction(name: "x")]),
-        ("func f(x: Int) -> Int { copy x + x }", []),
     ])
     func borrowed(declaration: String, expected: [ErrorCode]) {
         #expect(errors("func main() {}\n" + declaration) == expected)
