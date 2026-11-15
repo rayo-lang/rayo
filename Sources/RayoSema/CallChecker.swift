@@ -50,8 +50,8 @@ struct CallChecker {
         case .functions(let functions):
             call(among: functions, named: name, passing: arguments, in: range)
 
-        // A local can't be called.
-        case .inScope(.local):
+        // A local or a field of `self` can't be called.
+        case .inScope(.local), .instanceField:
             reachingNothing(reporting: .notAFunction(name: name), at: nameRange, passing: arguments)
 
         // A local, a function or a struct whose declaration failed was reported there.
