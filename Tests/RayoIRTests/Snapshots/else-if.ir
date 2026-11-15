@@ -46,7 +46,7 @@ bb8:
   branch read %7 @4:36-4:42, bb10, bb11
 bb9:
   %1 @4:5-4:9 = operand read %4 @4:12-4:59 @4:12-4:59
-  begin a0 read static %1 @5:7-5:11
+  begin a0 read %1 @5:7-5:11
   _ = call builtin "print(_: Int)"(a0) @5:1-5:12
   return
 bb10:

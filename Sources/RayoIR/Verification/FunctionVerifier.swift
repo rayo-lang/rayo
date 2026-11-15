@@ -72,18 +72,10 @@ struct FunctionVerifier {
                 throw violation("the IR retires the parameter %\(local.index) in its function's body")
             }
 
-        // An access reaches a place of the body. Only an object's value takes a dynamic one, and the IR has no objects.
+        // An access reaches a place of the body, and an end names an access that the body begins.
         case .begin(_, let access):
             _ = try type(of: access.place)
-            guard access.enforcement == .static else {
-                throw violation("the IR takes a dynamic access to a place that is no object's value")
-            }
-
-        // An end names an access that the body begins, and a dependence names one too, and a place of the body.
         case .end(let id):
-            _ = try access(id)
-        case .depend(let place, let id):
-            _ = try type(of: place)
             _ = try access(id)
         }
     }

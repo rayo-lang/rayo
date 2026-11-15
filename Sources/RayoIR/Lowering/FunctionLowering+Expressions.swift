@@ -155,7 +155,7 @@ extension FunctionLowering {
             switch argument {
             case .value(let operand): .operand(operand)
             case .place(let place, let range, let kind):
-                .access(builder.begin(Access(kind, .static, to: place, at: range)))
+                .access(builder.begin(Access(kind, to: place, at: range)))
             }
         }
     }

@@ -376,12 +376,12 @@ struct InitializationCheckerTests {
     @Test(arguments: [
         (
             "%1 @1:1-1:1 = operand move %0 @2:1-2:1 @1:1-1:1",
-            "begin a0 read static %0 @2:2-2:2\n  _ = call \"g(_: Int, _: Int)\"(a0, 1) @1:1-1:1",
+            "begin a0 read %0 @2:2-2:2\n  _ = call \"g(_: Int, _: Int)\"(a0, 1) @1:1-1:1",
             ErrorCode.usedAfterMove(name: "x"),
         ),
         (
             "_ = operand move %5.1.0 @2:1-2:1 @1:1-1:1",
-            "begin a0 read static %5.1 @2:2-2:2\n  _ = call \"take(_: Int, _: Hit)\"(1, a0) @1:1-1:1",
+            "begin a0 read %5.1 @2:2-2:2\n  _ = call \"take(_: Int, _: Hit)\"(1, a0) @1:1-1:1",
             .usedPartlyMoved(name: "s.hit", field: "s.hit.damage"),
         ),
     ])

@@ -11,8 +11,8 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 modify static %0 @2:3-2:3
-              begin a1 read static %0 @2:6-2:6
+              begin a0 modify %0 @2:3-2:3
+              begin a1 read %0 @2:6-2:6
               _ = call "change(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
@@ -27,8 +27,8 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
             \(storeShot())
-              begin a0 modify static %5.0 @2:3-2:3
-              begin a1 read static %5.1 @2:6-2:6
+              begin a0 modify %5.0 @2:3-2:3
+              begin a1 read %5.1 @2:6-2:6
               _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
@@ -41,8 +41,8 @@ struct AccessExtentTests {
             bb0:
               %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
-              begin a0 modify static %7[0].0 @2:3-2:3
-              begin a1 read static %7[1] @2:6-2:6
+              begin a0 modify %7[0].0 @2:3-2:3
+              begin a1 read %7[1] @2:6-2:6
               _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
@@ -63,8 +63,8 @@ struct AccessExtentTests {
               %4 @1:1-1:1 = call "Hit(damage: Int)"(7) @1:1-1:1
               %7 @1:1-1:1 = fill 2 of read %4 @1:1-1:1 @1:1-1:1
               %8 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
-              begin a0 modify static \(modified) @2:3-2:3
-              begin a1 read static \(read) @2:6-2:6
+              begin a0 modify \(modified) @2:3-2:3
+              begin a1 read \(read) @2:6-2:6
               _ = call "change(_: Int, _: Hit)"(a0, a1) @1:1-1:1
               return
             """
@@ -76,8 +76,8 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @2:3-2:3
-              begin a1 read static %0 @2:6-2:6
+              begin a0 read %0 @2:3-2:3
+              begin a1 read %0 @2:6-2:6
               _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
@@ -97,7 +97,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
             \(storeShot())
-              begin a0 read static %5.1 @2:3-2:3
+              begin a0 read %5.1 @2:3-2:3
               \(change)
               _ = call "take(_: Int, _: Hit)"(1, a0) @1:1-1:1
               return
@@ -111,7 +111,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 modify static %0 @2:3-2:3
+              begin a0 modify %0 @2:3-2:3
               %1 @1:1-1:1 = operand read %0 @2:6-2:6 @1:1-1:1
               _ = call "change(_: Int, _: Int)"(a0, 1) @1:1-1:1
               return
@@ -138,8 +138,8 @@ struct AccessExtentTests {
               %3 @1:1-1:1 = operand 3 @1:1-1:1
               goto bb3
             bb3:
-              begin a0 read static %0 @2:3-2:3
-              begin a1 read static %3 @1:1-1:1
+              begin a0 read %0 @2:3-2:3
+              begin a1 read %3 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
               return
             """
@@ -151,7 +151,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @2:3-2:3
+              begin a0 read %0 @2:3-2:3
               %0 @2:5-2:5 = call "double(_: Int)"(a0) @1:1-1:1
               _ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1
               %0 @2:6-2:6 = operand 2 @1:1-1:1
@@ -165,8 +165,8 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
-              begin a1 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              begin a1 read %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
               _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
               return
@@ -174,8 +174,8 @@ struct AccessExtentTests {
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
-              begin a1 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
+              begin a1 read %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, a1) @1:1-1:1
               end a1
               end a0
@@ -188,13 +188,13 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               return
             """
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               end a0
               return
             """))
@@ -204,7 +204,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -217,7 +217,7 @@ struct AccessExtentTests {
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -236,7 +236,7 @@ struct AccessExtentTests {
         let blocks = """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb1, bb2
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -247,7 +247,7 @@ struct AccessExtentTests {
         #expect(try ended(blocks) == body(of: """
             bb0:
               %0 @1:1-1:1 = operand 1 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb1, bb3
             bb1:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -268,7 +268,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb1:
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb0, bb2
             bb2:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -279,7 +279,7 @@ struct AccessExtentTests {
               %0 @1:1-1:1 = operand 1 @1:1-1:1
               goto bb1
             bb1:
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               branch true, bb3, bb2
             bb2:
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
@@ -291,69 +291,6 @@ struct AccessExtentTests {
             """))
     }
 
-    @Test func `an access ends only on paths that began it, though a value that may depend on it is used on`() throws {
-        // `y` may depend on the access where the paths join, but the path through `bb2` never began it.
-        let blocks = """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch true, bb1, bb2
-            bb1:
-              begin a0 read static %0 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              depend %1 on a0
-              goto bb3
-            bb2:
-              %1 @1:1-1:1 = operand 3 @1:1-1:1
-              goto bb3
-            bb3:
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              return
-            """
-        #expect(try ended(blocks) == body(of: """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch true, bb1, bb2
-            bb1:
-              begin a0 read static %0 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              depend %1 on a0
-              goto bb4
-            bb2:
-              %1 @1:1-1:1 = operand 3 @1:1-1:1
-              goto bb3
-            bb3:
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              return
-            bb4:
-              end a0
-              goto bb3
-            """))
-    }
-
-    @Test func `after paths join, a change conflicts with an access one began that a value may depend on`() throws {
-        let blocks = """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              branch true, bb1, bb2
-            bb1:
-              begin a0 read static %0 @2:3-2:3
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              depend %1 on a0
-              goto bb3
-            bb2:
-              %1 @1:1-1:1 = operand 3 @1:1-1:1
-              goto bb3
-            bb3:
-              %0 @2:6-2:6 = operand 4 @1:1-1:1
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              return
-            """
-        let expected = Diagnostic(
-            .changedWhileBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
-        )
-        #expect(try checked(function(blocks)).errors == [expected])
-    }
-
     @Test func `an access begun in a loop's body ends in the body, on each pass`() throws {
         let blocks = """
             bb0:
@@ -362,7 +299,7 @@ struct AccessExtentTests {
             bb1:
               branch true, bb2, bb3
             bb2:
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               goto bb1
             bb3:
@@ -375,82 +312,11 @@ struct AccessExtentTests {
             bb1:
               branch true, bb2, bb3
             bb2:
-              begin a0 read static %0 @1:1-1:1
+              begin a0 read %0 @1:1-1:1
               _ = call "g(_: Int, _: Int)"(a0, 1) @1:1-1:1
               end a0
               goto bb1
             bb3:
-              return
-            """))
-    }
-
-    @Test func `an access a value depends on stays live through the last use of the value and its copies`() throws {
-        // `y` depends on the access, and `k` on it through a copy of `y`, so the access ends after `k`'s last use.
-        let blocks = """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              begin a0 read static %0 @2:3-2:3
-              depend %1 on a0
-              %2 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
-              %3 @1:1-1:1 = operand read %2 @1:1-1:1 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
-              return
-            """
-        #expect(try ended(blocks) == body(of: """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              begin a0 read static %0 @2:3-2:3
-              depend %1 on a0
-              %2 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
-              %3 @1:1-1:1 = operand read %2 @1:1-1:1 @1:1-1:1
-              end a0
-              _ = call "g(_: Int, _: Int)"(1, 2) @1:1-1:1
-              return
-            """))
-    }
-
-    @Test func `a change to the place of an access a value depends on conflicts until the value's last use`() throws {
-        let blocks = """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %1 @1:1-1:1 = operand 2 @1:1-1:1
-              begin a0 read static %0 @2:3-2:3
-              depend %1 on a0
-              %0 @2:6-2:6 = operand 3 @1:1-1:1
-              %3 @1:1-1:1 = operand read %1 @1:1-1:1 @1:1-1:1
-              %0 @2:9-2:9 = operand 4 @1:1-1:1
-              return
-            """
-        let expected = Diagnostic(
-            .changedWhileBorrowed(name: "x", borrowed: "x"), at: at(6), labeling: [.init(.borrowed, at: at(3))],
-        )
-        #expect(try checked(function(blocks)).errors == [expected])
-    }
-
-    @Test func `a value assigned anew no longer depends on the access, which then ends`() throws {
-        let blocks = """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %3 @1:1-1:1 = operand 2 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
-              depend %3 on a0
-              %3 @1:1-1:1 = operand 5 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %3 @1:1-1:1) @1:1-1:1
-              return
-            """
-        #expect(try ended(blocks) == body(of: """
-            bb0:
-              %0 @1:1-1:1 = operand 1 @1:1-1:1
-              %3 @1:1-1:1 = operand 2 @1:1-1:1
-              begin a0 read static %0 @1:1-1:1
-              depend %3 on a0
-              end a0
-              %3 @1:1-1:1 = operand 5 @1:1-1:1
-              _ = call builtin "print(_: Int)"(read %3 @1:1-1:1) @1:1-1:1
               return
             """))
     }

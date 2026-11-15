@@ -96,14 +96,12 @@ public enum IRPrinter {
             "begin \(text(of: id)) \(text(of: access))"
         case .end(let id):
             "end \(text(of: id))"
-        case .depend(let place, let id):
-            "depend \(text(of: place)) on \(text(of: id))"
         }
     }
 
-    /// What an access does, how it is enforced, and the place it reaches, such as `read static %0.1 @2:3-2:6`.
+    /// What an access does, and the place it reaches, such as `read %0.1 @2:3-2:6`.
     private static func text(of access: Access) -> String {
-        "\(access.kind.rawValue) \(access.enforcement.rawValue) \(text(of: access.place)) \(text(of: access.range))"
+        "\(access.kind.rawValue) \(text(of: access.place)) \(text(of: access.range))"
     }
 
     /// An access as its number, such as `a2`.

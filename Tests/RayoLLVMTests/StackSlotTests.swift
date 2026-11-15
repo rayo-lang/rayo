@@ -136,31 +136,31 @@ private let replacingOneArray = """
       branch read %2 @9:11-9:19, bb2, bb3
     bb2:
       retire %2
-      begin a0 read static %0 @10:18-10:19
-      begin a1 read static %1 @10:21-10:22
+      begin a0 read %0 @10:18-10:19
+      begin a1 read %1 @10:21-10:22
       %0 @10:9-10:10 = call "bump(_: [100000 of Int], _: UInt)"(a0, a1) @10:13-10:23
       end a1
       end a0
       declare %3
       %3 @11:21-11:26 = add checked read %1 @11:21-11:22, UInt 1 @11:21-11:26
-      begin a2 read static %0 @11:18-11:19
-      begin a3 read static %3 @11:21-11:26
+      begin a2 read %0 @11:18-11:19
+      begin a3 read %3 @11:21-11:26
       %0 @11:9-11:10 = call "bump(_: [100000 of Int], _: UInt)"(a2, a3) @11:13-11:27
       end a3
       retire %3
       end a2
       declare %4
       %4 @12:21-12:26 = add checked read %1 @12:21-12:22, UInt 2 @12:21-12:26
-      begin a4 read static %0 @12:18-12:19
-      begin a5 read static %4 @12:21-12:26
+      begin a4 read %0 @12:18-12:19
+      begin a5 read %4 @12:21-12:26
       %0 @12:9-12:10 = call "bump(_: [100000 of Int], _: UInt)"(a4, a5) @12:13-12:27
       end a5
       retire %4
       end a4
       declare %5
       %5 @13:21-13:26 = add checked read %1 @13:21-13:22, UInt 3 @13:21-13:26
-      begin a6 read static %0 @13:18-13:19
-      begin a7 read static %5 @13:21-13:26
+      begin a6 read %0 @13:18-13:19
+      begin a7 read %5 @13:21-13:26
       %0 @13:9-13:10 = call "bump(_: [100000 of Int], _: UInt)"(a6, a7) @13:13-13:27
       end a7
       retire %5
@@ -170,7 +170,7 @@ private let replacingOneArray = """
     bb3:
       retire %1
       retire %2
-      begin a8 read static %0[2] @16:11-16:15
+      begin a8 read %0[2] @16:11-16:15
       _ = call builtin "print(_: Int)"(a8) @16:5-16:16
       end a8
       retire %0
@@ -325,22 +325,22 @@ private let summingTwoTemporaries = """
       declare %0
       declare %1
       %1 @16:15-16:24 = call "filled(_: UInt)"(UInt 3) @16:15-16:24
-      begin a0 read static %1 @16:15-16:24
+      begin a0 read %1 @16:15-16:24
       %0 @16:11-16:25 = call "sum(_: [100000 of Int])"(a0) @16:11-16:25
       end a0
       retire %1
-      begin a1 read static %0 @16:11-16:25
+      begin a1 read %0 @16:11-16:25
       _ = call builtin "print(_: Int)"(a1) @16:5-16:26
       end a1
       retire %0
       declare %2
       declare %3
       %3 @17:15-17:24 = call "filled(_: UInt)"(UInt 5) @17:15-17:24
-      begin a2 read static %3 @17:15-17:24
+      begin a2 read %3 @17:15-17:24
       %2 @17:11-17:25 = call "sum(_: [100000 of Int])"(a2) @17:11-17:25
       end a2
       retire %3
-      begin a3 read static %2 @17:11-17:25
+      begin a3 read %2 @17:11-17:25
       _ = call builtin "print(_: Int)"(a3) @17:5-17:26
       end a3
       retire %2

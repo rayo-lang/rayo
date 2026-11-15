@@ -82,7 +82,7 @@ struct CompilerTests {
             bb0:
               declare %0
               %0 @2:9-2:10 = operand 1 @2:13-2:14
-              begin a0 read static %0 @3:11-3:12
+              begin a0 read %0 @3:11-3:12
               _ = call builtin "print(_: Int)"(a0) @3:5-3:13
               end a0
               retire %0
