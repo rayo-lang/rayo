@@ -1,0 +1,38 @@
+main "main()"
+
+func "main()"() -> Void {
+  temp %0: Int
+bb0:
+  declare %0
+  %0 @2:11-2:23 = call "firstOver(_: Int)"(2) @2:11-2:23
+  begin a0 read %0 @2:11-2:23
+  _ = call builtin "print(_: Int)"(a0) @2:5-2:24
+  return
+}
+
+func "firstOver(_: Int)"(_: Int) -> Int {
+  param %0 n: Int @4:18-4:19
+  var %1 i: Int @5:9-5:10
+  temp %2: Bool
+bb0:
+  declare %1
+  %1 @5:9-5:10 = operand 0 @5:13-5:14
+  goto bb1
+bb1:
+  goto bb2
+bb2:
+  %1 @7:9-7:10 = add checked read %1 @7:9-7:10, 1 @7:9-7:10
+  declare %2
+  %2 @8:12-8:17 = greater read %1 @8:12-8:13, read %0 @8:16-8:17 @8:12-8:17
+  branch read %2 @8:12-8:17, bb4, bb5
+bb3:
+  unreachable
+bb4:
+  return move %1 @8:27-8:28
+bb5:
+  goto bb6
+bb6:
+  goto bb1
+bb7:
+  goto bb6
+}

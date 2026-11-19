@@ -26,8 +26,8 @@ extension FunctionLowering {
             lowerCompoundAssign(target, op, value)
 
         // A `while` loops through blocks of its own.
-        case .whileStmt(let condition, let body):
-            lowerWhile(condition, body)
+        case .whileStmt(let condition, let alwaysHolds, let body):
+            lowerWhile(condition, alwaysHolds: alwaysHolds, body)
 
         // A `break` goes to the innermost loop's exit.
         case .breakStmt:
@@ -91,7 +91,7 @@ extension FunctionLowering {
         return nil
     }
 
-    private mutating func lowerWhile(_ condition: CheckedExpr, _ body: [CheckedStmt]) {
+    private mutating func lowerWhile(_ condition: CheckedExpr, alwaysHolds: Bool, _ body: [CheckedStmt]) {
         // Make the loop's blocks: its header, its body, and its exit.
         let header = builder.newBlock()
         let bodyBlock = builder.newBlock()
@@ -99,7 +99,7 @@ extension FunctionLowering {
 
         // Enter the loop at its header, which tests the condition and goes on to the body or the exit.
         builder.end(with: .goto(header), continuingIn: header)
-        let test = headerTerminator(testing: condition, body: bodyBlock, exit: exit)
+        let test = headerTerminator(testing: condition, alwaysHolds: alwaysHolds, body: bodyBlock, exit: exit)
         builder.end(with: test, continuingIn: bodyBlock)
 
         // Lower the body with this loop innermost, so its `break` goes to `exit` and its `continue` to `header`.
@@ -112,10 +112,12 @@ extension FunctionLowering {
     }
 
     /// Lowers `condition` into the current block, and returns the terminator that goes on from a loop's header to
-    /// `body` when the condition holds and to `exit` when it doesn't.
-    private mutating func headerTerminator(testing condition: CheckedExpr, body: BlockID, exit: BlockID) -> Terminator {
-        // Only a `break` reaches the exit of a `while true`, so its header goes on to `body` alone.
-        if case .boolLiteral(true) = condition.kind { return .goto(body) }
+    /// `body` when the condition holds and to `exit` when it doesn't. A condition that always holds isn't evaluated,
+    /// and the header goes on to `body` alone, since only a `break` reaches the exit.
+    private mutating func headerTerminator(
+        testing condition: CheckedExpr, alwaysHolds: Bool, body: BlockID, exit: BlockID,
+    ) -> Terminator {
+        if alwaysHolds { return .goto(body) }
         return .branch(operand(of: condition, as: .read), then: body, otherwise: exit)
     }
 }

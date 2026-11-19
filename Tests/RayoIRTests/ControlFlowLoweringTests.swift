@@ -102,6 +102,24 @@ struct ControlFlowLoweringTests {
         try expectLowering(ofMain: "while true { break }", toMatch: "while-true-break")
     }
 
+    @Test func `a function that ends in a 'while true' that no 'break' leaves ends in a block no path reaches`()
+        throws {
+        // The loop's exit, where the function's end lies, is a block that only a `break` would reach.
+        let source = """
+            func main() {
+                print(firstOver(2))
+            }
+            func firstOver(_ n: Int) -> Int {
+                var i = 0
+                while true {
+                    i += 1
+                    if i > n { return i }
+                }
+            }
+            """
+        try expectLowering(of: source, toMatch: "while-true-result")
+    }
+
     @Test func `a 'continue' goes back to the header`() throws {
         try expectLowering(ofMain: "var i = 0\nwhile i < 2 {\ni += 1\ncontinue\n}", toMatch: "continue")
     }

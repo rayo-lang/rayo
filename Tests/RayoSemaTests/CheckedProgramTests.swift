@@ -118,6 +118,15 @@ struct CheckedProgramTests {
             """, toMatch: "control-flow")
     }
 
+    @Test func `only a loop whose condition is 'true' says that its condition always holds`() throws {
+        try expectChecking(of: """
+            func main() {
+                while true { break }
+                while false {}
+            }
+            """, toMatch: "always-holding-loops")
+    }
+
     @Test func `checking leaves a local written bare as its value, and a 'copy' of it as a copy`() throws {
         try expectChecking(of: """
             func main() {
