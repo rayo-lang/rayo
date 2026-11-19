@@ -47,6 +47,8 @@ public enum OwnershipChecker {
         let unread = UnusedValueChecker.errors(in: places, uses: uses)
         guard unread.isEmpty else { return (nil, unread) }
 
+        // The retirements are written into the body that already has the ends of its accesses, because an access's end
+        // uses the local it reaches. Written in before the ends, a local could retire while an access still reaches it.
         return (LocalRetirements.written(into: ended), [])
     }
 }
