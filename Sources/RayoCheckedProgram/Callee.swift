@@ -14,8 +14,8 @@ public enum Callee: Hashable, Sendable {
 
     /// The name of `builtin` and its parameters, as a function the program declares with them is named.
     private static func name(of builtin: Builtin) -> String {
-        let parameters = builtin.parameters.map(\.description).joined(separator: ", ")
-        return "\(builtin.name.spelling)(\(parameters))"
+        let parameters = builtin.parameters.map { (label: $0.label, type: "\($0.type)") }
+        return FunctionDeclaration.name(builtin.name.spelling, parameters: parameters)
     }
 
     /// The parameters of what the call calls, in order, where `functions` declares the program's functions.

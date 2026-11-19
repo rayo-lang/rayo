@@ -11,8 +11,7 @@ struct Signature: CustomStringConvertible {
 
     /// The name and the parameters, such as `f(_: Int, by: Bool)`, which tell the function apart from every other.
     var description: String {
-        let parameterList = parameters.map { "\($0.label ?? "_"): \($0.spelledType)" }.joined(separator: ", ")
-        return "\(name)(\(parameterList))"
+        FunctionDeclaration.name(name, parameters: parameters.map { (label: $0.label, type: $0.spelledType) })
     }
 
     /// Whether the declaration failed: a parameter's type or the written result type isn't known, which was reported
