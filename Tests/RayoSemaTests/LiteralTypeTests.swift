@@ -70,8 +70,18 @@ struct LiteralTypeTests {
         ("print(9223372036854775808 + nope)", [ErrorCode.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")]),
         ("print(nope + 9223372036854775808)", [.notDeclared(name: "nope"), .literalDoesntFit(type: "Int")]),
         ("f(9223372036854775808, nope)", [.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")]),
+        ("print([9223372036854775808, nope])", [.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")]),
+        (
+            "print(if true { 9223372036854775808 } else { nope })",
+            [.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")],
+        ),
+        ("let a: Nope = 9223372036854775808", [.notAType(name: "Nope"), .literalDoesntFit(type: "Int")]),
+        (
+            "let a: [2 of Int] = .init(repeating: 9223372036854775808, nope)",
+            [.literalDoesntFit(type: "Int"), .notDeclared(name: "nope")],
+        ),
     ])
-    func `a literal its default type can't hold is reported beside an operand or argument that fails`(
+    func `a literal its default type can't hold is reported beside a value or a written type that fails`(
         body: String, expected: [ErrorCode],
     ) {
         #expect(reported(inMain: body).codes == expected)
