@@ -75,8 +75,8 @@ extension Compiler {
     }
 
     /// `program`, which `stage` gave, once a debug build of `rayoc` has checked it keeps the IR's rules: its types, the
-    /// checks of the indices it finds elements by, and, for the ownership stage's IR, where its accesses end and its
-    /// locals retire.
+    /// blocks its paths reach, the checks of the indices it finds elements by, and, for the ownership stage's IR,
+    /// where its accesses end and its locals retire.
     static func verified(_ program: IRProgram, from stage: IRStage) throws(CompilationError) -> IRProgram {
         // A release build of `rayoc` takes its stages' IR on trust, and spends no time checking it.
         #if DEBUG

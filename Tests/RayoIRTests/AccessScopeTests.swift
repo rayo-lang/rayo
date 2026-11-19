@@ -99,14 +99,6 @@ private let unscopedAccesses = [
         message: "the IR leaves the function at bb0 without ending a0",
     ),
     UnscopedAccess(
-        testDescription: "an access not ended before a block that no run reaches the end of",
-        blocks: """
-              begin a0 read %0 @1:1-1:2
-              unreachable
-            """,
-        message: "the IR leaves the function at bb0 without ending a0",
-    ),
-    UnscopedAccess(
         testDescription: "an access ended on one path but not on the other",
         blocks: """
               begin a0 read %0 @1:1-1:2

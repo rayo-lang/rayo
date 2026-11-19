@@ -8,7 +8,9 @@ public enum CheckedStmt: Sendable {
     case binding(LocalID, at: SourceRange, CheckedExpr?)
     case assign(CheckedPlace, CheckedExpr)
     case compoundAssign(CheckedPlace, CheckedBinaryOperator, CheckedExpr)
-    case whileStmt(condition: CheckedExpr, body: [CheckedStmt])
+    /// Runs the body for as long as the condition holds. Where the condition always holds, the loop never ends by
+    /// testing it, so only a `break` leaves the loop.
+    case whileStmt(condition: CheckedExpr, alwaysHolds: Bool, body: [CheckedStmt])
     case breakStmt
     case continueStmt
     /// Evaluates the value, when there is one, and leaves the function with it as the result.

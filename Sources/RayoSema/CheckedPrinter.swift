@@ -92,8 +92,8 @@ public struct CheckedPrinter: ~Copyable {
             line("compound-assign \(op)", depth)
             write(place, depth: depth + 1)
             write(value, depth: depth + 1)
-        case .whileStmt(let condition, let body):
-            line("while", depth)
+        case .whileStmt(let condition, let alwaysHolds, let body):
+            line(alwaysHolds ? "while always-holds" : "while", depth)
             write(condition, depth: depth + 1)
             line("do", depth)
             write(body, depth: depth + 1)

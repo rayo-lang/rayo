@@ -1,8 +1,8 @@
 import RayoSema
 
-/// Checks the rules of IR that code generation takes as given. The IR keeps its types, and each index it finds an
-/// element by was checked against its array's count. The IR the ownership stage gives also ends each access once on
-/// every path, and uses no local after it retires it.
+/// Checks the rules of IR that code generation takes as given. The IR keeps its types, no path reaches a block that
+/// ends in `unreachable`, and each index it finds an element by was checked against its array's count. The IR the
+/// ownership stage gives also ends each access once on every path, and uses no local after it retires it.
 public enum IRVerifier {
     /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
     /// none does. Each primary initializer's declaration is checked in the order of its ID, then each body in the
@@ -20,12 +20,14 @@ public enum IRVerifier {
     }
 
     /// Throws the first violation in `body`, the body of `declaration` in `program`, which `stage` gave: of its types,
-    /// then of its indices, then, for the ownership stage's IR, of where its accesses end and its locals retire.
+    /// then of the blocks its paths reach, then of its indices, then, for the ownership stage's IR, of where its
+    /// accesses end and its locals retire.
     private static func verify(
         _ body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram, from stage: IRStage,
     ) throws(IRViolation) {
         // The index check takes each place's type as given, so the types are checked first.
         try FunctionVerifier(body: body, of: declaration, in: program).verify()
+        try UnreachableBlockVerifier(body: body, of: declaration.name).verify()
         try ElementIndexVerifier(body: body, of: declaration.name, types: program.types).verify()
 
         // Lowering writes no end and no retirement, so only the ownership stage's IR ends its accesses and retires its

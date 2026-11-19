@@ -70,19 +70,20 @@ struct ControlFlowTests {
 
     @Test(arguments: [Build.debug, .release])
     func `a block that no path reaches ends in unreachable, which the program never reaches`(build: Build) throws {
-        // `seven`'s second block follows its return, and `main`'s third follows a branch on a constant true.
+        // `seven`'s second block follows its return, and `main`'s second lies between the blocks of a jump that skips
+        // it.
         let text = """
             main "main()"
             func "main()"() -> Void {
               temp %0: Int
             bb0:
               %0 @1:1-1:2 = call "seven()"() @1:1-1:2
-              branch true, bb1, bb2
+              goto bb2
             bb1:
+              unreachable
+            bb2:
               \(printInt("%0"))
               return
-            bb2:
-              unreachable
             }
             func "seven()"() -> Int {
               let %0 x: Int @1:1-1:1

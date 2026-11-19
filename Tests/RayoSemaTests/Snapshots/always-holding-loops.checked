@@ -1,0 +1,11 @@
+main "main()"
+
+func "main()"() -> Void {
+  while always-holds
+    bool true: Bool @2:11-2:15
+  do
+    break
+  while
+    bool false: Bool @3:11-3:16
+  do
+}
