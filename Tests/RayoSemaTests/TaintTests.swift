@@ -75,7 +75,6 @@ struct TaintTests {
         _ = checker.check()
         #expect(checker.errors.taints.functions == [FunctionID(index: 0)])
     }
-
 }
 
 /// The checker's promise that a body missing a statement is tainted. Every check that fails taints the body it is
