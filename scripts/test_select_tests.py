@@ -83,7 +83,7 @@ class SelectionTests(unittest.TestCase):
 class SelectTestsMainTests(unittest.TestCase):
     def run_main(self, arguments, standard_input):
         output, errors = io.StringIO(), io.StringIO()
-        with (contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors)):
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
             status = main(arguments, io.StringIO(standard_input))
         return status, output.getvalue(), errors.getvalue()
 

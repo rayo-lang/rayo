@@ -61,9 +61,9 @@ class RunAffectedTestsTests(unittest.TestCase):
 
     def stand_in_environment(self):
         # A `swift` of the test's own comes first on the search path, and git reads none of the user's settings.
-        bin = os.path.join(self.directory, 'bin')
-        os.mkdir(bin)
-        swift = os.path.join(bin, 'swift')
+        bin_directory = os.path.join(self.directory, 'bin')
+        os.mkdir(bin_directory)
+        swift = os.path.join(bin_directory, 'swift')
         with open(swift, 'w', encoding='utf-8') as f:
             f.write(SWIFT.format(python=sys.executable))
         os.chmod(swift, 0o755)
@@ -71,7 +71,8 @@ class RunAffectedTestsTests(unittest.TestCase):
         with open(package, 'w', encoding='utf-8') as f:
             json.dump(PACKAGE, f)
         return dict(
-            os.environ, PATH=bin + os.pathsep + os.environ['PATH'], STAND_IN_PACKAGE=package, STAND_IN_LOG=self.log,
+            os.environ, PATH=bin_directory + os.pathsep + os.environ['PATH'],
+            STAND_IN_PACKAGE=package, STAND_IN_LOG=self.log,
             GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_AUTHOR_NAME='Test', GIT_AUTHOR_EMAIL='test@test',
             GIT_COMMITTER_NAME='Test', GIT_COMMITTER_EMAIL='test@test',
         )
@@ -207,6 +208,16 @@ class RunAffectedTestsTests(unittest.TestCase):
 
         self.assertEqual((status, output), (2, ''))
         self.assertIn("can't find the branch 'missing'", errors)
+        self.assertEqual(self.swift_runs(), [])
+
+    def test_git_failing_is_reported_in_its_own_words_and_nothing_runs(self):
+        self.repository = os.path.join(self.directory, 'not-a-repository')
+        os.mkdir(self.repository)
+
+        status, output, errors = self.run_script()
+
+        self.assertEqual((status, output), (2, ''))
+        self.assertIn('not a git repository', errors)
         self.assertEqual(self.swift_runs(), [])
 
 
