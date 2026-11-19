@@ -1,18 +1,34 @@
-"""Prints the test targets that a change reaches through the package manifest's dependencies, for CI to run only
-those:
+"""Selects the test targets that a change reaches through the package manifest's dependencies, so that a run tests
+only those. `run_affected_tests.py` runs the tests it selects.
 
-    swift package dump-package > package.json
-    python3 scripts/select_tests.py package.json changed-paths.json
+Run on its own, it reads changed paths, relative to the package's root, one a line, and prints the ones that can
+change what a test does, as a JSON array, for CI to pass to its test jobs:
 
-`changed-paths.json` holds the changed paths, relative to the package's root, as a JSON array. The script prints
-`all`, `none`, or the regular expression that `swift test --filter` takes to run only the selected targets' tests.
+    git diff --name-only main HEAD | python3 scripts/select_tests.py
 """
 
 import json
+import re
 import sys
+
+# The paths whose change can change what a test does. The build reads only the package's sources, its tests and its
+# manifest, and CI runs the tests through its workflow and its actions. The driver's tests also run each version's
+# proof program, in `examples/v<version>/`, and compare what it prints with its expected output, whose line endings
+# `.gitattributes` keeps.
+TEST_PATHS = re.compile(r'''
+    ^(Sources|Tests)/
+    | ^Package\.(swift|resolved)$
+    | ^\.github/(workflows/ci\.yml$|actions/)
+    | ^examples/v[0-9.]+/
+    | ^\.gitattributes$
+''', re.VERBOSE)
 
 # The kinds of dependency that name a target of the package; a product is another package's.
 TARGET_DEPENDENCIES = ('byName', 'target')
+
+
+def can_change_tests(path):
+    return TEST_PATHS.search(path) is not None
 
 
 def directory(target):
@@ -38,30 +54,32 @@ def reaches(name, changed, by_name):
                for dependency in dependency_names(by_name[name]) if dependency in by_name)
 
 
-def selection(package, changed_paths):
-    targets = package['targets']
-    changed = {target_holding(targets, path) for path in changed_paths}
+def test_targets(package):
+    """The names of the package's test targets, sorted."""
+    return sorted(target['name'] for target in package['targets'] if target['type'] == 'test')
 
-    # A path in no target's directory, such as the manifest or CI's, can change what any test target does.
+
+def selection(package, changed_paths):
+    """The names of the test targets that the changed paths reach, sorted. A path no test reads selects none."""
+    targets = package['targets']
+    changed = {target_holding(targets, path) for path in changed_paths if can_change_tests(path)}
+
+    # A path that a test reads but no target holds, such as the manifest or CI's, can change what any test does.
     if None in changed:
-        return 'all'
+        return test_targets(package)
 
     by_name = {target['name']: target for target in targets}
-    selected = sorted(target['name'] for target in targets
-                      if target['type'] == 'test' and reaches(target['name'], changed, by_name))
-    # A change that reaches no test target still has to build, which `none` asks for.
-    return '^(' + '|'.join(selected) + r')\.' if selected else 'none'
+    return [name for name in test_targets(package) if reaches(name, changed, by_name)]
 
 
-def main(arguments):
-    if len(arguments) != 2:
-        print('usage: select_tests.py <package.json> <changed-paths.json>', file=sys.stderr)
+def main(arguments, standard_input):
+    if arguments:
+        print('usage: select_tests.py < changed-paths', file=sys.stderr)
         return 2
-    # Windows reads a file in its own code page unless told otherwise.
-    with open(arguments[0], encoding='utf-8') as package, open(arguments[1], encoding='utf-8') as paths:
-        print(selection(json.load(package), json.load(paths)))
+    paths = [line for line in standard_input.read().splitlines() if line]
+    print(json.dumps([path for path in paths if can_change_tests(path)]))
     return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv[1:], sys.stdin))
