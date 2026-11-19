@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Checks the rules of IR that the stages after the one that gave it take as given. The IR keeps its types, no path
 /// reaches a block that ends in `unreachable`, and each index it finds an element by was checked against its array's

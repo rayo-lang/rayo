@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
 import RayoLLVM
@@ -12,20 +13,21 @@ import RayoSyntax
 extension Compiler {
     /// Reads the source file at `path` through `readFile`, checks it, lowers it to Rayo IR, and runs the ownership
     /// checks on the IR, adding the program's errors and warnings to `errors`. It gives the IR the emitter receives,
-    /// without the bodies of the functions a stage found failed, or nil when the file isn't UTF-8 text.
+    /// without the bodies of the functions a stage found failed, and whether a function that failed to parse may have
+    /// been the file's `main`; or nil when the file isn't UTF-8 text.
     static func frontEnd(
         _ path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
-    ) throws(CompilationError) -> IRProgram? {
+    ) throws(CompilationError) -> (program: IRProgram, mainMayHaveFailed: Bool)? {
         guard let checked = try checkedProgram(path, readFile: readFile, errors: &errors) else { return nil }
-        return try ir(of: checked, errors: &errors)
+        return (try ir(of: checked.program, errors: &errors), checked.mainMayHaveFailed)
     }
 
     /// Reads the source file at `path` through `readFile`, parses it and checks it, adding its errors and warnings to
-    /// `errors`. It gives the checked program, without the bodies of the functions that are tainted, or nil when the
-    /// file isn't UTF-8 text.
+    /// `errors`. It gives the checked program, without the bodies of the functions that are tainted, and whether a
+    /// function that failed to parse may have been the file's `main`; or nil when the file isn't UTF-8 text.
     static func checkedProgram(
         _ path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
-    ) throws(CompilationError) -> CheckedProgram? {
+    ) throws(CompilationError) -> (program: CheckedProgram, mainMayHaveFailed: Bool)? {
         let source = try source(at: path, readFile: readFile)
         guard let file = syntaxTree(of: source, errors: &errors) else { return nil }
         return checked(file, errors: &errors)
@@ -57,12 +59,15 @@ extension Compiler {
         return file
     }
 
-    /// Checks `file`, and gives the program it makes, adding its errors and warnings to `errors`. The program holds no
-    /// body for a function whose body is tainted, so the stages after this one skip it.
-    private static func checked(_ file: SourceFile, errors: inout [Diagnostic]) -> CheckedProgram {
+    /// Checks `file`, and gives the program it makes, and whether a function that failed to parse may have been its
+    /// `main`, adding its errors and warnings to `errors`. The program holds no body for a function whose body is
+    /// tainted, so the stages after this one skip it.
+    private static func checked(
+        _ file: SourceFile, errors: inout [Diagnostic],
+    ) -> (program: CheckedProgram, mainMayHaveFailed: Bool) {
         let checked = Checker.check(file)
         errors += checked.diagnostics
-        return checked.program
+        return (checked.program, checked.mainMayHaveFailed)
     }
 
     /// Runs the ownership checks on `program`, adding their errors to `errors`, and gives the program with the end of
@@ -87,12 +92,15 @@ extension Compiler {
     }
 
     /// The executable that `program` makes, when it has a `main`, which an executable starts at. A library, which has
-    /// none, is reported in `errors`, and makes none.
-    static func executable(of program: IRProgram, errors: inout [Diagnostic]) -> IRExecutable? {
+    /// none, makes none, and is reported in `errors` unless a function that failed to parse may have been its `main`,
+    /// as `mainMayHaveFailed` says.
+    static func executable(
+        of program: IRProgram, mainMayHaveFailed: Bool, errors: inout [Diagnostic],
+    ) -> IRExecutable? {
         guard let executable = IRExecutable(program) else {
             // A function that failed to parse may have been the `main`, so its absence isn't reported. A library is
             // reported at the start of its file, since no line of it is wrong.
-            if !program.mainMayHaveFailed {
+            if !mainMayHaveFailed {
                 let start = SourceLocation(line: 1, column: 1, offset: 0)
                 errors.append(Diagnostic(.noMain, at: SourceRange(start, start)))
             }

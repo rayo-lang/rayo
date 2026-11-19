@@ -1,4 +1,5 @@
-@testable import RayoSema
+@testable import RayoCheckedProgram
+import RayoSema
 import RayoSyntax
 import Testing
 

@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Returns, which give the function's result back as its signature says.
 extension FunctionEmitter {

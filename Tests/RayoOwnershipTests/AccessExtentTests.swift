@@ -1,7 +1,7 @@
 import RayoOwnership
 import RayoDiagnostics
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 import Testing
 
 @Suite("Where accesses end, and which of them conflict")

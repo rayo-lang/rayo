@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// An operator that computes a value from one operand, whose type says how it computes it.
 public enum IRUnaryOperator: Hashable, Sendable, CaseIterable, CustomStringConvertible {

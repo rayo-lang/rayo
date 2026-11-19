@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Checks that nothing in one function's body uses a local on any path after a retirement ends its life, until a
 /// declaration starts it again, as the IR the ownership stage gives must. Paths into a block may differ in which locals

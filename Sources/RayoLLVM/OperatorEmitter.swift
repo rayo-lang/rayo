@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// Emits the IR's operators on scalar values into a function, each in its operands' number format, and the

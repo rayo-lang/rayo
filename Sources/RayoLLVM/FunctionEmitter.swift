@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// Emits one function's body into an LLVM function. Each local lies in a place of its own: a stack slot, or the

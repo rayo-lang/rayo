@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 /// An input to an operation: a constant, or the value at a place, either read or moved out.

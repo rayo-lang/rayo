@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Writes the retirement of each local that a declaration starts the life of into a function's body, after the last
 /// point on each path where later code uses it before a declaration starts its life again. A local that no

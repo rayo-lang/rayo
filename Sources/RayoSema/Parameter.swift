@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// One parameter of a signature: the label a call writes before its argument, how the function takes the argument,
 /// and the type the argument must have.
 struct Parameter {

@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 extension IRBinaryOperator {
     /// The IR operator that the checked `op` lowers to, whose arithmetic checks overflow. `op` is neither `&&` nor

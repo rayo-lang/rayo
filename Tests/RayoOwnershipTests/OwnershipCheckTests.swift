@@ -2,7 +2,7 @@ import Testing
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
-import RayoSema
+import RayoCheckedProgram
 
 @Suite("Running the ownership checks over a program")
 struct OwnershipCheckTests {

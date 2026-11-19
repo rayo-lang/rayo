@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 extension IRParser {

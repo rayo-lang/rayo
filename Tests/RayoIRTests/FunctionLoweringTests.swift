@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoIR
 import RayoSema
 import RayoSyntax

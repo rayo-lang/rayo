@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 /// IR that uses a local on some path after a retirement ends its life, and what the verifier says is wrong with it.

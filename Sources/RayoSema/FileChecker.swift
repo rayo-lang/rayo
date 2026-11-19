@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoSource
 import RayoSyntax
@@ -198,13 +199,12 @@ final class FileChecker {
             if declaration != nil, !errors.taints.functions.contains(id) { bodies[id] = body(of: id).body }
         }
 
-        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main,
-                              mainMayHaveFailed: mainMayHaveFailed)
+        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main)
     }
 
     /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
     /// named `main`.
-    private var mainMayHaveFailed: Bool {
+    var mainMayHaveFailed: Bool {
         file.declarations.contains { declaration in
             guard case .failed(let failed) = declaration else { return false }
             return failed.kind == .function && (failed.name == nil || failed.name == "main")

@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 /// Lowers statements, the loops and jumps among them included.

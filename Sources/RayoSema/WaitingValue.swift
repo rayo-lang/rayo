@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// A value checked on its own whose type the position it stands in settles: an untyped value, an array literal, an
 /// implicit member, or an `if` whose branches end in such values.
 protocol WaitingValue {

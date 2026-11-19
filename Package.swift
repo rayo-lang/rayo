@@ -135,9 +135,12 @@ let package = Package(
         .target(name: "RayoSource"),
         .target(name: "RayoDiagnostics", dependencies: ["RayoDiagnosticsMacros", "RayoSource"]),
         .target(name: "RayoSyntax", dependencies: ["RayoDiagnostics", "RayoSource"]),
-        .target(name: "RayoSema", dependencies: ["RayoDiagnostics", "RayoSource", "RayoSyntax"]),
-        .target(name: "RayoIR", dependencies: ["RayoSema", "RayoSource"]),
-        .target(name: "RayoOwnership", dependencies: ["RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource"]),
+        .target(name: "RayoCheckedProgram", dependencies: ["RayoSource"]),
+        .target(name: "RayoSema", dependencies: ["RayoCheckedProgram", "RayoDiagnostics", "RayoSource", "RayoSyntax"]),
+        .target(name: "RayoIR", dependencies: ["RayoCheckedProgram", "RayoSource"]),
+        .target(name: "RayoOwnership", dependencies: [
+            "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoSource",
+        ]),
         .systemLibrary(name: "CLLVM"),
         .target(name: "CLLVMInstall", cSettings: [
             .define("RAYO_LLVM_MAJOR_VERSION", to: "\(llvmMajorVersion)"),
@@ -164,10 +167,11 @@ let package = Package(
         ),
         .target(
             name: "RayoLLVM",
-            dependencies: ["LLVM", "RayoIR", "RayoRuntime", "RayoSema", "RayoSource"],
+            dependencies: ["LLVM", "RayoCheckedProgram", "RayoIR", "RayoRuntime", "RayoSource"],
         ),
         .target(name: "RayoCompiler", dependencies: [
-            "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoIR", "RayoOwnership", "RayoLLVM", "RayoSource",
+            "RayoDiagnostics", "RayoSyntax", "RayoSema", "RayoCheckedProgram", "RayoIR", "RayoOwnership", "RayoLLVM",
+            "RayoSource",
         ]),
         .executableTarget(name: "rayoc", dependencies: ["RayoCompiler"]),
         .target(name: "RayoDriver", dependencies: ["RayoLLVMInstall"]),
@@ -182,7 +186,8 @@ let package = Package(
         .testTarget(name: "RayoSyntaxTests", dependencies: ["RayoDiagnostics", "RayoSyntax"]),
         .target(name: "SnapshotTesting", path: "Tests/SnapshotTesting"),
         .testTarget(
-            name: "RayoSemaTests", dependencies: ["RayoDiagnostics", "RayoSema", "RayoSyntax", "SnapshotTesting"],
+            name: "RayoSemaTests",
+            dependencies: ["RayoCheckedProgram", "RayoDiagnostics", "RayoSema", "RayoSyntax", "SnapshotTesting"],
             exclude: ["Snapshots"],
         ),
         .testTarget(name: "RayoCompilerTests", dependencies: [
@@ -195,16 +200,17 @@ let package = Package(
             "rayo", "rayoc", "tool-stand-in", "RayoDriver", "RayoLLVMInstall", "RayoRuntime", "ToolStandIn",
         ]),
         .testTarget(name: "RayoIRTests", dependencies: [
-            "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax", "SnapshotTesting",
+            "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource", "RayoSyntax",
+            "SnapshotTesting",
         ], exclude: ["Snapshots"]),
         .testTarget(name: "RayoOwnershipTests", dependencies: [
-            "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
+            "RayoCheckedProgram", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSource",
         ]),
         .testTarget(name: "LLVMTests", dependencies: ["LLVM"]),
         .target(name: "RayoLLVMTestSupport", path: "Tests/RayoLLVMTestSupport"),
         .testTarget(name: "RayoLLVMTests", dependencies: [
-            "LLVM", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport", "RayoRuntime", "RayoSema",
-            "RayoSource",
+            "LLVM", "RayoCheckedProgram", "RayoIR", "RayoLLVM", "RayoLLVMInstall", "RayoLLVMTestSupport",
+            "RayoRuntime", "RayoSource",
         ]),
     ],
 )

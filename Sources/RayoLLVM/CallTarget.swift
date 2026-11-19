@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// What a call of one of the program's functions reaches in the module.
 enum CallTarget {

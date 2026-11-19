@@ -1,6 +1,6 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
-import RayoSema
 
 /// Works out where each access of a function ends, checks the law of exclusivity over those extents, and writes the
 /// ends into the function's body.

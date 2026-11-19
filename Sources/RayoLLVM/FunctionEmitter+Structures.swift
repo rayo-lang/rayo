@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Structs, which a call of their primary initializer builds in its destination one field at a time.
 extension FunctionEmitter {

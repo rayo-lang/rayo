@@ -17,7 +17,7 @@ public struct TypeTable: Equatable, Sendable {
     }
 
     /// The table of `entries`, indexed by `StructID`, nil for each struct whose declaration failed.
-    init(entries: [StructType?]) {
+    package init(entries: [StructType?]) {
         self.entries = entries
     }
 
@@ -62,7 +62,7 @@ public struct TypeTable: Equatable, Sendable {
     }
 
     /// Whether the size of a value of `type`, which isn't Void, fits in an Int, so that the value can lie in memory.
-    func fitsInMemory(_ type: RayoType) -> Bool {
+    package func fitsInMemory(_ type: RayoType) -> Bool {
         layout(of: type, inside: []) != nil
     }
 
@@ -72,7 +72,7 @@ public struct TypeTable: Equatable, Sendable {
 
     /// Whether a value of `type`, which fits in memory, may lie on the stack: it is Void, or its size is at most
     /// `largestStackValue`.
-    func fitsOnStack(_ type: RayoType) -> Bool {
+    package func fitsOnStack(_ type: RayoType) -> Bool {
         type == .void || layout(of: type).size <= Self.largestStackValue
     }
 

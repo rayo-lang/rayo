@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// The types of the places in one function: each local's, and each part's inside it.
 struct PlaceTypes {

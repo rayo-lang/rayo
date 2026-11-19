@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Reads Rayo IR from the text `IRPrinter` writes, as a recursive-descent parser over its tokens.
 ///

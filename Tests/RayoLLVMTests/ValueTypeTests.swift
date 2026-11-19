@@ -1,5 +1,5 @@
 @testable import RayoLLVM
-import RayoSema
+import RayoCheckedProgram
 import Testing
 
 @Suite("The LLVM types of values")

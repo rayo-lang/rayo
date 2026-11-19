@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// A program that an executable can be built from: Rayo IR with the function a run of it starts at.
 public struct IRExecutable: Equatable, Sendable {

@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// The places that hold a function's locals, and the reads, writes and copies of the values in them.
 extension FunctionEmitter {

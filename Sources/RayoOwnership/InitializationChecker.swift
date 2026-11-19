@@ -1,6 +1,6 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// Checks that a program uses each local, and each field inside one, only where it holds a value, and assigns each

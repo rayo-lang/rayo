@@ -1,5 +1,5 @@
 import LLVM
-import RayoSema
+import RayoCheckedProgram
 
 /// A function's signature as LLVM sees it: how each parameter and the result are passed, and the LLVM function type
 /// and parameter attributes that follow.

@@ -1,7 +1,7 @@
 import LLVM
 @testable import RayoLLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// What an operator came to when its emitted code ran: the value it gave, or the message of the panic it reported.
 enum OperatorOutcome: Equatable {

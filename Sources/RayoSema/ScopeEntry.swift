@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// What a name that a block or a function's parameter list declares stands for.
 enum ScopeEntry {
     case local(LocalID)

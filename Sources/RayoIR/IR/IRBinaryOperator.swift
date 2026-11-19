@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// An operator that computes a value from two operands of one type. Arithmetic carries its overflow mode, and the
 /// operands' type says the rest of how the operator computes, such as whether it orders them as signed.

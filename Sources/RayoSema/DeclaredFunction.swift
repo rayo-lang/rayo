@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoSyntax
 
 /// A function as the checker declares it: what a call needs to know about it, and where its body comes from.

@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 /// IR that no lowering of a checked program makes, and what the verifier says is wrong with it.

@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 extension IRUnaryOperator {
     /// The IR operator that the checked `op` lowers to, whose arithmetic checks overflow.

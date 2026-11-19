@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// A function's name, its parameters' labels and types, and its result type: everything a call is checked against,
 /// apart from the function's body. Each function the file declares has one, and so does each struct's primary
 /// initializer, each of the prelude's built-ins, and an array's `init(repeating:)`.

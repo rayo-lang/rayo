@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// One of the integers and Bools a value splits into: where it lies inside the value, and its type.
 struct Scalar: Equatable {

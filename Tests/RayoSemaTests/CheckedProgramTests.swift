@@ -9,7 +9,7 @@ private func expectChecking(
 ) throws {
     let (file, syntaxErrors) = Parser.parse(source)
     try #require(syntaxErrors.isEmpty, "\(syntaxErrors)", sourceLocation: sourceLocation)
-    let (program, checkErrors) = Checker.check(file)
+    let (program, checkErrors, _) = Checker.check(file)
     try #require(checkErrors.isEmpty, "\(checkErrors)", sourceLocation: sourceLocation)
     Snapshot("\(name).checked").expect(CheckedPrinter.text(of: program), sourceLocation: sourceLocation)
 }

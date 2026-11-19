@@ -2,7 +2,7 @@ import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 struct InitializationCheckerTests {

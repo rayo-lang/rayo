@@ -1,6 +1,6 @@
 import LLVM
 @testable import RayoLLVM
-import RayoSema
+import RayoCheckedProgram
 import Testing
 
 @Suite("How a function's arguments and result are passed")

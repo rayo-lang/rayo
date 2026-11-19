@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// The body of a function of the program, as a control-flow graph.
 public struct IRBody: Equatable, Sendable {
