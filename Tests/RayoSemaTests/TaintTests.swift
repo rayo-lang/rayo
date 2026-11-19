@@ -1,5 +1,5 @@
 import Testing
-import RayoSema
+@testable import RayoSema
 import RayoSyntax
 
 /// The names of the functions of the program `source` checks to, and the names of those it holds a body for.
@@ -68,5 +68,68 @@ struct TaintTests {
         let program = Checker.check(Parser.parse("func a(_ n: Nope) {}\nfunc b() {}").file).program
         #expect(program.functions.ids.map(\.index) == [1])
         #expect(program.bodies.keys.map(\.index) == [1])
+    }
+
+    @Test func `a use of a parameter whose type failed taints the body`() {
+        let checker = FileChecker(Parser.parse("func f(n: Nope) {\n    print(n)\n    print(1)\n}").file)
+        _ = checker.check()
+        #expect(checker.errors.taints.functions == [FunctionID(index: 0)])
+    }
+}
+
+/// The checker's promise that a body missing a statement is tainted. Every check that fails taints the body it is
+/// checked in, so these tests check statements outside any function's body, where an error taints none.
+struct UntaintedFailureTests {
+    @Test func `a statement left out where no body is tainted stops the compiler`() async throws {
+        let exit = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+            // A `break` outside a loop fails, and is left out.
+            let file = Parser.parse("func main() {\n    break\n}").file
+            guard case .function(let main) = file.declarations.first else { return }
+            let body = BodyChecker(file: FileChecker(file), parameters: [], declaredAs: [], result: .void)
+            _ = body.check(main.body)
+        }
+        #expect(try stoppedForUntaintedFailure(exit))
+    }
+
+    @Test func `a single expression left out where no body is tainted stops the compiler`() async throws {
+        let exit = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+            // A body whose single expression failed returns nothing.
+            let body = BodyChecker(file: FileChecker(Parser.parse("").file), parameters: [], declaredAs: [],
+                                   result: .int)
+            _ = body.statements(returning: nil)
+        }
+        #expect(try stoppedForUntaintedFailure(exit))
+    }
+
+    /// Whether `exit` is that of a process the checker stopped, for a statement it left out of a body that isn't
+    /// tainted.
+    private func stoppedForUntaintedFailure(_ exit: ExitTest.Result?) throws -> Bool {
+        let message = String(decoding: try #require(exit).standardErrorContent, as: UTF8.self)
+        return message.contains("a statement whose check fails is left out only of a tainted body")
+    }
+}
+
+struct TaintedBodiesTests {
+    @Test func `the body being checked is tainted once a check taints it, until its check ends`() {
+        let taints = TaintedBodies()
+        var tainted: [Bool] = []
+        taints.checkingBody(of: FunctionID(index: 0)) {
+            tainted.append(taints.isCheckingTaintedBody)
+            taints.taint()
+            tainted.append(taints.isCheckingTaintedBody)
+        }
+        tainted.append(taints.isCheckingTaintedBody)
+        #expect(tainted == [false, true, false])
+    }
+
+    @Test func `of a body checked while another is, only the inner one answers whether it is tainted`() {
+        let taints = TaintedBodies()
+        var tainted: [Bool] = []
+        taints.checkingBody(of: FunctionID(index: 0)) {
+            taints.taint()
+            taints.checkingBody(of: FunctionID(index: 1)) { tainted.append(taints.isCheckingTaintedBody) }
+            tainted.append(taints.isCheckingTaintedBody)
+        }
+        #expect(tainted == [false, true])
     }
 }

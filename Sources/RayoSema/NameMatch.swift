@@ -13,14 +13,15 @@ enum NameMatch {
     /// nothing more.
     case failed
 
-    /// Whether the name reaches a function or a type of the module whose declaration failed, which taints the body
-    /// that uses it. A local whose declaration failed was reported in the same body, which that tainted already.
+    /// Whether the name reaches a declaration that failed, which taints the body that uses it: a local or a
+    /// parameter, or a function or a type of the module. A parameter whose type failed was reported with its
+    /// function's signature, outside the body, so nothing but its use taints the body.
     var reachesFailedDeclaration: Bool {
         switch self {
-        case .failed: true
+        case .failed, .inScope(.failed): true
         // A call might have meant any of the functions, so one that failed is reached among them.
         case .functions(let functions): functions.contains(where: \.hasFailed)
-        case .inScope, .instanceField, .type: false
+        case .inScope(.local), .instanceField, .type: false
         }
     }
 }

@@ -40,7 +40,24 @@ struct BodyChecker {
 
     /// Checks `statements` in the innermost scope, and gives the checked statements, without those that fail.
     func check(_ statements: ArraySlice<Stmt>) -> [CheckedStmt] {
-        statements.flatMap { check($0) }.compactMap { $0 }
+        kept(statements.flatMap { check($0) })
+    }
+
+    /// The statements of a body whose single expression checks to `returned`: a return of its value, or none where
+    /// it failed.
+    func statements(returning returned: CheckedExpr?) -> [CheckedStmt] {
+        kept([returned.map { .returnStmt($0) }])
+    }
+
+    /// `checked`, without the statements that failed, which only a tainted body leaves out.
+    private func kept(_ checked: [CheckedStmt?]) -> [CheckedStmt] {
+        // A body missing a statement has lost its meaning, so it must be tainted, which keeps it out of the checked
+        // program. If a check failed without tainting the body, lowering would get a body with a statement missing
+        // and compile it as if it were whole.
+        let kept = checked.compactMap { $0 }
+        precondition(kept.count == checked.count || errors.taints.isCheckingTaintedBody,
+                     "a statement whose check fails is left out only of a tainted body")
+        return kept
     }
 
     /// Checks `expr` as the value the function returns.
@@ -80,7 +97,7 @@ struct BodyChecker {
         case .error(let boundNames):
             errors.taints.taint()
             for name in boundNames { expressions.names.declareFailed(name) }
-            return []
+            return [nil]
         }
     }
 
