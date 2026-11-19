@@ -77,8 +77,8 @@ struct OwnershipCheckTests {
               return
             """, named: "passing()")
 
-        let (checked, errors) = OwnershipChecker.check(try program(of: [failing, passing] + callees))
-        let expected = try program(of: [failing, ended] + callees)
+        let (checked, errors) = OwnershipChecker.check(try program(of: [failing, passing] + callees, from: .lowering))
+        let expected = try program(of: [failing, ended] + callees, from: .ownership)
         #expect(errors == [FunctionID(index: 0): [Diagnostic(.unreadValue(name: "y"), at: at(5))]])
         #expect(checked.bodies[FunctionID(index: 0)] == nil)
         #expect(checked.bodies[FunctionID(index: 1)] == expected.bodies[FunctionID(index: 1)])
@@ -96,15 +96,15 @@ struct OwnershipCheckTests {
         let early = function("bb0:\n  %0 @2:5-2:5 = operand 1 @1:1-1:1\n  return", named: "early()")
         let clean = function("bb0:\n  return", named: "clean()")
 
-        let (_, reported) = OwnershipChecker.check(try program(of: [late, early, clean]))
+        let (_, reported) = OwnershipChecker.check(try program(of: [late, early, clean], from: .lowering))
         #expect(reported.mapValues { $0.map(\.range.start.column) } == [
             FunctionID(index: 0): [6, 7], FunctionID(index: 1): [5],
         ])
     }
 
     @Test func `checking a function eight times as long takes well under sixty-four times as long`() throws {
-        let short = try program(of: [longFunction(rounds: 500)] + callees)
-        let long = try program(of: [longFunction(rounds: 4000)] + callees)
+        let short = try program(of: [longFunction(rounds: 500)] + callees, from: .lowering)
+        let long = try program(of: [longFunction(rounds: 4000)] + callees, from: .lowering)
 
         // A check that grows in line with the length takes about eight times as long. One that grows with its square
         // takes up to sixty-four times, and over thirty at these lengths, where part of its work still grows in line.
