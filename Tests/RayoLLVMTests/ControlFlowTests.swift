@@ -69,6 +69,24 @@ struct ControlFlowTests {
     }
 
     @Test(arguments: [Build.debug, .release])
+    func `a branch on a constant goes on in the block the constant picks`(build: Build) throws {
+        let text = """
+            main "main()"
+            func "main()"() -> Void {
+            bb0:
+              branch false, bb1, bb2
+            bb1:
+              _ = call builtin "print(_: Int)"(1) @1:1-1:2
+              return
+            bb2:
+              _ = call builtin "print(_: Int)"(2) @1:1-1:2
+              return
+            }
+            """
+        #expect(try run(text, in: build) == .init(printed: "2\n"))
+    }
+
+    @Test(arguments: [Build.debug, .release])
     func `a block that no path reaches ends in unreachable, which the program never reaches`(build: Build) throws {
         // `seven`'s second block follows its return, and `main`'s second lies between the blocks of a jump that skips
         // it.

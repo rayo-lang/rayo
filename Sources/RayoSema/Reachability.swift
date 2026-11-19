@@ -9,8 +9,8 @@ enum Reachability {
         block.statements.allSatisfy(canComplete)
     }
 
-    /// Whether `condition`, a loop's condition, holds on every test and does nothing else, so that only a `break`
-    /// leaves the loop. Only the literal `true` is taken to hold always.
+    /// Whether `condition`, a loop's condition, is true on every test and has no effect of its own, so that only a
+    /// `break` leaves the loop. Only the literal `true` is taken to hold always.
     static func alwaysHolds(_ condition: Expr) -> Bool {
         if case .boolLiteral(true) = condition.kind { true } else { false }
     }

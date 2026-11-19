@@ -118,7 +118,7 @@ struct CheckedProgramTests {
             """, toMatch: "control-flow")
     }
 
-    @Test func `a loop whose condition is 'true' says that its condition always holds, and no other loop does`() throws {
+    @Test func `only a loop whose condition is 'true' says that its condition always holds`() throws {
         try expectChecking(of: """
             func main() {
                 while true { break }

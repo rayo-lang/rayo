@@ -22,7 +22,8 @@ func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
     return Lowering.lower(program)
 }
 
-/// Lowers `source`, and expects the IR's text to be the snapshot `name.ir`, and to read back as the same IR.
+/// Lowers `source`, and expects the IR's text to be the snapshot `name.ir`, to read back as the same IR, and to keep
+/// the rules of the IR that lowering gives.
 func expectLowering(
     of source: String, toMatch name: String, sourceLocation: Testing.SourceLocation = #_sourceLocation,
 ) throws {
@@ -30,10 +31,11 @@ func expectLowering(
     let text = IRPrinter.text(of: program)
     Snapshot("\(name).ir").expect(text, sourceLocation: sourceLocation)
     #expect(try IRParser.program(from: text) == program, sourceLocation: sourceLocation)
+    #expect(IRVerifier.verify(program, from: .lowering) == nil, sourceLocation: sourceLocation)
 }
 
-/// Lowers a `main` whose body is `body`, and expects the IR's text to be the snapshot `name.ir`, and to read back as
-/// the same IR.
+/// Lowers a `main` whose body is `body`, and expects the IR's text to be the snapshot `name.ir`, to read back as the
+/// same IR, and to keep the rules of the IR that lowering gives.
 func expectLowering(
     ofMain body: String, toMatch name: String, sourceLocation: Testing.SourceLocation = #_sourceLocation,
 ) throws {
