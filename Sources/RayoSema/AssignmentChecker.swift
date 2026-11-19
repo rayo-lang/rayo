@@ -78,7 +78,11 @@ struct AssignmentChecker {
     private func refusal(toChange local: LocalID, holdsParts: Bool) -> ErrorCode? {
         switch (names[local].kind, holdsParts) {
         // A borrowed parameter's value is its caller's, whole and part by part.
-        case (.parameter, _): .assignToParameter(name: names[local].name)
+        case (.parameter(.borrowed), _): .assignToParameter(name: names[local].name)
+        // An owned parameter's value is the function's, as a `var`'s is, so it may change whole or part by part.
+        case (.parameter(.owned), _): nil
+        // A mutable parameter's place is its caller's, which the function may change whole or part by part.
+        case (.parameter(.mutable), _): nil
         // A `let` may be assigned whole, only once on each path, which the initialization check enforces; it never
         // changes part by part.
         case (.let, true): .assignToPartOfLet(name: names[local].name)
