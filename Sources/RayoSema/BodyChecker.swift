@@ -40,7 +40,14 @@ struct BodyChecker {
 
     /// Checks `statements` in the innermost scope, and gives the checked statements, without those that fail.
     func check(_ statements: ArraySlice<Stmt>) -> [CheckedStmt] {
-        statements.flatMap { check($0) }.compactMap { $0 }
+        let checked = statements.flatMap { check($0) }
+
+        // A body missing a statement has lost its meaning, so it must be tainted, which keeps it out of the checked
+        // program. A check that fails without tainting it would hand lowering a body it takes as whole.
+        let kept = checked.compactMap { $0 }
+        precondition(kept.count == checked.count || errors.taints.isBodyBeingCheckedTainted,
+                     "a statement whose check fails is left out only of a tainted body")
+        return kept
     }
 
     /// Checks `expr` as the value the function returns.

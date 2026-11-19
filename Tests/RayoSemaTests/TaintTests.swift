@@ -1,5 +1,5 @@
 import Testing
-import RayoSema
+@testable import RayoSema
 import RayoSyntax
 
 /// The names of the functions of the program `source` checks to, and the names of those it holds a body for.
@@ -68,5 +68,18 @@ struct TaintTests {
         let program = Checker.check(Parser.parse("func a(_ n: Nope) {}\nfunc b() {}").file).program
         #expect(program.functions.ids.map(\.index) == [1])
         #expect(program.bodies.keys.map(\.index) == [1])
+    }
+
+    @Test func `a statement left out of a body that isn't tainted stops the compiler`() async throws {
+        let exit = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+            // Outside the check of any function's body, the error a `break` outside a loop reports taints no body, so
+            // the checker leaves the statement out of a body that isn't tainted.
+            let file = Parser.parse("func main() {\n    break\n}").file
+            guard case .function(let main) = file.declarations.first else { return }
+            let body = BodyChecker(file: FileChecker(file), parameters: [], declaredAs: [], result: .void)
+            _ = body.check(main.body)
+        }
+        let message = String(decoding: try #require(exit).standardErrorContent, as: UTF8.self)
+        #expect(message.contains("a statement whose check fails is left out only of a tainted body"))
     }
 }
