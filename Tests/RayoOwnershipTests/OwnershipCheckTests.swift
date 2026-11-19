@@ -78,7 +78,7 @@ struct OwnershipCheckTests {
             """, named: "passing()")
 
         let (checked, errors) = OwnershipChecker.check(try program(of: [failing, passing] + callees))
-        let expected = try program(of: [failing, ended] + callees)
+        let expected = try program(of: [failing, ended] + callees, from: .ownership)
         #expect(errors == [FunctionID(index: 0): [Diagnostic(.unreadValue(name: "y"), at: at(5))]])
         #expect(checked.bodies[FunctionID(index: 0)] == nil)
         #expect(checked.bodies[FunctionID(index: 1)] == expected.bodies[FunctionID(index: 1)])

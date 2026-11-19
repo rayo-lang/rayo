@@ -1,8 +1,9 @@
 import RayoSema
 
-/// Checks the rules of IR that code generation takes as given. The IR keeps its types, no path reaches a block that
-/// ends in `unreachable`, and each index it finds an element by was checked against its array's count. The IR the
-/// ownership stage gives also ends each access once on every path, and uses no local after it retires it.
+/// Checks the rules of IR that the stages after the one that gave it take as given. The IR keeps its types, no path
+/// reaches a block that ends in `unreachable`, and each index it finds an element by was checked against its array's
+/// count. Lowering's IR holds no end of an access and no retirement of a local, since the ownership stage writes those.
+/// The IR the ownership stage gives ends each access once on every path, and uses no local after it retires it.
 public enum IRVerifier {
     /// The first declaration or operation in `program`, which `stage` gave, that breaks the IR's rules, or nil where
     /// none does. Each primary initializer's declaration is checked in the order of its ID, then each body in the
@@ -20,8 +21,8 @@ public enum IRVerifier {
     }
 
     /// Throws the first violation in `body`, the body of `declaration` in `program`, which `stage` gave: of its types,
-    /// then of the blocks its paths reach, then of its indices, then, for the ownership stage's IR, of where its
-    /// accesses end and its locals retire.
+    /// then of the blocks its paths reach, then of its indices, then, for lowering's IR, of an end or a retirement it
+    /// holds, or, for the ownership stage's IR, of where its accesses end and its locals retire.
     private static func verify(
         _ body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram, from stage: IRStage,
     ) throws(IRViolation) {
@@ -30,11 +31,15 @@ public enum IRVerifier {
         try UnreachableBlockVerifier(body: body, of: declaration.name).verify()
         try ElementIndexVerifier(body: body, of: declaration.name, types: program.types).verify()
 
-        // Lowering writes no end and no retirement, so only the ownership stage's IR ends its accesses and retires its
-        // locals. A local's life lasts through each access to it, so the accesses are checked first.
-        guard stage == .ownership else { return }
-        try AccessScopeVerifier(body: body, of: declaration.name).verify()
-        try LocalLifeVerifier(body: body, of: declaration.name).verify()
+        // Only the ownership stage writes the ends of accesses and the retirements of locals, so lowering's IR holds
+        // neither. A local's life lasts through each access to it, so the accesses are checked first.
+        switch stage {
+        case .lowering:
+            try LoweredStatementVerifier(body: body, of: declaration.name).verify()
+        case .ownership:
+            try AccessScopeVerifier(body: body, of: declaration.name).verify()
+            try LocalLifeVerifier(body: body, of: declaration.name).verify()
+        }
     }
 
     /// The violation of the function `id` of `program`, where it is a primary initializer that a call can't build its
