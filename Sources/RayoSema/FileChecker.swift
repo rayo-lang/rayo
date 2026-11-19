@@ -256,9 +256,8 @@ final class FileChecker {
         // A function not declared Void, whose body is a single expression, returns the expression's value.
         if signature.result.type != .void, let value = function.body.singleExpression {
             let returned = body.returned(value).flatMap { fittingWhereGivenByBody($0, of: signature) }
-            let statements: [CheckedStmt] = returned.map { [.returnStmt($0)] } ?? []
             return BodyCheck(result: bodyResult(of: signature, returning: returned),
-                             body: CheckedBody(locals: body.locals, statements: statements))
+                             body: CheckedBody(locals: body.locals, statements: body.statements(returning: returned)))
         }
 
         // Any other body is checked statement by statement, and a missing `return` on a path to its end is reported.
