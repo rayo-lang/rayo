@@ -1,5 +1,5 @@
 import LLVM
-import RayoSema
+import RayoCheckedProgram
 
 /// Decides how a function's parameters and result are passed in Rayo's calling convention, which nothing outside the
 /// program sees, and the LLVM signature that follows, and which values are small.

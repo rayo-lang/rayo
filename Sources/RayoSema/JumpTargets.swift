@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// Where a `return`, a `break` and a `continue` in the code being checked leave for: the function's result, and the
 /// loops around the code.
 struct JumpTargets {

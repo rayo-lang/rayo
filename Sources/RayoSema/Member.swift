@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// What a name finds among the members of a type: a property of a value of the type, or the type's initializers.
 enum Member {
     /// The name of a type's initializers among its members, which a call of the type's name reaches too.

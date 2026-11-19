@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 extension Declarations {
     /// The member of `type` called `name`, or nil where `type` has none. A type's initializers are its members called
     /// `init`.

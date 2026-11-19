@@ -1,6 +1,6 @@
 import Testing
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 // The tests write their IR as text. A test names the source ranges it checks on line 2, each at the column it numbers

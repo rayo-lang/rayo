@@ -7,4 +7,11 @@ public struct CheckedLocal: Sendable {
     public var kind: LocalKind
     /// Where the source declares the local's name.
     public var range: SourceRange
+
+    package init(name: String, type: RayoType, kind: LocalKind, range: SourceRange) {
+        self.name = name
+        self.type = type
+        self.kind = kind
+        self.range = range
+    }
 }

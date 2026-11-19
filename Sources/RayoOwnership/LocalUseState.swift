@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Which locals some later code uses, at a point, before a declaration starts their lives again.
 struct LocalUseState: DataflowState {

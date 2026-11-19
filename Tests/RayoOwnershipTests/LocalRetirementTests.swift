@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 @Suite("Where locals retire")

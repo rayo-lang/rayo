@@ -7,7 +7,7 @@ import RayoSyntax
 /// for its `main`, which the stages after checking would go on to check, or nil where it declares no `main`.
 private func checked(_ source: String) -> (errors: [ErrorCode], mainHasBody: Bool?) {
     let (file, syntaxErrors) = Parser.parse(source)
-    let (program, checkErrors) = Checker.check(file)
+    let (program, checkErrors, _) = Checker.check(file)
     let main = program.functions.ids.first { program.functions[$0].name == "main()" }
     return ((syntaxErrors + checkErrors).inSourceOrder.map(\.code), main.map { program.bodies[$0] != nil })
 }
@@ -71,5 +71,20 @@ struct ErrorContainmentTests {
         #expect(reported.count == nameDiagnostics.count + 1)
         #expect(nameDiagnostics.map(\.code) == nameErrors)
         #expect(coveredText(nameDiagnostics, in: "func main() {}\n" + source) == [covered])
+    }
+
+    @Test(arguments: [
+        // A function that failed before its name, or that is named `main`, may have been `main`.
+        ("func (", true),
+        ("func main( {\n}", true),
+        // Any other declaration that failed can't have been, and nor can a `main` that parsed.
+        ("func helper( {\n}", false),
+        ("struct main(", false),
+        ("func main() {\n    let = 1\n}", false),
+    ])
+    func `checking says whether a function that failed to parse may have been 'main'`(
+        source: String, mayHaveBeenMain: Bool,
+    ) {
+        #expect(Checker.check(Parser.parse(source).file).mainMayHaveFailed == mayHaveBeenMain)
     }
 }

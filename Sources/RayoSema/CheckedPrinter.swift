@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoSource
 
 /// Writes a checked program as text, for a reader to see what checking made of the source.

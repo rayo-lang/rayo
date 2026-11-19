@@ -1,7 +1,7 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
-import RayoSema
 
 /// What the ownership stage makes of `function`, checked as the first function of a program beside the `callees` and
 /// `others`, as the pipeline runs the stage: its body with the end of each access and the retirement of each local

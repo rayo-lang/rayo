@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Lowers one function's body, statements and expressions alike, into its control-flow graph, and makes the IR
 /// body of it.

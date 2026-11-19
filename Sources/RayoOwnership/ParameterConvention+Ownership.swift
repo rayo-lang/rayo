@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// What each parameter convention means to the checks of this stage, which take it from here alone. Every parameter
 /// holds its argument from the function's entry, whatever its convention.

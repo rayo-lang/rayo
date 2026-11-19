@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// The function bodies of a check that are tainted, and so have no body in the checked program.
 ///
 /// A body is tainted when checking it reports an error that leaves it without a meaning, such as a name that names

@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// Calls, which pass their arguments and take their result as the called function's signature says.

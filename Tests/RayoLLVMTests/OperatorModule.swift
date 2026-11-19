@@ -1,7 +1,7 @@
 import LLVM
 @testable import RayoLLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// A module for the host, into which a debug or a release build's operators are emitted in functions of their own,

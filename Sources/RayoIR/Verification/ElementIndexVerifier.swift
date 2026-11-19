@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Checks that one function's body finds each element at an index a local holds only where an `index` operation
 /// checked that index against the array's count. The emitter loads such an index and finds the element with no check

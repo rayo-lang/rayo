@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// What checking an expression gives before its position is known: a typed value, or one that waits for its position
 /// to settle its type.
 enum CheckedValue {

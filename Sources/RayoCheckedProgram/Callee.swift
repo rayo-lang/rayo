@@ -7,9 +7,15 @@ public enum Callee: Hashable, Sendable {
     /// program's functions.
     public func name(in functions: FunctionTable) -> String {
         switch self {
-        case .builtin(let builtin): Signature(of: builtin).description
+        case .builtin(let builtin): Self.name(of: builtin)
         case .function(let id): functions[id].name
         }
+    }
+
+    /// The name of `builtin` and its parameters, as a function the program declares with them is named.
+    private static func name(of builtin: Builtin) -> String {
+        let parameters = builtin.parameters.map { (label: $0.label, type: "\($0.type)") }
+        return FunctionDeclaration.name(builtin.name.spelling, parameters: parameters)
     }
 
     /// The parameters of what the call calls, in order, where `functions` declares the program's functions.

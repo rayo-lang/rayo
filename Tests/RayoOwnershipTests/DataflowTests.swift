@@ -1,6 +1,6 @@
 @testable import RayoOwnership
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 struct DataflowTests {

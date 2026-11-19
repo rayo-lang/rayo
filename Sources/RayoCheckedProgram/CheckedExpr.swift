@@ -4,6 +4,12 @@ public struct CheckedExpr: Sendable {
     public var kind: CheckedExprKind
     public var type: RayoType
     public var range: SourceRange
+
+    package init(kind: CheckedExprKind, type: RayoType, range: SourceRange) {
+        self.kind = kind
+        self.type = type
+        self.range = range
+    }
 }
 
 public indirect enum CheckedExprKind: Sendable {
@@ -41,4 +47,9 @@ public struct CheckedBranch: Sendable {
     /// - in a Void branch that ends in a statement
     /// - in a branch no run reaches the end of
     public var value: CheckedExpr?
+
+    package init(statements: [CheckedStmt], value: CheckedExpr?) {
+        self.statements = statements
+        self.value = value
+    }
 }

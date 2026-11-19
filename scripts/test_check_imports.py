@@ -100,24 +100,14 @@ class CheckImportsTests(unittest.TestCase):
 
         self.assertEqual(len(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])])), 1)
 
-    def test_a_directory_a_rule_excepts_may_not_import_its_module_inside_one_it_allows(self):
-        rule = ImportRule('RayoSyntax', allowed=['Sources'], excepted=['Sources/RayoIR', 'Sources/RayoLLVM'])
-        self.write('Sources/RayoSema/Checker.swift', 'import RayoSyntax\n')
-        self.write('Sources/RayoIR/Lowering.swift', 'import RayoSema\nimport RayoSyntax\n')
-
-        self.assertEqual(findings(self.root, rules=[rule]), [
-            'Sources/RayoIR/Lowering.swift:2: imports RayoSyntax, which no file under Sources/RayoIR or '
-            'Sources/RayoLLVM may import',
-        ])
-
     def test_each_rule_limits_the_imports_of_its_own_module(self):
         rules = [ImportRule('CLLVM', allowed=['Sources/LLVM']),
-                 ImportRule('RayoSyntax', allowed=['Sources'], excepted=['Sources/LLVM'])]
+                 ImportRule('RayoSyntax', allowed=['Sources/RayoSema'])]
         self.write('Sources/LLVM/Context.swift', 'import CLLVM\nimport RayoSyntax\n')
         self.write('Sources/RayoSema/Checker.swift', 'import CLLVM\nimport RayoSyntax\n')
 
         self.assertEqual(findings(self.root, rules=rules), [
-            'Sources/LLVM/Context.swift:2: imports RayoSyntax, which no file under Sources/LLVM may import',
+            'Sources/LLVM/Context.swift:2: imports RayoSyntax, which only Sources/RayoSema may import',
             'Sources/RayoSema/Checker.swift:1: imports CLLVM, which only Sources/LLVM may import',
         ])
 
@@ -133,6 +123,17 @@ class CheckImportsTests(unittest.TestCase):
         self.write('Sources/RayoIR/Lowering.swift', 'import RayoSema\n@_exported import Foundation\n')
 
         self.assertEqual(findings(self.root, rules=[ImportRule('CLLVM', allowed=['Sources/LLVM'])]), [])
+
+    def test_nothing_after_semantic_checking_imports_syntax(self):
+        for path in ['Sources/RayoSema/Checker.swift', 'Sources/RayoCheckedProgram/CheckedProgram.swift',
+                     'Sources/RayoIR/Lowering.swift', 'Sources/RayoCompiler/Compiler.swift',
+                     'Tests/RayoIRTests/Lowered.swift', 'Tests/RayoOwnershipTests/TestProgram.swift']:
+            self.write(path, 'import RayoSyntax\n')
+
+        self.assertEqual([finding.split(':')[0] for finding in findings(self.root)], [
+            'Sources/RayoCheckedProgram/CheckedProgram.swift', 'Sources/RayoIR/Lowering.swift',
+            'Tests/RayoOwnershipTests/TestProgram.swift',
+        ])
 
     def test_files_outside_sources_and_tests_are_not_checked(self):
         self.write('scripts/generate.swift', 'import CLLVM\n')

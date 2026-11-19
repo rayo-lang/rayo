@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import RayoSource
 
 /// Calls of the prelude's built-ins.

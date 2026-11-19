@@ -1,6 +1,6 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
-import RayoSema
 
 /// Checks that a program moves no value out of a place that can't give it up: a parameter whose value is its caller's,
 /// or an array's element, which its array holds for as long as the array holds a value.

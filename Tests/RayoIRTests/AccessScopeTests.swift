@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 /// IR whose accesses don't end once on every path from where each begins, and what the verifier says is wrong with it

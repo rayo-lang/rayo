@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Checks that one function's body keeps the IR's types.
 struct FunctionVerifier {

@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.

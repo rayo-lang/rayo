@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// What an unqualified name stands for where a function body uses it.
 enum NameMatch {
     /// A local or a parameter.

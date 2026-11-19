@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// Lowers a checked program to Rayo IR, one function body at a time. A function the checked program holds no body
 /// for, since its body is tainted, has none in the IR either.
@@ -10,8 +10,7 @@ public enum Lowering {
             bodies[id] = lower(body, returning: program.functions[id].result)
         }
 
-        return IRProgram(types: program.types, functions: program.functions, bodies: bodies, main: program.main,
-                         mainMayHaveFailed: program.mainMayHaveFailed)
+        return IRProgram(types: program.types, functions: program.functions, bodies: bodies, main: program.main)
     }
 
     /// Lowers `body`, the body of a function whose result type is `result`.

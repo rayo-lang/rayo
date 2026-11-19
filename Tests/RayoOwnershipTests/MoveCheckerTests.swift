@@ -2,7 +2,7 @@ import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 
 struct MoveCheckerTests {
     @Test func `a move out of a borrowed parameter is reported at the move`() throws {

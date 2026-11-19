@@ -12,18 +12,11 @@ public struct CheckedProgram: Sendable {
     public var bodies: [FunctionID: CheckedBody]
     /// The file's first `main`, which a run of the program starts at, or nil for a library, which has none.
     public var main: FunctionID?
-    /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
-    /// named `main`.
-    public var mainMayHaveFailed: Bool
 
-    public init(
-        types: TypeTable, functions: FunctionTable, bodies: [FunctionID: CheckedBody], main: FunctionID?,
-        mainMayHaveFailed: Bool = false,
-    ) {
+    public init(types: TypeTable, functions: FunctionTable, bodies: [FunctionID: CheckedBody], main: FunctionID?) {
         self.types = types
         self.functions = functions
         self.bodies = bodies
         self.main = main
-        self.mainMayHaveFailed = mainMayHaveFailed
     }
 }

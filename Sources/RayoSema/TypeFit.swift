@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// Whether a typed value can stand where a position expects a type, and the value as it stands there. This is the
 /// one place that decides it: a value fits only its own type, and stands there as it is.
 enum TypeFit {
