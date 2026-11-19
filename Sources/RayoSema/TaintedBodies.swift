@@ -12,6 +12,11 @@ final class TaintedBodies {
     /// in the other needs its result type.
     private var checking: [FunctionID] = []
 
+    /// Whether the body being checked is tainted. Outside a body, none is.
+    var isCheckingTaintedBody: Bool {
+        if let body = checking.last { functions.contains(body) } else { false }
+    }
+
     /// Taints the body being checked. Outside a body, a declaration that reaches a failed one fails in its own way,
     /// so this does nothing.
     func taint() {
