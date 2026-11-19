@@ -31,11 +31,10 @@ public enum IRVerifier {
         try UnreachableBlockVerifier(body: body, of: declaration.name).verify()
         try ElementIndexVerifier(body: body, of: declaration.name, types: program.types).verify()
 
-        // Only the ownership stage writes the ends of accesses and the retirements of locals, so lowering's IR holds
-        // neither. A local's life lasts through each access to it, so the accesses are checked first.
         switch stage {
         case .lowering:
-            try LoweredStatementVerifier(body: body, of: declaration.name).verify()
+            try OwnershipStatementVerifier(body: body, of: declaration.name).verify()
+        // A local's life lasts through each access to it, so the accesses are checked first.
         case .ownership:
             try AccessScopeVerifier(body: body, of: declaration.name).verify()
             try LocalLifeVerifier(body: body, of: declaration.name).verify()

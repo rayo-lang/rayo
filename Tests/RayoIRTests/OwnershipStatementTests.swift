@@ -11,7 +11,7 @@ struct OwnershipStatement: CustomTestStringConvertible, Sendable {
 }
 
 @Suite("Verifying that lowering's IR holds only the statements lowering writes")
-struct LoweredStatementTests {
+struct OwnershipStatementTests {
     @Test(arguments: ownershipStatements)
     func `an end or a retirement in lowering's IR is a violation that names the statement and the block`(
         statement: OwnershipStatement,
@@ -22,7 +22,7 @@ struct LoweredStatementTests {
     }
 
     @Test(arguments: ownershipStatements)
-    func `the same IR, given by the ownership stage, is no violation`(statement: OwnershipStatement) throws {
+    func `an end or a retirement in the ownership stage's IR is no violation`(statement: OwnershipStatement) throws {
         let program = try IRParser.program(from: assigningALocal(statement.blocks))
         #expect(IRVerifier.verify(program, from: .ownership) == nil)
     }

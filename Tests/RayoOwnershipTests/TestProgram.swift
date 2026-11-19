@@ -23,7 +23,7 @@ func parsedIR(_ text: String, from stage: IRStage) throws -> IRProgram {
 /// a `Hit`, and a `Hit` of an Int `damage`, with the primary initializer of each after the functions. It keeps the
 /// rules of the IR that `stage` gives: lowering, for IR the ownership stage checks, or the ownership stage, for IR it
 /// is expected to give.
-func program(of functions: [(name: String, text: String)], from stage: IRStage = .lowering) throws -> IRProgram {
+func program(of functions: [(name: String, text: String)], from stage: IRStage) throws -> IRProgram {
     try parsedIR("""
         struct Shot {
           var range: Int
