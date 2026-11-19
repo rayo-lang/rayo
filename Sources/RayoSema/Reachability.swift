@@ -9,6 +9,12 @@ enum Reachability {
         block.statements.allSatisfy(canComplete)
     }
 
+    /// Whether `condition`, a loop's condition, is true on every test and has no effect of its own, so that only a
+    /// `break` leaves the loop. Only the literal `true` is taken to hold always.
+    static func alwaysHolds(_ condition: Expr) -> Bool {
+        if case .boolLiteral(true) = condition.kind { true } else { false }
+    }
+
     /// Whether a run can go on past `statement`.
     private static func canComplete(_ statement: Stmt) -> Bool {
         switch statement.kind {
@@ -25,10 +31,10 @@ enum Reachability {
         case .ifStmt(let ifExpr):
             return canComplete(ifExpr)
 
-        // A loop completes once its condition fails.
+        // A loop completes once its condition fails, and one whose condition always holds only where a `break` leaves
+        // it.
         case .whileStmt(let condition, let body):
-            // A `while true` that no `break` leaves never completes.
-            if case .boolLiteral(true) = condition.kind { return breaks(body) }
+            if alwaysHolds(condition) { return breaks(body) }
             return canComplete(condition)
 
         // Any other statement completes once the values it evaluates do.

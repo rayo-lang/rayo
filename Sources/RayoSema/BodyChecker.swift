@@ -115,9 +115,10 @@ struct BodyChecker {
     }
 
     private func checkWhile(_ condition: Expr, body: Block) -> CheckedStmt? {
+        let alwaysHolds = Reachability.alwaysHolds(condition)
         let condition = expressions.check(condition, expecting: Expectation(.bool))
         let body = checkLoopBody(body)
-        return condition.map { .whileStmt(condition: $0, body: body) }
+        return condition.map { .whileStmt(condition: $0, alwaysHolds: alwaysHolds, body: body) }
     }
 
     /// Checks `body` as a loop's body, where a `break` or a `continue` may be.
