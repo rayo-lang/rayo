@@ -93,38 +93,24 @@ runs:
         done
         echo "::error::fetching the dependencies failed $tries times"
         exit 1
-    # The test targets the changed paths reach, by the manifest's dependencies, are the ones a run needs.
-    - name: Select the tests
-      id: tests
-      shell: bash
-      env:
-        CHANGED_PATHS: ${{ inputs.changed-paths }}
-      run: |
-        # Without changed paths, as on a push to main, every test runs.
-        if [ -z "$CHANGED_PATHS" ]; then
-          selection=all
-        else
-          swift package dump-package > "$RUNNER_TEMP/package.json"
-          printf '%s' "$CHANGED_PATHS" > "$RUNNER_TEMP/changed-paths.json"
-          # Windows names its Python `python`. Linux's container has the `python3` that LLVM's packages install.
-          if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
-          selection=$("$python" scripts/select_tests.py "$RUNNER_TEMP/package.json" "$RUNNER_TEMP/changed-paths.json")
-        fi
-        echo "Selected tests: $selection"
-        echo "selection=$selection" >> "$GITHUB_OUTPUT"
+    # A pull request runs the tests of the test targets its changed paths reach by the manifest's dependencies, as
+    # an agent runs them before it opens one, and builds the tests where it reaches none.
     - name: Test
       shell: bash
       env:
         ARGUMENTS: ${{ inputs.arguments }}
-        SELECTION: ${{ steps.tests.outputs.selection }}
+        CHANGED_PATHS: ${{ inputs.changed-paths }}
       # The arguments are words, split where they have spaces.
       run: |
-        case "$SELECTION" in
-          all) swift test $ARGUMENTS ;;
-          # A change no test target reaches still has to build.
-          none) swift build --build-tests ;;
-          *) swift test $ARGUMENTS --filter "$SELECTION" ;;
-        esac
+        # Without changed paths, as on a push to main, every test runs.
+        if [ -z "$CHANGED_PATHS" ]; then
+          swift test $ARGUMENTS
+        else
+          printf '%s' "$CHANGED_PATHS" > "$RUNNER_TEMP/changed-paths.json"
+          # Windows names its Python `python`. Linux's container has the `python3` that LLVM's packages install.
+          if [ "$RUNNER_OS" = Windows ]; then python=python; else python=python3; fi
+          "$python" scripts/run_affected_tests.py --changed-paths "$RUNNER_TEMP/changed-paths.json" -- $ARGUMENTS
+        fi
     # The tests run rayo and rayoc in debug, where checks that a release build leaves out still run, such as the
     # check of the Rayo IR each stage gives. So the release build users run is built and run here too, and its
     # products are saved with the build, so a pull request rebuilds only what it changed.

@@ -1,8 +1,6 @@
 import contextlib
 import io
 import json
-import os
-import tempfile
 import unittest
 
 from select_tests import main, selection
@@ -25,28 +23,43 @@ PACKAGE = {'targets': [
     target('Unused', 'regular', []),
 ]}
 
+EVERY_TEST_TARGET = ['SemaTests', 'SyntaxTests', 'ToolTests']
 
-class SelectTestsTests(unittest.TestCase):
+
+class SelectionTests(unittest.TestCase):
     def test_a_change_to_a_test_target_selects_that_test_target(self):
-        self.assertEqual(selection(PACKAGE, ['Tests/SyntaxTests/LexerTests.swift']), r'^(SyntaxTests)\.')
+        self.assertEqual(selection(PACKAGE, ['Tests/SyntaxTests/LexerTests.swift']), ['SyntaxTests'])
 
     def test_a_change_to_a_source_target_selects_the_test_targets_that_depend_on_it_directly(self):
-        self.assertEqual(selection(PACKAGE, ['Sources/Sema/Checker.swift']), r'^(SemaTests)\.')
+        self.assertEqual(selection(PACKAGE, ['Sources/Sema/Checker.swift']), ['SemaTests'])
 
     def test_a_change_to_a_source_target_selects_the_test_targets_that_depend_on_it_through_others(self):
-        self.assertEqual(selection(PACKAGE, ['Sources/Source/File.swift']), r'^(SemaTests|SyntaxTests)\.')
+        self.assertEqual(selection(PACKAGE, ['Sources/Source/File.swift']), ['SemaTests', 'SyntaxTests'])
 
     def test_a_target_at_a_path_of_its_own_is_changed_by_a_change_under_that_path(self):
-        self.assertEqual(selection(PACKAGE, ['Tests/tool/main.swift']), r'^(ToolTests)\.')
+        self.assertEqual(selection(PACKAGE, ['Tests/tool/main.swift']), ['ToolTests'])
 
     def test_the_changes_to_several_targets_select_the_test_targets_each_selects(self):
         changed = ['Tests/tool/main.swift', 'Sources/Sema/Checker.swift']
-        self.assertEqual(selection(PACKAGE, changed), r'^(SemaTests|ToolTests)\.')
+        self.assertEqual(selection(PACKAGE, changed), ['SemaTests', 'ToolTests'])
 
-    def test_a_change_outside_every_target_selects_every_test_target(self):
-        for path in ['Package.swift', '.github/workflows/ci.yml', 'Tests/Shared.swift', 'Sources/SyntaxExtra/A.swift']:
+    def test_a_change_that_can_change_a_test_outside_every_target_selects_every_test_target(self):
+        paths = [
+            'Package.swift', 'Package.resolved', '.github/workflows/ci.yml', '.github/actions/swift-test/action.yml',
+            'examples/v0.1/hello.rayo', '.gitattributes', 'Tests/Shared.swift', 'Sources/SyntaxExtra/A.swift',
+        ]
+        for path in paths:
             with self.subTest(path=path):
-                self.assertEqual(selection(PACKAGE, ['Sources/Sema/Checker.swift', path]), 'all')
+                self.assertEqual(selection(PACKAGE, ['Sources/Sema/Checker.swift', path]), EVERY_TEST_TARGET)
+
+    def test_a_change_that_no_test_reads_selects_nothing_more(self):
+        paths = [
+            'README.md', 'docs/spec/types.md', 'scripts/select_tests.py', '.github/workflows/other.yml',
+            'examples/README.md', 'Package.swift.orig', 'SourcesExtra/A.swift',
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertEqual(selection(PACKAGE, ['Sources/Sema/Checker.swift', path]), ['SemaTests'])
 
     def test_a_dependency_on_a_condition_or_under_module_aliases_is_a_dependency_all_the_same(self):
         package = {'targets': [
@@ -58,42 +71,39 @@ class SelectTestsTests(unittest.TestCase):
             target('SyntaxTests', 'test', [{'byName': ['Syntax', {'platformNames': ['windows']}]}]),
         ]}
 
-        self.assertEqual(selection(package, ['Sources/Source/File.swift']), r'^(SyntaxTests)\.')
+        self.assertEqual(selection(package, ['Sources/Source/File.swift']), ['SyntaxTests'])
 
     def test_a_change_that_no_test_target_depends_on_selects_none(self):
-        self.assertEqual(selection(PACKAGE, ['Sources/Unused/File.swift']), 'none')
+        self.assertEqual(selection(PACKAGE, ['Sources/Unused/File.swift']), [])
 
     def test_no_changed_paths_select_none(self):
-        self.assertEqual(selection(PACKAGE, []), 'none')
+        self.assertEqual(selection(PACKAGE, []), [])
 
 
 class SelectTestsMainTests(unittest.TestCase):
-    def run_main(self, arguments):
+    def run_main(self, arguments, standard_input):
         output, errors = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
-            status = main(arguments)
+        with (contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors)):
+            status = main(arguments, io.StringIO(standard_input))
         return status, output.getvalue(), errors.getvalue()
 
-    def write_json(self, directory, name, value):
-        path = os.path.join(directory, name)
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(value, f)
-        return path
+    def test_the_changed_paths_that_can_change_a_test_are_written_as_a_json_array(self):
+        changed = 'README.md\nSources/Sema/Checker.swift\nscripts/check_docs.py\nPackage.swift\n'
 
-    def test_the_selection_for_the_files_named_is_written_to_standard_output(self):
-        with tempfile.TemporaryDirectory() as directory:
-            package = self.write_json(directory, 'package.json', PACKAGE)
-            paths = self.write_json(directory, 'changed-paths.json', ['Sources/Sema/Checker.swift'])
+        status, output, errors = self.run_main([], changed)
 
-            self.assertEqual(self.run_main([package, paths]), (0, '^(SemaTests)\\.\n', ''))
+        self.assertEqual((status, json.loads(output), errors), (0, ['Sources/Sema/Checker.swift', 'Package.swift'], ''))
 
-    def test_any_other_number_of_arguments_is_a_misuse(self):
-        for arguments in [[], ['package.json'], ['package.json', 'changed-paths.json', 'extra']]:
-            with self.subTest(arguments=arguments):
-                status, output, errors = self.run_main(arguments)
+    def test_no_changed_paths_that_can_change_a_test_are_written_as_an_empty_array(self):
+        for changed in ['', '\n', 'README.md\n']:
+            with self.subTest(changed=changed):
+                self.assertEqual(self.run_main([], changed), (0, '[]\n', ''))
 
-                self.assertEqual((status, output), (2, ''))
-                self.assertIn('usage: select_tests.py', errors)
+    def test_any_argument_is_a_misuse(self):
+        status, output, errors = self.run_main(['package.json'], '')
+
+        self.assertEqual((status, output), (2, ''))
+        self.assertIn('usage: select_tests.py', errors)
 
 
 if __name__ == '__main__':

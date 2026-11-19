@@ -42,6 +42,13 @@ A file without a `main` function is a library. `rayo check` checks it as it chec
 swift test
 ```
 
+A change often reaches only a few of the test targets, so a script can run just those. It finds what your branch changed since it left `origin/main`, along with what you haven't committed yet. It then runs each test target that depends on a changed module, directly or through others, as the package manifest says. A change to the manifest or to CI runs every test, and a change no test reads only builds them. CI picks a pull request's tests the same way. Name another base with `--base`, and pass `swift test` its own arguments after `--`:
+
+```sh
+python3 scripts/run_affected_tests.py
+python3 scripts/run_affected_tests.py --base impl-parser -- --parallel
+```
+
 Some tests compare what checking or lowering makes of a program with a snapshot: a file kept in a `Snapshots` directory beside the test, which holds the checked program or the Rayo IR as text. A test whose text differs fails with a diff. When a change means to change the text, run the tests with `RAYO_UPDATE_SNAPSHOTS=1` to rewrite the snapshots, and review their diff as part of the change:
 
 ```sh
