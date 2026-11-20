@@ -147,16 +147,17 @@ runs:
           "$@" > "$RUNNER_TEMP/timed.log" 2>&1 || { tail -50 "$RUNNER_TEMP/timed.log"; exit 1; }
           echo "::notice::$((`date +%s` - start))s, $(grep -c -E '\] Swift(Syntax|Parser)' "$RUNNER_TEMP/timed.log") swift-syntax lines: $*"
         }
+        # actions/cache packs with --posix, which keeps each file's time to the nanosecond.
         round_trip() {
-          tar -cf "$RUNNER_TEMP/build.tar" .build && rm -rf .build && tar -xf "$RUNNER_TEMP/build.tar" && rm "$RUNNER_TEMP/build.tar"
+          tar --posix -cf "$RUNNER_TEMP/build.tar" .build && rm -rf .build && tar -xf "$RUNNER_TEMP/build.tar" \
+            && rm "$RUNNER_TEMP/build.tar"
         }
+        env | sort | cut -d= -f1 | tr '\n' ' '
         timed swift build -c release
         timed swift build -c release
+        timed env GITHUB_RUN_ID=1 GITHUB_SHA=0 GITHUB_REF=refs/heads/other swift build -c release
         round_trip
         timed swift build -c release
-        timed swift build -c release --build-system native
-        round_trip
-        timed swift build -c release --build-system native
         bin=$(swift build -c release --show-bin-path)
 
         # Each run passes when it prints the output beside the program, writes no error, and exits with 0. A run
