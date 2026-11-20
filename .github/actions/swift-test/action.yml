@@ -112,7 +112,7 @@ runs:
           "$python" scripts/run_affected_tests.py --changed-paths "$RUNNER_TEMP/changed-paths.json" -- $ARGUMENTS
         fi
     # The tests run rayo and rayoc in debug, where checks that a release build leaves out still run, such as the
-    # check of the Rayo IR each stage gives. So the release build users run is built and run here too, and its
+    # checks of lowering's Rayo IR. So the release build users run is built and run here too, and its
     # products are saved with the build, so a pull request rebuilds only what it changed.
     - name: Run the proof programs with release rayo
       if: inputs.release-proof-programs == 'true'
