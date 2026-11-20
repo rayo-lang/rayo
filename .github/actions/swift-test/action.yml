@@ -141,13 +141,22 @@ runs:
       if: inputs.release-proof-programs == 'true'
       shell: bash
       run: |
-        swift build -c release -v > "$RUNNER_TEMP/release-build.log" 2>&1 || { tail -50 "$RUNNER_TEMP/release-build.log"; exit 1; }
-        grep -i -E 'prebuilt' "$RUNNER_TEMP/release-build.log" | head -20 || true
-        for manifest in "$RUNNER_TEMP"/restored/*.yaml; do
-          echo "=== diff of $(basename "$manifest") from the restored build"
-          diff "$manifest" ".build/$(basename "$manifest")" | head -60 || true
-        done
-        stat .build/checkouts/swift-syntax/Sources/SwiftSyntax/SyntaxProtocol.swift 2>&1 || true
+        swift build --help | grep -A3 -- '--build-system' || true
+        timed() {
+          local start=$(date +%s)
+          "$@" > "$RUNNER_TEMP/timed.log" 2>&1 || { tail -50 "$RUNNER_TEMP/timed.log"; exit 1; }
+          echo "::notice::$((`date +%s` - start))s, $(grep -c -E '\] Swift(Syntax|Parser)' "$RUNNER_TEMP/timed.log") swift-syntax lines: $*"
+        }
+        round_trip() {
+          tar -cf "$RUNNER_TEMP/build.tar" .build && rm -rf .build && tar -xf "$RUNNER_TEMP/build.tar" && rm "$RUNNER_TEMP/build.tar"
+        }
+        timed swift build -c release
+        timed swift build -c release
+        round_trip
+        timed swift build -c release
+        timed swift build -c release --build-system native
+        round_trip
+        timed swift build -c release --build-system native
         bin=$(swift build -c release --show-bin-path)
 
         # Each run passes when it prints the output beside the program, writes no error, and exits with 0. A run
