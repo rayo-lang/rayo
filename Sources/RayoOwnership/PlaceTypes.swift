@@ -16,30 +16,38 @@ struct PlaceTypes {
     /// source for the index.
     func sourceName(of place: Place) -> String? {
         // A temporary has no name in the source.
-        guard case .source(var name, _, _, _) = body.locals[place.root.index] else { return nil }
-
-        // Each field takes its name from the struct that holds it, and each element its index, where the IR writes it.
-        for depth in place.steps.indices {
-            switch place.steps[depth] {
-            case .field(let index): name += "." + fields(ofStructAt: place.prefix(depth))[index].name
-            case .element(let index): name += "[\(index)]"
-            case .elementAt: return name
-            }
-        }
-        return name
+        guard case .source(let name, _, _, _) = body.locals[place.root.index] else { return nil }
+        return name + writtenSteps(of: place, from: 0).text
     }
 
-    /// The names of the fields that `place` steps into after its first `depth` steps, as the source writes them, such
-    /// as `stats.hp`, or nil where it takes no step after them. Each of those steps must lead into a field, as each
-    /// step after a place's innermost element does.
-    func fieldPath(of place: Place, after depth: Int) -> String? {
-        guard depth < place.steps.count else { return nil }
-        return place.steps.indices.dropFirst(depth).map { step in
-            guard case .field(let index) = place.steps[step] else {
-                preconditionFailure("a field path names only fields, found \(place.steps[step])")
+    /// The name of `place` as the source writes it from the value its first `depth` steps lead to, such as `stats.hp`
+    /// or `inner[0].n`, or nil where the source can't write it so: where it starts at an element of that value, or an
+    /// index a local holds leads to it.
+    func partName(of place: Place, after depth: Int) -> String? {
+        // A part named from the value that holds it starts with a field.
+        guard depth < place.steps.count, case .field = place.steps[depth] else { return nil }
+        let written = writtenSteps(of: place, from: depth)
+        guard written.reachesPlace else { return nil }
+
+        // The name starts with the field's own, without the `.` that joins it to the value that holds it.
+        return String(written.text.dropFirst())
+    }
+
+    /// The steps of `place` from its step at `depth` on, as the source writes them after the value they start from,
+    /// such as `.stats.hp` or `[0].n`, and whether they reach the place. They stop before an element at an index a
+    /// local holds, since the IR keeps no source for the index.
+    private func writtenSteps(of place: Place, from depth: Int) -> (text: String, reachesPlace: Bool) {
+        var text = ""
+        for step in place.steps.indices.dropFirst(depth) {
+            // Each field takes its name from the struct that holds it, and each element its index, where the IR
+            // writes it.
+            switch place.steps[step] {
+            case .field(let index): text += "." + fields(ofStructAt: place.prefix(step))[index].name
+            case .element(let index): text += "[\(index)]"
+            case .elementAt: return (text, false)
             }
-            return fields(ofStructAt: place.prefix(step))[index].name
-        }.joined(separator: ".")
+        }
+        return (text, true)
     }
 
     /// The type of the value at `place`.

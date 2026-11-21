@@ -73,13 +73,14 @@ struct MoveCheckerTests {
         #expect(reported.map(\.range.start.column) == [1, 2])
     }
 
-    // An element at an index a local holds is named by its array, and one inside it by the array that holds it.
+    // The source names an array up to its first element at an index a local holds, so a part inside that element
+    // is named from it, and an element inside it isn't named.
     @Test(arguments: [
-        ("%3[1]", ElementPart(of: "a")),
-        ("%3[%4]", ElementPart(of: "a")),
-        ("%3[0].0", ElementPart(field: "damage", of: "a")),
-        ("%5[0][1]", ElementPart(of: "grid[0]")),
-        ("%5[%4][1]", ElementPart(of: "grid")),
+        ("%3[1]", ElementPart(.element, of: "a")),
+        ("%3[%4]", ElementPart(.element, of: "a")),
+        ("%3[0].0", ElementPart(.named("damage"), of: "a")),
+        ("%5[0][1]", ElementPart(.element, of: "grid[0]")),
+        ("%5[%4][1]", ElementPart(.unnamed, of: "grid")),
     ])
     func `a move out of an array's element, or out of a part of one, is reported at the move with the part it takes`(
         place: String, part: ElementPart,

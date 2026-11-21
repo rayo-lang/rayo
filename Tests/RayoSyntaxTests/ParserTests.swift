@@ -79,7 +79,7 @@ struct ParserErrorTests {
         ("func f() { let = 1 }", "expected the local's name, found '='"),
         ("func f() { var x = 1, = 2 }", "expected the local's name, found '='"),
     ])
-    func `a parsing error's message names what the parser expected, in the terms the source uses`(
+    func `a parsing error's message says what is wrong in the terms the source uses`(
         source: String, message: String,
     ) {
         #expect(errors(source).map(\.message) == [message])

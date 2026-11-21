@@ -113,7 +113,7 @@ struct StructDeclarationTests {
     }
 
     // A struct's fields are written in parentheses after its name, so the error speaks of its body alone.
-    @Test func `a member in a struct's body is told that a struct's body can't declare it`() {
+    @Test func `a declaration in a struct's body is reported as unsupported`() {
         #expect(diagnostics("func main() {}\nstruct S(var a: Int) {\n    func f() {}\n}").map(\.description) == [
             "3:10: error[E0275]: declarations in a struct's body aren't supported",
         ])

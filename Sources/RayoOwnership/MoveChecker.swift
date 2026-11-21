@@ -18,8 +18,9 @@ enum MoveChecker {
         guard case .move(let place, let range) = effect else { return nil }
 
         // An element, wherever its array lies, is the array's for as long as the array holds a value.
-        if let element = place.steps.lastIndex(where: \.isElement) {
-            return Diagnostic(.moveFromElement(part: part(of: place, inElementAt: element, in: places)), at: range)
+        if let innermost = place.steps.lastIndex(where: \.isElement) {
+            let part = part(of: place, innermostElementAt: innermost, in: places)
+            return Diagnostic(.moveFromElement(part: part), at: range)
         }
 
         // A parameter that doesn't own its value can't give it up.
@@ -37,11 +38,22 @@ enum MoveChecker {
         return Diagnostic(code, at: range)
     }
 
-    /// The part that `place` takes of the element its step at `depth` leads into, the innermost element on its way:
-    /// the fields it goes on into inside the element, if any, and the array that holds the element.
-    private static func part(of place: Place, inElementAt depth: Int, in places: PlaceTypes) -> ElementPart {
+    /// What `place` takes out of an element, named by the innermost array that the source names on the way to it. Its
+    /// innermost element is at step `innermost`.
+    private static func part(
+        of place: Place, innermostElementAt innermost: Int, in places: PlaceTypes,
+    ) -> ElementPart {
+        // The source names an array only up to its first element at an index a local holds, so that element is the
+        // one named where there is one.
+        let depth = place.steps.firstIndex(where: \.isAtIndexInLocal) ?? innermost
         let array = places.sourceName(of: place.prefix(depth))
-        return ElementPart(field: places.fieldPath(of: place, after: depth + 1), of: array)
+
+        // The place is the element, or a part inside it that the source writes from the element where it can.
+        let taken: ElementPart.Taken =
+            if depth + 1 == place.steps.count { .element }
+            else if let name = places.partName(of: place, after: depth + 1) { .named(name) }
+            else { .unnamed }
+        return ElementPart(taken, of: array)
     }
 }
 
@@ -51,6 +63,14 @@ private extension PlaceStep {
         switch self {
         case .field: false
         case .element, .elementAt: true
+        }
+    }
+
+    /// Whether the step leads into an array's element at an index a local holds.
+    var isAtIndexInLocal: Bool {
+        switch self {
+        case .field, .element: false
+        case .elementAt: true
         }
     }
 }

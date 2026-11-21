@@ -117,6 +117,16 @@ struct ErrorCodeTests {
         #expect(code.labels == [.moved: "moved here"])
     }
 
+    @Test(arguments: [
+        (ErrorCode.usedPartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' was moved out of 's', so 's' can't be used as a whole"),
+        (.usedMaybePartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' may have been moved out of 's', so 's' can't be used as a whole"),
+    ])
+    func `a use of a place a field was moved out of names the field and the place`(code: ErrorCode, message: String) {
+        #expect(code.message == message)
+    }
+
     @Test("an argument count names one argument, or several", arguments: [
         (ArgumentCount(0), "0 arguments"), (1, "1 argument"), (2, "2 arguments"),
     ])

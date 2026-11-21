@@ -227,6 +227,7 @@ public struct Lexer {
     /// literal reports an error and lexes as `.invalid`.
     private mutating func lexNumber(from start: SourceLocation) -> Token {
         let radix = skipRadixPrefix()
+        let prefixEnd = index
 
         // Read the digits into a 64-bit value, noting whether it overflowed.
         var value: UInt64 = 0
@@ -252,8 +253,8 @@ public struct Lexer {
             while let next = peek(), isIdentifierContinue(next) { advance() }
             error = .invalidDigit(digit: String(UnicodeScalar(byte)), base: baseName(of: radix))
         } else if digits == 0 {
-            // A prefix with no digits after it; the prefix is the literal's first two bytes.
-            error = .missingDigits(prefix: String(decoding: bytes[start.offset..<start.offset + 2], as: UTF8.self))
+            // A prefix with no digits after it.
+            error = .missingDigits(prefix: String(decoding: bytes[start.offset..<prefixEnd], as: UTF8.self))
         } else if overflow {
             // A value too big for 64 bits.
             error = .literalExceeds64Bits

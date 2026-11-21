@@ -64,6 +64,40 @@ struct MoveTests {
         #expect(diagnostics(source).map(\.description) == [message])
     }
 
+    // The array named is the innermost one the source can name: the source names an array up to the first index a
+    // local holds. A part inside that element that the source can't write from it, such as an element of it or a part
+    // a later such index leads to, is called a part.
+    @Test(arguments: [
+        ("let x = w.items[i].inner[j].n", "a part out of an element of 'w.items'"),
+        ("let x = w.items[i].inner[0].n", "'inner[0].n' out of an element of 'w.items'"),
+        ("let c = w.items[i].inner[0]\n    let x = c.n", "'inner[0]' out of an element of 'w.items'"),
+        ("let x = w.items[0].inner[i].n", "'n' out of an element of 'w.items[0].inner'"),
+        ("let x = g[i][j]", "a part out of an element of 'g'"),
+        ("let x = g[i][0]", "a part out of an element of 'g'"),
+        ("let x = g[0][i]", "an element out of 'g[0]'"),
+        ("let x = g[0][1]", "an element out of 'g[0]'"),
+    ])
+    func `a move out of an element inside another names the innermost array the source names`(
+        statements: String, part: String,
+    ) {
+        let source = """
+            func main() {
+                let w = W(items: [B(inner: [C(n: 1), C(n: 2)]), B(inner: [C(n: 3), C(n: 4)])])
+                let g: [2 of [2 of Int]] = [[1, 2], [3, 4]]
+                let i: UInt = 1
+                let j: UInt = 0
+                \(statements)
+                print(x + g[0][0] + w.items[0].inner[0].n + Int(copy i) + Int(copy j))
+            }
+            struct W(var items: [2 of B])
+            struct B(var inner: [2 of C])
+            struct C(var n: Int)
+            """
+        #expect(diagnostics(source).map(\.description) == [
+            "6:13: error[E0315]: can't move \(part); write 'copy' before it to take a copy",
+        ])
+    }
+
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
     // copies the element instead. The source gives the copy no name, so the error names it as an array.
     @Test func `an element taken from a copy can't be moved out of the copy`() {
