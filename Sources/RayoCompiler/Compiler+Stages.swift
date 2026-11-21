@@ -79,16 +79,37 @@ extension Compiler {
         return owned
     }
 
-    /// `program`, which `stage` gave, once a debug build of `rayoc` has checked it keeps the IR's rules: its types, the
-    /// blocks its paths reach, the checks of the indices it finds elements by, and, for the ownership stage's IR,
-    /// where its accesses end and its locals retire.
-    static func verified(_ program: IRProgram, from stage: IRStage) throws(CompilationError) -> IRProgram {
-        // A release build of `rayoc` takes its stages' IR on trust, and spends no time checking it.
-        #if DEBUG
+    /// `program`, which `stage` gave, once it has passed the checks `compilerBuild` of `rayoc` runs on that stage's IR.
+    static func verified(
+        _ program: IRProgram, from stage: IRStage, in compilerBuild: CompilerBuild = .current,
+    ) throws(CompilationError) -> IRProgram {
         // IR that breaks its rules is a fault in `rayoc`, never in the program.
-        if let violation = IRVerifier.verify(program, from: stage) { throw .failed("internal error: \(violation)") }
-        #endif
+        if let violation = violation(in: program, from: stage, by: compilerBuild) {
+            throw .failed("internal error: \(violation)")
+        }
         return program
+    }
+
+    /// The first violation in `program`, which `stage` gave, of the rules `compilerBuild` of `rayoc` checks there, or
+    /// nil where it breaks none.
+    private static func violation(
+        in program: IRProgram, from stage: IRStage, by compilerBuild: CompilerBuild,
+    ) -> IRViolation? {
+        switch (compilerBuild, stage) {
+        // A debug build checks every rule of each stage's IR.
+        case (.debug, _):
+            IRVerifier.verify(program, from: stage)
+
+        // The emitter takes the IR's types, the blocks its paths reach and the checks of its indices as given, and
+        // finds an element at an index a local holds with no check of its own, so every build checks those in the IR
+        // it receives. A release build leaves out the checks of where accesses end and locals retire, which cost
+        // more: the time the local-life check takes grows faster than a function's length. Lowering's IR never
+        // reaches the emitter, so a release build leaves it unchecked.
+        case (.release, .ownership):
+            IRVerifier.verifySharedRules(program)
+        case (.release, .lowering):
+            nil
+        }
     }
 
     /// The executable that `program` makes, when it has a `main`, which an executable starts at. A library, which has
