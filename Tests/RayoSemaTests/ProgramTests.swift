@@ -20,6 +20,12 @@ struct ProgramTests {
         #expect(errors(source) == [expected])
     }
 
+    @Test func `a 'main' that returns a value is told the type it must return`() {
+        #expect(diagnostics("func main() -> Int { 0 }").map(\.description) == [
+            "1:16: error[E0204]: 'main' must return Void",
+        ])
+    }
+
     @Test(arguments: [
         ("enum E {}", ErrorCode.missingDeclaration(found: .token("enum"))),
         ("func 1() {}", .missingFunctionName(found: .token("1"))),

@@ -117,6 +117,16 @@ struct ErrorCodeTests {
         #expect(code.labels == [.moved: "moved here"])
     }
 
+    @Test(arguments: [
+        (ErrorCode.usedPartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' was moved out of 's', so 's' can't be used as a whole"),
+        (.usedMaybePartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' may have been moved out of 's', so 's' can't be used as a whole"),
+    ])
+    func `a use of a place a field was moved out of names the field and the place`(code: ErrorCode, message: String) {
+        #expect(code.message == message)
+    }
+
     @Test("an argument count names one argument, or several", arguments: [
         (ArgumentCount(0), "0 arguments"), (1, "1 argument"), (2, "2 arguments"),
     ])
@@ -153,14 +163,16 @@ struct ErrorCodeTests {
     }
 
     @Test(arguments: [
-        (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used"),
-        (.unusedValue(type: .shadowedPrelude("Int")), "the prelude's Int value isn't used"),
+        (ErrorCode.unusedValue(type: "Int"), "the Int value isn't used; write '_ =' before it to drop it"),
+        (.unusedValue(type: .shadowedPrelude("Int")),
+         "the prelude's Int value isn't used; write '_ =' before it to drop it"),
         (.literalDoesntFit(type: "Int"), "the literal doesn't fit in an Int"),
         (.literalDoesntFit(type: .shadowedPrelude("Int")), "the literal doesn't fit in the prelude's Int"),
-        (.voidLocal(type: "Void"), "a local can't have type Void"),
-        (.voidLocal(type: .shadowedPrelude("Void")), "a local can't have the prelude's type Void"),
-        (.voidParameter(type: .shadowedPrelude("Void")), "a parameter can't have the prelude's type Void"),
-        (.voidField(type: .shadowedPrelude("Void")), "a field can't have the prelude's type Void"),
+        (.voidLocal(name: "x", type: "Void"), "the local 'x' can't have type Void"),
+        (.voidLocal(name: "x", type: .shadowedPrelude("Void")), "the local 'x' can't have the prelude's type Void"),
+        (.voidParameter(name: "v", type: .shadowedPrelude("Void")),
+         "the parameter 'v' can't have the prelude's type Void"),
+        (.voidField(name: "v", type: .shadowedPrelude("Void")), "the field 'v' can't have the prelude's type Void"),
         (.missingReturnValue(type: "Int"), "'return' needs a value of type Int"),
         (.missingReturnValue(type: .shadowedPrelude("Int")), "'return' needs a value of the prelude's type Int"),
     ])

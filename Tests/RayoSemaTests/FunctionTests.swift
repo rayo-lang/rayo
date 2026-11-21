@@ -31,9 +31,10 @@ struct FunctionTests {
 
     @Test("a function without '->' returns Void when its body is a Void expression, or more than one statement")
     func inferredResult() {
-        #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") == [.voidLocal(type: "Void")])
+        #expect(errors("func main() { let x = say() }\nfunc say() { print(1) }") ==
+            [.voidLocal(name: "x", type: "Void")])
         #expect(errors("func main() { let x = f() }\nfunc f() {\n    print(1)\n    3\n}") ==
-            [.voidLocal(type: "Void"), .unusedValue(type: "Int")])
+            [.voidLocal(name: "x", type: "Void"), .unusedValue(type: "Int")])
     }
 
     @Test(arguments: [
@@ -69,6 +70,12 @@ struct FunctionTests {
         let reported = diagnostics(source)
         #expect(reported.map(\.code) == [.resultDependsOnItself(signature: signature)])
         #expect(coveredText(reported, in: source) == [call])
+    }
+
+    @Test func `a result type that depends on itself is to be written after '->'`() {
+        #expect(diagnostics("func main() {}\nfunc f() { f() }").map(\.description) == [
+            "2:12: error[E0227]: the result type of 'f()' depends on itself; write it after '->'",
+        ])
     }
 
     @Test("a written result type ends what a result type depends on")

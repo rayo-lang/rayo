@@ -71,7 +71,7 @@ struct UIntTests {
 
     @Test func `an Int and a UInt that differ name both types`() {
         let message = ErrorCode.operandsDiffer(op: "+", left: "Int", right: "UInt").message
-        #expect(message == "'+' needs operands of one type, found Int and UInt")
+        #expect(message == "'+' needs operands of the same type, found Int and UInt")
     }
 
     @Test func `an operator on operands of the wrong kind names what it needs`() {

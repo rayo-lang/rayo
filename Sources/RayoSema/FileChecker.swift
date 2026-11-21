@@ -149,7 +149,8 @@ final class FileChecker {
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
-            errors.report(.voidParameter(type: declarations.typeName(of: .void)), at: parameter.type.range)
+            let code = ErrorCode.voidParameter(name: parameter.name, type: declarations.typeName(of: .void))
+            errors.report(code, at: parameter.type.range)
             type = nil
         }
         // So is one too large for the stack, where the call's argument lies.

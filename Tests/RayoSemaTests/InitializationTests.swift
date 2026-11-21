@@ -7,7 +7,7 @@ struct InitializationTests {
         ("var a = 1, b", [.missingLocalType(name: "b")], ["b"]),
         ("let x\nprint(x)\nx = 1", [.missingLocalType(name: "x")], ["x"]),
         ("let x: Int8", [.notAType(name: "Int8")], ["Int8"]),
-        ("var x: ()", [.voidLocal(type: "Void")], ["()"]),
+        ("var x: ()", [.voidLocal(name: "x", type: "Void")], ["()"]),
         ("let _: Int", [.underscoreDeclared], ["_"]),
     ])
     func needsType(body: String, expected: [ErrorCode], covered: [String]) {

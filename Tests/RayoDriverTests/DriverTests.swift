@@ -56,7 +56,7 @@ struct DriverTests {
     @Test(arguments: [
         ("func main() {}", CommandResult(exitCode: 0, output: "", errors: "")),
         ("func f() {\n    let = 1\n}", CommandResult(
-            exitCode: 1, output: "", errors: "main.rayo:2:9: error[E0113]: expected a name to bind, found '='\n")),
+            exitCode: 1, output: "", errors: "main.rayo:2:9: error[E0113]: expected the local's name, found '='\n")),
     ])
     func `check ends as rayoc's check of the file ends, with rayoc's errors`(
         source: String, expected: CommandResult,

@@ -18,7 +18,10 @@ enum MoveChecker {
         guard case .move(let place, let range) = effect else { return nil }
 
         // An element, wherever its array lies, is the array's for as long as the array holds a value.
-        if place.steps.contains(where: \.isElement) { return Diagnostic(.moveFromElement, at: range) }
+        if let innermost = place.steps.lastIndex(where: \.isElement) {
+            let part = part(of: place, innermostElementAt: innermost, in: places)
+            return Diagnostic(.moveFromElement(part: part), at: range)
+        }
 
         // A parameter that doesn't own its value can't give it up.
         guard case .source(let parameter, .parameter(let convention), _, _) = places.body.locals[place.root.index],
@@ -34,6 +37,24 @@ enum MoveChecker {
             ? .moveFromParameter(name: parameter) : .moveFieldFromParameter(field: name, parameter: parameter)
         return Diagnostic(code, at: range)
     }
+
+    /// What `place` takes out of an element, named by the innermost array that the source names on the way to it. Its
+    /// innermost element is at step `innermost`.
+    private static func part(
+        of place: Place, innermostElementAt innermost: Int, in places: PlaceTypes,
+    ) -> ElementPart {
+        // The source names an array only up to its first element at an index a local holds, so that element is the
+        // one named where there is one.
+        let depth = place.steps.firstIndex(where: \.isAtIndexInLocal) ?? innermost
+        let array = places.sourceName(of: place.prefix(depth))
+
+        // The place is the element, or a part inside it that the source writes from the element where it can.
+        let taken: ElementPart.Taken =
+            if depth + 1 == place.steps.count { .element }
+            else if let name = places.partName(of: place, after: depth + 1) { .named(name) }
+            else { .unnamed }
+        return ElementPart(taken, of: array)
+    }
 }
 
 private extension PlaceStep {
@@ -42,6 +63,14 @@ private extension PlaceStep {
         switch self {
         case .field: false
         case .element, .elementAt: true
+        }
+    }
+
+    /// Whether the step leads into an array's element at an index a local holds.
+    var isAtIndexInLocal: Bool {
+        switch self {
+        case .field, .element: false
+        case .elementAt: true
         }
     }
 }
