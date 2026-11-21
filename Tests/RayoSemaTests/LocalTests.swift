@@ -16,7 +16,7 @@ struct LocalTests {
         ("var x = true\nx += 1", .integerOperands(op: "+=", left: "Bool", right: "Int")),
         ("1 = 2", .assignToNonLocal),
         ("let x = 1\nlet x = 2", .alreadyDeclared(name: "x")),
-        ("let x = print(1)", .voidLocal(type: "Void")),
+        ("let x = print(1)", .voidLocal(name: "x", type: "Void")),
         ("let x = 1\nx(2)", .notAFunction(name: "x")),
         ("print = 3", .assignToFunction(name: "print")),
         ("main += 2", .assignToFunction(name: "main")),
@@ -35,6 +35,14 @@ struct LocalTests {
     ])
     func copiedName(body: String, expected: ErrorCode) {
         #expect(errors("func main() {\n\(body)\n}") == [expected])
+    }
+
+    @Test func `a local of type Void is reported by its name`() {
+        #expect(errorLines(inMain: "let x = print(1)") == ["2:9: error[E0219]: the local 'x' can't have type Void"])
+    }
+
+    @Test func `a '_' read as a value is told that it can only be assigned to`() {
+        #expect(errorLines(inMain: "print(_)") == ["2:7: error[E0212]: '_' can only be assigned to"])
     }
 
     @Test("a declaration that fails still declares its name, so its uses report nothing more", arguments: [

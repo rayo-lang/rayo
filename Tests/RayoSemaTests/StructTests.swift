@@ -43,7 +43,7 @@ struct StructTests {
         ("let b: Bool = 1", ErrorCode.typeMismatch(expected: "Bool", found: .shadowedPrelude("Int"))),
         ("1", .unusedValue(type: .shadowedPrelude("Int"))),
         ("let a = 9223372036854775808", .literalDoesntFit(type: .shadowedPrelude("Int"))),
-        ("let y: () = g()", .voidLocal(type: .shadowedPrelude("Void"))),
+        ("let y: () = g()", .voidLocal(name: "y", type: .shadowedPrelude("Void"))),
         ("let b = 1 == true", .operandsDiffer(op: "==", left: .shadowedPrelude("Int"), right: "Bool")),
         ("let t = true + 1", .integerOperands(op: "+", left: "Bool", right: .shadowedPrelude("Int"))),
         ("_ = g() == g()", .incomparable(op: "==", type: .shadowedPrelude("Void"))),
@@ -59,8 +59,8 @@ struct StructTests {
 
     @Test(arguments: [
         ("func main() -> Void {}", ErrorCode.mainReturnsNonVoid(type: .shadowedPrelude("Void"))),
-        ("func main() {}\nfunc h(_ v: ()) {}", .voidParameter(type: .shadowedPrelude("Void"))),
-        ("func main() {}\nstruct T(var v: ())", .voidField(type: .shadowedPrelude("Void"))),
+        ("func main() {}\nfunc h(_ v: ()) {}", .voidParameter(name: "v", type: .shadowedPrelude("Void"))),
+        ("func main() {}\nstruct T(var v: ())", .voidField(name: "v", type: .shadowedPrelude("Void"))),
     ])
     func `an error about a declaration names a prelude type that a struct shadows as the prelude's`(
         declarations: String, expected: ErrorCode,
@@ -72,8 +72,8 @@ struct StructTests {
 struct StructDeclarationTests {
     @Test(arguments: [
         ("struct S(var a: Q)", ErrorCode.notAType(name: "Q"), "Q"),
-        ("struct S(var a: Void)", .voidField(type: "Void"), "Void"),
-        ("struct S(var a: ())", .voidField(type: "Void"), "()"),
+        ("struct S(var a: Void)", .voidField(name: "a", type: "Void"), "Void"),
+        ("struct S(var a: ())", .voidField(name: "a", type: "Void"), "()"),
         ("struct S(var a)", .missingFieldType(name: "a"), "a"),
         ("struct S(var a: Int, let a: Bool)", .alreadyDeclared(name: "a"), "a"),
         ("struct S(var _: Int)", .underscoreDeclared, "_"),
@@ -91,6 +91,12 @@ struct StructDeclarationTests {
         #expect(coveredText(reported, in: source) == [covered])
     }
 
+    @Test func `a field of type Void is reported by its name`() {
+        #expect(diagnostics("func main() {}\nstruct S(var a: Void)").map(\.description) == [
+            "2:17: error[E0238]: the field 'a' can't have type Void",
+        ])
+    }
+
     @Test(arguments: [
         ("struct S(var a: Int) {\n    func f() {}\n}", ["f"]),
         ("struct S {\n    struct T\n    func f(x: S) -> T {}\n}", ["T", "f"]),
@@ -104,6 +110,13 @@ struct StructDeclarationTests {
         // Each member that parsed has the one error, at its name; a member that failed has its syntax error alone.
         let reported = diagnostics(source).filter { $0.code == .unsupportedMember }
         #expect(coveredText(reported, in: source) == covered)
+    }
+
+    // A struct's fields are written in parentheses after its name, so the error speaks of its body alone.
+    @Test func `a member in a struct's body is told that a struct's body can't declare it`() {
+        #expect(diagnostics("func main() {}\nstruct S(var a: Int) {\n    func f() {}\n}").map(\.description) == [
+            "3:10: error[E0275]: declarations in a struct's body aren't supported",
+        ])
     }
 
     @Test(arguments: [

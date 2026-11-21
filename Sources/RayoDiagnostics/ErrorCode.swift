@@ -7,16 +7,16 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(1, error: "the file isn't valid UTF-8")
     case notUTF8
 
-    @Code(2, error: "unterminated block comment")
+    @Code(2, error: "the block comment has no closing '*/'")
     case unterminatedBlockComment
 
-    @Code(3, error: "invalid digit in integer literal")
-    case invalidDigit
+    @Code(3, error: "'{digit}' isn't a digit in {base}")
+    case invalidDigit(digit: String, base: String)
 
-    @Code(4, error: "expected digits after the radix prefix")
-    case missingDigits
+    @Code(4, error: "expected digits after '{prefix}'")
+    case missingDigits(prefix: String)
 
-    @Code(5, error: "integer literal doesn't fit in 64 bits")
+    @Code(5, error: "the integer literal doesn't fit in 64 bits")
     case literalExceeds64Bits
 
     // MARK: Parsing
@@ -26,7 +26,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 102 is unused, and stays so.
 
-    @Code(103, error: "unmatched '}'")
+    @Code(103, error: "the '}' has no matching '{'")
     case unmatchedBrace
 
     @Code(104, error: "expected 'func' or 'struct' to begin a declaration, found {found}")
@@ -56,7 +56,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(112, error: "expected a newline or ';' after the statement, found {found}")
     case unendedStatement(found: FoundToken)
 
-    @Code(113, error: "expected a name to bind, found {found}")
+    @Code(113, error: "expected the local's name, found {found}")
     case missingBindingName(found: FoundToken)
 
     // 114 is unused, and stays so.
@@ -125,7 +125,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // 203 is unused, and stays so.
 
-    @Code(204, error: "'main' returns {type}")
+    @Code(204, error: "'main' must return {type}")
     case mainReturnsNonVoid(type: TypeName)
 
     @Code(205, error: "'{name}' isn't a type")
@@ -148,13 +148,13 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(211, error: "'{name}' is a function, not a value")
     case functionAsValue(name: String)
 
-    @Code(212, error: "'_' names no value")
+    @Code(212, error: "'_' can only be assigned to")
     case underscoreValue
 
     @Code(213, error: "expected {expected}, found {found}")
     case typeMismatch(expected: TypeName, found: TypeName)
 
-    @Code(214, error: "'{op}' needs operands of one type, found {left} and {right}")
+    @Code(214, error: "'{op}' needs operands of the same type, found {left} and {right}")
     case operandsDiffer(op: String, left: TypeName, right: TypeName)
 
     @Code(215, error: "'{op}' needs {needs} operands, found {left} and {right}")
@@ -169,8 +169,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(218, error: "'_' can't be declared")
     case underscoreDeclared
 
-    @Code(219, error: "a local can't have {type.typePhrase}")
-    case voidLocal(type: TypeName)
+    @Code(219, error: "the local '{name}' can't have {type.typePhrase}")
+    case voidLocal(name: String, type: TypeName)
 
     // 220 is unused, and stays so.
 
@@ -191,7 +191,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(226, error: "'{signature}' can reach its end without returning a value")
     case missingReturn(signature: String)
 
-    @Code(227, error: "the result type of '{signature}' depends on itself")
+    @Code(227, error: "the result type of '{signature}' depends on itself; write it after '->'")
     case resultDependsOnItself(signature: String)
 
     @Code(228, error: "expected {expected} before the argument, found {found}")
@@ -212,10 +212,10 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(233, error: "default arguments aren't supported")
     case defaultArgument
 
-    @Code(234, error: "a parameter can't have {type.typePhrase}")
-    case voidParameter(type: TypeName)
+    @Code(234, error: "the parameter '{name}' can't have {type.typePhrase}")
+    case voidParameter(name: String, type: TypeName)
 
-    @Code(235, error: "{type.definite} value isn't used")
+    @Code(235, error: "{type.definite} value isn't used; write '_ =' before it to drop it")
     case unusedValue(type: TypeName)
 
     @Code(236, error: "'{name}' needs a type or a value")
@@ -224,8 +224,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(237, error: "'{name}' needs a type")
     case missingFieldType(name: String)
 
-    @Code(238, error: "a field can't have {type.typePhrase}")
-    case voidField(type: TypeName)
+    @Code(238, error: "the field '{name}' can't have {type.typePhrase}")
+    case voidField(name: String, type: TypeName)
 
     @Code(239, error: "'{name}' contains itself")
     case containsItself(name: String)
@@ -333,7 +333,7 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(274, error: "index {index} is out of range for a {type}")
     case indexOutOfRange(index: UInt64, type: TypeName)
 
-    @Code(275, error: "a struct's members aren't supported")
+    @Code(275, error: "declarations in a struct's body aren't supported")
     case unsupportedMember
 
     @Code(276, error: "{type.withArticle} is too large to hold on the stack")
@@ -341,7 +341,7 @@ public enum ErrorCode: Sendable, Hashable {
 
     // MARK: Ownership
 
-    @Code(301, error: "'{name}' is a borrowed parameter, so it can't be moved")
+    @Code(301, error: "can't move the borrowed parameter '{name}'; write 'copy' before it to take a copy")
     case moveFromParameter(name: String)
 
     @Code(302, error: "'{name}' was moved", labels: ["moved": "moved here"])
@@ -365,16 +365,16 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(308, error: "the value assigned to '{name}' is never read")
     case unreadValue(name: String)
 
-    @Code(309, error: "'{field}' was moved out of '{name}', so '{name}' can't be used whole",
+    @Code(309, error: "'{field}' was moved out of '{name}', so '{name}' can't be used as a whole",
           labels: ["moved": "moved here"])
     case usedPartlyMoved(name: String, field: String)
 
-    @Code(310, error: "'{field}' may have been moved out of '{name}', so '{name}' can't be used whole",
+    @Code(310, error: "'{field}' may have been moved out of '{name}', so '{name}' can't be used as a whole",
           labels: ["moved": "moved here"])
     case usedMaybePartlyMoved(name: String, field: String)
 
     @Code(311, error:
-        "'{field}' is in the borrowed parameter '{parameter}', so it can't be moved; 'copy' makes an owned copy")
+        "can't move '{field}' out of the borrowed parameter '{parameter}'; write 'copy' before it to take a copy")
     case moveFieldFromParameter(field: String, parameter: String)
 
     @Code(312, error: "'{name}' can't be used while '{borrowed}' is mutably borrowed",
@@ -387,8 +387,8 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(314, error: "'{name}' can't be moved while '{borrowed}' is borrowed", labels: ["borrowed": "borrowed here"])
     case movedWhileBorrowed(name: String, borrowed: String)
 
-    @Code(315, error: "an array's element can't be moved, nor any part of one; 'copy' makes an owned copy")
-    case moveFromElement
+    @Code(315, error: "can't move {part}; write 'copy' before it to take a copy")
+    case moveFromElement(part: ElementPart)
 }
 
 extension ErrorCode {
@@ -473,7 +473,7 @@ public enum TypeName: Sendable, Hashable, ExpressibleByStringLiteral, CustomStri
         return "an"
     }
 
-    /// The name with the word `type` before it, as in `a local can't have type Void`, or, for a shadowed prelude
+    /// The name with the word `type` before it, as in `the local 'x' can't have type Void`, or, for a shadowed prelude
     /// type, `the prelude's type Void`.
     public var typePhrase: String {
         switch self {
@@ -491,6 +491,30 @@ public struct ArgumentCount: Sendable, Hashable, ExpressibleByIntegerLiteral, Cu
     public init(integerLiteral count: Int) { self.count = count }
 
     public var description: String { count == 1 ? "1 argument" : "\(count) arguments" }
+}
+
+/// An array's element, or a field inside one, as an error names what a move takes out of it: `an element out of
+/// 'wave.enemies'`, or `'stats' out of an element of 'wave.enemies'`.
+public struct ElementPart: Sendable, Hashable, CustomStringConvertible {
+    /// The fields inside the element that lead to the part, as the source writes them, such as `stats.hp`, or nil
+    /// where the part is the whole element.
+    public var field: String?
+    /// The array as the source names it, such as `wave.enemies`, or nil where the array is a value the source gives
+    /// no name, such as a call's result.
+    public var array: String?
+
+    public init(field: String? = nil, of array: String?) {
+        self.field = field
+        self.array = array
+    }
+
+    public var description: String {
+        let array = array.map { "'\($0)'" } ?? "an array"
+        return switch field {
+        case nil: "an element out of \(array)"
+        case let field?: "'\(field)' out of an element of \(array)"
+        }
+    }
 }
 
 /// How many elements an array holds, as an error names it: `1 element`, `2 elements`.

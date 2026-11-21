@@ -73,15 +73,24 @@ struct MoveCheckerTests {
         #expect(reported.map(\.range.start.column) == [1, 2])
     }
 
-    @Test(arguments: ["%3[1]", "%3[%4]", "%3[0].0", "%5[0][1]", "%5[%4][1]"])
-    func `a move out of an array's element, or out of a part of one, is reported at the move`(place: String) throws {
+    // An element at an index a local holds is named by its array, and one inside it by the array that holds it.
+    @Test(arguments: [
+        ("%3[1]", ElementPart(of: "a")),
+        ("%3[%4]", ElementPart(of: "a")),
+        ("%3[0].0", ElementPart(field: "damage", of: "a")),
+        ("%5[0][1]", ElementPart(of: "grid[0]")),
+        ("%5[%4][1]", ElementPart(of: "grid")),
+    ])
+    func `a move out of an array's element, or out of a part of one, is reported at the move with the part it takes`(
+        place: String, part: ElementPart,
+    ) throws {
         let blocks = """
             bb0:
               %4 @1:1-1:1 = index UInt 1 below 2 @1:1-1:1
               _ = operand move \(place) @2:1-2:1 @1:1-1:1
               return
             """
-        #expect(try checked(takingIntAndShot(blocks)).errors == [Diagnostic(.moveFromElement, at: at(1))])
+        #expect(try checked(takingIntAndShot(blocks)).errors == [Diagnostic(.moveFromElement(part: part), at: at(1))])
     }
 
     @Test func `a read of an element, and a move of the whole array, are allowed`() throws {

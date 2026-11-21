@@ -29,6 +29,19 @@ struct PlaceTypes {
         return name
     }
 
+    /// The names of the fields that `place` steps into after its first `depth` steps, as the source writes them, such
+    /// as `stats.hp`, or nil where it takes no step after them. Each of those steps must lead into a field, as each
+    /// step after a place's innermost element does.
+    func fieldPath(of place: Place, after depth: Int) -> String? {
+        guard depth < place.steps.count else { return nil }
+        return place.steps.indices.dropFirst(depth).map { step in
+            guard case .field(let index) = place.steps[step] else {
+                preconditionFailure("a field path names only fields, found \(place.steps[step])")
+            }
+            return fields(ofStructAt: place.prefix(step))[index].name
+        }.joined(separator: ".")
+    }
+
     /// The type of the value at `place`.
     func type(of place: Place) -> RayoType {
         do {

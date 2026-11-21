@@ -250,10 +250,10 @@ public struct Lexer {
         // A letter or a digit beyond the radix runs on from the digits; the error covers it and the rest of the word.
         if let byte = peek(), isIdentifierContinue(byte) {
             while let next = peek(), isIdentifierContinue(next) { advance() }
-            error = .invalidDigit
+            error = .invalidDigit(digit: String(UnicodeScalar(byte)), base: baseName(of: radix))
         } else if digits == 0 {
-            // A prefix with no digits after it.
-            error = .missingDigits
+            // A prefix with no digits after it; the prefix is the literal's first two bytes.
+            error = .missingDigits(prefix: String(decoding: bytes[start.offset..<start.offset + 2], as: UTF8.self))
         } else if overflow {
             // A value too big for 64 bits.
             error = .literalExceeds64Bits
@@ -291,6 +291,16 @@ public struct Lexer {
 }
 
 private func isDigit(_ byte: UInt8) -> Bool { byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9") }
+
+/// The name of the base an integer literal in `radix` is written in, as an error names it, such as `binary`.
+private func baseName(of radix: Int) -> String {
+    switch radix {
+    case 2: "binary"
+    case 8: "octal"
+    case 16: "hexadecimal"
+    default: "decimal"
+    }
+}
 
 private func isIdentifierStart(_ byte: UInt8) -> Bool {
     (byte >= UInt8(ascii: "a") && byte <= UInt8(ascii: "z")) || (byte >= UInt8(ascii: "A") && byte <= UInt8(ascii: "Z"))

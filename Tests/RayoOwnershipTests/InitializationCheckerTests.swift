@@ -668,6 +668,18 @@ struct FieldMoveTests {
         #expect(try checked(function(blocks)).errors == [Diagnostic(expected, at: at(2), labeling: moves(at: [1]))])
     }
 
+    @Test(arguments: [
+        (ErrorCode.usedPartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' was moved out of 's', so 's' can't be used as a whole"),
+        (.usedMaybePartlyMoved(name: "s", field: "s.hit"),
+         "'s.hit' may have been moved out of 's', so 's' can't be used as a whole"),
+    ])
+    func `the error at a use of a place a field was moved out of names the field and the place`(
+        code: ErrorCode, message: String,
+    ) {
+        #expect(code.message == message)
+    }
+
     @Test(arguments: [("%5.1", "%5.1"), ("%5.1.0", "%5.1.0"), ("%5.1.0", "%5.1")])
     func `assigning a moved field, or a field that holds it, makes the local whole again`(
         moved: String, assigned: String,

@@ -18,7 +18,9 @@ enum MoveChecker {
         guard case .move(let place, let range) = effect else { return nil }
 
         // An element, wherever its array lies, is the array's for as long as the array holds a value.
-        if place.steps.contains(where: \.isElement) { return Diagnostic(.moveFromElement, at: range) }
+        if let element = place.steps.lastIndex(where: \.isElement) {
+            return Diagnostic(.moveFromElement(part: part(of: place, inElementAt: element, in: places)), at: range)
+        }
 
         // A parameter that doesn't own its value can't give it up.
         guard case .source(let parameter, .parameter(let convention), _, _) = places.body.locals[place.root.index],
@@ -33,6 +35,13 @@ enum MoveChecker {
         let code: ErrorCode = place.steps.isEmpty
             ? .moveFromParameter(name: parameter) : .moveFieldFromParameter(field: name, parameter: parameter)
         return Diagnostic(code, at: range)
+    }
+
+    /// The part that `place` takes of the element its step at `depth` leads into, the innermost element on its way:
+    /// the fields it goes on into inside the element, if any, and the array that holds the element.
+    private static func part(of place: Place, inElementAt depth: Int, in places: PlaceTypes) -> ElementPart {
+        let array = places.sourceName(of: place.prefix(depth))
+        return ElementPart(field: places.fieldPath(of: place, after: depth + 1), of: array)
     }
 }
 
