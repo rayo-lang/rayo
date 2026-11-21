@@ -191,7 +191,7 @@ let package = Package(
             exclude: ["Snapshots"],
         ),
         .testTarget(name: "RayoCompilerTests", dependencies: [
-            "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoSema", "RayoSource",
+            "RayoCompiler", "RayoDiagnostics", "RayoIR", "RayoOwnership", "RayoSema", "RayoSource",
         ]),
         .target(name: "ToolStandIn", path: "Tests/ToolStandIn"),
         .executableTarget(name: "tool-stand-in", dependencies: ["ToolStandIn"], path: "Tests/tool-stand-in"),

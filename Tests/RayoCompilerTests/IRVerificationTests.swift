@@ -1,6 +1,7 @@
 @testable import RayoCompiler
 import RayoDiagnostics
 import RayoIR
+import RayoOwnership
 import Testing
 
 /// IR that breaks one of the IR's rules, the stage that gave it, and what the verifier says is wrong with it.
@@ -65,8 +66,8 @@ struct IRVerificationTests {
     }
 
     @Test func `a release build checks a function eight times as long in well under sixty-four times as long`() throws {
-        let short = try loweredIR(of: mainOfRounds(250))
-        let long = try loweredIR(of: mainOfRounds(2000))
+        let short = try ownedIR(of: mainOfRounds(50))
+        let long = try ownedIR(of: mainOfRounds(400))
 
         // A check that grows in line with the length takes about eight times as long. One that grows with its square
         // takes up to sixty-four times. Sixteen is a factor of two from the first, and of four from the second.
@@ -75,15 +76,15 @@ struct IRVerificationTests {
     }
 }
 
-/// The IR that lowering gives for `source`, which must check with no error. It stands in for the IR the ownership
-/// stage gives, which differs only in the ends of accesses and retirements of locals that the ownership stage writes
-/// in, and which takes that stage far longer to make than the release checks take to check.
-private func loweredIR(of source: String) throws -> IRProgram {
+/// The IR that the ownership stage gives for `source`, which must check with no error. The stages run without the
+/// pipeline, whose checks of their IR in a debug build would take far longer than the IR takes to make.
+private func ownedIR(of source: String) throws -> IRProgram {
     var errors: [Diagnostic] = []
     let readSource = { (_: String) in Array(source.utf8) }
     let checked = try #require(try Compiler.checkedProgram("main.rayo", readFile: readSource, errors: &errors))
-    try #require(errors.allSatisfy { $0.severity != .error })
-    return Lowering.lower(checked.program)
+    let (owned, ownershipErrors) = OwnershipChecker.check(Lowering.lower(checked.program))
+    try #require(errors.allSatisfy { $0.severity != .error } && ownershipErrors.isEmpty)
+    return owned
 }
 
 /// The fastest time `build` of `rayoc` takes to check `short` and `long`, as the ownership stage's IR, of `runs`
@@ -132,13 +133,23 @@ private func mainOfRounds(_ count: Int) -> String {
         """
 }
 
+/// The blocks of a `main` that finds an element of `%1` at the index `%2`, which it stores without checking it.
+private let uncheckedIndex = """
+      %1 @1:1-1:2 = fill 2 of 0 @1:1-1:2
+      %2 @1:1-1:2 = operand UInt 1 @1:1-1:2
+      _ = operand read %1[%2] @1:1-1:2 @1:1-1:2
+    """
+private let uncheckedIndexMessage =
+    "the IR indexes an array of 2 elements at %2, which it changes without checking it is below 2"
+private let typeMessage = "the IR returns a value of type Bool from a function that returns Void"
+
 /// IR the ownership stage gives, which the emitter receives, broken in a way every build of `rayoc` checks.
 private let brokenInTheIREveryBuildChecks = [
     BrokenIR(
         testDescription: "the ownership stage's IR that breaks its types",
         stage: .ownership,
         blocks: "  return true",
-        message: "the IR returns a value of type Bool from a function that returns Void",
+        message: typeMessage,
     ),
     BrokenIR(
         testDescription: "the ownership stage's IR whose path reaches an 'unreachable'",
@@ -149,13 +160,15 @@ private let brokenInTheIREveryBuildChecks = [
     BrokenIR(
         testDescription: "the ownership stage's IR that finds an element at an unchecked index",
         stage: .ownership,
-        blocks: """
-              %1 @1:1-1:2 = fill 2 of 0 @1:1-1:2
-              %2 @1:1-1:2 = operand UInt 1 @1:1-1:2
-              _ = operand read %1[%2] @1:1-1:2 @1:1-1:2
-              return
-            """,
-        message: "the IR indexes an array of 2 elements at %2, which it changes without checking it is below 2",
+        blocks: uncheckedIndex + "\n  return",
+        message: uncheckedIndexMessage,
+    ),
+    // The types are checked before the indices, since the index check takes each place's type as given.
+    BrokenIR(
+        testDescription: "the ownership stage's IR that breaks its types after an unchecked index",
+        stage: .ownership,
+        blocks: uncheckedIndex + "\n  return true",
+        message: typeMessage,
     ),
 ]
 
@@ -166,18 +179,13 @@ private let brokenWhereOnlyADebugBuildChecks = [
         testDescription: "lowering's IR that breaks its types",
         stage: .lowering,
         blocks: "  return true",
-        message: "the IR returns a value of type Bool from a function that returns Void",
+        message: typeMessage,
     ),
     BrokenIR(
         testDescription: "lowering's IR that finds an element at an unchecked index",
         stage: .lowering,
-        blocks: """
-              %1 @1:1-1:2 = fill 2 of 0 @1:1-1:2
-              %2 @1:1-1:2 = operand UInt 1 @1:1-1:2
-              _ = operand read %1[%2] @1:1-1:2 @1:1-1:2
-              return
-            """,
-        message: "the IR indexes an array of 2 elements at %2, which it changes without checking it is below 2",
+        blocks: uncheckedIndex + "\n  return",
+        message: uncheckedIndexMessage,
     ),
     BrokenIR(
         testDescription: "lowering's IR that retires a local",

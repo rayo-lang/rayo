@@ -79,23 +79,24 @@ extension Compiler {
         return owned
     }
 
-    /// `program`, which `stage` gave, once it has passed the checks `build` of `rayoc` runs on that stage's IR. Every
-    /// build checks the IR the ownership stage gives, which the emitter receives, for its types, the blocks its paths
-    /// reach and the checks of the indices it finds elements by. A debug build checks every rule of each stage's IR.
+    /// `program`, which `stage` gave, once it has passed the checks `compilerBuild` of `rayoc` runs on that stage's IR.
     static func verified(
-        _ program: IRProgram, from stage: IRStage, in build: CompilerBuild = .current,
+        _ program: IRProgram, from stage: IRStage, in compilerBuild: CompilerBuild = .current,
     ) throws(CompilationError) -> IRProgram {
         // IR that breaks its rules is a fault in `rayoc`, never in the program.
-        if let violation = violation(in: program, from: stage, by: build) {
+        if let violation = violation(in: program, from: stage, by: compilerBuild) {
             throw .failed("internal error: \(violation)")
         }
         return program
     }
 
-    /// The first violation in `program`, which `stage` gave, of the rules `build` of `rayoc` checks there, or nil
-    /// where it breaks none.
-    private static func violation(in program: IRProgram, from stage: IRStage, by build: CompilerBuild) -> IRViolation? {
-        switch (build, stage) {
+    /// The first violation in `program`, which `stage` gave, of the rules `compilerBuild` of `rayoc` checks there, or
+    /// nil where it breaks none.
+    private static func violation(
+        in program: IRProgram, from stage: IRStage, by compilerBuild: CompilerBuild,
+    ) -> IRViolation? {
+        switch (compilerBuild, stage) {
+        // A debug build checks every rule of each stage's IR.
         case (.debug, _):
             IRVerifier.verify(program, from: stage)
 

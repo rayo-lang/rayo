@@ -11,8 +11,8 @@ public enum IRVerifier {
     /// order of its function's ID.
     public static func verify(_ program: IRProgram, from stage: IRStage) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
-            try verifySharedRules(of: body, of: declaration, in: program)
-            try verifyRules(of: stage, in: body, of: declaration)
+            try verifySharedRules(in: body, of: declaration, in: program)
+            try verifyStageRules(of: stage, in: body, of: declaration)
         }
     }
 
@@ -20,9 +20,9 @@ public enum IRVerifier {
     /// does. Those are its types, the blocks its paths reach, and the checks of the indices it finds elements by, but
     /// not the rules of its accesses' ends and its locals' retirements, which differ between stages. The declarations
     /// and bodies are checked in the same order as `verify(_:from:)` checks them.
-    public static func verifySharedRules(_ program: IRProgram) -> IRViolation? {
+    package static func verifySharedRules(_ program: IRProgram) -> IRViolation? {
         firstViolation(in: program) { body, declaration throws(IRViolation) in
-            try verifySharedRules(of: body, of: declaration, in: program)
+            try verifySharedRules(in: body, of: declaration, in: program)
         }
     }
 
@@ -46,7 +46,7 @@ public enum IRVerifier {
     /// Throws the first violation in `body`, the body of `declaration` in `program`, of the rules every stage's IR
     /// keeps: of its types, then of the blocks its paths reach, then of its indices.
     private static func verifySharedRules(
-        of body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram,
+        in body: IRBody, of declaration: FunctionDeclaration, in program: IRProgram,
     ) throws(IRViolation) {
         // The index check takes each place's type as given, so the types are checked first.
         try FunctionVerifier(body: body, of: declaration, in: program).verify()
@@ -57,7 +57,7 @@ public enum IRVerifier {
     /// Throws the first violation in `body`, the body of `declaration`, of the rules of `stage`'s IR alone: for
     /// lowering's IR, of an end or a retirement it holds, or, for the ownership stage's IR, of where its accesses end
     /// and its locals retire.
-    private static func verifyRules(
+    private static func verifyStageRules(
         of stage: IRStage, in body: IRBody, of declaration: FunctionDeclaration,
     ) throws(IRViolation) {
         switch stage {
