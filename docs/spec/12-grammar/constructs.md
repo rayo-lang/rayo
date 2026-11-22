@@ -62,7 +62,7 @@ condition     = expression
               | ('let' | 'var') pattern '=' expression                 (* the pattern binds a new name; 'let x = x' is an error: write 'let x' (01) *)
               | ('let' | 'var') identifier                             (* no '=': 'if let x' is 'if let x = x', 'if var x' is 'if var x = &x' (01) *)
               | 'case' pattern '=' expression ;
-when-expr     = 'when' expression? '{' when-arm+ '}' ;
+when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s' for var parts that change s in place, 'when consume s' for parts that own what they bind (01) *)
 when-arm      = (pattern (',' pattern)* ('where' expression)? | 'else') block ;
                                                                    (* with no subject, an arm's test is one Bool expression, with no ',' list and no 'where' *)
                                                                    (* an arm ends with its block's '}', so arms need no separator *)

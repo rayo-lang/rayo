@@ -71,4 +71,4 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 - a `Synchronized` value's synchronization;
 - the promise of `unsafe` code.
 
-**A `when` holds its subject still while arms are tested** ([04](../../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)), so a guard sees the value its arm then binds, and a part of a value subject moves only once its arm is chosen.
+**A `when` holds its subject still while arms are tested** ([04](../../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)), so a guard sees the value its arm then binds, and a part of a consumed subject, or of any value subject, moves only once its arm is chosen.
