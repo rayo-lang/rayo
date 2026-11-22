@@ -14,7 +14,7 @@ Use of a value by code that doesn't own it: a **shared** borrow only reads it, a
 _Avoid_: loan
 
 **Borrowing binding**:
-A binding that names a place it borrows: a declaration written with `borrow` or `&` on a place, or a condition's or pattern's binding of a place ([01](docs/spec/01-values-and-ownership/bindings.md#bindings)).
+A binding that names a place it borrows: a declaration of a place, written with nothing before it or with `&`, or a condition's or pattern's binding of a place ([01](docs/spec/01-values-and-ownership/bindings.md#bindings)).
 _Avoid_: reference variable, alias
 
 **Changeable place**:

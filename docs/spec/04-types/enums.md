@@ -66,7 +66,7 @@ if case .chase(let t) = state { track(t) }     // one pattern as a condition
 - **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A `when` without a subject ends in `else` when its value is used.
 - **One set of names per arm.** Patterns that share an arm bind the same names, with the same types, and each name the same way: it looks, changes in place, or owns ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). No arm falls through into the next.
 
-**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and an `owned` part takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
 
 **Conditions and declarations use patterns too:**
 
@@ -86,7 +86,7 @@ if case .chase(let t) = state { track(t) }     // one pattern as a condition
 ```swift
 var target: Handle<Enemy>? = nil     // 8 bytes, the same as Handle<Enemy>
 if target != nil { attack(target) }  // a Handle<Enemy> inside the check
-let hp = borrow enemies[h]?.hp ?? 0  // looks at the element's hp in place, or at a 0
+let hp = enemies[h]?.hp ?? 0         // looks at the element's hp in place, or at a 0
 ```
 
 **`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`.** A `nil` pattern is `.none` and covers it. The two spellings differ only as a place property's declared type. There `T?` makes an optional place property, which hands out a place of type `T` or `nil`, and `Optional<T>` makes one that hands out a whole place of the enum ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).

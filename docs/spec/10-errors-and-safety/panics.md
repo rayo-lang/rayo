@@ -5,7 +5,7 @@
 A panic stops an operation that cannot continue under the language's rules. It does not return a value for the caller to handle, as a typed error does. It can follow an explicit precondition or a failed check built into an operation:
 
 ```swift
-let e = borrow enemies[h]!                       // panics if h is stale
+let e = enemies[h]!                              // panics if h is stale
 precondition(count < capacity, "queue full")     // panics if the caller broke the contract
 let share = total / players                      // panics if players is 0, in every build
 ```

@@ -49,7 +49,7 @@ var grunt = Enemy(pos: [5, 0, 5], target: copy p1)    // the enemy keeps a copy 
 players[p1]?.hp -= 10                          // changes the player in place, or does nothing if it's gone
 if var p = &players[p1] { p.pos.y += 1 }       // changes it through 'p'
 let hp = copy players[p1]?.hp ?? 0             // a copy of its hp, or 0
-let sure = borrow players[p1]!                 // panics if it's gone
+let sure = players[p1]!                        // panics if it's gone
 
 players.remove(p1)                             // the player leaves the game
 let gone = players[grunt.target!] == nil       // true: every copy of the handle is stale
@@ -75,7 +75,7 @@ The pool keeps its elements densely packed, so a loop visits them without gaps. 
 ```swift
 let p2 = players.insert(Player(pos: [4, 0, 0]))
 let p3 = players.insert(Player(pos: [8, 0, 0]))
-let p = borrow players[p2]!                    // borrows the player where it lies, inside the pool
+let p = players[p2]!                           // borrows the player where it lies, inside the pool
 players.remove(p3)                             // error: 'players' is borrowed by 'p' (used below)
 log("hp \(p.hp)")
 ```

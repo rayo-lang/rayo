@@ -2,25 +2,26 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-A move hands a value to a new owner and leaves its old place without that value. It can happen through familiar constructs, even when no `consume` appears. These constructs take a value and therefore move it ([Moves](moves-copies-destruction.md#moves)):
+A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes. A few constructs also take a value with no `consume` written ([Moves](moves-copies-destruction.md#moves)):
 
-- an assignment, `return`, `throw` and `await`;
+- `return`, `throw` and `await`;
 - `try`, `try?` and `try!`, and `_ = x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try));
 - an `owned` argument, and a `consuming` method's receiver ([Parameters](parameters.md#parameters));
-- a declaration that doesn't borrow, and an `owned` part of a condition or pattern ([Bindings](bindings.md#bindings));
 - a `[move x]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A borrowing binding borrows the place instead ([Bindings](bindings.md#bindings)).
+A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A declaration, a condition and a pattern borrow a place instead ([Bindings](bindings.md#bindings)), and an assignment of one needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
 
-**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow: in `f(consume x)` for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `kept` and `show` do below. A binding of it owns the value, and for a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
 ```swift
 var loot = alloc List<Item>()
 give(loot)                            // fine: 'loot' is a local that owns its list
 var spare = alloc List<Item>()
 show(consume spare)                   // 'show' only borrows; 'consume' moves 'spare' out, destroyed after the statement
+var bag = alloc List<Item>()
+let kept = consume bag                // 'kept' owns the list, and 'bag' holds no value
 give(player.inventory)                // error if 'player' is a mutable parameter: the caller still owns it
 let old = replace(&player.inventory, with: alloc List())    // the way to take it: leave a value behind
 ```
@@ -33,7 +34,7 @@ let old = replace(&player.inventory, with: alloc List())    // the way to take i
 - an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
 - a temporary, such as a call result passed to an `owned` parameter;
 - a field of one of those, through stored fields only, named or reached by reflection ([09](../09-compile-time/reflection.md#what-reflection-can-read)), when no type along the path declares a `deinit`, since a `deinit` takes the whole value;
-- a stored field of `self`, or a part of an enum `self`'s payload through an `owned` pattern, in that type's own `deinit`;
+- a stored field of `self`, or a part of an enum `self`'s payload through a pattern of `when consume self`, in that type's own `deinit`;
 - the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches `discard self` (below).
 
 **The condition on a field covers a temporary's fields and an enum's payload**, and a pattern takes an enum's payload under the same condition ([Conditions and patterns](bindings.md#conditions-and-patterns)):
@@ -88,13 +89,12 @@ So such a place always holds a value, across a `throw`, an early return, an `awa
 
 **A `const` that reaches run time is a place in read-only data that lives as long as the program** ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A view of it is static storage, which any function may return.
 
-**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `let` or `var` declared from one gets a new value, and `borrow` borrows the const itself. A `const` of a move-only type can only be borrowed or cloned.
+**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `let` of one borrows the const itself.
 
 ```swift
 const maxLives = 3
 
 var lives = maxLives               // a new Int, with no 'copy' written
-let cap = borrow maxLives          // borrows the const
 ```
 
 **A static stored member is a global or a `const` in its type's namespace**, and is taken as either is. So `Vec3.zero`, whether a copyable `static const` or a computed property, is taken with no `copy`, as in `Enemy(pos: .zero, hp: 100)`.

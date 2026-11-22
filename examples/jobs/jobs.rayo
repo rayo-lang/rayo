@@ -67,7 +67,7 @@ func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec
         if v.pinned { return }
         let next = v.pos + (v.pos - v.prev) * 0.99 + accel * (dt * dt)   // Verlet
         v.prev = copy v.pos                      // 'v' is a mutable parameter, which can't be moved from, so its position is copied
-        v.pos = next                             // 'next' is a local: it moves in
+        v.pos = consume next                     // 'next' is a local: 'consume' moves it in
     }
 }
 

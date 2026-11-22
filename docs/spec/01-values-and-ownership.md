@@ -6,15 +6,17 @@ Ownership answers a basic question about every value: who is responsible for it?
 struct Enemy(var pos: Vec3, var hp: Float)
 
 var a = Enemy(pos: .zero, hp: 100)
-var b = a                          // a move: 'b' takes over the enemy, and 'a' can't be used any more
+var b = consume a                  // a move: 'b' takes over the enemy, and 'a' can't be used any more
 var c = copy b                     // a copy, written out: Enemy is copyable, so this is a memcpy
 c.hp = 50                          // 'b' is unchanged
+let seen = b                       // a borrow: a read-only name for 'b', nothing copied
+log(seen.hp)
 
 func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
 
-In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
+In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, `seen` looks at `b` where it lies, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 

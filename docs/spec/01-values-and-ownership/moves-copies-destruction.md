@@ -2,7 +2,7 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-An assignment can hand a value to a new owner without making a second one. A copy does make a second value, which matters when either value owns resources that must later be released. Rayo keeps those operations distinct and defines when the remaining values are destroyed.
+A move can hand a value to a new owner without making a second one. A copy does make a second value, which matters when either value owns resources that must later be released. Rayo keeps those operations distinct and defines when the remaining values are destroyed.
 
 ## Moves
 
@@ -12,9 +12,17 @@ cmds.draw(mesh)
 submit(cmds)                      // submit keeps the list: it moves out of 'cmds'
 print(cmds.count)                 // error: 'cmds' was moved
 cmds = CommandList()              // fine: a new value makes 'cmds' usable again
+var queued = consume cmds         // 'consume' moves the list out of 'cmds' into 'queued'
+cmds = queued                     // error: assigning a place takes 'copy' or 'consume'
 ```
 
-**Assigning a value, declaring a `let` or `var` with it, returning it or passing it to a function that keeps it moves it.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
+**`consume x`, returning a local, and passing a place to a function that keeps it move the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
+
+**An assignment or a declaration takes a place's value only where it writes `consume`.** A `let` given a place borrows it read-only, as an argument does, and a `var` given one writes `copy`, `consume` or `&` ([Bindings](bindings.md#bindings)). An assignment given a place writes `copy` or `consume`, and leaving both out is a compile error that names them, since the place it assigns stores a value of its own, which a borrow isn't. These need neither:
+
+- one from a copyable `const`, which gives a new value ([Constants](moving-values-out.md#constants));
+- one whose conversion makes a value of its own from the place, such as a view or a numeric widening ([Conversions](bindings.md#conversions));
+- `_ = x`, which takes what `x` holds and drops it on purpose, as [Moving values out](moving-values-out.md#moving-values-out) lists ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
 **Only a place the code owns can be moved from.** Moving out of a value the code only borrows is a compile error, since the caller, an alias or a later `deinit` that reaches that place must still find a value in it ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 

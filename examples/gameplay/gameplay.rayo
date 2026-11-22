@@ -59,9 +59,9 @@ func acquireTargets(_ world: mutable World) {
         var bestDist: Float = .infinity
         for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
             let d = distanceSquared(p.pos, e.pos)
-            if d < bestDist { bestDist = d; best = h }
+            if d < bestDist { bestDist = copy d; best = copy h }
         }
-        e.target = best
+        e.target = consume best
     }
 }
 

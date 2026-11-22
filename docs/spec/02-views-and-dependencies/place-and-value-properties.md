@@ -60,7 +60,7 @@ struct Pool<T>(…) {
 
 world.enemies[h]?.hp -= 10                   // the mutate accessor, with optional chaining
 if var e = &world.enemies[h] { e.hp = 0 }
-let pos = borrow world.enemies[h]!.pos       // the borrow accessor; '!' panics on a stale handle
+let pos = world.enemies[h]!.pos              // the borrow accessor; '!' panics on a stale handle
 ```
 
 **A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `&`, as every place lent for change is marked ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). Nothing is copied or moved, so the caller reaches the place itself.
@@ -191,7 +191,7 @@ struct Flags(var bits: UInt32) {
 }
 ```
 
-**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it, with or without `borrow` ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)). Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
+**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A binding of what a `get` returns owns it ([01](../01-values-and-ownership/bindings.md#what-a-borrowing-let-sees)). Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 
 **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
