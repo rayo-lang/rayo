@@ -18,14 +18,18 @@ struct AssignmentChecker {
         let value = checkAssigned(valueExpr, by: op, to: current?.type)
         guard let current, let value else { return nil }
 
-        // A plain assignment's target owns what it holds, so it can't borrow a place it is given, which is reported.
-        if op.binary == nil { expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace) }
-
         return switch op.binary {
-        case nil: .assign(current.place, value)
+        case nil: plainAssign(value, to: current)
         case let binaryOp?:
             compoundAssign(value, CheckedBinaryOperator(binaryOp), spelled: op.rawValue, to: current, in: range)
         }
+    }
+
+    /// Checks an assignment of `value` to `place` with `=`. Its target owns what it holds, so it can't borrow a place
+    /// that `value` hands it, which is reported.
+    private func plainAssign(_ value: CheckedExpr, to place: TypedPlace) -> CheckedStmt {
+        expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace)
+        return .assign(place.place, value)
     }
 
     /// Checks the place that an assignment's target names, under the rules for a place an assignment changes. A

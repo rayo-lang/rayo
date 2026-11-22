@@ -18,24 +18,27 @@ extension ExpressionChecker {
         var name = names[place.local].name
         var type = names[place.local].type
         for step in place.place.steps {
-            switch (step, type) {
-            // A field takes its name from the struct that holds it.
-            case (.field(let index, _), .named(.structure(let id))):
-                let field = file.declarations.types.fields(of: id)[index]
-                name += "." + field.name
-                type = field.type
-
-            // An element takes its index, where the source writes one that has a name.
-            case (.element(let index, _, _), .array(_, let element)):
-                name += "[\(indexName(of: index))]"
-                type = element
-
-            // Checking steps into a field only of a struct, and into an element only of an array.
-            default:
-                preconditionFailure("a place steps into a part that its value doesn't have")
-            }
+            let part = written(step, from: type)
+            name += part.text
+            type = part.type
         }
         return name
+    }
+
+    /// `step` as the source writes it after the value of `type` it steps from, such as `.hp` or `[i]`, and the type
+    /// of the part it leads to.
+    private func written(_ step: CheckedPlaceStep, from type: RayoType) -> (text: String, type: RayoType) {
+        switch (step, type) {
+        // A field takes its name from the struct that holds it.
+        case (.field(let index, _), .named(.structure(let id))):
+            file.declarations.types.fields(of: id)[index].writtenStep
+        // An element takes its index, where the source writes one that has a name.
+        case (.element(let index, _, _), .array(_, let element)):
+            ("[\(indexName(of: index))]", element)
+        // Checking steps into a field only of a struct, and into an element only of an array.
+        default:
+            preconditionFailure("a place steps into a part that its value doesn't have")
+        }
     }
 
     /// The index of an element as an error writes it: an integer literal's value, a local's bare name, or `…`.
@@ -46,5 +49,13 @@ extension ExpressionChecker {
             if case .local(let local, _) = place.root { names[local].name } else { "…" }
         default: "…"
         }
+    }
+}
+
+private extension Field {
+    /// The step into the field as the source writes it after the struct that holds it, such as `.hp`, and the
+    /// field's type.
+    var writtenStep: (text: String, type: RayoType) {
+        ("." + name, type)
     }
 }

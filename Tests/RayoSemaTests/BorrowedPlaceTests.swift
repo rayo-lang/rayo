@@ -29,7 +29,7 @@ private func messages(of statement: String) -> [String] {
 /// The fix that every error for a place given to a position that can't borrow it ends with.
 private let fix = "write 'copy' before it to take a copy, or 'consume' to move it"
 
-struct TakenPlaceTests {
+struct BorrowedPlaceTests {
     // A `var` that borrowed its place could never change, so it takes a copy or the value itself, written out.
     @Test(arguments: [
         ("var x = a", "a"), ("var x = e.stats.hp", "e.stats.hp"), ("var x = e.slots[1]", "e.slots[1]"),
@@ -66,5 +66,9 @@ struct TakenPlaceTests {
     ])
     func `a value, a copy, a consume or a place in a temporary needs nothing written`(statement: String) {
         #expect(messages(of: statement) == [])
+    }
+
+    @Test func `a 'var' of '_' is reported for its name alone, whatever its value`() {
+        #expect(messages(of: "var _ = a").map { $0.prefix(16) } == ["9: error[E0218]:"])
     }
 }

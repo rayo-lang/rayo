@@ -30,15 +30,19 @@ extension Parser {
             advance()
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        // A `copy` takes the local it copies, or a part of it at any depth, and a `consume` the one it moves.
+
+        // A `copy` takes the local it copies, or a part of it at any depth.
         if consume(.copy) {
             let place = try parseNamedPlace(else: ErrorCode.missingCopiedName)
             return Expr(kind: .copy(place), range: range(from: start))
         }
+
+        // A `consume` takes the local it moves, or a part of it at any depth.
         if consume(.consume) {
             let place = try parseNamedPlace(else: ErrorCode.missingConsumedName)
             return Expr(kind: .consume(place), range: range(from: start))
         }
+
         // An expression without a `-` or `!` in front is a postfix one.
         guard case .punct(let punct) = current.kind, let op = punct.unaryOperator else {
             return try parsePostfix()
