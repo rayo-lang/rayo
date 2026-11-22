@@ -34,9 +34,9 @@ struct ExpressionLoweringTests {
                 let d = Hit(damage: 3)
                 let e = if t { consume d } else { Hit(damage: 4) }
                 let g = Hit(damage: 5)
-                show(if t { g } else { e })
+                show(if t { &g } else { &e })
             }
-            func show(_ h: Hit) {}
+            func show(_ h: &Hit) {}
             struct Hit(let damage: Int)
             """
         try expectLowering(of: source, toMatch: "taken-positions")
@@ -48,7 +48,7 @@ struct ExpressionLoweringTests {
         // a `return` each read the place. Each would move a value of any other type, as `_ =` moves the array of Ints.
         let source = """
             func main() {}
-            func kept(_ n: Int, _ level: UInt, _ alive: Bool, _ row: [2 of Int]) -> Int {
+            func kept(_ n: Int, _ level: UInt, _ alive: Bool, _ row: &[2 of Int]) -> Int {
                 _ = alive
                 _ = row
                 let s = Score(points: n, level: level)

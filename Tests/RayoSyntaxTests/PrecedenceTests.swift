@@ -26,6 +26,7 @@ private func grouped(_ expression: Expr) -> String {
     case .binary(let op, let left, let right): "(\(grouped(left)) \(op.rawValue) \(grouped(right)))"
     case .copy(let place): "(copy \(grouped(place)))"
     case .consume(let place): "(consume \(grouped(place)))"
+    case .reference(let place): "(& \(grouped(place)))"
     // The tests write no other expression.
     default: "\(expression.kind)"
     }
@@ -55,9 +56,9 @@ struct PrecedenceTests {
 
     @Test(arguments: [
         ("- -5", "(- -5)"), ("-(5) + 2", "((- 5) + 2)"), ("copy a + 1", "((copy a) + 1)"),
-        ("!false && false", "((! false) && false)"), ("consume a + 1", "((consume a) + 1)"),
+        ("!false && false", "((! false) && false)"), ("consume a + 1", "((consume a) + 1)"), ("&a + 1", "((& a) + 1)"),
     ])
-    func `prefix operators, 'copy' and 'consume' bind tighter than binary operators`(
+    func `prefix operators, 'copy', 'consume' and '&' bind tighter than binary operators`(
         expression: String, expected: String,
     ) throws {
         #expect(try grouping(of: expression) == expected)

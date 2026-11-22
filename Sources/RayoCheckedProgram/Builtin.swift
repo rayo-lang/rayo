@@ -33,11 +33,11 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
         return type
     }
 
-    /// The parameters, in order. Each borrows a scalar, which a call passes with no label.
+    /// The parameters, in order. Each owns a scalar, a copy of the argument a call passes with no label.
     public var parameters: [FunctionParameter] {
         switch self {
         case .print(let scalar), .conversion(let scalar, _):
-            [FunctionParameter(label: nil, convention: .borrowed, type: .scalar(scalar))]
+            [FunctionParameter(label: nil, convention: .owned, type: .scalar(scalar))]
         }
     }
 

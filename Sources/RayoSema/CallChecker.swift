@@ -212,13 +212,13 @@ struct CallChecker {
         }
 
         // Check every argument, so each one's errors are reported, before any failure fails the call.
-        let checked = zip(arguments, parameters).map { check($0, against: $1) }
+        let checked = zip(arguments, parameters).map { check($0, against: $1, of: name) }
         let values = checked.compactMap { $0 }
         return values.count == arguments.count ? values : nil
     }
 
-    /// Checks `argument`'s label and value against `parameter`.
-    private func check(_ argument: some CallArgument, against parameter: Parameter) -> CheckedExpr? {
+    /// Checks `argument`'s label and value against `parameter`, of the function the call names as `name`.
+    private func check(_ argument: some CallArgument, against parameter: Parameter, of name: String) -> CheckedExpr? {
         // A label other than the parameter's is reported, and fails the argument once its value is checked.
         let isLabeledRight = argument.label == parameter.label
         if !isLabeledRight {
@@ -227,11 +227,11 @@ struct CallChecker {
         }
 
         // A parameter whose type isn't known was reported where it is declared; the value is checked on its own.
-        guard let type = parameter.type else {
+        guard let expected = parameter.expectation(calledAs: name) else {
             argument.reportErrors(by: expressions)
             return nil
         }
-        let value = argument.checked(expecting: Expectation(type), by: expressions)
+        let value = argument.checked(expecting: expected, by: expressions)
         return isLabeledRight ? value : nil
     }
 
@@ -264,11 +264,16 @@ struct CallChecker {
             return nil
         }
 
-        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
-        let settled = zip(values, chosen.parameters).compactMap { value, parameter in
-            parameter.type.map { expressions.settled(value, expecting: Expectation($0)) }
-                ?? expressions.settled(value, toward: nil)
+        // A parameter whose type isn't known was reported where it is declared, and takes any argument, so the
+        // arguments report only their own errors, as they do where the call has one candidate.
+        let expectations = chosen.parameters.compactMap { $0.expectation(calledAs: name) }
+        guard expectations.count == values.count else {
+            expressions.reportSettlingErrors(of: values)
+            return nil
         }
+
+        // The chosen candidate's parameters settle the untyped arguments, and take each argument as it fits them.
+        let settled = zip(values, expectations).compactMap { expressions.settled($0, expecting: $1) }
         // An argument that failed to settle to its parameter's type was reported.
         guard settled.count == values.count else { return nil }
         return (chosen, settled)

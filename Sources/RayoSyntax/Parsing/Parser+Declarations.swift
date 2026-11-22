@@ -64,8 +64,7 @@ extension Parser {
         }
     }
 
-    /// `(label | '_')? identifier ':' ('mutable' | 'owned')? type ('=' expression)?`, where a label may be a
-    /// keyword.
+    /// `(label | '_')? identifier ':' ('mutable'? '&')? type ('=' expression)?`, where a label may be a keyword.
     private mutating func parseParameter() throws(ParseFailure) -> Param {
         // Read the parameter's parts in order; a label, convention or default value left out reads as nil.
         let start = current.range
@@ -94,10 +93,15 @@ extension Parser {
         return spelling
     }
 
-    /// `mutable` or `owned`, before a parameter's type, when one is written.
+    /// `&` or `mutable &`, before a parameter's type, when one is written.
     private mutating func parseConvention() -> ParamConvention? {
-        if consume(.mutable) { return .mutable }
-        if consume(.owned) { return .owned }
+        if consume(.ampersand) { return .borrowed }
+        // A `mutable` without a `&` after it is left to be reported where a type is expected.
+        if current.isKeyword(.mutable), peek().isPunct(.ampersand) {
+            advance()
+            advance()
+            return .mutable
+        }
         // Any other token starts the type.
         return nil
     }

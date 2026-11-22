@@ -15,10 +15,10 @@ struct ParameterTests {
         #expect(coveredText(reported, in: source) == covered)
     }
 
-    @Test("a parameter is borrowed: it can't change, and an expression reads it", arguments: [
-        ("func f(x: Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
-        ("func f(x: Int) { x += 1 }", [.assignToParameter(name: "x")]),
-        ("func f(x: Int) { x(1) }", [.notAFunction(name: "x")]),
+    @Test("a '&T' parameter is borrowed: it can't change, and an expression reads it", arguments: [
+        ("func f(x: &Int) { x = 1 }", [ErrorCode.assignToParameter(name: "x")]),
+        ("func f(x: &Int) { x += 1 }", [.assignToParameter(name: "x")]),
+        ("func f(x: &Int) { x(1) }", [.notAFunction(name: "x")]),
     ])
     func borrowed(declaration: String, expected: [ErrorCode]) {
         #expect(errors("func main() {}\n" + declaration) == expected)
@@ -56,10 +56,9 @@ struct ParameterTests {
             [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
-    @Test("'owned' and 'mutable' parameters and default values aren't supported", arguments: [
-        ("func f(_ x: owned Int) { print(x) }", [ErrorCode.unsupportedConvention(convention: "owned")],
-         ["_ x: owned Int"]),
-        ("func f(x: mutable Int) {}", [.unsupportedConvention(convention: "mutable")], ["x: mutable Int"]),
+    @Test("'mutable &' parameters and default values aren't supported", arguments: [
+        ("func f(x: mutable &Int) {}", [ErrorCode.unsupportedConvention(convention: "mutable &")],
+         ["x: mutable &Int"]),
         ("func f(x: Int = 1 + 2) {}", [.defaultArgument], ["1 + 2"]),
     ])
     func unsupported(declaration: String, expected: [ErrorCode], covered: [String]) {

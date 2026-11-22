@@ -40,7 +40,7 @@ struct ArrayCountTests {
     }
 
     @Test func `a borrowed parameter's count can't be assigned either`() {
-        let source = "func main() {}\nfunc reset(_ a: [2 of Int]) {\n    a.count = 0\n}"
+        let source = "func main() {}\nfunc reset(_ a: &[2 of Int]) {\n    a.count = 0\n}"
         #expect(diagnostics(source).map(\.description) == [countAssignment(at: "3:7")])
     }
 

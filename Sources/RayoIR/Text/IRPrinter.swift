@@ -4,8 +4,8 @@ import RayoSource
 /// Writes Rayo IR as text, which `IRParser` reads back into the same program.
 ///
 /// The text gives the program's structs, then the function it starts at, then each function, in the order of their
-/// IDs. A function's parameters are written as the source writes them, each with its label and its convention, which a
-/// borrowed parameter leaves out. A struct's primary initializer is declared with `init`, and has no body:
+/// IDs. A function's parameters are written each with its label and its convention, which a borrowed parameter leaves
+/// out. A struct's primary initializer is declared with `init`, and has no body:
 ///
 /// ```
 /// struct Pair {

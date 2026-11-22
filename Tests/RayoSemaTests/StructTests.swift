@@ -10,7 +10,7 @@ struct StructTests {
         ("let b = s == s", .incomparable(op: "==", type: "S")),
     ])
     func `a value of a struct's type has no other type, and '==' can't compare it`(body: String, expected: ErrorCode) {
-        #expect(errors("func main() {}\nfunc f(_ s: S) {\n\(body)\n}\nstruct S(var a: Int)\nstruct E") == [expected])
+        #expect(errors("func main() {}\nfunc f(_ s: &S) {\n\(body)\n}\nstruct S(var a: Int)\nstruct E") == [expected])
     }
 
     @Test(arguments: [
@@ -53,7 +53,7 @@ struct StructTests {
     ])
     func `an error names a prelude type that a struct shadows as the prelude's`(body: String, expected: ErrorCode) {
         let structs = "struct Int(var big: Bool)\nstruct Void\nstruct S(var a: Bool)"
-        let functions = "func f(_ b: Bool) {}\nfunc f(_ s: S) {}\nfunc g() {}"
+        let functions = "func f(_ b: Bool) {}\nfunc f(_ s: &S) {}\nfunc g() {}"
         #expect(errors("func main() {\n\(body)\n}\n\(structs)\n\(functions)") == [expected])
     }
 
@@ -99,7 +99,7 @@ struct StructDeclarationTests {
 
     @Test(arguments: [
         ("struct S(var a: Int) {\n    func f() {}\n}", ["f"]),
-        ("struct S {\n    struct T\n    func f(x: S) -> T {}\n}", ["T", "f"]),
+        ("struct S {\n    struct T\n    func f(x: &S) -> T {}\n}", ["T", "f"]),
         ("struct S {\n    func f(x) {}\n    func g() {}\n}", ["g"]),
     ])
     func `a member in a struct's body is reported at its name, and one that failed to parse isn't`(
@@ -134,7 +134,7 @@ struct StructDeclarationTests {
     }
 
     @Test(arguments: [
-        ("func main() {}\nfunc S() {}\nstruct S\nfunc g(_ s: S) {}", "S"),
+        ("func main() {}\nfunc S() {}\nstruct S\nfunc g(_ s: &S) {}", "S"),
         ("func main() {}\nfunc S() {}\nstruct S\nfunc S(_ x: Int) {}", "S"),
         ("func main() {\n    S()\n}\nstruct S\nfunc S() {}", "S"),
         ("struct main\nfunc main() {}", "main"),
@@ -248,7 +248,7 @@ struct FieldReadTests {
     }
 
     @Test func `a field whose declaration failed is read with no error of its own`() {
-        #expect(errors("func main() {}\nfunc f(s: S) { print(s.a) }\nstruct S(var a: Q)") == [.notAType(name: "Q")])
+        #expect(errors("func main() {}\nfunc f(s: &S) { print(s.a) }\nstruct S(var a: Q)") == [.notAType(name: "Q")])
     }
 }
 
@@ -291,7 +291,7 @@ struct NestedStructTests {
         body: String, expected: ErrorCode, covered: String,
     ) {
         let madeEnemy = "let e = Enemy(stats: Stats(hp: 1, speed: 2), armor: 3)"
-        let source = "func main() {}\nfunc f(b: Boss) {\n\(madeEnemy)\n\(body)\n}" + bossEnemyAndStats
+        let source = "func main() {}\nfunc f(b: &Boss) {\n\(madeEnemy)\n\(body)\n}" + bossEnemyAndStats
 
         // The one error covers what is wrong.
         let reported = diagnostics(source)

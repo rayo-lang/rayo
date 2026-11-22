@@ -41,7 +41,7 @@ struct FieldMoveTests {
                 print(made.stats.hp)
                 print(statsOf(Enemy(alive: true, stats: Stats(alive: true, hp: 1, speed: 4), armor: 2)).speed)
             }
-            func statsOf(_ given: Enemy) -> Stats {
+            func statsOf(_ given: &Enemy) -> Stats {
                 let e = copy given
                 return e.stats
             }

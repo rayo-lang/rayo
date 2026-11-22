@@ -5,7 +5,6 @@ func "main()"() -> Void {
 bb0:
   declare %0
   %0 @2:7-2:12 = add checked 1, 2 @2:7-2:12
-  begin a0 read %0 @2:7-2:12
-  _ = call builtin "print(_: Int)"(a0) @2:1-2:13
+  _ = call builtin "print(_: Int)"(read %0 @2:7-2:12) @2:1-2:13
   return
 }

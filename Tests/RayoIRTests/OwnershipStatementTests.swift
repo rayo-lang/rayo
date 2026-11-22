@@ -35,7 +35,7 @@ private let ownershipStatements = [
               goto bb1
             bb1:
               begin a0 read %0 @1:1-1:2
-              _ = call builtin "print(_: Int)"(a0) @1:1-1:2
+              _ = call "show(_: &Int)"(a0) @1:1-1:2
               end a0
               return
             """,
@@ -54,10 +54,12 @@ private let ownershipStatements = [
     ),
 ]
 
-/// A program whose `main` declares and assigns its Int local `%0`, then runs `blocks`.
+/// A program whose `main` declares and assigns its Int local `%0`, then runs `blocks`, which may call `show`, a
+/// function that borrows an Int.
 private func assigningALocal(_ blocks: String) -> String {
     """
     main "main()"
+    func "show(_: &Int)"(_: Int) -> Void
     func "main()"() -> Void {
       temp %0: Int
     bb0:

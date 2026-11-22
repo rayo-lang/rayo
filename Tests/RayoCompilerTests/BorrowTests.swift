@@ -35,7 +35,7 @@ struct BorrowTests {
             func main() {
                 print(total(Enemy(stats: Stats(hp: 1), slots: [2, 3]), 4))
             }
-            func total(_ e: Enemy, _ n: Int) -> Int {
+            func total(_ e: &Enemy, _ n: Int) -> Int {
                 ref let s = e.stats
                 ref let first = e.slots[0]
                 ref let m = n

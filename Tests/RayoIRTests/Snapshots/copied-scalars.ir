@@ -12,10 +12,10 @@ bb0:
   return
 }
 
-func "kept(_: Int, _: UInt, _: Bool, _: [2 of Int])"(_: Int, _: UInt, _: Bool, _: [2 of Int]) -> Int {
-  param %0 n: Int @2:13-2:14
-  param %1 level: UInt @2:23-2:28
-  param %2 alive: Bool @2:38-2:43
+func "kept(_: Int, _: UInt, _: Bool, _: &[2 of Int])"(_: owned Int, _: owned UInt, _: owned Bool, _: [2 of Int]) -> Int {
+  param %0 n: owned Int @2:13-2:14
+  param %1 level: owned UInt @2:23-2:28
+  param %2 alive: owned Bool @2:38-2:43
   param %3 row: [2 of Int] @2:53-2:56
   let %4 s: Score @5:9-5:10
   let %5 all: [2 of Int] @6:9-6:12

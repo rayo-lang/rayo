@@ -7,10 +7,10 @@ private let declarations = """
     struct Hit(var damage: Int)
     func f(_ a: Int, _ b: Int) {}
     func f(_ a: Int, _ b: Bool) {}
-    func g(_ s: Hit) {}
+    func g(_ s: &Hit) {}
     func g(_ n: Int) {}
     func h(_ b: Bool) {}
-    func h(_ s: Hit) {}
+    func h(_ s: &Hit) {}
     func double(_ n: Int) -> Int { 2 * copy n }
     """
 

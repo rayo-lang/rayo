@@ -29,7 +29,7 @@ struct TokenTests {
         let (lexed, _) = Lexer.tokenize("let keep copy consume struct self mutable owned mutating ref")
         #expect(lexed.map(\.kind) == [
             .keyword(.let), .identifier("keep"), .keyword(.copy), .keyword(.consume), .keyword(.struct),
-            .keyword(.`self`), .keyword(.mutable), .keyword(.owned), .keyword(.mutating), .keyword(.ref), .eof,
+            .keyword(.`self`), .keyword(.mutable), .identifier("owned"), .keyword(.mutating), .keyword(.ref), .eof,
         ])
     }
 

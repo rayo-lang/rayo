@@ -11,7 +11,7 @@ private let declarations = """
 /// The errors that `body`, as the body of a function that borrows the array `p`, reports, each as its position, code
 /// and message. The body starts on line 3.
 private func errorLines(_ body: String) -> [String] {
-    diagnostics("func main() {}\nfunc f(_ p: [2 of Int]) {\n\(body)\n}\n\(declarations)").map(\.description)
+    diagnostics("func main() {}\nfunc f(_ p: &[2 of Int]) {\n\(body)\n}\n\(declarations)").map(\.description)
 }
 
 struct ElementAssignmentTests {

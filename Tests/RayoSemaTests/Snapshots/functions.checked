@@ -3,20 +3,25 @@ main "main()"
 func "main()"() -> Void {
   expression
     call builtin "print(_: Int)": Void @2:5-2:25
-      call "add(_: Int, to: Int)": Int @2:11-2:24
-        integer 1: Int @2:15-2:16
-        integer 2: Int @2:22-2:23
+      owned
+        call "add(_: Int, to: Int)": Int @2:11-2:24
+          owned
+            integer 1: Int @2:15-2:16
+          owned
+            integer 2: Int @2:22-2:23
   expression
     call builtin "print(_: Bool)": Void @3:5-3:21
-      call "isZero(_: Int)": Bool @3:11-3:20
-        integer 0: Int @3:18-3:19
+      owned
+        call "isZero(_: Int)": Bool @3:11-3:20
+          owned
+            integer 0: Int @3:18-3:19
   expression
     call "greet()": Void @4:5-4:12
 }
 
-func "add(_: Int, to: Int)"(_: Int, to: Int) -> Int {
-  param %0 a: Int @6:12-6:13
-  param %1 b: Int @6:23-6:24
+func "add(_: Int, to: Int)"(_: owned Int, to: owned Int) -> Int {
+  param %0 a: owned Int @6:12-6:13
+  param %1 b: owned Int @6:23-6:24
   return
     binary add: Int @6:40-6:45
       value: Int @6:40-6:41
@@ -25,8 +30,8 @@ func "add(_: Int, to: Int)"(_: Int, to: Int) -> Int {
         place %1 @6:44-6:45
 }
 
-func "isZero(_: Int)"(_: Int) -> Bool {
-  param %0 n: Int @7:15-7:16
+func "isZero(_: Int)"(_: owned Int) -> Bool {
+  param %0 n: owned Int @7:15-7:16
   return
     binary equal: Bool @8:12-8:18
       value: Int @8:12-8:13

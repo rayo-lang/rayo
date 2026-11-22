@@ -15,9 +15,9 @@ struct BorrowTests {
                 print(hp + slot + either)
                 e.stats.hp = 1
                 print(e.stats.hp + e.slots[1])
-                print(stats(of: e))
+                print(stats(of: &e))
             }
-            func stats(of e: Enemy) -> Int {
+            func stats(of e: &Enemy) -> Int {
                 ref let s = e.stats
                 return s.hp * 10
             }

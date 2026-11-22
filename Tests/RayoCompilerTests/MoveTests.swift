@@ -3,14 +3,14 @@ import RayoDiagnostics
 
 struct MoveTests {
     @Test func `a move out of a borrowed parameter waits to be reported until the program checks`() {
-        let source = "func main() {}\nfunc f(x: Int) {\n    let y = consume x\n    let z: Bool = 1\n}"
+        let source = "func main() {}\nfunc f(x: &Int) {\n    let y = consume x\n    let z: Bool = 1\n}"
         #expect(diagnostics(source).map(\.code) == [.typeMismatch(expected: "Bool", found: "Int")])
     }
 
     @Test func `a move out of a borrowed parameter, or out of a field of one, names the parameter and the field`() {
         let source = """
             func main() {}
-            func f(n: Int, s: Stats) {
+            func f(n: &Int, s: &Stats) {
                 let m = consume n
                 let hp = consume s.hp
                 print(m + hp)
@@ -27,7 +27,7 @@ struct MoveTests {
     // The local or parameter that was copied keeps the field.
     @Test(arguments: [
         "func f() -> Int {\n    let e = E(a: S(n: 1))\n    let s = (copy e).a\n    return e.a.n + s.n\n}",
-        "func f(e: E) -> S { (copy e).a }",
+        "func f(e: &E) -> S { (copy e).a }",
     ])
     func `a field taken from a copy moves out of the copy`(function: String) {
         let source = "func main() {}\n\(function)\nstruct E(var a: S)\nstruct S(var n: Int)"
@@ -116,7 +116,7 @@ struct MoveTests {
 
     // A `consume` moves as any other move does, so it can't take what a borrowed parameter or an array holds.
     @Test func `'consume' of a borrowed parameter or of an element is reported as any such move is`() {
-        let source = "func main() {}\nfunc f(n: Int, a: [2 of Int]) -> Int {\n    consume n + consume a[0]\n}"
+        let source = "func main() {}\nfunc f(n: &Int, a: &[2 of Int]) -> Int {\n    consume n + consume a[0]\n}"
         #expect(diagnostics(source).map(\.description) == [
             "3:5: error[E0301]: can't move the borrowed parameter 'n'; write 'copy' before it to take a copy",
             "3:17: error[E0315]: can't move an element out of 'a'; write 'copy' before it to take a copy",
@@ -126,9 +126,9 @@ struct MoveTests {
     // A `copy` is a value, not a place. As with any temporary, its elements can't be moved out of it; `copy a[0]`
     // copies the element instead. The source gives the copy no name, so the error names it as an array.
     @Test func `an element taken from a copy can't be moved out of the copy`() {
-        let source = "func main() {}\nfunc f(a: [2 of S]) -> S { (copy a)[0] }\nstruct S(var n: Int)"
+        let source = "func main() {}\nfunc f(a: &[2 of S]) -> S { (copy a)[0] }\nstruct S(var n: Int)"
         #expect(diagnostics(source).map(\.description) == [
-            "2:28: error[E0315]: can't move an element out of an array; write 'copy' before it to take a copy",
+            "2:29: error[E0315]: can't move an element out of an array; write 'copy' before it to take a copy",
         ])
     }
 }

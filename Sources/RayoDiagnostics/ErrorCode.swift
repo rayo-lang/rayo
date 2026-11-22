@@ -124,6 +124,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(135, error: "expected '=' and the place a 'ref' binding refers to, found {found}")
     case missingReferencedPlace(found: FoundToken)
 
+    @Code(136, error: "expected a name after '&', found {found}")
+    case missingLentName(found: FoundToken)
+
     // MARK: Checking
 
     @Code(201, error: "the file has no 'main' function, so it can't be built into an executable or run")
@@ -364,6 +367,18 @@ public enum ErrorCode: Sendable, Hashable {
 
     @Code(281, error: "'ref var' isn't supported")
     case unsupportedReferenceVar
+
+    @Code(282, error: "parameters that own {type.withArticle} arrive in v0.3; write '&{type}' to borrow it")
+    case unsupportedOwnedParameter(type: TypeName)
+
+    @Code(283, error: "'{name}' takes a reference to {type.withArticle}; write '&{place}'")
+    case unlentPlace(name: String, type: TypeName, place: String)
+
+    @Code(284, error: "'{name}' takes {type.withArticle}, not a reference; remove the '&'")
+    case referenceToOwnedParameter(name: String, type: TypeName)
+
+    @Code(285, error: "'&' isn't supported outside a call's arguments")
+    case unsupportedReference
 
     // MARK: Ownership
 

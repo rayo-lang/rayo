@@ -33,20 +33,23 @@ func "main()"() -> Void {
     integer 9: Int @6:20-6:21
   expression
     call builtin "print(_: Int)": Void @7:5-7:19
-      value: Int @7:11-7:18
-        place %1 @7:11-7:12 .0 @7:11-7:18
+      owned
+        value: Int @7:11-7:18
+          place %1 @7:11-7:12 .0 @7:11-7:18
   bind %2 @8:13-8:14
     value: Hit @8:17-8:22
       place %1 @8:17-8:18 .1 @8:17-8:22
   expression
     call builtin "print(_: Int)": Void @9:5-9:20
-      value: Int @9:11-9:19
-        place %2 @9:11-9:12 .0 @9:11-9:19
+      owned
+        value: Int @9:11-9:19
+          place %2 @9:11-9:12 .0 @9:11-9:19
   expression
     call builtin "print(_: Int)": Void @10:5-10:33
-      value: Int @10:11-10:32
-        place temporary .0 @10:11-10:32
-          call "Hit(damage: Int)": Hit @10:11-10:25
-            owned
-              integer 3: Int @10:23-10:24
+      owned
+        value: Int @10:11-10:32
+          place temporary .0 @10:11-10:32
+            call "Hit(damage: Int)": Hit @10:11-10:25
+              owned
+                integer 3: Int @10:23-10:24
 }

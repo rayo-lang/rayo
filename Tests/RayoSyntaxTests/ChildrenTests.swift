@@ -34,6 +34,7 @@ struct ChildrenTests {
         ("a.b", ["a"]),
         ("copy a.b", ["a.b"]),
         ("consume a[i]", ["a[i]"]),
+        ("&a.b[i]", ["a.b[i]"]),
         ("-a", ["a"]),
         ("a && b + c", ["a", "b + c"]),
         ("[a, 1]", ["a", "1"]),

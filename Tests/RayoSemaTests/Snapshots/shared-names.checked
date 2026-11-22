@@ -17,34 +17,41 @@ func "main()"() -> Void {
     integer 3: Int @3:13-3:14
   expression
     call builtin "print(_: Int)": Void @4:5-4:17
-      value: Int @4:11-4:16
-        place %0 @4:11-4:16
+      owned
+        value: Int @4:11-4:16
+          place %0 @4:11-4:16
   bind %1 @5:9-5:13
     copy: Int @5:16-5:26
       place %0 @5:21-5:26
   expression
     call builtin "print(_: Int)": Void @6:5-6:22
-      call "next(_: Int)": Int @6:11-6:21
-        value: Int @6:16-6:20
-          place %1 @6:16-6:20
+      owned
+        call "next(_: Int)": Int @6:11-6:21
+          owned
+            value: Int @6:16-6:20
+              place %1 @6:16-6:20
   expression
     call builtin "print(_: Int)": Void @7:5-7:18
-      call "sum(_: Int)": Int @7:11-7:17
-        integer 3: Int @7:15-7:16
+      owned
+        call "sum(_: Int)": Int @7:11-7:17
+          owned
+            integer 3: Int @7:15-7:16
   expression
     call "show(print: Int)": Void @8:5-8:19
-      integer 7: Int @8:17-8:18
+      owned
+        integer 7: Int @8:17-8:18
   bind %2 @9:9-9:10
     integer 2: Int @9:13-9:14
   bind %3 @10:9-10:10
   expression
     call builtin "print(_: Int)": Void @11:5-11:13
-      value: Int @11:11-11:12
-        place %2 @11:11-11:12
+      owned
+        value: Int @11:11-11:12
+          place %2 @11:11-11:12
 }
 
-func "next(_: Int)"(_: Int) -> Int {
-  param %0 next: Int @13:13-13:17
+func "next(_: Int)"(_: owned Int) -> Int {
+  param %0 next: owned Int @13:13-13:17
   return
     binary add: Int @13:33-13:46
       copy: Int @13:33-13:42
@@ -52,8 +59,8 @@ func "next(_: Int)"(_: Int) -> Int {
       integer 1: Int @13:45-13:46
 }
 
-func "sum(_: Int)"(_: Int) -> Int {
-  param %0 sum: Int @14:12-14:15
+func "sum(_: Int)"(_: owned Int) -> Int {
+  param %0 sum: owned Int @14:12-14:15
   expression
     if: Void @15:5-15:29
       binary equal: Bool @15:8-15:16
@@ -69,16 +76,18 @@ func "sum(_: Int)"(_: Int) -> Int {
       value: Int @16:12-16:15
         place %0 @16:12-16:15
       call "sum(_: Int)": Int @16:18-16:30
-        binary subtract: Int @16:22-16:29
-          value: Int @16:22-16:25
-            place %0 @16:22-16:25
-          integer 1: Int @16:28-16:29
+        owned
+          binary subtract: Int @16:22-16:29
+            value: Int @16:22-16:25
+              place %0 @16:22-16:25
+            integer 1: Int @16:28-16:29
 }
 
-func "show(print: Int)"(print: Int) -> Void {
-  param %0 print: Int @18:11-18:16
+func "show(print: Int)"(print: owned Int) -> Void {
+  param %0 print: owned Int @18:11-18:16
   return
     call builtin "print(_: Int)": Void @18:25-18:37
-      value: Int @18:31-18:36
-        place %0 @18:31-18:36
+      owned
+        value: Int @18:31-18:36
+          place %0 @18:31-18:36
 }

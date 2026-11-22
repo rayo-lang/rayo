@@ -11,7 +11,7 @@ private let enemyAndStats = """
 
 /// A program whose `f` holds the `let` `l` and the `var` `e`, takes the borrowed parameter `p`, and runs `body`.
 private func source(running body: String) -> String {
-    "func main() {}\nfunc f(_ p: Enemy) {\nlet l = made()\nvar e = made()\n\(body)\n}" + enemyAndStats
+    "func main() {}\nfunc f(_ p: &Enemy) {\nlet l = made()\nvar e = made()\n\(body)\n}" + enemyAndStats
 }
 
 struct FieldAssignmentTests {

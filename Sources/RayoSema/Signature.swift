@@ -65,9 +65,10 @@ extension Signature {
     }
 
     /// The signature of `init(repeating:)` of the array of `count` values of `element`, which makes the array with
-    /// each element a copy of the argument it borrows.
+    /// each element a copy of its one argument. Its parameter owns the argument, so a call gives a place with nothing
+    /// written, as it gives any parameter that owns its argument.
     init(fillingArrayOf count: Int, _ element: RayoType) {
-        let parameter = Parameter(FunctionParameter(label: "repeating", convention: .borrowed, type: element))
+        let parameter = Parameter(FunctionParameter(label: "repeating", convention: .owned, type: element))
         self.init(name: Member.initializerName, target: .filledArray, parameters: [parameter],
                   result: .type(.array(count: count, element: element)))
     }

@@ -7,7 +7,9 @@ public struct Param: Sendable {
     public var label: String?
     public var name: String
     public var nameRange: SourceRange
+    /// The reference the parameter's type is written as, or nil where the parameter owns its argument.
     public var convention: ParamConvention?
+    /// The type of the argument, or of the place a reference parameter refers to.
     public var type: TypeExpr
     /// The value a call that leaves the argument out passes.
     public var defaultValue: Expr?

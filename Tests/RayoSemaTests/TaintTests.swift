@@ -58,10 +58,10 @@ struct TaintTests {
             }
             struct Flag(var on: Bool)
             func overloaded(_ b: Bool) {}
-            func overloaded(_ f: Flag) {}
+            func overloaded(_ f: &Flag) {}
             """)
         #expect(program.withBodies == [
-            "unused()", "unusedValue()", "literal()", "index()", "overloaded(_: Bool)", "overloaded(_: Flag)",
+            "unused()", "unusedValue()", "literal()", "index()", "overloaded(_: Bool)", "overloaded(_: &Flag)",
         ])
     }
 

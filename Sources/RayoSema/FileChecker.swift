@@ -135,17 +135,20 @@ final class FileChecker {
         return (id, isDeclared)
     }
 
-    /// Makes the signature's parameter from the one the declaration writes. Reports what rayoc doesn't support in
-    /// it: a convention, a default value, and the type Void, which leaves the parameter without a type.
+    /// Makes the signature's parameter from the one the declaration writes: a `&T` parameter borrows its argument,
+    /// and a `T` parameter owns it. Reports what rayoc doesn't support in it: a `mutable &T` parameter, which is
+    /// declared as one that borrows, a default value, and the type Void or a `T` parameter of a type that isn't
+    /// implicitly copyable, each of which leaves the parameter without a type.
     private func parameter(from parameter: Param) -> Parameter {
-        // A convention is reported, since every parameter borrows its argument.
-        if let convention = parameter.convention {
-            errors.report(.unsupportedConvention(convention: convention.rawValue), at: parameter.range)
+        // A `mutable &` is reported, and the parameter borrows its argument as a `&` one does.
+        if parameter.convention == .mutable {
+            errors.report(.unsupportedConvention(convention: ParamConvention.mutable.rawValue), at: parameter.range)
         }
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
 
-        // Resolve the type the parameter is written with.
+        // Resolve the type the parameter is written with, and the convention its reference, or the lack of one, says.
+        let convention: ParameterConvention = parameter.convention == nil ? .owned : .borrowed
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
@@ -153,12 +156,23 @@ final class FileChecker {
             errors.report(code, at: parameter.type.range)
             type = nil
         }
+        // So is one that owns a struct or an array, which rayoc doesn't support.
+        if let resolved = type, convention == .owned, !resolved.isImplicitlyCopyable {
+            errors.report(.unsupportedOwnedParameter(type: declarations.typeName(of: resolved)),
+                          at: parameter.type.range)
+            type = nil
+        }
         // So is one too large for the stack, where the call's argument lies.
         if let resolved = type, !declarations.fitsOnStack(resolved, at: parameter.type.range, reporting: errors) {
             type = nil
         }
-        return Parameter(label: parameter.label, convention: .borrowed, type: type,
-                         spelledType: parameter.type.spelling)
+        return Parameter(label: parameter.label, convention: convention, type: type,
+                         spelledType: spelling(of: parameter))
+    }
+
+    /// The type of `parameter` as the source writes it, after its reference where it has one, such as `&Enemy`.
+    private func spelling(of parameter: Param) -> String {
+        (parameter.convention.map { $0.rawValue } ?? "") + parameter.type.spelling
     }
 
     /// The result type that `function`, which is `id`, declares, or `.givenByBody` where its body gives it.

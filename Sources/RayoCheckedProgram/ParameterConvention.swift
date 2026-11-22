@@ -9,8 +9,8 @@ public enum ParameterConvention: String, Hashable, Sendable {
     /// there.
     case mutable
 
-    /// `type` as a parameter of this convention writes it: after `owned` or `mutable`, and on its own where the
-    /// parameter borrows, as the source writes it.
+    /// `type` as the program's text declares a parameter of this convention with it: after `owned` or `mutable`, and
+    /// on its own where the parameter borrows.
     public func spelling(of type: RayoType) -> String {
         self == .borrowed ? "\(type)" : "\(rawValue) \(type)"
     }

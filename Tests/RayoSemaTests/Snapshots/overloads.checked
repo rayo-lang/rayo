@@ -3,35 +3,42 @@ main "main()"
 func "main()"() -> Void {
   expression
     call builtin "print(_: Int)": Void @2:5-2:19
-      call "kind(_: Int)": Int @2:11-2:18
-        integer 5: Int @2:16-2:17
+      owned
+        call "kind(_: Int)": Int @2:11-2:18
+          owned
+            integer 5: Int @2:16-2:17
   expression
     call builtin "print(_: Int)": Void @3:5-3:22
-      call "kind(_: Bool)": Int @3:11-3:21
-        bool true: Bool @3:16-3:20
+      owned
+        call "kind(_: Bool)": Int @3:11-3:21
+          owned
+            bool true: Bool @3:16-3:20
   expression
     call builtin "print(_: Int)": Void @4:5-4:23
-      call "kind(of: Int)": Int @4:11-4:22
-        integer 5: Int @4:20-4:21
+      owned
+        call "kind(of: Int)": Int @4:11-4:22
+          owned
+            integer 5: Int @4:20-4:21
   expression
     call builtin "print(_: Int)": Void @5:5-5:18
-      call "kind()": Int @5:11-5:17
+      owned
+        call "kind()": Int @5:11-5:17
 }
 
-func "kind(_: Int)"(_: Int) -> Int {
-  param %0 x: Int @7:13-7:14
+func "kind(_: Int)"(_: owned Int) -> Int {
+  param %0 x: owned Int @7:13-7:14
   return
     integer 1: Int @7:23-7:24
 }
 
-func "kind(_: Bool)"(_: Bool) -> Int {
-  param %0 b: Bool @8:13-8:14
+func "kind(_: Bool)"(_: owned Bool) -> Int {
+  param %0 b: owned Bool @8:13-8:14
   return
     integer 2: Int @8:31-8:32
 }
 
-func "kind(of: Int)"(of: Int) -> Int {
-  param %0 x: Int @9:14-9:15
+func "kind(of: Int)"(of: owned Int) -> Int {
+  param %0 x: owned Int @9:14-9:15
   return
     integer 3: Int @9:31-9:32
 }

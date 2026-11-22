@@ -26,7 +26,7 @@ struct StackSizeTests {
     }
 
     @Test(arguments: [
-        ("func f(_ a: [2147483648 of Bool]) {}", "[2147483648 of Bool]" as TypeName, "[2147483648 of Bool]"),
+        ("func f(_ a: &[2147483648 of Bool]) {}", "[2147483648 of Bool]" as TypeName, "[2147483648 of Bool]"),
         (
             "func f() -> [2147483648 of Bool] { .init(repeating: false) }",
             "[2147483648 of Bool]", "[2147483648 of Bool]",
@@ -43,7 +43,7 @@ struct StackSizeTests {
     }
 
     @Test(arguments: [
-        "func f(_ a: [2147483647 of Bool]) -> [2147483647 of Bool] { copy a }",
+        "func f(_ a: &[2147483647 of Bool]) -> [2147483647 of Bool] { copy a }",
         "func f() {\n    var a: [2147483647 of Bool] = .init(repeating: false)\n    a[0] = true\n}",
         big,
     ])

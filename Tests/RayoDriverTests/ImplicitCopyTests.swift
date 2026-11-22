@@ -23,9 +23,9 @@ struct ImplicitCopyTests {
                 print(e.hp + hps[0] + hps[1])
                 print(e.level)
                 print(e.alive)
-                print(hpOf(e))
+                print(hpOf(&e))
             }
-            func hpOf(_ e: Enemy) -> Int {
+            func hpOf(_ e: &Enemy) -> Int {
                 return e.hp
             }
             struct Enemy(var hp: Int, var level: UInt, var alive: Bool)
@@ -59,7 +59,7 @@ struct ImplicitCopyTests {
                 print(alive)
                 print(hpOf(Stats(hp: 7)))
             }
-            func hpOf(_ s: Stats) -> Int {
+            func hpOf(_ s: &Stats) -> Int {
                 let hp = s.hp
                 return hp
             }

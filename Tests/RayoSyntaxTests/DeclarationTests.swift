@@ -28,6 +28,16 @@ struct DeclarationTests {
         #expect(structure.members.map(summary(of:)) == ["func f", "struct T", "failed func g"])
     }
 
+    @Test func `a parameter's type says whether it borrows its argument, borrows it for change, or owns it`() throws {
+        let file = Parser.parse("func f(_ a: &Int, b: mutable &[2 of Int], c: Bool) {}").file
+        guard case .function(let function)? = file.declarations.first else {
+            Issue.record("expected a function, found \(file.declarations)")
+            return
+        }
+        #expect(function.parameters.map(\.convention) == [.borrowed, .mutable, nil])
+        #expect(function.parameters.map(\.type.spelling) == ["Int", "[2 of Int]", "Bool"])
+    }
+
     @Test(arguments: [
         ("struct S", true), ("struct S(var x)", true), ("struct", true), ("func f() {}", false), ("func (", false),
     ])

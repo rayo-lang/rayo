@@ -5,8 +5,8 @@ bb0:
   return
 }
 
-func "isZero(_: Int)"(_: Int) -> Bool {
-  param %0 n: Int @2:15-2:16
+func "isZero(_: Int)"(_: owned Int) -> Bool {
+  param %0 n: owned Int @2:15-2:16
   temp %1: Bool
 bb0:
   declare %1
