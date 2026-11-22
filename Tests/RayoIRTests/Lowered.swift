@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
 import RayoSema
@@ -16,7 +17,7 @@ func lowered(_ source: String) throws(RejectedSource) -> IRProgram {
     let (file, syntaxErrors) = Parser.parse(source)
     guard syntaxErrors.isEmpty else { throw RejectedSource(diagnostics: syntaxErrors) }
 
-    let (program, checkErrors) = Checker.check(file)
+    let (program, checkErrors, _) = Checker.check(file)
     guard checkErrors.isEmpty else { throw RejectedSource(diagnostics: checkErrors) }
 
     return Lowering.lower(program)

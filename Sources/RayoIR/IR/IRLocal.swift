@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 public enum IRLocal: Equatable, Sendable {

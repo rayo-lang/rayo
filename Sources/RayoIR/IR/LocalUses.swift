@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// The local each effect in one body uses: the one whose storage it reads, writes or reaches through an access it
 /// holds. A local's life must last through every use of it.

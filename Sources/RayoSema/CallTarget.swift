@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// What a call does once it has chosen the signature it reaches: call a function, or make an array.
 enum CallTarget {
     /// A function the file declares, or a built-in, which the call calls with its arguments.

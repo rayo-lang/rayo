@@ -155,7 +155,7 @@ struct CompilerTests {
             .missingBindingName(found: .token("=")), .missingExpression(found: .token(")")),
         ])
         #expect(compiled.result.errors == """
-            a.rayo:2:9: error[E0113]: expected a name to bind, found '='
+            a.rayo:2:9: error[E0113]: expected the local's name, found '='
             a.rayo:3:9: error[E0115]: expected an expression, found ')'
 
             """)

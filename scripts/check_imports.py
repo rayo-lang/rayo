@@ -1,6 +1,6 @@
 """Checks that each module a rule in `RULES` limits is imported only where the rule allows, and that no file
-re-exports it. A target can import a module it reaches only through another dependency, so the package manifest
-can't enforce this.
+re-exports it. A target can import any module the build has made, whether it reaches it through another dependency
+or doesn't depend on it at all, so the package manifest can't enforce this.
 
     python3 scripts/check_imports.py   # writes each import that breaks a rule, and fails if there is any
 """
@@ -12,24 +12,21 @@ from typing import NamedTuple, Sequence
 
 
 class ImportRule(NamedTuple):
-    """The directories whose Swift files may import `module`: those under one of `allowed` and under none of
-    `excepted`."""
+    """The directories whose Swift files may import `module`: those under one of `allowed`."""
     module: str
     allowed: Sequence[str]
-    excepted: Sequence[str] = ()
 
 
 RULES = [
     # LLVM's C API is called only by the module that wraps it.
     ImportRule('CLLVM', allowed=['Sources/LLVM']),
     # Nothing after semantic checking sees syntax: the checked program, and every stage that reads it, take only what
-    # the checker resolved. The manifest gives none of those stages' modules `RayoSyntax` as a dependency, and this
-    # rule stops them reaching it through `RayoSema`. Lowering's tests may import it, since they parse the programs
-    # they lower.
-    ImportRule('RayoSyntax', allowed=['Sources', 'Tests'], excepted=[
-        'Sources/RayoSema/CheckedProgram', 'Sources/RayoIR', 'Sources/RayoOwnership', 'Sources/RayoLLVM',
-        'Sources/RayoRuntime', 'Sources/LLVM', 'Sources/CLLVM', 'Tests/RayoOwnershipTests', 'Tests/RayoLLVMTests',
-        'Tests/RayoLLVMTestSupport', 'Tests/LLVMTests',
+    # the checker resolved. Only the checker and the pipeline that runs it read syntax, as the manifest says, and so
+    # do the tests of the syntax, of checking and of the pipeline. Lowering's tests may import it too, since they
+    # parse the programs they lower.
+    ImportRule('RayoSyntax', allowed=[
+        'Sources/RayoSema', 'Sources/RayoCompiler', 'Tests/RayoSyntaxTests', 'Tests/RayoSemaTests',
+        'Tests/RayoIRTests', 'Tests/RayoCompilerTests',
     ]),
 ]
 
@@ -160,8 +157,8 @@ def interpolation_end(text, start):
     return len(text)
 
 
-def listed(names, conjunction='and'):
-    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + f' {conjunction} ' + names[-1]
+def listed(names):
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
 
 def is_under(path, directories):
@@ -184,10 +181,6 @@ def file_findings(path, text, rules):
         # Any other import is a finding outside the directories the rule allows.
         elif not is_under(path, rule.allowed):
             found.append(f'{path}:{number}: imports {module}, which only {listed(rule.allowed)} may import')
-        # And inside one the rule excepts from them.
-        elif is_under(path, rule.excepted):
-            excepted = listed(rule.excepted, 'or')
-            found.append(f'{path}:{number}: imports {module}, which no file under {excepted} may import')
     return found
 
 

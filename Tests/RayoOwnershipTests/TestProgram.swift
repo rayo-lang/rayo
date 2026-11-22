@@ -1,6 +1,6 @@
 import Testing
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 // The tests write their IR as text. A test names the source ranges it checks on line 2, each at the column it numbers
@@ -12,16 +12,18 @@ func at(_ column: Int) -> SourceRange {
     return SourceRange(location, location)
 }
 
-/// The program `text` writes, which must read as Rayo IR and keep the IR's types.
-func parsedIR(_ text: String) throws -> IRProgram {
+/// The program `text` writes, which must read as Rayo IR and keep the rules of the IR that `stage` gives.
+func parsedIR(_ text: String, from stage: IRStage) throws -> IRProgram {
     let program = try IRParser.program(from: text)
-    if let violation = IRVerifier.verify(program, from: .lowering) { throw violation }
+    if let violation = IRVerifier.verify(program, from: stage) { throw violation }
     return program
 }
 
 /// A program of `functions`, the first of them the one a run starts at, which declares a `Shot` of an Int `range` and
-/// a `Hit`, and a `Hit` of an Int `damage`, with the primary initializer of each after the functions.
-func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
+/// a `Hit`, and a `Hit` of an Int `damage`, with the primary initializer of each after the functions. It keeps the
+/// rules of the IR that `stage` gives: lowering, for IR the ownership stage checks, or the ownership stage, for IR it
+/// is expected to give.
+func program(of functions: [(name: String, text: String)], from stage: IRStage) throws -> IRProgram {
     try parsedIR("""
         struct Shot {
           var range: Int
@@ -34,7 +36,7 @@ func program(of functions: [(name: String, text: String)]) throws -> IRProgram {
         \(functions.map(\.text).joined(separator: "\n"))
         init "Shot(range: Int, hit: Hit)"(range: owned Int, hit: owned Hit) -> Shot
         init "Hit(damage: Int)"(damage: owned Int) -> Hit
-        """)
+        """, from: stage)
 }
 
 /// The function `name`, made of `blocks`, whose locals are the `var`s `x` (`%0`) and `y` (`%1`), the `let` `k` (`%2`)

@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoSyntax
 
 extension TypeID {

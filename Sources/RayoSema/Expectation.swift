@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 
 /// The type a position expects of the value that stands in it, and the error a value of another type reports there.

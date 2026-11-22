@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 @Suite("Where locals retire")
@@ -142,7 +142,7 @@ struct LocalRetirementTests {
               return read %0 @1:1-1:1
             """
         let returning = function(blocks, result: "Int")
-        let written = try program(of: [returning] + callees).bodies[FunctionID(index: 0)]
+        let written = try program(of: [returning] + callees, from: .ownership).bodies[FunctionID(index: 0)]
         #expect(try checked(returning).body == written)
     }
 }

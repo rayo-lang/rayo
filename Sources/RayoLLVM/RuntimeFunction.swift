@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 /// A function that crosses between a program and its runtime: one the runtime defines for the program's code to call,
 /// or the program's `main`, which the runtime's entry point calls.

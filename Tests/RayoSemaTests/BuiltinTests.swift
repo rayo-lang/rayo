@@ -1,4 +1,5 @@
 @testable import RayoSema
+import RayoCheckedProgram
 import RayoSyntax
 import Testing
 
@@ -18,6 +19,11 @@ struct BuiltinTests {
         let isEachBuiltin = found.allSatisfy(\.isBuiltin)
         #expect(isEachBuiltin)
         #expect(found.map(\.description).contains(Signature(of: builtin).description))
+    }
+
+    @Test(arguments: Builtin.allCases)
+    func `a call of a built-in names it as its signature does`(builtin: Builtin) {
+        #expect(Callee.builtin(builtin).name(in: FunctionTable()) == Signature(of: builtin).description)
     }
 
     @Test func `a prelude function is called by its own name`() {

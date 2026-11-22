@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// The file's named types, of every kind, which share one namespace: the type each name declares, the types whose
 /// declarations failed, and, once the types are checked, the table of those that can be laid out, with their fields.
 struct NamedTypes {

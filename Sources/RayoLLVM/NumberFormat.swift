@@ -1,5 +1,5 @@
 import LLVM
-import RayoSema
+import RayoCheckedProgram
 
 /// How LLVM holds the values of a scalar type: as integers of the type's width, whose bits its operations read as
 /// signed or not. A Bool is a one-bit integer, which reads as unsigned.

@@ -77,8 +77,14 @@ struct ParameterTests {
     ])
     func voidParameter(source: String, covered: String) {
         let reported = diagnostics(source)
-        #expect(reported.map(\.code) == [.voidParameter(type: "Void")])
+        #expect(reported.map(\.code) == [.voidParameter(name: "x", type: "Void")])
         #expect(coveredText(reported, in: source) == [covered])
+    }
+
+    @Test func `a parameter of type Void is reported by its name`() {
+        #expect(diagnostics("func main() {}\nfunc f(_ x: Void) {}").map(\.description) == [
+            "2:13: error[E0234]: the parameter 'x' can't have type Void",
+        ])
     }
 
     @Test("overloads whose parameter types aren't types aren't declared twice")

@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Which locals, and which parts inside them, hold a value that some code reads later, at a point.
 struct LivenessState: DataflowState {

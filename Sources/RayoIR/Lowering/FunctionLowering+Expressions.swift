@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 import RayoSource
 
 /// Lowers expressions, from the current block on, as the operations that compute them and the operands that hold

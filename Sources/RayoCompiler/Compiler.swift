@@ -205,8 +205,8 @@ public enum Compiler {
     ) throws(CompilationError) -> String {
         let checked = try checkedProgram(path, readFile: readFile, errors: &errors)
         // The stages after checking run only for the errors they find, which keep the program from being printed.
-        if let checked { _ = try ir(of: checked, errors: &errors) }
-        return CheckedPrinter.text(of: try accepted(checked, errors: errors))
+        if let checked { _ = try ir(of: checked.program, errors: &errors) }
+        return CheckedPrinter.text(of: try accepted(checked, errors: errors).program)
     }
 
     /// The Rayo IR of the source file at `path`, as text, once it checks.
@@ -214,7 +214,7 @@ public enum Compiler {
         of path: String, readFile: (String) -> [UInt8]?, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        return IRPrinter.text(of: try accepted(program, errors: errors))
+        return IRPrinter.text(of: try accepted(program, errors: errors).program)
     }
 
     /// Compiles the source file at `path` as `build` asks, writes its object code to the file at `objectPath`, and
@@ -224,7 +224,9 @@ public enum Compiler {
         writeFile: (String, [UInt8]) -> Bool, errors: inout [Diagnostic],
     ) throws(CompilationError) -> String {
         let program = try frontEnd(path, readFile: readFile, errors: &errors)
-        let executable = program.flatMap { Self.executable(of: $0, errors: &errors) }
+        let executable = program.flatMap {
+            Self.executable(of: $0.program, mainMayHaveFailed: $0.mainMayHaveFailed, errors: &errors)
+        }
         let accepted = try accepted(executable, errors: errors)
         try write(objectCode(of: accepted, build: build, sourcePath: path), to: objectPath, writeFile: writeFile)
         return ""

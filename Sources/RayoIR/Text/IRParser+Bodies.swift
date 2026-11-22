@@ -1,4 +1,4 @@
-import RayoSema
+import RayoCheckedProgram
 
 extension IRParser {
     /// Reads a function's body between braces: its locals, then its blocks.

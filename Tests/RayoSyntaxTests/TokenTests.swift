@@ -44,13 +44,27 @@ struct TokenTests {
     }
 
     @Test("a malformed integer literal is reported, and the error covers the literal", arguments: [
-        ("let x = 12ab", ErrorCode.invalidDigit, "12ab"),
-        ("let x = 0x", .missingDigits, "0x"),
+        ("let x = 12ab", ErrorCode.invalidDigit(digit: "a", base: "decimal"), "12ab"),
+        ("let x = 0x", .missingDigits(prefix: "0x"), "0x"),
         ("let x = 18446744073709551616", .literalExceeds64Bits, "18446744073709551616"),
     ])
     func errors(source: String, expected: ErrorCode, literal: String) {
         #expect(lexErrors(source) == [expected])
         #expect(lexCoveredText(source) == [literal])
+    }
+
+    @Test(arguments: [
+        ("12ab", "'a' isn't a digit in decimal"),
+        ("0b102", "'2' isn't a digit in binary"),
+        ("0o18", "'8' isn't a digit in octal"),
+        ("0xfg", "'g' isn't a digit in hexadecimal"),
+        ("0x", "expected digits after '0x'"),
+        ("0b_", "expected digits after '0b'"),
+        ("18446744073709551616", "the integer literal doesn't fit in 64 bits"),
+        ("a /* x /* y */", "the block comment has no closing '*/'"),
+    ])
+    func `a lexing error's message names what is wrong with the text`(source: String, message: String) {
+        #expect(Lexer.tokenize(source).diagnostics.map(\.code.message) == [message])
     }
 
     @Test("a character outside the grammar lexes as an unexpected character, which the parser reports", arguments: [

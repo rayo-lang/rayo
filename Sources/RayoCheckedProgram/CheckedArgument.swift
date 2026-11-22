@@ -8,7 +8,7 @@ public enum CheckedArgument: Sendable {
     case mutable(CheckedPlace)
 
     /// The argument that passes `value` to a parameter of `convention`.
-    init(passing value: CheckedExpr, as convention: ParameterConvention) {
+    package init(passing value: CheckedExpr, as convention: ParameterConvention) {
         self = switch convention {
         case .borrowed: .borrowed(value)
         case .owned: .owned(value)

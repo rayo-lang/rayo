@@ -24,7 +24,7 @@ Edit the right-hand column to match whatever vocabulary you actually use.
 | --- | --- |
 | `area:diagnostics` | `RayoSource`, `RayoDiagnostics`, `RayoDiagnosticsMacros`: source text, error codes and how errors are reported |
 | `area:syntax` | `RayoSyntax`: lexing, parsing and the syntax tree |
-| `area:sema` | `RayoSema`: semantic checking and the checked program |
+| `area:sema` | `RayoSema`, `RayoCheckedProgram`: semantic checking and the checked program |
 | `area:ir` | `RayoIR`: the IR and lowering |
 | `area:ownership` | `RayoOwnership`: the ownership checks on the IR |
 | `area:llvm` | `RayoLLVM`, `RayoRuntime`, `LLVM`, `CLLVM`: emitting LLVM code and the program runtime |

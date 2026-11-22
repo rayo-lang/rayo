@@ -1,7 +1,7 @@
 import LLVM
 import Testing
 @testable import RayoLLVM
-import RayoSema
+import RayoCheckedProgram
 import RayoRuntime
 #if os(Windows)
 import RayoLLVMTestSupport

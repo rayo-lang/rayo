@@ -1,6 +1,6 @@
 @testable import RayoOwnership
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 struct DataflowTests {
@@ -174,7 +174,7 @@ private struct EvaluatedOperands: DataflowState {
 private func solve(
     _ start: EvaluatedOperands, _ blocks: String, result: String = "Void",
 ) throws -> DataflowResults<EvaluatedOperands> {
-    let program = try program(of: [function(blocks, result: result)])
+    let program = try program(of: [function(blocks, result: result)], from: .lowering)
     // The program's one function has a body.
     let body = try #require(program.bodies[FunctionID(index: 0)])
     return DataflowSolver.solve(from: start, through: body, knowing: ())

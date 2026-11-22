@@ -30,7 +30,7 @@ struct ParserErrorTests {
     @Test("the lexer's and the parser's errors come in source order")
     func sourceOrder() {
         #expect(errors("func f() {\n    let = 1\n    let s = 0x\n}") == [
-            .missingBindingName(found: .token("=")), .missingDigits,
+            .missingBindingName(found: .token("=")), .missingDigits(prefix: "0x"),
         ])
     }
 
@@ -72,6 +72,17 @@ struct ParserErrorTests {
     @Test("a stray '}' is reported and skipped")
     func strayBrace() {
         #expect(errors("}\nfunc f() {}") == [.unmatchedBrace])
+    }
+
+    @Test(arguments: [
+        ("}\nfunc f() {}", "the '}' has no matching '{'"),
+        ("func f() { let = 1 }", "expected the local's name, found '='"),
+        ("func f() { var x = 1, = 2 }", "expected the local's name, found '='"),
+    ])
+    func `a parsing error's message says what is wrong in the terms the source uses`(
+        source: String, message: String,
+    ) {
+        #expect(errors(source).map(\.message) == [message])
     }
 
     @Test func `'return' takes a value on its own line, and a 'return' that ends its line takes none`() {

@@ -1,5 +1,5 @@
 import LLVM
-import RayoSema
+import RayoCheckedProgram
 
 /// The type of each runtime function, made once for a program, which the program's module declares the function with:
 /// the program's `main` where the module defines it, and any other the first time the program's code calls it.

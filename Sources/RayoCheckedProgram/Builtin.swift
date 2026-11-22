@@ -20,7 +20,7 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
     }
 
     /// Where the built-in's name lives in the prelude.
-    var name: BuiltinName {
+    package var name: BuiltinName {
         switch self {
         case .print: .function("print")
         case .conversion(_, let target): .initializer(of: .scalar(target))
@@ -28,7 +28,7 @@ public enum Builtin: CaseIterable, Hashable, Sendable {
     }
 
     /// The prelude type the built-in initializes, or nil where it is no initializer.
-    var initializedType: RayoType? {
+    package var initializedType: RayoType? {
         guard case .initializer(let type) = name else { return nil }
         return type
     }

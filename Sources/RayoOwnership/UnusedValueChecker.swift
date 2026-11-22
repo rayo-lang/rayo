@@ -1,6 +1,6 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
-import RayoSema
 
 /// Checks that some code reads each value a program assigns to a local, or to a field inside one, and each value the
 /// function's entry stores in a parameter.

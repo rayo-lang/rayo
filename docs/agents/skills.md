@@ -22,6 +22,7 @@ These edits bring the copies in line with the project rules in `AGENTS.md` and `
 - `domain-modeling/SKILL.md` and `domain-modeling/ADR-FORMAT.md`: a fourth condition offers an ADR only for a change of course on something that exists; a decision made while something is still being shaped goes into the thing itself, and before Rayo 1.0 no ADR is offered at all (the domain-docs rules in `docs/agents/domain.md`).
 - `improve-codebase-architecture/SKILL.md`: an ADR for a rejected candidate is offered only when `domain-modeling`'s test passes, so it follows the same rules.
 - `implement/SKILL.md`: the work goes up as a pull request that a fresh reviewer reviews, round after round, until it approves, and then hands back for the merge (the rules in `docs/agents/pull-requests.md`).
+- `implement/SKILL.md`: the run at the end tests what the change reaches, not the whole suite (the running-the-tests rule in `AGENTS.md`).
 - `implement/SKILL.md` and `implement/agents/openai.yaml`: the skill is model-invoked, so that `implement-epic`'s subagents can run it.
 
 Edit a copied skill only to bring it in line with a project rule or with a skill of this repo's own that runs it, and record the edit in this list.

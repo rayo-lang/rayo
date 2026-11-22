@@ -130,7 +130,8 @@ struct IfExpressionTests {
 
     @Test func `as a statement, an 'if''s branches needn't agree, and each value they leave unused is reported`() {
         #expect(errorLines(inMain: "let c = true\nif c { 1 } else { true }") == [
-            "3:8: error[E0235]: the Int value isn't used", "3:19: error[E0235]: the Bool value isn't used",
+            "3:8: error[E0235]: the Int value isn't used; write '_ =' before it to drop it",
+            "3:19: error[E0235]: the Bool value isn't used; write '_ =' before it to drop it",
         ])
     }
 }

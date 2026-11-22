@@ -1,5 +1,5 @@
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 import Testing
 
 /// IR that no lowering of a checked program makes, and what the verifier says is wrong with it.
@@ -33,6 +33,20 @@ struct IllTypedIRTests {
             }
             """)
         #expect(IRVerifier.verify(program, from: .lowering) == nil)
+    }
+
+    @Test func `a retirement of a parameter, whose place the call keeps until it returns, is a violation`() throws {
+        let program = try IRParser.program(from: main("bb0:\n  return", after: """
+            func "f(_: Int)"(_: Int) -> Void {
+              param %0 n: Int @1:1-1:2
+            bb0:
+              retire %0
+              return
+            }
+            """))
+        // Only the ownership stage writes a retirement, so only its IR can retire a parameter.
+        let message = "the IR retires the parameter %0 in its function's body"
+        #expect(IRVerifier.verify(program, from: .ownership) == IRViolation(function: "f(_: Int)", message: message))
     }
 
     @Test func `a primary initializer with a body, or that makes another type than its struct, is a violation`()
@@ -392,19 +406,6 @@ private let illTypedIR = [
             """),
         function: "f(_: Int)",
         message: "the IR declares the parameter %0 in its function's body",
-    ),
-    IllTypedIR(
-        testDescription: "a retirement of a parameter, whose place the call keeps until it returns",
-        text: main("bb0:\n  return", after: """
-            func "f(_: Int)"(_: Int) -> Void {
-              param %0 n: Int @1:1-1:2
-            bb0:
-              retire %0
-              return
-            }
-            """),
-        function: "f(_: Int)",
-        message: "the IR retires the parameter %0 in its function's body",
     ),
     IllTypedIR(
         testDescription: "a call that passes an access to an owned parameter",

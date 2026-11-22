@@ -1,6 +1,6 @@
 import RayoLLVM
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 import Testing
 
 /// `OperatorEmitter` emits each operator here as a unit, on the parameters of a function of its own, which the test

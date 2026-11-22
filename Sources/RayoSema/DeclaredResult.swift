@@ -1,3 +1,5 @@
+import RayoCheckedProgram
+
 /// A function's result type, as its declaration gives it.
 enum DeclaredResult {
     case type(RayoType)

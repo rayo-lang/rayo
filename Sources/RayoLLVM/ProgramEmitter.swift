@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// Emits a program into an LLVM module of its own, which it owns with the context the module is made in, the builder
 /// that adds to it, and the runtime its code calls.

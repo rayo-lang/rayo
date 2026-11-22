@@ -1,6 +1,6 @@
 import LLVM
+import RayoCheckedProgram
 import RayoIR
-import RayoSema
 
 /// The LLVM types of a program's values, and of a function's result, laid out as the program's type table says.
 struct LLVMTypes {

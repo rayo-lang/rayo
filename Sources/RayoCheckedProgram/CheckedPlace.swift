@@ -5,7 +5,12 @@ import RayoSource
 public struct CheckedPlace: Sendable {
     public var root: CheckedPlaceRoot
     /// The steps from the root to the place, outermost first; none where the place is the root itself.
-    public var steps: [CheckedPlaceStep] = []
+    public var steps: [CheckedPlaceStep]
+
+    package init(root: CheckedPlaceRoot, steps: [CheckedPlaceStep] = []) {
+        self.root = root
+        self.steps = steps
+    }
 
     /// Where the source names the whole place.
     public var range: SourceRange {
@@ -16,7 +21,7 @@ public struct CheckedPlace: Sendable {
     }
 
     /// The place that `step` leads to from this one.
-    func appending(_ step: CheckedPlaceStep) -> CheckedPlace {
+    package func appending(_ step: CheckedPlaceStep) -> CheckedPlace {
         CheckedPlace(root: root, steps: steps + [step])
     }
 }

@@ -1,7 +1,7 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoIR
 import RayoOwnership
-import RayoSema
 
 /// What the ownership stage makes of `function`, checked as the first function of a program beside the `callees` and
 /// `others`, as the pipeline runs the stage: its body with the end of each access and the retirement of each local
@@ -9,7 +9,7 @@ import RayoSema
 func checked(
     _ function: (name: String, text: String), beside others: [(name: String, text: String)] = [],
 ) throws -> (body: IRBody?, errors: [Diagnostic]) {
-    let (program, errors) = OwnershipChecker.check(try program(of: [function] + callees + others))
+    let (program, errors) = OwnershipChecker.check(try program(of: [function] + callees + others, from: .lowering))
     let first = FunctionID(index: 0)
     return (program.bodies[first], errors[first] ?? [])
 }
@@ -20,7 +20,8 @@ func ended(_ blocks: String) throws -> IRBody? {
     try checked(function(blocks)).body
 }
 
-/// The body of a function of `blocks`, as the text writes it.
+/// The body of a function of `blocks`, as the text writes it, which keeps the rules of the IR the ownership stage
+/// gives.
 func body(of blocks: String) throws -> IRBody? {
-    try program(of: [function(blocks)] + callees).bodies[FunctionID(index: 0)]
+    try program(of: [function(blocks)] + callees, from: .ownership).bodies[FunctionID(index: 0)]
 }

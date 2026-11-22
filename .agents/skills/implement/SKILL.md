@@ -7,7 +7,7 @@ Implement the work described by the spec, tickets or issue you were given. Branc
 
 Work on a branch of your own, from the newest code the work builds on; where a branch or pull request for the work already exists, continue it. Use /tdd where possible, at pre-agreed seams.
 
-Run typechecking regularly, single test files regularly, and the full test suite once at the end.
+Run typechecking regularly, single test files regularly, and the tests your change reaches once at the end.
 
 Commit your work, and open a pull request.
 

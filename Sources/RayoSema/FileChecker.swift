@@ -1,3 +1,4 @@
+import RayoCheckedProgram
 import RayoDiagnostics
 import RayoSource
 import RayoSyntax
@@ -148,7 +149,8 @@ final class FileChecker {
         var type = declarations.resolve(parameter.type, reporting: errors)
         // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
         if type == .void {
-            errors.report(.voidParameter(type: declarations.typeName(of: .void)), at: parameter.type.range)
+            let code = ErrorCode.voidParameter(name: parameter.name, type: declarations.typeName(of: .void))
+            errors.report(code, at: parameter.type.range)
             type = nil
         }
         // So is one too large for the stack, where the call's argument lies.
@@ -198,13 +200,12 @@ final class FileChecker {
             if declaration != nil, !errors.taints.functions.contains(id) { bodies[id] = body(of: id).body }
         }
 
-        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main,
-                              mainMayHaveFailed: mainMayHaveFailed)
+        return CheckedProgram(types: types, functions: table, bodies: bodies, main: main)
     }
 
     /// Whether a function that failed to parse may have been the file's `main`: one that failed before its name, or
     /// named `main`.
-    private var mainMayHaveFailed: Bool {
+    var mainMayHaveFailed: Bool {
         file.declarations.contains { declaration in
             guard case .failed(let failed) = declaration else { return false }
             return failed.kind == .function && (failed.name == nil || failed.name == "main")

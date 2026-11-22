@@ -2,7 +2,7 @@ import RayoOwnership
 import Testing
 import RayoDiagnostics
 import RayoIR
-import RayoSema
+import RayoCheckedProgram
 
 struct UnusedValueCheckerTests {
     @Test func `a value stored in a local that no code reads is reported at the store`() throws {
