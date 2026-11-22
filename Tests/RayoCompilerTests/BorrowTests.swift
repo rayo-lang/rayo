@@ -97,8 +97,9 @@ struct BorrowTests {
     @Test(arguments: [
         ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { 5 }\n"
             + "    print(deep)\n    e.stats.hp = 2\n    print(e.stats.hp)", []),
-        ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { e.slots[1] }\n"
-            + "    print(deep)\n    e.stats.hp = 2\n    print(e.stats.hp)", []),
+        ("\(enemy)\n    let c = false\n    ref let st = e.stats\n"
+            + "    ref let deep = if c { st.hp } else { e.slots[1] }\n    print(deep)\n    e.stats.hp = 2\n"
+            + "    print(e.stats.hp)", []),
         ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { 5 }\n"
             + "    e.stats.hp = 2\n    print(deep)", [
                 "6:5: error[E0313]: 'e.stats.hp' can't change while 'e.stats' is borrowed",
