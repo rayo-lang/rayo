@@ -37,7 +37,7 @@ func pad(_ index: Int32) -> Pad? {
     return Pad(
         leftStick:  Vec2(unsafe pad_deadzone(raw.left_stick[0]), unsafe pad_deadzone(raw.left_stick[1])),
         rightStick: Vec2(raw.right_stick[0], raw.right_stick[1]),   // Simd's initializer borrows its lanes and copies them
-        buttons:    plat.button(rawValue: copy raw.buttons)   // uint32_t field, uint32_t-backed C enum
+        buttons:    plat.button(rawValue: raw.buttons)        // uint32_t field, uint32_t-backed C enum
     )
 }
 
@@ -58,7 +58,7 @@ struct Loads(
     let raw = CUIntPtr(bitPattern: user)                               // the pointer's bits, at its own width
     guard raw <= CUIntPtr(UInt32.max) else { return }                  // no ticket: a value C made up, ignored
     let ticket = UInt32(truncating: raw)                               // drops only zero bits, after the guard
-    var result = LoadState.failed(copy error)                          // 'error' is a borrowed parameter
+    var result = LoadState.failed(error)                               // a copy of the borrowed Int32
     if error == 0 && data != nil {
         result = .done(unsafe alloc List(copying: data, count: UInt(len)))   // copied into .heap
     }
@@ -74,9 +74,9 @@ func requestFile(_ path: static StringView, _ loads: mutable Loads) -> Handle<Lo
     while loads.nextTicket == 0 || loads.tickets[loads.nextTicket] != nil {   // 0 would be a null user pointer
         loads.nextTicket &+= 1                                               // skips tickets still in flight after a wrap
     }
-    let ticket = copy loads.nextTicket
+    let ticket = loads.nextTicket
     loads.nextTicket &+= 1
-    loads.tickets[ticket] = copy h
+    loads.tickets[ticket] = h
     unsafe {
         let chars = path.cchars
         plat.read_file_async(chars.baseAddress, CSize(chars.count), onFileLoaded, .init(bitPattern: CUIntPtr(ticket)))

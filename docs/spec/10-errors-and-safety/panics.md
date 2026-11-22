@@ -258,7 +258,7 @@ struct SourceLocation(let file: static StringView, let line: Int, let column: In
 
 **Only the runtime makes a `Panic`.** The type has no public initializer, so every `Panic` that code holds, and every panic that `resumePanic` carries on, was reported when it happened.
 
-**A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+**A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Its 256-byte buffer makes it far larger than 16 bytes, so it isn't implicitly copyable, and each copy of one is written, as `copy p` is below. Neither is a `SourceLocation`, whose two `Int`s and a view take 32 bytes ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 ### Resuming a panic: `resumePanic`
 

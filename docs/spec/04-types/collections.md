@@ -9,18 +9,18 @@ Rayo has several ways to group values. Tuples and fixed-size arrays hold their e
 ```swift
 let pair: (UInt, Float) = (3, 0.5)
 let stats: (hp: Float, armor: Float) = (hp: 100, armor: 20)
-let (count, weight) = copy pair              // destructuring a copy
+let (count, weight) = pair                   // destructuring a copy: both elements are implicitly copyable
 for i in 0..<count { … }                     // a counted loop
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // an Array<Float, 4>: four Floats, stored inline
 var grid: [64 of Int] = .init(repeating: 0)  // every element is given
 let locks: [8 of Mutex<Int>] = .init(each: { _ in Mutex(0) })   // one call per index, for a move-only type
 ```
 
-**Tuples may be labeled, and are laid out as a struct of their elements** ([Structs](structs.md#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`.
+**Tuples may be labeled, and are laid out as a struct of their elements** ([Structs](structs.md#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`. A tuple whose elements are all implicitly copyable is implicitly copyable too, as `pair` is ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-**Ranges are copyable values**, bounded at both ends or at one: `0..<n`, `a...b`, `..<n`, `...b` and `i...`.
+**Ranges are copyable values**, bounded at both ends or at one: `0..<n`, `a...b`, `..<n`, `...b` and `i...`. A range is implicitly copyable when its bounds are, as a range of `Int`s is, since it holds at most two of them.
 
-**An array, `Array<T, N>`, written `[N of T]`, is `N` values of `T` stored inline**, with no heap allocation, and is copyable when `T` is. It is a language type, and what an array literal makes when nothing asks for another type ([below](#literals)).
+**An array, `Array<T, N>`, written `[N of T]`, is `N` values of `T` stored inline**, with no heap allocation, and is copyable when `T` is. It is never implicitly copyable, even a `[4 of Float]`, so a copy of one is always written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). It is a language type, and what an array literal makes when nothing asks for another type ([below](#literals)).
 
 **Its length is part of its type, so every element is given when it is made**, in one of these ways:
 
@@ -88,8 +88,8 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | Type | Owning? | Notes |
 | --- | --- | --- |
 | `List<T>` | yes | Growable, with the allocator it came from ([06](../06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)); lent as a `Span<T>` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) |
-| `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]` |
-| `static Span<T>` | no (static) | ptr + count into data that lives as long as the program, copyable and unscoped ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
+| `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]`; a `Span` is implicitly copyable, and a `MutableSpan` move-only |
+| `static Span<T>` | no (static) | ptr + count into data that lives as long as the program, implicitly copyable and unscoped ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
 | `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
 | `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
@@ -99,8 +99,8 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `Slice<T>` | no | Checked long-lived view into a buffer behind a `Shared` ([06](../06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)) |
 | `SoA<T>` | yes | Struct-of-arrays storage for any struct or tuple type `T` ([Struct of arrays: `SoA<T>`](data-layout.md#struct-of-arrays-soat)) |
 | `String` | yes | UTF-8 bytes, allocator; made only with `alloc`, and lent as a `StringView` ([below](#strings)) |
-| `StringView` | no (scoped) | ptr + byte count |
-| `static StringView` | no (static) | ptr + byte count into text that lives as long as the program, copyable and unscoped: a literal, a `Name`'s text, or a view of a `const`'s or a global `let`'s `String` ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
+| `StringView` | no (scoped) | ptr + byte count; implicitly copyable |
+| `static StringView` | no (static) | ptr + byte count into text that lives as long as the program, implicitly copyable and unscoped: a literal, a `Name`'s text, or a view of a `const`'s or a global `let`'s `String` ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
 | `Name` | no | Interned text, pointer-sized: compared without reading the text, and hashed by its entry or by a hash stored with it (below) |
 
 **A `Name` is interned text: each text has exactly one `Name`, so two `Name`s are equal exactly when their texts are** ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Equal texts give the same `Name` wherever and on whichever thread they are interned, and different texts never do. So `==` compares only the `Name`'s own pointer-sized value, never its text, and no two texts can collide. A compiler's keywords, the keys a config schema declares and a protocol's field names compare this way, as identifiers rather than bytes:
@@ -136,7 +136,7 @@ if let key = Name(existing: line.key), key == jump { … }   // a key read from 
 
 **Code that must free what it interns keeps its own interner**, an owning value whose storage comes from an allocator or an arena. It holds a `List` of the texts, and a `Map` from each text to an id of the interner's own type, typed as a `Handle<T>` is by its element, so ids from two kinds of interner don't mix. Its ids compare as cheaply as a `Name`, and resolve back to text through the interner that made them. Destroying the interner, or resetting its arena, frees every text at once.
 
-**A `Name` is copyable and unscoped, and it is `Sendable` and `Frozen`.** std declares `unsafe Sendable` and `unsafe Frozen` on it, since its value names immortal interned text, which nothing writes and every thread may read ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)).
+**A `Name` is implicitly copyable and unscoped, and it is `Sendable` and `Frozen`.** std declares `unsafe Sendable` and `unsafe Frozen` on it, since its value names immortal interned text, which nothing writes and every thread may read ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable), [06](../06-memory-and-allocators/owning-values.md#frozen-types-with-no-interior-mutability)). It declares `ImplicitlyCopyable` too, since a copy is one pointer-sized value that names the same text ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **`==`, hashing, `text` and `Name(existing:)` are `@noalloc`** ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)), so code that can't allocate still compares names, looks them up and reads their text. Only interning a new text allocates. `format(into:)` allocates nothing of its own either: it writes the text to its sink, and whether that write allocates is the sink's concern.
 
@@ -157,7 +157,7 @@ let shortcuts: Map<Name, Action> = alloc ["leap": .jump]                  // fin
 **std's `Hasher` is a keyed pseudorandom function: without its seed, nobody can predict what it outputs.** SipHash-1-3 is one such function. Which one std uses is the library's choice. A `Hasher` starts from a 128-bit `HashSeed`:
 
 ```swift
-struct HashSeed private init(…): Copyable {       // its fields are private too
+struct HashSeed private init(…): ImplicitlyCopyable {   // 16 bytes; its fields are private too
     init(_ high: UInt64, _ low: UInt64)           // a given seed
     static func fromProcessSeed() -> HashSeed     // a new seed, derived from the process seed
 }
@@ -192,7 +192,7 @@ A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one 
 
 **The primary initializers of `Map` and `Set` are private.** `Map(hashing:)` and `Set(hashing:)` take an owned hashing value, so a program can give a map one it configured, and every other initializer makes one with `H()`. A map's `clone()` keeps a copy of its hashing value and copies its table as it is, so the clone hashes as the original does.
 
-**std provides two hashing types:**
+**std provides two hashing types, both implicitly copyable**, since each holds at most a 16-byte seed, and every copy hashes as the first does:
 
 - **`SeededHashing`**, the default, takes a seed of its own from `HashSeed.fromProcessSeed()` when it is made, and starts each `Hasher` from it. So a key's hash, and the order in which a map visits its entries, can differ between maps made separately, and between two runs of one build ([11](../11-compilation-model.md#what-the-language-leaves-open)).
 - **`FixedHashing`** holds nothing, so it adds nothing to a map's size. It starts each `Hasher` from a seed that std fixes, so a key's hash depends only on the key. That hash is public: anyone can work out which keys collide, so `FixedHashing` is unsafe for keys that come from outside the program.
@@ -462,7 +462,7 @@ protocol ConsumingSequence {                    // what a loop over a whole valu
 
 **A collection's shared and mutable iterators yield views of its elements, and its consuming iterator yields the elements themselves:**
 
-- its iterator yields `Borrow<T>`, a copyable, scoped shared view of one element;
+- its iterator yields `Borrow<T>`, an implicitly copyable, scoped shared view of one element, a single pointer;
 - its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`, which lists `ExclusiveView` as `MutableSpan` does ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview));
 - its consuming iterator yields each `T` itself.
 

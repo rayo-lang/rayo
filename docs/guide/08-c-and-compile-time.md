@@ -84,7 +84,7 @@ let address = CUIntPtr(bitPattern: p)           // safe: a pointer turned into a
 unsafe {
     p.pointee.buttons = 0                       // the plat.pad that 'p' points at
     let bytes = p.cast(to: UInt8.self)          // the same address, as a *UInt8
-    let third = copy bytes[2]                   // reads (bytes + 2).pointee, which nothing bounds-checks
+    let third = bytes[2]                        // reads (bytes + 2).pointee, which nothing bounds-checks
 }
 ```
 
@@ -142,7 +142,7 @@ unsafe { audio.track(voice.pin.address) }          // valid for as long as 'voic
 let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // a global queue any thread may push to
 
 @c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the SDK's audio thread
-    audioEvents.push(AudioEvent(raw: copy event))             // 'event' is borrowed, so copy it in
+    audioEvents.push(AudioEvent(raw: event))                  // 'event' is borrowed, so it is copied in
 }
 
 unsafe { plat.set_audio_callback(onAudioEvent, nil) }
@@ -341,7 +341,7 @@ func save<T>(_ value: T, into w: mutable Writer) {
 ```swift
 struct Transient: Attribute {}                          // a field that save skips
 struct Bounds(let min: Float, let max: Float): Attribute {
-    init(_ min: Float, _ max: Float) { self.init(min: copy min, max: copy max) }   // the parameters are borrowed
+    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // the borrowed Floats are copied in
 }
 
 @reflect(private)

@@ -11,7 +11,12 @@ A move hands a value to a new owner and leaves its old place without that value.
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A `ref let` or `ref var`, in a declaration or a condition, borrows a place instead, and so does a `for` or `when` name bound to a part of one ([`for` and `when` names](bindings.md#for-and-when-names)). A `let` or `var` of a place needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of a place needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
+Two kinds of value are exceptions, since taking one makes a new value and leaves the place as it was:
+
+- a value of an implicitly copyable type, which each of these but a `[move x]` capture copies ([Implicit copies](moves-copies-destruction.md#implicit-copies));
+- a copyable `const` ([below](#constants)).
+
+A `ref let` or `ref var`, in a declaration or a condition, borrows a place instead, and so does a `for` or `when` name bound to a part of one ([`for` and `when` names](bindings.md#for-and-when-names)). A `let` or `var` of a place of any other type needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of one needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
 
 **`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `show` does below, and gives a `let` or `var` a place's value to own, as `kept` does. For a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
@@ -80,7 +85,7 @@ slots[0] = 1                       // fine: 'slots' holds all four elements
 
 **The alternatives leave a value in the place:**
 
-- `copy place` and `alloc place.clone()` leave it as it was;
+- `copy place` and `alloc place.clone()` leave it as it was, and so does an implicit copy of an implicitly copyable value ([Implicit copies](moves-copies-destruction.md#implicit-copies));
 - through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
 So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
@@ -89,7 +94,7 @@ So such a place always holds a value, across a `throw`, an early return, an `awa
 
 **A `const` that reaches run time is a place in read-only data that lives as long as the program** ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A view of it is static storage, which any function may return.
 
-**A `const` of a copyable type is taken without `copy`**, as a new value each time. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `ref let` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
+**A `const` of a copyable type is taken without `copy`**, as a new value each time, whether or not the type is implicitly copyable. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `ref let` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
 
 ```swift
 const maxLives = 3

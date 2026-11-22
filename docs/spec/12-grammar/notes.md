@@ -80,7 +80,7 @@ let bad = try readText(path).count      // error: '.count' applies to the Result
 **Whitespace tells the prefix and postfix range operators, as in `..<x` and `x...`, from the binary ones.** Between two operands, with whitespace on both sides or on neither, a range operator is binary. Attached to an operand on one side only, it is prefix or postfix, whatever is on its other side: whitespace, a bracket or punctuation.
 
 ```swift
-let hp = copy target?.hp            // '?' after an operand: optional chaining
+let hp = target?.hp                 // '?' after an operand: optional chaining
 let all = 0..<n                     // between two operands, with whitespace on neither side: binary
 let tail = xs[3...]                 // attached to 3 only, and closed by ']': postfix
 let head = xs[..<n]                 // attached to n only: prefix

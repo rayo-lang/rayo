@@ -44,11 +44,11 @@ struct Enemy(
 ```swift
 var players = alloc Pool<Player>(capacity: 8)
 let p1 = players.insert(Player(pos: .zero))            // p1: Handle<Player>
-var grunt = Enemy(pos: [5, 0, 5], target: copy p1)    // the enemy keeps a copy of the handle
+var grunt = Enemy(pos: [5, 0, 5], target: p1)         // the enemy keeps a copy of the handle
 
 players[p1]?.hp -= 10                          // changes the player in place, or does nothing if it's gone
 if ref var p = &players[p1] { p.pos.y += 1 }   // changes it through 'p'
-let hp = copy players[p1]?.hp ?? 0             // a copy of its hp, or 0
+let hp = players[p1]?.hp ?? 0                  // a copy of its hp, or 0
 ref let sure = players[p1]!                    // panics if it's gone
 
 players.remove(p1)                             // the player leaves the game
@@ -62,7 +62,7 @@ func chase(_ enemies: mutable Pool<Enemy>, _ players: Pool<Player>, dt: Float) {
 }
 ```
 
-`Pool<T>` owns its elements, while `Handle<T>` names one ([03](../spec/03-handles-and-objects.md#pools-and-handles)). `insert` moves the player into `players` and gives back `p1`, a handle the enemy can keep. The handle is eight bytes and copyable, so other enemies can keep the same target without owning the player. An optional handle takes eight bytes too: all-zero bits mean `nil`.
+`Pool<T>` owns its elements, while `Handle<T>` names one ([03](../spec/03-handles-and-objects.md#pools-and-handles)). `insert` moves the player into `players` and gives back `p1`, a handle the enemy can keep. The handle is eight bytes and implicitly copyable, so `grunt` gets a copy with no `copy` written, and other enemies can keep the same target without owning the player. An optional handle takes eight bytes too: all-zero bits mean `nil`.
 
 Looking up `players[p1]` reaches the player where it sits in the pool; it does not copy the player ([02](../spec/02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). The lookup gives `nil` after the player leaves, so an `if` or a `guard` binds the player only when it is there. The binding writes `ref let` or `ref var`, just as the declaration of `sure` above does, so `p` refers to the player in the pool instead of owning a copy ([01](../spec/01-values-and-ownership/bindings.md#conditions)). In `chase`, `guard` skips an enemy with no target or with a target that has left. `guard` keeps `p` bound after the condition, and its `else` must leave the current scope ([04](../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
@@ -125,7 +125,7 @@ if m.value == nil { log("menu closed") }               // checks only that the m
 
 **The owner is move-only, so an object has exactly one.** Using a weak pointer never makes a second owner.
 
-**A weak pointer is 8 bytes and copyable**, so you can store as many as you like.
+**A weak pointer is 8 bytes and implicitly copyable**, so you can store as many as you like, with no `copy` written.
 
 **Through the owner, `value` is the object itself.** The owner keeps the object alive, so there is no optional.
 

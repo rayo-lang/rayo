@@ -208,7 +208,7 @@ use(e)
 
 ```swift
 struct Pair(var a: StringView, var b: StringView): Scoped {
-    mutating func flip() { let t = copy a; a = copy b; b = consume t }
+    mutating func flip() { let t = a; a = b; b = t }
 }
 var pair = Pair(a: s1.view, b: s2.view)
 pair.flip()                                      // both fields now depend on 's1' and 's2'

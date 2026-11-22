@@ -30,6 +30,8 @@ let wide: Int = small      // widening: every UInt8 fits in an Int
 
 **`Int` and `UInt` are 64 bits on every target, whatever its pointer width** ([11](../11-compilation-model.md#what-a-target-must-provide)). So an integer's range, and the point where its arithmetic overflows, never differ between a 32-bit target and a 64-bit one. Every size fits in an `Int`, and every count and index in a `UInt`, since no target's pointers are wider than 64 bits. C's size types, whose width does follow the target, import as aliases of their own, such as `CSize` ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
+**Every number type and `Bool` is implicitly copyable**, since each is one machine value. So taking one from a place copies it with no `copy` written, as `let n = e.hp` does ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+
 **A number literal takes its type from its context**, whether it is written in decimal, hexadecimal, octal or binary, or with an exponent: `1_000`, `0xFF`, `0o17`, `0b1010`, `1e-3` ([Literals](collections.md#literals)).
 
 ### Conversions
@@ -250,6 +252,8 @@ A library type gets the same by declaring its operations `@inline` ([11](../11-c
 
 So a vector's layout is the same on every target, and no vector asks for more than 64 bytes of alignment. A vector's C representation takes the same alignment ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
 
+**A vector of 16 bytes or less is implicitly copyable**, such as a `Vec4`, an `IVec2` or a `Simd<Float, 3>`, so taking one from a place copies it with no `copy` written. A wider one, such as a `Simd<UInt8, 64>`, is copied with `copy`, since only a copy that cheap is made silently ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+
 **Only the 3-lane form has padding**: it takes the room of four lanes, and its last lane is padding ([below](#vec3-and-three-lane-vectors)).
 
 **A mask stores each lane as a `Bool`, one byte of 0 or 1**, so `Simd<Bool, N>` has `Simd<UInt8, N>`'s size and alignment. A target that keeps masks as bits in a register converts a mask when it stores one.
@@ -374,11 +378,11 @@ struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the ve
 **`Vec3` is `std.math`'s struct of three floats**, 12 bytes with no padding, written in ordinary Rayo:
 
 ```swift
-public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral {
-    @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: copy x, y: copy y, z: copy z) }
+public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral, ImplicitlyCopyable {
+    @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: x, y: y, z: z) }
 
     @inline @noalloc public init<let N: UInt>(arrayLiteral e: owned [N of Float]) {   // @noalloc: literals work anywhere
-        static if N == 3 { self.init(x: copy e[0], y: copy e[1], z: copy e[2]) }
+        static if N == 3 { self.init(x: e[0], y: e[1], z: e[2]) }
         else { static error("a Vec3 literal needs 3 elements") }
     }
 

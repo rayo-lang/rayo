@@ -104,19 +104,19 @@ let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' m
 public struct Fraction private init(let num: Int, let den: Int) {   // other modules can't call the primary
     public init(_ num: Int, over den: Int) {
         precondition(den != 0, "zero denominator")
-        self.init(num: copy num, den: copy den)
+        self.init(num: num, den: den)                 // each Int is copied in
     }
 }
 
 public struct Body private init(let mass: Float, let invMass: Float, var velocity: Vec3 = .zero) {
     public init(mass: Float) -> Self!PhysicsError {
         guard mass > 0 else { throw .badMass }          // 'self' doesn't exist yet: only the arguments are checked
-        self.init(mass: copy mass, invMass: 1 / mass)   // every field is set at once
+        self.init(mass: mass, invMass: 1 / mass)        // every field is set at once
     }
 }
 ```
 
-**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function whose parameters are borrowed unless marked. So it passes `copy x`, or an `owned` parameter, on to the primary one, as `Fraction` does above.
+**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function whose parameters are borrowed unless marked. So it passes `copy x`, or an `owned` parameter, on to the primary one. A parameter of an implicitly copyable type is copied in with nothing written, as `Fraction` passes its `Int`s above ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
 **A secondary initializer calls `self.init` at most once on every path, and exactly once on every path that returns the new value.** A call that a path could reach twice, as one in a loop could, is a compile error. The call reaches the primary initializer directly or through other secondary ones, and secondary initializers that call each other without reaching it are a compile error.
 
@@ -169,7 +169,7 @@ struct Env<T>(var rec: Rec, var body: T)
 
 func unpack<T: Copyable>(_ m: Msg<T>, _ e: Env<T>) {
     let p = copy m.payload      // by value: under-aligned, since T may need more than 4
-    let id = copy e.rec.id      // by value: under-aligned, since Env<UInt8> misaligns it
+    let id = e.rec.id           // a copy, by value: under-aligned, since Env<UInt8> misaligns it
 }
 ```
 

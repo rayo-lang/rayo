@@ -6,7 +6,7 @@ An owning value remembers where its storage came from so it can grow and release
 
 ## Allocator values
 
-**An `Allocator` is a copyable id that names a registered allocator.** An owning value records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.heap` are the same type.
+**An `Allocator` is an implicitly copyable id that names a registered allocator** ([Writing an allocator](allocator-implementations.md#writing-an-allocator-allocatorimpl)). An owning value records the allocator its storage came from, and grows and frees through it. So the allocator isn't part of its type: a `List<Prop>` from `levelHeap` and one from `.heap` are the same type.
 
 **Every registered allocator is either `.heap` or library code:**
 

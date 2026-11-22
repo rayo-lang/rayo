@@ -98,7 +98,7 @@ if target != nil { attack(target) }  // a Handle<Enemy> inside the check
 ref let hp = enemies[h]?.hp ?? 0     // refers to the element's hp in place, or to a 0
 ```
 
-**`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`.** A `nil` pattern is `.none` and covers it. The two spellings differ only as a place property's declared type. There `T?` makes an optional place property, which hands out a place of type `T` or `nil`, and `Optional<T>` makes one that hands out a whole place of the enum ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)).
+**`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`.** A `nil` pattern is `.none` and covers it. The two spellings differ only as a place property's declared type. There `T?` makes an optional place property, which hands out a place of type `T` or `nil`, and `Optional<T>` makes one that hands out a whole place of the enum ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)). The prelude declares `T?` implicitly copyable where `T` is, so a `Handle<Enemy>?` copies with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **`T?` offers these operations:**
 
@@ -189,7 +189,7 @@ union Mixed { var byte: UInt8; var word: UInt32 }   // 'byte' covers one byte of
 
 var b = Bits(f: 1.5)       // a union is initialized by writing one member
 b.u = 7                    // writing a member is safe
-let x = copy b.f           // reads the bits of 7 as a Float: safe, since Bits is Pod and padding-free
+let x = b.f                // reads the bits of 7 as a Float: safe, since Bits is Pod and padding-free
 var m = Mixed(word: 0)
 unsafe { use(m.byte) }     // reading a member of Mixed needs unsafe
 ```

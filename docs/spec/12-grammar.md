@@ -19,7 +19,7 @@ let total = base +              // a line that ends in a binary operator continu
     bonus * 2
 let hps = alloc enemies
     .span                       // a line that starts with '.' joins the one above
-    .map({ copy $0.hp })
+    .map({ $0.hp })
 spawn(
     at: origin,                 // inside ( and [, newlines are whitespace
     count: 3

@@ -77,11 +77,11 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 
 **A module's interface is its public declarations, and what its public types' fields decide**, such as:
 
-- whether a type is copyable, `Sendable`, `Frozen`, `Pod`, shallow or sealed;
+- whether a type is copyable, implicitly copyable, `Sendable`, `Frozen`, `Pod`, shallow or sealed;
 - its niche;
 - its layout.
 
-**The interface carries those facts because other modules' checks need them, and the fields that decide them may be private.** Whether `copy` applies to an imported value, for one, depends on whether its type is copyable, which depends on all of the type's fields ([01](01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
+**The interface carries those facts because other modules' checks need them, and the fields that decide them may be private.** Whether `copy` applies to an imported value, for one, depends on whether its type is copyable, which depends on all of the type's fields ([01](01-values-and-ownership/moves-copies-destruction.md#copyable-types)). Whether a binding of an imported value's place copies it with nothing written depends on whether the type is implicitly copyable, which the compiler confirms from the same fields ([01](01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **Local type checking rules out some convenience features.** Each row gives a rule of local checking, and the feature it rules out:
 

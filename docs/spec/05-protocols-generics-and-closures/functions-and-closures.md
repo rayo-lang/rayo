@@ -264,7 +264,7 @@ A closure's type says what it does with its captures, and the compiler infers th
   **An exclusive view that isn't a changeable place is captured as `&` lends it**, such as a `let` that owns a `MutableSpan`. A literal that writes through one captures a new view of what it views, owned by the literal and lent exclusively, as `&lives` lends one ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). It never captures the place that holds the view, which isn't changeable. The new view depends on that place exclusively, so the `let` can't be used while the closure lives.
 
   A `mutating` function value is move-only, and calling it mutates the closure itself. So it is passed `mutable` or owned, and runs on one thread at a time.
-- **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`.
+- **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`, and neither does taking an implicitly copyable one, which copies it ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
   A literal checked against a `consuming` function type, or a `some F` whose `F` is one, is `consuming` whatever its body does. Its concrete type satisfies only `consuming` function types, and it is called at most once.
 
@@ -297,7 +297,7 @@ A closure can't keep what it is lent for one call, such as the data behind a loc
 
 ```swift
 m.lock { d in kept = d.items.span }               // error: 'd' is lent only for the call
-forEachLine(src.view) { lines.append(copy $0) }   // fine: forEachLine's closure takes a 'keep' parameter
+forEachLine(src.view) { lines.append($0) }        // fine: forEachLine's closure takes a 'keep' parameter
 let names = alloc entries.map { $0.name.view }    // fine: the closure returns a view of its parameter, and keeps none
 ```
 
@@ -334,7 +334,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 
 **`Closure<F>`**, such as `Closure<mutating (Int) -> Int>`, is an unscoped, move-only value that owns every capture. It is `Sendable` only when its function type is `@sendable`, such as `Closure<mutating @sendable (Int) -> Int>` ([below](#function-typed-values)).
 
-- **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](../07-concurrency/global-state.md#global-state)).
+- **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. An implicitly copyable value is listed with `copy` too, as `id` is above, since the list is where a closure says how it holds each capture. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](../07-concurrency/global-state.md#global-state)).
 - **Size.** A `Closure` holds small captures inline, laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). How much it holds inline, and so its own size, is a layout choice that may change, so the language leaves it open, and code never depends on it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A capture whose layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one, is never inline.
 - **Allocation.** Captures that aren't inline go in an out-of-line context that the closure owns. So converting a closure to a `Closure` may allocate, as `append` may, and takes no `alloc`: the `Closure` type shows that it may. The context's allocator follows the rule for allocations with no construction ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). In `@noalloc` code, every conversion into a `Closure` is an error, whether or not that one would allocate.
 - **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a borrowed `Closure` is always the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)), and a packed struct can't hold one ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
@@ -417,7 +417,7 @@ let put: (mutable List<StringView>) -> Void = { o in o.append(src.view) }    // 
 func pick() -> (Int, Int) -> Int { max }                                   // fine: a named function views no storage
 func inc() -> (Int) -> Int { return { x in x + 1 } }                       // fine: nor does a literal that captures nothing
 func sorted(by less: (Int, Int) -> Bool = { a, b in a < b }) { … }        // fine, as a default, for the same reason
-func mk() -> () -> Int { let x = 5; return { [copy x] in copy x } }        // error: the result would view mk's temporary
+func mk() -> () -> Int { let x = 5; return { [copy x] in x } }             // error: the result would view mk's temporary
 ```
 
 **A value of function type is a view of a closure's storage**, where all its captures, owned ones included, live. Converting a closure to a function type makes such a view. A closure here is any value of a closure's concrete type, such as a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter. The view depends on the storage and on what the closure carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only.

@@ -113,7 +113,7 @@ doc.first = doc.text.view              // fine in the caller's own body: 'doc' t
 struct Lines(let out: MutableSpan<StringView>, var s: String, var view: StringView): Scoped {
     mutating func fill() {
         out[0] = s.view                // error: a store through 'out' that depends on self's own storage
-        out[0] = copy view             // fine: depends only on what the field 'view' carries
+        out[0] = view                  // fine: a copy, which depends only on what the field 'view' carries
     }
 }
 ```

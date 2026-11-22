@@ -9,10 +9,10 @@ An owning value cannot proceed as though an allocation succeeded when it did not
 ```swift
 func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
     do {
-        try spawns.tryAppend(copy p)    // the fallible form: fails with AllocError instead of ending the program
+        try spawns.tryAppend(p)         // the fallible form: fails with AllocError instead of ending the program
     } catch {
         evictUnusedAssets()             // make room, then try once more
-        try spawns.tryAppend(copy p)    // 'p' is borrowed, so each attempt appends a copy
+        try spawns.tryAppend(p)         // 'p' is borrowed, so each attempt appends a copy of the Vec3
     }
 }
 ```

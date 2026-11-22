@@ -47,7 +47,7 @@ public struct World(
 )
 
 extension World: TimeSource {                       // lets tasks stepped with a World use elapsed(_:)
-    var now: Instant<World> { copy clock }          // simulation time, not wall time, copied out
+    var now: Instant<World> { clock }               // simulation time, not wall time, copied out
 }
 
 // MARK: - Systems
@@ -59,7 +59,7 @@ func acquireTargets(_ world: mutable World) {
         var bestDist: Float = .infinity
         for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
             let d = distanceSquared(p.pos, e.pos)
-            if d < bestDist { bestDist = copy d; best = copy h }
+            if d < bestDist { bestDist = d; best = h }
         }
         e.target = consume best
     }
@@ -83,8 +83,8 @@ func contact(_ world: mutable World) {
     for (h, e) in world.enemies.entries {
         guard e.target != nil, ref let p = world.players[e.target] else { continue }
         if distanceSquared(p.pos, e.pos) < 1 {
-            // 'e' is borrowed, so the command gets a copy of its target; 'h' is the loop's own handle, so it moves in.
-            world.commands.append(.damagePlayer(copy e.target, amount: damage(for: e.kind)))
+            // A handle is implicitly copyable, so the command gets a copy of the borrowed enemy's target.
+            world.commands.append(.damagePlayer(e.target, amount: damage(for: e.kind)))
             world.commands.append(.despawn(h))
         }
     }
@@ -106,8 +106,8 @@ func applyCommands(_ world: mutable World) {
             .despawn(h) {
                 world.enemies.remove(h)               // every copy of h goes stale at once
             }
-            .spawn(kind, pos) {                       // 'c' is a place, so the names borrow its payload
-                _ = world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))   // the new handle isn't needed
+            .spawn(kind, pos) {                       // 'c' is a place: 'kind' borrows its part, and 'pos' is a copy
+                _ = world.enemies.insert(Enemy(kind: copy kind, pos: pos))   // the new handle isn't needed
             }
             .damagePlayer(h, amount) {
                 world.players[h]?.hp -= amount        // silently skipped if the player is gone
@@ -139,7 +139,7 @@ public struct Game(
 
 public func newGame(viewport: IVec2) -> UniquePointer<Game> {
     var game = Game()
-    game.world.viewport = copy viewport               // 'viewport' is a borrowed parameter
+    game.world.viewport = viewport                    // a copy of the borrowed IVec2
     _ = game.scripts.start(waveSpawner(count: 10, every: .seconds(2), around: .zero))   // the first wave; tick steps it each frame
     return alloc UniquePointer(consume game)
 }

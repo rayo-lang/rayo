@@ -13,14 +13,14 @@ func remember(_ pos: owned Vec3) { ... }            // takes ownership: keeps th
 damage(&boss, by: 10)                                   // '&' marks the mutable borrow; 'boss' must be a changeable place
 adopt(loot)                                             // 'loot' is moved in and can't be used after
 adopt(alloc backpack.items.clone())                     // a clone is a new value, so nothing moves
-remember(copy e.pos)                                    // a copy moves in, and e.pos stays as it was
+remember(e.pos)                                         // a Vec3 is implicitly copyable: a copy moves in, and e.pos stays as it was
 ```
 
 | Convention | Declared as | Call site | Callee receives |
 | --- | --- | --- | --- |
 | borrowed (default) | `_ x: T` | `f(x)` | A shared borrow ([below](#borrowed-arguments)) |
 | mutable | `_ x: mutable T` | `f(&x)` | A mutable borrow of a [changeable place](bindings.md#changeable-places) |
-| owned | `_ x: owned T` | `f(x)` | The value: a place moves in, whatever its type, and `f(copy x)` passes a copy |
+| owned | `_ x: owned T` | `f(x)` | The value: a place moves in, and `f(copy x)` passes a copy. A place of an implicitly copyable type is copied in ([Implicit copies](moves-copies-destruction.md#implicit-copies)) |
 
 - **The callee owns an `owned` argument as a `var` owns its value.** It may change or consume it. It is destroyed when the call ends, by returning or a panic's unwind, unless the callee has moved it on ([Destruction by unwinding](moves-copies-destruction.md#destruction-by-unwinding)). A `consuming` method's `self` is held the same way.
 - **Methods use the same conventions for `self`.** A plain `func` borrows it, a `mutating func` takes it `mutable`, and a `consuming func` takes it `owned`. A struct's primary initializer takes its fields `owned`, since the value owns its fields ([04](../04-types/structs.md#initializers)). So `World(enemies: enemies)` moves `enemies` in.
@@ -126,6 +126,6 @@ damage(&world.enemies[h]!, by: reinforce(&world.enemies))   // error: '!' begins
 
 ```swift
 pool[h]?.hp = 0                                       // works out pool[h], evaluates 0, then reads the optional
-pool[a]?.hp = copy pool[b]!.hp                        // fine: pool[b] is read before pool[a]'s optional is
+pool[a]?.hp = pool[b]!.hp                             // fine: pool[b] is read before pool[a]'s optional is
 world.enemies[h]?.hp -= reinforce(&world.enemies)     // fine: reinforce returns before the optional is read
 ```

@@ -170,7 +170,7 @@ A place property whose declared type is written `T?` is an **optional place prop
 - used as a `mutating` or `consuming` receiver, such as `take()`;
 - passed as an argument other than a copy.
 
-**An optional place property or chain may still be compared with `nil`.** When `T` is copyable, one may also be copied wherever a copy is accepted ([01](../01-values-and-ownership/parameters.md#parameters)), as `copy target?.hp` does. `a ?? b` with an optional `b` needs that copy, since it hands on `a` whole ([04](../04-types/enums.md#optionals)).
+**An optional place property or chain may still be compared with `nil`.** When `T` is copyable, one may also be copied wherever a copy is accepted ([01](../01-values-and-ownership/parameters.md#parameters)), as `copy target?.hp` does, and copied with nothing written when `T` is implicitly copyable, as `let hp = target?.hp` copies a `Float?` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)). `a ?? b` with an optional `b` needs that copy, since it hands on `a` whole ([04](../04-types/enums.md#optionals)).
 
 ### Places behind a run-time check
 

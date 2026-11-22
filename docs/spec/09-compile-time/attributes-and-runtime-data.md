@@ -8,7 +8,7 @@ Reflection gives a field's name and type, but not that the field is a cache a se
 
 ```swift
 struct Bounds(let min: Float, let max: Float): Attribute {
-    init(_ min: Float, _ max: Float) { self.init(min: copy min, max: copy max) }   // the parameters are borrowed
+    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // the borrowed Floats are copied in
 }
 struct Tooltip(let text: static StringView): Attribute
 struct Transient: Attribute {}     // skipped by serializers

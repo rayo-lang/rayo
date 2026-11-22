@@ -24,7 +24,7 @@ An allocator has two sides: the values that use it must recognize whether their 
 
 ```swift
 let levelArena = Allocator.register(Arena(size: 256.mb))
-let propBudget = Allocator.register(Budgeted(inner: copy levelArena, limit: 16.mb, name: "Props"))   // a wrapper over levelArena
+let propBudget = Allocator.register(Budgeted(inner: levelArena, limit: 16.mb, name: "Props"))   // a wrapper over levelArena
 
 var props = propBudget.alloc List<Prop>()    // counted against the budget, stored in levelArena's blocks
 levelArena.reset()                           // 'props' goes stale with the arena memory under it
@@ -75,24 +75,26 @@ unsafe protocol WrapperImpl: AllocatorImpl {           // passes its backing's a
     unsafe func backingDidFree(stampedBefore: Stamp)   // memory stamped before `stampedBefore` is gone; newer memory isn't
 }
 
-struct Allocation(
+struct Allocation(                                     // two pointers, 16 bytes
     let address: *Void,
     let block: *BlockHeader?,                          // the arena block, which records its stamp, and so its arena; else nil
-)
+): ImplicitlyCopyable
 
-struct Allocator(…): Copyable, Hashable                // an opaque id of a registered allocator; 8 bytes, 8-aligned
+struct Allocator(…): ImplicitlyCopyable, Hashable      // an opaque id of a registered allocator; 8 bytes, 8-aligned
 extension Allocator {                                  // forwarding: call the registered implementation's own methods
     unsafe func allocate(bytes: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func reallocate(_ p: *Void, old: Int, new: Int, align: Int, site: CallSite) -> Allocation?
     unsafe func free(_ p: *Void, bytes: Int, align: Int)
 }
 
-struct Stamp(…): Copyable, Comparable                  // an opaque, ordered token; only the runtime makes one; 8 bytes, 8-aligned
-struct CallSite(let id: UInt32): Copyable              // the allocating call site, which a build may pass so a tracking allocator
+struct Stamp(…): ImplicitlyCopyable, Comparable        // an opaque, ordered token; only the runtime makes one; 8 bytes, 8-aligned
+struct CallSite(let id: UInt32): ImplicitlyCopyable    // the allocating call site, which a build may pass so a tracking allocator
                                                        //   can attribute memory, or 0 where it passes none
 struct BlockHeader(…)                                  // runtime-defined; starts every arena block.
                                                        //   An arena writes one with unsafe BlockHeader.initialize(at:stamp:)
 ```
+
+**`Allocation`, `Allocator`, `Stamp` and `CallSite` are implicitly copyable**, since each is 16 bytes or less, and every copy names what the first does. So code passes them with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **`reset()` and `release` are operations of an `Allocator` id, which the runtime carries out**, and which panic unless the registered implementation conforms to `ArenaImpl` ([What a reset does](arena-safety.md#what-a-reset-does)).
 

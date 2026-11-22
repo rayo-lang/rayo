@@ -39,7 +39,7 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 - **Keep code honest.** A listing presented as a complete program must be complete. Shorter listings show the relevant lines from the same game's code, with enough context in the prose to follow them. Omit a helper's body only when its implementation has no bearing on the point being taught, and explain what the helper does where it first appears. A rejected line carries an error comment. The shown code follows the spec's rules and grammar in 12, apart from any clearly omitted body.
 - **Keep one `Enemy`.** Chapter 1 declares `Enemy(pos, vel, hp)`. Later declarations retain those fields and any fields added in between.
 - **Rayo stands on its own.** Teach each idea in Rayo's terms, and let its merits be its own. Name another language only where the comparison makes a point the reader needs:
-    - a difference that would mislead a reader who expects that language's behavior, as a `Vec3` that moves where C++ and Swift would copy it;
+    - a difference that would mislead a reader who expects that language's behavior, as an `Enemy` that moves where C++ and Swift would copy it;
     - a definition Rayo takes from it, as the C++20 memory orderings;
     - a bug the chapter's problem shows, as a C++ reference that dangles.
 

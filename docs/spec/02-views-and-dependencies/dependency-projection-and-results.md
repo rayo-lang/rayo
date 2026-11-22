@@ -65,7 +65,7 @@ Every other type is **unsealed**. Each item above is a closure or a function val
 
 ```swift
 alloc func names(_ t: Span<Token>) -> List<StringView> {
-    alloc t.map { copy $0.text }   // the list depends on what 't' views, not on the literal
+    alloc t.map { $0.text }        // the list depends on what 't' views, not on the literal
 }
 ```
 
@@ -143,7 +143,7 @@ func nearest(_ es: Span<Enemy>, to p: Vec3) -> Borrow<Enemy>? {
 **A function value received `owned` absorbs, at the call, only what a call of it can store through its `keep` parameters** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#what-a-closure-may-keep-keep)). So its type counts as sealed there when every `keep` parameter's type is. The same holds for a closure of concrete type received `owned` through a `some F` parameter, or through a type parameter constrained to a function type. So this leaves only `src` borrowed:
 
 ```swift
-forEachLine(src.view) { line in lines.append(copy line) }
+forEachLine(src.view) { line in lines.append(line) }
 ```
 
 **A function value or a closure passed `mutable` stays unsealed**, since the callee may replace it with another closure.

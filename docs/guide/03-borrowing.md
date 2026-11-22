@@ -59,29 +59,29 @@ alloc func longer(a: List<Int>, b: List<Int>) -> List<Int> {
 
 A clone copies every value. A function can also hand back a view of a list it borrowed, which copies nothing ([Views](04-views.md)).
 
-An `Int` follows the same rule:
+A borrowed `Enemy` follows the same rule, since an `Enemy` isn't implicitly copyable:
+
+```swift
+func healthier(a: Enemy, b: Enemy) -> Enemy {
+    if a.hp >= b.hp { return a }            // error: 'a' is only borrowed, so it can't move out
+    return copy b                           // fine: a copy of the enemy is the function's own
+}
+```
+
+`copy b` copies the enemy's few bytes, and nothing more. A borrowed `Int` needs no `copy`, since an `Int` is implicitly copyable: returning it copies it ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)):
 
 ```swift
 func atLeastZero(hp: Int) -> Int {
     if hp < 0 { return 0 }
-    return hp                   // error: 'hp' is only borrowed, so it can't move out
+    return hp                   // a copy of the caller's Int
 }
 ```
 
-For an `Int`, a copy is what you'd want anyway. Rayo still asks you to write it, since it never makes a second value unless you ask, whatever the type ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)). Here, `copy hp` copies the `Int`'s few bytes, and nothing more:
-
-```swift
-func atLeastZero(hp: Int) -> Int {
-    if hp < 0 { return 0 }
-    return copy hp
-}
-```
-
-A `var` declared from a borrowed parameter needs a copy too. Here a function counts the turns of healing it takes to reach a target, and keeps a running value of its own:
+A `var` declared from a borrowed `Int` gets a copy the same way. Here a function counts the turns of healing it takes to reach a target, and keeps a running value of its own:
 
 ```swift
 func turnsToHeal(hp: Int, target: Int) -> Int {
-    var current = hp            // error: write 'copy' or 'consume' before 'hp', or declare 'ref let'
+    var current = hp            // a copy of its own, which the loop changes
     var turns = 0
     while current < target {
         current += 15
@@ -91,11 +91,7 @@ func turnsToHeal(hp: Int, target: Int) -> Int {
 }
 ```
 
-A `var` owns what it holds, so it needs a value of its own ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). `ref let` would only borrow `hp`, which the loop then couldn't change. `consume hp` would move it, and `hp` isn't `turnsToHeal`'s to give. So `turnsToHeal` copies it:
-
-```swift
-var current = copy hp
-```
+A `var` owns what it holds, so it needs a value of its own ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). For an `Int` that is the copy, and `hp` stays the caller's. A `var` declared from a borrowed `Enemy` would write `copy` before it.
 
 ## Borrowing to change
 
@@ -109,7 +105,7 @@ func heal(hp: Int) {
 
 You might expect `hp` to be `heal`'s own copy, which it could change freely. Say a caller passes a variable that holds 40. `heal` would change only its copy, and the caller's variable would still hold 40 when `heal` returns. Nothing would tell you that the healing was lost. For a list, the copy would also be a hidden clone, allocating memory on every call.
 
-So a plain parameter only borrows, whether it holds an `Int` or a list. A function that wants a value of its own to change can copy or clone it, as `turnsToHeal` copies `hp` into `current`. Or it can take the value `owned`, as `archive` does. An `owned` parameter is the function's own, as a `var`'s value is, so the function can change it. The caller gives the value up in exchange.
+So a plain parameter only borrows, whether it holds an `Int` or a list. A function that wants a value of its own to change can copy or clone it, as `turnsToHeal` copies `hp` into `current`, with nothing written for an `Int`. Or it can take the value `owned`, as `archive` does. An `owned` parameter is the function's own, as a `var`'s value is, so the function can change it. The caller gives the value up in exchange.
 
 To change the caller's variable itself, the function asks for a `mutable` parameter:
 
@@ -187,10 +183,10 @@ A `ref let` of an element borrows it to read, as `same` borrows the whole list. 
 let top = consume hits[0]       // error: an element can't move out of its list
 ```
 
-An element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, copy the element to get a value of your own:
+An element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, a `let` gets a copy of the element, a value of its own, with nothing written:
 
 ```swift
-let top = copy hits[0]
+let top = hits[0]
 ```
 
 In a list of lists, though, each element is a whole list. `copy` is an error there, since a list isn't copyable, and `clone()` would allocate a second list. A borrow reads the element where it sits, and gives it a short name:
@@ -236,11 +232,11 @@ log("\(same.count)")
 
 ## Loops
 
-A `for` loop over `hits` borrows the list for its whole run, and on each pass, `h` names one element where it sits. The loop only reads the list, so `h` can't change:
+A `for` loop over `hits` borrows the list for its whole run, and on each pass, `h` holds a copy of one element, since an `Int` is implicitly copyable. In a list of enemies, the name would borrow each enemy where it sits instead. Either way the loop only reads the list, so `h` can't change:
 
 ```swift
 for h in hits {
-    h += 5                      // error: 'h' is borrowed, so the loop can't change it
+    h += 5                      // error: 'h' is read-only; write '&hits' to change the elements
 }
 ```
 
@@ -257,7 +253,7 @@ Since the loop borrows the whole list, its body can't change the list itself:
 ```swift
 for h in hits {
     if h > 20 {
-        hits.append(copy h)     // error: 'hits' is borrowed by the loop
+        hits.append(h)          // error: 'hits' is borrowed by the loop
     }
 }
 ```
@@ -269,14 +265,14 @@ To add values that the loop finds, collect them in a list of their own. Then add
 ```swift
 var big = alloc List<Int>()
 for h in hits {
-    if h > 20 { big.append(copy h) }
+    if h > 20 { big.append(h) }
 }
 for b in big {
-    hits.append(copy b)
+    hits.append(b)
 }
 ```
 
-The first loop borrows `hits` and changes `big`, which is a different list. Each `h` only borrows its element, so `big` gets a copy of it. The second loop borrows `big` and changes `hits`, which nothing borrows any more.
+The first loop borrows `hits` and changes `big`, which is a different list. Each `h` is a copy of its element, and `big` gets a copy of that. The second loop borrows `big` and changes `hits`, which nothing borrows any more.
 
 ## The law of exclusivity
 
@@ -303,7 +299,7 @@ hp -= 10                        // error: 'hp' is borrowed by 'before' (used bel
 log("lost \(before - hp)")
 ```
 
-If the change were allowed, `before` would read 90, since it's another name for `hp`, and the log would say "lost 0". With `let before = copy hp`, `before` holds a value of its own, and keeps the 100 ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+If the change were allowed, `before` would read 90, since it's another name for `hp`, and the log would say "lost 0". With `let before = hp`, `before` holds a value of its own, and keeps the 100 ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
 
 A mutable borrow is the strictest case. While it's in use, no other use of its place may happen at all, not even a read. That's what makes a mutable borrow **exclusive**, and it's where the law gets its name.
 
@@ -324,7 +320,7 @@ A read can clash with a mutable borrow too. One call can do it alone, when it ge
 ```swift
 func addAll(target: mutable List<Int>, source: List<Int>) {
     for x in source {
-        target.append(copy x)
+        target.append(x)
     }
 }
 

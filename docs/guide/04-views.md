@@ -64,7 +64,7 @@ parse(lines)                              // and the same as parse(lines.span)
 
 **A string is indexed by byte offset.** A range of a string or string view must start and end on Unicode scalar boundaries, or taking it panics. So a string view always holds whole UTF-8 sequences ([04](../spec/04-types/collections.md#strings)).
 
-**`Span` and `StringView` are copyable**: a copy is a second view of the same memory.
+**`Span` and `StringView` are implicitly copyable**: a copy is a second view of the same memory, only a pointer and a count, so it needs no `copy` written ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)).
 
 **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
 
@@ -254,7 +254,7 @@ use(syms)
 ```swift
 func pick(_ a: StringView, _ b: StringView) -> StringView
     where return borrows a {
-    copy b                                // error: by its 'where' clause, the result may borrow only 'a'
+    b                                     // error: by its 'where' clause, the result may borrow only 'a'
 }
 ```
 
