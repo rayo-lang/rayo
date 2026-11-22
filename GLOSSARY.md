@@ -259,7 +259,7 @@ _Avoid_: SimdElement
 A vector property whose name lists up to four of the lanes `x`, `y`, `z` and `w`, as `v.zyx` does: a swizzle of 2 to 4 lanes is shorthand for a shuffle, and one lane is `v[i]` ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
 **Text**:
-`Text`: a run of UTF-8 text, unsized, reached through a `&Text`, such as a `String`'s text or a literal's text, to which the literal is a `static &Text` ([04](docs/spec/04-types/collections.md#strings)).
+`Text`: a run of UTF-8 text, unsized, reached through a `&Text`, such as a `String`'s text or a literal's text; a string literal is a `static &Text` ([04](docs/spec/04-types/collections.md#strings)).
 _Avoid_: string view, `str`
 
 **Unconditional extension**:

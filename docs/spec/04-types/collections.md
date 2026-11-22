@@ -355,7 +355,7 @@ print(&name)            // a String place, lent: 'name' stays as it was
 print(name)             // error: 'print' owns its argument; write '&name' or 'consume name'
 ```
 
-**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and owns its argument, of any `Formattable` type ([11](../11-compilation-model.md#the-prelude)). So `print(hp)` copies an implicitly copyable `hp`, and a place of any other type is lent with `&`.
+**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and owns its argument, of any `Formattable` type ([11](../11-compilation-model.md#the-prelude)). So `print(hp)` copies an implicitly copyable `hp`, and a place of any other type is lent with `&` or moved in with `consume`.
 
 **A reference is `Formattable` when what it refers to is**, and formats as that value does, since its `format(into:)` forwards to the value's ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So `print(&x)` and `print("\(x)")` write the same line, and so does `print(x)` where `x` is implicitly copyable.
 
