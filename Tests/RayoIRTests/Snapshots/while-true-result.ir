@@ -28,7 +28,7 @@ bb2:
 bb3:
   unreachable
 bb4:
-  return move %1 @8:27-8:28
+  return read %1 @8:27-8:28
 bb5:
   goto bb6
 bb6:

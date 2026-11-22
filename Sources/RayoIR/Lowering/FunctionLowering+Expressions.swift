@@ -52,9 +52,11 @@ extension FunctionLowering {
         // So is a Bool.
         case .boolLiteral(let value): .constant(.bool(value))
         // A place written on its own gives its value up where its position takes it, and keeps it where it reads it.
+        // A position that takes a value of an implicitly copyable type takes a copy, so the place keeps it there too.
         case .place(let place):
             switch use {
             case .read: .read(self.place(of: place), at: expr.range)
+            case .take where expr.type.isImplicitlyCopyable: .read(self.place(of: place), at: expr.range)
             case .take: .move(self.place(of: place), at: expr.range)
             case .borrow: preconditionFailure("a borrow is lowered into the local it declares, as no operand")
             }

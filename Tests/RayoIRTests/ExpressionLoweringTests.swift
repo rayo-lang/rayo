@@ -23,18 +23,38 @@ struct ExpressionLoweringTests {
 
     @Test func `'_ =', an assignment and a 'consume' in an 'if' move a local, and an argument's 'if' reads it`()
         throws {
-        let body = """
-            let a = 1
-            var b = 2
-            b = consume a
-            _ = b
-            let t = true
-            let d = 3
-            let e = if t { consume d } else { 4 }
-            let g = 5
-            print(if t { g } else { e })
+        let source = """
+            func main() {
+                let a = Hit(damage: 1)
+                var b = Hit(damage: 2)
+                b = consume a
+                _ = b
+                let t = true
+                let d = 3
+                let e = if t { consume d } else { 4 }
+                let g = 5
+                print(if t { g } else { e })
+            }
+            struct Hit(let damage: Int)
             """
-        try expectLowering(ofMain: body, toMatch: "taken-positions")
+        try expectLowering(of: source, toMatch: "taken-positions")
+    }
+
+    @Test func `a position that takes an Int, a UInt or a Bool from a place copies it, so the place keeps its value`()
+        throws {
+        // A `_ =`, an initializer's argument, an array literal's element, a branch of an `if` in such a position and
+        // a `return` each read the place, where they would move a value of any other type.
+        let source = """
+            func main() {}
+            func kept(_ n: Int, _ level: UInt, _ alive: Bool) -> Int {
+                _ = alive
+                let s = Score(points: n, level: level)
+                let all = [n, if alive { n } else { 0 }]
+                return n
+            }
+            struct Score(let points: Int, let level: UInt)
+            """
+        try expectLowering(of: source, toMatch: "copied-scalars")
     }
 
     @Test func `a local in parentheses is borrowed where the bare local would be, and read where it would be`() throws {

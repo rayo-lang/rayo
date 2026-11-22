@@ -16,7 +16,7 @@ private func expectLowering(withShot body: String, toMatch name: String) throws 
 @Suite("Lowering structs")
 struct StructLoweringTests {
     @Test func `a struct's value is a call of its primary initializer, which moves a local given bare`() throws {
-        try expectLowering(withEnemy: "let hp = 1\nlet e = Enemy(hp: hp, armor: 2)", toMatch: "struct-value")
+        try expectLowering(withShot: "let h = Hit(damage: 7)\nlet s = Shot(range: 4, hit: h)", toMatch: "struct-value")
     }
 
     @Test func `a field used as an operand is read where it lies in its local`() throws {
@@ -30,8 +30,12 @@ struct StructLoweringTests {
     }
 
     @Test func `a field that a statement takes is moved out of where it lies, in its local or in a temporary`() throws {
-        let body = "let e = Enemy(hp: 1, armor: 2)\nlet a = consume e.armor\n_ = Enemy(hp: 3, armor: 4).hp"
-        try expectLowering(withEnemy: body, toMatch: "field-move")
+        let body = """
+            let s = Shot(range: 4, hit: Hit(damage: 7))
+            let h = consume s.hit
+            _ = Shot(range: 1, hit: Hit(damage: 2)).hit
+            """
+        try expectLowering(withShot: body, toMatch: "field-move")
     }
 
     @Test
