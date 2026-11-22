@@ -59,9 +59,10 @@ f(mutable &x, &x)             // error: two borrows of x overlap for the whole c
 
 - a `Synchronized` value, whose identity is its address, and which changes through a shared borrow;
 - the argument of `ptr(to:)`, whose result is its address;
-- one that a result, an error, a place property's place or an absorbing argument may still view after the call, which would otherwise view the callee's copy.
+- one that a result, an error, a place property's place or an absorbing argument may still view after the call, which would otherwise view the callee's copy;
+- a `keep &T` argument, which the closure called may view after the call.
 
-**Which arguments these are follows from the signature alone, and conversions keep parameter types.** So a call through a function value passes its arguments as a direct call does.
+**Which arguments these are follows from the signature alone, and conversions keep parameter types or add `keep`, which only makes more arguments the caller's place.** So a call through a function value passes its arguments as a direct call does.
 
 **A `mutable &` argument's changes reach the caller's place**, through a written-back temporary too ([01](../../spec/01-values-and-ownership/parameters.md#parameters)).
 
