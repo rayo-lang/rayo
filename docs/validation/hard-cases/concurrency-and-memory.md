@@ -119,7 +119,7 @@ The team writes its workers twice, once over `Runtime.startThread` and once over
 
 **A network service runs each connection's handler as a task, so thousands of connections wait at once without a thread each** ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). A reactor of the program's own waits on the platform's readiness or completion API, such as epoll, kqueue or an I/O completion port, through `import c`. Its awaitables hand each task's `Waker` to the reactor, which calls it once the socket is ready or the operation completes, and arrange each timeout with `wake(at:)` ([07](../../spec/07-concurrency/tasks.md#waking-a-task)). K2 follows such a server's memory over weeks, and this case checks its tasks.
 
-The criteria below use these statements, the first five in the tasks that handle a connection, and the rest outside them:
+The criteria below use these statements, the first five in the tasks that handle a connection, and the rest outside them. As in 07, `sock` is a `Handle<Socket>` into the reactor, which owns the sockets, so it is implicitly copyable and no borrow of it is live across an `await` ([07](../../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)):
 
 ```swift
 let req = try await read(sock, timeout: .seconds(30))              // fails with .timedOut once 30 s pass with no bytes
@@ -130,7 +130,7 @@ let host = &req.host; try await write(sock, &page); log(host)      // error: the
 
 guard let h = try? conns.start(serve(sock)) else { continue }      // nil when the set is full: the task, handed back, is dropped
 conns.cancel(h)                                                    // the client is gone: its handler is destroyed where it waits
-let db = try block(on: connect(dbAddress))                         // in main, before serving: waits for one task whose Context is Void
+let db = try block(on: connect(consume dbAddress))                 // in main, before serving: waits for one task whose Context is Void
 ```
 
 - **Must accept** the handlers run either way that 07 allows ([07](../../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)):

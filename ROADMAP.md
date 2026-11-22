@@ -21,12 +21,13 @@ The first version proves the language end to end with the smallest set of featur
 v0.1 adds:
 
 - functions with labeled parameters, results and recursion, where a `&T` parameter borrows the place a call lends it with `&a`, as `show(&boss)`, and an `Int` or `Bool` parameter `x: T` owns a copy of its argument ([01](docs/spec/01-values-and-ownership/parameters.md#parameters));
+- the compile errors for a place given to a `&T` parameter without `&`, which names `&`, and for `&a` given to a parameter that isn't a reference, which names the parameter's type ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position));
 - `Int` and `Bool`, with integer literals, the arithmetic operators `+`, `-`, `*`, `/` and `%`, unary `-`, the comparisons, and `&&`, `||` and `!`;
 - overflow, which panics in a debug build and wraps in a release build, and division by zero, which panics in both;
 - `let` and `var` locals, assignment and compound assignment;
 - `if`, `else`, `while`, `break` and `continue`;
 - moves and `copy`, with the checks that a local is assigned before it is used;
-- struct declarations, whose names are the types of locals, parameters and results, and `copy` of a struct;
+- struct declarations, whose names are the types of locals and results, and of the place a `&T` parameter refers to, and `copy` of a struct;
 - making a struct with its primary initializer, as `Enemy(hp: 100, armor: 5)`, which takes its arguments owned, and reading a field of a struct where a borrow of the field suffices, as `e.hp - 5` or `print(e.hp)`;
 - a field of a struct type, given by a nested initializer call or by a local, which the call moves, and read through the struct that holds it, as `e.stats.hp`;
 - `copy` of a field of a local or a `&T` parameter, as `copy e.stats` or `copy e.stats.hp`, which leaves the struct whole;
@@ -69,6 +70,7 @@ Its proof program extends v0.2's.
 v0.3 adds:
 
 - `mutable &T` parameters, which a call lends a place with `mutable &a`, and parameters `x: T` of a struct or array type, which own their arguments, with the [law of exclusivity](docs/spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity), and the error for an owning parameter that no code reads ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values));
+- the compile errors for a place given to a `mutable &T` parameter without `mutable &`, and for a struct or an array given to an owning parameter without `consume` or `copy`, each of which names the marks that fit;
 - `mutating func`, whose `self` names the receiver's place as a `mutable &T` parameter names its argument's.
 
 ## Not yet planned
@@ -111,6 +113,7 @@ Statements and control flow:
 Ownership and borrowing:
 
 - `ref var` bindings, as `ref var m = mutable &p`, and the errors for a `ref var` given `&p` and a `ref let` given `mutable &p` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)): v0.2 builds `ref let` alone;
+- `&` and `mutable &` of a temporary, as `show(&makeEnemy())`, and the compile error for a value given to a `&T` parameter ([01](docs/spec/01-values-and-ownership/references.md#making-a-reference)): v0.1 and v0.2 lend only a local or a parameter, or a field or an element of one;
 - `consume` of any other place, such as a parameter that owns its argument, or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `ImplicitlyCopyable`, its conformances declared by a struct or an enum, and the other implicitly copyable types, such as tuples, `Handle` and `T?` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)): v0.2 copies `Int`, `UInt` and `Bool` implicitly, and v0.2.5 `Float` and `Double`;
 - implicit copies in the positions v0.2 doesn't build, such as a condition's binding, a `for` or `when` name and a tuple literal's element ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#implicit-copies));

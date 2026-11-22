@@ -89,7 +89,7 @@ for (int i : path) cur = cur->children[i].get();    // re-target the cursor to a
 cur->children.push_back(std::make_unique<Node>());
 ```
 
-A `ref var` cursor names one place for good, so `=` writes the node it names. A cursor that moves is a `var` that holds a `mutable &Node`, which assigning another reference points elsewhere ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
+A `ref var` cursor names one place for good, so `=` writes the node it names. A cursor that moves is a `var` that holds a `mutable &Node`, and assigning it another reference points it elsewhere ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
 
 - **Must accept** a loop that re-targets the mutable cursor to a child each iteration.
 - **Must accept** the same walk when the children are `List<UniquePointer<Node>>` and the tree is 10,000 levels deep, without a run-time mark held per level.
@@ -119,7 +119,7 @@ if ref let c = &h?.cell { use(&c.tag.span) }                 // a reference thro
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
 - **Must accept** a user container, such as a ring buffer over raw memory, whose subscript's `mutate` hands out an element, and a function that takes the container as a `mutable &` parameter and returns a reference to that element.
-- **Must accept** an `SoA<T>` column, the buffer that holds one field of `T`, taken as a `mutable &[T]` as `lives` is above, and moved into a struct of references, into a closure, or into a parameter that owns it.
+- **Must accept** an `SoA<T>` column, the buffer that holds one field of `T`, taken as a `mutable &[F]` of that field's type `F`, as `lives` is a `mutable &[Float]` above. It is then moved into a struct of references, into a closure, or into a parameter that owns it.
 - **Must accept** the optional chains through place properties above, the first two through one that hands out a stored optional field.
 
 ### A8 · A graph with cross-links, freed all at once
