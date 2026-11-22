@@ -288,16 +288,24 @@ _Avoid_: default generic parameter
 A value of the unsized type `any P`, reached through `&any P` or `mutable &any P` or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 _Avoid_: trait object, protocol type, boxed protocol
 
+**Existential reference**:
+A `&any P` or a `mutable &any P`: a reference to an existential, a pointer and a witness table, made from `&x` or `mutable &x` of a `T: P` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+_Avoid_: `&dyn` reference
+
 **Function value**:
-A value of a function type, which views a closure's storage or names a function ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+A value of a function type, which views a closure's storage or names a function; `&f`, `mutable &f` or `consume f` makes one from a closure in a place ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 _Avoid_: function pointer (a `@c` type)
+
+**Implicit conversion**:
+A conversion the expected type decides, with nothing written, such as `&List<T>` to `&[T]`, `&T` to `&any P` or `Box<T>` to `Box<any P>` ([05](docs/spec/05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+_Avoid_: coercion
 
 **Marker protocol**:
 A protocol with no requirements that states a property of a type, such as `Copyable`, `Scoped` or `Sendable`; the compiler derives some, such as `Copyable` and `Sendable`, from what a type holds ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#conformances)).
 _Avoid_: marker trait, tag protocol
 
 **Opaque type parameter**:
-A type parameter marked `@opaque`, which may stand for any type, an opaque type included, since its body uses the type only behind a pointer ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+A type parameter marked `@opaque`, which may stand for any type, an opaque or unsized one included, since its body uses the type only behind a pointer ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
 _Avoid_: unsized parameter, `?Sized`
 
 **Type value**:
@@ -307,6 +315,13 @@ _Avoid_: metatype
 **Unscoped closure**:
 A `Closure<F>`, which owns its captures, and so may outlive the scope that made it ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 _Avoid_: escaping closure, boxed closure
+
+**Unpacking**:
+Passing an existential reference to a `&T` or `mutable &T` parameter, or an owned `Box<any P>` to a `T` one, so that `T` is the value's dynamic type for that call ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#unpacking-an-existential)).
+_Avoid_: opening an existential
+
+**Unscoped existential**:
+A `Box<any P>`, or an object pointer, reference-counted pointer or weak link to `any P`, which holds or names only an unscoped value ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#unscoped-existentials)).
 
 **Value parameter**:
 A generic parameter declared `let`, which takes a `const` value of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
