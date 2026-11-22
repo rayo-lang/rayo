@@ -6,7 +6,7 @@ Safe Rayo code relies on the compiler to check its memory guarantees. Some opera
 
 ```swift
 unsafe {
-    let p: *Particle = ptr(to: &particles[0])
+    let p: *Particle = ptr(to: mutable &particles[0])
     p[3].pos = .zero
     _ = memcpy(dst, src, n)                                         // C's memcpy returns 'dst', dropped here
 }
@@ -35,7 +35,7 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 - the raw-memory operations ([below](#raw-memory)), and resizing or freeing a raw allocation ([below](#raw-allocations));
 - calls into C, since a header can't say that a pointer outlives the call, or that a buffer holds `n` elements ([08](../08-c-interop/imports-and-inline-c.md#calling-imported-functions));
 - calls through `@c` pointers, since the type can't tell a Rayo function from a C one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)), and calls to `unsafe` functions;
-- using a field declared `unsafe`, which `unsafe` code trusts, such as `Span`'s `baseAddress` ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), whether by name, through reflection or as a `SoA` column;
+- using a field or property declared `unsafe`, which `unsafe` code trusts, such as a run's `baseAddress` ([04](../04-types/collections.md#runs-of-elements)), whether by name, through reflection or as a `SoA` column;
 - accessing a bare global `var` ([07](../07-concurrency/global-state.md#global-state)) or an imported C variable ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), since every thread can reach it;
 - converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
 - reading a union member where 04 requires it, since what another member's write left there may not be a valid value of it ([04](../04-types/enums.md#untagged-unions)).
@@ -51,11 +51,16 @@ So a call the language makes on the code's behalf is allowed only where the call
 
 ## Raw pointers
 
-**`*T` is a non-null raw pointer, to a `T` of any type, an `@opaque` one included** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)). `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)). Both are implicitly copyable, since each is one machine value, so taking one from a place copies it with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+**`*T` is a non-null raw pointer to a `T` of a sized type or an `@opaque` one, never an unsized one** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)). `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Each is one address, the pointer C sees, as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)). Both are implicitly copyable, since each is one machine value, so taking one from a place copies it with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-- **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types, to a `U` of any type, an `@opaque` one included.
+**An unsized value at an address is reached through a reference, never a raw pointer.** One address can't say how many elements lie there or what type the value has, so `unsafe` code builds a `&[T]` from a `*T` and a count, as `&p[0..<n]` does (below). A run's own address is its `unsafe` `baseAddress` ([04](../04-types/collections.md#runs-of-elements)).
+
+**Raw pointers follow these rules:**
+
+- **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types, to a `U` of a sized type or an `@opaque` one.
 - **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
-- **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void`, a pointer to an `@opaque` type and a `*T` whose `T` is an `@opaque` type parameter have none of them, nor `q - p` (below), and byte offsets go through `p.cast(to: UInt8.self)`.
+- **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void` and a pointer to an `@opaque` type have none of them, nor `q - p` (below), and byte offsets go through `p.cast(to: UInt8.self)`.
+- **Runs.** `p[a..<b]` is the run of `T`s from `p + a` up to `p + b`, a `[T]` place with a `borrow` and a `mutate`, under the same condition on `T`. So `&p[0..<n]` makes a `&[T]` of the `n` elements at `p`, and `mutable &p[0..<n]` a `mutable &[T]`. A reference made through a raw pointer carries no dependency the compiler can check, so the code that makes one keeps the promises below for as long as it is used ([Values, views and threads](#values-views-and-threads)).
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 - **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
 
@@ -101,8 +106,8 @@ The rules say what an allocation is, what each access through a raw pointer must
 - **Valid.** A read as `T` finds a valid `T` there. What is valid depends on the type:
     - for a padding-free `Pod` type ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), any initialized bytes;
     - for any other type, a bit pattern that is one of its values, such as a write of a `T` leaves;
-    - for a type whose primary initializer or a field is `unsafe` or `private`, only the values its initializers could produce ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). Such a type may guard an invariant, such as a `Handle`'s generation that is never 0, and bytes must not forge a value that breaks it ([03](../03-handles-and-objects.md#pools-and-handles)). So a `String`, or a `StringView`, `static` or not, holds whole UTF-8 sequences ([04](../04-types/collections.md#strings)).
-- **Whole.** Storing a whole `T` may write every byte of it, padding included. So may any write to a `T` lent as a `mutable` argument, bound with `&` or reached through a `MutableSpan<T>`. A struct whose tail padding holds other data is never stored whole or lent in those ways, since such a write could overwrite the data in its padding. Its fields are written one by one, each through its own place, such as `p.pointee.len`. A `TrailingArray`'s header can be such a struct, and so can an imported struct whose flexible array member's elements share its tail padding ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
+    - for a type whose primary initializer or a field is `unsafe` or `private`, only the values its initializers could produce ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). Such a type may guard an invariant, such as a `Handle`'s generation that is never 0, and bytes must not forge a value that breaks it ([03](../03-handles-and-objects.md#pools-and-handles)). So a `String`, or the `Text` that a `&Text` refers to, `static` or not, holds whole UTF-8 sequences ([04](../04-types/collections.md#strings)).
+- **Whole.** Storing a whole `T` may write every byte of it, padding included. So may any write to a `T` through a mutable reference, such as a `mutable &T` argument, a `ref var` or an element of a `mutable &[T]`. A struct whose tail padding holds other data is never stored whole or lent in those ways, since such a write could overwrite the data in its padding. Its fields are written one by one, each through its own place, such as `p.pointee.len`. A `TrailingArray`'s header can be such a struct, and so can an imported struct whose flexible array member's elements share its tail padding ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 - **Race-free.** Two accesses to the same bytes on different threads, at least one of them a write, are ordered by synchronization ([07](../07-concurrency/synchronization.md#atomics-and-locks)). This doesn't apply when both are atomic accesses of the same size at the same address. Atomic accesses that overlap in any other way count as non-atomic here.
 - **Exposed.** A pointer converted from an integer reaches only memory whose address was exposed:
     - an allocation whose address an earlier pointer-to-integer conversion exposed;
@@ -110,12 +115,12 @@ The rules say what an allocation is, what each access through a raw pointer must
 
 **Raw accesses respect borrows and views.** `unsafe` code reads a place only where Rayo code could. It writes a place, moves its value out, as `p.move()` does, or destroys the value in it, only where Rayo code with exclusive access could. These rules apply the law of exclusivity ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)) to raw accesses:
 
-- **Under a mutable access.** While a `mutable` access, a binding made with `&`, such as a `ref var`, or a mutable view is live, nothing touches the places it reaches except through it. So two `MutableSpan`s made from one pointer never overlap while both are live, since one could write what the other still reads ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
-- **Under a borrow.** While a borrow, a borrowing binding or a shared view is live, nothing writes, moves out of or destroys the places it reads. The exception is the places inside a `Synchronized` value, which its own operations may write, move out of or destroy. Any other write could free what the borrow still reads, as appending to a `String` may move its text and free the buffer a view of it reads.
+- **Under a mutable access.** While a mutable reference, a `ref var` or another mutable view is live, nothing touches the places it reaches except through it. So two `mutable &[T]`s made from one pointer never overlap while both are live, since one could write what the other still reads ([02](../02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+- **Under a borrow.** While a shared reference, a `ref let` or another shared view is live, nothing writes, moves out of or destroys the places it reads. The exception is the places inside a `Synchronized` value, which its own operations may write, move out of or destroy. Any other write could free what the borrow still reads, as appending to a `String` may move its text and free the buffer a view of it reads.
 - **Under narrowing.** While a place is narrowed, nothing makes it `nil` except the code that narrowed it, through one of the events that end the narrowing ([04](../04-types/enums.md#narrowing)). That code uses the payload without checking again.
 - **Immutable memory.** Nothing writes memory that Rayo treats as immutable: read-only data, which holds every `const`'s frozen data, and a `Frozen` value behind a `Shared` or a `LocalShared`. Rayo reads such memory without a mark ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold)). Nothing writes memory that its provider made read-only either, such as a C object defined `const`, a string literal's bytes or a page mapped read-only.
 
-**A live parameter counts as a borrow or `mutable` access of its argument's place.** The compiler may assume that neither kind is aliased. It may also pass a borrowed argument as a copy of its bits, so the callee may see a copy rather than the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
+**A live `&T` or `mutable &T` parameter counts as a shared or mutable borrow of its argument's place.** The compiler may assume that neither kind is aliased. It may also pass a `&T` argument as a copy of its bits, so the callee may see a copy rather than the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
 **The views `unsafe` code makes keep the promises that 02 states for dependencies** ([02](../02-views-and-dependencies.md#dependencies)). The compiler sees names, not memory, so a view's dependency set is all it knows of which places the view reaches.
 
@@ -124,7 +129,7 @@ The rules say what an allocation is, what each access through a raw pointer must
 **These rules cover the values, views and threads that `unsafe` code hands on to other code:**
 
 - **Places hold valid values.** Whenever Rayo code may next read, lend or destroy a place as `T`, it holds a valid `T`. So a write through a pointer of another type leaves one there. A place that `p.move()` or `p.deinitialize()` emptied is initialized again before its owner uses or destroys it, a panic's unwind included ([below](#panics-in-unsafe-code)). Otherwise the owner would use or destroy a value that has moved out or been destroyed already.
-- **Views reach live, aligned, valid places.** This holds for a span, `Borrow` or `MutableRef` that `unsafe` code makes from a raw pointer, and for a borrowed or `mutable` argument that it passes through one. For as long as such a view or argument lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. Such a mutable view's places, and such a `mutable` argument's, are also writable. A span reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
+- **Views reach live, aligned, valid places.** This holds for a reference or other view that `unsafe` code makes from a raw pointer, such as `&p.pointee` or `mutable &p[0..<n]`, and for one it passes on as an argument. For as long as such a view lives, its places lie inside one live allocation, and each is aligned for its type and holds a valid value. A mutable reference's places are also writable. A `&[T]` or `mutable &[T]` reaches its `count` consecutive places. Safe code reads and writes them with aligned accesses.
 - **A move-only value has one owner.** Its bytes stand for one value. After they are copied to a second place, only one of the two is used or destroyed as that type again, as `p.move()` leaves only the destination. That holds wherever the code can panic too, since the unwind destroys the places it finds. Two places standing for it would be two owners of what it holds, two mutable aliases, or a guard that unlocks twice.
 - **Values that aren't `Sendable` stay on their thread.** Such a value is used, lent and destroyed only on the thread whose code made it, or, for a thread-bound object, on its home thread ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). That holds whatever `unsafe` code or C passes it through, since only on that thread do exclusivity and the dynamic tier check all of its aliases ([07](../07-concurrency/race-freedom-and-sendable.md#why-safe-code-cant-race)). A value that only the raw pointers it holds keep from being `Sendable` may cross, and each access through those pointers follows the rules on raw accesses ([above](#raw-accesses)).
 
@@ -163,11 +168,11 @@ If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads
 ```swift
 subscript(i: UInt) -> T {
     get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
-    set { unsafe (storage + i).initialize(to: newValue) }
+    set { unsafe (storage + i).initialize(to: consume newValue) }
 }
 subscript(i: UInt) -> T {
-    borrow { unsafe storage[i] }                             // sound: hands out slot i itself, which stays full
-    mutate { unsafe &storage[i] }
+    borrow { unsafe &storage[i] }                            // sound: hands out slot i itself, which stays full
+    mutate { unsafe mutable &storage[i] }
 }
 ```
 
@@ -183,17 +188,18 @@ Two more facts are part of the boundary between `unsafe` and safe code:
 
 ## Taking an address
 
-**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `&`, and a shared form for a place it borrows.
+**`ptr(to:)` returns the address of a place**, in two forms: one for a place lent to it with `mutable &`, and a shared form for a place lent with `&`.
 
 ```swift
-unsafe func ptr<T>(to place: mutable T) -> *T     // the form for a place lent with '&'
-let p = unsafe ptr(to: &particles[0])             // the address of particles[0], lent for change
-let q = unsafe ptr(to: particles[0])              // the shared form: the address of a place it borrows
+unsafe func ptr<T>(to place: mutable &T) -> *T    // the form for a place lent for change
+let p = unsafe ptr(to: mutable &particles[0])     // the address of particles[0], lent for change
+let q = unsafe ptr(to: &particles[0])             // the shared form: the address of a place it borrows
 ```
 
-- **Builtin.** It is builtin, and the call's `&` chooses the form: `&` lends the place for change, and a place without it is borrowed ([01](../01-values-and-ownership/parameters.md#parameters)).
+- **Builtin.** It is builtin, and the call's mark chooses the form: `mutable &` lends the place for change, and `&` lends it shared ([01](../01-values-and-ownership/references.md#making-a-reference)).
+- **Sized places.** The place's type binds `T`, so it is sized, as a raw pointer's target is ([above](#raw-pointers)). So `ptr(to: &hits.span)` is a compile error, and a run's address is its `baseAddress`.
 - **Never a function value.** It converts to no function type or `Closure` and binds no `some F`, so every call of it is direct.
-- **The caller's place.** Its argument, borrowed or not, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
+- **The caller's place.** Its argument, of either form, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 - **A short access.** The access ends with the call, since a raw pointer is unscoped.
 
 **The place must be storage that a view could outlive:** a variable, a stored field or element, or a place property's place ([02](../02-views-and-dependencies/place-and-value-properties.md#the-place-lies-in-its-sources)). Passing a value property or an under-aligned place ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)) is a compile error, since either reaches the call only as a temporary the call would outlive. An under-aligned field's address is its enclosing place's plus `field.offset` ([09](../09-compile-time/reflection.md#what-reflection-can-read)).

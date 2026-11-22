@@ -5,7 +5,7 @@
 A panic stops an operation that cannot continue under the language's rules. It does not return a value for the caller to handle, as a typed error does. It can follow an explicit precondition or a failed check built into an operation:
 
 ```swift
-ref let e = enemies[h]!                          // panics if h is stale
+ref let e = &enemies[h]!                         // panics if h is stale
 precondition(count < capacity, "queue full")     // panics if the caller broke the contract
 let share = total / players                      // panics if players is 0, in every build
 ```
@@ -14,7 +14,7 @@ let share = total / players                      // panics if players is 0, in e
 
 ```swift
 catchPanic {
-    handle(request)
+    handle(&request)
 } recover: { p in
     log("request failed: \(p.message)")      // the server goes on to the next request
 }
@@ -42,7 +42,7 @@ A few failures can't unwind, and end the program at once instead ([below](#what-
 **Uses out of bounds, or outside a value's life:**
 
 - out-of-bounds indexing, and a string range off a Unicode scalar boundary ([04](../04-types/collections.md#strings));
-- a vector load or store outside its span ([04](../04-types/numbers-and-math.md#simd-and-math));
+- a vector load or store outside its run of elements ([04](../04-types/numbers-and-math.md#simd-and-math));
 - an access through, or a pin taken through, a stale object owner ([03](../03-handles-and-objects.md#destroying-an-object));
 - opening an owning value whose allocator was reset or unregistered since ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it));
 - reading a global before its initializer has run ([07](../07-concurrency/global-state.md#initialization-at-startup));
@@ -147,7 +147,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 **Two checks treat those points as exits:**
 
 - a `defer` body is checked as if written at each of them too ([Cleanup](typed-errors.md#cleanup));
-- a scoped `mutable` parameter counts as used at each of them, so a callee never leaves its caller a view of what it freed ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+- a `mutable &T` parameter whose `T` is scoped counts as used at each of them, so a callee never leaves its caller a view of what it freed ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **Each such point is checked as the unwind leaves it:**
 
@@ -157,7 +157,7 @@ fatalError("enemy \(id) has no mesh")      // an interpolated message, formatted
 
 ```swift
 defer { x.reset() }
-f(&x)                  // fine: if f panics, its borrow of x has ended by the time the defer runs
+f(mutable &x)          // fine: if f panics, its borrow of x has ended by the time the defer runs
 ```
 
 **A panic in a `deinit` or a `defer` block unwinds as any panic does, except in code an unwind runs** ([below](#what-ends-the-program)). The unwind still destroys the rest of the value whose `deinit` panicked, its fields after its `deinit`, and every other live value. An assignment whose old value's `deinit` panics has already stored its new value ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction)).
@@ -201,7 +201,7 @@ let frame = catchPanic {
     return world.snapshot()
 } recover: { p in
     log("step failed: \(p.message)")
-    world = loadWorld(level)                  // 'world' may be half-changed: this program rebuilds it
+    world = loadWorld(&level)                 // 'world' may be half-changed: this program rebuilds it
     return alloc lastGoodFrame.clone()
 }
 ```
@@ -222,11 +222,11 @@ let frame = catchPanic {
 
 ```swift
 catchPanic {
-    views.append(name.view)          // creating this closure makes 'views' depend on 'name'
+    views.append(&name)              // creating this closure makes 'views' depend on 'name'
 } recover: { _ in
     name = alloc "b"                 // error: 'views' depends on 'name', and is used below
 }
-print(views[0])
+print("\(views[0])")
 ```
 
 Moves are checked as for any call's arguments: a place that either closure owns a capture of moved into it when the call began, so the other can't use it. Whether a captured place holds a value is tracked across both closures ([01](../01-values-and-ownership/moving-values-out.md#places-that-hold-no-value)).
@@ -245,12 +245,12 @@ struct Panic {                 // copyable and Sendable: up to 256 bytes of its 
     let sequence: UInt64       // its place in the runtime's report order
     …
 }
-struct SourceLocation(let file: static StringView, let line: Int, let column: Int)
+struct SourceLocation(let file: static &Text, let line: Int, let column: Int)
 ```
 
 **A `Panic` keeps a copy of its message, since the unwind destroys what the message's segments borrowed:**
 
-- **`p.message`** is a `StringView` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
+- **`p.message`** is a `&Text` of that copy, which `p` holds in a 256-byte buffer of its own. A longer message is cut at the last Unicode scalar boundary that fits, so the copy stays whole UTF-8 ([04](../04-types/collections.md#strings)).
 - **`p.isCut`** is `true` when the message was cut, which tells a cut message from a whole one. The report always has the whole message.
 - **`p.location`** is where the panic happened: the call to `fatalError`, `precondition` or `assert`, or the operation whose check failed.
 
@@ -258,7 +258,7 @@ struct SourceLocation(let file: static StringView, let line: Int, let column: In
 
 **Only the runtime makes a `Panic`.** The type has no public initializer, so every `Panic` that code holds, and every panic that `resumePanic` carries on, was reported when it happened.
 
-**A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Its 256-byte buffer makes it far larger than 16 bytes, so it isn't implicitly copyable, and each copy of one is written, as `copy p` is below. Neither is a `SourceLocation`, whose two `Int`s and a view take 32 bytes ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+**A `Panic` is copyable and `Sendable`, and making one allocates nothing**, since everything it holds is inline. So one thread can hand another the panic it caught ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Its 256-byte buffer makes it far larger than 16 bytes, so it isn't implicitly copyable, and each copy of one is written, as `copy p` is below. Neither is a `SourceLocation`, whose two `Int`s and reference to text take 32 bytes ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 ### Resuming a panic: `resumePanic`
 
@@ -273,7 +273,7 @@ func resumePanic(_ p: Panic) -> Never
 ```swift
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot
 ...                                                                                // the library waits for every piece
-if ref let p = caught { resumePanic(p) }                                           // on the lending thread: carry it on
+if let p = consume caught { resumePanic(consume p) }                                // on the lending thread: carry it on
 ```
 
 ## Panic strategy
@@ -285,10 +285,10 @@ if ref let p = caught { resumePanic(p) }                                        
 ## `assert` and `precondition`
 
 ```swift
-mutating func push(_ item: owned Item) {
+mutating func push(_ item: Item) {
     precondition(count < capacity, "ring buffer full")    // an API contract: checked in every build
     assert(invariantsHold())                              // an internal invariant, costly to test: debug builds by default
-    unsafe { (storage + tail).initialize(to: item) }      // relies on the precondition
+    unsafe { (storage + tail).initialize(to: consume item) }   // relies on the precondition
     ...
 }
 ```

@@ -109,7 +109,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
 | anonymous `union`/`struct` members | Their fields are accessible directly on the enclosing struct, as in C |
 | flexible array member `T data[]` | The struct without the member, as a `TrailingArray` header (below) |
 | `__attribute__((packed))` / `#pragma pack(n)` / `__attribute__((aligned(n)))` | `@layout(.packed)` / `@layout(.packed(n))` / `@align(n)`, with identical layout ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)) |
-| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S`, and only an `@opaque` type parameter may stand for it ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)) |
+| incomplete `struct S;` that the reading doesn't define, and that no header its import names for it defines ([above](#the-identity-of-an-imported-type)) | `@opaque struct S`: only usable as `*S`, and it binds no type parameter, though `*S` does ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)) |
 | a struct or union whose layout Rayo can't reproduce, or whose members don't all map (below) | `@opaque` too |
 | `typedef T N;` | `typealias N = T`, with the exceptions below |
 | `union U` | `@c union U` |
@@ -139,16 +139,16 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     let n: UInt = platform_queued()                                         // error on a 64-bit target: a UInt64 never converts implicitly to UInt
     let queued = UInt(platform_queued())                                    // fine on every target
     ```
-- **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. Its `unsafe` static function `trailing(at:count:)`, called with a `p: *S` and a count `n`, gives a `MutableSpan<T>` at the member's offset from `p`, without lending the struct:
+- **Flexible array members.** A struct `S` with a flexible array member `T data[]` imports without the member, as a `TrailingArray` header. Its `unsafe` static function `trailing(at:count:)`, called with a `p: *S` and a count `n`, gives a `mutable &[T]` at the member's offset from `p`, without lending the struct:
 
     ```swift
     // C: struct Packet { uint32_t len; uint8_t data[]; };
-    let bytes = unsafe Packet.trailing(at: p, count: n)   // a MutableSpan<UInt8> of n elements at data's offset
+    var bytes = unsafe Packet.trailing(at: p, count: n)   // a 'mutable &[UInt8]' of n elements at data's offset
     ```
 
-  Its caller promises what 10 asks of a span made from a raw pointer ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)):
+  Its caller promises what 10 asks of a reference made from a raw pointer ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds)):
     - `n` valid elements there, aligned for `T`;
-    - nothing else reaching them for as long as the span lives, a whole-struct write at `p` included, since they may share its tail padding.
+    - nothing else reaching them for as long as the reference lives, a whole-struct write at `p` included, since they may share its tail padding.
 
   Rayo-allocated instances use `TrailingArray<S, T>` when the member's offset is a multiple of `T`'s alignment, since only then can the elements be both where C reads them and aligned ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)).
 - **Structs and unions that import as `@opaque`.** An **`@opaque` type** is an imported struct or union that Rayo uses only behind a pointer, since it doesn't know or can't map its layout. A struct the reading only declares imports as one (above). A struct or union also imports as one when Rayo's layout rules, with `@layout(.packed(n))` and `@align(n)`, can't reproduce its members' offsets, size and alignment, as with an `_Alignas`, `aligned` or `packed` member. So does one whose members don't all map, as with an `_Atomic` member. A function that passes such a type by value, or a variable of that type, isn't imported, since an `@opaque` type is usable only behind a pointer.
@@ -162,7 +162,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     - a pointer.
 
   The promotions would change a `Float` or a narrower integer, so the code converts one explicitly first, as in `Double(x)` or `CInt(x)`. A variadic function converts to no function type, and an `extern c func` can't declare one.
-- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `static StringView`:
+- **Literal macros.** A macro defined as a single literal imports as a `const`, usable as an array length or in a `static if` condition. Its value is the C literal's, so an octal literal reads as octal, and a `float` literal's value is rounded to `float`. A negated or parenthesized literal counts as one. Its type follows the type C gives the literal, suffix included. For an integer or character literal, it is the alias of that C type, such as `CInt` or `CUInt`. For a floating-point literal, it is the type that C type imports as, such as `Float` or `Double`, and for a string literal `static &Text`:
 
     ```c
     #define MAX_PADS 16          // const MAX_PADS: CInt = 16
@@ -173,7 +173,7 @@ typealias Visitor = @c stack(1 << 20) (CInt) -> Void             // in a C funct
     #define SEP ','              // a CInt, the type C gives a character literal
     #define SCALE 0.1f           // a Float, its value rounded to float
     #define RATE 0.1             // a Double
-    #define TITLE "Rayo"         // a static StringView
+    #define TITLE "Rayo"         // a static &Text
     ```
 
 **A C type the table doesn't map isn't imported.** Such types include:
@@ -208,6 +208,11 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
 ```
 
 **The rules below say how Rayo code builds and uses an imported struct, union or enum.**
+
+**Copies.** A C type has no destructor and owns nothing outside its bytes, so every imported struct, union and enum is copyable ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). Only the enums are implicitly copyable ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
+
+- **Enums.** The language makes an imported enum, and a flag set, conform to `ImplicitlyCopyable`, since each is one integer of its underlying type. So `when stick` below copies `stick` with nothing written.
+- **Structs and unions.** One is copyable with `copy`, but never implicitly copyable, since a type conforms only by listing the protocol, and no author declares an imported type's copies cheap. So a place of one, such as `pad` above, writes its mark wherever a position takes it.
 
 **Structs.** An imported struct's primary initializer takes the fields that reflection lists for it ([09](../09-compile-time/reflection.md#what-reflection-can-read)), in order, each labeled by its name and an anonymous union or struct member unlabeled, so `T.construct` builds one too. It also gets a zero-initializing `init()` when all-zero bytes are a valid value of every field, and an `unsafe` one otherwise, as when a field is a `_Nonnull` pointer.
 

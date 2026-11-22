@@ -7,7 +7,7 @@
 A job system is a Rayo library whose safe API takes function values that borrow the caller's data, and runs them on its threads as **lent work**. The library finishes the work before those borrows can end ([below](#the-librarys-promise)):
 
 ```swift
-particles.forEachInParallel { p in                          // @sendable (mutable Particle) -> Void: not mutating, so any thread
+particles.forEachInParallel { p in                          // @sendable (mutable &Particle) -> Void: not mutating, so any thread
     p.vel += gravity * dt
     p.pos += p.vel * dt
 }
@@ -20,7 +20,7 @@ particles.forEachInParallel { p in                          // @sendable (mutabl
     - a non-`mutating` one by any number of threads at once, since it only reads its captures;
     - a `mutating` one by one thread at a time, each call happening before the next, since calling it changes the closure itself;
     - a `consuming` one once, since the call consumes it.
-- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(&x, x)` is.
+- **Exclusivity holds across a call's arguments**, closures included, since a closure literal borrows what it captures for as long as the call has it. So the second `join` at the top of this chapter is rejected, as `f(mutable &x, &x)` is.
 - **What a call begins ends with it**, since rule 5 lets no function return or store a view of what it owns or began ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A lock guard is released on the thread that took it ([Locks: `Mutex` and `RwLock`](synchronization.md#locks-mutex-and-rwlock)). So nothing a closure began on one thread is left for another.
 
 **Writing a shared place from a parallel loop's body is a type error:**
@@ -44,10 +44,10 @@ particles.forEachInParallel { p in
 **`ThreadScope.run`, at the top of this chapter, returns only when every thread its block spawned has finished, its teardown included.** So its threads may borrow the caller's locals, as the spawned closure there borrows `world.bodies`. It is declared as:
 
 ```swift
-static func run<R: ~Scoped>(_ body: consuming (mutable ThreadScope) -> R) -> R { … }   // ThreadScope's: runs the block once
+static func run<R: ~Scoped>(_ body: consuming (mutable &ThreadScope) -> R) -> R { … }   // ThreadScope's: runs the block once
 ```
 
-The block takes the scope as a `mutable ThreadScope`, so a helper can take the scope as a parameter of that type. The block is called once, so it may write and move its captures, as `Mutex.lock`'s may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
+The block takes the scope as a `mutable &ThreadScope`, so a helper can take the scope as a parameter of that type. The block is called once, so it may write and move its captures, as `Mutex.lock`'s may ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
 
 **`spawn` takes the closure by its concrete type and moves it into the scope** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)):
 
@@ -61,7 +61,7 @@ A parameter of function type would get only a view of the literal, which dies at
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(&world.bodies, dt: dt) }
+    s.spawn { integrate(mutable &world.bodies, dt: dt) }
     print(world.bodies.count)                               // error: 's' borrows 'world.bodies' exclusively until the block returns
 }
 ```
@@ -72,8 +72,8 @@ ThreadScope.run { s in
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(&world.bodies, dt: dt) }            // if this panics, its panic waits for the join
-    mix(&world.audio)                                       // and this still runs
+    s.spawn { integrate(mutable &world.bodies, dt: dt) }    // if this panics, its panic waits for the join
+    mix(mutable &world.audio)                               // and this still runs
 }                                                           // every thread has finished: a spawned thread's panic resumes here
 ```
 
@@ -89,7 +89,7 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 
 **Lending is the library's `unsafe` promise.** A scoped value, such as a closure that borrows the caller's locals, reaches another thread only through a library's `unsafe` code, which promises:
 
-- **to move only `Sendable` values between threads.** The closures it takes are `@sendable`, and whatever it passes them is `Sendable`. Whatever it hands back from them to the lending thread is `Sendable` too: their results, the errors they fail with and the panics that end them included. Each value it hands over is made and written before the receiving thread's first use of it, in the memory model's happens-before order ([Atomics and locks](synchronization.md#atomics-and-locks));
+- **to move only `Sendable` values between threads.** The closures it takes are `@sendable`, and whatever it passes them is `Sendable`. A reference it passes, such as the `mutable &Particle` a parallel loop gives its body, is `Sendable` when what it refers to is ([What may cross threads](race-freedom-and-sendable.md#what-may-cross-threads-sendable)). Whatever it hands back from them to the lending thread is `Sendable` too: their results, the errors they fail with and the panics that end them included. Each value it hands over is made and written before the receiving thread's first use of it, in the memory model's happens-before order ([Atomics and locks](synchronization.md#atomics-and-locks));
 - **to call the value only as its kind allows**, each call of a `mutating` one happening before the next;
 - **to keep it past the call it was given to only in a type that is unsealed and scoped**, as the `ThreadScope` that `ThreadScope.run` lends its block keeps what `spawn` is given ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)). So the value that keeps it absorbs what it borrows for as long as it is kept. While that call runs, a raw pointer to it may pass through any storage that only the library's `unsafe` code reads, such as a global work queue;
 - **to have every other thread done with it by the time the borrows it carries may end**, every access they made through it happening before then. That time is when the call that lent them returns or a panic unwinds out of it, as for the job system's `join`, or, for a value kept as above, the last use of the value that keeps it.
@@ -118,9 +118,9 @@ The panic unwinds the spawned closure's frames on its own thread, and destroys t
 ```swift
 let ready = Event()
 ThreadScope.run { s in
-    s.spawn { ready.wait(); process(&output) }     // parks until 'ready' is signalled
-    defer { ready.signal() }                       // runs when the block unwinds too
-    prepare(&input)                                // may panic: without the defer, the spawned thread would wait for ever
+    s.spawn { ready.wait(); process(mutable &output) }   // parks until 'ready' is signalled
+    defer { ready.signal() }                              // runs when the block unwinds too
+    prepare(mutable &input)                              // may panic: without the defer, the spawned thread would wait for ever
 }
 ```
 
@@ -136,7 +136,7 @@ let table = catchPanic {                          // a global's initializer, run
     ThreadScope.run { s in
         s.spawn { buf.append(1) }                 // runs here, before 'spawn' returns
     }
-    return buf
+    return consume buf
 } recover: { _ in alloc List<Int>() }
 ```
 
@@ -158,21 +158,21 @@ let table = catchPanic {                          // a global's initializer, run
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // called from main, after startup
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in &rx { draw(snapshot) }                               // parks between snapshots; ends once every sender is gone
+        for snapshot in mutable &rx { draw(&snapshot) }                     // parks between snapshots; ends once every sender is gone
     }
-    return (render, tx)                                                      // the simulation keeps the sender
+    return (consume render, consume tx)                                      // the simulation keeps the sender
 }
 
-func runSimulation(_ world: mutable World) {                                 // called from main, after startup
+func runSimulation(_ world: mutable &World) {                                // called from main, after startup
     var (render, tx) = startRenderer()
     while !world.quit {
-        step(&world)
+        step(mutable &world)
         when tx.send(alloc Shared(world.snapshot())) {
             .failure { break }                                               // the render thread is gone
             else {}
         }
     }
-    _ = tx                                                                   // drops the last sender: the render loop ends
+    _ = consume tx                                                           // drops the last sender: the render loop ends
     render.join()                                                            // waits for it, or resumes its panic here
 }
 
@@ -180,7 +180,7 @@ let snapshots = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)               // 
 
 func startRendererOnGlobal() -> Thread<Void> {
     Thread.start(name: "render") {
-        while true { draw(snapshots.waitPop()) }                             // parks until the simulation pushes one; a queue never disconnects
+        while true { draw(&snapshots.waitPop()) }                            // parks until the simulation pushes one; a queue never disconnects
     }
 }
 ```
@@ -189,7 +189,7 @@ func startRendererOnGlobal() -> Thread<Void> {
 
 ```swift
 struct Thread<R: Sendable & ~Scoped>(…): ~Copyable    // R: the body's result type
-static func start(name: static StringView = "", _ body: owned Closure<consuming @sendable () -> R>) -> Thread<R> { … }
+static func start(name: static &Text = "", _ body: Closure<consuming @sendable () -> R>) -> Thread<R> { … }
                                                       // Thread<R>'s: the body, handed over; a call infers R from it
 ```
 
@@ -209,10 +209,10 @@ static func start(name: static StringView = "", _ body: owned Closure<consuming 
 var level = loadLevel()                                      // move-only: owns its lists
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                        // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(&level, bounces: bounces)                       // error: unlisted captures; a thread body can't borrow them
 }
 _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns 'level' and a copy of 'bounces'; '_ =' detaches it
-    bakeLighting(level, bounces: bounces)
+    bakeLighting(&level, bounces: bounces)
 }
 ```
 
@@ -220,10 +220,10 @@ _ = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: owns '
 
 ```swift
 let checksum = Thread.start(name: "checksum") { [move path] in   // a Thread<UInt32!IoError>
-    let bytes = try readFile(path.view)
-    return crc32(bytes)
+    let bytes = try readFile(&path)
+    return crc32(&bytes)
 }
-indexFolder(dir)                                                // runs on this thread meanwhile
+indexFolder(&dir)                                               // runs on this thread meanwhile
 let sum = try checksum.join()                                   // waits for the thread, then takes its result or propagates its error
 ```
 
@@ -275,8 +275,8 @@ So no Rayo code of the thread runs after its teardown.
 **`Runtime.startThread` is the runtime's one primitive for starting a thread:**
 
 ```swift
-static func startThread(_ body: owned Closure<consuming @sendable () -> Void>,   // Runtime's: the body, handed over
-                        ended: owned Shared<Event>?) -> ThreadStart { … }          // 'ended': signalled after the thread's teardown
+static func startThread(_ body: Closure<consuming @sendable () -> Void>,   // Runtime's: the body, handed over
+                        ended: Shared<Event>?) -> ThreadStart { … }          // 'ended': signalled after the thread's teardown
 
 enum ThreadStart {
     case started                                             // a new thread runs the body

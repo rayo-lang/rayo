@@ -93,7 +93,7 @@ One of the three levels at which a pattern is checked: **static**, by the compil
 _Avoid_: safety level, mode
 
 **Unsized type**:
-`[T]`, `Text` or `any P`: a type whose size isn't known where code is compiled, held only behind a reference, a `Box` or a pointer ([01](docs/spec/01-values-and-ownership/references.md#unsized-types)).
+`[T]`, `Text` or `any P`: a type whose size isn't known where code is compiled. It is held only behind a reference, a `Box`, an object pointer or a reference-counted pointer, and binds no type parameter ([01](docs/spec/01-values-and-ownership/references.md#unsized-types)).
 _Avoid_: dynamically sized type, DST
 
 ### Views and dependencies
@@ -304,10 +304,6 @@ _Avoid_: coercion
 A protocol with no requirements that states a property of a type, such as `Copyable`, `Scoped` or `Sendable`; the compiler derives some, such as `Copyable` and `Sendable`, from what a type holds ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#conformances)).
 _Avoid_: marker trait, tag protocol
 
-**Opaque type parameter**:
-A type parameter marked `@opaque`, which may stand for any type, an opaque or unsized one included, since its body uses the type only behind a pointer ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
-_Avoid_: unsized parameter, `?Sized`
-
 **Type value**:
 `T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 _Avoid_: metatype
@@ -450,7 +446,7 @@ The end of a future that its producer fulfills once with the value, which `fulfi
 _Avoid_: promise (in plain text; the library's promise is a different guarantee)
 
 **Resume parameter**:
-The one parameter a task's owner passes in at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
+The parameter a task's `with` clause declares, a mutable reference to its context, which the task's owner lends the task anew at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
 
 **Runner**:
 What polls a task and makes its `Waker`s, such as std's `TaskSet` and `block(on:)` ([07](docs/spec/07-concurrency/tasks.md#running-tasks)).

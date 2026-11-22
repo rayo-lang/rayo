@@ -39,7 +39,7 @@ let wet = alloc Shared(Material(albedo: rock.share(), roughness: 0.2))   // shar
 let dry = alloc Shared(Material(albedo: consume rock, roughness: 0.9))   // a move: the count doesn't change
 
 let log = alloc Shared(Mutex(alloc List<Message>()))                     // Synchronized: changes only under its lock
-log.value.lock { $0.append(m) }
+log.value.lock { msgs in msgs.append(consume m) }                        // the body owns 'm', and moves it in
 ```
 
 **A `Shared<T>`'s count is atomic, and its `T` must be `Frozen` ([below](#frozen-types-with-no-interior-mutability)) or `Synchronized` ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).** So any number of threads may read the value at once, and it changes only through its own synchronization, if at all.
@@ -78,43 +78,44 @@ log.value.lock { $0.append(m) }
 - nothing writes what a value of the type holds, or what it points at through a raw pointer, through a shared borrow of it, except bookkeeping that no reader observes;
 - nothing at all writes a value of the type frozen into read-only data ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
 
-**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for a static type whose data is `Frozen`, such as `static StringView`, and std for `Name`, which points into immortal data ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
+**So a type that writes bookkeeping must keep its values from being freezable**, as a `Shared` does by not being `TrivialFree`. The language makes the promise for a static type whose data is `Frozen`, such as `static &Text`, and std for `Name`, which points into immortal data ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 
 **Some types hide what they hold, or hold it through a raw pointer, yet are `Frozen` according to what they hold:**
 
-- **Existentials.** An existential has no fields to check, so `any P` and `MutableRef<any P>` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+- **References.** `&U` and `mutable &U` are `Frozen` when `U` is, since nothing writes the place a reference refers to through a shared borrow of the reference: writing through one needs a mutable reference in a changeable place ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). A run `[T]` is `Frozen` when `T` is, and `Text` always is.
+- **Existentials.** An existential has no fields to check, so `any P` is `Frozen` only when `P` refines `Frozen`, or when it is written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). A reference to one, such as `&any P`, is `Frozen` when the existential is, by the rule for references.
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names one of these:
   - a buffer the container owns alone, written only by its `mutating` methods, apart from a `StablePool`'s pin counts (below). Those methods need exclusive access, which no shared borrow of a `Frozen` value that holds the container grants;
-  - in a `String` made from a literal or a `static StringView`, bytes that live as long as the program and that nothing writes ([04](../04-types/collections.md#strings)).
+  - in a `String` made from a literal or a `static &Text`, bytes that live as long as the program and that nothing writes ([04](../04-types/collections.md#strings)).
 - **`Shared<T>` and `LocalShared<T>`.** Each is `Frozen` when its `T` is: its count is bookkeeping that no reader observes. So an asset graph, a `Shared<Material>` holding `Shared<Texture>`s, is `Frozen` all the way down. A `StablePool`'s pin counts are bookkeeping of the same kind ([03](../03-handles-and-objects.md#pinning-for-c)), so pinning an element of a `Frozen` pool, from any thread, leaves it `Frozen`.
 
 ## Long-lived views into long-lived buffers
 
-**For a view that has to be stored in long-lived state, which a scoped `Span` can't be, the view is a checked `Slice<T>`** ([02](../02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go)). Its buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`:
+**For a view that has to be stored in long-lived state, which a scoped reference can't be, the view is a checked `Slice<T>`** ([02](../02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go)). Its buffer lives behind a `Shared` ([above](#sharedt-data-with-many-owners)), as a fixed-size **`Blob`** of bytes, or a `Blob` or `List` under an `RwLock`:
 
 ```swift
 let package = alloc Shared(try alloc Blob.load("level3.pak"))   // Blob: fixed-size bytes, 16-byte-aligned unless asked
 struct MeshComponent(var vertices: Slice<Vertex>)                // a checked view: a weak link to the buffer and an element range
 
 let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.vertexOffset, count: header.vertexCount))
-upload(m.vertices.read()!)                                       // Span<Vertex>: one check, then none per element
+upload(m.vertices.read()!)                                       // a '&[Vertex]': one check, then none per element
 ```
 
-**`Slice<T>` is unscoped, copyable and `Sendable`.** It can be unscoped because it reads its buffer only through a scoped span it hands out for each use, so nothing frees the buffer while it is read ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`. With its element range it is larger than 16 bytes, so it isn't implicitly copyable, and its copy is written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+**`Slice<T>` is unscoped, copyable and `Sendable`.** It can be unscoped because it reads its buffer only through a scoped reference it hands out for each use, so nothing frees the buffer while it is read ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). It holds a weak link to its buffer's `Shared`, so it keeps nothing alive, and once that value is destroyed every `Slice` into it reads `nil`. With its element range it is larger than 16 bytes, so it isn't implicitly copyable, and its copy is written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **A `Blob` owns one allocation of bytes, with its length and alignment fixed at construction.** The alignment is 16 bytes unless the constructor asks for more, up to the page size, as in `alloc Blob(count: n, align: 64)`.
 
 **A slice is checked when it is made, and again at each read or lock:**
 
-- **Reading and locking it.** `s.read()` gives a slice's elements as a `Span<T>?`, and `s.lock()` as a `MutableSpan<T>?`. Each is `nil` once the buffer is gone: its `Shared` value destroyed, or the buffer's storage stale after a reset or an unregistration. Each call checks the storage as an open does, reading `nil` where an open would panic ([Opening an owning value checks it](arena-safety.md#opening-an-owning-value-checks-it)).
+- **Reading and locking it.** `s.read()` gives a slice's elements as a `(&[T])?`, and `s.lock()` as a `(mutable &[T])?`. Each is `nil` once the buffer is gone: its `Shared` value destroyed, or the buffer's storage stale after a reset or an unregistration. Each call checks the storage as an open does, reading `nil` where an open would panic ([Opening an owning value checks it](arena-safety.md#opening-an-owning-value-checks-it)).
 
-  Each call upgrades the weak link, and the span holds that owner until the span's last use ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). For a buffer under an `RwLock`, the span also holds the read lock for `read()`, or the write lock for `lock()`, until then. A slice of a bare `Shared<Blob>` is read-only: its `lock()` panics, since nothing writes a `Frozen` value.
+  Each call upgrades the weak link, and the reference holds that owner until its last use ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). For a buffer under an `RwLock`, the reference also holds the read lock for `read()`, or the write lock for `lock()`, until then. A slice of a bare `Shared<Blob>` is read-only: its `lock()` panics, since nothing writes a `Frozen` value.
 - **What creation checks.** `T` must be `Pod` ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), and a blob's bytes are always initialized (zeroed at construction, or filled by the load), so reading them as `T` is sound. `slice(of:at:count:)` fails unless all of these hold, which put every element inside the blob, aligned for `T`:
   - the range is in bounds;
   - `T`'s alignment is at most the blob's;
   - the offset is a multiple of `T`'s alignment.
 
-  Locking as a `MutableSpan<T>` also requires `T.isPaddingFree`, as a mutable span cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), since a store through a padded `T` would leave bytes other slices read uninitialized.
+  Locking as a `mutable &[T]` also requires `T.isPaddingFree`, as a mutable run cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)), since a store through a padded `T` would leave bytes other slices read uninitialized.
 - **Locked blobs.** A slice of a `Shared<RwLock<Blob>>` is read and locked under the blob's lock. A write lock can replace the whole blob with a shorter or less-aligned one. So each `read()` or `lock()` of such a slice also compares its end with the current blob's length, and `T`'s alignment with the blob's, under the lock it takes anyway. A failure reads as `nil`. A bare `Shared<Blob>` can't be replaced, so the range and alignment creation checked hold for its slices' whole life.
 - **Lists.** `slice(at:count:)` on a `Shared<RwLock<List<T>>>` makes a `Slice<T>` of a range of its elements, which needn't be `Pod`. A write lock can grow, shrink or move the list's buffer, so each `read()` or `lock()` of such a slice finds the buffer again and compares the range with the list's current count, under the lock it takes. A failure reads as `nil`.
 - **Limits.** `slice` fails when the offset or the count exceeds `UInt32.max`.

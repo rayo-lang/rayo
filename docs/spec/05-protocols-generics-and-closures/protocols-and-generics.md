@@ -118,7 +118,7 @@ func toughest<T: Damageable>(_ xs: &[T]) -> Float {
 }
 ```
 
-**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a reference or not `Sendable`, among other things, though it has a size unless it is marked `@opaque` ([below](#type-parameters-with-no-known-size-opaque)). So a body that passes is sound for every instantiation.
+**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a reference or not `Sendable`, among other things, though it has a size ([below](#type-parameters-stand-for-sized-types)). So a body that passes is sound for every instantiation.
 
 **A body copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, even where every instantiation's type argument is an `Int`, since the check sees only the constraints. Under `T: Copyable` alone, it writes `copy x` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
 
@@ -136,7 +136,7 @@ func bad<T: Copyable>(_ xs: &[T]) -> T { xs[0] }                          // err
 - where a shuffle's index is out of range for a generic `N`, or its result's count isn't a lane count ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles));
 - where a swizzle names a lane that a vector of a generic `N` lacks ([04](../04-types/numbers-and-math.md#shuffles-and-swizzles)).
 
-**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation**, except where it uses an `@opaque` type parameter ([below](#type-parameters-with-no-known-size-opaque)). Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
+**Compile-time code is one exception: it is checked at each instantiation, and an error there is reported at the instantiation**. Its meaning depends on the type arguments, as the members a type generates from its parameters do ([09](../09-compile-time/declaration-generation.md#generated-members-are-checked-per-instantiation)). It is any of these parts of generic code ([09](../09-compile-time.md)):
 
 - `static if` branches, checked only when their condition holds;
 - `static for` bodies and static closures, checked per element;
@@ -154,44 +154,37 @@ func bad<T: Copyable>(_ xs: &[T]) -> T { xs[0] }                          // err
 
 **The checks that run on the expanded body are those of moves, initialization, borrows, dependencies, the places that place properties hand out, and `self.init` calls.** So a move in a `static for` body moves once per element ([09](../09-compile-time/reflection.md#static-reflection)).
 
-## Type parameters with no known size: `@opaque`
+## Type parameters stand for sized types
 
-A wrapper around a C handle needs only a pointer to the C type, so one generic wrapper can serve C types whose layout Rayo doesn't know, and keep them apart. Here `CHandle` is user code, which frees each handle with the C function it was given:
+A wrapper around a C handle holds a pointer to a C type whose layout Rayo doesn't know. A pointer is one address, so the wrapper is an ordinary struct, one for each C type, which frees its handle with that type's own C function:
 
 ```swift
-struct CHandle<@opaque T>(let raw: *T, let release: @c (*T?) -> CInt) {
-    deinit { unsafe { _ = release(raw) } }         // the body uses T only behind a pointer
+struct Database(let raw: *sqlite3) {                // sqlite3: an @opaque C type, reached only through the pointer
+    deinit { unsafe { _ = sqlite3_close(raw) } }
+}
+struct Statement(let raw: *sqlite3_stmt) {
+    deinit { unsafe { _ = sqlite3_finalize(raw) } }
 }
 
-let db = CHandle(raw: conn, release: sqlite3_close)        // conn: the *sqlite3 that sqlite3_open gave
-let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
+let db = Database(raw: conn)                        // conn: the *sqlite3 that sqlite3_open gave
 ```
 
-**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type had none. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for a type with no size ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)):
+**Every type parameter stands for a type with a size**, and so do an associated type and the `Self` of a protocol extension, since a body may hold a value of the type ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). So two kinds of type bind none of them:
 
-- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer, since Rayo doesn't know its size ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
 
-**So an unsized type binds no type parameter but an `@opaque` one**, as the `T` of a type value is, which makes `Text.self` and `(any Drawable).self` type values ([below](#value-parameters-and-type-values)). A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`.
+A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`. A raw pointer to an `@opaque` type is one address, so `*sqlite3` binds any type parameter too, as in `List<*sqlite3>`.
 
-**An `@opaque` type conforms to no protocol, and an `@opaque` type parameter takes no constraints.** A protocol extension is generic code over an unmarked `Self`, which may hold a `Self` by value, so no conformance could keep it sound.
+**The language's own types whose argument needs no layout take some of these types by rules of their own:**
 
-**An unsized type conforms to a protocol only through witnesses it declares itself.** A default, and every other member of a protocol extension, is generic code over an unmarked `Self` for the same reason, so none is ever called on an unsized value. So `Text` declares each of its comparisons ([Operators](operators.md#equality-and-ordering)). A requirement that takes or returns a `Self` by value is one no unsized type can meet, except where its `where` clause leaves the type out, as `Comparable`'s `min` does with `Self: Copyable`.
+- **Type values.** The `T` of `Type<T>` may be any type, so `Text.self` and `(any Drawable).self` are type values ([below](#value-parameters-and-type-values)).
+- **Raw pointers.** The pointee of `*T` and `*T?`, and the target `U` of `p.cast(to: U.self)`, are each a sized type or an `@opaque` type, never an unsized one ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
+- **Unscoped existentials.** `Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`, is a type of its own, which binding a type parameter never makes ([below](#unscoped-existentials)).
 
-**The language's own type parameters that need no layout are `@opaque` too:** the pointee of `*T` and `*T?`, the `T` of a type value `Type<T>`, so `T.self` names any type, and the target `U` of `p.cast(to: U.self)` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). `*T` and `*T?` are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`.
+**An `@opaque` type conforms to no protocol**, since code never reaches a place of one, so no witness has a value to act on.
 
-**In an `@opaque` type parameter's body, anything that needs `T`'s layout or a `T` value is a compile error:**
-
-- a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
-- a reference to a `T`, `&T` or `mutable &T`, whose layout depends on whether `T` has a size ([01](../01-values-and-ownership/references.md#layout));
-- a function type that takes or gives a `T`, a `@c` one included;
-- `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
-- a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible`, `T.construct` and `T.makeCase` ([09](../09-compile-time/reflection.md#what-reflection-can-read));
-- `T` as the argument for a type parameter that isn't `@opaque`.
-
-**`T.name`, `T.baseName`, `T.module`, `T.id`, the kind queries, `T`'s attributes, `T == U` and `T != U` stay readable**, since none needs a layout or a conformance.
-
-**Compile-time code in that body treats `T` as `@opaque` too**, so it is checked at the definition, as the rest of the body is, and a `static if` branch can't use what only some types allow.
+**An unsized type conforms to a protocol only through witnesses it declares itself.** A default, and every other member of a protocol extension, is generic code over a `Self` that stands for a sized type (above), so none is ever called on an unsized value. So `Text` declares each of its comparisons ([Operators](operators.md#equality-and-ordering)). A requirement that takes or returns a `Self` by value is one no unsized type can meet, except where its `where` clause leaves the type out, as `Comparable`'s `min` does with `Self: Copyable`.
 
 ## Instantiation
 
@@ -221,7 +214,7 @@ func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an er
 
 **A generic parameter declared `let` takes a `const` value** of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>`. Such a parameter is a **value parameter**. Two arguments are the same exactly when they are the same value: the same integer, the same `Bool` or the same case, whatever `==` the type declares.
 
-**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` or unsized one included ([above](#type-parameters-with-no-known-size-opaque)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a run's `reinterpret` does:
+**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` or unsized one included ([above](#type-parameters-stand-for-sized-types)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a run's `reinterpret` does:
 
 ```swift
 func reinterpret<U: Pod>(as _: Type<U>) -> (&[U])?    // binds U from the type value it is passed
@@ -257,7 +250,7 @@ func reportAny<K, H>(_ m: &Map<K, Int, H>) { … }      // takes a map with any 
 
 ## Conformances
 
-**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). The language also makes the number types, `Bool`, raw pointers, shared references, small `Simd` vectors and some tuples conform to `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-with-no-known-size-opaque)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
+**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). The language also makes the number types, `Bool`, raw pointers, shared references, small `Simd` vectors and some tuples conform to `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-stand-for-sized-types)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
 ```swift
 protocol HasHp { var hp: Float { get set } }
@@ -398,7 +391,7 @@ func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
 
 **Passing an existential reference to a parameter `&T` or `mutable &T`, with `T: P`, unpacks it: `T` is the value's dynamic type for that call.** This is **unpacking**. A `&any P` unpacks into a `&T` parameter, and a `mutable &any P` into a `mutable &T` one, whose whole value the generic code may replace, since `T` has a size there and the type can't change. An owned `Box<any P>` passed to a parameter `T` unpacks as well: its value moves out into the call, and its allocation is freed.
 
-**`any P` never conforms to `P`, and it is unsized, so it binds no unmarked `T`** ([above](#type-parameters-with-no-known-size-opaque)). Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
+**`any P` never conforms to `P`, and it is unsized, so it binds no `T`** ([above](#type-parameters-stand-for-sized-types)). Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
 
 ```swift
 swap(mutable &a.value, mutable &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
@@ -406,7 +399,7 @@ swap(mutable &a.value, mutable &b.value)   // error: two Box<any Widget>s, whose
 
 **These rules decide whether a call unpacks:**
 
-- **Where it doesn't.** A call binds `T` from an existential's own type wherever that meets `T`'s constraints. So an existential reference or a `Box<any P>` given to a parameter `T` binds `T` as itself, as `List<&any Drawable>`'s `append` takes a reference as its element, and `any P` binds an `@opaque` `T` as itself.
+- **Where it doesn't.** A call binds `T` from an existential's own type wherever that meets `T`'s constraints. So an existential reference or a `Box<any P>` given to a parameter `T` binds `T` as itself, as `List<&any Drawable>`'s `append` takes a reference as its element.
 - **Where it unpacks.** Only where that binds no `T`, and only into a parameter whose type is `&T` or `mutable &T` for an existential reference, or `T` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
 - **Anything else is a compile error.** A call that would need `T` to be `any P` and meets neither rule doesn't compile.
 

@@ -11,7 +11,7 @@ let levelArena = Allocator.register(Arena(size: 256.mb))
 var spawns = levelArena.alloc List<Vec3>()
 spawns.append(.zero)
 
-let pts = spawns.span         // a view into the arena's memory, which the arena counts as a use
+let pts = &spawns.span        // a reference into the arena's memory, which the arena counts as a use
 levelArena.reset()            // panics: 'pts' is used below, so something still uses the arena
 print(pts[0])
 ```
@@ -66,7 +66,7 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 - **Owning values.** These are all values that own storage from an allocator, heap or arena: `List`, `String`, `Map`, `Box`, a `Closure`'s out-of-line context ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)), and the rest. An object's owner owns its object's storage but isn't an owning value in this sense. Its object is checked at each use instead, and destroyed by a reset ([03](../03-handles-and-objects.md#objects-in-arenas-and-other-allocators)).
 - **Opening.** An open is any access that reaches storage the value owns:
   - reading what it holds, or lending a place of it, such as an element, a lookup, `Box.value`, a `Shared` value's contents or a `TrailingArray`'s header;
-  - taking a span of it;
+  - lending its elements, as `&list.span` does;
   - iterating it;
   - growing it;
   - calling a `Closure` whose context is out of line.
@@ -88,13 +88,13 @@ spawns.append(.zero)          // panics: 'spawns' was allocated in 'levelArena' 
 
 ```swift
 struct Door(var name: String) {
-    deinit { print(name) }                     // runs inside the reset that destroys this door
+    deinit { print(&name) }                    // runs inside the reset that destroys this door
 }
 
 var doors = alloc List<UniquePointer<Door>>()  // from .heap: the list's buffer isn't in the arena
 for i in 0..<4 {
     let name = levelArena.alloc "gate \(i)"                          // the names and the doors come from the arena
-    doors.append(levelArena.alloc UniquePointer(Door(name: name)))
+    doors.append(levelArena.alloc UniquePointer(Door(name: consume name)))
 }
 levelArena.reset()                             // destroys the doors; each deinit can still read its 'name'
 ```
@@ -110,7 +110,7 @@ let levelHeap = Allocator.register(TlsfHeap(size: 64.mb))
 var props = levelHeap.alloc List<Prop>()
 // ... the level runs ...
 Allocator.unregister(levelHeap)     // every value still allocated from the heap goes stale
-props.append(p)                     // panics: 'props' came from an unregistered allocator
+props.append(consume p)             // panics: 'props' came from an unregistered allocator
 ```
 
 **`Allocator.unregister(a)` ends an allocator**, of any kind. A heap can't be reset, so unregistering it is how every value it handed out goes stale at once, as `props` does above.

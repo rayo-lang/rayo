@@ -8,9 +8,9 @@ Reflection gives a field's name and type, but not that the field is a cache a se
 
 ```swift
 struct Bounds(let min: Float, let max: Float): Attribute {
-    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // the borrowed Floats are copied in
+    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // each Float is implicitly copyable: a copy goes in
 }
-struct Tooltip(let text: static StringView): Attribute
+struct Tooltip(let text: static &Text): Attribute
 struct Transient: Attribute {}     // skipped by serializers
 struct Replicated(var reliable: Bool = false): Attribute
 
@@ -24,10 +24,10 @@ struct Enemy(
 **An attribute is any struct that conforms to `Attribute`, and its arguments must be `const`.** Its value must be freezable, since `typeInfo` puts it in read-only data ([below](#runtime-type-info)) the way a `const` that reaches run time is frozen ([Consts that reach run time](constants-and-conditions.md#consts-that-reach-run-time)). Reflection reads an attribute on a field, a type or an enum case ([What reflection can read](reflection.md#what-reflection-can-read)). An editor's inspector, for example:
 
 ```swift
-func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
+func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!                // this field's @Bounds, known at compile time
-        ui.slider(f.name, &value[f], min: b.min, max: b.max)
+        ui.slider(f.name, mutable &value[f], min: b.min, max: b.max)
     }
 }
 ```
@@ -43,20 +43,20 @@ For code that walks types **at run time**, `typeInfo(T.self)` returns a `TypeInf
 ```swift
 public struct TypeInfo private init(    // Frozen, derived: every field is Frozen
     public let id: UInt64,
-    public let name: static StringView,
+    public let name: static &Text,
     public let size: Int,
     public let alignment: Int,
-    public let fields: static Span<FieldInfo>,  // name, offset, type id, attributes
-    public let cases: static Span<CaseInfo>,    // name, tag, payload fields, attributes
-    public let attributes: static Span<AttributeInfo>,  // each: the attribute type's TypeInfo, and its value
+    public let fields: static &[FieldInfo],     // name, offset, type id, attributes
+    public let cases: static &[CaseInfo],       // name, tag, payload fields, attributes
+    public let attributes: static &[AttributeInfo],    // each: the attribute type's TypeInfo, and its value
 )
 
 let enemyInfo = typeInfo(Enemy.self)    // a global let: a TypeInfo can be kept anywhere
 
-func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function for every type, at run time
+func showFields(_ info: &TypeInfo, in ui: mutable &Inspector) {   // one function for every type, at run time
     for f in info.fields {
         ui.label(f.name)
-        for a in f.attributes { if ref let t = a[as: Tooltip.self] { ui.hint(t.text) } }
+        for a in f.attributes { if ref let t = &a[as: Tooltip.self] { ui.hint(t.text) } }
     }
 }
 ```
@@ -75,6 +75,6 @@ func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function 
 - **Safety and checks.** For each module, whether it is `@safe` ([10](../10-errors-and-safety/unsafe-code.md#safe-modules)), and its diagnostic check settings ([10](../10-errors-and-safety/checks-and-build-modes.md#choosing-checks-for-a-module-or-a-scope)).
 - **Mode and target.** The build mode and the target, which `target` exposes ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)).
 - **Panic strategy.** Whether a panic unwinds, the default, or aborts the program ([10](../10-errors-and-safety/panics.md#panic-strategy)).
-- **Flags.** The flags that `target.flag` reads, each a `const` `Bool`, `Int` or `static StringView`.
+- **Flags.** The flags that `target.flag` reads, each a `const` `Bool`, `Int` or `static &Text`.
 - **Seed bytes.** For a program on a platform with no source of randomness, the bytes startup takes as the process seed, without which the build fails ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)).
 - **C headers.** For each `import c`, the header it reads and each header its config block names. For each `import c` and each `extern c` block, the preprocessor definitions its C is read with, so no other import's macros reach an `import c` ([08](../08-c-interop/imports-and-inline-c.md#importing-headers)).

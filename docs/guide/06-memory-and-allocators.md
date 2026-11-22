@@ -9,8 +9,8 @@ let frameArena = Allocator.register(Arena(size: 64.mb))          // scratch data
 while running {
     do {
         var visible = frameArena.alloc List<Handle<Mesh>>()      // the list's storage comes from the arena
-        cull(world, into: &visible)
-        submit(visible.span)
+        cull(&world, into: mutable &visible)
+        submit(&visible)
     }                                                            // 'visible' is destroyed: freeing into an arena does nothing
     frameArena.reset()                                           // the frame's scratch memory is freed at once
 }
@@ -27,7 +27,7 @@ var editorMeshes = alloc List<Mesh>()            // the same type, List<Mesh>, f
 
 Every heap allocation goes through an allocator the code can name ([06](../spec/06-memory-and-allocators.md)). `Allocator.register` takes an implementation, such as an `Arena`, and returns a copyable `Allocator` id. Every construction of a list, string or box says `alloc`, which marks a value that gets heap memory of its own ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Writing `levelHeap.alloc` instead chooses where that memory comes from. `.heap` names the platform's general-purpose heap and is always available ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocator-values)).
 
-A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `List<Mesh>` accepts either.
+A list, string or box that owns allocated storage is an **owning value**. It records the allocator it used, then grows and frees through that allocator for its whole life ([06](../spec/06-memory-and-allocators/allocator-implementations.md#how-values-record-their-allocator)). This is why `levelMeshes` and `editorMeshes` have the same type, `List<Mesh>`, despite using different heaps: a function that takes a `&List<Mesh>` accepts either.
 
 **Every registered allocator is one of three kinds:**
 
@@ -65,11 +65,11 @@ So a value hands its allocator to what it allocates, and nothing else does. Code
 **`alloc` applies only to values that allocate.** A plain value goes on the heap only inside a value that allocates, such as a `Box`:
 
 ```swift
-var boxed = alloc enemy          // error: 'Enemy' isn't Allocating
-var boss = alloc Box(enemy)      // a Box owns the enemy, in one allocation
+var boxed = alloc enemy               // error: 'Enemy' isn't Allocating
+var boss = alloc Box(consume enemy)   // a Box owns the enemy, in one allocation
 ```
 
-`alloc` before a plain value is an error, and you box the value yourself, with `alloc Box(enemy)` ([below](#one-owned-value-box)).
+`alloc` before a plain value is an error, and you box the value yourself, with `alloc Box(consume enemy)` ([below](#one-owned-value-box)).
 
 **Two kinds of allocation have no construction to mark.** A list grows through the allocator its `alloc` showed. A closure stored as a `Closure` value may allocate room for what it captures, and its type shows that it may ([06](../spec/06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)).
 
@@ -79,7 +79,7 @@ A list keeps the allocator it was built with, wherever it later grows. A new str
 var names = alloc List<String>()                         // from .heap
 names.append(frameArena.alloc "wave \(wave)")            // the list grows in .heap, but the new String is in the arena
 frameArena.reset()
-print(names[0])                                          // panics: the string came from 'frameArena' before its reset
+print(&names[0])                                         // panics: the string came from 'frameArena' before its reset
 ```
 
 ## Arenas and resets
@@ -93,7 +93,7 @@ print(names[0])                                          // panics: the string c
 var positions = frameArena.alloc List<Vec3>()
 positions.append(.zero)
 
-let pts = positions.span    // a view into the arena's memory: a use of the arena while 'pts' is live
+let pts = &positions.span   // a reference into the arena's memory: a use of the arena while 'pts' is live
 frameArena.reset()          // panics: 'pts' is used below
 print(pts[0])
 ```
@@ -111,11 +111,11 @@ Finish using the arena's memory before you reset it, and copy out anything the n
 An **open** is an access that reaches storage an owning value owns ([06](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Opening a value includes:
 
 - reading what it holds, such as an element or a `Box`'s value;
-- taking a span of it;
+- lending its elements, as `&positions.span` does;
 - iterating it;
 - growing it.
 
-Each open checks whether the allocator has reset since the value obtained its storage, and panics if it has. Taking a span also counts as using the arena until the span's last use. That is why the reset beside `pts` fails even though the program has not yet read an element through `pts`. The spec gives the exact check and how it works across threads ([06](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
+Each open checks whether the allocator has reset since the value obtained its storage, and panics if it has. Lending its elements also counts as using the arena until the reference's last use. That is why the reset beside `pts` fails even though the program has not yet read an element through `pts`. The spec gives the exact check and how it works across threads ([06](../spec/06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 
 ### Stale values, objects and heaps
 
@@ -137,7 +137,7 @@ Each open checks whether the allocator has reset since the value obtained its st
 
 ```swift
 do {
-    let names = frameArena.alloc collectNames(world)   // an alloc func: the list and its strings come from the arena
+    let names = frameArena.alloc collectNames(&world)  // an alloc func: the list and its strings come from the arena
     world.results = alloc names.clone()                // the clone and its strings come from .heap
 }
 frameArena.reset()
@@ -172,9 +172,9 @@ enum Tree {
 
 ### Boxes of `any P`
 
-**An existential, `any P`, views a value of any type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
+**An existential, `any P`, is a value of some type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
 
-**A plain `any P` only borrows its value, as a view does.** To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
+**Its size depends on the type inside, so, like a run of elements, an `any P` sits behind a reference or a box** ([01](../spec/01-values-and-ownership/references.md#unsized-types)). A `&any P` borrows its value, as `&boss` borrows an enemy, and is a pointer and a table. To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
 
 The game already has enemies that take damage. To put them in one list with breakable crates, give both types the same `Damageable` behavior:
 
@@ -195,12 +195,12 @@ extension Crate: Damageable {
 var targets = alloc List<Box<any Damageable>>()
 targets.append(alloc Box(Enemy(pos: [0, 0, 5])))  // a Box<Enemy> becomes a Box<any Damageable>, allocated once
 targets.append(alloc Box(Crate(pos: [4, 0, 2])))
-for t in &targets { t.value.takeDamage(10) }       // dynamic dispatch, on each target in place
+for t in mutable &targets { t.value.takeDamage(10) }   // dynamic dispatch, on each target in place
 ```
 
 **Both costs show in the code.** `any` marks the dynamic dispatch, and `alloc Box` the allocation, since `any P` never allocates on its own.
 
-**A `Box<any P>` takes only an unscoped value.** The box isn't scoped, so it can go anywhere, and a value that borrows, such as a `Span`, could then outlive what it borrows ([Views](04-views.md)).
+**A `Box<any P>` takes only an unscoped value.** The box isn't scoped, so it can go anywhere, and a value that borrows, such as a `&[Float]`, could then outlive what it borrows ([Views](04-views.md)).
 
 ## Reference counting: `Shared`
 
@@ -234,7 +234,7 @@ print(wet.value.roughness)                                               // 'val
 ```swift
 let grass = alloc Shared(Texture(pixels: alloc loadPixels("grass.tex"), width: 256))
 let cached = grass.weak()                            // WeakShared<Texture>: owns nothing
-if let tex = cached.upgrade() { draw(tex.value) }    // an owner while 'tex' lives, or nil if the texture is gone
+if let tex = cached.upgrade() { draw(&tex.value) }   // an owner while 'tex' lives, or nil if the texture is gone
 ```
 
 **A weak link names a shared value without keeping it alive.** `s.weak()` returns one, a `WeakShared<T>`: 8 bytes, and copyable ([06](../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
@@ -252,16 +252,16 @@ struct MeshComponent(var vertices: Slice<Vertex>)     // a stored view: a weak l
 
 let package = alloc Shared(try alloc Blob.load("level3.pak"))   // the level's bytes, loaded once
 let m = MeshComponent(vertices: try package.slice(of: Vertex.self, at: header.vertexOffset, count: header.vertexCount))
-upload(m.vertices.read()!)                            // a Span<Vertex>: one check, then none per element
+upload(m.vertices.read()!)                            // a '&[Vertex]': one check, then none per element
 ```
 
-**Long-lived state can't hold a `Span`, so a stored view into a buffer is a `Slice<T>`** ([06](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
+**Long-lived state can't hold a reference, which is scoped, so a stored view into a buffer is a `Slice<T>`** ([06](../spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
 
 **A slice's buffer lives behind a `Shared`**, often as a `Blob`: a block of bytes of fixed size.
 
 **A slice is copyable, and keeps nothing alive.** It holds a weak link to its buffer.
 
-**`s.read()` checks the buffer, and returns a `Span<T>?`.** It's `nil` once the buffer is gone: its `Shared` value destroyed, or its storage stale after a reset. Reading through the span checks nothing more.
+**`s.read()` checks the buffer, and returns a `(&[T])?`.** It's `nil` once the buffer is gone: its `Shared` value destroyed, or its storage stale after a reset. Reading through the reference checks nothing more.
 
 **`slice(of:at:count:)` fails unless the range is in bounds and aligned for `T`.** `T` must be `Pod`: a type for which any bytes are a valid value ([04](../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
@@ -279,7 +279,7 @@ func spawnBoss(at pos: Vec3) -> Box<Enemy>!AllocError {
         return try alloc Box(Enemy(pos: pos, hp: 5000))        // fails with AllocError instead of ending the program
     } catch {
         evictUnusedAssets()                                     // make room, then try once more
-        return try alloc Box(Enemy(pos: pos, hp: 5000))        // 'pos' is borrowed, so each attempt copies it
+        return try alloc Box(Enemy(pos: pos, hp: 5000))        // a Vec3 is implicitly copyable: each attempt copies 'pos'
     }
 }
 ```
@@ -297,7 +297,7 @@ So a collection that must back off under a hard memory limit, such as a streamin
 
 ```swift
 @noalloc
-func fillSilence(_ out: MutableSpan<Float>, _ history: mutable List<Float>) {
+func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
     history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
 }

@@ -7,13 +7,13 @@ The compiler knows a type's fields, cases and other declarations while it builds
 ```swift
 struct Stats(var hp: Float, var armor: Float)
 
-func dump<T>(_ value: T) {
+func dump<T>(_ value: &T) {
     static for field in T.fields {                      // unrolled in the compiler: one copy of the body per field
         log("\(field.name) = \(value[field])")          // each copy is checked with its own field's type
     }
 }
 
-dump(Stats(hp: 100, armor: 5))                          // compiles to two log calls, for hp and armor
+dump(&Stats(hp: 100, armor: 5))                         // compiles to two log calls, for hp and armor
 ```
 
 **Every type has compile-time metadata**, which reflection reads ([below](#what-reflection-can-read)).
@@ -23,18 +23,18 @@ dump(Stats(hp: 100, armor: 5))                          // compiles to two log c
 A complete serializer dispatches on the kind of type it gets, walking a struct's fields and an enum's cases with `static for`. Each branch is checked only for the types that reach it ([`static if` and conditional compilation](constants-and-conditions.md#static-if-and-conditional-compilation)):
 
 ```swift
-func serialize<T>(_ value: T, into w: mutable Writer) {
+func serialize<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: value)                                    // Vec3, Color, …: raw bytes
+        w.bytes(of: &value)                                   // Vec3, Color, …: raw bytes
     } else static if T.conforms(Serializable.self) {          // List, String, Map, Handle… conform in std
-        value.serialize(into: &w)
+        value.serialize(into: mutable &w)
     } else static if T.isEnum {
-        serializeEnum(value, into: &w)
+        serializeEnum(&value, into: mutable &w)
     } else static if T.isConstructible {                      // every field visible here, so none is skipped silently
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {
             w.key(field.name)
-            serialize(value[field], into: &w)
+            serialize(&value[field], into: mutable &w)
         }
         w.endObject()
     } else {
@@ -42,11 +42,11 @@ func serialize<T>(_ value: T, into w: mutable Writer) {
     }
 }
 
-func serializeEnum<T>(_ value: T, into w: mutable Writer) {
+func serializeEnum<T>(_ value: &T, into w: mutable &Writer) {
     static for c in T.cases {
-        if ref let payload = value[case: c] {                 // nil unless value holds case c
+        if ref let payload = &value[case: c] {                // nil unless value holds case c
             w.tag(c.name)
-            static for field in c.payload { serialize(payload[field], into: &w) }
+            static for field in c.payload { serialize(&payload[field], into: mutable &w) }
         }
     }
 }
@@ -63,12 +63,12 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | Expression | Meaning |
 | --- | --- |
 | `T.fields` | Compile-time list of stored fields, in declaration order |
-| `field.name` | `static StringView`: the field's name, or, for an unlabeled tuple element or an imported struct's anonymous union or struct member, its position among the fields, `0`, `1`, … |
+| `field.name` | `static &Text`: the field's name, or, for an unlabeled tuple element or an imported struct's anonymous union or struct member, its position among the fields, `0`, `1`, … |
 | `field.type` | The field's type, usable as a type |
 | `field.hasDefault` | A `const`: whether the declaration has an initializer, or is an optional `var` that isn't `unsafe`, which defaults to `nil` ([04](../04-types/structs.md#initializers)) |
 | `field.defaultValue()` | A call that evaluates that default |
 | `T.field(ofType: U.self)`, `T.hasField(ofType: U.self)` | The one stored field of type `U` (a compile error if there are none or several), and whether there is exactly one |
-| `T.cases`, `c.name`, `c.payload` | Enum cases, their names as `static StringView`s, and their payload types (a list of fields, like `T.fields`) |
+| `T.cases`, `c.name`, `c.payload` | Enum cases, their names as `static &Text`s, and their payload types (a list of fields, like `T.fields`) |
 | `field.attribute(Bounds.self)`, `T.attribute(A.self)`, `c.attribute(A.self)` | That attribute's value on the field, the type or the enum case, the first one where it is written more than once, or `nil` |
 | `field.attributes(Requires.self)`, `T.attributes(A.self)`, `c.attributes(A.self)` | A compile-time list of every value of that attribute there, in order |
 | `field.has(Transient.self)`, `T.has(A.self)`, `c.has(A.self)` | Whether the attribute is present |
@@ -77,9 +77,9 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 
 | Expression | Meaning |
 | --- | --- |
-| `T.name` | `static StringView`: the type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)` |
-| `T.baseName` | `static StringView`: the name `T`'s declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration |
-| `T.module` | `static StringView`: `T`'s module's name, empty for a structural type |
+| `T.name` | `static &Text`: the type's declared name, after its enclosing types' names and joined to them by `.`, with its generic arguments resolved, such as `Tag<Player>`, `Outer.Inner` or `(Int, Float)` |
+| `T.baseName` | `static &Text`: the name `T`'s declaration gives it alone, such as `Tag` or `Inner`, and an empty string for a type with no declaration |
+| `T.module` | `static &Text`: `T`'s module's name, empty for a structural type |
 | `T.id` | A stable 64-bit type id that no other type of the program has (below) |
 | `T.layoutId` | A 64-bit hash of every representation `T` depends on (below) |
 | `field.offset`, `field.bitRange`, `T.size`, `T.alignment` | Layout facts |
@@ -88,17 +88,15 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | `T.isConstructible` | Whether `T.construct` applies here ([below](#constructing-values-reflectively)) |
 | `T.conforms(P.self)`, `T == U`, `T != U` | Protocol conformance and type equality, for use in `static if` |
 
-**An `@opaque` type parameter's body reads none of `T`'s layout, fields, cases or conformances**, since an `@opaque` type has no layout Rayo can use and conforms to no protocol. Its name, module and id, the kind queries, its attributes and type equality stay readable ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
-
 **Reaching into a value:**
 
 | Expression | Meaning |
 | --- | --- |
-| `value[field]` | Projection of that field (borrowed, lent for change on a changeable place, or `consume` on one the code may move from) |
-| `value[fields: (f1, f2)]` | Several distinct fields projected at once as a tuple of disjoint places ([below](#tuples-field-lists-and-queries)) |
-| `value[case: c]` | A projection of case `c`'s payload, as a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](../04-types/collections.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case (borrowed, lent for change on a changeable place, or `consume`, which moves the payload out only when `value` holds `c`) |
+| `value[field]` | That field's place: `&value[field]` lends it, `mutable &value[field]` lends it for change from a changeable place, and `consume value[field]` moves it out of one the code may move from |
+| `value[fields: (f1, f2)]` | Several distinct fields at once, as a tuple of disjoint places ([below](#tuples-field-lists-and-queries)) |
+| `value[case: c]` | Case `c`'s payload, an optional place: a tuple whose fields are `c.payload`, a one-element tuple for a one-field payload ([04](../04-types/collections.md#tuples-ranges-and-arrays)), or `nil` when `value` holds another case. It is lent and moved from as `value[field]` is, and `consume` moves the payload out only when `value` holds `c` |
 
-**`value[field]` lends the field in place**, as a place property does ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)), so a view of it can outlive the access. An imported bitfield or an under-aligned field is the exception: it goes through a temporary there, as a value property does. Every `value[field]` is checked per instantiation, for one field ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). So generic code sees a place or a temporary exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
+**`value[field]` is the field's own place**, as a place property's is ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)), so a reference to it can outlive the access. An imported bitfield or an under-aligned field is the exception: it goes through a temporary there, as a value property does. Every `value[field]` is checked per instantiation, for one field ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). So generic code sees a place or a temporary exactly as the instantiation does. Each element of `value[fields: …]` follows the same terms.
 
 **Two kinds of imported C member reflect in their own way:**
 
@@ -108,30 +106,32 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 **Some types have no fields or cases for reflection to see:**
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
-- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
-- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`;
+- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `&any P` or a function type;
+- every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, a reference, an inline array or a `Simd` vector;
+- an unsized type, a run `[T]`, `Text` or `any P`, whose size isn't known where code is compiled ([01](../01-values-and-ownership/references.md#unsized-types));
 - an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
-For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout, and on an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
+For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout. On an unsized or an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
 
 **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type. The identity holds what tells the type apart from every other, built as follows:
 
 - **A declared type** has one part for each declaration from its module inward to itself: a module, type, extension, function, property, subscript, accessor, block, closure literal, `static if` branch or `static for` element. A part holds everything that tells its declaration apart from the others its scope may hold, so two declarations that may coexist never share a part:
     - its kind and its name;
     - an extension's extended type and constraints;
-    - a function's, property's or subscript's whole signature, with `static`, parameter labels, types and conventions, result and `where` clause;
+    - a function's, property's or subscript's whole signature, with `static`, parameter labels and types, result and `where` clause;
     - an accessor's kind (`get`, `set`, `borrow`, `mutate`);
     - for a block, closure or branch, which has no name, its position in the scope around it;
     - every compile-time argument the declaration's body is instantiated with (below).
 
   So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`. An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
-- **The type's own generic arguments** are part of it, a value argument by its value, and so is whether the type is an unscoped existential or `MutableRef<any P>`. So `Tag<Player>` and `Tag<Enemy>` differ, `Box<any P>` and `Box<(any P)>` do, and so do `MutableRef<any P>` and `MutableRef<(any P)>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+- **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `List<&Text>` and `List<static &Text>` ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 - **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
-- **A structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
+- **A structural type**, a tuple, inline array, run, raw pointer, reference, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
     - a tuple's labels;
     - an inline array's count;
+    - a reference's kind, shared or mutable;
     - an existential's protocols, as a set;
-    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; and each parameter's `keep` and convention;
+    - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; and each parameter's `keep`;
     - an error union's members, as a set.
 
   So `Closure<unsafe () -> Void>` and `Closure<() -> Void>` differ.
@@ -155,7 +155,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
 
 **A `T!Never` reads as the enum it is, though it stores no tag** ([04](../04-types/enums.md#enums)). `isEnum` is true for it, and its `cases` are `success` and `failure`. `value[case: .success]` always holds the `T`, and `value[case: .failure]` is always `nil`. Its `size` and `alignment` are `T`'s, and its `layoutId` covers its two cases and the absence of a tag, so it differs from `T`'s.
 
-The types it holds are those of its stored fields, elements and payloads. The recursion goes through a static view's elements, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
+The types it holds are those of its stored fields, elements and payloads. The recursion goes through what a static reference refers to, `Slice`, `Shared` and each owning container's element types, but not through raw pointers, object owners or weak pointers. Unlike `T.id`, `T.layoutId` changes whenever any representation it covers changes, barring a 64-bit hash collision. So a binary cache or a type-erased container can tell when data laid out for `T` is stale, or holds bit patterns that are no longer values of it.
 
 ## Reflection and access control
 
@@ -182,22 +182,22 @@ public struct Enemy(
 
 - **Which fields are listed.** `T.fields` lists every field inside `T`'s own module, and elsewhere only the `public` ones, or all of them when `T` is `@reflect(private)`.
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them. Where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), it also lets that code write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
-- **Writing.** `value[field]` lends for change only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
+- **Writing.** `mutable &value[field]`, and a write through `value[field]`, reach only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
 - **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path. `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
-- **`unsafe` fields and unions.** A field declared `unsafe`, such as `Span`'s `baseAddress`, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
+- **`unsafe` fields and unions.** A field declared `unsafe`, such as the raw pointer that an `unsafe` core keeps ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)), is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
 
 ## Constructing values reflectively
 
 Loaders (save files, network replication, asset import) need the reverse of `serialize`: building a `T` field by field, including fields with no default. **Static closures** do it: closures whose body is instantiated once per field, like a `static for` body:
 
 ```swift
-func deserialize<T>(_ r: mutable Reader) -> T!LoadError {
+func deserialize<T>(_ r: mutable &Reader) -> T!LoadError {
     static if T.conforms(Pod.self) && T.isPaddingFree {      // mirrors serialize: raw bytes
         return try r.read(T.self)
     } else static if T.conforms(Serializable.self) {         // one protocol for both directions
-        return try T(from: &r)
+        return try T(from: mutable &r)
     } else static if T.isEnum {
-        return try deserializeEnum(&r)
+        return try deserializeEnum(mutable &r)
     } else static if T.isConstructible {
         try r.beginObject(T.name)
         let value = try T.construct { static field in          // one instantiation per stored field
@@ -205,30 +205,30 @@ func deserialize<T>(_ r: mutable Reader) -> T!LoadError {
                 return field.defaultValue()                   // never saved; a @Transient field needs a default
             } else {
                 try r.expectKey(field.name)
-                return try deserialize(&r) as field.type      // must produce exactly field.type
+                return try deserialize(mutable &r) as field.type   // must produce exactly field.type
             }
         }
         try r.endObject()
-        return value
+        return consume value
     } else {
         static error("\(T.name) can't be built field by field here: conform it to Serializable")
     }
 }
 
-func deserializeEnum<T>(_ r: mutable Reader) -> T!LoadError {
+func deserializeEnum<T>(_ r: mutable &Reader) -> T!LoadError {
     static for c in T.cases {
         if try r.acceptTag(c.name) {                          // compares the file's tag with c's name as bytes, and reads past it only when they match
-            return try T.makeCase(c) { static field in try deserialize(&r) as field.type }
+            return try T.makeCase(c) { static field in try deserialize(mutable &r) as field.type }
         }
     }
     throw .unknownCase(type: T.name, offset: r.offset)       // the tag no case matched is still unread at r.offset
 }
 ```
 
-**A static closure appears only as the argument of `T.construct` or `T.makeCase`**, which run its instances once each, in field order. It is checked as that sequence of bodies, unrolled. An instance names the enclosing function's places as the body of a `static for` there would. So it may move out of one that no later instance uses, as `rebuild` does with each field of an owned `old` ([above](#reflection-and-access-control)):
+**A static closure appears only as the argument of `T.construct` or `T.makeCase`**, which run its instances once each, in field order. It is checked as that sequence of bodies, unrolled. An instance names the enclosing function's places as the body of a `static for` there would. So it may move out of one that no later instance uses, as `rebuild` does with each field of `old`, which it owns ([above](#reflection-and-access-control)):
 
 ```swift
-func rebuild<T>(_ old: owned T) -> T {
+func rebuild<T>(_ old: T) -> T {
     return T.construct { static field in consume old[field] }   // each instance moves out its own field of 'old'
 }
 ```
@@ -258,12 +258,12 @@ struct Columns<Row>(                                      // Row: a tuple of col
     var rows = alloc SoA<Row>(),                          // from the allocator the table is made with
 ): Table, Allocating
 
-func calibrate<Row>(_ table: mutable Columns<Row>) {
+func calibrate<Row>(_ table: mutable &Columns<Row>) {
     const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
     const cal = Row.field(ofType: Calibration.self)
     const out = Row.field(ofType: Calibrated.self)
-    var (rs, cs, os) = table.rows[mutableFields: (raw, cal, out)]   // a MutableSpan of each column
-    for (o, (r, c)) in os.mutableZip(rs.zip(cs)) { o.value = r.value * c.gain + c.offset }
+    var (rs, cs, os) = table.rows[mutableFields: (raw, cal, out)]   // a 'mutable &[…]' of each column
+    for (o, (r, c)) in os.mutableZip(&rs.zip(&cs)) { o.value = r.value * c.gain + c.offset }
 }
 
 struct Telemetry(                                         // one table per kind of sensor
@@ -272,11 +272,11 @@ struct Telemetry(                                         // one table per kind 
     var counters     = alloc Columns<(Timestamp, Count)>(),
 )
 
-func calibrateAll(_ t: mutable Telemetry) {               // every table with all three columns
+func calibrateAll(_ t: mutable &Telemetry) {             // every table with all three columns
     static for f in Telemetry.fields where f.type.Row.hasField(ofType: Reading.self)
                                          && f.type.Row.hasField(ofType: Calibration.self)
                                          && f.type.Row.hasField(ofType: Calibrated.self) {
-        calibrate(&t[f])                                  // instantiated for 'thermometers' and 'flowMeters'
+        calibrate(mutable &t[f])                          // instantiated for 'thermometers' and 'flowMeters'
     }
 }
 ```
@@ -289,24 +289,24 @@ struct Archetype<Row>(                                    // Row: a tuple of com
     var entities = alloc List<Entity>(),
 ): Table, Allocating
 
-func integrate<Row>(_ table: mutable Archetype<Row>, dt: Float) {
+func integrate<Row>(_ table: mutable &Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent
     const vf = Row.field(ofType: Velocity.self)
-    var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // MutableSpan<Transform>, MutableSpan<Velocity>
-    for (t, v) in ts.mutableZip(vs) { t.position += v.linear * dt }
+    var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // a 'mutable &[Transform]' and a 'mutable &[Velocity]'
+    for (t, v) in ts.mutableZip(&vs) { t.position += v.linear * dt }
 }
 
 struct World(                                             // one table per archetype the game declares
-    var movers   = Archetype<(Transform, Velocity)>(),
-    var sleepers = Archetype<(Transform, Velocity, Asleep)>(),
-    var props    = Archetype<(Transform, Mesh)>(),
+    var movers   = alloc Archetype<(Transform, Velocity)>(),
+    var sleepers = alloc Archetype<(Transform, Velocity, Asleep)>(),
+    var props    = alloc Archetype<(Transform, Mesh)>(),
 )
 
-func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Velocity, but not Asleep"
+func integrateAll(_ w: mutable &World, dt: Float) {        // "Transform and Velocity, but not Asleep"
     static for f in World.fields where f.type.Row.hasField(ofType: Transform.self)
                                      && f.type.Row.hasField(ofType: Velocity.self)
                                      && !f.type.Row.hasField(ofType: Asleep.self) {
-        integrate(&w[f], dt: dt)                          // instantiated for 'movers' only
+        integrate(mutable &w[f], dt: dt)                  // instantiated for 'movers' only
     }
 }
 ```
@@ -318,13 +318,13 @@ func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Ve
 - **Distinct fields.** The fields must be distinct `const` field descriptors, checked at instantiation. Distinct stored fields of a struct or tuple never overlap ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), except those the next bullet names.
 - **Overlapping members are rejected** at instantiation, since writing one can change the other ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)): two members of a union type (`T.isUnion`), which are all one place, and two imported bitfields in the same C memory location.
 - **One way per declaration.** Fields borrowed in different ways take a declaration each ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)). In generic code, where the fields may be one, two such declarations overlap, so one `value[fields:]` borrows both exclusively instead (below).
-- **`SoA`.** `s[fields:]` on an `SoA` `s` returns a tuple of its columns, each a `Span`, and `s[mutableFields:]` each a `MutableSpan` ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+- **`SoA`.** `s[fields:]` on an `SoA` `s` returns a tuple of its columns, each a `&[T]`, and `s[mutableFields:]` each a `mutable &[T]` ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 
 For one row of a table, held in a `var` in code generic over `Row`, the two fields may be one where the borrows are checked:
 
 ```swift
 var row: Row = …
-ref var (o, r) = &row[fields: (out, raw)]     // both borrowed exclusively, checked distinct at instantiation
+ref var (o, r) = mutable &row[fields: (out, raw)]   // both borrowed exclusively, checked distinct at instantiation
 ```
 
 For a concrete type, each field takes the declaration it needs, since distinct stored fields never overlap:
@@ -333,8 +333,8 @@ For a concrete type, each field takes the declaration it needs, since distinct s
 const sOut = Sample.field(ofType: Calibrated.self)
 const sRaw = Sample.field(ofType: Reading.self)
 var sample: Sample = …
-ref var o = &sample[sOut]                     // borrows the Calibrated exclusively
-ref let r = sample[sRaw]                      // borrows the Reading shared: a disjoint field
+ref var o = mutable &sample[sOut]             // borrows the Calibrated exclusively
+ref let r = &sample[sRaw]                     // borrows the Reading shared: a disjoint field
 ```
 
 ## Enumerating a module's types

@@ -6,22 +6,22 @@ A function that can fail in an expected way returns the failure to its caller as
 
 ```swift
 enum LoadError: Error {
-    case notFound(path: static StringView)
+    case notFound(path: static &Text)
     case corrupt(offset: UInt?)                               // nil where the offset isn't known
-    case unknownCase(type: static StringView, offset: UInt)   // reflective loaders (09)
-    case badValue(field: static StringView)
+    case unknownCase(type: static &Text, offset: UInt)   // reflective loaders (09)
+    case badValue(field: static &Text)
     case outOfMemory
 }
 
-func loadMesh(_ path: StringView) -> Mesh!LoadError {
-    let bytes = try readFile(path)                      // readFile returns List<UInt8>!IoError; converted below
+func loadMesh(_ path: &Text) -> Mesh!LoadError {
+    let bytes = try readFile(&path)                     // readFile returns List<UInt8>!IoError; converted below
     guard bytes.count >= MeshHeader.size else { throw .corrupt(offset: 0) }
     ...
 }
 
 extension LoadError {                                   // enables 'try' across error types
-    @converts init(_ e: owned IoError) { self = if e == .missing { .notFound(path: "?") } else { .corrupt(offset: nil) } }
-    @converts init(_ e: owned ParseError) { self = .corrupt(offset: e.offset) }
+    @converts init(_ e: IoError) { self = if e == .missing { .notFound(path: "?") } else { .corrupt(offset: nil) } }
+    @converts init(_ e: ParseError) { self = .corrupt(offset: e.offset) }
 }
 ```
 
@@ -35,7 +35,7 @@ enum Result<Success, Failure: Error> {
     case failure(Failure)
 }
 
-func loadLevel(_ path: StringView) -> Level!(IoError | ParseError)   // the same as -> Result<Level, (IoError | ParseError)>
+func loadLevel(_ path: &Text) -> Level!(IoError | ParseError)   // the same as -> Result<Level, (IoError | ParseError)>
 ```
 
 **`Success!Failure` is `Result<Success, Failure>`, a std enum in the prelude that holds a success value or an error** ([11](../11-compilation-model.md#the-prelude)). Its `Failure` is its **failure type**, and so is that of a function whose result type it is. The two spellings name one type, and either is valid wherever a type is. The success type comes first, as in `T?`, since Rayo writes what modifies a type after it.
@@ -60,9 +60,9 @@ Like every Rayo enum, it is never `Pod`, since a tag that no case uses is no val
 ### What a failure type names
 
 ```swift
-func tryMap<E: Error>(_ xs: Span<Int>, _ f: (Int) -> Int!E) -> List<Int>!E
+func tryMap<E: Error>(_ xs: &[Int], _ f: (Int) -> Int!E) -> List<Int>!E
 func square(_ x: Int) -> Int { x * x }
-let squares = tryMap(xs, square)     // square can't fail, so E is Never, and the call is a List<Int>
+let squares = tryMap(&xs, square)    // square can't fail, so E is Never, and the call is a List<Int>
 log("\(squares.count) squares")
 ```
 
@@ -78,7 +78,7 @@ log("\(squares.count) squares")
 
 **`T!Never` is a type of its own, distinct from `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
-**A call whose result type, worked out at the call, is `T!Never` has type `T`, and so does an `await` whose awaitable's `Failure` is `Never` there** ([07](../07-concurrency/tasks.md#awaitables)). The result type is worked out after the call's generic arguments are substituted, so `tryMap(xs, square)` above is a `List<Int>`. The compiler takes the value out, which can't fail, so code that can't fail never writes `try`. A `try` on such a call is a compile error, since the call is no `Result`.
+**A call whose result type, worked out at the call, is `T!Never` has type `T`, and so does an `await` whose awaitable's `Failure` is `Never` there** ([07](../07-concurrency/tasks.md#awaitables)). The result type is worked out after the call's generic arguments are substituted, so `tryMap(&xs, square)` above is a `List<Int>`. The compiler takes the value out, which can't fail, so code that can't fail never writes `try`. A `try` on such a call is a compile error, since the call is no `Result`.
 
 **This rule gives those two expressions their type, and converts nothing.** So a member or an operator never sees a `T!Never` as a `T`, and a conformance of `T` never covers a `T!Never`, which would give that type a second one. Generic code is checked once, so in a body generic over `E` or `X.Failure`, such a call is still an `R!E` or an `Output!Failure`, taken apart with `try`. A `T!Never` value from anywhere else, such as one a generic container stores, stays a `Result` too.
 
@@ -112,9 +112,9 @@ struct FixedSeed(let seed: UInt64): SeedSource      // a stored UInt64 meets it:
 A function that can fail for more than one reason names every error type in its failure type:
 
 ```swift
-func loadLevel(_ path: StringView) -> Level!(IoError | ParseError) {
-    let bytes = try readFile(path)            // fails with IoError
-    return try parseLevel(bytes)              // fails with ParseError
+func loadLevel(_ path: &Text) -> Level!(IoError | ParseError) {
+    let bytes = try readFile(&path)           // fails with IoError
+    return try parseLevel(&bytes)             // fails with ParseError
 }
 
 struct LoadReport(var lastError: (IoError | ParseError)?)
@@ -130,10 +130,10 @@ typealias Failure = (IoError | ParseError)
 ## Propagating errors with `try`
 
 ```swift
-func loadBossLevel(_ path: StringView) -> Level!LoadError {
-    let level = try loadLevel(path)            // the level, or a return with the error, converted to LoadError
+func loadBossLevel(_ path: &Text) -> Level!LoadError {
+    let level = try loadLevel(&path)           // the level, or a return with the error, converted to LoadError
     guard level.hasBoss else { throw .badValue(field: "boss") }
-    return level                               // returned as .success(level)
+    return consume level                       // returned as .success(level)
 }
 ```
 
@@ -141,20 +141,21 @@ func loadBossLevel(_ path: StringView) -> Level!LoadError {
 
 - **`return v`** of a `T`, where the result type is `T!E`, returns `.success(v)`, as a value converts to `T?` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A `Result` returned whole is returned as it is. Its failure type may also be one that converts implicitly to the result's, as a member converts to its union ([above](#error-unions)).
 - **`throw e`** returns `.failure(e)`, converting `e`'s members as `try` does (below). Inside a `do` block, it fails the block instead ([below](#handling-errors-with-do-and-catch)).
+- **Each operand is a position**, so a place given to `return` or `throw` writes its mark, as in `return consume level` above ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
 
-**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error, and the operand takes no implicit conversion into a `Result`, so `let n: Int = try 5` is an error too. `try` takes `r` as a value, so a place moves in, as it does into an `owned` parameter ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)). On a `T!Never`, it gives the `T`, and never fails.
+**`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error, and the operand takes no implicit conversion into a `Result`, so `let n: Int = try 5` is an error too. `try` takes `r` as a value, so a place given to it writes `consume` or `copy` before it, unless its type is implicitly copyable, as every position does ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). A reference to a `Result` is no `Result`, so `try &r` is a compile error. On a `T!Never`, it gives the `T`, and never fails.
 
 **`try` applies to the whole postfix chain after it**, as every prefix operator does ([12](../12-grammar/constructs.md#expressions)). So `try f().x` names the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x`.
 
-**When `try r` is expected to be a `T`, `r` is expected to be a `Result` whose success type is `T`**, with its failure type left open. So in `try deserialize(&r) as Mesh`, the `as` binds `deserialize`'s `T` to `Mesh` ([09](../09-compile-time/reflection.md#constructing-values-reflectively)).
+**When `try r` is expected to be a `T`, `r` is expected to be a `Result` whose success type is `T`**, with its failure type left open. So in `try deserialize(mutable &r) as Mesh`, the `as` binds `deserialize`'s `T` to `Mesh` ([09](../09-compile-time/reflection.md#constructing-values-reflectively)).
 
 **A `try` whose operand's failure type isn't `Never` stands in a function or closure whose result is a `Result`, or in a `do` block.** Anywhere else it is a compile error, since the error would have nowhere to go.
 
 **A property can fail only through the value its `get` returns:**
 
 ```swift
-var level: Level!IoError { get { try load(path) } }   // a get body: it propagates an IoError, or returns .success
-var cache: Mesh!LoadError { borrow { slot } }         // hands out a place that holds a Result; the borrow can't fail
+var level: Level!IoError { get { try load(&path) } }  // a get body: it propagates an IoError, or returns .success
+var cache: Mesh!LoadError { borrow { &slot } }        // hands out a place that holds a Result; the borrow can't fail
 ```
 
 - **A `get` body is a function body**, so `try` and `throw` work in it where the property's type is a `Result`, as in `level`. A subscript's `get` works the same way.
@@ -164,7 +165,7 @@ var cache: Mesh!LoadError { borrow { slot } }         // hands out a place that 
 
 **The error propagates member by member.** When the enclosing function infers its errors, the members join that union unchanged. Otherwise each member must be the enclosing failure type, or one of its members, or convert to it:
 
-- **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, declared `owned`. The error moves in, so the new error may carry what the error borrowed, never a view of the error itself ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it can't fail. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.
+- **Conversion.** A member converts through the target type's `@converts` initializer whose single parameter is exactly that member, so it owns its argument. The error moves in, so the new error may carry what the error borrowed, never a view of the error itself ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)). A type may have one such initializer per source type, and it can't fail. It is declared in the target type's module or the source type's, and imports form no cycle, so only one of the two can see both types, and no two modules give one pair different conversions.
 - **Into a union.** When the target is a union, a member that is one of its members stays itself, and otherwise exactly one of its members may convert from it. If two could, the `try` or `throw` is an error.
 - **A local lookup.** The lookup looks only at the target type, or for a generic error type at its constraints, so it stays bounded and local. With no matching initializer, the `try` is a compile error.
 
@@ -173,10 +174,10 @@ var cache: Mesh!LoadError { borrow { slot } }         // hands out a place that 
 **Conversions in generic code.** A protocol may require a conversion, and a `try` in generic code then converts through that requirement:
 
 ```swift
-protocol FromIo: Error { @converts init(_ e: owned IoError) }   // every conforming error converts from IoError
+protocol FromIo: Error { @converts init(_ e: IoError) }   // every conforming error converts from IoError
 
-func load<E: FromIo>(_ p: StringView) -> List<UInt8>!E {
-    let bytes = try readFile(p)        // readFile fails with IoError: converted through E's requirement
+func load<E: FromIo>(_ p: &Text) -> List<UInt8>!E {
+    let bytes = try readFile(&p)       // readFile fails with IoError: converted through E's requirement
     ...
 }
 ```
@@ -184,10 +185,10 @@ func load<E: FromIo>(_ p: StringView) -> List<UInt8>!E {
 ## Keeping an error as a value
 
 ```swift
-let outcome = loadLevel(path)       // no 'try': a Level!(IoError | ParseError), kept as a value
-loader.report(outcome)              // handed on: whoever takes it apart handles the error
-loadLevel(path)                     // error: the Result is never used
-_ = loadLevel(path)                 // fine: the outcome is dropped on purpose
+let outcome = loadLevel(&path)      // no 'try': a Level!(IoError | ParseError), kept as a value
+loader.report(consume outcome)      // handed on: whoever takes it apart handles the error
+loadLevel(&path)                    // error: the Result is never used
+_ = loadLevel(&path)                // fine: the outcome is dropped on purpose
 ```
 
 **A call written without `try` evaluates to its `Result`**, so code keeps an error by leaving `try` out. It can store the `Result`, move it to another thread, and take it apart later with `try` or `when`.
@@ -198,18 +199,18 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 ```swift
 let outcome = {
-    let bytes = try readFile(path)
-    return try parseLevel(bytes)
+    let bytes = try readFile(&path)
+    return try parseLevel(&bytes)
 }()                                 // a Level!(IoError | ParseError): the first failure, kept as a value
 ```
 
-**A `Result` is an ordinary enum, so a `when` matches it as it matches any enum** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). A pattern on `.failure` matches an error union with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)). A place subject is borrowed, so a `when` reads a `Result` the code only borrows, which `try` can't take, and binds its payload in place:
+**A `Result` is an ordinary enum, so a `when` matches it as it matches any enum** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). A pattern on `.failure` matches an error union with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)). A subject lent with `&` stays where it is, so a `when` reads a `Result` the code only borrows, which `try` can't take, and binds its payload in place ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
 ```swift
-func show(_ outcome: Level!(IoError | ParseError)) {
-    let first = try? outcome                                    // error: 'outcome' is borrowed, and 'try?' takes it
-    when outcome {
-        .success(level) { preview(level) }                      // borrows the level in place
+func show(_ outcome: &(Level!(IoError | ParseError))) {
+    let first = try? consume outcome                            // error: 'outcome' is borrowed, so 'try?' can't take it
+    when &outcome {
+        .success(level) { preview(&level) }                     // 'level' names the level in place
         .failure(IoError.missing) { showMissingFileDialog() }
         .failure(e as ParseError) { log("parse error at \(e.offset)") }
         .failure { showDiskErrorDialog() }                      // the rest of IoError
@@ -223,8 +224,8 @@ func show(_ outcome: Level!(IoError | ParseError)) {
 
 ```swift
 do {
-    let level = try loadLevel(path)           // the do block's error type: IoError | ParseError
-    start(level)
+    let level = try loadLevel(&path)          // the do block's error type: IoError | ParseError
+    start(consume level)
 } catch IoError.missing {                      // one case of one member, qualified by its type
     showMissingFileDialog()
 } catch is IoError {                           // the rest of IoError
@@ -233,9 +234,9 @@ do {
     log("parse error at \(e.offset)")
 }
 
-func loadOrDefault(_ path: StringView) -> Level!IoError {
+func loadOrDefault(_ path: &Text) -> Level!IoError {
     do {
-        return try loadLevel(path)
+        return try loadLevel(&path)
     } catch is ParseError {                    // ParseError is handled here...
         return alloc Level()
     }                                          // ...and IoError propagates, as a 'try' would

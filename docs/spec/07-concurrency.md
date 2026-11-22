@@ -5,16 +5,16 @@ Concurrent code becomes unsafe when two threads reach the same storage without c
 ```swift
 import std.jobs
 
-join({ updateAI(&world.ai, sense: world.perception) },    // may run both closures at once, and returns when both are done
-     { integrate(&world.bodies, dt: dt) })                 // fine: each closure writes a different field
+join({ updateAI(mutable &world.ai, sense: &world.perception) },   // may run both closures at once, and returns when both are done
+     { integrate(mutable &world.bodies, dt: dt) })                 // fine: each closure writes a different field
 
-join({ steer(&world.ai, around: world.bodies) },
-     { integrate(&world.bodies, dt: dt) })                 // error: one closure reads 'world.bodies' while the other writes it
+join({ steer(mutable &world.ai, around: &world.bodies) },
+     { integrate(mutable &world.bodies, dt: dt) })                 // error: one closure reads 'world.bodies' while the other writes it
 
-ThreadScope.run { s in                                     // threads that may borrow this function's locals
-    s.spawn { integrate(&world.bodies, dt: dt) }           // runs on another thread
-    mix(&world.audio)                                      // runs on this thread meanwhile
-}                                                          // the spawned thread has finished here
+ThreadScope.run { s in                                            // threads that may borrow this function's locals
+    s.spawn { integrate(mutable &world.bodies, dt: dt) }          // runs on another thread
+    mix(mutable &world.audio)                                     // runs on this thread meanwhile
+}                                                                 // the spawned thread has finished here
 ```
 
 The first `join` can write two separate fields of `world` at once. The second is rejected because one job reads `world.bodies` while the other changes it. `ThreadScope.run` lets the spawned work borrow a local value because the work finishes before the scope returns, or before a panic unwinds out of it. A panic in work on another thread reaches the thread that waits for it, as a panic in a closure it called itself would ([Panics in lent work](07-concurrency/thread-work.md#panics-in-lent-work)).
