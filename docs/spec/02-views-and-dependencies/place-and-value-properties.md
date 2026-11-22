@@ -7,8 +7,8 @@ A computed property or subscript gives part of a value a name of the type's choo
 ```swift
 struct Enemy(var stats: Stats) {
     var hp: Int {                       // a place property: hands out its own storage
-        borrow { stats.hp }
-        mutate { &stats.hp }
+        borrow { &stats.hp }
+        mutate { mutable &stats.hp }
     }
 }
 
@@ -53,17 +53,28 @@ A body with no accessor keyword returns a value, as a `get` does.
 ```swift
 struct Pool<T>(…) {
     subscript(h: Handle<T>) -> T? {                              // hands out part of the pool, never of 'h' (below)
-        borrow { if valid(h) { dense[slots[h.index].denseIndex] } else { nil } }
-        mutate { if valid(h) { &dense[slots[h.index].denseIndex] } else { nil } }
+        borrow { if valid(h) { &dense[slots[h.index].denseIndex] } else { nil } }
+        mutate { if valid(h) { mutable &dense[slots[h.index].denseIndex] } else { nil } }
     }
 }
 
-world.enemies[h]?.hp -= 10                   // the mutate accessor, with optional chaining
-if ref var e = &world.enemies[h] { e.hp = 0 }
-ref let pos = world.enemies[h]!.pos          // the borrow accessor; '!' panics on a stale handle
+world.enemies[h]?.hp -= 10                       // the mutate accessor, with optional chaining
+if ref var e = mutable &world.enemies[h] { e.hp = 0 }
+ref let pos = &world.enemies[h]!.pos             // the borrow accessor; '!' panics on a stale handle
 ```
 
-**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `mutable &`, as every place lent for change is marked ([01](../01-values-and-ownership/references.md#making-a-reference)). Nothing is copied or moved, so the caller reaches the place itself.
+**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. So a `borrow` body writes `&` before its place, and a `mutate` body writes `mutable &`, as a `return` of a place writes its mark ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). Nothing is copied or moved, so the caller reaches the place itself.
+
+**A place property with a `borrow` and a `mutate` serves `&` and `mutable &` under one name.** Reading through it, as `x.p.m` does, and `&x.p` use its `borrow`. Changing through it, as `x.p.m = v` or a `mutating` call on `x.p` does, and `mutable &x.p` use its `mutate`. A place property with only a `borrow` lends its place only for reading, so a change through it, or `mutable &` of it, is a compile error, since nothing lends that place for change:
+
+```swift
+extension Squad {
+    var leader: Enemy { borrow { &members[0] } }   // a borrow and no mutate
+}
+show(&squad.leader)                                // fine: the borrow
+squad.leader.hp -= 1                               // error: 'leader' has no 'mutate'
+heal(mutable &squad.leader)                        // error: 'leader' has no 'mutate', so 'mutable &' can't lend it
+```
 
 **Each source's access ends at the last use of the place and of every value that depends on it**, as a borrow of a stored field does, and nothing runs then ([below](#the-place-lies-in-its-sources)). An argument that is no source is lent only for the accessor's call. So `world.enemies[h]?.hp -= 10` changes the element where it lies in the pool. A view of the place can outlive the statement that took it, as a view of a field can ([below](#what-a-place-depends-on)).
 
@@ -72,32 +83,32 @@ ref let pos = world.enemies[h]!.pos          // the borrow accessor; '!' panics 
 **A place property's place lies in its sources, which its declaration names.** A **source** is a place, or what a place borrows, that the handed-out place may be part of. By default the sources are `self` and what it borrows, as `where return borrows self` would name them, or static storage for a `static` property. So a subscript's arguments are only keys, as `h` is for `Pool`. A `where` item with `return` as its subject names the sources instead ([Precise dependencies (opt-in)](dependency-lifetimes.md#precise-dependencies-opt-in)):
 
 - **`where return borrows x`**: the parameter `x`, `self` included, and what `x` borrows;
-- **`where return outlives x`**: only what `x` borrows, such as the elements a span views ([below](#what-a-place-depends-on));
+- **`where return outlives x`**: only what `x` borrows, such as the elements an iterator walks ([below](#what-a-place-depends-on));
 - **`where return borrows static`**: static storage.
 
 Several items name several sources, and then `self` is a source only when an item names it:
 
 ```swift
 extension Node {
-    subscript(graft g: mutable Node) -> Node where return borrows g {   // hands out part of 'g', not of self
-        borrow { g } mutate { &g }
+    subscript(graft g: mutable &Node) -> Node where return borrows g {   // hands out part of 'g', not of self
+        borrow { &g } mutate { mutable &g }
     }
 }
 ```
 
-**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)).
+**A `mutate` hands out a place only in `self`, a `mutable &` parameter, or what one of them refers to or views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)).
 
-**The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements and other place properties. This is an error, since `other` is no source:
+**The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements, references and other place properties. This is an error, since `other` is no source:
 
 ```swift
 extension Inventory {
-    subscript(from other: Inventory) -> Item { borrow { other.items[0] } }   // error: 'other' isn't a source
+    subscript(from other: &Inventory) -> Item { borrow { &other.items[0] } }   // error: 'other' isn't a source
 }
 ```
 
 **The place is never one of these, since none is storage the caller could go on using:**
 
-- a local, a temporary or an `owned` parameter's own storage, each of which ends when the body returns;
+- a local, a temporary or an owned parameter's own storage, each of which ends when the body returns;
 - the result of a value property's `get`, which is such a temporary;
 - an imported bitfield or an under-aligned field, which is reached only through a copy (above);
 - a place reached through a dynamic access the body begins, such as an object's `value`, since that access ends when the body returns ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
@@ -109,10 +120,10 @@ extension Inventory {
 ```swift
 extension Inventory {
     var all: List<Item> {
-        borrow { items }
+        borrow { &items }
         mutate {
             defer { items = alloc List() }       // error: changes the place the body hands out
-            return &items
+            return mutable &items
         }
     }
 }
@@ -124,34 +135,38 @@ extension Inventory {
 
 ```swift
 struct Inventory(var items: List<Item>) {
-    subscript(i: UInt) -> Item { borrow { items[i] } mutate { &items[i] } }
+    subscript(i: UInt) -> Item { borrow { &items[i] } mutate { mutable &items[i] } }
 }
-func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: the view depends on 'inv', not on '0'
+func firstName(_ inv: &Inventory) -> &Text { &inv[0].name }   // fine: the reference depends on 'inv', not on '0'
 ```
 
-**The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on each `mutable` source, and on `self` through a `mutate` when `self` is a source. It depends shared on every other source, and on no argument that isn't one. Each source's set keeps its own kinds. So `cur[graft: &spare]` depends exclusively on `spare` and what it holds, not on `cur`, and a `mutable` parameter that no item names, such as a log the accessor writes to, stays free.
+**The kinds are rule 3's**, since the accessor is a call ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). The place depends exclusively on each `mutable &` source, and on `self` through a `mutate` when `self` is a source. It depends shared on every other source, and on no argument that isn't one. Each source's set keeps its own kinds. So `cur[graft: mutable &spare]` depends exclusively on `spare` and what it holds, not on `cur`, and a `mutable &` parameter that no item names, such as a log the accessor writes to, stays free.
 
 **The place depends on a source place whatever the place's type.** The shallow and sealed exemptions spare a value a call returns, which can't reach a shallow argument's own bytes ([Shallow values](dependency-projection-and-results.md#shallow-values)). A place lies inside its source, so they never apply to it:
 
 ```swift
 struct Pair(var a: Int, var b: Int) {
-    var first: Int { borrow { a } mutate { &a } }
+    var first: Int { borrow { &a } mutate { mutable &a } }
 }
-func leak() -> any Equatable {
+func leak() -> &Int {
     let p = Pair(a: 1, b: 2)
-    return p.first                       // error: the view depends on local 'p', which is destroyed on return
+    return &p.first                      // error: the reference depends on local 'p', which is destroyed on return
 }
 ```
 
 **Each source place is the caller's place, never a bit copy**, since the place lies inside it ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-**On an exclusive view type, a view of the place depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views. `s` is declared `mutable` rather than received owned, since no result may depend on an owned parameter's own storage, which ends with the call ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)):
+**What the source is reached through decides what a view of the place depends on**, as rule 1 says of any place ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)). Through a mutable reference, a view of the place depends on the place that holds the reference, so it keeps a chunk borrowed while it lives. Through a shared reference, it depends on what the reference carries, so a reference to an element of a `&[T]` depends on what owns the elements, not on the place that holds the `&[T]`:
 
 ```swift
-func label(_ s: mutable MutableSpan<Item>, _ i: UInt) -> StringView { s[i].name.view }
+for chunk in data.mutableChunks(64) {
+    let head = &chunk[0]                 // depends on 'chunk', and through it on 'data'
+    chunk[0] = 0                         // error: 'chunk' is borrowed by 'head' (used below)
+    print("\(head)")
+}
 ```
 
-**On a view type that `outlives` accepts, `where return outlives self` says the place is reached through what the view carries** ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So a view of a span's element depends on what the span views, not on the variable that holds the span.
+**On a type that `outlives` accepts, `where return outlives self` says the place is reached through what `self` carries** ([Staying valid after a parameter moves on: `outlives`](dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)). So a view of the place depends on what `self` refers to or walks, not on the place that holds `self`.
 
 ### Optional places and tuples of places
 
@@ -161,12 +176,14 @@ A place property whose declared type is written `T?` is an **optional place prop
 
 - **An optional place property's place is the unwrapped `T`**: the `T` that `?.`, `!`, `??`, an optional binding or a `when` pattern unwraps.
 - **So is the place of an optional chain through a place**, since `a?.b` names the `b` inside `a`'s payload and no `B?` lies in memory.
-- **A tuple of places is used element by element**, as a pattern binds them. It comes from a body that hands out several places at once, as `(&a, &b)`, or from `value[fields:]` ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)).
+- **A tuple of places is used element by element**, as a pattern binds them. It comes from a body that hands out several places at once, as `(mutable &a, mutable &b)` does, or from `value[fields:]` ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)).
+
+**`&` or `mutable &` of an optional place makes a reference to an optional**, so `&world.enemies[h]` is a `&Enemy?` ([01](../01-values-and-ownership/references.md#making-a-reference)). A `ref` binding of a condition unwraps it to its payload, as `if ref var e = mutable &world.enemies[h]` does above, and binds nothing when the place is `nil` ([01](../01-values-and-ownership/bindings.md#conditions)).
 
 **No such `T?` or tuple exists in memory, so none can be:**
 
 - assigned as a whole;
-- lent with `&` or bound as a place, except by a condition or pattern that unwraps or destructures it;
+- lent with `&` or `mutable &`, except to a condition or pattern that unwraps or destructures it at once;
 - used as a `mutating` or `consuming` receiver, such as `take()`;
 - passed as an argument other than a copy.
 
@@ -184,26 +201,26 @@ A place property whose declared type is written `T?` is an **optional place prop
 var a = Angle(radians: 0)
 a.degrees = 90                               // calls set
 a.degrees += 45                              // calls get, then set with the sum
-ref var d = &a.degrees                       // calls get, lends the copy, then calls set once the access ends
+ref var d = mutable &a.degrees               // calls get, lends the copy, then calls set once the access ends
 
 struct Flags(var bits: UInt32) {
     var low: UInt16 { UInt16(truncating: bits) }      // a get: these 16 bits lie in no place of their own
 }
 ```
 
-**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as an `owned` parameter named `newValue`. A `let` or `var` of what a `get` returns owns it, and a `ref let` of it is a compile error, since there is no place to refer to ([01](../01-values-and-ownership/bindings.md#what-a-ref-let-sees)). A `ref var` of `&a.p` refers to the copy a change lends, as the next paragraphs say. Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
+**A `get` returns a value, and a `set` takes one.** A `set` receives the assigned value as a parameter named `newValue`, which owns it. A `let` or `var` of what a `get` returns owns it. A `ref let` of `&a.p` is a compile error, since `&` lends a temporary that dies with the statement ([01](../01-values-and-ownership/bindings.md#what-a-ref-let-sees)). A `ref var` of `mutable &a.p` refers to the copy a change lends, as the next paragraphs say. Of the four accessors, only a `get` can fail, when the property's type is a `Result` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 
 **Assignment calls `set`.** So does a compound assignment, since `a ⊕= b` is `a = a ⊕ b` ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
-**Any other change calls `get`, lends the copy it returns, and calls `set` with that copy once the access ends.** Such changes include binding the property to a `ref var` with `&`, passing it as a `mutable` argument, and calling a `mutating` method on it. Until then, the copy lives in a hidden local of the caller.
+**Any other change calls `get`, lends the copy it returns, and calls `set` with that copy once the access ends.** Such changes include binding `mutable &a.p` to a `ref var`, passing it as a `mutable &` argument, and calling a `mutating` method on the property. Until then, the copy lives in a hidden local of the caller.
 
 **The access is held until the last use of every value that depends on it**, as a dynamic access is ([Rule 6: Dynamic accesses](dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). So a view of the copy depends on the access, and `set` runs only once nothing uses the copy. **Such a view works like any view within the function, but can't leave it** ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)), since the access began in that function.
 
 **Meanwhile the access keeps `self` and the subscript's arguments lent as it began them**, `self` exclusively, since `set` changes it. So what depends on the access depends on those places too, whatever the shallow rule, `outlives` or `copy` drops from its set.
 
-**That `set` call is checked as if written there.** So the change is an error when the `get`'s result may depend on `self` or on a `mutable` argument of the access, which `set` changes while its `newValue` still views it.
+**That `set` call is checked as if written there.** So the change is an error when the `get`'s result may depend on `self` or on a `mutable &` argument of the access, which `set` changes while its `newValue` still views it.
 
-**Both calls take the subscript's arguments**, worked out once when a compound assignment or another change calls `get` and then `set`. A borrowed or `mutable` argument is lent to each in turn, and a copyable `owned` one is copied for the `get`. So such an access is a compile error when an `owned` parameter's type is move-only, since one value can't move into two calls.
+**Both calls take the subscript's arguments**, worked out once when a compound assignment or another change calls `get` and then `set`. A `&` or `mutable &` argument is lent to each in turn, and a copyable argument that a parameter owns is copied for the `get`. So such an access is a compile error when an owning parameter's type is move-only, since one value can't move into two calls.
 
 ## Panics during a change
 
@@ -216,11 +233,11 @@ struct Flags(var bits: UInt32) {
 **Through an under-aligned field, a panic follows 04's rule for its temporary instead** ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 ```swift
-func drain(_ hp: mutable Int) { hp -= 10; precondition(hp > 0) }
-func turn(_ deg: mutable Float) { deg += 90; precondition(deg < 360) }
+func drain(_ hp: mutable &Int) { hp -= 10; precondition(hp > 0) }
+func turn(_ deg: mutable &Float) { deg += 90; precondition(deg < 360) }
 
-drain(&enemy.hp)          // on a panic, enemy.stats.hp stays 10 lower
-turn(&angle.degrees)      // on a panic, set never runs, so angle.radians is as it was
+drain(mutable &enemy.hp)          // on a panic, enemy.stats.hp stays 10 lower
+turn(mutable &angle.degrees)      // on a panic, set never runs, so angle.radians is as it was
 ```
 
 ## Properties in protocols
@@ -246,12 +263,33 @@ protocol Aiming { var heading: Float { get set } }      // a value: a copy out, 
 - **A place property that hands out a tuple of places meets no place requirement.**
 - **An optional place property, or one that hands out a tuple of places, meets `{ get }` but never `{ get set }`**, since it has no whole value that a `set` could write ([above](#optional-places-and-tuples-of-places)).
 
+**A protocol that refines another may add a `mutate` to a place requirement it inherits.** It restates the requirement with the same name, type and `where` clause, and `borrow mutate` for its accessors. That is the inherited requirement with a `mutate` added, not a second declaration of its name. Generic code over the refining protocol may then lend the place with `mutable &`, and a conformer to it meets the requirement with both accessors:
+
+```swift
+protocol Collection: Sequence where Iterator: SharedIterator {
+    subscript(i: UInt) -> Element { borrow }              // generic code reads an element where it lies
+}
+protocol MutableCollection: Collection {
+    subscript(i: UInt) -> Element { borrow mutate }       // and here may change it there too
+}
+```
+
+A witness with both accessors also meets `{ borrow }` (above), so every conformer to the refining protocol still conforms to the protocol it refines.
+
 ## The standard place properties
 
 **The standard library's place properties have these sources:**
 
-- Collection and pool subscripts, `Box.value`, `MutableRef.value`, every lock guard's `.value`, and a `MutableSpan`'s element places lie in `self` or what it borrows, the default.
-- The place properties of `Span`, `StringView` and `Borrow` are `where return outlives self`.
+- Collection and pool subscripts, range subscripts, `span`, an `SoA` column, `Box.value` and every lock guard's `.value` lie in `self` or what it borrows, the default.
 - The `.value` of a `UniquePointer` or a `WeakPointer` is the language's own, and depends on its access ([above](#places-behind-a-run-time-check)).
 
-**Properties that build a view are value properties**, such as `span`, sub-span ranges and an `SoA` column: each `get` returns a new view, which depends on what the call was given ([Rule 3: Call results](dependency-projection-and-results.md#rule-3-call-results)). `Span`'s and `StringView`'s range `get`s, `first` and `last` are `where return outlives self`, so their views depend on what the span views. An `SoA` column's view depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+**`span` is a place property of type `[T]`, with a `borrow` and a `mutate`, that hands out a contiguous collection's elements in place.** A range subscript and an `SoA` column are place properties of type `[T]` too, each of a run of the elements. So `&` and `mutable &` lend each as a `&[T]` or a `mutable &[T]` ([01](../01-values-and-ownership/references.md#unsized-types)):
+
+```swift
+var span: [T] { borrow { … } mutate { … } }      // in List<T>
+let all = &hits.span                              // a '&[Int]' of every hit
+var some = mutable &hits[0..<4]                   // a 'mutable &[Int]' of the first four
+particles.life.sort()                             // sorts an SoA column where it lies, through its 'mutate'
+```
+
+**A range of what a shared reference refers to depends on what the reference carries**, by rule 1, so `&rest[1...]` of a `&[T]` depends on what owns the elements ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)). An `SoA` column's place depends on its column alone ([04](../04-types/data-layout.md#struct-of-arrays-soat)).

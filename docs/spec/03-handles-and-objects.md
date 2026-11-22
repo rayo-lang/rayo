@@ -41,15 +41,15 @@ if enemies[h] == nil { … }                           // true: a stale handle r
 A `UniquePointer` owns one value, its **object**, in memory from any allocator. Any number of `WeakPointer`s point at it, as a node points at its parent, and every use through either is checked:
 
 ```swift
-var renderer = alloc UniquePointer(Renderer(device: dev))   // the one owner, move-only
+var renderer = alloc UniquePointer(Renderer(device: consume dev))   // the one owner, move-only
 let r: WeakPointer<Renderer> = renderer.weak()              // implicitly copyable: store any number, cycles included
 
 struct Sprite(var mesh: MeshId, var renderer: WeakPointer<Renderer>)                     // a weak pointer as a field
 struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Node>>)     // tree with parent pointers
 
 renderer.value.beginFrame()                    // through the owner: the object itself, no optional
-_ = r.value?.submit(mesh)                      // optional place property: nil once the object is destroyed
-if ref var rd = &r.value { rd.beginFrame(); rd.submit(mesh) }   // one modify access, held while 'rd' is used
+_ = r.value?.submit(&mesh)                     // optional place property: nil once the object is destroyed
+if ref var rd = mutable &r.value { rd.beginFrame(); rd.submit(&mesh) }   // one modify access, held while 'rd' is used
 r.value!.stats.drawCalls += 1                  // '!' panics if the object is gone
 ```
 
@@ -73,7 +73,7 @@ r.value!.stats.drawCalls += 1                  // '!' panics if the object is go
 
 **The law of exclusivity holds for an object's value too, checked at run time** ([01](01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)), since the static checker can't see which weak pointers name one object. Every access to the value, through the owner or any weak pointer, is checked:
 
-- **Marks.** A **read access** is any shared use of the value, such as a `ref let` or a borrowing method call, and holds a shared mark. A **modify access** is any change, such as an assignment, a `ref var` binding of `&place` or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life. The language then releases the mark itself, since `value` is a place property that runs no code after an access ([02](02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)).
+- **Marks.** A **read access** is any shared use of the value, such as a `ref let` binding of `&place`, a `&` argument or a plain method call, and holds a shared mark. A **modify access** is any change, such as an assignment, a `ref var` binding of `mutable &place`, a `mutable &` argument or a `mutating` call, and holds an exclusive mark. Each mark lasts until the last use of every value that depends on the access (rule 6 in [02](02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)), so the check covers each view of the value for its whole life. The language then releases the mark itself, since `value` is a place property that runs no code after an access ([02](02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)).
 - **Conflicts.** A conflicting access panics before it touches the value. So an observer that calls back into the object that is notifying it panics when either access changes the object: the observer's or the notifying method's. Destroying the object while any access to it is live panics too ([below](#destroying-an-object)).
 - **Counts never wrap.** An access that would take the reader count past its limit panics, in every build, as every count kept for safety does ([10](10-errors-and-safety/panics.md#what-panics)). So does creating an object when no generation is left, since each object needs a generation that no other object of the run gets ([below](#destroying-an-object)).
 
@@ -86,7 +86,7 @@ let mixer = alloc Shared(Mutex(AudioMixer()))              // AudioMixer must be
 let m: WeakShared<Mutex<AudioMixer>> = mixer.weak()        // implicitly copyable and Sendable: may go to any thread
 
 _ = Thread.start { [copy m, copy clip] in                  // '_ =' detaches the thread: nothing joins it
-    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner of the mixer for as long as 'mx' lives
+    if let mx = m.upgrade() { mx.value.lock { $0.play(&clip) } }   // one more owner of the mixer for as long as 'mx' lives
 }
 ```
 
@@ -146,7 +146,7 @@ From then every weak pointer reads `nil` and no new access can begin.
 - **`WeakPointer<T>(bits:)` returns `nil` unless the bits name a live object of type `T` whose home thread is the calling thread.** It is memory-safe for any bits, even while another thread destroys the object. Genuine bits never resolve to an object other than the one they were made for. Forged or mistyped bits, like a forged `Handle`, read `nil` or name some live `T` on this thread.
 - **`WeakPointer<any P>(bits:)` takes the same 64 bits**, and reads `nil` unless the object's type conforms to `P` ([05](05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
-**`UniquePointer.leak(p)` hands ownership to C.** It gives up the owner and returns a weak pointer for C to hold as a `uint64_t`. A leaked object is used through its weak pointers as any other, and stays leaked until one of these:
+**`UniquePointer.leak(consume p)` hands ownership to C.** It gives up the owner and returns a weak pointer for C to hold as a `uint64_t`. A leaked object is used through its weak pointers as any other, and stays leaked until one of these:
 
 - `UniquePointer.adopt(w)` returns its owner;
 - a reset or an unregistration of its allocator destroys it ([above](#objects-in-arenas-and-other-allocators));

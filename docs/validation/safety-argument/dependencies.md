@@ -128,7 +128,7 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 ## `rebind`
 
-**`rebind` moves a name, such as a cursor walking down a tree, to another place** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). These rules keep the name's set covered at each step:
+**`rebind` moves a name, such as a cursor walking down a tree, to another place** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)). These rules keep the name's set covered at each step:
 
 - **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A step through a place property also takes on the property's other sources. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
 - **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object panics, since the mark is live ([03](../../spec/03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
