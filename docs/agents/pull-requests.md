@@ -17,7 +17,7 @@ How a change reaches `main` on `rayo-lang/rayo`: the branch it is made on, its c
 
 ## Opening a pull request
 
-**Each pull request is one change that makes sense on its own**, so a change that is several, such as docs, code and CI, or code too big to review at once, lands as a stack of them ([below](#stacked-pull-requests)).
+**Each pull request is one change that a reviewer can judge, and `main` can take, on its own.** A part of a change that could be judged and taken without the rest is a pull request of its own, stacked on the one it builds on ([below](#stacked-pull-requests)).
 
 **At most three pull requests are open on `rayo-lang/rayo` at a time**, whoever opened them, drafts included and counting each pull request in a stack; `gh pr list -R rayo-lang/rayo --state open` counts them. Open the next only when one has merged or closed; work past the limit waits on its branch.
 
