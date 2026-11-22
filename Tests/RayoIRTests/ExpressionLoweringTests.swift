@@ -30,11 +30,12 @@ struct ExpressionLoweringTests {
                 b = consume a
                 _ = b
                 let t = true
-                let d = 3
-                let e = if t { consume d } else { 4 }
-                let g = 5
-                print(if t { g } else { e })
+                let d = Hit(damage: 3)
+                let e = if t { consume d } else { Hit(damage: 4) }
+                let g = Hit(damage: 5)
+                show(if t { g } else { e })
             }
+            func show(_ h: Hit) {}
             struct Hit(let damage: Int)
             """
         try expectLowering(of: source, toMatch: "taken-positions")
@@ -43,11 +44,12 @@ struct ExpressionLoweringTests {
     @Test func `a position that takes an Int, a UInt or a Bool from a place copies it, so the place keeps its value`()
         throws {
         // A `_ =`, an initializer's argument, an array literal's element, a branch of an `if` in such a position and
-        // a `return` each read the place, where they would move a value of any other type.
+        // a `return` each read the place, where they move an array of Ints, as they would any other type's value.
         let source = """
             func main() {}
-            func kept(_ n: Int, _ level: UInt, _ alive: Bool) -> Int {
+            func kept(_ n: Int, _ level: UInt, _ alive: Bool, _ row: [2 of Int]) -> Int {
                 _ = alive
+                _ = row
                 let s = Score(points: n, level: level)
                 let all = [n, if alive { n } else { 0 }]
                 return n
@@ -66,7 +68,8 @@ struct ExpressionLoweringTests {
     }
 
     @Test func `'copy' reads a local where a bare local would be moved`() throws {
-        try expectLowering(ofMain: "let a = 1\nlet b = copy a", toMatch: "copy")
+        let source = "func main() {\nlet a = Hit(damage: 1)\nlet b = copy a\n}\nstruct Hit(let damage: Int)"
+        try expectLowering(of: source, toMatch: "copy")
     }
 
     @Test

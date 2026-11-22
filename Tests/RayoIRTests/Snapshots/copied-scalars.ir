@@ -12,29 +12,31 @@ bb0:
   return
 }
 
-func "kept(_: Int, _: UInt, _: Bool)"(_: Int, _: UInt, _: Bool) -> Int {
+func "kept(_: Int, _: UInt, _: Bool, _: [2 of Int])"(_: Int, _: UInt, _: Bool, _: [2 of Int]) -> Int {
   param %0 n: Int @2:13-2:14
   param %1 level: UInt @2:23-2:28
   param %2 alive: Bool @2:38-2:43
-  let %3 s: Score @4:9-4:10
-  let %4 all: [2 of Int] @5:9-5:12
-  temp %5: Int
+  param %3 row: [2 of Int] @2:53-2:56
+  let %4 s: Score @5:9-5:10
+  let %5 all: [2 of Int] @6:9-6:12
+  temp %6: Int
 bb0:
   _ = operand read %2 @3:9-3:14 @3:9-3:14
-  declare %3
-  %3 @4:9-4:10 = call "Score(points: Int, level: UInt)"(read %0 @4:27-4:28, read %1 @4:37-4:42) @4:13-4:43
+  _ = operand move %3 @4:9-4:12 @4:9-4:12
   declare %4
+  %4 @5:9-5:10 = call "Score(points: Int, level: UInt)"(read %0 @5:27-5:28, read %1 @5:37-5:42) @5:13-5:43
   declare %5
-  branch read %2 @5:22-5:27, bb1, bb2
+  declare %6
+  branch read %2 @6:22-6:27, bb1, bb2
 bb1:
-  %5 @5:19-5:44 = operand read %0 @5:30-5:31 @5:30-5:31
+  %6 @6:19-6:44 = operand read %0 @6:30-6:31 @6:30-6:31
   goto bb3
 bb2:
-  %5 @5:19-5:44 = operand 0 @5:41-5:42
+  %6 @6:19-6:44 = operand 0 @6:41-6:42
   goto bb3
 bb3:
-  %4 @5:9-5:12 = array of Int(read %0 @5:16-5:17, read %5 @5:19-5:44) @5:15-5:45
-  return read %0 @6:12-6:13
+  %5 @6:9-6:12 = array of Int(read %0 @6:16-6:17, read %6 @6:19-6:44) @6:15-6:45
+  return read %0 @7:12-7:13
 bb4:
   unreachable
 }
