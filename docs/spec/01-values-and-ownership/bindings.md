@@ -81,7 +81,7 @@ target.hp = 0
 
 - **A `let` or `var` given a place writes a mark before it** ([above](#bindings)). Leaving it out is a compile error that names the marks that fit, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
 - **A `let` or `var` given `&p` or `mutable &p` holds the reference**, which borrows `p` as its kind says until the binding's last use ([References](references.md#making-a-reference)).
-- **A `let` can't write through a reference it holds, even a `mutable &T`, and a `var` writes its members through a `mutable &T` it holds**, since writing through a reference needs it in a changeable place ([References](references.md#forwarding-through-a-reference)).
+- **Writing through a reference that a `let` or `var` holds follows the rule for writing through any reference**, which only a `var` holding a `mutable &T` meets ([References](references.md#forwarding-through-a-reference)).
 - **An assignment from a place writes a mark**, as every position does ([Moves](moves-copies-destruction.md#moves)).
 
 **Assigning to a `var` that holds a reference points it elsewhere.** `best = &e` makes `best` refer to `e`, and the place it referred to is free once nothing else depends on it. What the `var` depends on from then on follows the dependency rules ([02](../02-views-and-dependencies.md#dependencies)):
@@ -396,14 +396,12 @@ var d: &any Drawable = &sprite              // refers to 'sprite', and may later
 - the place a `mutable &T` refers to, reached through a changeable place that holds the reference ([References](references.md#forwarding-through-a-reference));
 - a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
 
-**Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a `&T` parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is a `for` or `when` name whose subject is a shared reference, or that holds a copy, and the place any shared reference refers to. So a `let` that holds a `mutable &[Float]` can't change its elements.
+**Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a `&T` parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is a `for` or `when` name whose subject is a shared reference, or that holds a copy, and the place any shared reference refers to. So is the place a `let` reaches through a reference it holds ([References](references.md#forwarding-through-a-reference)).
 
 ```swift
 let x = makeEnemy()
 ref var y = mutable &x             // error: a let is read-only, even one that owns its value
 heal(mutable &x)                   // error: the same
-let lives = mutable &particles.life
-lives[0] = 1                       // error: writing through a reference needs a changeable place; declare 'var lives'
 ```
 
 **There are four exceptions, each with its own way of keeping exclusivity**, the first two checked at run time:

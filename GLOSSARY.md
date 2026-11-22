@@ -31,7 +31,7 @@ A type whose values `copy` duplicates byte for byte, without allocating ([01](do
 _Avoid_: trivially copyable, bitwise-copyable
 
 **Forwarding**:
-A reference's passing on of its members, methods, subscripts and operators to the value it refers to, so `r.hp` reads that value's `hp` ([01](docs/spec/01-values-and-ownership/references.md#forwarding-through-a-reference)).
+How a reference reaches the value it refers to: its members, methods, subscripts and operators are that value's, so `r.hp` reads the value's `hp` ([01](docs/spec/01-values-and-ownership/references.md#forwarding-through-a-reference)).
 _Avoid_: auto-deref, dereferencing
 
 **Hidden local**:
@@ -99,7 +99,7 @@ _Avoid_: dynamically sized type, DST
 ### Views and dependencies
 
 **Absorption**:
-The rule that after a call, each scoped `mutable` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+The rule that after a call, each scoped `mutable &` argument takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).
@@ -109,7 +109,7 @@ _Avoid_: lifetime, region, loan set
 An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
 **Exclusive view**:
-A mutable view that changes only what it views, never itself, such as a `MutableSpan`, a `MutableRef`, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+A mutable view that changes only what it views, never itself, such as a mutable reference, a lock guard or a `mutating` function value ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 
 **Full statement**:
 A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
@@ -123,7 +123,7 @@ _Avoid_: lock token
 Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes or the runtime's tables, which a static value may view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
 
 **Mutable view**:
-A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value. Every exclusive view is one; a `consuming` function value and a struct of spans are mutable views that aren't exclusive ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+A view through which what it views can be changed, such as a `mutable &[T]`, a lock guard or a `mutating` function value. Every exclusive view is one; a `consuming` function value and a struct of mutable references are mutable views that aren't exclusive ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 _Avoid_: exclusive reference
 
 **Optional place property**:
@@ -153,7 +153,7 @@ A place, or what a place borrows, that a place property's place may lie in: `sel
 Global `let`s and `const`s, and the views their `Synchronized` values lend, which any function may return a view of ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **Static type**:
-`static T`: a `T` whose every view views data that lives as long as the program, static storage or immortal data, so its values, **static values**, are unscoped and convert implicitly to `T`. A static value of a view type, such as a string literal's `static StringView`, is a **static view** ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
+`static T`: a `T` whose every view views data that lives as long as the program, static storage or immortal data, so its values, **static values**, are unscoped and convert implicitly to `T`. A static value of a view type, such as a string literal's `static &Text`, is a **static view** ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
 _Avoid_: static string, static span, `'static`
 
 **Value property**:
@@ -277,7 +277,7 @@ The type a struct's, enum's or union's type parameter names after `=`, which a w
 _Avoid_: default generic parameter
 
 **Existential**:
-A value of type `any P` or `MutableRef<any P>`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+A value of the unsized type `any P`, reached through `&any P` or `mutable &any P` or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 _Avoid_: trait object, protocol type, boxed protocol
 
 **Function value**:
@@ -366,7 +366,7 @@ _Avoid_: rewind
 
 **Slice**:
 A `Slice<T>`: a checked, copyable view into a buffer behind a `Shared`, which can be stored anywhere and reads `nil` once the buffer is gone ([06](docs/spec/06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers)).
-_Avoid_: span (a `Span` is scoped)
+_Avoid_: span (a `&[T]` is scoped)
 
 **Stamp**:
 An ordered token the runtime gives each block an arena hands out memory from, which names the arena and dates the block against its resets ([06](docs/spec/06-memory-and-allocators/arena-safety.md#what-a-reset-does)).

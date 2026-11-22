@@ -29,7 +29,7 @@ A **reference** is a value that refers to a place. A **shared reference**, of ty
 
 **References follow the dependency rules, as every view does, and need no lifetimes.** Both kinds conform to `Scoped`, so a reference stays within the scope that lent it, and a struct or enum that holds one is scoped too ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)). What a reference depends on is the place it borrows ([02](../02-views-and-dependencies.md#dependencies)).
 
-**`?` binds tighter than `&`.** So `&T?` is a reference to an optional, and `(&T)?` is an optional reference. A pool's element is an optional place, so `&world.enemies[h]` is a `&Enemy?`, and an optional view of elements is written `(&[T])?` ([12](../12-grammar/notes.md#references-and-unsized-types)).
+**A reference to an optional is written `&T?`, and an optional reference `(&T)?`**, as the grammar's precedence of `?` and `&` gives ([12](../12-grammar/notes.md#references-and-unsized-types)). A pool's element is an optional place, so `&world.enemies[h]` is a `&Enemy?`.
 
 **A shared reference is implicitly copyable, and a mutable reference is move-only.** The language makes `&T` conform to `ImplicitlyCopyable`, as it makes numbers conform, since a copy is one more shared borrow of the same place, which the law of exclusivity allows ([Implicitly copyable types](moves-copies-destruction.md#implicitly-copyable-types)). `mutable &T` is `~Copyable`, since two copies would be two mutable aliases of one place.
 
@@ -50,7 +50,7 @@ let held = mutable &enemies[2]
 held.hp = 0                         // error: a 'let' can't write through the reference it holds; declare 'var held'
 ```
 
-**A reference has no members of its own, except one the language gives it.** `mutable &[T]` has `consumingSplit(at:)`, which takes the reference and hands over two mutable references to its halves. The halves carry only what the reference carried, so they may outlive a borrow of the place that held it ([04](../04-types/collections.md#mutating-and-consuming-methods)):
+**A reference itself has no members, except one the language gives it.** Every member a call reaches through a reference is the referent's, by forwarding, as `[T]`'s own `split(at:)` and `mutableSplit(at:)` are ([04](../04-types/collections.md#mutating-and-consuming-methods)). The one exception is `mutable &[T]`'s `consumingSplit(at:)`, which takes the reference itself and hands over two mutable references to its halves. The halves carry only what the reference carried, so they may outlive a borrow of the place that held it:
 
 ```swift
 let whole = mutable &samples.span                   // a 'mutable &[Float]'
@@ -116,7 +116,9 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; write '&hits.s
 
 **Every borrow, move and copy of a place is written where it happens**, so a reader sees from the code alone what happens to the place. A **position** is a part of the code that takes a value:
 
-- an argument, a subscript's index argument and an initializer's argument included, and an enum case's payload;
+- an argument to a function or a method;
+- a subscript's index argument;
+- an initializer's argument, and an enum case's payload;
 - a loop's or a `when`'s subject;
 - the initializer of a declaration or of a condition's binding;
 - the right side of `=`, as in `_ = consume g`;
@@ -130,7 +132,7 @@ let run: [Int] = hits.span          // error: '[Int]' is unsized; write '&hits.s
 - `consume p` moves its value out ([Moving values out](moving-values-out.md#moving-values-out));
 - `copy p` makes a second value ([Copies](moves-copies-destruction.md#copies)).
 
-**A bare place of any type but an implicitly copyable one is a compile error that names the marks that fit.** A place of an implicitly copyable type is copied with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
+**A bare place of any type but an implicitly copyable one is a compile error that names the marks that fit**, except in the cases [below](#unmarked-places). A place of an implicitly copyable type is copied with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)). The last expression of an `if` or `when` arm or of an `unsafe` block stands in its position, and writes its mark there, as does each operand of `??` ([Bindings](bindings.md#if-and-when-as-values)).
 
 **The value a position takes has the type it expects, so a mark that doesn't fit is a compile error.** A `&T` parameter takes a shared reference, a `mutable &T` parameter a mutable one, and a `T` parameter a `T` ([Parameters](parameters.md#parameters)). So a value given to a `&T` parameter is a compile error too, and `&makeEnemy()` lends one as a temporary:
 
@@ -144,6 +146,8 @@ keep(copy boss)                     // fine: a copy of the enemy
 let hp = boss.hp                    // a Float is implicitly copyable: a copy, with nothing written
 ```
 
+### Unmarked places
+
 **Three other operands take a place with no mark, since the code around them already says what happens:**
 
 - **A method's receiver.** The method's declaration says what it does with `self`: a plain `func` borrows it, a `mutating` one borrows it for change, from a changeable place, and a `consuming` one takes it ([Parameters](parameters.md#parameters)).
@@ -155,8 +159,9 @@ static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { … }   // each operand is
 static func * (lhs: Vec3, rhs: Float) -> Vec3 { … }         // a Vec3 is implicitly copyable: each operand is copied
 ```
 
-**Some places give a position a value of its own with no mark**, so the place is left as it was or dies anyway:
+**Some places take no mark, since the position makes a value of its own from them, or borrows through them as a mark would**, so the place is left as it was or dies anyway:
 
 - **A copyable `const`**, which gives a new value each time ([Constants](moving-values-out.md#constants));
 - **A conversion that makes a value from the place**, such as a copyable value's conversion to or from its static type ([Conversions](bindings.md#conversions));
-- **A part of a temporary**, such as `makeEnemy().pos`, which dies with its statement, so the position takes it as a value, moving it out where [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows.
+- **A part of a temporary**, such as `makeEnemy().pos`, which dies with its statement, so the position takes it as a value, moving it out where [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows;
+- **A place that holds a reference, given to a `ref let` or `ref var`**, which reborrows through it, as `ref var t = r` does for a `mutable &T` in `r` ([above](#reborrowing)).

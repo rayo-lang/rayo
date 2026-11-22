@@ -2,10 +2,11 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes: an argument, an initializer, an assignment, a `return` and every other position move a place only where they write `consume` ([References](references.md#places-given-to-a-position)). Two constructs take a value from a place with nothing written, since each says in its own form that it takes it:
+A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes: an argument, an initializer, an assignment, a `return` and every other position move a place only where they write `consume` ([References](references.md#places-given-to-a-position)). Three cases take a value from a place with nothing written:
 
 - a `consuming` method's receiver, since the method's declaration says it takes `self` ([Parameters](parameters.md#parameters));
-- a `[move x]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+- a `[move x]` capture, since the capture list says it moves ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
+- any position given a part of a temporary, such as `makeHolder().items`, since the temporary dies with its statement ([References](references.md#unmarked-places)).
 
 Two kinds of value are exceptions, since taking one makes a new value and leaves the place as it was:
 

@@ -18,7 +18,7 @@ cmds = queued                     // error: write 'consume queued'
 
 **`consume x` moves the value.** The new owner takes it over, and the place it came from can't be used until it gets a new value, so the value's bytes stand for it in one place only.
 
-**A position takes a place's value only where it writes `consume`.** Every position given a place writes `&`, `mutable &`, `consume` or `copy` before it ([References](references.md#places-given-to-a-position)). So an argument, a declaration, an assignment and a `return` move a place only with `consume`. A place of an implicitly copyable type, such as an `Int`, is copied with nothing written, and stays usable ([Implicit copies](#implicit-copies)).
+**A position takes a place's value only where it writes `consume`.** Every position given a place writes `&`, `mutable &`, `consume` or `copy` before it ([References](references.md#places-given-to-a-position)). So an argument, a declaration, an assignment and a `return` move a place only with `consume`. The exception is a part of a temporary, such as `makeHolder().items`, which a position takes with nothing written, since the temporary dies with its statement ([References](references.md#unmarked-places)). A place of an implicitly copyable type, such as an `Int`, is copied with nothing written, and stays usable ([Implicit copies](#implicit-copies)).
 
 **Only a place the code owns can be moved from.** Moving out of a value the code only borrows is a compile error, since the caller, an alias or a later `deinit` that reaches that place must still find a value in it ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 

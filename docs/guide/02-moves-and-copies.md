@@ -43,22 +43,26 @@ hits = alloc List<Int>()        // the first list is destroyed here
 
 ## Moves
 
-A parameter marked `owned` takes over the value passed to it ([01](../spec/01-values-and-ownership/parameters.md#parameters)):
+A parameter declared with a plain type, such as `List<Int>`, takes over the value passed to it ([01](../spec/01-values-and-ownership/parameters.md#parameters)):
 
 ```swift
-func archive(list: owned List<Int>) {
+func archive(list: List<Int>) {
     log("archived \(list.count) hits")
 }
 
 var hits = alloc List<Int>()
 hits.append(12)
-archive(list: hits)
+archive(list: consume hits)
 log("\(hits.count)")            // error: 'hits' was moved
 ```
 
-Passing `hits` to `archive` **moves** the list. `archive`'s parameter becomes its owner, and `hits` holds nothing any more. So using `hits` after the call is an error: there's no list in it to use ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)).
+Passing `consume hits` to `archive` **moves** the list. `archive`'s parameter becomes its owner, and `hits` holds nothing any more. So using `hits` after the call is an error: there's no list in it to use ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)).
 
-Nothing in the call marks the move, since `archive`'s declaration already says `owned`. If you miss it, the compiler tells you as soon as you use `hits` again.
+The call says `consume`, so a reader sees the move where it happens, without a trip to `archive`'s declaration. Leaving it out is an error that tells you what to write:
+
+```swift
+archive(list: hits)             // error: 'archive' takes 'List<Int>'; write 'consume hits'
+```
 
 Moves are how Rayo frees the list's memory exactly once. A move hands the list from one owner to the next, so the list never has two owners at once. Here `archive`'s parameter ends up with it. The function reads its count, then destroys the list when it returns. `hits` holds nothing when it goes out of scope, so it has nothing to destroy.
 
@@ -71,11 +75,11 @@ hits = alloc List<Int>()
 hits.append(5)                  // fine
 ```
 
-Most parameters aren't `owned`. A plain parameter, with nothing written before its type, **borrows** its argument: it reads the value without owning it ([Borrowing](03-borrowing.md)). Passing a list to one moves nothing, so the caller still owns the list afterwards. Operators such as `-` only read their values too, and so does `\(…)` inside quotes.
+A function that only needs to read the list doesn't have to take it over. A parameter written `&List<Int>` **borrows** its argument: it reads the value without owning it, and the call writes `&hits` to lend it ([Borrowing](03-borrowing.md)). Passing a list that way moves nothing, so the caller still owns the list afterwards. Operators such as `-` only read their values too, and so does `\(…)` inside quotes, so neither needs a mark.
 
 ## Adding to a list
 
-A list owns the values in it, so `append`'s parameter is `owned`. Adding a variable's number to a list still leaves the variable usable:
+A list owns the values in it, so `append`'s parameter takes over what it's given. Adding a variable's number to a list still leaves the variable usable, with nothing written:
 
 ```swift
 let best = 30
@@ -83,20 +87,21 @@ hits.append(best)
 log("best is \(best)")          // fine: best is 30
 ```
 
-The list owns a copy of the 30, and `best` keeps its own. An `Int` is **implicitly copyable**: its type promises that a copy is cheap, so where a value of it would move, Rayo copies it instead, with nothing written ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). The number types and `Bool` are implicitly copyable, and so are a few small values the standard library declares that way, such as `Vec3`.
+The list owns a copy of the 30, and `best` keeps its own. An `Int` is **implicitly copyable**: its type promises that a copy is cheap, so wherever a variable of it is handed on, Rayo copies it, with nothing written ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). The number types and `Bool` are implicitly copyable, and so are a few small values the standard library declares that way, such as `Vec3`.
 
-A struct you declare isn't, unless it says so. Chapter 1's `Enemy` holds only numbers, but passing one to an `owned` parameter moves it:
+A struct you declare isn't, unless it says so. Chapter 1's `Enemy` holds only numbers, but handing a variable of it to `append` needs a word that says what happens to the variable:
 
 ```swift
 var wave = alloc List<Enemy>()
 let boss = Enemy(pos: .zero, hp: 500)
-wave.append(boss)
+wave.append(boss)               // error: write 'consume boss' or 'copy boss'
+wave.append(consume boss)
 log("boss has \(boss.hp)")      // error: 'boss' was moved
 ```
 
-The list now owns the enemy, just as a list of strings would own a string added the same way. `boss` is a `let`, and it still moved. A `let` can't change, but it can hand its value over. After that, it can't be used at all. So wherever you can use a `let`, it still holds the value it started with.
+With `consume`, the list owns the enemy, just as a list of strings would own a string added the same way. `boss` is a `let`, and it still moved. A `let` can't change, but it can hand its value over. After that, it can't be used at all. So wherever you can use a `let`, it still holds the value it started with.
 
-In C++ or Swift, `boss` would be copied quietly, since an `Enemy` is a few plain numbers. Rayo moves it instead. That's no slower: a move copies at most the same few bytes a copy would ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)). And a second enemy never appears unless you ask for one.
+In C++ or Swift, `boss` would be copied quietly, since an `Enemy` is a few plain numbers. Rayo makes you choose between a move and a copy instead, and a move is no slower: it copies at most the same few bytes a copy would ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#moves)). So a second enemy never appears unless you ask for one.
 
 A value written in the call, as in `hits.append(12)`, is made right there, so no variable gives anything up.
 
@@ -137,34 +142,34 @@ A clone is meant to be fully independent of the original: changing or destroying
 
 ## Declaring, assigning and returning
 
-A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, and leaving that out is an error:
+A `let` or a `var` owns the value it holds, as `hits` owns its list. So a variable declared from another one has to say how it gets that value, as a call does, and leaving that out is an error:
 
 ```swift
 var hits = alloc List<Int>()
 hits.append(12)
-let same = hits                 // error: write 'copy' or 'consume' before 'hits', or declare 'ref let'
+let same = hits                 // error: write 'consume' or '&' before 'hits'
 ```
 
-The error names three ways out. `copy` makes a value of its own, and `consume` moves the value over, as the rest of this section shows. `ref let` declares a name that owns nothing: it refers to the value where it lies, the same way a plain parameter borrows its argument ([01](../spec/01-values-and-ownership/bindings.md#bindings)):
+The error names two ways out, since a list can't be copied (below). `consume` moves the value over, as the rest of this section shows. `&hits` makes a **reference** to the list: a value that refers to the list where it lies, and owns nothing of it, the same way a `&List<Int>` parameter borrows its argument ([01](../spec/01-values-and-ownership/references.md#references)):
 
 ```swift
-ref let same = hits
+let same = &hits
 log("\(same.count)")            // 1
 ```
 
-`same` is another name for the list in `hits`. Nothing moved and nothing was copied. `hits` still owns the list, and `same` only borrows it. The `ref` says so where `same` is declared, so a reader knows at once that `same` has nothing of its own.
+`same` holds a reference to the list in `hits`. Nothing moved and nothing was copied. `hits` still owns the list, and `same` only borrows it. The `&` says so where `same` is declared, so a reader knows at once that `same` has no list of its own.
 
 A borrow comes with one restriction. `same` can't change the list, and the list can't change while you still use `same` either:
 
 ```swift
-ref let same = hits
+let same = &hits
 hits.append(5)                  // error: 'hits' is borrowed by 'same' (used below)
 log("\(same.count)")
 ```
 
-Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including `ref var`, which borrows a value to change it ([Borrowing](03-borrowing.md)).
+Once `same` isn't used any more, `hits` can change the list again. Chapter 3 shows the rest of borrowing, including `mutable &`, which borrows a value to change it ([Borrowing](03-borrowing.md)).
 
-To move the list into the new variable instead, write `consume` before it. It makes the same move an `owned` parameter makes, written out where nothing else would make it ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
+To move the list into the new variable instead, write `consume` before it, as the call to `archive` did ([01](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out)):
 
 ```swift
 let finished = consume hits
@@ -177,7 +182,7 @@ Assigning to a variable that already exists works the same way, with `copy` or `
 alloc func newRound() -> List<Int> {
     var round = alloc List<Int>()
     round.append(0)
-    return round
+    return consume round
 }
 
 let current = alloc newRound()  // 'current' owns the new list
@@ -186,9 +191,9 @@ older = current                 // error: write 'copy' or 'consume' before 'curr
 older = consume current         // older's first list is destroyed, and 'current' holds nothing
 ```
 
-`return` needs no `consume`: it moves a local's value out to the caller, since the local goes out of scope as the function returns. `newRound` builds the list it hands back, so it is declared `alloc func`, and a call to it takes `alloc`, as making a list does. Chapter 6 shows what that gives the function ([Memory and allocators](06-memory-and-allocators.md#the-ambient-allocator)).
+`return` hands a value to the caller, so it says what it does with a variable, as a call does: `return consume round` moves the list out, and leaves `round` holding nothing as the function ends. `newRound` builds the list it hands back, so it is declared `alloc func`, and a call to it takes `alloc`, as making a list does. Chapter 6 shows what that gives the function ([Memory and allocators](06-memory-and-allocators.md#the-ambient-allocator)).
 
-An implicitly copyable value needs none of the three. Declaring or assigning a variable from one copies it:
+An implicitly copyable value needs no word at all. Declaring or assigning a variable from one copies it:
 
 ```swift
 var hp = 100
@@ -197,7 +202,7 @@ hp -= 10
 log("lost \(before - hp)")      // lost 10
 ```
 
-`before` keeps the old value past the change, since it holds a copy of its own. Declared with `ref let` instead, `before` would borrow `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used. And `consume hp` still moves the number, leaving `hp` empty, if that is what you mean.
+`before` keeps the old value past the change, since it holds a copy of its own. Declared as `let before = &hp` instead, `before` would hold a reference that borrows `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used. And `consume hp` still moves the number, leaving `hp` empty, if that is what you mean.
 
 ## A value that may have moved
 
@@ -206,7 +211,7 @@ The compiler follows every path through the code to know whether a variable stil
 ```swift
 var hits = alloc List<Int>()
 if bossFight {
-    archive(list: hits)
+    archive(list: consume hits)
 }
 log("\(hits.count)")            // error: 'hits' may have been moved
 ```
@@ -217,7 +222,7 @@ The fix is to make sure every path leaves `hits` holding a list ([01](../spec/01
 
 ```swift
 if bossFight {
-    archive(list: hits)
+    archive(list: consume hits)
     hits = alloc List<Int>()
 }
 log("\(hits.count)")            // fine
@@ -229,7 +234,8 @@ If `hits` isn't used again, there's nothing to fix. The compiler still places th
 
 - [01 Moves](../spec/01-values-and-ownership/moves-copies-destruction.md#moves): what a move does.
 - [01 Moving values out](../spec/01-values-and-ownership/moving-values-out.md#moving-values-out): every construct that moves a value, and what can be moved from.
-- [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): `owned` and the other parameter conventions.
+- [01 Parameters](../spec/01-values-and-ownership/parameters.md#parameters): what a parameter's type says it does with its argument.
+- [01 Places given to a position](../spec/01-values-and-ownership/references.md#places-given-to-a-position): where a variable handed on writes `consume`, `copy` or `&`, and where it needs nothing.
 - [01 Copies](../spec/01-values-and-ownership/moves-copies-destruction.md#copies): `copy` and `clone()`, which types are copyable, and which copy with nothing written.
 - [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): what `let`, `var`, `ref let` and `ref var` each do with what they're given.
 - [01 Destruction](../spec/01-values-and-ownership/moves-copies-destruction.md#destruction): when a value is destroyed, and in what order.

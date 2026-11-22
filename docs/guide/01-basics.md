@@ -154,7 +154,7 @@ func report(hp: Int) {
 }
 ```
 
-Inside `report`, `hp` behaves like a `let`: `report` can read it, but not change it. Chapter 3 shows the other ways a function can take a parameter, including one that lets it change a variable you pass it ([Borrowing](03-borrowing.md)).
+Inside `report`, `hp` holds its own copy of the number the caller passed, so if `report` changed it, the caller's variable would stay as it was. Chapter 3 shows the other ways a function can take a parameter, including one that lets it change a variable you pass it ([Borrowing](03-borrowing.md)).
 
 ## Making decisions with `if`
 

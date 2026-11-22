@@ -22,8 +22,6 @@ type-primary  = type-name
               | 'static' type-primary                              (* a static type (02): static &Text, static Token, static &any Logger;
                                                                       (static &[Float])? is an optional static reference *)
               | 'any' composition | 'some' composition
-ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a reference (01): &Enemy, mutable &[Float], &any Drawable;
-                                                                      '?' binds tighter than '&', so &T? refers to an optional, and (&T)? is an optional reference *)
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
                                                                    (* C function pointer (08); 'noalloc': its calls allocate nothing (05) *)
               | 'unsafe'? ('mutating' | 'consuming')? '@sendable'? '@noalloc'? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type ;
@@ -31,6 +29,8 @@ ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a referenc
                                                                       'mutating' may write its captures, 'consuming' is call-once;
                                                                       '@sendable' holds only closures with Sendable captures (07);
                                                                       '@noalloc' holds only functions whose calls can't allocate (05) *)
+ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a reference (01): &Enemy, mutable &[Float], &any Drawable;
+                                                                      &T? refers to an optional, and (&T)? is an optional reference (see Notes) *)
 composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; &any P & Sendable is &(any P & Sendable);
                                                                       after a cast operator, the type takes every '&' that follows *)
 type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy>, Text *)
@@ -51,7 +51,7 @@ statement     = declaration | ref-decl | expression | assignment | guard-stmt
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
               | 'defer' block | 'unsafe' block | 'unchecked' block
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
-              | rebind-stmt | static-if-stmt | static-for-stmt
+              | static-if-stmt | static-for-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
               | '_' '=' expression                                      (* drops a value on purpose, which an unused one would otherwise make an error (05) *)
               | static-error
@@ -60,7 +60,6 @@ statement     = declaration | ref-decl | expression | assignment | guard-stmt
 assignment    = expression assign-op expression ;                (* an optional chain on the left ends in '.member' or '[index]': 'x? = v' is an error (04) *)
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;
                                                                    (* a ⊕= b is a = a ⊕ b, with a's place worked out once (05) *)
-rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a ref var, nothing for a ref let (02) *)
 
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;

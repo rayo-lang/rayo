@@ -255,7 +255,7 @@ A closure's type says what it does with its captures, and the compiler infers th
 - **Non-`mutating`.** Its function types accept only closures that only read their captures, shared-borrowed or owned. So a job system may run one on many threads at once ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)), and a `sort(by:)` comparator can't write the pool it reads.
 - **`mutating`.** A literal captures a place **exclusively** when its body makes any mutable access to it:
     - assigning it;
-    - lending it with `&`, wherever `&` may appear ([01](../01-values-and-ownership/references.md#making-a-reference));
+    - lending it with `mutable &`, wherever `mutable &` may appear ([01](../01-values-and-ownership/references.md#making-a-reference));
     - calling a `mutating` method on it;
     - capturing it exclusively in a nested literal.
 
@@ -420,7 +420,7 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in x } }             // er
 
 **A value of function type is a view of a closure's storage**, where all its captures, owned ones included, live. Converting a closure to a function type makes such a view. A closure here is any value of a closure's concrete type, such as a literal, a local, parameter or field of a literal's anonymous type, or a `some F` parameter. The view depends on the storage and on what the closure carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#closure-calls)). A non-`mutating` function value is a copyable shared view; a `mutating` or `consuming` one is move-only.
 
-- **A non-`consuming` closure is borrowed as its kind needs.** A non-`mutating` one is borrowed shared, whatever the function type. A `mutating` one is borrowed exclusively, so the place holding it is lent with `&` ([01](../01-values-and-ownership/references.md#making-a-reference)), as in `run(&grow)`, and is usable again after the view's last use.
+- **A non-`consuming` closure is borrowed as its kind needs.** A non-`mutating` one is borrowed shared, whatever the function type. A `mutating` one is borrowed exclusively, so the place holding it is lent with `mutable &` ([01](../01-values-and-ownership/references.md#making-a-reference)), as in `run(mutable &grow)`, and is usable again after the view's last use.
 - **A `consuming` closure is handed over.** The conversion consumes the source place ([01](../01-values-and-ownership/moving-values-out.md#moving-values-out)), and the value takes over the captures but not their memory, so it still can't outlive that memory. Calling it moves out of the captures and destroys the rest; dropping it uncalled destroys them all.
 - **Converting a function value never adds ownership.** A value accepted where a stronger kind is expected views the same storage the same way: called through a `consuming` type, a borrowed closure runs with the access it was lent, and dropping the value destroys nothing.
 - **Named functions and operators are function values too.** A named function other than `ptr(to:)` ([10](../10-errors-and-safety/unsafe-code.md#taking-an-address)), a static method or an operator, such as `max` or the `+` in `combine: +`, converts to each of these, with parameter conventions lining up as a witness's do ([01](../01-values-and-ownership/parameters.md#parameters)):

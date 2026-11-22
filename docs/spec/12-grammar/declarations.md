@@ -53,8 +53,8 @@ operator      = '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '
                                                                    One parameter declares a prefix operator ('-', '!', '~'), two a binary one (05) *)
 label         = identifier ;
 task-decl     = 'task' 'func' identifier generic-params? param-clause
-                ('with' '(' identifier ':' 'mutable' '&' type-primary type-suffix* ')')? ('->' result-type)? where-clause? block ;
-                                                                   (* one resume parameter, a mutable reference: with (ctx: mutable &C) (07) *)
+                ('with' '(' identifier ':' ref-type ')')? ('->' result-type)? where-clause? block ;
+                                                                   (* one resume parameter, whose ref-type is a mutable one only: with (ctx: mutable &C) (07) *)
 param-clause  = '(' (param (',' param)* ','?)? ')' ;
 param         = (arg-label | '_')? identifier ':' 'keep'? type ('=' expression)? ;
                                                                    (* x: T owns its argument, x: &T borrows it, x: mutable &T borrows it for change (01);
