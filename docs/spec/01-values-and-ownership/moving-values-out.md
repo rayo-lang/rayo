@@ -30,7 +30,7 @@ let old = replace(&player.inventory, with: alloc List())    // the way to take i
 
 **Only code that owns a place may move from it**, implicitly or with `consume`. No borrow of that place may be live, and no scoped value may depend on it: a move is a mutable access ([The law of exclusivity](exclusivity.md#the-law-of-exclusivity)). These places can be moved from:
 
-- a local that owns its value: a `let` or `var`, including an owned exclusive view such as an `SoA` column bound with `&` ([Lending a place for change](bindings.md#lending-a-place-for-change)), but not one a `rebind` has pointed at a place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
+- a local that owns its value: a `let` or `var`, such as one that owns an `SoA` column bound with `&` ([Lending a place for change](bindings.md#lending-a-place-for-change)), but not one a `rebind` has pointed at a place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
 - an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
 - a temporary, such as a call result passed to an `owned` parameter;
 - a field of one of those, through stored fields only, named or reached by reflection ([09](../09-compile-time/reflection.md#what-reflection-can-read)), when no type along the path declares a `deinit`, since a `deinit` takes the whole value;

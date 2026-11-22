@@ -7,7 +7,7 @@ A **view** is a value that borrows memory something else owns, so code can read 
 ```swift
 let text: StringView = source.view            // borrows source's characters: no copy
 let body: Span<Vertex> = mesh.vertices.span   // borrows the list's elements, read-only
-var hot = &heat.span                          // a MutableSpan<Float>: borrows them mutably
+let hot = &heat.span                          // a MutableSpan<Float>: borrows them mutably
 ```
 
 **A view of memory that can be freed must stay within the scope that lent it.** Inside that scope, the compiler sees every borrow, and rejects freeing the memory while the view lives ([Dependencies](../02-views-and-dependencies.md#dependencies)). A type whose values must stay there conforms to the marker protocol **`Scoped`**, and any value of such a type is a **scoped value**. Among them are these, each of which reaches memory it doesn't own:
@@ -37,8 +37,67 @@ struct Span<Element>(                                  // shared view: copyable
 struct MutableSpan<Element>(                           // exclusive view: move-only
     public unsafe let baseAddress: *Element,
     public let count: UInt,
-): Scoped, ~Copyable
+): Scoped, ~Copyable, ExclusiveView
 ```
+
+## Exclusive views
+
+**Writing through an exclusive view needs exclusive access to the view, not a changeable place.** The write changes what the view views, never the view itself. What keeps two writers apart is that nothing else reaches the view while it writes, and an owned binding has that whether or not it may change ([01](../01-values-and-ownership/bindings.md#exclusive-access)). So a loop name that owns each chunk writes through it, and one that borrows a view shared can't:
+
+```swift
+for chunk in &data.chunks(64) { scale(&chunk) }   // 'chunk' owns its view, so it may write through it
+for d in targets { d.takeDamage(1) }              // error: 'd' is a shared borrow of a view
+```
+
+**Only replacing the view, or changing which elements it covers, needs a changeable place**, since that changes the view itself:
+
+```swift
+let hot = &heat.span               // a MutableSpan<Float> that a let owns
+hot[0] = 0                         // fine: writes an element through the view
+hot = &cold.span                   // error: 'hot' is a let; replacing the view needs a 'var'
+```
+
+**These types are exclusive views, and each writes only through itself:**
+
+- a type that conforms to `ExclusiveView` ([below](#exclusiveview)), such as `MutableSpan`, `MutableRef`, and the guard of a `Mutex` or of an `RwLock`'s write lock ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
+- `mutable any P`, whose `mutating` requirements change only the value it views ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
+- an exclusive `SoA` row, whose fields' places lie in the columns ([04](../04-types/data-layout.md#struct-of-arrays-soat));
+- a `mutating` function value, whose call changes only the closure it views ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+
+**Every exclusive view is a [mutable view](dependency-projection-and-results.md#mutable-views), but not every mutable view writes only through itself.** A `consuming` function value ends when it is called, and a closure literal with an exclusive capture changes the closure itself. A value that holds a mutable view without listing `ExclusiveView`, such as a struct of spans, may change its own fields.
+
+**`&v` of an exclusive view held with exclusive access lends a new view of what `v` views**, until that view's last use, as an argument or an initializer ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). So `scale(&chunk)` above writes through `chunk`, and leaves it usable after the call. A parameter of an exclusive view's type is received owned, as [01](../01-values-and-ownership/parameters.md#parameters) says, so `scale` owns the new view:
+
+```swift
+func scale(_ s: MutableSpan<Float>) { for x in &s { x *= 2 } }   // 's' is received owned, so it writes through itself
+```
+
+A `mutable` parameter is lent the place `v` instead ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+
+### `ExclusiveView`
+
+**`ExclusiveView` is the prelude's marker protocol for a type that views memory exclusively and writes only through it** ([11](../11-compilation-model.md#the-prelude)). It inherits `Scoped`. A conformer's members are of three kinds, as `MutableSpan`'s are:
+
+```swift
+protocol ExclusiveView: Scoped {}                      // views memory exclusively, and writes only through the view
+
+extension MutableSpan {
+    subscript(i: UInt) -> Element { borrow { … } mutate { … } }                         // a mutate: writes an element through the view
+    mutating func sort() where Element: Comparable                                       // writes through the view: reorders its elements
+    mutating func split(at m: UInt) -> (MutableSpan<Element>, MutableSpan<Element>)     // lends two halves of what it views
+    consuming func split(at m: UInt) -> (MutableSpan<Element>, MutableSpan<Element>)    // covers other elements: hands over new views
+}
+```
+
+- **A plain member reads the view, or what it views**, as reading its `count` does.
+- **A `mutating` member, a `mutate` accessor included, writes through the view.** It needs exclusive access to `self`, not a changeable place. So inside it `self` is held with exclusive access but isn't changeable, and the compiler checks each such member locally: it assigns none of `self`'s stored fields, and not `self` itself. A `mutate` hands out a place only in what `self` views ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
+- **A member that changes which elements the view covers is `consuming`**, and returns the new view, as the consuming `split(at:)` does. A changeable place may then hold that view in place of the old one.
+
+**A conformance is checked where the type is declared:**
+
+- **Only the type's own declaration lists it**, directly or through a protocol it lists that inherits it. The conformance changes how every `mutating` member of the type is checked, so it can't come after members already checked without it.
+- **The type is scoped and move-only.** A copyable conformer is a compile error, since a copy would be a second writer through the same view.
+- **Generic code over `T: ExclusiveView`** calls a `T`'s `mutating` members through any `T` held with exclusive access, as code over a concrete conformer does.
 
 ## Where a scoped value can go
 
@@ -136,7 +195,7 @@ func show(_ hint: Hint, _ token: Token) {
 
 **No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
 
-- an exclusive view, such as `MutableSpan<T>`, `MutableRef<T>` or `mutable any P`;
+- an exclusive view, such as `MutableSpan<T>`, `MutableRef<T>` or `mutable any P` ([above](#exclusive-views));
 - a lock guard ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
 - a function value or closure literal;
 - a type declared `Scoped` with no scoped field, such as a profiling zone.

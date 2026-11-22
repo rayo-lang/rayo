@@ -49,7 +49,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 ```swift
 let all: Span<Int> = hits.span            // the hit list's elements, read-only
 let firstTwo = hits[0..<2]               // a range of them: also a Span<Int>
-var editable = &hits.span                // a MutableSpan<Int>: '&' asks for the mutable form
+let editable = &hits.span                // a MutableSpan<Int>: '&' asks for the mutable form
 let text: StringView = source.view        // the string's bytes
 let word = text[0..<5]                    // a range of bytes: also a StringView
 let name: StringView = "grunt"            // the literal's bytes, which last for the whole run
@@ -67,6 +67,17 @@ parse(lines)                              // and the same as parse(lines.span)
 **`Span` and `StringView` are copyable**: a copy is a second view of the same memory.
 
 **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
+
+**A `MutableSpan` you own changes its elements even under a `let`.** `editable[0] = 0` changes an element of `hits`, not the span, so it needs only that nothing else reaches the span meanwhile, and owning the span gives you that ([02](../spec/02-views-and-dependencies/scoped-values.md#exclusive-views)). Pointing `editable` at other elements would change the span itself, and that takes a `var`.
+
+**A function that writes through a span takes it with no convention written, and receives it owned.** At the call, `&editable` lends the function a new view of the same elements, and `editable` works again once the call returns:
+
+```swift
+func clear(_ s: MutableSpan<Int>) { for x in &s { x = 0 } }
+
+clear(&editable)                         // a new view of the hits, for this call
+editable[0] = 1                          // fine: 'editable' is free again
+```
 
 ## When a view is scoped
 
@@ -115,7 +126,7 @@ let tok = Token(text: word, line: 1)      // so does the token that holds it
 source.append("!")                        // error: 'source' is borrowed by 'tok' (used below)
 log(tok.text)
 
-var editable = &hits.span                // carries 'hits', exclusive
+let editable = &hits.span                // carries 'hits', exclusive
 let n = hits.count                       // error: 'hits' is borrowed by 'editable' (used below)
 editable[0] = 0
 ```
@@ -308,6 +319,7 @@ use(names)                                                     // fine: the loop
 ## In the spec
 
 - [02 Scoped values](../spec/02-views-and-dependencies/scoped-values.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.
+- [02 Exclusive views](../spec/02-views-and-dependencies/scoped-values.md#exclusive-views): which bindings write through a view, what `&` of one lends, and the `ExclusiveView` protocol.
 - [02 Dependencies](../spec/02-views-and-dependencies.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
 - [02 Shallow values](../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values): which arguments lend only what they carry, and to which results.
 - [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): full statements, and the temporaries that loops keep.

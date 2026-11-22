@@ -52,7 +52,7 @@ for d in &targets { d = &crate; break }       // by storing a borrow into a list
 
 - an exclusive by-reference capture as a `mutable` argument;
 - a shared one borrowed;
-- an owned one `owned`.
+- an owned one `owned`, a new view of an exclusive view included, which is passed as `&v` passes it to an `owned` parameter ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
 
 So `names` depends on `tmp` from the closure's creation, whether or not the closure is called:
 
@@ -110,7 +110,7 @@ func index(_ d: mutable Doc) {
 }
 doc.first = doc.text.view              // fine in the caller's own body: 'doc' then depends on 'doc.text'
 
-struct Lines(var out: MutableSpan<StringView>, var s: String, var view: StringView): Scoped {
+struct Lines(let out: MutableSpan<StringView>, var s: String, var view: StringView): Scoped {
     mutating func fill() {
         out[0] = s.view                // error: a store through 'out' that depends on self's own storage
         out[0] = copy view             // fine: depends only on what the field 'view' carries

@@ -71,4 +71,6 @@ f(&x, x)                      // error: two borrows of x overlap for the whole c
 - a `Synchronized` value's synchronization;
 - the promise of `unsafe` code.
 
+**What an exclusive view views is written through a view held with exclusive access**, which a shared borrow never is ([02](../../spec/02-views-and-dependencies/scoped-values.md#exclusive-views)). Such a write leaves the view as it was, so the view needs no changeable place. Nothing else reaches the view meanwhile, and its exclusive dependency keeps every other access to what it views out, so the write has no alias.
+
 **A `when` holds its subject still while arms are tested** ([04](../../spec/04-types/enums.md#matching-with-when-and-choosing-with-if)), so a guard sees the value its arm then binds, and a part of a consumed subject, or of any value subject, moves only once its arm is chosen.

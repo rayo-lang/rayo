@@ -463,7 +463,7 @@ protocol ConsumingSequence {                    // what a loop over a whole valu
 **A collection's shared and mutable iterators yield views of its elements, and its consuming iterator yields the elements themselves:**
 
 - its iterator yields `Borrow<T>`, a copyable, scoped shared view of one element;
-- its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`;
+- its mutable iterator yields `MutableRef<T>`, a move-only exclusive one, a one-element `MutableSpan`, which lists `ExclusiveView` as `MutableSpan` does ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview));
 - its consuming iterator yields each `T` itself.
 
 A pattern binds through the view's `value`, so move-only elements iterate like any others.
@@ -478,7 +478,7 @@ for (i, e) in &makeEnemies().enumerated() { … }       // the new list is a hid
 
 | Loop over | Iterator | Each pass |
 | --- | --- | --- |
-| `&s` | `var it = S.makeMutableIterator()` | `while var r = it.next()`: bind the pattern to `r′`, then run the body |
+| `&s` | `var it = S.makeMutableIterator()` | `while let r = it.next()`: bind the pattern to `r′`, then run the body |
 | a whole value whose type conforms to `ConsumingSequence` | `var it = S.makeConsumingIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 | anything else | `var it = S.makeIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 
@@ -496,7 +496,7 @@ for e in &enemies where e.hp > 0 { … }        // the body runs only where the 
 **What each name of the pattern binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
 - **An element bound in place is read-only through a `Borrow` or a shared row, and changeable through a `MutableRef` or an exclusive row.** A loop over `&s` hands out the exclusive kind, and so does a `zip` for each `&` argument. So a loop that changes its elements writes `&` on the sequence and nothing on the pattern, as a loop that reads them writes nothing either.
-- **A value the iterator hands out is owned by its name**, such as a range's `Int`, a handle or a chunk. It is read-only, as a `let` is, and code that would change it declares a `var` from it.
+- **A value the iterator hands out is owned by its name**, such as a range's `Int`, a handle or a chunk. It is read-only, as a `let` is, and code that would change it declares a `var` from it. An exclusive view it owns, such as a chunk, still writes through itself, since that needs only exclusive access ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 So the `pool.entries` loop above binds `e` in place, where it can change it, and gives `h` its own handle ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A `zip` with `&` arguments hands out `MutableRef` parts itself, so the `zip` loop at the top of this section needs no `&` of its own.
 
@@ -507,10 +507,10 @@ So the `pool.entries` loop above binds `e` in place, where it can change it, and
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
 ```swift
-func scale(_ s: owned MutableSpan<Float>) { … }
+func scale(_ s: MutableSpan<Float>) { … }
 var names = alloc List<StringView>()
 for s in table.entries { names.append(s.name.view) }    // fine: each element depends on 'table', not the iterator
-for chunk in &data.chunks(64) { scale(chunk) }          // one MutableSpan<Float> at a time: 'chunk' owns it, and moves it into scale's 'owned' parameter
+for chunk in &data.chunks(64) { scale(&chunk) }         // one MutableSpan<Float> at a time: 'chunk' owns it, and lends scale a new view of it
 ```
 
 **A mutable iterator lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so two are never live at once. Keeping a chunk past its iteration, or holding two, is a compile error. `split(at:)` gives two at once.
@@ -530,7 +530,7 @@ for (i, e) in items.enumerated() { … }           // shared: (UInt, Borrow<Item
 for (i, e) in &items.enumerated() { … }          // exclusive: (UInt, MutableRef<Item>) elements
 let ages = particles.life                        // Span<Float>
 log("first age \(ages[0])")
-var lives = &particles.life                      // MutableSpan<Float>
+let lives = &particles.life                      // MutableSpan<Float>
 lives[0] = 1
 particles.life.sort()                            // only the mutable form has sort(), so it is used
 ```
@@ -560,8 +560,8 @@ func cols(_ p: mutable Particles) -> Cols { Cols(life: &p.life) }      // an arg
 **A `consuming` method may share a `mutating` one's name and parameters:**
 
 ```swift
-var (a, b) = s.split(at: m)             // 's' is a place: the mutating form lends two halves
-var (c, d) = (consume s).split(at: m)   // a whole value: the consuming form hands them over
+let (a, b) = s.split(at: m)             // 's' is a place: the mutating form lends two halves
+let (c, d) = (consume s).split(at: m)   // a whole value: the consuming form hands them over
 ```
 
 - **A receiver that is a whole value picks the `consuming` form**: a call result, a `get` accessor's or subscript's included, or `consume x`.

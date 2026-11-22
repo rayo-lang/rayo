@@ -31,7 +31,7 @@ The criteria below also use these patterns:
 
 ```swift
 work.append(&data[0..<n])                    // a quicksort's worklist: the first pending range, as a span
-while var s = work.popLast() { … }           // each pass pops the next pending range
+while let s = work.popLast() { … }           // each pass pops the next pending range
 lexer.lex(into: &tokens)                     // appends tokens that view the lexer's source
 fill(&keys, &values)                         // fills two lists of views
 let texts = alloc t.map { copy $0.text }     // 't' is a Span<Token>
@@ -107,7 +107,7 @@ step(&p, &r)
 The criteria below also use these patterns:
 
 ```swift
-var lives = &particles.life                          // an SoA column, taken as a MutableSpan<Float>
+let lives = &particles.life                          // an SoA column, taken as a MutableSpan<Float>
 
 node.next = nil                                      // through a place property that hands out a stored optional field
 _ = node.next.take()                                 // takes the value out through the same property, and drops it

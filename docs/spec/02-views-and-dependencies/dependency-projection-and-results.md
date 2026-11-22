@@ -37,7 +37,7 @@ let t = Token(text: src[start..<pos])    // in a lexer: depends on the text, not
 
 **An `owned` argument contributes only its set**, since its own storage belongs to the callee, which can't return a view of it (rule 5).
 
-**A `mutable` argument's place is held exclusively, and a borrowed one's shared.** Each set keeps its own kinds, so a view taken through a borrowed `MutableSpan` still holds what the span holds exclusively.
+**A `mutable` argument's place is held exclusively, and a borrowed one's shared.** Each set keeps its own kinds, so a view taken through a shared borrow of a `MutableSpan`, such as a borrowed struct that holds one, still holds what the span holds exclusively.
 
 **An error is part of the result**, since a function that can fail returns a `Result` ([10](../10-errors-and-safety/typed-errors.md#results)). So what a `try` propagates, and what a `catch` binds, depends on the arguments the same way.
 
@@ -168,11 +168,13 @@ forEachLine(src.view) { line in lines.append(copy line) }
 
 **A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 
-**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A borrowed `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
+**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of an exclusive view's type is one of the parameters that [01](../01-values-and-ownership/parameters.md#parameters) receives owned. A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
 ```swift
-func rest<T>(_ s: owned MutableSpan<T>) -> MutableSpan<T>   // fine: takes an owned mutable view
-func peek<T>(_ s: MutableSpan<T>) -> MutableSpan<T>         // error: 's' is only borrowed
+struct Halves<T>(let low: MutableSpan<T>, let high: MutableSpan<T>): Scoped
+
+func rest<T>(_ s: MutableSpan<T>) -> MutableSpan<T>         // fine: 's' is an owned mutable view
+func peek<T>(_ h: Halves<T>) -> MutableSpan<T>              // error: 'h' is only borrowed
 ```
 
 **`unsafe` code that builds a mutable view answers for it**, since the signature's shape isn't enough: the code can take a dummy `mutable` argument. This covers a `MutableSpan`, a `MutableRef`, and a type of the code's own, declared `~Copyable`, that changes what it views through a raw pointer. The code promises that everything the view can change lies in a `mutable` argument's place, or in storage that place owns, or is reached through an exclusive dependency that an argument passed `mutable` or `owned` carries. It promises too that none of it is reached only through a borrowed argument or what one carries.

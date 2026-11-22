@@ -262,7 +262,7 @@ func calibrate<Row>(_ table: mutable Columns<Row>) {
     const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
     const cal = Row.field(ofType: Calibration.self)
     const out = Row.field(ofType: Calibrated.self)
-    var (rs, cs, os) = &table.rows[fields: (raw, cal, out)]       // a MutableSpan of each column
+    let (rs, cs, os) = &table.rows[fields: (raw, cal, out)]       // a MutableSpan of each column
     for (r, c, o) in zip(rs, cs, &os) { o.value = r.value * c.gain + c.offset }
 }
 
@@ -292,7 +292,7 @@ struct Archetype<Row>(                                    // Row: a tuple of com
 func integrate<Row>(_ table: mutable Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent
     const vf = Row.field(ofType: Velocity.self)
-    var (ts, vs) = &table.rows[fields: (tf, vf)]        // MutableSpan<Transform>, MutableSpan<Velocity>
+    let (ts, vs) = &table.rows[fields: (tf, vf)]        // MutableSpan<Transform>, MutableSpan<Velocity>
     for (t, v) in zip(&ts, vs) { t.position += v.linear * dt }
 }
 

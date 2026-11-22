@@ -83,5 +83,5 @@ if ref var (a, b) = &world.enemies[h1, h2] { // nil if h1 == h2 or either is sta
 }
 if ref var (a, b) = &verts[i, j] { ... }     // lists too: nil if i == j; out of bounds still panics
 list.swapAt(i, j)
-var (left, right) = list.split(at: mid)        // two disjoint MutableSpans, both depending on list
+let (left, right) = list.split(at: mid)        // two disjoint MutableSpans, both depending on list
 ```

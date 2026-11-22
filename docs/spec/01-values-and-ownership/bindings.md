@@ -227,7 +227,7 @@ when state {
 | A part of a place lent with `&`, as in `for e in &enemies` or `when &shape` | A mutable borrow of it, whatever its type |
 | A value: what an iterator hands out as its own, or a part of a call's result, of `consume s` or of `copy s` | Its owner |
 
-- **Nothing points such a name at another value.** It takes no `let` or `var`. An owned name is read-only, as a `let` is, and code that would change its value declares a `var` from it. A mutable borrow writes through to its element or part, as a `ref var` does, so `r *= 2` below changes `shape`.
+- **Nothing points such a name at another value.** It takes no `let` or `var`. An owned name is read-only, as a `let` is, and code that would change its value declares a `var` from it. An exclusive view it owns, such as a chunk, still writes through itself ([Exclusive access](#exclusive-access)). A mutable borrow writes through to its element or part, as a `ref var` does, so `r *= 2` below changes `shape`.
 - **A borrowing name can't be consumed**, since what it borrows has another owner. An owned name can be, as a `let` can.
 - **`consume` marks a subject whose names own what they bind**, as `&` marks one whose names borrow it for change. `consume` takes the subject out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)), as in the second example below.
 - **A `when` name takes its part out of a value subject only once its arm is chosen**, since patterns and guards run under a borrow of the subject until then ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
@@ -346,11 +346,12 @@ var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the vi
 - a `var` that owns its value;
 - a temporary, which its statement owns ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries));
 - the place that a `ref var`, or a `for` or `when` name of a subject lent with `&`, refers to, through that binding;
-- a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer;
+- a `mutable` or `owned` parameter, or `self` in a `mutating` or `consuming` method, a `deinit` or an initializer, except `self` in an exclusive view's `mutating` member (below);
 - an owned capture of a `mutating` or `consuming` closure;
-- a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place.
+- a `var` field, an element, or a property with a `mutate` or a `set` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)), of a changeable place;
+- a place that an exclusive view held with [exclusive access](#exclusive-access) hands out through a `mutate`, such as `lives[0]` for a `MutableSpan` that a `let` owns.
 
-**Everything else is read-only, and so is whatever is reached through it**: a `let`, a `ref let`, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`.
+**Everything else is read-only**: a `let`, a `ref let`, a borrowed parameter, `self` in a plain method, a `let` field, a `const` and a global `let`. So is whatever is reached through one of these, except a place listed above, such as an element of a `MutableSpan` that a `let` owns.
 
 ```swift
 let x = makeEnemy()
@@ -370,6 +371,23 @@ let r = renderer.weak()
 _ = r.value?.submit(mesh)          // fine: an object's value is changeable through a let of a weak pointer
 ```
 
+**An exclusive view writes through itself with exclusive access, not a changeable place**, which is why the places it hands out are changeable ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
+
+### Exclusive access
+
+**A place is held with exclusive access when nothing else reaches it while it is used**, whether or not it may change. That is what writing through an exclusive view needs, and an owned binding has it as a mutable borrow does:
+
+| The view is held by | Writes through it |
+| --- | --- |
+| an owned `let`, or a value an iterator hands out | yes |
+| a `ref var`, a `mutable` parameter, a part of a `&` subject | yes |
+| any other changeable place, or a parameter received owned | yes |
+| a `ref let`, a borrowed parameter, an element of a sequence that isn't lent | no |
+
+- **Every changeable place is held with exclusive access**, and so are these, which can't change: a `let` that owns its value, a `for` or `when` name that owns what it binds ([above](#for-and-when-names)), and `self` in an exclusive view's `mutating` member.
+- **A stored field of a place held with exclusive access is held so too**, whether it is a `let` or a `var` field.
+- **A shared borrow is never held with exclusive access, and nor is anything reached through it**, since other code may read the place at the same time. That covers `self` in a plain method and a capture of a non-`mutating` closure too.
+
 ## Lending a place for change
 
 **`&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
@@ -382,27 +400,28 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 - the last expression of an `if` or `when` arm whose position lends a place for change;
 - a place holding a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value, made into a new function value ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
 - the place that a place property's `mutate` hands out ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate));
-- a place made into a `mutable any P`, or holding one that lends a new view of its value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+- a place made into a `mutable any P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
+- an exclusive view held with exclusive access that lends a new view of what it views ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 ```swift
 for (i, e) in &makeEnemies().enumerated() { ... }       // the loop keeps the new list in a hidden local, and changes it
 ref var t = if left { &a } else { &b }                   // the arm's place is lent for change
-var v: mutable any Damageable = &boss                    // a mutable any P made from 'boss'
+let v: mutable any Damageable = &boss                    // a mutable any P made from 'boss'
 ```
 
-**What follows `&` is a changeable place, or a member of one that has a mutable form.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change.
+**What follows `&` is a changeable place, a member of one that has a mutable form, or an exclusive view held with exclusive access.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change. An exclusive view that isn't a changeable place lends only what it views: a new view of it, or its elements to a loop, never the place that holds the view ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).
 
 - **`&` picks a mutable form.** Where a method or property has a shared and a mutable form of one name, the operand of `&` picks the mutable one ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). So a binding of `&particles.life` binds an [`SoA`](../04-types/data-layout.md#struct-of-arrays-soat) column as a `MutableSpan<Float>` that it owns, where a binding of `particles.life` gets a `Span<Float>`, as in the example below.
-- **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an **owned exclusive view**: a move-only scoped value ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
+- **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an owned value of a move-only scoped type ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
 - **A call result lent for change takes `&`, as any changeable place does**, when it is a `mutable` argument, a loop's sequence or a `when` subject. It is a temporary, which its statement owns, or which the loop or the `when` owns in a hidden local, as in the example below.
 - **A `zip` marks its own arguments**, as in `zip(&vels, forces)`, so a loop over it needs no `&` of its own ([04](../04-types/collections.md#iteration)).
 
 ```swift
-var lives = &particles.life        // the mutable form: a MutableSpan<Float> that 'lives' owns
+let lives = &particles.life        // the mutable form: a MutableSpan<Float> that 'lives' owns
 lives[0] = 1
 let ages = particles.life          // the shared form: a Span<Float>
 log("first age \(ages[0])")
-var g = registry.lock()            // no '&': 'g' owns the guard, and changes the registry through it
+let g = registry.lock()            // no '&': 'g' owns the guard, and changes the registry through it
 g.value.flush()
 heal(&makeEnemy())                 // the statement owns the new enemy, and destroys it after the call
 ```
