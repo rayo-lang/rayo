@@ -7,12 +7,12 @@ An owning value cannot proceed as though an allocation succeeded when it did not
 ## Allocation failure
 
 ```swift
-func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
+func addSpawn(_ p: Vec3, to spawns: mutable &SoA<Vec3>) -> Void!AllocError {
     do {
         try spawns.tryAppend(p)         // the fallible form: fails with AllocError instead of ending the program
     } catch {
         evictUnusedAssets()             // make room, then try once more
-        try spawns.tryAppend(p)         // 'p' is borrowed, so each attempt appends a copy of the Vec3
+        try spawns.tryAppend(p)         // a Vec3 is implicitly copyable, so each attempt appends a copy of 'p'
     }
 }
 ```
@@ -34,14 +34,14 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
 
 ```swift
 @noalloc
-func fillSilence(_ out: MutableSpan<Float>, _ history: mutable List<Float>) {
+func fillSilence(_ out: mutable &[Float], _ history: mutable &List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
     history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
     var spare = alloc List<Float>()              // error: 'alloc' allocates, and 'fillSilence' is @noalloc
 }
 ```
 
-**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a span. That includes the calls the language makes for the code, such as a literal's initializer ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures), [04](../04-types/collections.md#literals)). Arithmetic that a software routine computes counts as an operation that doesn't allocate, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). A call with no static callee is checked through its type:
+**In a `@noalloc` function, a call may allocate unless its callee is known statically and is itself `@noalloc`, or is a language operation that doesn't allocate**, such as integer arithmetic or indexing a run of elements. That includes the calls the language makes for the code, such as a literal's initializer ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures), [04](../04-types/collections.md#literals)). Arithmetic that a software routine computes counts as an operation that doesn't allocate, since no software routine allocates ([11](../11-compilation-model.md#what-a-target-must-provide)). A call with no static callee is checked through its type:
 
 - a call through a function value may allocate unless its type is `@noalloc` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values));
 - a call through `any P`, and a requirement call in generic code, may allocate unless the protocol declares the requirement `@noalloc`, which every witness to it must then be.
@@ -62,7 +62,7 @@ alloc func buildLevel(_ n: Int) -> Level!(IoError | ParseError) { … } // build
 
 world.level = try levelArena.alloc buildLevel(3)                      // in a function that can fail: the level's lists and strings come from the arena
 
-levelArena.release(replace(&world.level, with: alloc Level()))        // requires Level: TrivialFree; forgets the old level instead of destroying it
+levelArena.release(replace(mutable &world.level, with: alloc Level())) // requires Level: TrivialFree; forgets the old level instead of destroying it
 levelArena.reset()                                                    // what the arena holds goes stale, and its memory is freed
 ```
 

@@ -15,13 +15,13 @@ The compiler says nothing about the race. A frame now and then reports the wrong
 ```swift
 import std.jobs                                         // join, forEachInParallel, parallelReduce
 
-func integrate(_ enemies: mutable List<Enemy>, dt: Float) {
+func integrate(_ enemies: mutable &List<Enemy>, dt: Float) {
     enemies.forEachInParallel { e in                    // runs the body on many threads at once
         e.pos += e.vel * dt                             // fine: each call changes only the enemy it was given
     }
 }
 
-func totalHp(_ enemies: List<Enemy>) -> Float {
+func totalHp(_ enemies: &List<Enemy>) -> Float {
     enemies.span.parallelReduce(Float(0), combine: +) { sum, e in sum + e.hp }
 }
 ```
@@ -31,11 +31,11 @@ func totalHp(_ enemies: List<Enemy>) -> Float {
 ## Lending work to other threads
 
 ```swift
-join({ integrate(&world.enemies, dt: dt) },             // may run both closures at once, and returns when both are done
-     { mix(&world.audio) })                             // fine: each closure writes a different field
+join({ integrate(mutable &world.enemies, dt: dt) },     // may run both closures at once, and returns when both are done
+     { mix(mutable &world.audio) })                     // fine: each closure writes a different field
 
-join({ integrate(&world.enemies, dt: dt) },
-     { drawRadar(world.enemies) })                      // error: one closure reads 'world.enemies' while the other writes it
+join({ integrate(mutable &world.enemies, dt: dt) },
+     { drawRadar(&world.enemies) })                     // error: one closure reads 'world.enemies' while the other writes it
 ```
 
 `std.jobs` is a **job system**: it runs closures on a pool of threads. The closures in `join` borrow parts of `world` for the length of the call, and `join` finishes them before it returns. This is **lent work** ([07](../spec/07-concurrency/thread-work.md#lending-work-to-other-threads)).
@@ -65,10 +65,10 @@ The job system's own `unsafe` code promises to call each closure only as its kin
 
 ```swift
 ThreadScope.run { s in
-    s.spawn { integrate(&world.enemies, dt: dt) }       // runs on another thread
-    mix(&world.audio)                                   // runs on this thread meanwhile
-    print(world.enemies.count)                          // error: 's' borrows 'world.enemies' exclusively until the block returns
-}                                                       // every spawned thread has finished here
+    s.spawn { integrate(mutable &world.enemies, dt: dt) }   // runs on another thread
+    mix(mutable &world.audio)                               // runs on this thread meanwhile
+    print(world.enemies.count)                               // error: 's' borrows 'world.enemies' exclusively until the block returns
+}                                                            // every spawned thread has finished here
 ```
 
 **`ThreadScope.run` starts threads that may borrow the caller's locals** ([07](../spec/07-concurrency/thread-work.md#scoped-threads)). It returns only when every thread its block spawned has finished, so no thread outlives what it borrows.
@@ -89,17 +89,18 @@ The `Enemy` from chapter 5 can cross to another thread because its fields can, i
 The compiler works out `Sendable` from what a type holds, as it does for `Copyable`:
 
 - **A struct, enum, tuple or array is `Sendable` when everything it holds is.** std's containers follow their elements, so `List<Enemy>` is `Sendable`, and `List<WeakPointer<Enemy>>` isn't.
+- **A reference is `Sendable` when what it refers to is.** So the `mutable &Enemy` that a parallel loop hands each worker may go to another thread, since an `Enemy` may.
 - **Object pointers never are.** `UniquePointer`, `WeakPointer` and anything that holds one stay on the object's home thread ([Handles and objects](05-handles-and-objects.md)).
 - **`Shared<T>` is `Sendable` when `T` is, and `LocalShared<T>` never is** ([06](../spec/06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 
 `GLTexture` opts out with `~Sendable`. Its `UInt32` field could cross threads, but the id it holds is meaningful only on the GL thread. A wrapper over a thread-safe C library's pointer can instead declare `unsafe Sendable`, making a promise the compiler cannot check ([10](../spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
 
-**Lent work captures only `Sendable` values, even when it only borrows them.** A job system takes its closures as a **`@sendable` function type**, which accepts only closures whose captures are all `Sendable`. `forEachInParallel`'s body has the type `@sendable (mutable Enemy) -> Void`:
+**Lent work captures only `Sendable` values, even when it only borrows them.** A job system takes its closures as a **`@sendable` function type**, which accepts only closures whose captures are all `Sendable`. `forEachInParallel`'s body has the type `@sendable (mutable &Enemy) -> Void`:
 
 ```swift
-func drawMarkers(_ enemies: mutable List<Enemy>, _ hud: Hud) {
+func drawMarkers(_ enemies: mutable &List<Enemy>, _ hud: &Hud) {
     enemies.forEachInParallel { e in
-        mark(hud, at: e.pos)        // error: 'Hud' isn't Sendable, so lent work can't capture it
+        mark(&hud, at: e.pos)       // error: 'Hud' isn't Sendable, so lent work can't capture it
     }
 }
 ```
@@ -110,7 +111,7 @@ func drawMarkers(_ enemies: mutable List<Enemy>, _ hud: Hud) {
 
 **Data that several threads change through shared borrows lives in a `Synchronized` type** ([07](../spec/07-concurrency/synchronization.md#atomics-and-locks)). A **`Synchronized`** type changes only through its own synchronization, such as a lock or atomic operations. So a shared borrow of it is enough to change it, from any thread.
 
-**Lent work that changes data through a `mutable` borrow needs no lock.** Exclusivity already keeps the threads apart, since each closure that changes data has it to itself.
+**Lent work that changes data through a mutable reference needs no lock.** Exclusivity already keeps the threads apart, since each closure that changes data has it to itself.
 
 ### Locks: `Mutex` and `RwLock`
 
@@ -124,14 +125,14 @@ enemies.forEachInParallel { e in
 
 var g = deaths.lock()                    // a MutexGuard<List<Vec3>>
 g.value.append(boss.pos)
-_ = g                                    // unlocks now; otherwise the end of the scope does
+_ = consume g                            // unlocks now; otherwise the end of the scope does
 
 deaths.lock { _ in
     deaths.lock { _ in }                 // panics: this thread already holds 'deaths'
 }
 
 let nav = RwLock(NavGrid())
-let route = nav.read { grid in findPath(grid, from: start, to: goal) }   // many readers at once
+let route = nav.read { grid in findPath(&grid, from: start, to: goal) }  // many readers at once
 nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one writer, and no readers meanwhile
 ```
 
@@ -141,7 +142,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **Locking doesn't make a closure `mutating`.** `lock` is a non-`mutating` method, so a body that only locks `deaths` still runs on many threads at once.
 
-**The guard form returns a guard, which holds the lock for as long as it lives.** `_ = g` releases it early, and shows where the lock ends. `g` is a `var`, since appending writes through the guard. Writing through any view, a guard as much as a `MutableSpan`, takes a binding that may change, such as a `var` ([Views](04-views.md#views)).
+**The guard form returns a guard, which holds the lock for as long as it lives.** `_ = consume g` releases it early, and shows where the lock ends. `g` is a `var`, since appending writes through the guard. Writing through any view, a guard as much as a `mutable &[T]`, takes a binding that may change, such as a `var` ([Views](04-views.md#views)).
 
 **`_ =` drops a value on purpose.** Rayo rejects any value that code never uses, unless its type is `Void`, because an ignored result is usually a bug, such as an error nobody handled. So code that has no use for a value, such as the `Thread` that `Thread.start` returns below, drops it with `_ =` ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 
@@ -163,7 +164,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 let spawned = Atomic(0)
 spawned.add(1, .relaxed)                 // through a shared borrow, from any thread
 
-func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int32>) {
+func countCrowds(_ enemies: mutable &List<Enemy>, into cells: &AtomicArray<Int32>) {
     enemies.forEachInParallel { e in
         cells.add(cellOf(e.pos), 1, .relaxed)     // fine: an atomic add, through a shared borrow of 'cells'
     }
@@ -198,10 +199,10 @@ func countCrowds(_ enemies: mutable List<Enemy>, into cells: AtomicArray<Int32>)
 var level = loadLevel()
 let bounces = 3
 _ = Thread.start(name: "bake") {
-    bakeLighting(level, bounces: bounces)                               // error: unlisted captures; a thread body can't borrow them
+    bakeLighting(&level, bounces: bounces)                              // error: unlisted captures; a thread body can't borrow them
 }
 let bake = Thread.start(name: "bake") { [move level, copy bounces] in   // fine: the thread owns 'level', and a copy of 'bounces'
-    bakeLighting(level, bounces: bounces)
+    bakeLighting(&level, bounces: bounces)
 }
 loadAudio()                                                             // runs on this thread meanwhile
 bake.join()                                                             // waits until the bake has finished
@@ -216,7 +217,7 @@ bake.join()                                                             // waits
 **`Thread.start` returns a `Thread<R>`, where `R` is what the body returns, and `join()` waits for the thread to end and returns that value** ([07](../spec/07-concurrency/thread-work.md#joining-a-thread)). The bake returns nothing, so `bake` is a `Thread<Void>`. A thread that computes something hands it back through `join()`, as this one does with a checksum of some bytes it owns:
 
 ```swift
-let hashing = Thread.start { [move bytes] in crc32(bytes) }   // a Thread<UInt32>
+let hashing = Thread.start { [move bytes] in crc32(&bytes) }  // a Thread<UInt32>
 let crc = hashing.join()                                      // waits, then returns the body's UInt32
 ```
 
@@ -242,25 +243,25 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
     let (tx, rx) = alloc Channel<Shared<Snapshot>>.make(capacity: 3)
     let render: Thread<Void> = Thread.start(name: "render") { [move rx] in   // the thread owns the receiver
-        for snapshot in &rx { draw(snapshot) }                               // waits for each snapshot in turn
+        for snapshot in mutable &rx { draw(&snapshot) }                     // waits for each snapshot in turn
     }
-    return (render, tx)                                                      // the simulation keeps the sender
+    return (consume render, consume tx)                                      // the simulation keeps the sender
 }
 ```
 
 **A `Channel` hands items from one thread to another through two owned ends, a `Sender` and a `Receiver`** ([07](../spec/07-concurrency/synchronization.md#queues-and-channels)).
 
-**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The `&` in `&rx` is there because receiving changes the `Receiver`.
+**The render thread owns the `Receiver`, and takes one item at a time from it in a loop.** Each pass calls `receive()`, which **parks** the thread between items: it sleeps until the next item comes. The loop lends `rx` with `mutable &` because receiving changes the `Receiver`, and each snapshot it hands out is the loop's own, which `draw(&snapshot)` lends to the drawing code.
 
 **The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 
 ```swift
 var (render, tx) = startRenderer()
 while running {
-    step(&world)
+    step(mutable &world)
     _ = tx.send(alloc Shared(world.snapshot()))  // '_ =': if the render thread is gone, the snapshot is dropped
 }
-_ = tx                                           // drops the sender: the render loop ends
+_ = consume tx                                   // drops the sender: the render loop ends
 render.join()                                    // waits for the last frame
 ```
 
@@ -312,8 +313,8 @@ func tick() {
 ## Tasks
 
 ```swift
-task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
-    guard ref let d = game.doors[door] else { return }
+task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
+    guard ref let d = &game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
     await elapsed(.seconds(0.5))                           // half a second of game time; a later step resumes
     game.audio.play(d.slamSound, at: d.pos)                // error: 'd' borrows 'game.doors' across an 'await'
@@ -322,14 +323,14 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 
 var scripts = TaskSet<Game>(capacity: 512)
 _ = scripts.start(openDoor(frontDoor))                     // calling openDoor runs nothing: it returns the task
-scripts.step(&game)                                        // steps each task that has been woken since the last step
+scripts.step(mutable &game)                                // steps each task that has been woken since the last step
 ```
 
 **A `task func` can suspend at `await`, and continues once what it waits on wakes it and its owner steps it** ([07](../spec/07-concurrency/tasks.md#task-functions-coroutines-that-wait-without-a-thread)). It suits a script that spans frames, or any work that spends its time waiting, and it never runs on its own.
 
 **Calling a `task func` runs nothing: it returns the task**, a value that its owner keeps and steps.
 
-**A task is a value whose size the compiler knows, so it never allocates on its own.** Its parameters are `owned`, and the locals it keeps across an `await` live inside it.
+**A task is a value whose size the compiler knows, so it never allocates on its own.** Its parameters own their arguments, and the locals it keeps across an `await` live inside it.
 
 **No borrow lives across an `await`**, since between steps the task holds only what it owns ([07](../spec/07-concurrency/tasks.md#semantics)). So after an `await`, look a borrowed value up again.
 
@@ -345,7 +346,7 @@ scripts.step(&game)                                        // steps each task th
 let quitLoading = Atomic(false)                                  // a global, which the main thread sets
 var loads = TaskSet<Loader>(capacity: 64)
 _ = loads.start(streamZone(next))                                // its reads go through an I/O library, which wakes it as each completes
-loads.run(&loader, until: { _ in quitLoading.load(.acquire) })   // parks the thread whenever no task is woken
+loads.run(mutable &loader, until: { _ in quitLoading.load(.acquire) })   // parks the thread whenever no task is woken
 ```
 
 **`run` steps the set each time a task is woken, and parks the thread in between**, so a loading thread sleeps while its reads are under way. It returns once its condition holds after a step, or once no task is left ([07](../spec/07-concurrency/tasks.md#waiting-for-wakes-run-and-blockon)).

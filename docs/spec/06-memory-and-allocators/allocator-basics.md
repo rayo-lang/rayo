@@ -41,7 +41,7 @@ var boxed = alloc boss.value                         // error: 'Enemy' isn't All
 - an array or dictionary literal, which then builds the `Allocating` type its position expects, such as a `List` or a `Map`, or a `List` from an array literal where nothing expects a type ([04](../04-types/collections.md#literals));
 - a string literal, which then makes a `String`, formatting an interpolated one into it, as in `alloc "Wave \(n) cleared"` ([04](../04-types/collections.md#strings)).
 
-**An `Allocating` initializer or an `alloc func` called without `alloc` is a compile error**, such as `List<Prop>()`, `String("hp \(hp)")` or a bare `x.clone()` ([below](#functions-that-make-a-new-value-alloc-func)). So is an array or dictionary literal that would become an `Allocating` type without `alloc`. So every value that owns storage shows where the storage comes from. A string literal without `alloc` is a `static StringView`, which owns nothing ([04](../04-types/collections.md#literals)).
+**An `Allocating` initializer or an `alloc func` called without `alloc` is a compile error**, such as `List<Prop>()`, `String("hp \(hp)")` or a bare `x.clone()` ([below](#functions-that-make-a-new-value-alloc-func)). So is an array or dictionary literal that would become an `Allocating` type without `alloc`. So every value that owns storage shows where the storage comes from. A string literal without `alloc` is a `static &Text`, which owns nothing ([04](../04-types/collections.md#literals)).
 
 **`alloc` applies to nothing else.** So `a.alloc f()` on a plain function `f`, one not declared `alloc func`, is a compile error. `alloc` never boxes a value either: `alloc` before a plain value, such as `boss.value` above, is a compile error, and boxing one is written `alloc Box(v)`. Only the `Box`'s contents go to the allocator. The `Box` itself is a small owning pointer that lives wherever it is put, as the inline part of every `Allocating` value does.
 
@@ -76,9 +76,9 @@ let inv = level.alloc Inventory()        // 'items' comes from 'level' too
 
 ```swift
 extension List {
-    alloc func filter(_ keep: (Element) -> Bool) -> List<Element> where Element: Copyable {
+    alloc func filter(_ keep: (&Element) -> Bool) -> List<Element> where Element: Copyable {
         var out = alloc List<Element>()                  // the allocator the call received
-        for x in self where keep(x) { out.append(copy x) }
+        for x in &self where keep(&x) { out.append(copy x) }
         return out
     }
 }
@@ -96,15 +96,15 @@ extension List {
 
 ```swift
 struct Level(var names: List<String> = alloc List<String>()): Allocating {
-    mutating func addName(_ n: StringView) {
-        names.append(alloc String(n))          // the level's allocator: the string goes where the list is
+    mutating func addName(_ n: &Text) {
+        names.append(alloc String(&n))         // the level's allocator: the string goes where the list is
     }
     alloc func clone() -> Level {
         alloc Level(names: alloc names.clone())   // the received allocator: each part goes where the copy goes
     }
 }
 
-func report(_ level: Level) {
+func report(_ level: &Level) {
     var lines = alloc List<String>()           // a free function: .heap, even when a Level method calls it
     …
 }

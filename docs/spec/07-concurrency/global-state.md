@@ -12,11 +12,11 @@ let godMode = Atomic(false)
 @threadlocal var scratch = alloc List<Int>()
 
 func damageScale() -> Float { config.snapshot().value.damageScale }   // an owner that never waits, then a copy
-func debugMenuSet(_ c: owned GameConfig) { config.publish(c) }      // readers see old or new, never torn
+func debugMenuSet(_ c: GameConfig) { config.publish(consume c) }    // readers see old or new, never torn
 
 func grow() { scratch.append(0) }              // modify access to this thread's 'scratch'
 func scan() {
-    for x in scratch { grow(); use(x) }        // panics: read by the loop, modified by grow()
+    for x in &scratch { grow(); use(x) }       // panics: read by the loop, modified by grow()
 }
 ```
 

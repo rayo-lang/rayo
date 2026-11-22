@@ -5,20 +5,20 @@ Rayo gives expected failures and broken assumptions different paths. An expected
 ```swift
 enum ConfigError: Error {
     case notFound
-    case badValue(field: static StringView)
+    case badValue(field: static &Text)
 }
 
-func loadConfig(_ path: StringView) -> Config!ConfigError { ... }   // the result type names the error type
+func loadConfig(_ path: &Text) -> Config!ConfigError { ... }        // the result type names the error type
 
 do {
-    settings = try loadConfig(path)       // a missing file is expected: it comes back as a value
+    settings = try loadConfig(&path)      // a missing file is expected: it comes back as a value
 } catch .notFound {
     settings = Config()                   // fall back to the defaults
 } catch .badValue(field) {
     log("bad value for \(field)")
 }
 
-ref let pos = enemies[target]!.pos        // a stale handle here is a bug: '!' panics
+ref let pos = &enemies[target]!.pos       // a stale handle here is a bug: '!' panics
 ```
 
 `loadConfig`'s result type, a `Result`, tells the caller which failures it may catch. The `catch` arms handle them as values; the `!` on the last line takes the panic path if the handle has gone stale.

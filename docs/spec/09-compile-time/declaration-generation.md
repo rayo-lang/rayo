@@ -49,7 +49,7 @@ A generated declaration needs a name that comes from the element it was made for
 struct Particle(var pos: Vec3, var vel: Vec3)
 
 var columns = Columns<Particle>()                         // fields: pos: List<Vec3>, vel: List<Vec3>
-step(&columns.pos, columns.vel.span, dt)                  // two fields of one value: disjoint, as if written out
+step(mutable &columns.pos, &columns.vel, dt)             // two fields of one value: disjoint, as if written out
 ```
 
 ## Generated members are checked per instantiation

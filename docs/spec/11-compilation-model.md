@@ -7,7 +7,7 @@ Modules decide which declarations a source file can name and what a build checks
 ```swift
 // in the module 'gameplay'
 import engine.math                                        // its public declarations are visible here
-public func armor(_ e: Enemy) -> Float { e.hp * 0.5 }    // visible to every module that imports 'gameplay'
+public func armor(_ e: &Enemy) -> Float { e.hp * 0.5 }   // visible to every module that imports 'gameplay'
 ```
 
 **A module is a set of source files checked and built together.** It is what an import names, what `public` exports from, and what the compiler checks against the interfaces of the modules it imports ([below](#type-checking-is-local)).
@@ -58,8 +58,8 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 
 **The prelude must hold what the compiler itself relies on, since the language's syntax and rules mean its declarations:**
 
-- the language's own types, such as the numbers, `Never`, `Simd`, `Array`, `Span` and `UniquePointer`;
-- the std types the language names, such as `Allocator` and `Allocating` for `alloc`;
+- the language's own types, such as the numbers, `Never`, `Simd`, `Array` and `UniquePointer`;
+- the std types the language names, such as `Allocator` and `Allocating` for `alloc`, and `Text` for string literals;
 - the literal protocols ([04](04-types/collections.md#literals));
 - the C type aliases ([08](08-c-interop.md));
 - the protocols the compiler derives or checks;
@@ -96,7 +96,7 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 ## Runtime costs
 
 ```swift
-for e in enemies.span {             // a plain loop over memory, in every build
+for e in &enemies {                 // a plain loop over memory, in every build
     total += e.hp
 }
 let step = vec.normalized * speed   // vector arithmetic: no hidden call where the processor has the operations
@@ -228,17 +228,16 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
 - **Thread timing**, and the early polls that a task's deadline may cost it ([07](07-concurrency/tasks.md#waking-a-task)).
 - **The process seed**, which startup draws anew for each run ([04](04-types/collections.md#hash-maps-and-sets)). So what a `Hasher` whose seed derives from it outputs can differ even between two runs of one build, and so can any order that depends on that output, such as that of a `Map` with the default `SeededHashing`.
 - **Destruction order**: the order in which a reset or an unregistration runs the `deinit`s of the objects it destroys ([03](03-handles-and-objects.md#objects-in-arenas-and-other-allocators)), and in which a thread's teardown destroys its objects ([07](07-concurrency/global-state.md#thread-teardown)).
-- **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a span cast or an atomic compare-and-swap.
-- **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a span of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Compile-time code observes neither, since only queries whose answer freezing keeps run there ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)). Safe code never sees where a function's code lives.
+- **The bits of a NaN result**, which only reading its bytes as another type observes: a bit cast, a union read, a run cast or an atomic compare-and-swap.
+- **Where values and code live**: the address in a raw pointer, and an address's alignment beyond what its type guarantees. `reinterpret` observes that alignment when it checks a run of storage whose type guarantees less than the target type needs ([04](04-types/data-layout.md#plain-data-pod-and-bit-casts)). Compile-time code observes neither, since only queries whose answer freezing keeps run there ([10](10-errors-and-safety/unsafe-code.md#raw-pointers)). Safe code never sees where a function's code lives.
 - **The bits of weak pointers and weak links**, which `w.bits` shows ([03](03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)).
 - **The values of the ids and hashes that the language defines only by what they identify**: `T.id` and `T.layoutId`. Each implementation keeps them the same from build to build ([09](09-compile-time/reflection.md#what-reflection-can-read)). The order of an error union's members, which follows its members' `T.id`s, is left open with them ([10](10-errors-and-safety/typed-errors.md#error-unions)).
 - **Whether two types' `T.id`s collide.** A collision fails the build ([09](09-compile-time/reflection.md#what-reflection-can-read)).
 - **The layouts below**, which only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe, and whose values no `Closure` stores inline ([05](05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)):
     - a task's state and an interpolated literal's value, which the compiler builds ([07](07-concurrency/tasks.md#semantics), [04](04-types/collections.md#strings));
     - the builtin `SoA<T>` ([04](04-types/data-layout.md#struct-of-arrays-soat));
-    - the iteration views `Borrow<T>` and `MutableRef<T>` ([04](04-types/collections.md#iteration));
     - `Slice<T>` ([06](06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers));
-    - the existential views `any P` and `MutableRef<any P>`, and function-typed values ([05](05-protocols-generics-and-closures.md));
+    - the existential references `&any P` and `mutable &any P`, beyond their pointer and witness table ([01](01-values-and-ownership/references.md#layout)), and function-typed values ([05](05-protocols-generics-and-closures.md));
     - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 - **A `Closure`'s layout**: its size, and how much of its captures it holds inline, so whether converting a closure to one allocates ([05](05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **What a library leaves open**, such as:

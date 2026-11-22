@@ -6,7 +6,7 @@ A C or C++ program uses a library written in Rayo:
 
 ```swift
 @export(c) func nav_load(_ desc: NavDesc) -> WeakShared<NavMesh> { ... }   // Shared.leak: the C caller owns the mesh
-@export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: MutableSpan<Int32>) -> Int32 { ... }
+@export(c, name: "nav_path") func findPath(_ mesh: WeakShared<NavMesh>, _ out: mutable &[Int32]) -> Int32 { ... }
 
 @export(c) @c struct NavDesc(
     var width: Int32,
@@ -18,7 +18,7 @@ A C or C++ program uses a library written in Rayo:
 **`@export(c)` functions get C linkage and no mangling, and their parameters and results must have a C representation** ([below](#c-representations)).
 
 - **The name is a promise.** An exported name shares one namespace with every C symbol the program links or loads. So `@export` on a function is an unverified promise ([10](../10-errors-and-safety/unsafe-code.md#unverified-promises)): nothing else in the program defines that name, and every C caller of it calls this signature. The build fails when two objects it links define one name.
-- **Parameters pass by value.** Each passes in its C representation, whatever its Rayo convention (borrowed or `owned`), except a `mutable` one, which passes as a pointer. The same holds for `@c func`, the form a callback takes ([below](#callbacks)).
+- **Parameters pass in their types' C representations.** A parameter that owns its argument passes the value. A reference parameter passes what its type's representation gives: a pointer, or a pointer and a count. The same holds for `@c func`, the form a callback takes ([below](#callbacks)).
 - **Errors are values.** A function that can fail returns a `Result`, which crosses as the table below gives ([below](#c-representations)), so its failure type needs a C representation too. An error union has none, since the order of its members is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
 - **Panics stay in Rayo.** A panic in the body is reported as any panic is ([10](../10-errors-and-safety/panics.md#panics)), and Rayo never unwinds.
 - **Not generic.** An `@export` function has no type parameters and no `some P` parameter, since C calls one symbol.
@@ -32,7 +32,7 @@ A C or C++ program uses a library written in Rayo:
 
 **Every generated header declares `rayo_int_t` and `rayo_uint_t`**, typedefs of `int64_t` and `uint64_t`, which `Int` and `UInt` cross as. C's `#ifndef` can't test for a typedef, so the header guards each with a macro it defines alongside it, as `_SIZE_T_DEFINED` guards `size_t`. So several generated headers can be included together. A header that Rayo imports back gives them as `Int` and `UInt` again ([What imports as what](imports-and-inline-c.md#what-imports-as-what)).
 
-**For each `List`, `String` and `TrailingArray` type among them, the header declares a free function**: an `@export` function that takes the value `owned` and destroys it. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
+**For each `List`, `String` and `TrailingArray` type among them, the header declares a free function**: an `@export` function whose parameter owns the value, which it destroys. So a call of the free function enters Rayo as any call from C does ([below](#c-entries-and-threads)).
 
 ## C representations
 
@@ -45,12 +45,12 @@ A C or C++ program uses a library written in Rayo:
 
 | Rayo | C representation |
 | --- | --- |
-| `Span<T>` | `struct { const T* ptr; rayo_uint_t count; }` |
-| `StringView` | `struct { const char* ptr; rayo_uint_t count; }` |
-| `MutableSpan<T>` | `struct { T* ptr; rayo_uint_t count; }` |
-| `mutable T` parameter | `T*` |
+| `&T`, `mutable &T` of a sized `T` | `const T*`, `T*`, never null |
+| `&[T]` | `struct { const T* ptr; rayo_uint_t count; }` |
+| `&Text` | `struct { const char* ptr; rayo_uint_t count; }` |
+| `mutable &[T]` | `struct { T* ptr; rayo_uint_t count; }` |
 | `Void` or `Never` as a result | `void`, and `_Noreturn` for `Never` |
-| `static Span<T>`, `static StringView` | as `Span<T>` and `StringView`: data that lives as long as the program, which C may keep |
+| `static &[T]`, `static &Text` | as `&[T]` and `&Text`: data that lives as long as the program, which C may keep |
 | struct | the C struct that declares its fields in layout order ([04](../04-types/structs.md#structs)), packed as the struct is, each in its representation |
 | `[N of T]` field | a `T name[N]` field, each element in its representation |
 | tuple | a C struct whose member `_i` is element `i`, declared in layout order ([04](../04-types/collections.md#tuples-ranges-and-arrays)), each in its representation |
@@ -69,20 +69,20 @@ A C or C++ program uses a library written in Rayo:
 | `TrailingArray<H, E>` | `struct { H* ptr; rayo_uint_t count; uint64_t alloc; }`, where `ptr` points at the header and the `count` elements start at the offset 04 gives ([04](../04-types/data-layout.md#a-header-and-trailing-elements-trailingarray)), which the generated header names |
 
 - **The `nil` value of a niche** is the one 04 gives ([04](../04-types/enums.md#optionals)), and the generated header names it.
-- **A `String` that still uses a static view's bytes** ([04](../04-types/collections.md#strings)) has `cap` 0 and a non-null `ptr`.
-- **The builtins in the table are laid out as their C structs**, interior padding included. So on a 32-bit target, a `Span<T>` has 4 bytes of padding after its `ptr`, and it isn't padding-free there, nor is a type that holds one ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)).
+- **A `String` that still uses a `static &Text`'s bytes** ([04](../04-types/collections.md#strings)) has `cap` 0 and a non-null `ptr`.
+- **The builtins in the table are laid out as their C structs**, interior padding included. So on a 32-bit target, a `&[T]` has 4 bytes of padding after its `ptr`, and it isn't padding-free there, nor is a type that holds one ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
 **Every other type has no C representation**, and can't appear in an exported signature or a `@c` type. That includes:
 
 - function-typed values other than `@c` pointers;
 - weak pointers and weak links to `any P`;
 - std's `Name`, whose value means something only to this program's interner ([04](../04-types/collections.md#collections-and-strings));
-- any type whose layout the language or a library leaves open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `Borrow`, `MutableRef`, `Slice`, `Pin` and `LocalPin`;
+- any type whose layout the language or a library leaves open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as a task's state, `&any P`, `mutable &any P`, `Slice`, `Pin` and `LocalPin`;
 - any type that is or holds a `Synchronized` value, which synchronizes itself and whose identity is its address ([07](../07-concurrency/synchronization.md#atomics-and-locks)).
 
 ## What a C entry hands back to C
 
-**A `Span<T>` or `StringView` handed back to C views what it depends on** ([02](../02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores into a `mutable` parameter or through a view a parameter carries.
+**A reference handed back to C refers to what it depends on** ([02](../02-views-and-dependencies.md#dependencies)), and C uses it only while that memory lives. What a C entry ([below](#c-entries-and-threads)) hands back to C is its scoped result, and whatever it stores through a `mutable &` parameter or through a reference a parameter carries.
 
 **Once a C entry returns, nothing in Rayo holds what it borrowed**: a lock guard is released, and an open no longer counts as a use of its allocator ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)).
 
@@ -98,7 +98,7 @@ A C or C++ program uses a library written in Rayo:
 
 **Ownership crosses to C in these ways:**
 
-- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable` parameter C lent, or that Rayo passes to an `owned` parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
+- as a `List`, `String` or `TrailingArray` that a C entry returns to C or stores through a `mutable &` parameter C lent, or that Rayo passes to an owning parameter of an `extern c func` or a `@c` pointer ([above](#c-representations));
 - as a weak pointer from `UniquePointer.leak`, which comes back through `adopt` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c));
 - as a weak link from `Shared.leak`, which comes back through `adopt` ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - as a `RawAllocation` through `Box.leak` and the `unsafe` `Box.adopt` ([06](../06-memory-and-allocators/owning-values.md#owning-boxes)).
@@ -120,7 +120,7 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }
 // the program drains audioEvents with pop() wherever it processes input
 ```
 
-**A function pointer type imported from a C header has borrowed parameters**, so a `@c func` with an `owned` parameter doesn't convert to it ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)): C calling through it never gives up what it passes.
+**A function pointer type imported from a C header takes only imported types**, which are plain C data. So C calling through it gives up nothing it passes: each parameter owns a copy of the bits, and C keeps its own. A `@c func` converts to it only when its parameters have the same types ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)), so one that takes a `List` or a reference doesn't, except by C representations inside `unsafe`.
 
 ## C entries and threads
 

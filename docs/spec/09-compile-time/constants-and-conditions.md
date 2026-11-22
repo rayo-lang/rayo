@@ -14,11 +14,11 @@ const jumpId: Name = "jump"                             // interned by the build
 func makeSinTable() -> [1024 of Float] {
     var t: [1024 of Float] = .init(repeating: 0)
     for i in 0..<t.count { t[i] = sin(Float(i) / 1024 * 2 * .pi) }
-    return t
+    return consume t
 }
 ```
 
-**A `const` initializer is evaluated at compile time.** It is checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](../01-values-and-ownership/parameters.md#default-arguments)). So, as for a default, a view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
+**A `const` initializer is evaluated at compile time.** It is checked as the body of a function with no parameters that returns the `const`'s type, as a default value is ([01](../01-values-and-ownership/parameters.md#default-arguments)). So, as for a default, a reference or other view it returns views only static storage ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-5-the-callee-side)).
 
 **Any function can run at compile time if what it executes, on the input it gets:**
 
@@ -68,15 +68,15 @@ alloc func makePresets() -> List<Preset> {
     var a = alloc List<Preset>()
     a.append(Preset(name: alloc "grunt", hp: 50))
     a.append(Preset(name: alloc "brute", hp: 400))
-    return a
+    return consume a
 }
 
-func presets() -> Span<Preset> { enemyPresets.span }   // a view of a const: any function may return it
+func presets() -> &[Preset] { &enemyPresets.span }   // a reference to a const: any function may return it
 
-struct World(var presets: static Span<Preset>, …)
+struct World(var presets: static &[Preset], …)
 
-func setUp(_ world: mutable World) {
-    world.presets = enemyPresets.span                  // converts to a static view, since it views a const
+func setUp(_ world: mutable &World) {
+    world.presets = &enemyPresets.span                 // converts to a static reference, since it refers to a const
     var edited = alloc enemyPresets.clone()            // fine: a run-time copy, from the ambient allocator
     edited.append(Preset(name: alloc "boss", hp: 900))
     enemyPresets.append(Preset(name: alloc "boss", hp: 900))   // error: a const is never mutated
@@ -91,7 +91,7 @@ func setUp(_ world: mutable World) {
 - **Pointers.** It points each pointer into a copied allocation at the same offset in its copy. Evaluation never turns a pointer into an integer (above), so no integer in the value is an address that freezing would leave stale.
 - **Allocator words.** It makes every allocator word in the value the static allocator's, whether or not it records an allocation: an empty `List`'s and a literal-backed `String`'s record none.
 
-**A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)), so a view of it depends only on static storage, and converts to its static type wherever one is expected ([02](../02-views-and-dependencies/scoped-values.md#static-values)). For a `List` or an `[N of T]` reached from a `const` through stored fields and place properties, `.span` converts to a `static Span<T>`. For a `String` reached that way, as `enemyPresets[i].name` is, `.view` converts to a `static StringView`. Either may then be kept anywhere, since what it views is never freed.
+**A frozen `const` lives as long as the program** ([01](../01-values-and-ownership/moving-values-out.md#constants)), so a reference to it depends only on static storage, and converts to its static type wherever one is expected ([02](../02-views-and-dependencies/scoped-values.md#static-values)). For a `List` or an `[N of T]` reached from a `const` through stored fields and place properties, a reference to its elements, such as `&enemyPresets.span`, converts to a `static &[T]`. For a `String` reached that way, as `enemyPresets[i].name` is, a reference to its text converts to a `static &Text`. Either may then be kept anywhere, since what it refers to is never freed.
 
 **What can be frozen.** A `const` that reaches run time must be **freezable**, or it is a compile error. A frozen value lies in read-only data, where nothing consumes, mutates or destroys it ([06](../06-memory-and-allocators/allocator-basics.md#the-static-allocator)), and every thread may read it. It is built at compile time and read at run time, so it reaches nothing that exists only at run time, and nothing from compile time but what freezing copies. So a freezable value meets each of these:
 
@@ -133,11 +133,11 @@ static if !target.flag("sse4") {
     static error("needs SSE4")                                  // fails the build where the flag is off
 }
 
-func store<T>(_ value: T, into w: mutable Writer) {
+func store<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: value)                                      // fast path for plain data: safe, one memcpy
+        w.bytes(of: &value)                                     // fast path for plain data: safe, one memcpy
     } else {
-        serialize(value, into: &w)
+        serialize(&value, into: mutable &w)
     }
 }
 ```

@@ -91,14 +91,14 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 
 ```swift
 let log = Mutex(alloc List<Message>())
-log.lock { msgs in msgs.append(m) }      // closure form: lock takes 'consuming (mutable T) -> R', called once
+log.lock { msgs in msgs.append(consume m) }   // closure form: lock takes 'consuming (mutable &T) -> R', called once
 
-var g = log.lock()                       // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
-g.value.append(n)                        // views of g.value depend on g
-_ = g                                    // unlocks; otherwise its deinit unlocks at scope end
+var g = log.lock()                            // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
+g.value.append(consume n)                     // views of g.value depend on g
+_ = consume g                                 // unlocks; otherwise its deinit unlocks at scope end
 
 log.lock { msgs in
-    log.lock { _ in }                    // panics: this thread already holds 'log'
+    log.lock { _ in }                         // panics: this thread already holds 'log'
 }
 ```
 
@@ -148,8 +148,8 @@ The ends are move-only, unscoped values that point to shared heap state, so `T` 
 
 ```swift
 func share() -> Sender<T>                                        // Sender<T>'s: another Sender of the same channel
-mutating func send(_ item: owned T) -> Void!Disconnected<T>      // Sender<T>'s: parks while full; fails once the Receiver is gone
-mutating func trySend(_ item: owned T) -> Void!TrySendError<T>   // Sender<T>'s: never parks
+mutating func send(_ item: T) -> Void!Disconnected<T>            // Sender<T>'s: parks while full; fails once the Receiver is gone
+mutating func trySend(_ item: T) -> Void!TrySendError<T>         // Sender<T>'s: never parks
 mutating func receive() -> T?                                    // Receiver<T>'s: parks while empty; nil once every Sender is gone
 mutating func tryReceive() -> T!TryReceiveError                  // Receiver<T>'s: never parks
 mutating func receive(timeout: Duration) -> T!ReceiveTimeoutError   // Receiver<T>'s: parks while empty, for at most 'timeout'
@@ -193,11 +193,11 @@ So each send either put its item in before the disconnection, and the item is de
 **`receive()` parks while the channel is empty and connected, and returns `nil` once it is disconnected for receiving.** So a consumer's loop ends when its producers are done, after it has handled every item they sent:
 
 ```swift
-while let r = rx.receive() { handle(r) }      // ends once every Sender is gone and the channel is empty
-for r in &rx { handle(r) }                    // the same loop
+while let r = rx.receive() { handle(consume r) }      // ends once every Sender is gone and the channel is empty
+for r in mutable &rx { handle(consume r) }           // the same loop
 ```
 
-**A `Receiver` is a `MutableSequence` whose iterator calls `receive()`**, so `for r in &rx` hands each item over, and ends at disconnection ([04](../04-types/collections.md#iteration)). The loop holds `rx` exclusively, as each `receive()` does, and the `&` says so.
+**A `Receiver` is a `MutableSequence` whose iterator calls `receive()`**, so `for r in mutable &rx` hands each item over, and ends at disconnection ([04](../04-types/collections.md#iteration)). The loop holds `rx` exclusively, as each `receive()` does, and the `mutable &` says so.
 
 **`tryReceive()` never parks, and tells an empty channel from a disconnected one:**
 
@@ -239,9 +239,9 @@ enum TrySendError<T>: Error {
 **A send's result is a `Result`, so the unused-value rule makes the sender check it or drop it on purpose** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)):
 
 ```swift
-tx.send(r)                // error: the Void!Disconnected<Request> is never used
-_ = tx.send(r)            // fine: if the Receiver is gone, the request is destroyed here
-try tx.send(r)            // fine in a function that fails with Disconnected<Request>
+tx.send(consume r)        // error: the Void!Disconnected<Request> is never used
+_ = tx.send(consume r)    // fine: if the Receiver is gone, the request is destroyed here
+try tx.send(consume r)    // fine in a function that fails with Disconnected<Request>
 ```
 
 ### Futures
@@ -251,9 +251,9 @@ try tx.send(r)            // fine in a function that fails with Disconnected<Req
 ```swift
 let (promise, lightmap) = Future<Lightmap>.make()                // promise: a Promise<Lightmap>, lightmap: a Future<Lightmap>
 _ = Thread.start(name: "bake") { [move promise, move level] in   // '_ =' detaches the thread
-    _ = promise.fulfill(bakeLightmap(level))                     // '_ =': if nobody waits any more, the lightmap is destroyed
+    _ = promise.fulfill(bakeLightmap(&level))                    // '_ =': if nobody waits any more, the lightmap is destroyed
 }
-if let map = lightmap.wait() { apply(map) }                      // parks until the bake is done; nil if its Promise went unfulfilled
+if let map = lightmap.wait() { apply(&map) }                     // parks until the bake is done; nil if its Promise went unfulfilled
 ```
 
 **The ends are move-only, unscoped values that point to shared heap state, so `T` must be `~Scoped`.** Each is `Sendable` when `T` is, so the producer's thread can own the `Promise`. Neither is `Synchronized`: each has one owner, and fulfilling or waiting consumes the end, so a future has one producer and one waiter.
@@ -261,7 +261,7 @@ if let map = lightmap.wait() { apply(map) }                      // parks until 
 **Each end is used once:**
 
 ```swift
-consuming func fulfill(_ value: owned T) -> Void!Disconnected<T>   // Promise<T>'s: fails, handing the value back, once the Future is gone
+consuming func fulfill(_ value: T) -> Void!Disconnected<T>         // Promise<T>'s: fails, handing the value back, once the Future is gone
 consuming func wait() -> T?                                        // Future<T>'s: parks until fulfilled; nil once disconnected
 ```
 
@@ -277,7 +277,7 @@ It is `true` once the future is fulfilled or disconnected, and then a `wait()` o
 
 ```swift
 while !lightmap.isReady { drawLoadingScreen() }   // never parks: checks once a frame
-if let map = lightmap.wait() { apply(map) }       // returns at once: the bake is done, or its Promise is gone
+if let map = lightmap.wait() { apply(&map) }      // returns at once: the bake is done, or its Promise is gone
 ```
 
 **A future is disconnected as a channel is, once the end on one side is gone** ([above](#disconnected-channels)):
@@ -305,25 +305,25 @@ if let map = lightmap.wait() { apply(map) }       // returns at once: the bake i
 
 ```swift
 ThreadScope.run { s in
-    var assets = consume rx                                  // the block owns the Receiver: an unwind out of the block destroys it
+    var assets = consume rx                                          // the block owns the Receiver: an unwind out of the block destroys it
     let meshes = tx.share()
-    s.spawn { [move meshes] in loadMeshes(into: &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
-    s.spawn { [move tx] in loadSounds(into: &tx) }           // the last producer takes the original
-    for asset in &assets { register(asset) }                 // ends once both producers are done, or have panicked
+    s.spawn { [move meshes] in loadMeshes(into: mutable &meshes) }   // each thread owns its Sender, so its panic destroys it inside the scope
+    s.spawn { [move tx] in loadSounds(into: mutable &tx) }           // the last producer takes the original
+    for asset in mutable &assets { register(consume asset) }         // ends once both producers are done, or have panicked
 }
 ```
 
 **Code that only borrows an end compiles, but the end then outlives everything that happens in the scope**, panics included, since nothing destroys a frame outside the scope until `ThreadScope.run` has joined every thread:
 
-- **A borrowed `Sender`**, such as `&tx`. The channel never disconnects inside the scope, so a consumer there waits for ever, after a producer's panic or even after every producer finishes, and `ThreadScope.run` waits for it.
-- **A borrowed `Receiver`**, such as `&rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
+- **A borrowed `Sender`**, such as `mutable &tx`. The channel never disconnects inside the scope, so a consumer there waits for ever, after a producer's panic or even after every producer finishes, and `ThreadScope.run` waits for it.
+- **A borrowed `Receiver`**, such as `mutable &rx`. After the consumer's panic, a producer parked in `send` on the full channel is never woken, and `ThreadScope.run` waits for it.
 
 ### Snapshots, one-time values and waits
 
 **These `Synchronized` types publish a value for any thread to read, hold a value set once, or make a thread wait:**
 
-- **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
-- **`Once<T>`** is set once. Its `get()` lends a read-only `Borrow<T>?`, `nil` until the value is set.
+- **`Published<T: Frozen & Sendable>`** holds a value that any thread reads and replaces. `p.snapshot()` returns a new owner of the current value, a `Shared<T>`, adding one to its count without waiting. `p.publish(consume v)` swaps in a new value and drops its own owner of the old one, which whoever drops the last owner destroys ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), so a snapshot taken before the swap stays valid.
+- **`Once<T>`** is set once. Its `get()` returns a shared reference to the value, a `(&T)?`, `nil` until the value is set.
 - **Blocking primitives** are `Event`, `Condvar` and `Semaphore`, whose waits park the thread ([below](#parking-and-waking-a-thread)), as a `Future`'s `wait()` does too, though a `Future` is an owned end and not `Synchronized` ([above](#futures)). An `Event` is set once: `signal()` wakes every thread parked in its `wait()`, and a later `wait()` returns at once. A `signal()` happens before every `wait()` it lets return, so what the signalling thread did before it is visible to the waiter. An `Event` holds only its state word, and declares no `deinit`, so destroying one runs no Rayo code.
 
 **A `Condvar` wait consumes the guard and returns a new one:**
@@ -350,7 +350,7 @@ g = cv.wait(consume g)       // unlocks, parks, relocks after it wakes, and retu
 
 **A `Synchronized` type hands values to other threads, and lends views of its data, only in ways that keep them race-free and exclusive.** For that, it:
 
-- **has unscoped contents that are `Sendable` or raw pointers**, which it hands to other threads, and which absorption can't follow through a shared `self` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). So `Mutex<Span<T>>` and `Mutex<WeakPointer<T>>` are compile errors, and `Mutex<List<T>>` is fine when `T` is `Sendable`. So the type is itself `Sendable`. A raw pointer handed over this way, as by `Atomic<*T>` or an allocator's `Allocation`, is used only in `unsafe` code, which answers for what it points at ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds));
+- **has unscoped contents that are `Sendable` or raw pointers**, which it hands to other threads, and which absorption can't follow through a shared `self` ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)). So `Mutex<&[T]>` and `Mutex<WeakPointer<T>>` are compile errors, and `Mutex<List<T>>` is fine when `T` is `Sendable`. So the type is itself `Sendable`. A raw pointer handed over this way, as by `Atomic<*T>` or an allocator's `Allocation`, is used only in `unsafe` code, which answers for what it points at ([10](../10-errors-and-safety/unsafe-code.md#what-unsafe-code-upholds));
 - **takes elements in and hands them out as owned values**, each handed out after, in happens-before order, the call that took it in, and lends views of them only as the next bullets allow;
 - **grants a view only while no conflicting view of the same data is live, on any thread**: an exclusive guard or closure argument while no other view is live, and a shared one while no exclusive one is. Each view it grants happens after the end of every conflicting view it granted before. A request that would conflict with a view its own thread holds panics or blocks, and never succeeds, so a re-entrant lock can't satisfy the contract;
 - **declares every guard it returns from a shared `self` `@guard`, and each guard points only into its lock**: the lock's own storage, or state from `.heap` that the lock points to and keeps allocated while the guard lives. So each guard is released on the thread that took it ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));

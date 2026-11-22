@@ -7,7 +7,7 @@ Some run-time checks prevent memory errors; others catch logic mistakes that lea
 ## Check levels
 
 ```swift
-ref let v = verts[i]      // bounds check: without it, a bad index would read memory outside the buffer
+ref let v = &verts[i]     // bounds check: without it, a bad index would read memory outside the buffer
 let n = a + b             // overflow check: without it, the sum wraps, which is a wrong value but memory-safe
 ```
 
@@ -27,8 +27,8 @@ An enclosing `unchecked` block turns every one off ([below](#unchecked-blocks)).
 ### Choosing checks for a module or a scope
 
 ```swift
-@checks(.all) func accumulate(_ total: mutable Int, _ xs: Span<Int>) { … }   // overflow checked here, even in release
-@checks(.none) do { for x in xs { sum += x } }                            // diagnostics off in this block only; bounds stay on
+@checks(.all) func accumulate(_ total: mutable &Int, _ xs: &[Int]) { … }  // overflow checked here, even in release
+@checks(.none) do { for x in &xs { sum += x } }                           // diagnostics off in this block only; bounds stay on
 ```
 
 **Diagnostic checks can be chosen per module and per scope.**
@@ -60,7 +60,7 @@ unchecked {                        // bounds and the table's other checks off he
 
 | Check | Class | `debug` | `release` |
 | --- | --- | --- | --- |
-| Indexing and slicing bounds, vector loads and stores within their span ([04](../04-types/numbers-and-math.md#simd-and-math)), and string ranges on Unicode scalar boundaries | memory safety | on | on |
+| Indexing and slicing bounds, vector loads and stores within their run of elements ([04](../04-types/numbers-and-math.md#simd-and-math)), and string ranges on Unicode scalar boundaries | memory safety | on | on |
 | Stack space, on entry to each function and before each call into C | memory safety | on | on |
 | Thread-bound object: liveness, conflicting accesses, and destruction under an access | memory safety | on | on |
 | Thread-local: initialized, not destroyed, and conflicting accesses | memory safety | on | on |

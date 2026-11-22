@@ -14,7 +14,7 @@ struct Enemy(
 )
 
 game.window = unsafe plat.window_create(1280, 720, "Rayo".cString) // a direct call into C, which you vouch for
-save(boss.value, into: &file)                                      // writes pos, vel and hp, found by reflection
+save(&boss.value, into: mutable &file)                            // writes pos, vel and hp, found by reflection
 ```
 
 Rayo calls C directly, with no glue code. Where C can't promise something, you promise it yourself, and Rayo marks that code `unsafe`. You write `save` once for every type, with code the compiler runs while it builds your program: `const`, `static if`, and reflection over a type's fields.
@@ -54,7 +54,7 @@ func readPad(_ index: Int32) -> plat.pad? {
     var raw = plat.pad()                                        // the C struct, all zeros
     let ok = unsafe plat.poll_pad(index, ptr(to: &raw))         // C fills it in through the pointer
     guard ok && raw.connected else { return nil }
-    return raw
+    return consume raw
 }
 ```
 
@@ -107,19 +107,19 @@ unsafe {
 ## Passing memory to C
 
 ```swift
-func upload(_ samples: Span<Float>) {                   // safe: a span always knows its count
+func upload(_ samples: &[Float]) {                      // safe: a run always knows its count
     unsafe { plat.upload(samples.baseAddress, CSize(samples.count)) }
 }
-func log(_ level: Int32, _ text: StringView) {
+func log(_ level: Int32, _ text: &Text) {
     unsafe { plat.log(level, text.cchars.baseAddress, CSize(text.cchars.count)) }
 }
 ```
 
-**A span hands C a pointer and a count.** Its `baseAddress` is an `unsafe` field, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
+**A reference to a run hands C a pointer and a count.** `samples` names the run its caller lends, as in `upload(&levelSamples)`. Its `baseAddress`, the first element's address, is an `unsafe` member, so reading it needs `unsafe` ([10](../spec/10-errors-and-safety/unsafe-code.md#what-needs-unsafe)). With that `unsafe`, you promise, among other things, that C only reads there, at most `count` elements, and none after the call returns.
 
-**A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `*CChar` that C reads as a `const char*` ([04](../spec/04-types/collections.md#strings)). It belongs to the literal, not to its type: a `static StringView` kept in a variable has no `cString`, since a range of one has no NUL after it.
+**A string literal passes to C as a C string, at no cost.** The compiler puts a NUL after every literal's bytes, so `"Rayo".cString`, written on the literal itself, is a `*CChar` that C reads as a `const char*` ([04](../spec/04-types/collections.md#strings)). It belongs to the literal, not to its type: a `static &Text` kept in a variable has no `cString`, since a range of one has no NUL after it.
 
-**Other strings needn't end in a NUL, so you pass them with a length.** `s.cchars` views any string's bytes as a `Span<CChar>`, for C functions that take a pointer and a length.
+**Other strings needn't end in a NUL, so you pass them with a length.** `s.cchars` is any string's bytes as a run of `CChar`, a `[CChar]`, with no NUL after it, for C functions that take a pointer and a length.
 
 ### When C keeps the pointer
 
@@ -142,7 +142,7 @@ unsafe { audio.track(voice.pin.address) }          // valid for as long as 'voic
 let audioEvents = alloc MpscQueue<AudioEvent>(capacity: 256)  // a global queue any thread may push to
 
 @c func onAudioEvent(_ user: *Void?, _ event: CInt) {         // runs on the SDK's audio thread
-    audioEvents.push(AudioEvent(raw: event))                  // 'event' is borrowed, so it is copied in
+    audioEvents.push(AudioEvent(raw: event))                  // a CInt is implicitly copyable, so 'event' is copied in
 }
 
 unsafe { plat.set_audio_callback(onAudioEvent, nil) }
@@ -158,7 +158,7 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 **An error it returns is a value like any other**, so a `Result` reaches C as a struct of a tag and the value or the error, when their types have C representations or take no space, as `Void` does. A panic in it stops the program, without unwinding into C.
 
-**C never gives up what it passes through an imported callback type**, so a `@c func` with an `owned` parameter doesn't convert to one.
+**An imported callback type takes only C's own types**, plain data that C passes as a copy. So a `@c func` that takes a `List` or a reference doesn't convert to one.
 
 **Calling through a `@c` pointer needs `unsafe`**, since its type can't tell a Rayo function from a C one ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
@@ -177,7 +177,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **The build writes a C header for the module**, with every exported function and the types their signatures use.
 
-**An exported function takes and returns only types with C representations.** Numbers, `Bool`, raw pointers and structs of them cross to C unchanged. A `Span<T>` crosses as a struct of a pointer and a count, and a `Handle` as its 64 bits.
+**An exported function takes and returns only types with C representations.** Numbers, `Bool`, raw pointers and structs of them cross to C unchanged. A `&T` crosses as a pointer, a `&[T]` as a struct of a pointer and a count, and a `Handle` as its 64 bits.
 
 **A struct crosses with its fields in the order Rayo lays them out in memory, and the generated header declares them in that order.** Rayo sorts a struct's fields by alignment, largest first, so no padding falls between them, and fields of equal alignment keep their declared order ([04](../spec/04-types/structs.md#structs)).
 
@@ -187,7 +187,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **An exported function is a plain C function.** It has no type parameters. An error it returns reaches C as a value, in a struct of a tag and the result or the error.
 
-**An exported function's parameters pass by value, whatever their conventions, except a `mutable` one, which passes as a pointer.**
+**An exported function's parameters pass as their types say.** One that owns its argument, such as `desc`, takes the value itself, and a `&T` or `mutable &T` one takes a pointer to the caller's value.
 
 **An exported name is a promise the compiler can't check.** The build fails when two objects it links define one name. But nothing checks a symbol the program loads at run time, or that every C caller uses this signature. So `@export` is an **unverified promise**, taken on trust as an `unsafe` block is ([10](../spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
 
@@ -201,7 +201,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 - every value it hands Rayo is valid for its Rayo type: a `Bool` is 0 or 1, a Rayo enum holds one of its cases, and a pointer that may not be null isn't;
 - it reads Rayo memory only while Rayo keeps it alive and isn't writing it, and writes it only where Rayo code with exclusive access could;
-- it never frees or keeps a value that Rayo passed it borrowed;
+- it never frees or keeps a value that Rayo lent it through a reference;
 - it never `longjmp`s over a Rayo frame or unwinds through one;
 - it enters Rayo only by an ordinary call, never from a signal handler.
 
@@ -217,7 +217,7 @@ const sinTable: [1024 of Float] = makeSinTable()         // computed once, by th
 func makeSinTable() -> [1024 of Float] {
     var t: [1024 of Float] = .init(repeating: 0)
     for i in 0..<t.count { t[i] = sin(Float(i) / 1024 * 2 * .pi) }
-    return t
+    return consume t
 }
 
 const startTime = now()          // error: 'now' calls C, which can't run in the compiler
@@ -267,9 +267,9 @@ static if !target.hasFlag("sse4") {
     static error("needs SSE4")           // fails every build that doesn't declare the flag
 }
 
-func endFrame(_ game: Game) {
+func endFrame(_ game: &Game) {
     static if target.hasFlag("editor") {
-        drawGizmos(game)                 // declared only in editor builds, which declare the flag
+        drawGizmos(&game)                // declared only in editor builds, which declare the flag
     }
     static if game.paused { return }     // error: a 'static if' condition must be a const
 }
@@ -296,16 +296,16 @@ func endFrame(_ game: Game) {
 ## Reflection: `T.fields` and `static for`
 
 ```swift
-func save<T>(_ value: T, into w: mutable Writer) {
+func save<T>(_ value: &T, into w: mutable &Writer) {
     static if T.conforms(Pod.self) && T.isPaddingFree {
-        w.bytes(of: value)                              // a Float or a Vec3: its bytes, as they are
+        w.bytes(of: &value)                             // a Float or a Vec3: its bytes, as they are
     } else static if T.conforms(Serializable.self) {
-        value.serialize(into: &w)                       // List, String and Map conform in std
+        value.serialize(into: mutable &w)               // List, String and Map conform in std
     } else static if T.isConstructible {                // a struct whose fields this code all sees
         w.beginObject(T.name)
         static for field in T.fields where !field.has(Transient.self) {   // skip live links and caches
             w.key(field.name)
-            save(value[field], into: &w)                // each copy checked with its own field's type
+            save(&value[field], into: mutable &w)       // each copy checked with its own field's type
         }
         w.endObject()
     } else {
@@ -316,11 +316,11 @@ func save<T>(_ value: T, into w: mutable Writer) {
 
 **Every type has metadata that code reads at compile time** ([09](../spec/09-compile-time/reflection.md#static-reflection)). Reading it is **reflection**.
 
-**`T.fields` lists `T`'s stored fields in declaration order** ([09](../spec/09-compile-time/reflection.md#what-reflection-can-read)). Each has a `name`, a `static StringView`, and a `type`.
+**`T.fields` lists `T`'s stored fields in declaration order** ([09](../spec/09-compile-time/reflection.md#what-reflection-can-read)). Each has a `name`, a `static &Text`, and a `type`.
 
 **`static for` repeats its body once per field, and checks each copy with that field's type.**
 
-**`value[field]` reaches the field in place, as `value.pos` would.** Only an imported bitfield or an under-aligned field goes through a temporary.
+**`value[field]` is the field's place, as `value.pos` is, so `&value[field]` lends the field where it lies.** Only an imported bitfield or an under-aligned field goes through a temporary.
 
 **`T.conforms(P.self)`, `T.isPaddingFree` and `T.isConstructible` are `const` queries**, so `static if` can test them.
 
@@ -341,7 +341,7 @@ func save<T>(_ value: T, into w: mutable Writer) {
 ```swift
 struct Transient: Attribute {}                          // a field that save skips
 struct Bounds(let min: Float, let max: Float): Attribute {
-    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // the borrowed Floats are copied in
+    init(_ min: Float, _ max: Float) { self.init(min: min, max: max) }   // each Float is implicitly copyable: a copy goes in
 }
 
 @reflect(private)
@@ -353,10 +353,10 @@ struct Enemy(
     @Transient var path: List<Vec3> = alloc [],
 )
 
-func inspect<T>(_ value: mutable T, in ui: mutable Inspector) {
+func inspect<T>(_ value: mutable &T, in ui: mutable &Inspector) {
     static for f in T.fields where f.has(Bounds.self) {
         const b = f.attribute(Bounds.self)!             // this field's @Bounds, known at compile time
-        ui.slider(f.name, &value[f], min: b.min, max: b.max)
+        ui.slider(f.name, mutable &value[f], min: b.min, max: b.max)
     }
 }
 ```
