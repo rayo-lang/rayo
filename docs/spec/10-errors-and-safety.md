@@ -14,7 +14,7 @@ do {
     settings = try loadConfig(path)       // a missing file is expected: it comes back as a value
 } catch .notFound {
     settings = Config()                   // fall back to the defaults
-} catch .badValue(let field) {
+} catch .badValue(field) {
     log("bad value for \(field)")
 }
 

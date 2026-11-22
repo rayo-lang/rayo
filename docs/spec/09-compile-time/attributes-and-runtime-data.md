@@ -56,7 +56,7 @@ let enemyInfo = typeInfo(Enemy.self)    // a global let: a TypeInfo can be kept 
 func showFields(_ info: TypeInfo, in ui: mutable Inspector) {   // one function for every type, at run time
     for f in info.fields {
         ui.label(f.name)
-        for a in f.attributes { if let t = a[as: Tooltip.self] { ui.hint(t.text) } }
+        for a in f.attributes { if ref let t = a[as: Tooltip.self] { ui.hint(t.text) } }
     }
 }
 ```

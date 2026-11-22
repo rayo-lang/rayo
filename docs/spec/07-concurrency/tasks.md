@@ -28,7 +28,7 @@ task func handshake(_ sock: owned Handle<Socket>) with (net: mutable Reactor) ->
 
 ```swift
 task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
-    guard let d = game.doors[door] else { return }
+    guard ref let d = game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
     game.doors[door]?.state = .opening
     await elapsed(.seconds(0.5))           // half a second of the game's own time
@@ -53,7 +53,7 @@ task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
 **No borrow and no dynamic access may be live across an `await`**, since the task's owner may move or destroy its state between steps. That means none of these may be live there:
 
 - a scoped value ([02](../02-views-and-dependencies/scoped-values.md#where-a-scoped-value-can-go));
-- a binding or pattern part that borrows a place;
+- a binding, or a `for` or `when` name, that borrows a place;
 - a borrowed place the statement has already worked out when it suspends, such as an assignment's left side or an argument place before the `await`. The exception is a place in the task's parameters or owned locals, reached through stored fields and indices without reading an optional.
 
 **The resume parameter is exempt**, since each step lends it anew.

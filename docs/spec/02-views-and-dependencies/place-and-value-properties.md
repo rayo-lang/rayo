@@ -59,7 +59,7 @@ struct Pool<T>(…) {
 }
 
 world.enemies[h]?.hp -= 10                   // the mutate accessor, with optional chaining
-if var e = &world.enemies[h] { e.hp = 0 }
+if ref var e = &world.enemies[h] { e.hp = 0 }
 ref let pos = world.enemies[h]!.pos          // the borrow accessor; '!' panics on a stale handle
 ```
 
@@ -159,7 +159,7 @@ A place property whose declared type is written `T?` is an **optional place prop
 
 **An optional place property, an optional chain, or a tuple of places, is a place only in its parts:**
 
-- **An optional place property's place is the unwrapped `T`**: the `T` that `?.`, `!`, `x? = v`, `??`, a `let` or `var` condition or a pattern unwraps.
+- **An optional place property's place is the unwrapped `T`**: the `T` that `?.`, `!`, `??`, an optional binding or a `when` pattern unwraps.
 - **So is the place of an optional chain through a place**, since `a?.b` names the `b` inside `a`'s payload and no `B?` lies in memory.
 - **A tuple of places is used element by element**, as a pattern binds them. It comes from a body that hands out several places at once, as `(&a, &b)`, or from `value[fields:]` ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)).
 

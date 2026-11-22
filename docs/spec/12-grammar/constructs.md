@@ -51,27 +51,27 @@ statement     = declaration | ref-decl | expression | assignment | guard-stmt
               | static-error
               | label ':' (for-stmt | while-stmt | repeat-stmt) ;
 
-assignment    = expression assign-op expression ;
+assignment    = expression assign-op expression ;                (* an optional chain on the left ends in '.member' or '[index]': 'x? = v' is an error (04) *)
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;
                                                                    (* a ⊕= b is a = a ⊕ b, with a's place worked out once (05) *)
 rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a ref var, nothing for a ref let (02) *)
 
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
-condition     = expression
-              | ('let' | 'var') pattern '=' expression                 (* the pattern binds a new name; 'let x = x' is an error: write 'let x' (01) *)
-              | ('let' | 'var') identifier                             (* no '=': 'if let x' is 'if let x = x', 'if var x' is 'if var x = &x' (01) *)
-              | 'case' pattern '=' expression ;
-when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s' for var parts that change s in place, 'when consume s' for parts that own what they bind (01) *)
-when-arm      = (pattern (',' pattern)* ('where' expression)? | 'else') block ;
+condition     = expression                                         (* a Bool test *)
+              | ('let' | 'var' | 'ref' 'let' | 'ref' 'var') pattern '=' expression ;
+                                                                   (* an optional binding: the expression is an optional, whose payload the pattern binds;
+                                                                      each word means what it means in a declaration, so 'ref var' takes '&' before a place (01) *)
+when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s': payload names borrow s's parts for change; 'when consume s': they own them (01) *)
+when-arm      = (match-pattern (',' match-pattern)* ('where' expression)? | 'else') block ;
                                                                    (* with no subject, an arm's test is one Bool expression, with no ',' list and no 'where' *)
                                                                    (* an arm ends with its block's '}', so arms need no separator *)
 for-stmt      = 'for' pattern 'in' expression ('where' expression)? block ;
-                                                                   (* 'for x in &s' changes elements in place (04); a for pattern has no 'let', and 'var' only on a part that owns its value *)
+                                                                   (* 'for x in &s' borrows elements for change (04); the sequence says what each name is (01) *)
 while-stmt    = 'while' condition (',' condition)* block ;
 repeat-stmt   = 'repeat' block 'while' expression ;
 do-stmt       = 'do' block catch-clause* ;
-catch-clause  = 'catch' pattern? ('where' expression)? block ;
+catch-clause  = 'catch' catch-pattern? ('where' expression)? block ;
 
 static-if-stmt  = 'static' 'if' expression block ('else' (static-if-stmt | block))? ;
 static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)? block ;
@@ -134,15 +134,26 @@ trailing-closure = closure ;
 ## Patterns
 
 ```ebnf
-pattern       = '_' | identifier | tuple-pattern | enum-pattern | expression-pattern
-              | ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); each 'let' or 'var' binds a name, so 'let _' and 'let _ as E' are errors (01) *)
+pattern       = '_' | identifier | tuple-pattern ;                 (* a declaration's, a condition's or a for loop's (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
-enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identifier ':')? pattern)* ','? ')')? ;
+match-pattern = enum-pattern | type-pattern | expression-pattern ;   (* a when arm's top level: it compares, or matches a case or a type *)
+catch-pattern = identifier | enum-pattern | type-pattern ;         (* a catch clause's: a bare name binds the whole error (10) *)
+enum-pattern  = type? '.' identifier ('(' payload-elem (',' payload-elem)* ','? ')')? ;
+payload-elem  = (identifier ':')? payload-pattern ;
+payload-pattern = '_' | identifier | literal | '-' (int-literal | float-literal) | 'nil' | enum-pattern | type-pattern
+              | '(' payload-pattern (',' payload-pattern)* ','? ')' ;   (* inside a payload (04) *)
+type-pattern  = 'is' type | identifier 'as' type ;                 (* is ParseError; e as ParseError binds e *)
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)
 ```
 
-**Three forms in a pattern have two readings each, and these rules choose between them:**
+**Each position in a pattern reads a bare identifier one way:**
 
-- **A bare identifier** in a `when` arm, an `if case`, `guard case` or `while case`, or a `catch` pattern that isn't under `let` or `var` is an expression pattern, which compares with an existing value. Under a binding kind, and in `for`, `let` and `var` patterns, which must always match ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)), it binds a new name.
-- **`.name` and `T.name` in a pattern** are enum patterns. Where the subject's type, or `T`, has no case `name`, `.name` or `T.name` without a payload is an expression pattern of that member, compared with `==`, as `Int.max` is.
-- **`as` in a pattern.** `let e as E` is always a type pattern, and a cast inside an expression pattern is parenthesized: `(0 as Int32) { … }`.
+- **In a declaration, a condition or a `for` loop** it binds a new name ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+- **At a `when` arm's top level** it is an expression pattern, except as the name of a type pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- **Inside an enum pattern's payload** it binds a new name ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- **In a `catch` clause** it binds the whole error ([10](../10-errors-and-safety/typed-errors.md#handling-errors-with-do-and-catch)).
+
+**Two forms need a rule to tell them from an expression:**
+
+- **`.name` and `T.name` in a match pattern** are enum patterns. Where the subject's type, or `T`, has no case `name`, `.name` or `T.name` without a payload is an expression pattern of that member, compared with `==`, as `Int.max` is. Inside a payload, `.name` and `T.name` name a case.
+- **`as` in a pattern.** `e as E` is always a type pattern, and a cast inside an expression pattern is parenthesized: `(0 as Int32) { … }`.

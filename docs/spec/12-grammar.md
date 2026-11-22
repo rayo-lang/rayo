@@ -44,12 +44,12 @@ x = 1; y = 2                    // ';' separates statements on one line
 
   So a line that starts with `-x` or `..<n` starts a new statement, unless the line above continues.
 - **A labeled trailing closure continues its call** when its label follows the previous trailing closure's `}` on the same line, as in `} recover: {`. So that `}` doesn't end the statement. A label at the start of the next line begins a new statement instead.
-- **A `when` arm ends with the `}` of its block.** Whatever follows begins the next arm, on the same line or the next, so a line that starts with `.` or `else` there begins an arm rather than joining the one above. An arm's patterns and guard may span lines by the rules above, as `.chase(let t)` does below.
+- **A `when` arm ends with the `}` of its block.** Whatever follows begins the next arm, on the same line or the next, so a line that starts with `.` or `else` there begins an arm rather than joining the one above. An arm's patterns and guard may span lines by the rules above, as `.chase(t)` does below.
 
 ```swift
 let label = when state {
     .idle { "idle" }
-    .chase(let t)
+    .chase(t)
         where t.isBoss { "fleeing" }    // a pattern, and its guard on the next line: one arm
     .chase { "chasing" }                // the '}' above ended an arm, so '.' begins this one
     else { "stuck" }

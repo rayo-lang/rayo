@@ -114,7 +114,7 @@ _ = node.next.take()                                 // takes the value out thro
 pool[a]?.hp = copy pool[b]!.hp                       // one element's field, assigned from another's
 world.enemies[h]?.hp -= reinforce(&world.enemies)    // the right side lends the whole pool for change
 let hp = copy target?.hp                             // a copy through an optional chain
-if let c = h?.cell { use(c.tag.span) }               // a view through an optional chain
+if ref let c = h?.cell { use(c.tag.span) }           // a view through an optional chain
 ```
 
 - State whether this compiles. If it doesn't, give the idiom and its cost. Rust has the same limitation, so "same as Rust, and here is the workaround" is an acceptable answer.
@@ -319,8 +319,8 @@ consuming func intoItems() -> List<T>                // on a wrapper, moving its
 give(makeLoot().item)                                // a field moved out of a call result
 upload(builder.finish(builder.count))                // 'finish' is consuming
 adopt(list, list.count)                              // 'adopt' takes its first parameter owned
-when connect().state { .open(let buf) { … } … }      // matches part of a temporary whose type has a deinit
-when connect() { .open(var b) { b.append(0) } … }    // changes a payload in place
+when connect().state { .open(buf) { … } … }          // matches part of a temporary whose type has a deinit
+when &connect() { .open(b) { b.append(0) } … }       // changes a payload in place
 for s in consume tags { names.append(s) }            // 'tags' is an inline array of Strings
 ref let e = if c { enemies[0] } else { makeEnemy() } // a place on one path, a value on the other
 ref let b = attr ?? Bounds(lo: 0, hi: 1)             // the same, through ??

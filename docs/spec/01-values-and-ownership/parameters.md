@@ -122,11 +122,10 @@ damage(&world.enemies[h]!, by: reinforce(&world.enemies))   // error: '!' begins
 
 **Some operands are skipped.** `&&`, `||` and `??` evaluate their right side only when the left doesn't decide. Optional chaining skips the rest of the chain at a `nil`, arguments included.
 
-**An assignment through `?.`, `?` or `!` reads the optional only after evaluating its right side.** When the left side holds one, the assignment works out its left place up to the first of them. Then it evaluates its right side, and only then reads the optional and works out the rest, so the right side's accesses have ended by then. A compound assignment does the same. When the chain stops at a `nil`, the right side's value is dropped.
+**An assignment through an optional chain or `!` reads the optional only after evaluating its right side.** When the left side holds one, the assignment works out its left place up to the first `?` or `!`. Then it evaluates its right side, and only then reads the optional and works out the rest, so the right side's accesses have ended by then. A compound assignment does the same. When the chain stops at a `nil`, the right side's value is dropped. A chain on the left ends in a member or an element, so `x? = v` is a compile error ([04](../04-types/enums.md#optionals)).
 
 ```swift
 pool[h]?.hp = 0                                       // works out pool[h], evaluates 0, then reads the optional
-requests[h]? = consume v                              // the same through '?': v is evaluated before the optional is read
 pool[a]?.hp = copy pool[b]!.hp                        // fine: pool[b] is read before pool[a]'s optional is
 world.enemies[h]?.hp -= reinforce(&world.enemies)     // fine: reinforce returns before the optional is read
 ```

@@ -44,7 +44,7 @@ func serialize<T>(_ value: T, into w: mutable Writer) {
 
 func serializeEnum<T>(_ value: T, into w: mutable Writer) {
     static for c in T.cases {
-        if let payload = value[case: c] {                     // nil unless value holds case c
+        if ref let payload = value[case: c] {                 // nil unless value holds case c
             w.tag(c.name)
             static for field in c.payload { serialize(payload[field], into: &w) }
         }

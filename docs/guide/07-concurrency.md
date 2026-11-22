@@ -255,7 +255,7 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {
 **The loop ends once every `Sender` is gone**, after the render thread has drawn every snapshot sent before. The channel is then **disconnected**, and `receive()` returns `nil` instead of parking for ever ([07](../spec/07-concurrency/synchronization.md#disconnected-channels)). So the simulation stops the render thread by dropping its sender, and then joins it:
 
 ```swift
-let (render, var tx) = startRenderer()
+var (render, tx) = startRenderer()
 while running {
     step(&world)
     _ = tx.send(alloc Shared(world.snapshot()))  // '_ =': if the render thread is gone, the snapshot is dropped
@@ -313,7 +313,7 @@ func tick() {
 
 ```swift
 task func openDoor(_ door: owned Handle<Door>) with (game: mutable Game) {
-    guard let d = game.doors[door] else { return }
+    guard ref let d = game.doors[door] else { return }
     game.audio.play(d.creakSound, at: d.pos)
     await elapsed(.seconds(0.5))                           // half a second of game time; a later step resumes
     game.audio.play(d.slamSound, at: d.pos)                // error: 'd' borrows 'game.doors' across an 'await'

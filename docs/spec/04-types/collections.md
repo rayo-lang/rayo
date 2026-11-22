@@ -474,7 +474,7 @@ A pattern binds through the view's `value`, so move-only elements iterate like a
 for (i, e) in &makeEnemies().enumerated() { … }       // the new list is a hidden mutable local, and so is its adaptor
 ```
 
-**Each element is bound in place when it lives in the collection, and owned when the iterator hands it out as a value of its own** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). A loop runs as a `while` over an iterator that its form picks, where `S` is what is iterated:
+**Each element is bound in place when it lives in the collection, and owned when the iterator hands it out as a value of its own** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). A loop runs as a `while` over an iterator that its form picks, where `S` is what is iterated:
 
 | Loop over | Iterator | Each pass |
 | --- | --- | --- |
@@ -493,24 +493,24 @@ for (h, e) in &pool.entries { … }             // 'e' is bound in place, and 'h
 for e in &enemies where e.hp > 0 { … }        // the body runs only where the condition holds
 ```
 
-**The pattern binds part by part, and what each part binds decides whether it can change:**
+**What each name of the pattern binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
 - **An element bound in place is read-only through a `Borrow` or a shared row, and changeable through a `MutableRef` or an exclusive row.** A loop over `&s` hands out the exclusive kind, and so does a `zip` for each `&` argument. So a loop that changes its elements writes `&` on the sequence and nothing on the pattern, as a loop that reads them writes nothing either.
-- **A value the iterator hands out is owned by its part**, such as a range's `Int`, a handle or a chunk. It is read-only unless the part is written `var`, as for any binding of a value.
-- **`var` on a part bound in place is a compile error**, since the element's view already says whether it changes.
+- **A value the iterator hands out is owned by its name**, such as a range's `Int`, a handle or a chunk. It is read-only, as a `let` is, and code that would change it declares a `var` from it.
 
 So the `pool.entries` loop above binds `e` in place, where it can change it, and gives `h` its own handle ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A `zip` with `&` arguments hands out `MutableRef` parts itself, so the `zip` loop at the top of this section needs no `&` of its own.
 
 **A `where c` after the sequence runs the body as `if c { body }`**, with the pattern bound, as in the `enemies` loop above.
 
-**`while` takes conditions as `if` does** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)), and narrows as `if` does ([Narrowing](enums.md#narrowing)). The exception is the short form `while let x`, allowed only on a place that other code can change while the loop runs ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x)). `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
+**`while` takes conditions as `if` does** ([01](../01-values-and-ownership/bindings.md#conditions)), and narrows as `if` does ([Narrowing](enums.md#narrowing)). `repeat { … } while c` tests `c` after each pass. A label, as in `outer: for row in grid`, lets a nested loop's `break outer` or `continue outer` name that loop.
 
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
 ```swift
+func scale(_ s: owned MutableSpan<Float>) { … }
 var names = alloc List<StringView>()
 for s in table.entries { names.append(s.name.view) }    // fine: each element depends on 'table', not the iterator
-for var chunk in &data.chunks(64) { scale(&chunk) }   // one MutableSpan<Float> at a time, owned by 'chunk'
+for chunk in &data.chunks(64) { scale(chunk) }          // one MutableSpan<Float> at a time: 'chunk' owns it, and moves it into scale's 'owned' parameter
 ```
 
 **A mutable iterator lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so two are never live at once. Keeping a chunk past its iteration, or holding two, is a compile error. `split(at:)` gives two at once.

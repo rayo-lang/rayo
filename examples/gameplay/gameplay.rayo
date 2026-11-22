@@ -54,7 +54,7 @@ extension World: TimeSource {                       // lets tasks stepped with a
 
 /// Picks the closest player for each enemy that has lost its target.
 func acquireTargets(_ world: mutable World) {
-    for var e in &world.enemies where e.target == nil || world.players[e.target] == nil {
+    for e in &world.enemies where e.target == nil || world.players[e.target] == nil {
         var best: Handle<Player>? = nil
         var bestDist: Float = .infinity
         for (h, p) in world.players.entries {       // immutable borrow; disjoint from enemies
@@ -68,7 +68,7 @@ func acquireTargets(_ world: mutable World) {
 /// Moves enemies toward their targets, in parallel across enemies on std's job system.
 func steer(_ world: mutable World, dt: Float) {
     world.enemies.forEachInParallel { e in              // not mutating, so it may run on many threads at once
-        guard e.target != nil, let p = world.players[e.target] else {     // players: read-only capture
+        guard e.target != nil, ref let p = world.players[e.target] else { // players: read-only capture
             e.vel *= 0.9
             return
         }
@@ -81,7 +81,7 @@ func steer(_ world: mutable World, dt: Float) {
 /// Resolves contact damage. Mutations to other pools go through the command buffer.
 func contact(_ world: mutable World) {
     for (h, e) in world.enemies.entries {
-        guard e.target != nil, let p = world.players[e.target] else { continue }
+        guard e.target != nil, ref let p = world.players[e.target] else { continue }
         if distanceSquared(p.pos, e.pos) < 1 {
             // 'e' is borrowed, so the command gets a copy of its target; 'h' is the loop's own handle, so it moves in.
             world.commands.append(.damagePlayer(copy e.target, amount: damage(for: e.kind)))
@@ -92,9 +92,9 @@ func contact(_ world: mutable World) {
 
 func damage(for kind: EnemyKind) -> Float {
     return when kind {
-        .grunt  -> 5
-        .runner -> 3
-        .brute  -> 20
+        .grunt  { 5 }
+        .runner { 3 }
+        .brute  { 20 }
     }
 }
 
@@ -103,12 +103,15 @@ func applyCommands(_ world: mutable World) {
     let commands = world.commands.take()              // moves the contents out; world.commands is left empty
     for c in commands {                               // 'c' borrows each command in place
         when c {
-            .despawn(let h) ->
+            .despawn(h) {
                 world.enemies.remove(h)               // every copy of h goes stale at once
-            .spawn(let kind, let pos) ->              // 'let' parts borrow the payload
-                world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))
-            .damagePlayer(let h, let amount) ->
+            }
+            .spawn(kind, pos) {                       // 'c' is a place, so the names borrow its payload
+                _ = world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))   // the new handle isn't needed
+            }
+            .damagePlayer(h, amount) {
                 world.players[h]?.hp -= amount        // silently skipped if the player is gone
+            }
         }
     }
 }

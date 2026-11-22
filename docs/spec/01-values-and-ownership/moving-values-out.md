@@ -11,7 +11,7 @@ A move hands a value to a new owner and leaves its old place without that value.
 - a global's initializer;
 - the elements of a tuple or array literal, and an enum case's payload.
 
-A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A `ref let` or `ref var`, a condition and a pattern borrow a place instead, and a `let` or `var` of one needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of a place needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
+A copyable `const` is the exception: taking one makes a new value ([below](#constants)). A `ref let` or `ref var`, in a declaration or a condition, borrows a place instead, and so does a `for` or `when` name bound to a part of one ([`for` and `when` names](bindings.md#for-and-when-names)). A `let` or `var` of a place needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of a place needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
 
 **`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `show` does below, and gives a `let` or `var` a place's value to own, as `kept` does. For a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
 
@@ -37,7 +37,7 @@ let old = replace(&player.inventory, with: alloc List())    // the way to take i
 - a stored field of `self`, or a part of an enum `self`'s payload through a pattern of `when consume self`, in that type's own `deinit`;
 - the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches `discard self` (below).
 
-**The condition on a field covers a temporary's fields and an enum's payload**, and a pattern takes an enum's payload under the same condition ([Conditions and patterns](bindings.md#conditions-and-patterns)):
+**The condition on a field covers a temporary's fields and an enum's payload**, and a `when` name takes an enum's payload under the same condition ([`for` and `when` names](bindings.md#for-and-when-names)):
 
 ```swift
 take(makeHolder().items)        // moves 'items' out of the temporary: an error when makeHolder()'s type has a deinit
