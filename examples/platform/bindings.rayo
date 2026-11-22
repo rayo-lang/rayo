@@ -104,6 +104,6 @@ func main() {
         let t = now()
         pumpLoads(&loads)
         tick(&game.value, dt: Float(t - last))                  // one checked access for the whole frame
-        last = t
+        last = consume t
     }
 }

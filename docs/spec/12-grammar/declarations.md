@@ -90,7 +90,7 @@ init-decl     = attribute* modifier* 'init' '?'? generic-params? param-clause in
 deinit-decl   = attribute* 'deinit' block ;                         (* '@noalloc' is the attribute with a meaning here (06) *)
 subscript-decl= attribute* modifier* 'subscript' generic-params? param-clause '->' type where-clause? accessor-block ;   (* subscript<T>(as t: Type<T>) -> T?, as AttributeInfo's a[as:] (02) *)
 accessor-block= '{' ( statement* | accessor+ ) '}' ;              (* 'get', 'set', 'borrow' or 'mutate' first, after attributes and modifiers, then '{', begins an accessor,
-                                                                      never a call or a borrow of a closure literal *)
+                                                                      never a call *)
 accessor      = attribute* modifier* ('get' | 'set' | 'borrow' | 'mutate') block ;   (* the accessors are 'get', 'get set', 'borrow' or 'borrow mutate' (02); unsafe get { … } *)
 
 inheritance   = ':' conformance (',' conformance)* ;

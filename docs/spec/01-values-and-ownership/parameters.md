@@ -126,7 +126,7 @@ damage(&world.enemies[h]!, by: reinforce(&world.enemies))   // error: '!' begins
 
 ```swift
 pool[h]?.hp = 0                                       // works out pool[h], evaluates 0, then reads the optional
-requests[h]? = v                                      // the same through '?': v is evaluated before the optional is read
+requests[h]? = consume v                              // the same through '?': v is evaluated before the optional is read
 pool[a]?.hp = copy pool[b]!.hp                        // fine: pool[b] is read before pool[a]'s optional is
 world.enemies[h]?.hp -= reinforce(&world.enemies)     // fine: reinforce returns before the optional is read
 ```
