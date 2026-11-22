@@ -40,26 +40,31 @@ runs:
     # A build is reused only by the same Swift compiler and the same LLVM, down to the patch and the package
     # build, since either one changing can leave modules or links the next build can't use.
     #
-    # SwiftPM's build system keeps one record of what it built in a scratch path, for every configuration, so a debug
-    # build makes the next release build in the same path compile every module again, swift-syntax's too where no
-    # prebuilt one exists. So the release build has a scratch path of its own, inside .build, so that it is saved
-    # with the rest.
-    - name: Name the build's cache and paths
+    # SwiftPM's build system keeps a single record of what it built in a scratch path, which every configuration
+    # shares. So a debug build makes the next release build in the same path compile every module again,
+    # swift-syntax's too where no prebuilt one exists. The release build therefore has a scratch path of its own. It
+    # sits inside .build, so the cache saves it with the rest.
+    #
+    # The layout number names how the build's paths are laid out inside .build. A change to that layout changes the
+    # number, so that no job restores a build laid out the old way, and the next push to main saves one laid out the
+    # new way, even where it changes no source.
+    - name: Name the build's cache and scratch paths
       id: name
       shell: bash
       env:
         PLATFORM: ${{ inputs.platform }}
         LLVM_VERSION: ${{ inputs.llvm-version }}
         SOURCES: ${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
-        RELEASE: ${{ inputs.release-proof-programs }}
+        RELEASE_PROOF_PROGRAMS: ${{ inputs.release-proof-programs }}
       run: |
+        layout=2
         toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
-        prefix="build-$PLATFORM-$RUNNER_ARCH-$toolchain-"
+        prefix="build-layout$layout-$PLATFORM-$RUNNER_ARCH-$toolchain-"
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "key=$prefix$SOURCES" >> "$GITHUB_OUTPUT"
         release_scratch_path=.build/release-build
         echo "release-scratch-path=$release_scratch_path" >> "$GITHUB_OUTPUT"
-        if [ "$RELEASE" = true ]; then
+        if [ "$RELEASE_PROOF_PROGRAMS" = true ]; then
           echo "scratch-paths=.build $release_scratch_path" >> "$GITHUB_OUTPUT"
         else
           echo "scratch-paths=.build" >> "$GITHUB_OUTPUT"
@@ -83,8 +88,8 @@ runs:
     # rest of the restored build, which `swift package reset` would delete too. Each try clones into the scratch path
     # alone, skipping SwiftPM's shared cache, since a runner starts with that cache empty and keeps nothing in it.
     #
-    # Each scratch path the job builds in holds its own clones. One restored with the versions Package.resolved pins
-    # fetches nothing.
+    # Each scratch path the job builds in holds its own clones. A scratch path restored with the versions
+    # Package.resolved pins fetches nothing.
     - name: Resolve the dependencies
       shell: bash
       env:
@@ -95,7 +100,7 @@ runs:
         tries=4
         pause_seconds=15
         resolve() {
-          local scratch_path=$1
+          local scratch_path=$1 try
           for try in $(seq "$tries"); do
             if swift package --scratch-path "$scratch_path" --disable-dependency-cache --force-resolved-versions \
               resolve; then
