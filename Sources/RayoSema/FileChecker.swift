@@ -136,21 +136,26 @@ final class FileChecker {
     }
 
     /// Makes the signature's parameter from the one the declaration writes: a `&T` parameter borrows its argument,
-    /// and a `T` parameter owns it. Reports what rayoc doesn't support in it: a `mutable &T` parameter, which is
-    /// declared as one that borrows, a default value, and the type Void or a `T` parameter of a type that isn't
-    /// implicitly copyable, each of which leaves the parameter without a type.
+    /// a `mutable &T` one borrows it for change, and a `T` one owns it. Reports what rayoc doesn't support in it: a
+    /// default value, and a `mutable &T` parameter, the type Void, or a `T` parameter of a type that isn't implicitly
+    /// copyable, each of which leaves the parameter without a type, so that its calls report nothing more.
     private func parameter(from parameter: Param) -> Parameter {
-        // A `mutable &` is reported, and the parameter borrows its argument as a `&` one does.
-        if parameter.convention == .mutable {
-            errors.report(.unsupportedConvention(convention: ParamConvention.mutable.rawValue), at: parameter.range)
-        }
         // A default value is reported, since every call writes every argument.
         if let defaultValue = parameter.defaultValue { errors.report(.defaultArgument, at: defaultValue.range) }
 
         // Resolve the type the parameter is written with, and the convention its reference, or the lack of one, says.
-        let convention: ParameterConvention = parameter.convention == nil ? .owned : .borrowed
+        let convention: ParameterConvention = switch parameter.convention {
+        case nil: .owned
+        case .borrowed: .borrowed
+        case .mutable: .mutable
+        }
         var type = declarations.resolve(parameter.type, reporting: errors)
-        // A parameter of type Void is reported and keeps no type, since no local holds a Void value.
+        // A `mutable &` parameter is reported and keeps no type, since rayoc doesn't support one.
+        if convention == .mutable {
+            errors.report(.unsupportedConvention(convention: ParamConvention.mutable.rawValue), at: parameter.range)
+            type = nil
+        }
+        // So is one of type Void, since no local holds a Void value.
         if type == .void {
             let code = ErrorCode.voidParameter(name: parameter.name, type: declarations.typeName(of: .void))
             errors.report(code, at: parameter.type.range)

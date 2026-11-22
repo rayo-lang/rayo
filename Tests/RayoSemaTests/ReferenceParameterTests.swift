@@ -147,6 +147,12 @@ struct ReferenceParameterTests {
         ])
     }
 
+    @Test func `a call of a function whose parameter is 'mutable &T' reports nothing more`() {
+        let body = "    var x = 1\n    bump(x)\n    bump(&x)\n    print(x)"
+        let source = "func main() {\n\(body)\n}\nfunc bump(_ n: mutable &Int) {}"
+        #expect(errors(source) == [.unsupportedConvention(convention: "mutable &")])
+    }
+
     @Test func `a parameter that owns an Int may change, and one that borrows it can't`() {
         #expect(declarationMessages(of: "func f(_ n: Int) {\n    n += 1\n    print(n)\n}") == [])
         #expect(declarationMessages(of: "func f(_ n: &Int) { n = 1 }") == [

@@ -44,8 +44,8 @@ extension ExpressionChecker {
         return switch parameter.convention {
         case .borrowed: typeFitted(place, to: expected)
         case .owned: reportReference(lent, toOwning: parameter, expected)
-        // Checking reports a `mutable &` parameter that the source writes, and declares it as one that borrows, and no
-        // built-in or initializer takes its argument for change.
+        // Checking leaves a `mutable &` parameter that the source writes without a type, and no built-in or
+        // initializer takes its argument for change, so no argument stands where one is expected.
         case .mutable: preconditionFailure("no parameter that checking declares borrows its argument for change")
         }
     }
