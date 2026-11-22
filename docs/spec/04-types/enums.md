@@ -79,7 +79,7 @@ let label = when hit {
 
 **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
-**Declarations, conditions and `for` loops take patterns that always match, which bind names and test nothing** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+**Declarations, conditions and `for` loops take patterns that always match: they bind names, and test nothing of their own** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
 
 **A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
 
