@@ -39,18 +39,36 @@ runs:
 
     # A build is reused only by the same Swift compiler and the same LLVM, down to the patch and the package
     # build, since either one changing can leave modules or links the next build can't use.
-    - name: Name the build's cache
+    #
+    # SwiftPM's build system keeps a single record of what it built in a scratch path, which every configuration
+    # shares. So a debug build makes the next release build in the same path compile every module again,
+    # swift-syntax's too where no prebuilt one exists. The release build therefore has a scratch path of its own. It
+    # sits inside .build, so the cache saves it with the rest.
+    #
+    # The layout number names how the build's paths are laid out inside .build. A change to that layout changes the
+    # number, so that no job restores a build laid out the old way, and the next push to main saves one laid out the
+    # new way, even where it changes no source.
+    - name: Name the build's cache and scratch paths
       id: name
       shell: bash
       env:
         PLATFORM: ${{ inputs.platform }}
         LLVM_VERSION: ${{ inputs.llvm-version }}
         SOURCES: ${{ hashFiles('Package.swift', 'Package.resolved', 'Sources/**', 'Tests/**') }}
+        RELEASE_PROOF_PROGRAMS: ${{ inputs.release-proof-programs }}
       run: |
+        layout=2
         toolchain=$( (swift --version 2>&1; echo "$LLVM_VERSION") | git hash-object --stdin | cut -c 1-16)
-        prefix="build-$PLATFORM-$RUNNER_ARCH-$toolchain-"
+        prefix="build-layout$layout-$PLATFORM-$RUNNER_ARCH-$toolchain-"
         echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
         echo "key=$prefix$SOURCES" >> "$GITHUB_OUTPUT"
+        release_scratch_path=.build/release-build
+        echo "release-scratch-path=$release_scratch_path" >> "$GITHUB_OUTPUT"
+        if [ "$RELEASE_PROOF_PROGRAMS" = true ]; then
+          echo "scratch-paths=.build $release_scratch_path" >> "$GITHUB_OUTPUT"
+        else
+          echo "scratch-paths=.build" >> "$GITHUB_OUTPUT"
+        fi
 
     # A pull request starts from the build main last saved, so it compiles only what it changed. Only a push to
     # main saves a build, which keeps the cache to one build per platform and architecture.
@@ -66,33 +84,43 @@ runs:
     # a stall fails its try rather than hanging until the job times out.
     #
     # A fetch that fails partway can leave the build naming a clone that was never made. So before the next try,
-    # the step deletes the clones, checkouts and downloads in .build, and the record of them, and keeps the rest of
-    # the restored build, which `swift package reset` would delete too. Each try clones into .build alone, skipping
-    # SwiftPM's shared cache, since a runner starts with that cache empty and keeps nothing in it.
+    # the step deletes the clones, checkouts and downloads in the scratch path, and the record of them, and keeps the
+    # rest of the restored build, which `swift package reset` would delete too. Each try clones into the scratch path
+    # alone, skipping SwiftPM's shared cache, since a runner starts with that cache empty and keeps nothing in it.
     #
-    # A restored build that already holds the versions Package.resolved pins fetches nothing.
+    # Each scratch path the job builds in holds its own clones. A scratch path restored with the versions
+    # Package.resolved pins fetches nothing.
     - name: Resolve the dependencies
       shell: bash
       env:
         GIT_HTTP_LOW_SPEED_LIMIT: "1000"
         GIT_HTTP_LOW_SPEED_TIME: "60"
+        SCRATCH_PATHS: ${{ steps.name.outputs.scratch-paths }}
       run: |
         tries=4
         pause_seconds=15
-        for try in $(seq "$tries"); do
-          if swift package --disable-dependency-cache --force-resolved-versions resolve; then
-            exit 0
-          fi
-          if [ "$try" -lt "$tries" ]; then
-            echo "::warning::fetching the dependencies failed on try $try of $tries; trying again"
-            # A file that can't be deleted, such as one Windows holds open, mustn't end the tries early.
-            rm -rf .build/repositories .build/checkouts .build/prebuilts .build/artifacts \
-              .build/workspace-state.json || true
-            sleep $((try * pause_seconds))
-          fi
+        resolve() {
+          local scratch_path=$1 try
+          for try in $(seq "$tries"); do
+            if swift package --scratch-path "$scratch_path" --disable-dependency-cache --force-resolved-versions \
+              resolve; then
+              return 0
+            fi
+            if [ "$try" -lt "$tries" ]; then
+              echo "::warning::fetching the dependencies into $scratch_path failed on try $try of $tries; trying again"
+              # A file that can't be deleted, such as one Windows holds open, mustn't end the tries early.
+              rm -rf "$scratch_path/repositories" "$scratch_path/checkouts" "$scratch_path/prebuilts" \
+                "$scratch_path/artifacts" "$scratch_path/workspace-state.json" || true
+              sleep $((try * pause_seconds))
+            fi
+          done
+          echo "::error::fetching the dependencies into $scratch_path failed $tries times"
+          return 1
+        }
+        # The paths are words, split where they have spaces.
+        for scratch_path in $SCRATCH_PATHS; do
+          resolve "$scratch_path" || exit 1
         done
-        echo "::error::fetching the dependencies failed $tries times"
-        exit 1
     # A pull request runs the tests of the test targets its changed paths reach by the manifest's dependencies, as
     # an agent runs them before it opens one, and builds the tests where it reaches none.
     - name: Test
@@ -112,14 +140,16 @@ runs:
           "$python" scripts/run_affected_tests.py --changed-paths "$RUNNER_TEMP/changed-paths.json" -- $ARGUMENTS
         fi
     # The tests run rayo and rayoc in debug, where checks that a release build leaves out still run, such as the
-    # checks of lowering's Rayo IR. So the release build users run is built and run here too, and its
-    # products are saved with the build, so a pull request rebuilds only what it changed.
+    # checks of lowering's Rayo IR. So the release build users run is built and run here too, in its own scratch
+    # path, which is saved with the build, so a pull request rebuilds only what it changed.
     - name: Run the proof programs with release rayo
       if: inputs.release-proof-programs == 'true'
       shell: bash
+      env:
+        SCRATCH_PATH: ${{ steps.name.outputs.release-scratch-path }}
       run: |
-        swift build -c release
-        bin=$(swift build -c release --show-bin-path)
+        swift build -c release --scratch-path "$SCRATCH_PATH"
+        bin=$(swift build -c release --scratch-path "$SCRATCH_PATH" --show-bin-path)
 
         # Each run passes when it prints the output beside the program, writes no error, and exits with 0. A run
         # that fails doesn't stop the rest, so one CI run reports every failure.
