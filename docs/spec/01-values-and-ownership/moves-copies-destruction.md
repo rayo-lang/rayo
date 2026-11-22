@@ -104,7 +104,7 @@ extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as th
 
 **Generic code copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, since an unconstrained or merely copyable `T` may be a large value. Under `T: Copyable` alone, it writes `copy x`.
 
-**No other type the language gives conforms**, such as a function value or a type value, so a copy of one is written.
+**The only other type the language gives that conforms is `Borrow<any P>`**, as std's `Borrow<T>` does ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). So a copy of a function value or a type value is written.
 
 **The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, `Allocator`, `Stamp` and `std.math`'s `Vec3` are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
 

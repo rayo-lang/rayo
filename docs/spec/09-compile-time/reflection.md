@@ -108,7 +108,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 **Some types have no fields or cases for reflection to see:**
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
-- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
+- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `Borrow<any P>` or a function type;
 - every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`;
 - an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 

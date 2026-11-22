@@ -412,7 +412,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 ```swift
 for (i, e) in &makeEnemies().enumerated() { ... }       // the loop keeps the new list in a hidden local, and changes it
 ref var t = if left { &a } else { &b }                   // the arm's place is lent for change
-targets.append(&boss)                                    // a MutableRef<any Damageable> made from 'boss'
+targets.append(&boss)                                    // a view of 'boss', into a List<MutableRef<any Damageable>>
 ```
 
 **What follows `&` is a changeable place, a member of one that has a mutable form, or an exclusive view held with exclusive access.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change. An exclusive view that isn't a changeable place lends only what it views: a new view of it, or its elements to a loop, never the place that holds the view ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)).

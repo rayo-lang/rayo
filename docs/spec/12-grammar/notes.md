@@ -134,8 +134,6 @@ typealias Count = (Int)                               // just Int, not a one-ele
 typealias Single = (Int,)                             // a one-element tuple
 ```
 
-**`mutable` before a parameter's type is always its convention, never part of the type**, so `mutable any Damageable` is the `mutable` convention on an `any Damageable` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
-
 **An expression names a type in two ways**: by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 
 **Any other type in an expression is parenthesized.** A `(` in expression position begins such a type when what it holds starts as only a type can, with `*`, `any`, `some`, `@c` or `[ … of`, or when the matching `)` is followed by `.self`. Any other such type is named through a `typealias` first:

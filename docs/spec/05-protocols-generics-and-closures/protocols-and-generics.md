@@ -295,7 +295,7 @@ for w in &widgets { w.value.update(dt) }           // a mutating requirement, th
 
 **`any P` is an existential, and never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out.
 
-**Nothing holds an `any P` directly, since its size is that of a type known only at run time.** So a `let`, a `var`, a field, an element or a result of type `any P` is a compile error, and `any P` binds no type parameter. Code reaches the value through a borrow of the place that holds it, or through an unscoped existential, which holds one or points at one:
+**Nothing holds an `any P` directly, since its size is that of a type known only at run time.** So a `let`, a `var`, an `owned` parameter, a field, an element or a result of type `any P` is a compile error, and `any P` binds no type parameter. Code reaches the value through a borrow of the place that holds it, or through an unscoped existential, which holds one or points at one:
 
 | Form | What it is | Made from |
 | --- | --- | --- |
@@ -305,6 +305,12 @@ for w in &widgets { w.value.update(dt) }           // a mutating requirement, th
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
+
+**The existential views are types of their own, which the language provides.** `Borrow<any P>` and `MutableRef<any P>` aren't instances of std's `Borrow<T>` and `MutableRef<T>`, since `any P` binds no type parameter, but each has the members its namesake has:
+
+- **A `value` place property** lends the value as an `any P`, borrowed for a `Borrow`, and borrowed or `mutable` for a `MutableRef` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
+- **Its layout** holds a pointer to the value and the value's witness table, and is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
+- **Its conformances** are its namesake's: `Borrow<any P>` is implicitly copyable, and `MutableRef<any P>` is move-only and lists `ExclusiveView` ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview)).
 
 **`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.
 

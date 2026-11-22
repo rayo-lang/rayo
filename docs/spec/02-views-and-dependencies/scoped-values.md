@@ -189,7 +189,7 @@ func show(_ hint: Hint, _ token: Token) {
 
 **`static` qualifies a scoped type whose scoped parts are all shared views:**
 
-- the shared views `StringView`, `Span<T>` and `Borrow<T>`, such as `Borrow<any P>`;
+- the shared views `StringView`, `Span<T>`, `Borrow<T>` and `Borrow<any P>`;
 - a type whose scoped fields, payloads and elements all take `static`, a field of raw pointer type `*U` counting as one of type `U`, as `Token`, `[2 of Token]`, `(StringView, Int)` and `List<StringView>` do.
 
 **No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
