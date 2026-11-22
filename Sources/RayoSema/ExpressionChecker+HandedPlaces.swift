@@ -3,11 +3,20 @@ import RayoDiagnostics
 
 extension ExpressionChecker {
     /// Reports each place rooted in a local that `value` hands its position to, with the error `code` gives for the
-    /// place's name. A position that takes its value but can't borrow it, such as a `var`'s declaration or an
-    /// assignment, has its places reported so, since nothing written says whether to copy the value or move it.
+    /// place's name. A position that takes its value but can't borrow it, such as a `let`'s or `var`'s declaration or
+    /// an assignment, has its places reported so, since nothing written says whether to copy the value or move it.
     func reportHandedPlaces(of value: CheckedExpr, as code: (String) -> ErrorCode) {
         for handed in value.handedPlaces {
             file.errors.report(code(sourceName(of: handed)), at: handed.place.range)
+        }
+    }
+
+    /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a
+    /// branch of an `if` declares, which ends with the branch while the `ref let` lives on.
+    func reportEndedPlaces(of value: CheckedExpr, referredToBy binding: String) {
+        for handed in value.handedPlaces where !names.isInScope(handed.local) {
+            let place = sourceName(of: handed)
+            file.errors.report(.referenceOutlivesPlace(binding: binding, place: place), at: handed.place.range)
         }
     }
 

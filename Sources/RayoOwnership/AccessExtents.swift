@@ -63,7 +63,7 @@ struct AccessExtents {
             live.formUnion(dependencies.dependencies(of: access))
         }
         for local in uses.readLocals {
-            live.formUnion(dependencies.dependentLocals[local] ?? [])
+            live.formUnion(dependencies.dependencies(of: local))
         }
         return live
     }

@@ -38,7 +38,7 @@ struct ExpressionLoweringTests {
     }
 
     @Test func `a local in parentheses is borrowed where the bare local would be, and read where it would be`() throws {
-        try expectLowering(ofMain: "let a = 1\nlet b = (a)\nprint((b))", toMatch: "parenthesized-local")
+        try expectLowering(ofMain: "let a = 1\nref let b = (a)\nprint((b))", toMatch: "parenthesized-local")
     }
 
     @Test func `'!' applies to its operand as '-' does`() throws {

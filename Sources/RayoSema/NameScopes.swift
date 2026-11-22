@@ -31,6 +31,16 @@ final class NameScopes {
         blocks.removeLast()
     }
 
+    /// Whether `local` is in scope here: the block that declares it, the parameters' scope for a parameter, hasn't
+    /// ended yet.
+    func isInScope(_ local: LocalID) -> Bool {
+        blocks.contains { block in
+            block.values.contains { entry in
+                if case .local(let declared) = entry { declared == local } else { false }
+            }
+        }
+    }
+
     /// Looks `name` up among the body's locals and parameters, innermost block first, among the fields of its
     /// `self`, and among the module's functions and types. A call gets the module's functions or type where it has
     /// either; any other use takes the first of the three levels that has the name. A name that reaches a declaration

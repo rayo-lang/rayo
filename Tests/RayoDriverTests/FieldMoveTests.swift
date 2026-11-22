@@ -21,19 +21,19 @@ struct FieldMoveTests {
         let source = """
             func main() {
                 var e = enemy()
-                let s = e.stats
+                let s = consume e.stats
                 print(s.hp)
                 print(s.speed)
                 print(e.armor)
                 print(e.alive)
                 let armor = copy e.armor
                 e.armor = armor + 1
-                let moved = e.armor
+                let moved = consume e.armor
                 print(moved)
                 let l = Enemy(alive: false, stats: Stats(alive: true, hp: 20, speed: 7), armor: 2)
                 let copied = (copy l).stats
                 print(copied.hp)
-                let hp = l.stats.hp
+                let hp = consume l.stats.hp
                 print(hp)
                 print(l.stats.speed)
                 print(l.armor)

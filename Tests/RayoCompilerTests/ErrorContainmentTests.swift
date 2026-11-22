@@ -30,7 +30,7 @@ private let failingFunctionsErrors: [ErrorCode] = [
 /// that checked no further, a value no code reads.
 private let ownershipErrors = """
         let x: Int
-        let unread = x
+        let unread = copy x
     """
 
 /// The errors `rayoc -o` reports for `source`, and whether it wrote the object file.

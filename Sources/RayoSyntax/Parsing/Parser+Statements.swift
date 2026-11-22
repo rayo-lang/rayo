@@ -27,18 +27,25 @@ extension Parser {
 
     private mutating func parseStatement() throws(StatementFailure) -> Stmt {
         let start = current.range
-        let kind = if let bindingKind = consumeBindingKeyword() {
-            StmtKind.declaration(bindingKind, try parseBindings())
+        let kind = if let bindingKind = try consumeBindingKeywords() {
+            StmtKind.declaration(bindingKind, try parseBindings(of: bindingKind))
         } else {
             try parseNonDeclaration()
         }
         return Stmt(kind: kind, range: range(from: start))
     }
 
-    /// Consumes the `let` or `var` that starts a declaration, when one comes next, and gives the kind it declares: a
-    /// `let`'s bindings never change, and a `var`'s can.
-    private mutating func consumeBindingKeyword() -> BindingKind? {
-        if consume(.let) { .let } else if consume(.var) { .var } else { nil }
+    /// Consumes the words that start a declaration, when they come next, and gives the kind they declare: a `let`'s
+    /// bindings never change, and a `var`'s can, and after `ref` each refers to a place instead of owning a value.
+    private mutating func consumeBindingKeywords() throws(StatementFailure) -> DeclarationKind? {
+        if consume(.let) { return .let }
+        if consume(.var) { return .var }
+        guard consume(.ref) else { return nil }
+
+        if consume(.let) { return .refLet }
+        if consume(.var) { return .refVar }
+        _ = fail(ErrorCode.missingReferenceKind)
+        throw StatementFailure()
     }
 
     /// Parses a statement other than a declaration. It binds no name, so its failure carries none.
@@ -91,16 +98,18 @@ extension Parser {
         return .assign(target: target, op: op, value: try parseExpression())
     }
 
-    /// After the `let` or `var`: `binding (',' binding)*`. A failure carries the names bound before it.
-    private mutating func parseBindings() throws(StatementFailure) -> [Binding] {
-        var bindings = [try parseBinding(after: [])]
-        while consume(.comma) { bindings.append(try parseBinding(after: bindings)) }
+    /// After the words that start a declaration of `kind`: `binding (',' binding)*`. A failure carries the names bound
+    /// before it.
+    private mutating func parseBindings(of kind: DeclarationKind) throws(StatementFailure) -> [Binding] {
+        var bindings = [try parseBinding(of: kind, after: [])]
+        while consume(.comma) { bindings.append(try parseBinding(of: kind, after: bindings)) }
         return bindings
     }
 
-    /// `identifier (':' type)? ('=' expression)?`, after the bindings `bound` of the same declaration. A binding that
-    /// fails after its name still binds it.
-    private mutating func parseBinding(after bound: [Binding]) throws(StatementFailure) -> Binding {
+    /// `identifier (':' type)? ('=' expression)?`, after the bindings `bound` of the same declaration of `kind`. A
+    /// binding that refers to a place needs its `=` and the place. A binding that fails after its name still binds it.
+    private mutating func parseBinding(of kind: DeclarationKind, after bound: [Binding]) throws(StatementFailure)
+        -> Binding {
         let boundNames = bound.map(\.name)
         guard let (name, nameRange) = try? expectIdentifier(else: ErrorCode.missingBindingName) else {
             throw StatementFailure(boundNames: boundNames)
@@ -108,6 +117,7 @@ extension Parser {
 
         do {
             let type = consume(.colon) ? try parseType() : nil
+            if kind.refersToPlace, !current.isPunct(.assign) { throw fail(ErrorCode.missingReferencedPlace) }
             let value = consume(.assign) ? try parseExpression() : nil
             return Binding(name: name, nameRange: nameRange, type: type, value: value)
         } catch {

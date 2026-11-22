@@ -61,7 +61,7 @@ struct ControlFlowLoweringTests {
                 while true {
                     i += 1
                     let odd = if i % 2 == 0 { continue } else { copy i }
-                    let next = if odd > 7 { break } else { odd }
+                    ref let next = if odd > 7 { break } else { odd }
                     print(next)
                 }
             }

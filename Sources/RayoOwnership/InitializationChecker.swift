@@ -75,7 +75,7 @@ private struct FunctionErrors {
     mutating func store(to destination: Destination, holding state: PlaceState) {
         // Only a `let`, whether it owns its value or borrows it, is assigned at most once on each path.
         guard case .source(let name, let kind, _, _) = places.body.locals[destination.place.root.index],
-              kind == .let || kind == .borrowingLet else { return }
+              kind == .let || kind == .refLet else { return }
         guard state.isAssignedOnSomePath else { return }
         stores.append(Diagnostic(storeError(naming: name, holding: state), at: destination.range))
     }

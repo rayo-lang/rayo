@@ -94,8 +94,8 @@ struct AssignmentChecker {
         // A `let` may be assigned whole, only once on each path, which the initialization check enforces; it never
         // changes part by part. A borrowing one is assigned by its declaration, so the check reports any other
         // assignment of it whole as a second one.
-        case (.let, true), (.borrowingLet, true): .assignToPartOfLet(name: names[local].name)
-        case (.let, false), (.borrowingLet, false): nil
+        case (.let, true), (.refLet, true): .assignToPartOfLet(name: names[local].name)
+        case (.let, false), (.refLet, false): nil
         // A `var` owns its value, and may change it whole or part by part.
         case (.var, _): nil
         }

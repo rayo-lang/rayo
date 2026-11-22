@@ -3,7 +3,7 @@ import RayoDiagnostics
 import RayoSource
 import RayoSyntax
 
-/// Checks what declares a local: a parameter, or a binding of a `let` or `var` with its type annotation and value.
+/// Checks what declares a local: a parameter, or a binding of a declaration, with its type annotation and value.
 struct BindingChecker {
     /// What a binding's type annotation and value give the local it declares.
     private enum Declared {
@@ -62,23 +62,39 @@ struct BindingChecker {
         }
     }
 
-    /// Checks `binding`, which declares a local.
-    func check(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
+    /// Checks `binding`, which a declaration of `kind` declares as a local.
+    func check(_ binding: Binding, declaredWith kind: DeclarationKind) -> CheckedStmt? {
         // Checked before the name, so a declaration of `_` still reports its type's and its value's errors.
         let declared = checkTypeAndValue(of: binding)
 
         // A binding of `_` is reported, and declares no local.
         guard errors.isNaming(binding.name, at: binding.nameRange) else { return nil }
 
-        // A `var` that borrowed a place could never change what it holds, so a place it is given is reported.
-        if kind == .var, let value = declared.value {
-            expressions.reportHandedPlaces(of: value, as: ErrorCode.varBorrowsPlace)
-        }
+        if let value = declared.value { checkHolding(value, in: binding, declaredWith: kind) }
 
         let type = checkLocalType(declared, of: binding)
-        let localKind = LocalKind(kind, givenBy: declared.value)
-        let local = names.declare(binding.name, type: type, kind: localKind, at: binding.nameRange)
+        let local = names.declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
         return local.map { .binding($0, at: binding.nameRange, declared.value) }
+    }
+
+    /// Reports what `binding`, declared with `kind`, can't hold of `value`, the value it is given.
+    private func checkHolding(_ value: CheckedExpr, in binding: Binding, declaredWith kind: DeclarationKind) {
+        switch kind {
+        // A `let` or `var` owns its value, while a place's value has an owner already, so a place it is given says how
+        // the binding takes the value, or that the binding refers to the place.
+        case .let, .var:
+            expressions.reportHandedPlaces(of: value) { .ownerBorrowsPlace(keyword: kind.keyword, place: $0) }
+
+        // A `ref let` refers to a place, so it needs one, and one that lasts as long as it does.
+        case .refLet:
+            if value.handedPlaces.isEmpty {
+                errors.report(.referenceToValue(binding: binding.name), at: binding.nameRange)
+            }
+            expressions.reportEndedPlaces(of: value, referredToBy: binding.name)
+
+        case .refVar:
+            errors.report(.unsupportedReferenceVar, at: binding.nameRange)
+        }
     }
 
     /// Checks `binding`'s type annotation and value, and the value against the annotation when it has both.
@@ -136,12 +152,25 @@ struct BindingChecker {
 }
 
 private extension LocalKind {
-    /// The kind of local that a declaration with `kind` and `value` declares. A `let` whose value hands it a place that
-    /// a local holds borrows that place; one given any other value, or none, owns its value.
-    init(_ kind: BindingKind, givenBy value: CheckedExpr?) {
+    /// The kind of local that a declaration with `kind` declares. A `ref var`, which is reported as unsupported, is
+    /// declared as a `ref let`, so its uses report nothing more.
+    init(_ kind: DeclarationKind) {
         switch kind {
-        case .let: self = (value?.handedPlaces ?? []).isEmpty ? .let : .borrowingLet
+        case .let: self = .let
         case .var: self = .var
+        case .refLet, .refVar: self = .refLet
+        }
+    }
+}
+
+private extension DeclarationKind {
+    /// The words that start the declaration, as an error names them.
+    var keyword: String {
+        switch self {
+        case .let: "let"
+        case .var: "var"
+        case .refLet: "ref let"
+        case .refVar: "ref var"
         }
     }
 }

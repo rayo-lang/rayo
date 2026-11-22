@@ -31,7 +31,7 @@ struct FunctionBuilder: ~Copyable {
 
     /// Whether `local` is a `let` that borrows the place its declaration gives it.
     func isBorrowing(_ local: LocalID) -> Bool {
-        if case .source(_, .borrowingLet, _, _) = locals[local.index] { true } else { false }
+        if case .source(_, .refLet, _, _) = locals[local.index] { true } else { false }
     }
 
     mutating func newBlock() -> BlockID {

@@ -3,10 +3,10 @@ import RayoDiagnostics
 import RayoIR
 
 /// Checks that a program moves no value out of a place that can't give it up: a parameter whose value is its caller's,
-/// a borrowing `let`, whose value is the place's it borrows, or an array's element, which its array holds for as long
+/// a `ref let`, whose value is the place's it refers to, or an array's element, which its array holds for as long
 /// as the array holds a value.
 enum MoveChecker {
-    /// Reports each move out of a parameter whose value is its caller's, out of a borrowing `let`, out of an array's
+    /// Reports each move out of a parameter whose value is its caller's, out of a `ref let`, out of an array's
     /// element, or out of a part inside any of them, in every block of the body whose places `places` gives the types
     /// of, whether or not a path reaches it.
     static func errors(in places: PlaceTypes) -> [Diagnostic] {
@@ -25,8 +25,11 @@ enum MoveChecker {
         }
 
         // Only a local of the source may not own its value; a temporary owns what lowering stores in it.
-        guard case .source(let local, let kind, _, _) = places.body.locals[place.root.index],
-              let name = places.sourceName(of: place) else { return nil }
+        guard case .source(let local, let kind, _, _) = places.body.locals[place.root.index] else { return nil }
+
+        guard let name = places.sourceName(of: place) else {
+            preconditionFailure("a local of the source names each place inside it")
+        }
 
         // The error names the whole local, or the part moved out of it as the source writes it.
         let part = place.steps.isEmpty ? nil : name
@@ -40,9 +43,9 @@ enum MoveChecker {
         // A parameter that doesn't own its value can't give it up.
         case .parameter(let convention) where !convention.allowsMove:
             part.map { .moveFieldFromParameter(field: $0, parameter: local) } ?? .moveFromParameter(name: local)
-        // Nor can a borrowing `let`, whose value is the place's it borrows.
-        case .borrowingLet:
-            part.map { .moveFieldFromBorrowingLet(field: $0, local: local) } ?? .moveFromBorrowingLet(name: local)
+        // Nor can a `ref let`, whose value is the place's it refers to.
+        case .refLet:
+            part.map { .moveFieldFromReference(field: $0, local: local) } ?? .moveFromReference(name: local)
         case .let, .var, .parameter:
             nil
         }

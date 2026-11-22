@@ -38,7 +38,7 @@ extension IRParser {
     private mutating func local() throws(IRTextError) -> IRLocal? {
         guard case .word(let keyword) = current.kind else { return nil }
         // A parameter's convention follows its name, so its keyword stands for a parameter of any convention.
-        let kind = [LocalKind.let, .borrowingLet, .var, .parameter(.borrowed)].first { $0.keyword == keyword }
+        let kind = [LocalKind.let, .refLet, .var, .parameter(.borrowed)].first { $0.keyword == keyword }
         guard kind != nil || keyword == "temp" else { return nil }
         advance()
 

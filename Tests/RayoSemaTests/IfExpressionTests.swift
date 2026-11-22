@@ -33,9 +33,9 @@ struct IfExpressionTests {
     }
 
     @Test(arguments: [
-        "let y = if c { 1 } else { u }\ntake(y)",
-        "let y = if c { u } else { 1 }\ntake(y)",
-        "let y = if c { 1 + 2 } else if !c { u } else { -0 }\ntake(y)",
+        "let y = if c { 1 } else { copy u }\ntake(y)",
+        "let y = if c { copy u } else { 1 }\ntake(y)",
+        "let y = if c { 1 + 2 } else if !c { copy u } else { -0 }\ntake(y)",
         "let y = if c { [1, 2] } else { [u, 3] }\ntake(y[0])",
         "take((if c { 1 } else { u }) + 1)",
     ])
@@ -49,7 +49,7 @@ struct IfExpressionTests {
         "take(u + if c { 1 } else { 2 })",
         "pick(if c { 1 } else { 2 })\ntake(u)",
         "take(if c { if !c { 1 } else { 2 } } else { 3 })\ntake(u)",
-        "let y = if c { u } else if !c { 1 } else { 2 }\ntake(y)",
+        "let y = if c { copy u } else if !c { 1 } else { 2 }\ntake(y)",
     ])
     func `an 'if' whose branches all wait for a type waits too, wherever it is used`(body: String) {
         let declarations = "func take(_ n: UInt) {}\nfunc pick(_ n: UInt) {}\nfunc pick(_ b: Bool) {}"

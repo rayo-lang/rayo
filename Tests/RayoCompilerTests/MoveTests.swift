@@ -70,7 +70,7 @@ struct MoveTests {
     @Test(arguments: [
         ("let x = consume w.items[i].inner[j].n", "a part out of an element of 'w.items'"),
         ("let x = consume w.items[i].inner[0].n", "'inner[0].n' out of an element of 'w.items'"),
-        ("let c = consume w.items[i].inner[0]\n    let x = c.n", "'inner[0]' out of an element of 'w.items'"),
+        ("let c = consume w.items[i].inner[0]\n    let x = consume c.n", "'inner[0]' out of an element of 'w.items'"),
         ("let x = consume w.items[0].inner[i].n", "'n' out of an element of 'w.items[0].inner'"),
         ("let x = consume g[i][j]", "a part out of an element of 'g'"),
         ("let x = consume g[i][0]", "a part out of an element of 'g'"),

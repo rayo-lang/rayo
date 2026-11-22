@@ -3,7 +3,7 @@ main "main()"
 func "main()"() -> Void {
   var %0 i: Int @2:9-2:10
   let %1 odd: Int @5:13-5:16
-  borrow %2 next: Int @6:13-6:17
+  ref %2 next: Int @6:17-6:21
   temp %3: Int
   temp %4: Bool
   temp %5: Int
@@ -34,15 +34,15 @@ bb6:
   %1 @5:13-5:16 = operand read %3 @5:19-5:61 @5:19-5:61
   declare %2
   declare %6
-  %6 @6:23-6:30 = greater read %1 @6:23-6:26, 7 @6:23-6:30
-  branch read %6 @6:23-6:30, bb8, bb9
+  %6 @6:27-6:34 = greater read %1 @6:27-6:30, 7 @6:27-6:34
+  branch read %6 @6:27-6:34, bb8, bb9
 bb7:
   goto bb6
 bb8:
   goto bb3
 bb9:
-  begin a0 read %1 @6:48-6:51
-  %2 @6:13-6:17 = operand read %1 @6:48-6:51 @6:48-6:51
+  begin a0 read %1 @6:52-6:55
+  %2 @6:17-6:21 = operand read %1 @6:52-6:55 @6:52-6:55
   depend %2 on a0
   goto bb10
 bb10:
