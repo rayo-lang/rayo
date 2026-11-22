@@ -19,7 +19,7 @@ let first: &Text = names[0]                  // a pointer and a length, whatever
 - **`[T]`, `Text` and `any P`**, which code holds only behind a value of fixed size that refers to them ([01](../01-values-and-ownership/references.md#unsized-types));
 - **an `@opaque` type**, a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
-`T.size` and `T.alignment` of an unsized type are compile errors. Only an `@opaque` type parameter may stand for one, and its body is checked as though its type were unsized, so it is the one type parameter whose body may not rely on a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+`T.size` and `T.alignment` of an unsized type are compile errors. No type parameter stands for one, so every generic body may rely on its types having a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)).
 
 **No value's size depends on what it holds.** A count whose bound is fixed when the program is built is part of the type, and the elements lie inside the value. That bound is an array's `N` ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)), or the capacity of an `InlineList` or of std's `FixedString`, which may hold fewer ([Collections and strings](collections.md#collections-and-strings)). A count with no such bound puts the elements outside the value, which reaches them through a fixed-size part:
 

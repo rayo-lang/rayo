@@ -88,8 +88,6 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 | `T.isConstructible` | Whether `T.construct` applies here ([below](#constructing-values-reflectively)) |
 | `T.conforms(P.self)`, `T == U`, `T != U` | Protocol conformance and type equality, for use in `static if` |
 
-**An `@opaque` type parameter's body reads none of `T`'s layout, fields, cases or conformances**, since an `@opaque` type has no layout Rayo can use and conforms to no protocol. Its name, module and id, the kind queries, its attributes and type equality stay readable ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
-
 **Reaching into a value:**
 
 | Expression | Meaning |

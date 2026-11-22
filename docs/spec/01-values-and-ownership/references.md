@@ -101,7 +101,7 @@ peek(&best)                         // refers to 'best' itself
 - **`Text`, a run of UTF-8**, such as a `String`'s text or a literal's ([04](../04-types/collections.md#strings));
 - **`any P`, an existential**, a value of some type that conforms to `P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
-**An unsized type is held only behind a reference, a `Box`, an object pointer, a reference-counted pointer or a raw pointer** ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). It is never a local's, a field's, a parameter's, a result's, an element's or a payload's type by itself. It never binds a type parameter that isn't `@opaque` either ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+**An unsized type is held only behind a reference, a `Box`, an object pointer or a reference-counted pointer.** It is never a local's, a field's, a parameter's, a result's, an element's or a payload's type by itself. It binds no type parameter either, though `Type<T>` names any type, so `Text.self` is a type value ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)).
 
 **A place of unsized type is never assigned, moved or copied as a whole**, since nothing knows its size. Its parts are changed through a `mutable &`, as `some[0] = 0` changes an element below. So a `mutable &[T]` made from a `List<T>`, or a `mutable &any P` made from a `T: P`, can't store a value of another type in that place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 

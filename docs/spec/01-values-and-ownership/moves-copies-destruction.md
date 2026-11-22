@@ -52,7 +52,7 @@ var a = copy player.items                  // error: 'List<Item>' is not copyabl
 - it declares no `deinit`, since each copy would run it, and two copies would release one resource twice;
 - it doesn't opt out with `~Copyable`;
 - it isn't one of the types that are always move-only ([below](#types-that-are-always-move-only));
-- it isn't an `@opaque` C type, which has no values to copy and conforms to no protocol ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+- it isn't an `@opaque` C type, which has no values to copy and conforms to no protocol ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-stand-for-sized-types)).
 
 So a copyable type owns no heap memory, and `copy` never allocates. Every other type is **move-only**, including every type that owns memory, such as `List`, `String`, `Box` or `Pool`, and copying one of those takes `clone()`.
 
@@ -81,7 +81,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 **A copyable type whose copy is cheap may promise that its copies need no `copy` written.** If every copy were written, even an `Int`'s, the cheapest operation would be the one code writes most. The marker protocol **`ImplicitlyCopyable`** refines `Copyable` and states the promise. Keeping the two apart keeps a large copyable value from ever copying silently: a copy that nothing writes is one its type has declared cheap. A type that conforms is **implicitly copyable**:
 
-- **Number types, `Bool` and raw pointers**, which the language makes conform, since each is one machine value, or a raw pointer's address and the count or conformance it carries beside it ([04](../04-types/numbers-and-math.md#numbers), [10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A `Simd` vector of 16 bytes or less conforms too, such as a `Vec4` ([04](../04-types/numbers-and-math.md#simd-and-math)).
+- **Number types, `Bool` and raw pointers**, which the language makes conform, since each is one machine value ([04](../04-types/numbers-and-math.md#numbers), [10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A `Simd` vector of 16 bytes or less conforms too, such as a `Vec4` ([04](../04-types/numbers-and-math.md#simd-and-math)).
 - **Shared references**, `&T`, which the language makes conform, since a copy is one more shared borrow of the same place ([References](references.md#making-a-reference)).
 - **Imported C enums and flag sets**, which the language makes conform, since each is one integer ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
 - **A struct or enum that lists `ImplicitlyCopyable`.** The compiler confirms that the type is copyable and that every field and payload is implicitly copyable, as it confirms a listed `Copyable`. A `~Copyable` type can't conform.
