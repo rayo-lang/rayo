@@ -29,7 +29,7 @@ A view can keep several places borrowed:
 ```swift
 func visible(_ items: mutable List<Sprite>, in cells: Span<Cell>) -> MutableSpan<Sprite> { ... }
 
-let vis = visible(&sprites, in: grid.cells.span)
+var vis = visible(&sprites, in: grid.cells.span)
 grid.cells.append(c)                               // error: grid.cells is borrowed by 'vis' (used below)
 cull(&vis)
 ```

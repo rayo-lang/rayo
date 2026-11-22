@@ -85,7 +85,7 @@ extension Node {
 }
 ```
 
-**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)). An exclusive view's `mutate` needs only exclusive access to `self`, which isn't changeable there, so it hands out a place only in what `self` views, as a `MutableSpan`'s subscript does ([Exclusive views](scoped-values.md#exclusive-views)).
+**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)).
 
 **The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements and other place properties. This is an error, since `other` is no source:
 

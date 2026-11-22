@@ -109,7 +109,7 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 **A value that can write what it views carries an exclusive dependency on it** ([02](../../spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)). Otherwise a function could turn a shared borrow into a `MutableSpan`, which would write what another shared borrow still reads, against Exclusive. The two exceptions are exclusive by other means: a dynamic exclusive access, checked at run time, and a guard, whose lock grants no conflicting view ([07](../../spec/07-concurrency/synchronization.md#the-synchronized-contract)). `unsafe` code that builds a mutable view promises the same of what it builds.
 
-**An iterator that hands out mutable views lends them one at a time** ([04](../../spec/04-types/collections.md#iteration)). Each depends on the iterator exclusively until the next `next()`, so two are never live at once. A `zip` with an `&` argument iterates only by consuming, so no second iterator over it exists to hand out its views again.
+**An iterator that hands out mutable views lends them one at a time** ([04](../../spec/04-types/collections.md#iteration)). Each depends on the iterator exclusively until the next `next()`, so two are never live at once. A `mutableZip` iterates only by consuming, so no second iterator over it exists to hand out its views again.
 
 ## Destruction as a use
 

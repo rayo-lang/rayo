@@ -163,15 +163,29 @@ forEachLine(src.view) { line in lines.append(line) }
 
 - a `MutableSpan` or a `MutableRef`, such as a `MutableRef<any P>`;
 - a lock guard;
+- an exclusive `SoA` row;
 - a `mutating` or `consuming` function value, or a closure with an exclusive capture;
 - a value holding one of these.
 
+**An exclusive view is a mutable view that changes only what it views, never itself:**
+
+- a `MutableSpan` or a `MutableRef`;
+- a lock guard ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
+- an exclusive `SoA` row, whose fields' places lie in the columns ([04](../04-types/data-layout.md#struct-of-arrays-soat));
+- a `mutating` function value, whose call changes only the closure it views ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+
+**The other mutable views aren't exclusive views, since each may change itself:**
+
+- a `consuming` function value, which ends when it is called;
+- a closure literal with an exclusive capture, whose call changes the closure itself;
+- a value that holds a mutable view, such as a struct of spans, which may change its own fields.
+
 **A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 
-**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of an exclusive view's type is received `owned` with no `owned` written, unless it is declared `mutable` ([01](../01-values-and-ownership/parameters.md#parameters)). A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
+**A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of a `MutableSpan` or a `MutableRef` type is received `owned` with no `owned` written, unless it is declared `mutable` ([01](../01-values-and-ownership/parameters.md#parameters)). A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
 ```swift
-struct Halves<T>(let low: MutableSpan<T>, let high: MutableSpan<T>): Scoped
+struct Halves<T>(var low: MutableSpan<T>, var high: MutableSpan<T>): Scoped
 
 func rest<T>(_ s: MutableSpan<T>) -> MutableSpan<T>         // fine: 's' is an owned mutable view
 func peek<T>(_ h: Halves<T>) -> MutableSpan<T>              // error: 'h' is only borrowed

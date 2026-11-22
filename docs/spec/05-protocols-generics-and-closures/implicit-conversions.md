@@ -55,11 +55,11 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 **The other exceptions make new views instead of converting a variable**, and each lends its place until the view's last use:
 
 - `&x` → `MutableRef<any P>`;
-- `&v`, for an exclusive view `v` of any type held with exclusive access → a new view of what `v` views, of `v`'s type: the same value for a `MutableRef<any P>`, and the same elements for a `MutableSpan` ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views));
+- `&v`, for a changeable place `v` holding a `MutableSpan` or a `MutableRef` → a new view of what `v` views, of `v`'s type: the same elements for a `MutableSpan`, and the same value for a `MutableRef` ([02](../02-views-and-dependencies/scoped-values.md#writing-through-a-view));
 - `&f` → the function value of a `mutating` closure or `Closure<mutating …>` `f`;
-- `&f`, for a `mutating` function value `f` held with exclusive access → a new view of the same closure.
+- `&f`, for a changeable place `f` holding a `mutating` function value → a new view of the same closure.
 
-**Where a `mutable` parameter expects the exclusive view's own type, `&v` lends the place `v` instead**, as for any type, and `v` must then be a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)).
+**Where a `mutable` parameter expects the view's own type, `&v` lends the place `v` instead**, as for any type ([01](../01-values-and-ownership/bindings.md#changeable-places)).
 
 **So a function that takes a `mutating` callback can pass it on twice**, lending a new view of it each time:
 

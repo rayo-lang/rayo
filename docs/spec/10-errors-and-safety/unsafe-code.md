@@ -191,7 +191,7 @@ let p = unsafe ptr(to: &particles[0])             // the address of particles[0]
 let q = unsafe ptr(to: particles[0])              // the shared form: the address of a place it borrows
 ```
 
-- **Builtin.** It is builtin, and the call's `&` chooses the form, as for a method's forms ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)).
+- **Builtin.** It is builtin, and the call's `&` chooses the form: `&` lends the place for change, and a place without it is borrowed ([01](../01-values-and-ownership/parameters.md#parameters)).
 - **Never a function value.** It converts to no function type or `Closure` and binds no `some F`, so every call of it is direct.
 - **The caller's place.** Its argument, borrowed or not, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 - **A short access.** The access ends with the call, since a raw pointer is unscoped.
