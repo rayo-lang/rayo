@@ -167,13 +167,13 @@ return b
 ```swift
 while var s = work.popLast() {                  // 'work' stays free while 's' holds its buffer
     let p = partition(&s)
-    let (low, high) = (consume s).split(at: p)  // the halves carry what 's' carried
+    let (low, high) = s.consumingSplit(at: p)   // the halves carry what 's' carried
     work.append(low)
     work.append(high)
 }
 ```
 
-The consuming `split(at:)` hands the halves over with what `s` carried, where the lending `s.split(at: p)` would tie them to `s` ([04](../04-types/collections.md#mutating-and-consuming-forms-of-one-method)).
+`consumingSplit(at:)` hands the halves over with what `s` carried, where `s.split(at: p)` would lend them, tied to `s` ([04](../04-types/collections.md#mutating-and-consuming-methods)).
 
 ### Naming a field
 

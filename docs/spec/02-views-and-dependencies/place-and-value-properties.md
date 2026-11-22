@@ -137,7 +137,7 @@ func firstName(_ inv: Inventory) -> StringView { inv[0].name.view }   // fine: t
 struct Pair(var a: Int, var b: Int) {
     var first: Int { borrow { a } mutate { &a } }
 }
-func leak() -> Borrow<any Equatable> {
+func leak() -> any Equatable {
     let p = Pair(a: 1, b: 2)
     return p.first                       // error: the view depends on local 'p', which is destroyed on return
 }

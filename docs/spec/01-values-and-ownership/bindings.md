@@ -342,7 +342,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
-- **Making a `Borrow<any P>` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. A `ref let` or `ref var` of type `any P` refers to the place itself instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). A `String` or a `List` made into its view borrows the place shared too ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
+- **Making an `any P` from a place borrows the place shared**, as making any view of it does, and the binding, `let` or `var`, owns the view. So a `var` of one may later point at another value. A `ref let` or `ref var` of type `any P` refers to the place itself instead ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). A `String` or a `List` made into its view borrows the place shared too ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)).
 
 ```swift
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
@@ -351,7 +351,7 @@ var spare: Enemy? = copy boss               // wrapping a copy of the enemy
 let pick: Enemy? = boss                     // error: wrapping takes the enemy; write 'copy' or 'consume'
 var last: Enemy? = consume boss             // or wrapping the enemy itself, moved out of 'boss'
 var target: Handle<Enemy>? = h              // a Handle is implicitly copyable: wrapping a copy, and 'h' stays usable
-var d: Borrow<any Drawable> = sprite        // borrows 'sprite'; 'd' owns the view, and may later view another value
+var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the view, and may later view another value
 ```
 
 ## Changeable places

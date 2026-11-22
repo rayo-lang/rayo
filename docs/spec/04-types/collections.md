@@ -552,16 +552,13 @@ particles.mutableLife.sort()                     // sorts the column through a t
 func lives(_ p: mutable Particles) -> MutableSpan<Float> { p.mutableLife }   // a result of one
 ```
 
-### Mutating and consuming forms of one method
+### Mutating and consuming methods
 
-**A `consuming` method may share a `mutating` one's name and parameters**, since the receiver's form picks between them:
+**A `consuming` method that hands over what a `mutating` one lends puts `consuming` in its name**, as `makeConsumingIterator()` does. Each name has one declaration, so the name a call writes says whether it lends or hands over ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)):
 
 ```swift
-let (a, b) = s.split(at: m)             // 's' is a place: the mutating form lends two halves
-let (c, d) = (consume s).split(at: m)   // a whole value: the consuming form hands them over
+let (a, b) = s.split(at: m)            // lends two halves of what 's' views
+let (c, d) = s.consumingSplit(at: m)   // takes 's', and hands the halves over
 ```
 
-- **A receiver that is a whole value picks the `consuming` form**: a call result, a `get` accessor's or subscript's included, or `consume x`.
-- **A receiver that is a place picks the `mutating` form.** A place here is a variable, a stored field even of a temporary, or a place property's place.
-
-So `s.split(at: m)` on a `MutableSpan` lends two halves that depend on `s` exclusively, and needs `s` changeable. `(consume s).split(at: m)` hands them over, carrying only what `s` carried, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A shared `Span`'s `split(at:)` is declared `where return outlives self`, so it needs no pair.
+So `s.split(at: m)` on a `MutableSpan` lends two halves that depend on `s` exclusively, and needs `s` changeable. `s.consumingSplit(at: m)` takes `s` and hands the halves over, carrying only what `s` carried, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A shared `Span`'s `split(at:)` is declared `where return outlives self`, so it needs no consuming form.

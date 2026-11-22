@@ -172,9 +172,9 @@ enum Tree {
 
 ### Boxes of `any P`
 
-**An existential, `any P`, stands for a value of any type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
+**An existential, `any P`, views a value of any type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
 
-**Without a box, code only borrows an `any P`**, as a parameter of that type does. To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
+**A plain `any P` only borrows its value, as a view does.** To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
 
 The game already has enemies that take damage. To put them in one list with breakable crates, give both types the same `Damageable` behavior:
 

@@ -124,7 +124,7 @@ let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing 
 
 - **Function type parameters.** When the matching `)` is followed by `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter.
 - **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
-- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple.
+- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple. The exception is `(any P)` as the type argument of an existential's own type name, which keeps `any P` apart from the form `any` makes there (below).
 
 ```swift
 typealias OnError = (IoError | ParseError) -> Void    // ')' then '->': one error-union parameter
@@ -133,6 +133,8 @@ typealias Hit = (target: Handle<Enemy>, damage: Float) // a tuple
 typealias Count = (Int)                               // just Int, not a one-element tuple
 typealias Single = (Int,)                             // a one-element tuple
 ```
+
+**After an existential's own type name, `any` right after `<` makes that existential**, as in `MutableRef<any P>`, `Box<any P>` and `Shared<any P>`. Those names are `MutableRef`, `Box`, the object pointers, the reference-counted pointers and the weak links ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). So the type such a name gives with its type parameter bound to `any P` is written with `(any P)`, as `Box<(any P)>` is.
 
 **An expression names a type in two ways**: by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 

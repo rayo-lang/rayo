@@ -56,7 +56,7 @@ let v = get()                    // 'v' depends on 'src'
 
 - a function type, or a closure's concrete type;
 - an interpolated literal's type ([04](../04-types/collections.md#strings));
-- a `some P` or an `any P`, held in a view, a box or a pointer;
+- a `some P`, or an existential: an `any P`, a `MutableRef<any P>` or an unscoped existential;
 - a type parameter or an associated type.
 
 Every other type is **unsealed**. Each item above is a closure or a function value, may stand for one, or is a way to view a shallow value's own bytes ([below](#shallow-values)). So no value of a sealed type can reach a closure's storage, or a shallow argument's own bytes.
@@ -114,13 +114,13 @@ A copyable type that holds no inline array, at any depth, is **shallow**, scoped
 - `Int`, a `Range` and `Vec3`;
 - a `Simd` vector, whose lanes are never viewed ([04](../04-types/numbers-and-math.md#simd-and-math));
 - `Span`, `StringView` and [`Borrow<T>`](../04-types/collections.md#iteration);
-- a `Borrow<any P>`, and a non-`mutating` function value;
+- an `any P`, and a non-`mutating` function value;
 - a `Token` of a `StringView` and an `Int`;
 - tuples and `Optional`s of those.
 
 **When a result or an absorbing argument has a sealed type, a shallow argument contributes only its dependency set**, not the argument place. Safe code can view a shallow value's own bytes only through one of these:
 
-- a `Borrow<any P>` made from it;
+- an `any P` made from it;
 - a closure capturing it by reference;
 - an interpolated literal borrowing it.
 
