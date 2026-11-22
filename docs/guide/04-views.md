@@ -66,7 +66,7 @@ let run: [Int] = hits.span               // error: '[Int]' is unsized; write '&h
 
 **A string is indexed by byte offset.** A range of a string must start and end on Unicode scalar boundaries, or taking it panics. So a `&Text` always refers to whole UTF-8 sequences ([04](../spec/04-types/collections.md#strings)).
 
-**A `&[T]` or a `&Text` is implicitly copyable**, as every shared reference is. A copy is a second reference to the same memory, only an address and a count, so it needs no `copy` written ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)).
+**A `&[T]` or a `&Text` is implicitly copyable.** Every shared reference is, as chapter 3's `&Enemy` is. A copy is a second reference to the same memory, only an address and a count, so it needs no `copy` written ([Moves and copies](02-moves-and-copies.md#adding-to-a-list)).
 
 **A `mutable &[T]` is move-only**, since two copies would be two ways to change the same elements at once.
 
@@ -74,7 +74,7 @@ let run: [Int] = hits.span               // error: '[Int]' is unsized; write '&h
 
 **Writing through a `mutable &[T]` takes a binding that may change.** `editable[0] = 0` changes an element of `hits` through the reference, so `editable` is a `var`. A `let` that holds a mutable reference can read through it, but never write through it ([01](../spec/01-values-and-ownership/references.md#forwarding-through-a-reference)).
 
-**A function that changes a run of elements takes a `mutable &[T]`.** Inside, the parameter names the elements, so the function lends them on with `mutable &`, as it would any place. At the call, `mutable &editable` lends a new reference to the same elements, and `editable` works again once the call returns ([01](../spec/01-values-and-ownership/references.md#reborrowing)):
+**A function that changes a run of elements takes a `mutable &[T]`.** Inside, the parameter names the elements, so the function lends them on with `mutable &`, just as it would lend a variable of its own. At the call, `mutable &editable` lends a new reference to the same elements, and `editable` works again once the call returns ([01](../spec/01-values-and-ownership/references.md#reborrowing)):
 
 ```swift
 func clear(_ s: mutable &[Int]) { for x in mutable &s { x = 0 } }
@@ -189,7 +189,7 @@ use(&tokens)
 
 **Only a scoped argument absorbs.** A `List<Int>` holds no views, so it takes on nothing.
 
-**A shared reference, or a number, lends an absorbing argument only what it carries, as it does a result.** So `lines` borrows `source`, not the reference that `&source` made.
+**A shared reference, or a number, lends an absorbing argument only what it carries.** It lends a call's result the same, as `longest` showed above. So `lines` borrows `source`, not the reference that `&source` made.
 
 **Another `mutable &` argument lends what it carries, not itself.** So `tokens` borrows the text the scanner refers to, and the scanner can move on while `tokens` is in use.
 

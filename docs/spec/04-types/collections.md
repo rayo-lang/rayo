@@ -162,7 +162,7 @@ average(&samples)                   // a List<Float>: lent as a reference to its
 average(&samples[0..<64])           // the first 64 of them
 ```
 
-**A run's members read its elements, change them where they lie, or lend parts of it.** None assigns, moves or copies the run as a whole, since nothing knows its size ([01](../01-values-and-ownership/references.md#unsized-types)). A run is iterated through a reference to it ([Iteration](#iteration)):
+**A run's members read its elements, change them where they lie, or lend parts of it.** A run is iterated through a reference to it ([Iteration](#iteration)):
 
 | Member | What it is |
 | --- | --- |
@@ -179,11 +179,9 @@ average(&samples[0..<64])           // the first 64 of them
 
 ```swift
 var some = mutable &hits[0..<4]           // a 'mutable &[Int]' of the first four hits
-some[0] = 0                               // writes hits[0]
 some.sort()                               // sorts the four where they lie
 var (lo, hi) = some.mutableSplit(at: 2)   // two 'mutable &[Int]'s: 'some' stays borrowed while either is used
 lo[0] = hi[0]
-let all: [Int] = hits.span                // error: '[Int]' is unsized; write '&hits.span'
 ```
 
 ### Hash maps and sets
@@ -236,11 +234,12 @@ A type that conforms to `Hashing` is a **hashing type**. A map or set keeps one 
 
 **The primary initializers of `Map` and `Set` are private.** `Map(hashing:)` and `Set(hashing:)` take a hashing value, which the map owns, so a program can give a map one it configured, and every other initializer makes one with `H()`. A map's `clone()` keeps a copy of its hashing value and copies its table as it is, so the clone hashes as the original does.
 
-**A lookup borrows its key, so it takes a `&K`, and a key in a place is lent with `&`** ([01](../01-values-and-ownership/parameters.md#parameters)). A map or set whose keys are `String`s also looks up a `&Text`, since a `String` hashes and compares as its text does. A string literal is a `static &Text` already, so it is looked up with nothing written:
+**A lookup borrows its key, so it takes a `&K`, and every key in a place is lent with `&`**, an implicitly copyable one too, since the position expects a reference ([01](../01-values-and-ownership/parameters.md#parameters)). A map or set whose keys are `String`s also looks up a `&Text`, since a `String` hashes and compares as its text does. A string literal is a `static &Text` already, so it passes as it is:
 
 ```swift
 if let hp = scores[&name] { … }           // lends the String 'name' to the lookup
-if let hp = scores["grunt"] { … }         // a literal is a reference to its text already
+if let hp = scores["grunt"] { … }         // a literal is the '&Text' the lookup takes
+if let n = counts[&id] { … }              // an Int key is lent with '&' too
 if let hp = scores[name] { … }            // error: the lookup takes '&String'; write '&name'
 ```
 
@@ -314,7 +313,17 @@ let bare = String("grunt")                // error: making a 'String' needs 'all
 
 **A bare `String("…")` is a compile error**, as every `Allocating` initializer without `alloc` is ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc)). Its diagnostic points to the literal itself, which needs no `String`, to `alloc "…"`, and to std's `FixedString`, which the spec leaves to std ([11](../11-compilation-model.md#what-the-spec-defines)).
 
-**Strings are indexed by byte offset.** A range of a `String` or of a `Text`, such as `s[0..<5]`, is a `Text` place with a `borrow` and no `mutate`, so `&s[0..<5]` is a `&Text`, and no code writes bytes that could split a UTF-8 sequence. A range must start and end on Unicode scalar boundaries, or taking it panics, so all text holds whole UTF-8 sequences ([10](../10-errors-and-safety/panics.md#what-panics)). Unicode scalars and graphemes are sequences that `s.scalars` and `s.graphemes` make.
+**Strings are indexed by byte offset.** A range of a `String` or of a `Text`, such as `s[0..<5]`, is a `Text` place with a `borrow` and no `mutate`, so `&s[0..<5]` is a `&Text`, and no code writes bytes that could split a UTF-8 sequence. A range must start and end on Unicode scalar boundaries, or taking it panics, so all text holds whole UTF-8 sequences ([10](../10-errors-and-safety/panics.md#what-panics)).
+
+**A `Text`'s members read it; none changes it**, so a `mutable &Text` lends nothing a `&Text` doesn't. A `String` has them too, beside the members that change it:
+
+| Member | What it is |
+| --- | --- |
+| `count` | The number of bytes, a read-only `UInt` |
+| `s[a..<b]`, and the other ranges | The bytes in the range, a `Text` place with a `borrow`, which panics off a scalar boundary |
+| `scalars`, `graphemes` | Sequences of the text's Unicode scalars and of its user-perceived characters |
+| `cchars` | The bytes as a `[CChar]` place with a `borrow`, and no NUL after them (below) |
+| `==`, `hash(into:)`, `format(into:)` | Comparing, hashing and formatting the text |
 
 **`.cString` is written on a string literal itself, as in `"abc".cString`, and is a `*CChar` to the literal's bytes, which end in a NUL.** So a literal passes to C as a C string at no cost. It is a form of the literal, not a member of `Text`, since a range of static text has no NUL after it. So `title.cString` on a `static &Text` value, or on a `const` imported from a C `#define`, is a compile error. `s.cchars` is any string's bytes as a `[CChar]` place, with a `borrow` and no terminator, for C functions that take a pointer and a length.
 
@@ -337,13 +346,18 @@ protocol Formattable { func format(into sink: mutable &some TextSink) where sink
 func print(_ value: some Formattable)
 
 let hp = 7
+let name = alloc "grunt"
 print(42)               // 42
 print(hp > 0)           // true
 print("hp \(hp)")       // hp 7
 print(0.1 + 0.2)        // 0.30000000000000004
+print(&name)            // a String place, lent: 'name' stays as it was
+print(name)             // error: 'print' owns its argument; write '&name' or 'consume name'
 ```
 
-**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and takes any `Formattable` ([11](../11-compilation-model.md#the-prelude)). The text it writes is the one the value's `format` writes, so `print(x)` and `print("\(x)")` write the same line.
+**`print` writes a value's text, then a newline, to the program's standard output** ([08](../08-c-interop/c-contract-and-embedding.md#what-the-runtime-needs-from-the-platform)). It is a prelude function, and owns its argument, of any `Formattable` type ([11](../11-compilation-model.md#the-prelude)). So `print(hp)` copies an implicitly copyable `hp`, and a place of any other type is lent with `&`.
+
+**A reference is `Formattable` when what it refers to is**, and formats as that value does, since its `format(into:)` forwards to the value's ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So `print(&x)` and `print("\(x)")` write the same line, and so does `print(x)` where `x` is implicitly copyable.
 
 **The language's own types format the same text on every target and in every build**, so a program's printed output can be compared exactly with one recorded on another machine:
 
@@ -613,7 +627,9 @@ func lives(_ p: mutable &SoA<Particle>) -> mutable &[Float] { mutable &p.life } 
 | `s.split(at: m)` | `s.mutableSplit(at: m)` |
 | `bytes.reinterpret(as: U.self)` | `bytes.mutableReinterpret(as: U.self)` |
 
-**The mutable form's receiver takes no mark, as every receiver doesn't, and must be a changeable place** ([01](../01-values-and-ownership/bindings.md#changeable-places)). What it returns depends on the receiver exclusively, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A binding that writes through a mutable reference it holds is a `var`, since writing through a reference needs a changeable place ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)):
+A run's members table says what each of these hands out ([Runs of elements](#runs-of-elements)).
+
+**No receiver takes a mark, so the mutable form's receiver takes none, and it must be a changeable place** ([01](../01-values-and-ownership/bindings.md#changeable-places)). What it returns depends on the receiver exclusively, by rule 3 ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)). A binding that writes through a mutable reference it holds is a `var`, since writing through a reference needs a changeable place ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)):
 
 ```swift
 for (i, e) in items.enumerated() { … }               // (UInt, &Item) elements

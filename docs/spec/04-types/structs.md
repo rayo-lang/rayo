@@ -96,7 +96,7 @@ let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' m
 - **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let` and its type. The value owns its fields, so the primary initializer owns every argument, as a `T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). So `Inventory(items: consume loot)` moves `loot` in, and `copy loot` or `alloc loot.clone()` gives it a second value instead. A field whose type is a reference holds the reference, which makes the struct scoped ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 - **Defaults.** A field's default makes its argument optional. A field with a default may leave its type to the default, as `spawned` does above.
 - **Optional `var`s.** A `var` declared with an optional type, `T?` written as such, with no default and not `unsafe`, starts as `nil`. It counts as defaulted, for the primary initializer and for reflection's `hasDefault` ([09](../09-compile-time/reflection.md#what-reflection-can-read)). A `let` of optional type does neither.
-- **`unsafe` fields.** An `unsafe` field, such as an index that `unchecked` code trusts ([Plain data](data-layout.md#plain-data-pod-and-bit-casts)), is given its argument only inside `unsafe`, just as naming it needs `unsafe`.
+- **`unsafe` fields.** An `unsafe` field, such as an index that `unchecked` code trusts ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)), is given its argument only inside `unsafe`, just as naming it needs `unsafe`.
 
 **A type can also offer other initializers**, which can check an invariant before the value exists:
 

@@ -16,7 +16,7 @@ let first: &Text = names[0]                  // a pointer and a length, whatever
 
 **The unsized types have no size of their own, so they have no values that sit in a place by themselves:**
 
-- **`[T]`, `Text` and `any P`**, which code reaches only through a reference, a `Box` or a pointer, whose own size is fixed ([01](../01-values-and-ownership/references.md#unsized-types));
+- **`[T]`, `Text` and `any P`**, which code holds only behind a value of fixed size that refers to them ([01](../01-values-and-ownership/references.md#unsized-types));
 - **an `@opaque` type**, a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
 `T.size` and `T.alignment` of an unsized type are compile errors. Only an `@opaque` type parameter may stand for one, and its body is checked as though its type were unsized, so it is the one type parameter whose body may not rely on a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
@@ -97,7 +97,7 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 
 - **Bit casts.** `U(bitPattern: t)` between `Pod` types of equal size is safe when `t`'s type is padding-free.
 - **Run casts.** `bytes.reinterpret(as: Vertex.self)` refers to a run of a `Pod` type `A` as a `(&[U])?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. Its alignment check is an alignment query, so it runs at compile time for a `U` aligned no more than the run's allocation ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). This shared cast needs `A` padding-free, so every byte read is initialized.
-- **Mutable run casts.** `bytes.mutableReinterpret(as: Vertex.self)` gives a `(mutable &[U])?`, checked the same way ([Collections](collections.md#shared-and-mutable-views-of-one-collection)). It needs both types padding-free, since a store through a padded type leaves its padding unspecified while other references still see `A`.
+- **Mutable run casts.** `bytes.mutableReinterpret(as: Vertex.self)` gives a `(mutable &[U])?`, checked the same way ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). It needs both types padding-free, since a store through a padded type leaves its padding unspecified while other references still see `A`.
 
 ## A header and trailing elements: `TrailingArray`
 
@@ -149,13 +149,15 @@ let vels = &particles.vel              // a '&[Vec3]' of another, held at the sa
 lives[0] -= 1
 ```
 
-**Subscripts reach columns by field.** `s[field: f]` is one column, a place with both accessors, as `s.f` is. `s[fields: (f1, f2)]` hands out a tuple of shared references to several columns, and `s[mutableFields: (f1, f2)]` a tuple of mutable references. A tuple of references is a value, not a place, so its two forms have two names, as a method's do ([Collections](collections.md#shared-and-mutable-views-of-one-collection)):
+**Subscripts reach columns by field.** `s[field: f]` is one column, a place with both accessors, as `s.f` is. `s[fields: (f1, f2)]` hands out a tuple of shared references to several columns, and `s[mutableFields: (f1, f2)]` a tuple of mutable references. A tuple of references is a value, not a place, so its two forms have two names, as a method's do ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)):
 
 ```swift
 var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // 'ts' and 'vs' are mutable references to two distinct columns
 ```
 
 **Each element that a loop over `&s` or `mutable &s` hands out is a row.** A **row** is a value that lends one index across every column: shared from `&s`, and exclusive from `mutable &s`. The loop name owns each row, as it owns a chunk ([Iteration](collections.md#iteration)). `s.row(i)` and `s.mutableRow(i)` hand out the row at index `i` the same way. A row has one place property per field of `T`, named as the field is, which lends that field's place in its column.
+
+**A shared row's field places have only a `borrow`.** So a row from `&s` or `s.row(i)` reads its fields, and `mutable &` of one, or a write through it, is a compile error. Only a row from `mutable &s` or `s.mutableRow(i)` lends its fields with `mutable &`, since only it holds `s` exclusively.
 
 **A row's places are disjoint, as a struct's stored fields are** ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
 
