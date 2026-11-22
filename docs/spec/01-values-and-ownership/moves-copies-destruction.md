@@ -75,7 +75,7 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 
 **Some types are move-only whatever their fields, since a second copy would break what the type promises:**
 
-- **Exclusive `SoA` rows.** An exclusive `SoA` row lends one place in each column, and two copies would be two ways to change the same place at once ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+- **Exclusive views the language gives.** A `MutableRef<any P>` lends one place for change, and an exclusive `SoA` row lends one place in each column. Two copies would be two ways to change the same place at once ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch), [04](../04-types/data-layout.md#struct-of-arrays-soat)).
 - **`Synchronized` types.** A `Synchronized` type, such as `Mutex` or `Atomic<Int>`, exists once, so every thread that shares it synchronizes on the same memory ([07](../07-concurrency/synchronization.md#the-synchronized-contract)).
 - **Lock guards.** A `@guard` type, such as `MutexGuard`, holds a lock for as long as it lives, and a copy would release the lock a second time ([02](../02-views-and-dependencies/dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them)).
 - **`mutating` and `consuming` function values.** Calling a `mutating` one changes the closure itself, and a `consuming` one runs at most once ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).

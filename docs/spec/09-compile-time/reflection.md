@@ -112,7 +112,7 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 - every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`;
 - an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
-For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout, and on an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
+For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout. On an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)), and on `any P`, since its size is that of a type known only at run time ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type. The identity holds what tells the type apart from every other, built as follows:
 
