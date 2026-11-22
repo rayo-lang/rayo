@@ -182,7 +182,7 @@ hp -= 10
 log("lost \(before - hp)")      // lost 10
 ```
 
-A `ref let before = hp` would borrow `hp` instead. Then `-=` would be an error, since `hp` can't change while `before` is still used.
+Declared with `ref let` instead, `before` would borrow `hp`. Then `-=` would be an error, since `hp` can't change while `before` is still used.
 
 ## A value that may have moved
 

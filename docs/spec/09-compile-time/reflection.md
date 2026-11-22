@@ -262,7 +262,7 @@ func calibrate<Row>(_ table: mutable Columns<Row>) {
     const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
     const cal = Row.field(ofType: Calibration.self)
     const out = Row.field(ofType: Calibrated.self)
-    let (rs, cs, var os) = &table.rows[fields: (raw, cal, out)]   // Span, Span, MutableSpan<Calibrated>
+    var (rs, cs, os) = &table.rows[fields: (raw, cal, out)]       // a MutableSpan of each column
     for (r, c, o) in zip(rs, cs, &os) { o.value = r.value * c.gain + c.offset }
 }
 
@@ -292,7 +292,7 @@ struct Archetype<Row>(                                    // Row: a tuple of com
 func integrate<Row>(_ table: mutable Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent
     const vf = Row.field(ofType: Velocity.self)
-    let (var ts, vs) = &table.rows[fields: (tf, vf)]    // MutableSpan<Transform>, Span<Velocity>
+    var (ts, vs) = &table.rows[fields: (tf, vf)]        // MutableSpan<Transform>, MutableSpan<Velocity>
     for (t, v) in zip(&ts, vs) { t.position += v.linear * dt }
 }
 
@@ -317,14 +317,24 @@ func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Ve
 
 - **Distinct fields.** The fields must be distinct `const` field descriptors, checked at instantiation. Distinct stored fields of a struct or tuple never overlap ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), except those the next bullet names.
 - **Overlapping members are rejected** at instantiation, since writing one can change the other ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)): two members of a union type (`T.isUnion`), which are all one place, and two imported bitfields in the same C memory location.
-- **Mixed binding kinds.** Each element of the pattern has its own binding kind, so one projection can borrow one field shared and another exclusively (below).
-- **`SoA`.** `s[fields:]` on an `SoA` `s` returns a tuple of its columns, each in the kind of its pattern element ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+- **One way per declaration.** A declaration borrows every place of a projection the one way its keyword says, so fields borrowed in different ways take a declaration each. Two such declarations are disjoint only where the fields are known apart when the borrows are checked, as for a concrete type. In generic code, where the fields may be one, they overlap, so one `value[fields:]` borrows both exclusively instead (below).
+- **`SoA`.** `s[fields:]` on an `SoA` `s` returns a tuple of its columns: each a `Span`, or each a `MutableSpan` where `s` is marked `&` ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 
-For one row of a table, held in a `var`:
+For one row of a table, held in a `var` in code generic over `Row`, the two fields may be one where the borrows are checked:
 
 ```swift
 var row: Row = …
-let (var o, r) = &row[fields: (out, raw)]     // o borrows the Calibrated exclusively, r the Reading shared
+ref var (o, r) = &row[fields: (out, raw)]     // both borrowed exclusively, checked distinct at instantiation
+```
+
+For a concrete type, each field takes the declaration it needs, since distinct stored fields never overlap:
+
+```swift
+const sOut = Sample.field(ofType: Calibrated.self)
+const sRaw = Sample.field(ofType: Reading.self)
+var sample: Sample = …
+ref var o = &sample[sOut]                     // borrows the Calibrated exclusively
+ref let r = sample[sRaw]                      // borrows the Reading shared: a disjoint field
 ```
 
 ## Enumerating a module's types

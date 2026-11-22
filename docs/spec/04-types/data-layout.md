@@ -137,10 +137,10 @@ for p in &particles {                  // p is a row: one place per field
 
 **Columns are views.** `s.life` returns a `Span` of the column's buffer in a shared context and a `MutableSpan` in an exclusive one ([Shared, mutable and consuming forms of one method](collections.md#shared-mutable-and-consuming-forms-of-one-method)), which a binding of `&particles.life` owns ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). The view depends on that column alone, a part of `s` disjoint from the other columns as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `&s.pos` and `s.vel` can be held at once.
 
-**Subscripts reach columns by field.** `s[field: f]` returns one column, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of columns. Marked `&`, `s[fields:]` gives each column in the kind of its pattern element:
+**Subscripts reach columns by field.** `s[field: f]` returns one column, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of columns. Marked `&`, `s[fields:]` gives every column as a `MutableSpan`, and unmarked, every column as a `Span`. A `let` field's column is the exception, a `Span` in either case (below):
 
 ```swift
-let (var ts, vs) = &table.rows[fields: (tf, vf)]   // 'ts' is a MutableSpan, and 'vs' a Span
+var (ts, vs) = &table.rows[fields: (tf, vf)]       // 'ts' and 'vs' are MutableSpans of two distinct columns
 ```
 
 **Each element a `for` loop over `s` hands out, and `s[i]`, is a row.** A **row** is a view of one index across every column. It is shared or, through `&`, exclusive, as `Borrow<T>` and `MutableRef<T>` are for other collections ([Iteration](collections.md#iteration)). It has one place property per field of `T`, named as the field is, which lends that field's place in its column. Those places are disjoint, as a struct's stored fields are ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.

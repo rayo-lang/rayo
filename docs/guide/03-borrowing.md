@@ -44,7 +44,7 @@ func longer(a: List<Int>, b: List<Int>) -> List<Int> {
 }
 ```
 
-`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A plain parameter owns nothing. It's like a `ref let`, such as `ref let same = hits`: it can't change, and it has nothing of its own to hand over.
+`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A plain parameter owns nothing. It's like a `ref let`, such as `same` in chapter 2: it can't change, and it has nothing of its own to hand over.
 
 `longer`'s parameters have nothing written before their types, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
@@ -157,7 +157,7 @@ Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from it
 
 ## Borrowing in a declaration
 
-A declaration borrows too, the way a plain parameter borrows its argument, when it begins with `ref`. You've seen `ref let same = hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+A declaration borrows too, the way a plain parameter borrows its argument, when it begins with `ref`. You've seen `same`, a `ref let` that borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
 
 To borrow something to change it, declare the name with `ref var`, and write `&` before what it borrows, as in a call. Here `first` borrows `hits[0]`, which is the list's first element:
 
@@ -172,9 +172,16 @@ log("\(hits[0])")               // 17
 
 `first` is another name for `hits[0]`, so every change to `first` lands on the element ([01](../spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)). Even assigning to `first` assigns to the element: `first = 0` would set `hits[0]` to 0, rather than point `first` somewhere else. The `var` in `ref var` says that the element may change through `first`, not that `first` may come to name something else.
 
-Both halves are required. `ref var first = hits[0]` is an error that asks for `&`, since every borrow that changes a value says so with `&`, in a declaration as at a call. `ref let first = &hits[0]` is an error that asks for `ref var`, since a `ref let` changes nothing.
+Both halves are required, and leaving out either one is an error:
 
-A `ref let` of an element borrows it to read, as `ref let same = hits` borrows the whole list. Moving the element out, though, is an error:
+```swift
+ref var first = hits[0]         // error: write '&hits[0]'
+ref let first = &hits[0]        // error: '&' lends for change; declare 'ref var'
+```
+
+Every borrow that changes a value says so with `&`, in a declaration as at a call. So a `ref var` without `&` is missing it. A `ref let` changes nothing, so it has no use for `&`.
+
+A `ref let` of an element borrows it to read, as `same` borrows the whole list. Moving the element out, though, is an error:
 
 ```swift
 let top = consume hits[0]       // error: an element can't move out of its list
