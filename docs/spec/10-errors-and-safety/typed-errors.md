@@ -194,7 +194,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A `Result` that is never used is a compile error, as every unused value whose type isn't `Void` or `Never` is** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)). So no error is dropped without the code saying so, however deeply a value holds it, as in the `(Void!IoError)?` that `player?.save()` gives. `_ = r` drops one on purpose.
 
-**A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). So code runs a block and keeps its first failure as a value this way:
+**A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). This is how code runs a block and keeps its first failure as a value:
 
 ```swift
 let outcome = {

@@ -116,9 +116,7 @@ func report(_ level: Level) {
 - **Inside every other method of an `Allocating` type, it is the allocator `self` was allocated with.** So a value hands its allocator down to what it allocates: an `Inventory` made with `level.alloc Inventory()` makes its lists from `level`, and a level's `names.append(alloc String(n))` puts the string where the list is.
 - **Everywhere else, it is `.heap`**, in a free function included, even one called from such a method.
 
-A closure's body takes the ambient allocator of the function the closure is written in, since the rule follows where code is written.
-
-**Where the code is written alone decides the ambient allocator.** So code deep in a call tree allocates from an allocator only when the allocator reaches it through a value or an `alloc` its caller wrote.
+A closure's body takes the ambient allocator of the function the closure is written in, since the rule follows where code is written. So code deep in a call tree allocates from an allocator only when the allocator reaches it through a value or an `alloc` its caller wrote.
 
 ### Growth
 
