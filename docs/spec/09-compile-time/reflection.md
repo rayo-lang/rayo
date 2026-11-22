@@ -108,11 +108,11 @@ Reflection reads three kinds of fact, one table each: a type's fields, cases and
 **Some types have no fields or cases for reflection to see:**
 
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value;
-- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `any P` or a function type;
+- a language type whose layout is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)), such as `Borrow<any P>` or a function type;
 - every other language type but a tuple, such as a number, `Bool`, a raw or object pointer, an inline array, a `Simd` vector or a `static StringView`;
 - an `@opaque` type, whose layout Rayo doesn't know or can't map ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
 
-For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout, and on an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)).
+For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isConstructible` are false, and `value[field]` and `T.construct` don't apply. Only `T.size`, `T.alignment`, `T.isPaddingFree` and `T.layoutId` observe its layout. On an `@opaque` type they are compile errors, since it has none Rayo can use ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)), and on `any P`, since its size is that of a type known only at run time ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 **`T.id` names one type.** It hashes `T`'s identity, which two types share exactly when they are the same type. The identity holds what tells the type apart from every other, built as follows:
 
@@ -125,12 +125,12 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - every compile-time argument the declaration's body is instantiated with (below).
 
   So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
-- **The type's own generic arguments** are part of it, a value argument by its value, and so is whether the type is an unscoped existential. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<(any P)>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+- **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<Borrow<any P>>`.
 - **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
 - **A structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
     - a tuple's labels;
     - an inline array's count;
-    - an existential's `any` or `mutable any`, and its protocols, as a set;
+    - an existential's protocols, as a set;
     - a function type's `unsafe`, closure kind, `@sendable`, `@noalloc`, or `@c` with its stack need in bytes, `target.cStackReserve` when none is written; and each parameter's `keep` and convention;
     - an error union's members, as a set.
 

@@ -240,7 +240,7 @@ So an address passed on through any chain of threads, by `.relaxed` atomics incl
     - the builtin `SoA<T>` ([04](04-types/data-layout.md#struct-of-arrays-soat));
     - the iteration views `Borrow<T>` and `MutableRef<T>` ([04](04-types/collections.md#iteration));
     - `Slice<T>` ([06](06-memory-and-allocators/owning-values.md#long-lived-views-into-long-lived-buffers));
-    - the existential views `any P` and `mutable any P`, and function-typed values ([05](05-protocols-generics-and-closures.md));
+    - the existential views `Borrow<any P>` and `MutableRef<any P>`, and function-typed values ([05](05-protocols-generics-and-closures.md));
     - the runtime's `BlockHeader` ([06](06-memory-and-allocators/allocator-implementations.md#writing-an-allocator-allocatorimpl)).
 - **A `Closure`'s layout**: its size, and how much of its captures it holds inline, so whether converting a closure to one allocates ([05](05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 - **What a library leaves open**, such as:

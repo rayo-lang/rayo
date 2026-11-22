@@ -246,7 +246,7 @@ tree.root.value = 1                              // error if placed before the l
 
 **`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` is a value only where it makes a view of a type of its own:
 
-- a `mutable any P`;
+- a `MutableRef<any P>`;
 - a function value made from a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
 - the mutable form of a `get`, such as `&list.span` ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method));
 - a new view of an exclusive view held with exclusive access, such as `&chunk` for a `MutableSpan` ([Exclusive views](scoped-values.md#exclusive-views)).

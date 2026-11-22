@@ -82,7 +82,7 @@ log.value.lock { $0.append(m) }
 
 **Some types hide what they hold, or hold it through a raw pointer, yet are `Frozen` according to what they hold:**
 
-- **Existentials.** An existential has no fields to check, so `any P` and `mutable any P` are `Frozen` only when `P` refines `Frozen`, or when they are written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
+- **Existentials.** An existential has no fields to check, so `any P` is `Frozen` only when `P` refines `Frozen`, or when it is written with `& Frozen`, which accepts only `Frozen` types, as for `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 - **Containers.** std's owning containers (`List`, `String`, `Map`, `Set`, `TrailingArray`, `Pool`, `StablePool`, `Box` and `Blob`) and the builtin `SoA` conform when every type they hold does: a `TrailingArray`'s header and elements, a `Map`'s keys and values, and each other container's elements. So `Box<any P>` is `Frozen` exactly when its `any P` is. The raw pointer inside each names one of these:
   - a buffer the container owns alone, written only by its `mutating` methods, apart from a `StablePool`'s pin counts (below). Those methods need exclusive access, which no shared borrow of a `Frozen` value that holds the container grants;
   - in a `String` made from a literal or a `static StringView`, bytes that live as long as the program and that nothing writes ([04](../04-types/collections.md#strings)).

@@ -15,7 +15,7 @@ let hot = &heat.span                          // a MutableSpan<Float>: borrows t
 - **Views of elements and values:** `Span<T>`, `MutableSpan<T>`, `StringView`, `Borrow<T>` and `MutableRef<T>`;
 - **Iterators** of collections, spans and strings, which borrow what they walk;
 - **Lock guards**, which point into their lock ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
-- **Existential views**, `any P` and `mutable any P`, which view a value of some type that conforms to `P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
+- **Existential views**, `Borrow<any P>` and `MutableRef<any P>`, which view a value of some type that conforms to `P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
 - **Function values**, which view a closure's storage ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)), and **closure literals** that capture by reference or hold a scoped capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)).
 
 **An iterator that borrows nothing is unscoped**, such as a `Range`'s. So a task may `await` inside `for i in 0..<n`: a scoped value can't live across an `await` ([below](#where-a-scoped-value-can-go)), but this loop's iterator isn't one.
@@ -60,7 +60,6 @@ hot = &cold.span                   // error: 'hot' is a let; replacing the view 
 **These types are exclusive views, and each writes only through itself:**
 
 - a type that conforms to `ExclusiveView` ([below](#exclusiveview)), such as `MutableSpan`, `MutableRef`, and the guard of a `Mutex` or of an `RwLock`'s write lock ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
-- `mutable any P`, whose `mutating` requirements change only the value it views ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
 - an exclusive `SoA` row, whose fields' places lie in the columns ([04](../04-types/data-layout.md#struct-of-arrays-soat));
 - a `mutating` function value, whose call changes only the closure it views ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
 
@@ -126,7 +125,7 @@ let c: Cursor<List<Int>>                           // scoped, since a list's ite
 - the object pointers, reference-counted pointers and weak links to `any P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch));
 - `Closure<F>` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
 
-**Binding a type parameter to `any P` never makes an unscoped existential** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+**Binding a type parameter never makes an unscoped existential, since no type parameter is bound to `any P`** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
 ## Generic code and `~Scoped`
 
@@ -177,7 +176,7 @@ let keywords: [2 of Token] = [Token(kind: .kIf, text: "if"), Token(kind: .kElse,
 struct Hint(let text: static StringView, let delay: Float)    // a plain struct can store a static view
 
 let fileLog = FileLogger(path: "game.log")                    // a global let of a Logger, with a Mutex inside
-struct AudioLog(let log: static any Logger)                   // a view of a logger that lives as long as the program
+struct AudioLog(let log: static Borrow<any Logger>)           // a view of a logger that lives as long as the program
 let audioLog = AudioLog(log: fileLog)
 
 func show(_ hint: Hint, _ token: Token) {
@@ -190,12 +189,12 @@ func show(_ hint: Hint, _ token: Token) {
 
 **`static` qualifies a scoped type whose scoped parts are all shared views:**
 
-- the shared views `StringView`, `Span<T>`, `Borrow<T>` and `any P`;
+- the shared views `StringView`, `Span<T>`, `Borrow<T>` and `Borrow<any P>`;
 - a type whose scoped fields, payloads and elements all take `static`, a field of raw pointer type `*U` counting as one of type `U`, as `Token`, `[2 of Token]`, `(StringView, Int)` and `List<StringView>` do.
 
 **No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
 
-- an exclusive view, such as `MutableSpan<T>`, `MutableRef<T>` or `mutable any P` ([above](#exclusive-views));
+- an exclusive view, such as `MutableSpan<T>` or `MutableRef<T>` ([above](#exclusive-views));
 - a lock guard ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
 - a function value or closure literal;
 - a type declared `Scoped` with no scoped field, such as a profiling zone.
@@ -222,7 +221,7 @@ func show(_ hint: Hint, _ token: Token) {
 
 - a literal, which views the program image ([04](../04-types/collections.md#literals));
 - a value built only from static and unscoped values, such as `keywords[0]` above;
-- a view of a global `let` or a `const`, such as the `any Logger` view of `fileLog` above, made as any `any P` view is and then converted ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
+- a view of a global `let` or a `const`, such as the `Borrow<any Logger>` of `fileLog` above, made as any `Borrow` is and then converted ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
 - a view that a `Synchronized` value in a global lends for the rest of the program, such as `Once.get()`'s ([07](../07-concurrency/synchronization.md#snapshots-one-time-values-and-waits));
 - the result of a function declared `where return borrows static`.
 
@@ -238,7 +237,7 @@ func show(_ hint: Hint, _ token: Token) {
 
 - a `static StringView` is always `Frozen`, since the text it views is never written: a literal's bytes, interned text, or a `String` in a global `let` or a `const`;
 - a static `Span<U>` or `Borrow<U>` is `Frozen` when `U` is;
-- a static `any P` is `Frozen` when `P` refines `Frozen`;
+- a static `Borrow<any P>` is `Frozen` when `P` refines `Frozen`;
 - any other static type is `Frozen` when each of its fields, taken as static, is.
 
-So `static any Logger` above isn't `Frozen`, since `Logger` doesn't refine `Frozen`. It can be a global `let`'s or a field's type, but a `const` can't hold one ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
+So `static Borrow<any Logger>` above isn't `Frozen`, since `Logger` doesn't refine `Frozen`. It can be a global `let`'s or a field's type, but a `const` can't hold one ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)).
