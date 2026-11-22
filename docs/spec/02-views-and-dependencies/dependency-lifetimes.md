@@ -8,7 +8,7 @@ A dependency usually matters while the value that carries it can still be used. 
 
 ```swift
 var m = Mutex(0)
-let g = m.lock()
+var g = m.lock()
 g.value += 1                                  // g's last use written out
 var n = consume m                             // error: destroying g at scope end still uses m
 ```
@@ -56,7 +56,7 @@ doc.first = doc.text.view                     // 'doc' now depends on its own fi
 ## Lock guards are released on the thread that took them
 
 ```swift
-let g = registry.lock()
+var g = registry.lock()
 _ = Thread.start { [move g] in g.value.flush() }  // error: a guard isn't Sendable, so it stays on the thread that took it
 ```
 
@@ -165,7 +165,7 @@ return b
 **A value `p` owns can view `p`'s own storage only by making `p` depend on a part of itself.** Then `&p` conflicts with that dependency, so the call can't be made. So what such a call returns depends only on what `p` carried, with the same kinds, and a worklist over a `List<MutableSpan<Float>>` works:
 
 ```swift
-while let s = work.popLast() {                  // 'work' stays free while 's' holds its buffer
+while var s = work.popLast() {                  // 'work' stays free while 's' holds its buffer
     let p = partition(&s)
     let (low, high) = (consume s).split(at: p)  // the halves carry what 's' carried
     work.append(low)
@@ -173,7 +173,7 @@ while let s = work.popLast() {                  // 'work' stays free while 's' h
 }
 ```
 
-The consuming `split(at:)` hands the halves over with what `s` carried, where the lending `s.split(at: p)` would tie them to `s` ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)).
+The consuming `split(at:)` hands the halves over with what `s` carried, where the lending `s.split(at: p)` would tie them to `s` ([04](../04-types/collections.md#mutating-and-consuming-forms-of-one-method)).
 
 ### Naming a field
 
@@ -244,12 +244,11 @@ tree.root.value = 1                              // error if placed before the l
 - `x` is a local declared in the same function or closure body, not a parameter or a capture.
 - `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `ref var`, and a place with nothing written before it for a `ref let`, which still changes nothing. A binding that owns its value is lent the same way, `&` for a `var` and nothing for a `let` (below).
 
-**`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` is a value only where it makes a view of a type of its own:
+**`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` gives a value to assign only where `x`'s type makes a view from it:
 
 - a `MutableRef<any P>`;
 - a function value made from a `mutating` closure, a `Closure<mutating …>` or a `mutating` function value ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions));
-- the mutable form of a `get`, such as `&list.span` ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method));
-- a new view of an exclusive view held with exclusive access, such as `&chunk` for a `MutableSpan` ([Exclusive views](scoped-values.md#exclusive-views)).
+- a new view of what a `MutableSpan` or a `MutableRef` in a changeable place views, such as `&chunk` ([Writing through a view](scoped-values.md#writing-through-a-view)).
 
 **Then `x = &p` writes that view into the place `x` names**, as `d = &crate` does in a loop over `&targets`, and `x` still names the same place.
 
@@ -267,7 +266,7 @@ tree.root.value = 1                              // error if placed before the l
 
 ```swift
 var cur = buildTree()                            // owns the tree the call returned
-var lives = &particles.life                      // owns the MutableSpan the mutable form returns
+var lives = particles.mutableLife                // owns the MutableSpan the mutable member returns
 ```
 
 **The first `rebind` of such a binding hands the value to a hidden local** of the binding's scope, destroyed at its end. The value stays where it is, so views already taken from it stay valid and depend on that local. A lock guard handed over this way stays locked until the scope ends.

@@ -49,7 +49,7 @@ The compiler never looked inside `splitLines`. Its signature alone tells the cal
 ```swift
 let all: Span<Int> = hits.span            // the hit list's elements, read-only
 let firstTwo = hits[0..<2]               // a range of them: also a Span<Int>
-let editable = &hits.span                // a MutableSpan<Int>: '&' asks for the mutable form
+var editable = hits.mutableSpan          // a MutableSpan<Int>, made by a member of its own
 let text: StringView = source.view        // the string's bytes
 let word = text[0..<5]                    // a range of bytes: also a StringView
 let name: StringView = "grunt"            // the literal's bytes, which last for the whole run
@@ -68,7 +68,9 @@ parse(lines)                              // and the same as parse(lines.span)
 
 **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
 
-**A `MutableSpan` you own changes its elements even under a `let`.** `editable[0] = 0` changes an element of `hits`, not the span, so it needs only that nothing else reaches the span meanwhile, and owning the span gives you that ([02](../spec/02-views-and-dependencies/scoped-values.md#exclusive-views)). Pointing `editable` at other elements would change the span itself, and that takes a `var`.
+**The mutable view has a name of its own.** `hits.span` and `hits.mutableSpan` are two members, since a shared and a mutable view never share a name. So `&` never picks between them: written before an expression, it always lends that place for change ([04](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection)).
+
+**Writing through a `MutableSpan` takes a `var`, as any change does.** `editable[0] = 0` changes an element of `hits` through the span, and only a changeable place may do that, so a `let` never changes anything, whatever its type ([02](../spec/02-views-and-dependencies/scoped-values.md#writing-through-a-view)).
 
 **A function that writes through a span takes it with no convention written, and receives it owned.** At the call, `&editable` lends the function a new view of the same elements, and `editable` works again once the call returns:
 
@@ -126,7 +128,7 @@ let tok = Token(text: word, line: 1)      // so does the token that holds it
 source.append("!")                        // error: 'source' is borrowed by 'tok' (used below)
 log(tok.text)
 
-let editable = &hits.span                // carries 'hits', exclusive
+var editable = hits.mutableSpan          // carries 'hits', exclusive
 let n = hits.count                       // error: 'hits' is borrowed by 'editable' (used below)
 editable[0] = 0
 ```
@@ -319,7 +321,8 @@ use(names)                                                     // fine: the loop
 ## In the spec
 
 - [02 Scoped values](../spec/02-views-and-dependencies/scoped-values.md#scoped-values): the scoped types, where a scoped value can go, and `~Scoped` in generic code.
-- [02 Exclusive views](../spec/02-views-and-dependencies/scoped-values.md#exclusive-views): which bindings write through a view, what `&` of one lends, and the `ExclusiveView` protocol.
+- [02 Writing through a view](../spec/02-views-and-dependencies/scoped-values.md#writing-through-a-view): which bindings write through a view, and what `&` of one lends.
+- [04 Shared and mutable views of one collection](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection): the two names of each view a collection gives.
 - [02 Dependencies](../spec/02-views-and-dependencies.md#dependencies): the six rules. Rules 1 and 2 fill a view's set, rule 3 gives a call's result its set, rule 4 is absorption, rule 5 is what a function may return or store, and rule 6 covers accesses to objects and slices.
 - [02 Shallow values](../spec/02-views-and-dependencies/dependency-projection-and-results.md#shallow-values): which arguments lend only what they carry, and to which results.
 - [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): full statements, and the temporaries that loops keep.

@@ -30,8 +30,8 @@ The caller has to know which text the list views. Changing that text, as `source
 The criteria below also use these patterns:
 
 ```swift
-work.append(&data[0..<n])                    // a quicksort's worklist: the first pending range, as a span
-while let s = work.popLast() { … }           // each pass pops the next pending range
+work.append(data[mutableRange: 0..<n])       // a quicksort's worklist: the first pending range, as a span
+while var s = work.popLast() { … }           // each pass pops the next pending range
 lexer.lex(into: &tokens)                     // appends tokens that view the lexer's source
 fill(&keys, &values)                         // fills two lists of views
 let texts = alloc t.map { $0.text }          // 't' is a Span<Token>
@@ -107,7 +107,7 @@ step(&p, &r)
 The criteria below also use these patterns:
 
 ```swift
-let lives = &particles.life                          // an SoA column, taken as a MutableSpan<Float>
+var lives = particles.mutableLife                    // an SoA column, taken as a MutableSpan<Float>
 
 node.next = nil                                      // through a place property that hands out a stored optional field
 _ = node.next.take()                                 // takes the value out through the same property, and drops it
@@ -245,7 +245,7 @@ each(enemies.span) { e in if e.hp < 10 { low.append(tag.view) } }    // a closur
 
 ```swift
 grid.cells.forEachIndexedInParallel { i, cell in cell.value = f(i) }   // each call gets an element and its index
-for (i, e) in &makeItems().enumerated() { … }                        // sequential, over a temporary whose elements it changes
+for (i, e) in makeItems().mutableEnumerated() { … }                  // sequential, over a temporary whose elements it changes
 ```
 
 - **Must accept** with the true index in every call and no copy of the collection. Show how the library's splitting keeps each part's starting index.

@@ -30,7 +30,7 @@ remember(e.pos)                                         // a Vec3 is implicitly 
 **Some parameters are received `owned` with no `owned` written**, unless they are declared `mutable`. Each is used in a way that a borrowed parameter, which is read-only, can't be ([Changeable places](bindings.md#changeable-places)):
 
 - **Function values that change or consume their captures.** This covers a parameter of a `mutating` or `consuming` function type, and one of a type parameter constrained to one, written `some F` or named. Calling such a value changes or consumes the closure, so a borrowed one could never be called ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds)).
-- **Exclusive views.** This covers a parameter of a type that conforms to `ExclusiveView`, such as `MutableSpan` or `MutableRef<any P>`, or of a type parameter constrained to it. Writing through such a view needs exclusive access to it, which a borrowed parameter lacks ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)). Writing `owned` on one says the same, and a `mutable` one lets the callee replace the caller's view too.
+- **Mutable spans and references.** This covers a parameter of a `MutableSpan` or a `MutableRef` type, `MutableRef<any P>` included. Writing through such a view is `mutating`, which needs a changeable place, and a borrowed parameter isn't one ([02](../02-views-and-dependencies/scoped-values.md#writing-through-a-view)). So a function that takes a `MutableSpan<Float>` with nothing written writes through it. Writing `owned` on one says the same, and a `mutable` one lets the callee replace the caller's view too.
 
 ## Argument labels
 
@@ -102,7 +102,7 @@ f(&x, x)                                 // error: two borrows of x overlap for 
 3. **As it begins, it runs the accessors those places reach**, in the order the places were worked out, receiver first. These are each place property's `borrow` or `mutate`, and the `get` of each value property that the call lends for change ([02](../02-views-and-dependencies/place-and-value-properties.md#place-and-value-properties)). A panic in this step ends the borrows already begun, and the unwind destroys the values step 2 took, as temporaries, as in `f(consume a, &list[99])`.
 4. **When it returns, it calls the `set` of each such value property, in reverse order.** A change that the result still depends on is the exception: its `set` runs at that value's last use ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)). An unwind calls none of them, and destroys each copy a `get` made ([10](../10-errors-and-safety/panics.md#unwinding)). A place property's access runs no code as it ends, whether the call returns or unwinds.
 
-**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it as a mutable form's view, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)).
+**Any other `get` runs as its argument or receiver is evaluated.** It makes a value, whatever the call then does with it: borrows it, changes it, takes it, or calls a method on it. Its result keeps what it depends on borrowed (rule 3 in [02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)).
 
 ```swift
 items.insert(x, at: items.count)   // count's get has returned before insert borrows items

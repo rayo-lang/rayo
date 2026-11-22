@@ -124,7 +124,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - for a block, closure or branch, which has no name, its position in the scope around it;
     - every compile-time argument the declaration's body is instantiated with (below).
 
-  So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's shared and mutable forms ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
+  So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`, or of a method's mutating and consuming forms ([04](../04-types/collections.md#mutating-and-consuming-forms-of-one-method)). An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
 - **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<Borrow<any P>>`.
 - **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
 - **A structural type**, a tuple, inline array, raw pointer, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
@@ -262,8 +262,8 @@ func calibrate<Row>(_ table: mutable Columns<Row>) {
     const raw = Row.field(ofType: Reading.self)           // per instantiation; a compile error if absent
     const cal = Row.field(ofType: Calibration.self)
     const out = Row.field(ofType: Calibrated.self)
-    let (rs, cs, os) = &table.rows[fields: (raw, cal, out)]       // a MutableSpan of each column
-    for (r, c, o) in zip(rs, cs, &os) { o.value = r.value * c.gain + c.offset }
+    var (rs, cs, os) = table.rows[mutableFields: (raw, cal, out)]   // a MutableSpan of each column
+    for (o, (r, c)) in os.mutableZip(rs.zip(cs)) { o.value = r.value * c.gain + c.offset }
 }
 
 struct Telemetry(                                         // one table per kind of sensor
@@ -292,8 +292,8 @@ struct Archetype<Row>(                                    // Row: a tuple of com
 func integrate<Row>(_ table: mutable Archetype<Row>, dt: Float) {
     const tf = Row.field(ofType: Transform.self)          // per instantiation; a compile error if absent
     const vf = Row.field(ofType: Velocity.self)
-    let (ts, vs) = &table.rows[fields: (tf, vf)]        // MutableSpan<Transform>, MutableSpan<Velocity>
-    for (t, v) in zip(&ts, vs) { t.position += v.linear * dt }
+    var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // MutableSpan<Transform>, MutableSpan<Velocity>
+    for (t, v) in ts.mutableZip(vs) { t.position += v.linear * dt }
 }
 
 struct World(                                             // one table per archetype the game declares

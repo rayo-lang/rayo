@@ -30,9 +30,6 @@ A second value with the same contents: `copy x` duplicates a copyable value's by
 A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 _Avoid_: trivially copyable, bitwise-copyable
 
-**Exclusive access**:
-How a place is held when nothing else reaches it while it is used, though never by a shared borrow. Changeable places have it, and so do an owning `let`, `for` or `when` name, and `self` in an exclusive view's `mutating` member ([01](docs/spec/01-values-and-ownership/bindings.md#exclusive-access)).
-
 **Hidden local**:
 A local the language declares to keep a value that a statement can't name, such as a `when` subject or a loop's sequence ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction)).
 
@@ -93,9 +90,6 @@ _Avoid_: lifetime, region, loan set
 **Dynamic access**:
 An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
-**Exclusive view**:
-A mutable view that changes only what it views, never itself, such as a type that conforms to `ExclusiveView`, a `MutableRef<any P>` included. It writes through itself with exclusive access rather than a changeable place ([02](docs/spec/02-views-and-dependencies/scoped-values.md#exclusive-views)).
-
 **Full statement**:
 A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 _Avoid_: full-expression
@@ -108,7 +102,7 @@ _Avoid_: lock token
 Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes or the runtime's tables, which a static value may view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
 
 **Mutable view**:
-A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value. Every exclusive view is one; a `consuming` function value and a struct of spans are mutable views that aren't exclusive ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value. Writing through one is `mutating`, so it needs a changeable place ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 _Avoid_: exclusive reference
 
 **Optional place property**:

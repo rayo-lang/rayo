@@ -16,7 +16,7 @@ eachMut(enemies.span) { e in if e.hp <= 0 { dead += 1 } }    // writes 'dead': a
 each(enemies.span) { e in if e.hp <= 0 { dead += 1 } }       // error: a mutating closure where a non-mutating one is expected
 ```
 
-**Functions may share a name when their argument labels ([01](../01-values-and-ownership/parameters.md#argument-labels)) or parameter types differ.** A type's methods and properties may also share one when only their `self` convention differs ([04](../04-types/collections.md#shared-mutable-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
+**Functions may share a name when their argument labels ([01](../01-values-and-ownership/parameters.md#argument-labels)) or parameter types differ.** A type's `mutating` and `consuming` methods may also share one when only their `self` convention differs ([04](../04-types/collections.md#mutating-and-consuming-forms-of-one-method)). A call picks among such overloads in these steps:
 
 1. It keeps the candidates whose parameters its arguments match by label, in order. A parameter that has a default may be left out ([01](../01-values-and-ownership/parameters.md#default-arguments)). Trailing closures are matched to each candidate's parameters by the trailing-closure scan, and a candidate the scan rejects drops out ([below](#trailing-closures)).
 2. It keeps those that its arguments typed without context fit. Each such argument is of its parameter's type, or converts to it implicitly ([Implicit conversions](implicit-conversions.md#implicit-conversions)). A generic candidate whose type arguments, bound from those arguments, fail its constraints drops out. So `min(v, w)` on two vectors picks the vector form, since `Simd` isn't `Comparable` ([04](../04-types/numbers-and-math.md#simd-and-math)).
@@ -242,8 +242,6 @@ h { finish() }                       // the closure converts to the optional's .
 
 **A body that names a borrowing binding captures the place the binding names**, as worked out when it was bound. The capture brings the binding's dependency set and the dynamic accesses the binding holds, which stay held while the closure lives.
 
-**A body that writes through an exclusive view that isn't a changeable place captures a new view of what it views**, not the place that holds it ([below](#closure-kinds)).
-
 ## Closure kinds
 
 A closure's type says what it does with its captures, and the compiler infers this kind from the literal's body:
@@ -261,7 +259,7 @@ A closure's type says what it does with its captures, and the compiler infers th
     - calling a `mutating` method on it;
     - capturing it exclusively in a nested literal.
 
-  **An exclusive view that isn't a changeable place is captured as `&` lends it**, such as a `let` that owns a `MutableSpan`. A literal that writes through one captures a new view of what it views, owned by the literal and lent exclusively, as `&lives` lends one ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). It never captures the place that holds the view, which isn't changeable. The new view depends on that place exclusively, so the `let` can't be used while the closure lives.
+  **Writing through a view is a mutable access to the place that holds it**, since the write calls a `mutating` member, such as a `MutableSpan`'s `mutate` ([02](../02-views-and-dependencies/scoped-values.md#writing-through-a-view)). So a literal that writes through a `var` that owns a `MutableSpan` captures the `var` exclusively. One that writes through a `let`'s view is a compile error, as writing through it outside the literal is.
 
   A `mutating` function value is move-only, and calling it mutates the closure itself. So it is passed `mutable` or owned, and runs on one thread at a time.
 - **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`, and neither does taking an implicitly copyable one, which copies it ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
@@ -273,8 +271,8 @@ A closure's type says what it does with its captures, and the compiler infers th
 ```swift
 var n = 0
 particles.forEachInParallel { _ in n += 1 }   // error: writes 'n', so it is mutating, but the loop runs it on many threads
-let lives = &particles.life
-times(3) { lives[0] += 1 }                    // fine: captures a new view of what 'lives' views, and writes through it
+var lives = particles.mutableLife
+times(3) { lives[0] += 1 }                    // fine: captures 'lives' exclusively, and writes through it
 lives[0] = 0                                  // fine: the literal's last use is above, so 'lives' is free again
 ```
 
@@ -350,8 +348,8 @@ func times(_ n: UInt, _ body: some mutating () -> Void) { … }   // monomorphiz
 
 var hits = 0
 var misses = 0
-var onHit = { hits += 1 }                           // no annotation: the literal's own concrete type, which a call changes
-let onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function type, a view of the literal, which a call writes through
+var onHit = { hits += 1 }                           // no annotation: the literal's own concrete type
+var onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function type, a view of the literal
 ```
 
 **Every closure literal has its own anonymous concrete type.** A local initialized with a literal and no type annotation has that type, so it only ever holds that literal; with an annotation it has the function type. The type is laid out as a struct whose fields are its captures ([04](../04-types/structs.md#structs)), declared in this order: the listed captures, in list order, then the others, by reference or moved, in order of first use. A capture by reference is a pointer.

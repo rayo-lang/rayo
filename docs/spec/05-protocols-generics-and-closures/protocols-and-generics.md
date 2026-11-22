@@ -310,7 +310,7 @@ for w in &widgets { w.value.update(dt) }           // a mutating requirement, th
 
 - **A `value` place property** lends the value as an `any P`, borrowed for a `Borrow`, and borrowed or `mutable` for a `MutableRef` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 - **Its layout** holds a pointer to the value and the value's witness table, and is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
-- **Its conformances** are its namesake's: `Borrow<any P>` is implicitly copyable, and `MutableRef<any P>` is move-only and lists `ExclusiveView` ([02](../02-views-and-dependencies/scoped-values.md#exclusiveview)).
+- **Its conformances** are its namesake's: `Borrow<any P>` is implicitly copyable, and `MutableRef<any P>` is move-only ([01](../01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)).
 
 **`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.
 
