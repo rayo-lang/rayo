@@ -54,12 +54,12 @@ statement     = declaration | expression | assignment | guard-stmt
 assignment    = expression assign-op expression ;
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;
                                                                    (* a ⊕= b is a = a ⊕ b, with a's place worked out once (05) *)
-rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a var, 'borrow' for a let (02) *)
+rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a var, nothing for a let (02) *)
 
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
 condition     = expression
-              | 'owned'? ('let' | 'var') pattern '=' expression        (* the pattern binds a new name; 'let x = x' is an error: write 'let x' (01) *)
+              | ('let' | 'var') pattern '=' expression                 (* the pattern binds a new name; 'let x = x' is an error: write 'let x' (01) *)
               | ('let' | 'var') identifier                             (* no '=': 'if let x' is 'if let x = x', 'if var x' is 'if var x = &x' (01) *)
               | 'case' pattern '=' expression ;
 when-expr     = 'when' expression? '{' when-arm+ '}' ;
@@ -67,7 +67,7 @@ when-arm      = (pattern (',' pattern)* ('where' expression)? | 'else') block ;
                                                                    (* with no subject, an arm's test is one Bool expression, with no ',' list and no 'where' *)
                                                                    (* an arm ends with its block's '}', so arms need no separator *)
 for-stmt      = 'for' pattern 'in' expression ('where' expression)? block ;
-                                                                   (* 'for x in &s' changes elements in place (04); a for pattern has no 'let', no 'owned' part, and 'var' only on a part that owns its value *)
+                                                                   (* 'for x in &s' changes elements in place (04); a for pattern has no 'let', and 'var' only on a part that owns its value *)
 while-stmt    = 'while' condition (',' condition)* block ;
 repeat-stmt   = 'repeat' block 'while' expression ;
 do-stmt       = 'do' block catch-clause* ;
@@ -90,7 +90,7 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 | 5 | `..< ...` |
 | 6 | `+ - &+ &- +\| -\| \| ^` |
 | 7 | `* / % &* *\| & << >> &<< &>>` |
-| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy borrow unsafe`, then `alloc` and `a.alloc` |
+| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy unsafe`, then `alloc` and `a.alloc` |
 | 9 | postfix `?` `!` `...` `.member` `(args)` `[index]` `{trailing-closure}` |
 
 ```ebnf
@@ -102,8 +102,7 @@ binary-op     = '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '..
               | '+' | '-' | '&+' | '&-' | '+|' | '-|' | '|' | '^' | '*' | '/' | '%' | '&*' | '*|' | '&' | '<<' | '>>' | '&<<' | '&>>' ;   (* levels in the table above *)
 cast-op       = 'as' ;                                             (* level 4; the right-hand side is a type, not an expression (05) *)
 literal       = int-literal | float-literal | string-lit | 'true' | 'false' ;
-prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'borrow' | 'unsafe' ;
-                                                                   (* 'borrow' only where a declaration borrows (01) *)
+prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'unsafe' ;
 postfix-expr  = primary postfix* ;
 postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); alloc gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
@@ -136,7 +135,7 @@ trailing-closure = closure ;
 
 ```ebnf
 pattern       = '_' | identifier | tuple-pattern | enum-pattern | expression-pattern
-              | 'owned'? ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); each 'let' or 'var' binds a name, so 'let _' and 'let _ as E' are errors (01) *)
+              | ('let' | 'var') pattern | 'is' type | 'let' identifier 'as' type ;   (* .circle(var r), .moveTo(let p); each 'let' or 'var' binds a name, so 'let _' and 'let _ as E' are errors (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
 enum-pattern  = type? '.' identifier ('(' (identifier ':')? pattern (',' (identifier ':')? pattern)* ','? ')')? ;
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)

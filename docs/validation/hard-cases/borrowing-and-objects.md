@@ -322,8 +322,8 @@ adopt(list, list.count)                              // 'adopt' takes its first 
 when connect().state { .open(let buf) { … } … }      // matches part of a temporary whose type has a deinit
 when connect() { .open(var b) { b.append(0) } … }    // changes a payload in place
 for s in consume tags { names.append(s) }            // 'tags' is an inline array of Strings
-let e = if c { borrow enemies[0] } else { makeEnemy() }     // a place on one path, a value on the other
-let b = borrow attr ?? Bounds(lo: 0, hi: 1)                 // the same, through ??
+let e = if c { enemies[0] } else { makeEnemy() }     // a place on one path, a value on the other
+let b = attr ?? Bounds(lo: 0, hi: 1)                 // the same, through ??
 ```
 
 - **Must accept** moving it without cloning. If the values live in a pool and the containers hold handles, show that instead, and state which is idiomatic.

@@ -43,7 +43,9 @@ v0.2 adds:
 - `[N of T]` as the type of locals, borrowed parameters, results, struct fields and array elements, nested arrays included, made by a literal or by `.init(repeating:)`;
 - reading, copying, assigning and compound-assigning an element as `a[i]`, through fields and nested arrays, with a `UInt` index ([04](docs/spec/04-types/collections.md#inline-array-elements));
 - `a.count`, a `UInt`;
-- the `index out of range` panic in every build, and a compile error for an integer literal index out of range.
+- the `index out of range` panic in every build, and a compile error for an integer literal index out of range;
+- a `let` that borrows a local, or a field or an element of one, read-only, as `let x = a[i]`, and the compile error for a `var` or an assignment given such a place without `copy` or `consume` ([01](docs/spec/01-values-and-ownership/bindings.md#bindings));
+- `consume`, which moves a local or a field of one, as `let x = consume e` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
 
 ## v0.2.5: `Float` and `Double`
 
@@ -104,8 +106,8 @@ Statements and control flow:
 
 Ownership and borrowing:
 
-- `borrow` and `&` bindings ([01](docs/spec/01-values-and-ownership/bindings.md#bindings));
-- `consume` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out));
+- `&` bindings ([01](docs/spec/01-values-and-ownership/bindings.md#bindings));
+- `consume` of any other place, such as an `owned` parameter or a temporary ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)): v0.2 builds `consume` of a local or a field of one;
 - `copy` of a field of a temporary, as `copy makeEnemy().pos` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copies)): v0.1 copies a field of a local or a borrowed parameter;
 - views such as `Span`, which are [scoped values](docs/spec/02-views-and-dependencies/scoped-values.md), and the dependencies that check them ([02](docs/spec/02-views-and-dependencies.md#dependencies));
 - closures and function values ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));

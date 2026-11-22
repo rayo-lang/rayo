@@ -44,7 +44,7 @@ func longer(a: List<Int>, b: List<Int>) -> List<Int> {
 }
 ```
 
-`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A plain parameter owns nothing. It's like a `let` that borrows, such as `let same = borrow hits`: it can't change, and it has nothing of its own to hand over.
+`return` hands the caller a value that the function owns ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). A plain parameter owns nothing. It's like a `let` that borrows, such as `let same = hits`: it can't change, and it has nothing of its own to hand over.
 
 `longer`'s parameters have nothing written before their types, so its declaration tells every caller that both lists stay theirs. Returning one would break that promise. After `longer(a: hits, b: misses)`, the caller would still use `hits` and `misses`, but one of them would hold nothing.
 
@@ -77,11 +77,11 @@ func atLeastZero(hp: Int) -> Int {
 }
 ```
 
-Declaring a variable from a borrowed parameter needs a copy too, for the same reason. Here a function counts the turns of healing it takes to reach a target, and keeps a running value of its own:
+A `var` declared from a borrowed parameter needs a copy too. Here a function counts the turns of healing it takes to reach a target, and keeps a running value of its own:
 
 ```swift
 func turnsToHeal(hp: Int, target: Int) -> Int {
-    var current = hp            // error: 'hp' is only borrowed, so it can't move out
+    var current = hp            // error: write 'copy', 'consume' or '&' before 'hp'
     var turns = 0
     while current < target {
         current += 15
@@ -91,7 +91,7 @@ func turnsToHeal(hp: Int, target: Int) -> Int {
 }
 ```
 
-A declaration takes its value, as `return` does ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)), and `hp` isn't `turnsToHeal`'s to give. So `turnsToHeal` copies it:
+A `var` can change what it holds, so it can't just borrow `hp` to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)). `consume hp` would move it, and `hp` isn't `turnsToHeal`'s to give. So `turnsToHeal` copies it:
 
 ```swift
 var current = copy hp
@@ -157,7 +157,7 @@ Each `heal(hp: &hp)` lends `heal` the variable that `healTwice` borrowed from it
 
 ## Borrowing in a declaration
 
-A declaration can borrow too. Declaring a variable from another one moves the value, so a declaration that borrows has to say so. You've seen `let same = borrow hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
+A declaration borrows too, the way a plain parameter does. You've seen `let same = hits`, which borrows a list to read it ([Moves and copies](02-moves-and-copies.md#declaring-assigning-and-returning)).
 
 To borrow something to change it, write `&` before it, as in a call. Declare the name with `var`, since you'll change the value through it. Here `first` borrows `hits[0]`, which is the list's first element:
 
@@ -172,13 +172,13 @@ log("\(hits[0])")               // 17
 
 `first` is another name for `hits[0]`, so every change to `first` lands on the element ([01](../spec/01-values-and-ownership/bindings.md#bindings)). Even assigning to `first` assigns to the element: `first = 0` would set `hits[0]` to 0, rather than point `first` somewhere else.
 
-Reading an element is fine, as the `log` call does. Declaring a variable from the element itself isn't:
+A `let` of an element borrows it to read, as `let same = hits` borrows the whole list. Moving the element out, though, is an error:
 
 ```swift
-let top = hits[0]               // error: an element can't move out of its list
+let top = consume hits[0]       // error: an element can't move out of its list
 ```
 
-A declaration takes its value, and an element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, copy the element instead:
+An element can't leave its list. If it could, the list would still count two values, but its first one would be gone. For an `Int`, copy the element to get a value of your own:
 
 ```swift
 let top = copy hits[0]
@@ -189,7 +189,7 @@ In a list of lists, though, each element is a whole list. `copy` is an error the
 ```swift
 var rounds = alloc List<List<Int>>()
 rounds.append(alloc hits.clone())
-let latest = borrow rounds[rounds.count - 1]
+let latest = rounds[rounds.count - 1]
 log("\(latest.count) hits, \(total(list: latest)) damage")
 ```
 
@@ -200,7 +200,7 @@ log("\(latest.count) hits, \(total(list: latest)) damage")
 While `latest` borrows an element of `rounds`, `rounds` can't change:
 
 ```swift
-let latest = borrow rounds[rounds.count - 1]
+let latest = rounds[rounds.count - 1]
 rounds.append(alloc List<Int>())  // error: 'rounds' is borrowed by 'latest' (used below)
 log("\(latest.count) hits")
 ```
@@ -210,7 +210,7 @@ log("\(latest.count) hits")
 The compiler can't know whether an `append` will need a bigger block, and doesn't try. While `latest` is in use, it rejects any change to `rounds`. A borrow doesn't last to the end of its block, though. It ends at its last use. So the fix is to finish with `latest` first ([01](../spec/01-values-and-ownership/bindings.md#how-long-a-borrow-lasts)):
 
 ```swift
-let latest = borrow rounds[rounds.count - 1]
+let latest = rounds[rounds.count - 1]
 log("\(latest.count) hits")
 rounds.append(alloc List<Int>())
 ```
@@ -218,7 +218,7 @@ rounds.append(alloc List<Int>())
 Moving a list away counts as changing it too:
 
 ```swift
-let same = borrow hits
+let same = hits
 archive(list: hits)             // error: 'hits' is borrowed by 'same' (used below)
 log("\(same.count)")
 ```
@@ -289,7 +289,7 @@ A change can't happen while a shared borrow is in use, even a change that frees 
 
 ```swift
 var hp = 100
-let before = borrow hp
+let before = hp
 hp -= 10                        // error: 'hp' is borrowed by 'before' (used below)
 log("lost \(before - hp)")
 ```
@@ -345,7 +345,7 @@ Some values bend this chapter's rules. A value that several pointers can reach c
 - [01 What can be moved from](../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from): which places can be moved from, and what to do with the rest.
 - [01 Changeable places](../spec/01-values-and-ownership/bindings.md#changeable-places): every place that can be changed or lent with `&`.
 - [01 Lending a place for change](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change): every place that takes `&`, and why the value a method is called on doesn't.
-- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): `borrow` and `&` in a declaration, and how long a borrow lasts.
+- [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): how a declaration borrows, with or without `&`, and how long a borrow lasts.
 - [01 Evaluation order](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin.
 - [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.
 - [02 Temporaries](../spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries): how long a value that nothing names lives.

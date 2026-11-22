@@ -7,7 +7,7 @@ Some run-time checks prevent memory errors; others catch logic mistakes that lea
 ## Check levels
 
 ```swift
-let v = borrow verts[i]   // bounds check: without it, a bad index would read memory outside the buffer
+let v = verts[i]          // bounds check: without it, a bad index would read memory outside the buffer
 let n = a + b             // overflow check: without it, the sum wraps, which is a wrong value but memory-safe
 ```
 

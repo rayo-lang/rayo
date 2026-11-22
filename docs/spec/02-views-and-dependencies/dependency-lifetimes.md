@@ -208,7 +208,7 @@ use(e)
 
 ```swift
 struct Pair(var a: StringView, var b: StringView): Scoped {
-    mutating func flip() { let t = copy a; a = copy b; b = t }
+    mutating func flip() { let t = copy a; a = copy b; b = consume t }
 }
 var pair = Pair(a: s1.view, b: s2.view)
 pair.flip()                                      // both fields now depend on 's1' and 's2'
@@ -242,7 +242,7 @@ tree.root.value = 1                              // error if placed before the l
 **`rebind x to p` makes the local `x` name the place `p` from then on**, as if declared with it there.
 
 - `x` is a local declared in the same function or closure body, not a parameter or a capture.
-- `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `var`, and marked `borrow` for a `let`, which still changes nothing.
+- `p` has `x`'s type, and is lent as `x`'s declaration lent its place: a changeable place marked `&` for a `var`, and a place with nothing written before it for a `let`, which still changes nothing.
 
 **`=` never rebinds**: `cur = &child` is a compile error, and `rebind` does that instead. `&p` is a value only where it makes a view of a type of its own:
 

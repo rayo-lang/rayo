@@ -2,39 +2,40 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-**A declaration takes the value it is given, as an assignment does, unless it says it borrows.** `let` and `var` say only whether the binding may change what it holds. So a declaration moves a value out of a place, whatever its type. `borrow` borrows the place instead, and `&` lends it for change.
+**A declaration borrows a place read-only, as an argument and a condition do, unless it says otherwise.** `let` and `var` say only whether the binding may change what it holds. So a name bound to a place reads the place where it lies, whatever its type. Each other operation has one spelling, the same in every position: `&` lends the place for change, `copy` makes a second value, and `consume` moves the value out ([Moving values out](moving-values-out.md#moving-values-out)).
 
 ```swift
 var enemies = loadEnemies()
 
-let seen = borrow enemies[0]       // looks: a read-only name for the enemy, nothing copied
+let seen = enemies[0]              // looks: a read-only name for the enemy, nothing copied
 var boss = &enemies[0]             // changes it in place: boss.hp = 0 changes enemies[0]
 var spare = copy enemies[0]        // a second enemy of its own
-let first = enemies[0]             // error: an element can't move out of its list
+var last = enemies[1]              // error: a var takes 'copy', 'consume' or '&' before a place
+let first = consume enemies[0]     // error: an element can't move out of its list
 let mesh = loadMesh()              // a value, not a place: the binding owns it
-let all = enemies                  // a move: 'enemies' can't be used until it gets a new value
+let all = consume enemies          // a move: 'enemies' can't be used until it gets a new value
 ```
 
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
-| `let x = place`, `var x = place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value. A copyable `const` gives a new value instead ([Constants](moving-values-out.md#constants)) | A `memcpy` at most |
-| `let x = borrow place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
+| `let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live. A copyable `const` gives a new value instead ([Constants](moving-values-out.md#constants)) | None |
 | `var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
+| `let x = consume place`, `var x = consume place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
 | `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
-| `var x = borrow place` | | A compile error, since `=` on a `var` that borrows writes the place it names ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)), which a shared borrow can't | |
+| `var x = place` | | A compile error that names `copy`, `consume` and `&`, since a `var` may change what it holds, and a shared borrow can't | |
 
-- **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one with `borrow` or `&` on a place, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
+- **A binding that names a place it borrows is a borrowing binding**, and can't be consumed. A declaration makes one from a place, with nothing written or with `&`, unless the initializer makes a value of its own from the place, such as a view ([below](#lending-a-place-for-change)). A condition or pattern makes one by binding a place ([below](#conditions-and-patterns)).
 - **A binding of anything that isn't a place owns it**, as a binding of a call's result does: a literal, an operator's result, `copy place` or `consume place`. A binding that owns its value can move it on, and a `let` still can't change it.
-- **`borrow` on a value binds the value itself**, which the binding owns, since there is no place to borrow. A value property, whose accessor is a `get`, gives such a value ([below](#what-a-borrowing-let-sees)).
-- **`borrow` is written only where a declaration borrows**, and a borrowed argument and a condition borrow with nothing written. A declaration writes it:
-    - on its initializer;
-    - on an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals));
-    - on the place a `rebind` of the binding names ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
+- **A `let` of a value binds the value itself**, which the binding owns, since there is no place to borrow. A value property, whose accessor is a `get`, gives such a value ([below](#what-a-borrowing-let-sees)).
+- **A `var` given a place writes `copy`, `consume` or `&` before it**, and leaving all three out is a compile error that names them, since a `var` may change what it holds and a shared borrow can't. That holds as well for an expression the initializer hands its position to:
+    - the last expression of an `if` or `when` arm, or of an `unsafe` block ([below](#if-and-when-as-values));
+    - an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **An assignment from a place writes `copy` or `consume`**, as a `var` does ([Moves](moves-copies-destruction.md#moves)), and `rebind` points a `var` at another place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)).
 - **Views taken from a borrowing `let` depend on the place itself** ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-1-projection)).
-- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So `borrow` of one owns that value instead, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
-- **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So `borrow` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
-- **Neither borrowing form may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
+- **A place in a temporary's own storage dies with its statement**, such as `makeEnemy().pos`. So a `let` of one owns that value instead, moving it out as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows. Where that can't move it, the binding is a compile error unless it is written with `copy`, or with `alloc` and `.clone()`.
+- **A place that a `where return outlives self` place property hands out from a temporary lies outside the temporary**, such as `makeSpan()[0]`. So a `let` of one borrows it, depending on what the temporary carries ([02](../02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
+- **No borrowing binding may bind an under-aligned place**: that is a compile error, since a load or store of its type at that address may be invalid, and fault on some targets ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 
 ## What a borrowing `let` sees
 
@@ -42,9 +43,9 @@ let all = enemies                  // a move: 'enemies' can't be used until it g
 
 **Making a field computed, or stored, never silently changes what a binding of it gets.** What a binding of `e.f` gets follows from how `f` is declared:
 
-- **A stored field** moves out of `e`, as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows, and `borrow` gives another name for the field.
-- **A value property** gives the value its `get` returns, which the binding owns, with or without `borrow` ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
-- **A place property** lends its place to `borrow`, as a stored field does, and can't be moved from ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
+- **A stored field** gives another name for the field, and `consume` moves it out of `e`, as [What can be moved from](moving-values-out.md#what-can-be-moved-from) allows.
+- **A value property** gives the value its `get` returns, which the binding owns ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
+- **A place property** lends its place, as a stored field does, and can't be moved from ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 
 Where the stored and the computed forms would differ, the stored form is a compile error:
 
@@ -52,11 +53,12 @@ Where the stored and the computed forms would differ, the stored form is a compi
 extension Enemy { var isDead: Bool { hp <= 0 } }   // computed
 
 func hit(_ e: mutable Enemy, _ d: Float) {
-    let before = borrow e.hp
+    let before = e.hp
     e.hp -= d                      // error: 'before' still names e.hp
+    log(before)
     let dead = e.isDead            // computed: the Bool it returned, which 'dead' owns
     save(dead)                     // fine: save takes an owned parameter
-    let hp = e.hp                  // error: 'e' is a mutable parameter, so e.hp can't move out of it
+    let hp = consume e.hp          // error: 'e' is a mutable parameter, so e.hp can't move out of it
 }
 ```
 
@@ -135,31 +137,36 @@ func report(_ count: UInt) {
 
 ## Conditions and patterns
 
-**A condition or a pattern borrows a place it binds, unless it says `owned`.** It looks inside a value, at an optional's payload or an enum case's, so where a declaration's default is to take, its default is to look. `guard` and `while` work the same way as `if`:
+**A condition or a pattern borrows a place it binds, as a declaration does.** It looks inside a value, at an optional's payload or an enum case's, where the value lies. `guard` and `while` work the same way as `if`:
 
 ```swift
 if let e = world.enemies[h] { ... }        // looks at the enemy in place
 if var e = &world.enemies[h] { ... }       // changes it in place
 if let v = pool.take(h) { ... }            // owns the value that take moved out
+if let e = consume spare { ... }           // moves the optional out of 'spare': 'e' owns the enemy
 ```
 
 - **A `let` looks at the place, and a `var` changes it in place**, with the place marked `&`.
-- **`owned` takes the value out of a place the code owns**, as a declaration does ([above](#bindings)).
-- **A value, such as a call's result, is owned by the binding**, as in a declaration.
+- **A value, such as a call's result, is owned by the binding**, as in a declaration. `consume place` is such a value: it takes the value out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)), and `copy place` makes one.
+- **A `var` given a place takes `copy`, `consume` or `&` before it**, as in a declaration ([above](#bindings)).
 
 **A condition may also unwrap an optional under the name it already has**, as `if let x` does ([below](#unwrapping-under-the-same-name-if-let-x)). Narrowing unwraps a local, a parameter or a stored field of one in place, with no binding at all ([04](../04-types/enums.md#narrowing)).
 
 **In a `when`, each part of a pattern binds as a condition does:**
 
 - **A `let` part looks at what it matches, and a `var` part changes it in place.** For a `var` part, the subject is marked `&`, as in the example below.
-- **An `owned` part takes what it matches out of a subject the code owns.** It moves as a field is moved out ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): only when no type on the path to it declares a `deinit`, except in that type's own `deinit`, since a `deinit` takes the whole value. It also moves only once its arm is chosen, since patterns and guards run under a borrow of the subject until then ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
-- **When the subject is a value, every part owns what it matches.**
+- **When the subject is a value, every part owns what it matches.** A call's result is such a subject, and so is `consume place`, which takes the subject out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)). Each part takes what it matches out of the subject only once its arm is chosen, since patterns and guards run under a borrow of the subject until then ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 - **A `deinit` on the path keeps a value subject whole.** This holds in an arm where any of its patterns has, on the path to a part, a type that declares a `deinit`, whichever pattern matched. The value stays whole in a hidden local until the arm ends, as a `for` loop's sequence does. The arm's `let` parts look at it, and its `var` parts change it in place, so the `deinit` runs on the changed value, and nothing moves out of it. The subject still takes no `&`, since the hidden local is the arm's own.
+- **In a type's own `deinit`, that type's `deinit` keeps nothing whole**, since it is already running. So `when consume self` takes an enum `self`'s payload apart there ([What can be moved from](moving-values-out.md#what-can-be-moved-from)).
 - **A subject in a temporary's own storage that can't be moved out is kept whole the same way**, with the whole temporary in that hidden local, as `connect().state` is where `Conn` declares a `deinit`.
 
 ```swift
 when &shape {
     .circle(var r) { r *= 2 }      // a var part: doubles the radius inside 'shape'
+    else {}
+}
+when consume event {
+    .message(let m) { inbox.append(m) }   // 'event' is moved out: 'm' owns the message
     else {}
 }
 ```
@@ -216,7 +223,7 @@ if case .some(let reply) = reply { … }         // error: write 'if let reply'
 if case .some(var reply) = &reply { … }        // error: write 'if var reply'
 ```
 
-**With `owned`, which has no short form (below), `owned let x = x` is an error only where `x` is a local or a parameter**, since it reuses that name. The error asks for a name of its own.
+**With `consume`, which has no short form (below), `if let x = consume x` is an error only where `x` is a local or a parameter**, since it reuses that name. The error asks for a name of its own.
 
 **The short form binds what the long form would** ([above](#conditions-and-patterns)):
 
@@ -238,10 +245,10 @@ if case .some(var reply) = &reply { … }        // error: write 'if var reply'
 if let t = window.value.target { … }           // a place reached through an object, under a name of its own
 ```
 
-**The short form takes no `owned`.** Its new `x` is the old one's payload, in place, so the name still stands for one value. `owned` would move the payload out, and leave the place behind the name holding no value. The one name would then stand for two bindings in different states, as a reused name does. Code that takes the payload moves it out of the narrowed place, or binds it to a name of its own:
+**The short form takes no `consume`.** Its new `x` is the old one's payload, in place, so the name still stands for one value. `consume` would move the optional out, and leave the place behind the name holding no value. The one name would then stand for two bindings in different states, as a reused name does. Code that takes the payload moves it out of the narrowed place, or binds it to a name of its own:
 
 ```swift
-if owned let m = reply { send(m) }             // moves the Message out: 'reply' holds no value after this
+if let m = consume reply { send(m) }           // moves the optional out: 'reply' holds no value after this
 ```
 
 **`while let x` and `while var x` are compile errors wherever no code can change `x` while the loop runs**, since such a loop could end only through `break`, `return` or `throw`. Its binding holds the optional still while it is live, so nothing can make it `nil` then. In these places, nothing can change `x` between the binding's uses either:
@@ -288,9 +295,9 @@ func report() {
 **An `if` or `when` expression hands its position to the arm that runs.** Whatever the position does with a value, it does with the arm's last expression, as if that expression stood there: borrows it, lends it for change, moves it or returns it. An `unsafe` block used as an expression hands its position to its last expression the same way ([10](../10-errors-and-safety/unsafe-code.md#unsafe-code)).
 
 ```swift
-let e = if first { borrow enemies[0] } else { borrow enemies[1] }   // borrows one of the two
+let e = if first { enemies[0] } else { enemies[1] }                 // borrows one of the two
 var t = if left { &a } else { &b }                                  // lends one for change
-let v = if c { p } else { q }                                       // moves from the one chosen
+let v = if c { consume p } else { consume q }                       // moves from the one chosen
 ```
 
 What depends on `e` depends on both places ([02](../02-views-and-dependencies.md#dependencies)). `v` moves from the one chosen, so each of `p` and `q` is moved only on its own path ([Moving values out](moving-values-out.md#moving-values-out)).
@@ -298,7 +305,7 @@ What depends on `e` depends on both places ([02](../02-views-and-dependencies.md
 **When some arms borrow places and others give values, each value is kept in a hidden local:**
 
 ```swift
-let e = if c { borrow enemies[0] } else { makeEnemy() }      // the new enemy is kept in a hidden local
+let e = if c { enemies[0] } else { makeEnemy() }             // the new enemy is kept in a hidden local
 ```
 
 The hidden local is declared where the binding is, and destroyed with it if its arm ran. The binding is then a borrowing binding, which can't be consumed. What depends on it depends on every arm's place, and on those hidden locals.
@@ -308,7 +315,7 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 **A converted value is a new value.** When a binding's declared type differs from its initializer's, the conversion says what it does with a place ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)):
 
 - **A numeric widening, and a copyable value's conversion to or from its [static type](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type), read the place** and make a new value, which the binding owns. A move-only value's conversion to or from its static type takes it, as the conversions below do.
-- **These conversions take the value**, so from a place, each moves it as a declaration does, unless the code writes a copy of a copyable value:
+- **These conversions take the value**, so a place takes `consume` or `copy` before it, as a `var` does, and leaving both out is a compile error that names them:
     - wrapping it in an optional or an error union, or as a `Result`'s `.success`;
     - making a `Box<T>` or an object pointer into one of an existential;
     - moving a closure into a `Closure`.
@@ -318,7 +325,8 @@ The hidden local is declared where the binding is, and destroyed with it if its 
 let total: Int = n                          // 'n' is an Int32: the widened Int is a new value 'total' owns
 let all: Span<Enemy> = enemies              // borrows the List 'enemies'; 'all' owns the view
 var spare: Handle<Enemy>? = copy h          // wrapping a copy of the handle
-var target: Handle<Enemy>? = h              // or wrapping the handle itself, moved out of 'h'
+let pick: Handle<Enemy>? = h                // error: wrapping takes the handle; write 'copy' or 'consume'
+var target: Handle<Enemy>? = consume h      // or wrapping the handle itself, moved out of 'h'
 var d: any Drawable = sprite                // borrows 'sprite'; 'd' owns the view, and may later view another value
 ```
 
