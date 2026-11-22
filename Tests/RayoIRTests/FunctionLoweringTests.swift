@@ -25,8 +25,8 @@ struct FunctionLoweringTests {
     }
 
     @Test func `a mutable argument is a modify access to the place it names, begun as the call begins`() throws {
-        // Checking takes no `mutable` parameter from the source yet, so the test makes `bump`'s parameter mutable in
-        // the checked program, and passes `x` to it as a mutable place.
+        // Checking rejects a `mutable` parameter that the source writes, so the test makes `bump`'s parameter mutable
+        // in the checked program, and passes `x` to it as a mutable place.
         let source = "func main() {\n    var x = 1\n    bump(x)\n    print(x)\n}\nfunc bump(_ n: Int) {}"
         let (file, _) = Parser.parse(source)
         var checked = Checker.check(file).program

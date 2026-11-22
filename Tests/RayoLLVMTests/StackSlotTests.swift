@@ -180,8 +180,8 @@ private let replacingOneArray = """
 
 /// A program that passes a copy of its array `a` to `bumpedSum` twice, which bumps one element of its copy and sums
 /// them all, then reads `a` again. Each sum reads the whole copy, so optimising keeps each copy in memory. It prints
-/// 100001 twice, then 1. The source can't yet write a parameter that takes its argument owned, so the IR is written
-/// here, with each local declared and retired where lowering and the ownership stage would put them.
+/// 100001 twice, then 1. Checking rejects an `owned` parameter that the source writes, so the IR is written here,
+/// with each local declared and retired where lowering and the ownership stage would put them.
 private let passingOwnedCopies = """
     main "main()"
     func "bumpedSum(_: [100000 of Int], _: UInt)"(_: owned [100000 of Int], _: UInt) -> Int {

@@ -25,7 +25,8 @@ struct CallChecker {
         case .name(let name):
             call(named: name, at: callee.range, arguments, in: range).map { .typed($0) }
 
-        // A member call calls a method of its base's type, and no type has methods yet.
+        // A member call calls a method of its base's type, and checking rejects every declaration in a struct's body,
+        // so no type has one.
         case .member(let base, let name, let nameRange):
             memberCall(named: name, at: nameRange, of: base, calledAt: callee.range, passing: arguments)
 
