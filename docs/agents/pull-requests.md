@@ -17,6 +17,17 @@ How a change reaches `main` on `rayo-lang/rayo`: the branch it is made on, its c
 
 ## Opening a pull request
 
+**A pull request holds one kind of change, and makes sense on its own**: a reviewer can judge it, and CI passes on it, without the pull requests above it. The kinds are:
+
+- **code**: `Sources/`, `Tests/`, `scripts/` and `Package.swift`, with the comments, test files and snapshots that go with them;
+- **CI**: `.github/`;
+- **docs**: the rest, such as the spec, the guide, `docs/validation/`, `ROADMAP.md`, `GLOSSARY.md`, `README.md`, `TOOLCHAIN.md`, `AGENTS.md`, `docs/agents/` and the skills.
+
+**A change lands as a stack** ([below](#stacked-pull-requests)), each pull request below the ones that build on it, when it is:
+
+- **of more than one kind.** Docs that decide what to build, such as a spec chapter or the roadmap, sit below the code that builds them; docs that describe what the code does, such as `TOOLCHAIN.md`, and CI that runs it sit above it.
+- **code too big to review as one pull request.** It is split into increments, each a step that builds, passes its tests, and leaves `main` working if it merges alone, such as a new IR construct below the checks that use it.
+
 **At most three pull requests are open on `rayo-lang/rayo` at a time**, whoever opened them, drafts included and counting each pull request in a stack; `gh pr list -R rayo-lang/rayo --state open` counts them. Open the next only when one has merged or closed; work past the limit waits on its branch.
 
 **Pull requests follow the `create-pr` skill.**
