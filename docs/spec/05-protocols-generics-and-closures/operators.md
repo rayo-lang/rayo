@@ -16,20 +16,27 @@ extension Vec3 {                                                // in std.math
 pos += vel * dt                                                 // pos = pos + vel * dt
 ```
 
-**Lookup is bounded: the candidates for `a ⊕ b` are the operators declared on the types of `a` and `b`, and nothing else.** Those include the defaults of protocols the types conform to, such as `Equatable`'s `!=`, and, for a type parameter, its constraints' requirements. A text type's are `StringView`'s comparisons alone, since every text type shares them and declares none of its own (below). So lookup reads only the operands' types, and type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
+**Operators borrow their operands, so an operand takes no mark and never moves** ([01](../01-values-and-ownership/references.md#unmarked-places)). So an operator declares each parameter `&T`, or `T` where `T` is implicitly copyable, as `Vec3` and `Float` are above. An operand given to a `&T` parameter is lent shared, as `&a` would lend it, and one given to a `T` parameter is copied. A parameter of any other type, a `mutable &T` or a `T` that isn't implicitly copyable, is a compile error, since the operand writes no mark that could lend it for change, move it or copy it:
+
+```swift
+static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { … }    // fine: each operand is borrowed
+static func + (lhs: Inventory, rhs: Inventory) -> Inventory   // error: an Inventory isn't implicitly copyable; take '&Inventory'
+```
+
+**Lookup is bounded: the candidates for `a ⊕ b` are the operators declared on the types of `a` and `b`, and nothing else.** Those include the defaults of protocols the types conform to, such as `Equatable`'s `!=`, and, for a type parameter, its constraints' requirements. An operand that is a reference forwards to what it refers to, so its candidates are that type's ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). A text type's are `Text`'s comparisons alone, since every text type shares them and declares none of its own (below). So lookup reads only the operands' types, and type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
 **The other rules fix what an operator expression can mean:**
 
 - **The set is fixed.** The declarable operators are the ones the grammar lists ([12](../12-grammar/declarations.md#files-and-declarations)), with fixed precedence. The others are built in:
     - `&&` and `||` take `Bool`s, and `??` takes an optional ([04](../04-types/enums.md#optionals)). Each evaluates its right side only when needed.
     - `..<` and `...` make a range of a copyable `Comparable` type. They borrow their operands and copy them in, so `0..<count` leaves `count` usable.
-- **Typed operands may widen.** When both operands are typed, a candidate applies when each operand is of its parameter's type or widens to it ([04](../04-types/numbers-and-math.md#conversions)), or is text that converts to the `StringView` its parameter takes (below). If exactly one candidate needs no widening, it wins; otherwise exactly one must apply, or the expression is ambiguous. So with `total` a `Double` and `dt` a `Float`, `total += dt` adds two `Double`s.
+- **Typed operands may widen.** When both operands are typed, a candidate applies when each operand is of its parameter's type or widens to it ([04](../04-types/numbers-and-math.md#conversions)), or is text that converts to the `&Text` its parameter takes (below). If exactly one candidate needs no widening, it wins; otherwise exactly one must apply, or the expression is ambiguous. So with `total` a `Double` and `dt` a `Float`, `total += dt` adds two `Double`s.
 - **The parameter count decides the form.** A function with one parameter declares a prefix operator, and one with two a binary operator. `-` has both forms, `!` and `~` are only prefix, and the rest only binary.
 - **Compound assignment is shorthand.** `a ⊕= b` means `a = a ⊕ b`, with the place `a` worked out once ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)), so `hp[next()] -= 1` calls `next()` once. No type declares `+=`, so it always agrees with `+`.
 
 **Untyped operands take their type from the other side.** A literal or an implicit member expression (`2`, `0.5`, `.pi`, `.zero`) has no type until something expects one. An implicit member names a static member, case or initializer of the expected type. Where a `T?` is expected, it names one of `T?` first and then of `T`, as `.init(bitPattern: tag)` does, with `tag` a `CUIntPtr`, for a `*Void?` parameter. When one operand of `a ⊕ b` is untyped and the other typed:
 
-- The candidates are the operators on the typed operand's type that take it in its position and whose matching parameter the untyped operand fits. With `v` a `Vec3`, `v * 2` keeps only `*(Vec3, Float)`, so `2` is a `Float`. A text operand takes `StringView`'s parameter in its position, and a string literal fits it, since a static view converts to one. A shift is the exception: its untyped value never takes its type from the count ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)).
+- The candidates are the operators on the typed operand's type that take it in its position and whose matching parameter the untyped operand fits. With `v` a `Vec3`, `v * 2` keeps only `*(Vec3, Float)`, so `2` is a `Float`. A text operand takes `Text`'s parameter in its position, and a string literal fits it, since a static reference converts to one. A shift is the exception: its untyped value never takes its type from the count ([04](../04-types/numbers-and-math.md#integer-overflow-division-and-shifts)).
 - If several remain, the one whose parameter has the typed operand's own type wins; otherwise the expression is ambiguous.
 
 **When both operands are untyped, the expression is untyped**, typed by its context the same way, or else by the literal defaults: `Double` if either is a floating-point literal, and `Int` if not ([04](../04-types/collections.md#literals)).
@@ -59,7 +66,7 @@ let angle = Float(i) / 1024 * 2 * .pi   // Float(i) / 1024 is a Float, so 2 and 
 
 ```swift
 func takesFixed(_ m: Map<Name, Int, FixedHashing>) { … }
-func merge<K, H>(_ into: mutable Map<K, Int, H>, _ from: Map<K, Int, H>) { … }
+func merge<K, H>(_ into: mutable &Map<K, Int, H>, _ from: Map<K, Int, H>) { … }
 func g<K, H>(_ m: Map<K, Int, H>) { … }
 func h(_ m: Map<Name, Int, SeededHashing>) { … }
 func h(_ m: Map<Name, Int, FixedHashing>) { … }
@@ -69,8 +76,8 @@ var fixed: Map<Name, Int, FixedHashing> = alloc [:]
 let pairs: [2 of (Name, Int)] = [("jump", 0), ("fire", 1)]
 
 takesFixed(alloc Map())                                    // H is FixedHashing, from the parameter's type
-merge(&fixed, alloc Map())                                 // K and H bind from 'fixed', and Map() takes them from the parameter's type
-merge(&fixed, alloc Map<Name, Int>())                      // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
+merge(mutable &fixed, alloc Map())                         // K and H bind from 'fixed', and Map() takes them from the parameter's type
+merge(mutable &fixed, alloc Map<Name, Int>())              // error: a written Map<Name, Int> is SeededHashing, and 'fixed' is FixedHashing
 g(alloc Map(dictionaryLiteral: copy pairs))                // error: K binds to Name from Map's own argument, but nothing binds H
 g(alloc Map<Name, Int>(dictionaryLiteral: copy pairs))     // fine: the written type takes its default, so H is SeededHashing
 h(alloc Map())                                             // error: ambiguous, since Map() fits both overloads
@@ -92,8 +99,8 @@ let half = catchPanic { 1 } recover: { _ in 2.5 }    // both results are literal
 **An expected type that isn't a `Result` binds only the success type of a result type `R!E`.** The match binds `R` from it, and leaves `E` to the arguments, as `try` leaves an expected failure type open ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)). Where `E` then binds to `Never`, the call is an `R` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), which fits. Otherwise the call is a `Result`, which doesn't, and the error says to write `try`:
 
 ```swift
-let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }       // R is Panic?; neither closure fails, so EB and ER are Never
-let level: Level = catchPanic { try loadLevel(path) } recover: { _ in alloc Level() }  // error: the call is a Level!(IoError | ParseError); write 'try'
+let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }         // R is Panic?; neither closure fails, so EB and ER are Never
+let level: Level = catchPanic { try loadLevel(&path) } recover: { _ in alloc Level() }   // error: the call is a Level!(IoError | ParseError); write 'try'
 ```
 
 **Each untyped argument then takes its parameter's type.** The first four calls below bind `T` or `C` in the first, second and fourth of those ways. The third then gives its untyped `.seconds(0.5)` the type `Duration`, and the last call gives its untyped `0` the type `Float`:
@@ -112,61 +119,66 @@ hp = max(0, hp - amount)               // T is Float, from 'hp - amount', so 0 i
 struct Tile(let x: Int32, let y: Int32): Hashable      // == and hash(into:) derived from the fields
 
 struct Version(let major: Int, let minor: Int): Comparable {    // == derived; < written
-    static func < (lhs: Version, rhs: Version) -> Bool {
+    static func < (lhs: &Version, rhs: &Version) -> Bool {
         lhs.major < rhs.major || (lhs.major == rhs.major && lhs.minor < rhs.minor)
     }
 }
 ```
 
-**Three protocols declare `==`, `<` and hashing:**
+**Three protocols declare `==`, `<` and hashing.** `Version`'s `<` takes each operand as a `&Version`, since `==`, `<`, `min` and `max` take `&Self` and a witness declares the same types ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)):
 
 - **`Equatable`** requires `==` and `!=`, and gives `!=` a default.
+
+    ```swift
+    static func == (lhs: &Self, rhs: &Self) -> Bool
+    static func != (lhs: &Self, rhs: &Self) -> Bool
+    ```
 - **`Comparable: Equatable`** requires `<`, `<=`, `>`, `>=`, and, of a copyable type, the methods `min(_:)` and `max(_:)`, and gives each but `<` a default. The methods borrow both values and return a copy of the lesser or the greater, as `..<` copies its operands in (above):
 
     ```swift
-    func min(_ other: Self) -> Self where Self: Copyable
-    func max(_ other: Self) -> Self where Self: Copyable
+    func min(_ other: &Self) -> Self where Self: Copyable
+    func max(_ other: &Self) -> Self where Self: Copyable
     ```
 - **`Hashable: Equatable`** requires `hash(into:)`, which feeds std's hash state, a `Hasher`, whose seed the map or set doing the hashing chooses ([04](../04-types/collections.md#hash-maps-and-sets)). It must give equal hashes for values that `==` calls equal.
 
     ```swift
     protocol Hashable: Equatable {
-        func hash(into hasher: mutable Hasher)   // borrows self, feeds 'hasher', and returns nothing
+        func hash(into hasher: mutable &Hasher)   // borrows self, feeds 'hasher', and returns nothing
     }
     ```
 
 **The defaults are these, written in terms of `==` and `<`.** So a type with unordered values, such as `Float` with NaN, gets `>`, `<=` and `>=` right from `<` and `==` alone:
 
 ```swift
-a != b    // default: !(a == b)
-a > b     // default: b < a
-a <= b    // default: a < b || a == b
-a >= b    // default: b < a || a == b
-a.min(b)  // default: b when b < a, else a
-a.max(b)  // default: a when b < a, else b
+a != b     // default: !(a == b)
+a > b      // default: b < a
+a <= b     // default: a < b || a == b
+a >= b     // default: b < a || a == b
+a.min(&b)  // default: a copy of b when b < a, else of a
+a.max(&b)  // default: a copy of a when b < a, else of b
 ```
 
 **Every witness of `min` returns `self`, and every witness of `max` returns `other`, when neither operand is less than the other in the order they use**, as the defaults do. That order is `<` for every type but `Half`, `Float` and `Double`, whose witnesses put `-0` below `+0` ([04](../04-types/numbers-and-math.md#floating-point)). A NaN operand is never a tie: the float witnesses give NaN for it. Values that tie can still differ, so the rule fixes which one a call returns:
 
 ```swift
 struct Ranked(let rank: Int, let id: UInt32): Comparable {       // compares on its rank alone
-    static func == (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank == rhs.rank }
-    static func < (lhs: Ranked, rhs: Ranked) -> Bool { lhs.rank < rhs.rank }
+    static func == (lhs: &Ranked, rhs: &Ranked) -> Bool { lhs.rank == rhs.rank }
+    static func < (lhs: &Ranked, rhs: &Ranked) -> Bool { lhs.rank < rhs.rank }
 }
 
 let a = Ranked(rank: 1, id: 7)
 let b = Ranked(rank: 1, id: 9)
-let lo = a.min(b)    // a, with id 7: the two tie, so min returns self
-let hi = a.max(b)    // b, with id 9: max returns other
+let lo = a.min(&b)    // a copy of a, with id 7: the two tie, so min returns self
+let hi = a.max(&b)    // a copy of b, with id 9: max returns other
 ```
 
 **A type may replace any default with its own operator or method.** `Half`, `Float` and `Double` replace `min` and `max` with IEEE 754-2019's `minimum` and `maximum`, so that a NaN operand gives NaN and `-0` counts as less than `+0` ([04](../04-types/numbers-and-math.md#floating-point)).
 
-**The free functions `min(a, b)` and `max(a, b)` call `a.min(b)` and `a.max(b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They borrow their arguments, so a place passed to them stays usable:
+**The free functions `min(a, b)` and `max(a, b)` call `a.min(&b)` and `a.max(&b)`**, as `max(0, 1)` and `max(f, d)` above do. So generic code over `Comparable & Copyable` gives the same result as concrete code, bit for bit, for every type it is instantiated with. They own their arguments, so an implicitly copyable argument is copied with nothing written, and any other takes `copy` or `consume`, as `max(copy v1, copy v2)` does for two `Version`s:
 
 ```swift
-func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }
-func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
+func min<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(&b) }
+func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(&b) }
 ```
 
 **A move-only `Comparable` type, such as `String`, has no `min` or `max`**, since neither can return a copy of a borrowed value of it ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)). Code compares such values with `<` and moves the one it keeps.
@@ -186,6 +198,7 @@ func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(b) }
 - **Cases without payloads.** Every enum compares with one of its cases that carries no payload, whatever its other cases carry: `x == .idle` and `x != .idle` test which case `x` holds, as `x == nil` does for an optional.
 - **Tuples and inline arrays.** A tuple is `Equatable`, `Hashable` or `Comparable` when each element is, comparing element by element in order, and `[N of T]` is the same when `T` is.
 - **Optionals.** Every optional compares with `nil`: `x == nil` and `x != nil` test for a value, whatever `T` is. `T?` is `Equatable` or `Hashable` when `T` is.
-- **Text.** `StringView` is `Comparable` and `Hashable`, and its comparisons and hash are the only ones text has. `String` and `static StringView` declare none of their own, and conform through `StringView`'s, each converting to a `StringView` as it does wherever one is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). So `a == b` on two `String`s, `a == view` and `name == "grunt"` each have one candidate. They compare bytes, and order them byte by byte, a prefix before any longer text. Equal texts hash alike, whichever type holds them, so a `Map<String, V>` or a `Set<String>` is looked up by any text, as in `ages["grunt"]`. `Name` is `Hashable`: two are equal exactly when their texts are, though `==` never reads the text ([04](../04-types/collections.md#collections-and-strings)).
+- **References.** A reference takes its `Equatable` and `Hashable` conformances from what it refers to ([Conformances](protocols-and-generics.md#conformances)), so a `Set<&Tile>` or a `Map<&Text, Int>` compares and hashes what each key refers to.
+- **Text.** `Text` is `Comparable` and `Hashable`, and its comparisons and hash are the only ones text has. `String` declares none of its own, and conforms through `Text`'s, converting a `&String` to a `&Text` as it does wherever one is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). So `a == b` on two `String`s, `a == text` and `name == "grunt"` each have one candidate. They compare bytes, and order them byte by byte, a prefix before any longer text. Equal texts hash alike, whichever type holds them, so a `Map<String, V>` or a `Set<String>` is looked up by any text, as in `ages["grunt"]`. `Name` is `Hashable`: two are equal exactly when their texts are, though `==` never reads the text ([04](../04-types/collections.md#collections-and-strings)).
 
 **`Simd` vectors don't conform**, since their comparisons return masks ([04](../04-types/numbers-and-math.md#simd-and-math)).

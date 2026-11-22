@@ -16,36 +16,38 @@ extension Damageable {
 
 extension Enemy: Damageable {}
 
-func applyAoE<T: Damageable>(_ targets: MutableSpan<T>, amount: Float) {
-    for t in &targets { t.takeDamage(amount) }
+func applyAoE<T: Damageable>(_ targets: mutable &[T], amount: Float) {
+    for t in mutable &targets { t.takeDamage(amount) }
 }
 ```
 
-**A protocol names requirements that a conforming type meets**, such as the `hp` property and the `takeDamage` method of `Damageable` above. `applyAoE` can change a span of any `Damageable` type. The compiler checks its body against the protocol, then makes a separate instance for each concrete element type ([below](#instantiation)).
+**A protocol names requirements that a conforming type meets**, such as the `hp` property and the `takeDamage` method of `Damageable` above. `applyAoE` can change a run of elements of any `Damageable` type. The compiler checks its body against the protocol, then makes a separate instance for each concrete element type ([below](#instantiation)).
 
-**A protocol may inherit others, and declare static requirements and associated types, constrained by `where` clauses** ([12](../12-grammar/declarations.md#files-and-declarations)). An associated type is a type that the protocol leaves to each conformance to choose.
+**A protocol may inherit others, and declare static requirements and associated types, constrained by `where` clauses** ([12](../12-grammar/declarations.md#files-and-declarations)). An associated type is a type that the protocol leaves to each conformance to choose. A protocol that inherits another may restate a place requirement it inherits to add a `mutate`, as `MutableCollection` adds one to `Collection`'s subscript ([02](../02-views-and-dependencies/place-and-value-properties.md#properties-in-protocols)).
+
+**A requirement declares each parameter's type as any function does, so it takes another value of the conforming type as `&Self`, `mutable &Self` or `Self`**, as `Equatable`'s `==` takes two `&Self` operands ([Equality and ordering](operators.md#equality-and-ordering)). A witness declares the same types, with `Self` its own type. So a call through generic code passes its arguments as a direct call would ([01](../01-values-and-ownership/parameters.md#parameters)).
 
 **A requirement whose `where` clause constrains `Self` or an associated type is required only of conformances that satisfy the clause**, as `Comparable`'s `min` and `max` require `Self: Copyable` ([Equality and ordering](operators.md#equality-and-ordering)):
 
 - **Where it is required.** A conformance must meet it under the conformance's own conditions plus the clause, and its witness is checked there. A conditional conformance, `extension X: P where …`, follows the same rule.
 - **Witnesses.** A member of the conformer, or of an extension of it whose `where` clause those conditions imply, may be the witness. Otherwise the default applies, to each instantiation where the clause holds. A conformer that never meets the clause provides none, and a member of that name it declares is an ordinary member, not a witness (below).
 - **Generic calls.** Generic code may call it only where its own constraints imply the clause.
-- **Existentials.** Through `any P` it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it.
+- **Existentials.** Through an existential it is callable only when `P` itself implies the clause, since the existential may hold a conformer that fails it ([below](#any-p-explicit-dynamic-dispatch)).
 
 ```swift
-func lowest<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.min(b) }   // fine: T: Copyable implies the clause
-func lowest2<T: Comparable>(_ a: T, _ b: T) -> T { a.min(b) }             // error: T may be move-only
+func lowest<T: Comparable & Copyable>(_ a: &T, _ b: &T) -> T { a.min(&b) }   // fine: T: Copyable implies the clause
+func lowest2<T: Comparable>(_ a: &T, _ b: &T) -> T { a.min(&b) }             // error: T may be move-only
 ```
 
 A generic conformer can meet such a requirement in a constrained extension. `Pair<T>` is copyable exactly when `T` is, so its conformance's conditions plus `Self: Copyable` imply the extension's `T: Copyable`:
 
 ```swift
 struct Pair<T: Comparable>(let a: T, let b: T): Comparable {
-    static func < (lhs: Self, rhs: Self) -> Bool { lhs.a < rhs.a || (lhs.a == rhs.a && lhs.b < rhs.b) }
+    static func < (lhs: &Self, rhs: &Self) -> Bool { lhs.a < rhs.a || (lhs.a == rhs.a && lhs.b < rhs.b) }
 }
 
 extension Pair where T: Copyable {
-    func min(_ other: Self) -> Self { … }    // the witness of min for every copyable Pair<T>
+    func min(_ other: &Self) -> Self { … }    // the witness of min for every copyable Pair<T>
 }
 ```
 
@@ -53,7 +55,7 @@ extension Pair where T: Copyable {
 
 ```swift
 extension Pair where T == Int {
-    func min(_ other: Self) -> Self { … }    // error: Pair<Int> already has a witness of min, above
+    func min(_ other: &Self) -> Self { … }    // error: Pair<Int> already has a witness of min, above
 }
 ```
 
@@ -94,36 +96,36 @@ protocol Probe {
 struct Thermometer(let value: Int, var lastError: IoError?): Probe             // lastError binds Failure to IoError
 ```
 
-**`some P` is written only as a parameter's type**, where it is an anonymous type parameter constrained `P`.
+**`some P` is written only as a parameter's type, or as the type a reference parameter refers to**, as in `_ sink: mutable &some TextSink`. Either way it is an anonymous type parameter constrained `P`.
 
 ## Protocol extensions
 
 **A protocol extension of `P` declares members of every type conforming to `P`**, checked once as generic code over `Self: P`, and adds no requirement or stored member. The extension of `Damageable` above is one. Its members are of two kinds:
 
 - **Defaults.** A member that matches a requirement is its **default**, the witness of each conformance whose type declares none, as `takeDamage` is for `Enemy`. Only the protocol's module declares defaults. A member matching a requirement in another module's extension is a compile error, so every module sees the same witness ([below](#conformances)).
-- **Other members.** Any other member is never a witness. A call to it is resolved statically, with `Self` the receiver's type. A call to it on an `any P` unpacks the receiver as an argument for a `T: P` parameter does ([below](#unpacking-an-existential)).
+- **Other members.** Any other member is never a witness. A call to it is resolved statically, with `Self` the receiver's type. A call to it on an existential, through a reference or an unscoped existential's `value`, as in `box.value.helper()`, unpacks the receiver, as an argument for a `&T` or `mutable &T` parameter unpacks ([below](#unpacking-an-existential)).
 
 ## Checking generic code
 
 **Generics are type-checked once, at the definition, against their constraints:**
 
 ```swift
-func toughest<T: Damageable>(_ xs: Span<T>) -> Float {
+func toughest<T: Damageable>(_ xs: &[T]) -> Float {
     var best: Float = 0
-    for x in xs { best = max(best, x.hp) }    // fine: Damageable requires 'hp'
-    for x in xs { best += x.armor }           // error here, at the definition: Damageable has no 'armor'
+    for x in &xs { best = max(best, x.hp) }    // fine: Damageable requires 'hp'
+    for x in &xs { best += x.armor }           // error here, at the definition: Damageable has no 'armor'
     return best
 }
 ```
 
-**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a mutable view or not `Sendable`, among other things, though it has a size unless it is marked `@opaque` ([below](#type-parameters-with-no-known-size-opaque)). So a body that passes is sound for every instantiation.
+**Checking once keeps type checking local**: a module is checked against the interfaces of the modules it imports, not the bodies of their generics, except for the compile-time code below ([11](../11-compilation-model.md#type-checking-is-local)). The check assumes no more of a type parameter than its constraints say: an unconstrained one may be move-only, scoped, a reference or not `Sendable`, among other things, though it has a size unless it is marked `@opaque` ([below](#type-parameters-with-no-known-size-opaque)). So a body that passes is sound for every instantiation.
 
 **A body copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, even where every instantiation's type argument is an `Int`, since the check sees only the constraints. Under `T: Copyable` alone, it writes `copy x` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
 
 ```swift
-func firstOf<T: Copyable>(_ xs: Span<T>) -> T { copy xs[0] }            // a copy, written out
-func lastOf<T: ImplicitlyCopyable>(_ xs: Span<T>) -> T { xs[xs.count - 1] }   // a copy, with nothing written
-func bad<T: Copyable>(_ xs: Span<T>) -> T { xs[0] }                    // error: write 'copy' before 'xs[0]'
+func firstOf<T: Copyable>(_ xs: &[T]) -> T { copy xs[0] }                 // a copy, written out
+func lastOf<T: ImplicitlyCopyable>(_ xs: &[T]) -> T { xs[xs.count - 1] }  // a copy, with nothing written
+func bad<T: Copyable>(_ xs: &[T]) -> T { xs[0] }                          // error: write 'copy' before 'xs[0]'
 ```
 
 **So a generic fails at an instantiation only in these cases, where the arguments decide the outcome:**
@@ -165,15 +167,23 @@ let db = CHandle(raw: conn, release: sqlite3_close)        // conn: the *sqlite3
 let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
 ```
 
-**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type were `@opaque`. Only such a parameter stands for an `@opaque` type, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)). An unmarked type parameter, an associated type and the `Self` of a protocol extension never do.
+**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type had none. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for a type with no size ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)):
+
+- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
+- **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
+
+**So an unsized type binds no type parameter but an `@opaque` one**, as the `T` of a type value is, which makes `Text.self` and `(any Drawable).self` type values ([below](#value-parameters-and-type-values)). A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`.
 
 **An `@opaque` type conforms to no protocol, and an `@opaque` type parameter takes no constraints.** A protocol extension is generic code over an unmarked `Self`, which may hold a `Self` by value, so no conformance could keep it sound.
+
+**An unsized type conforms to a protocol only through witnesses it declares itself.** A default, and every other member of a protocol extension, is generic code over an unmarked `Self` for the same reason, so none is ever called on an unsized value. So `Text` declares each of its comparisons ([Operators](operators.md#equality-and-ordering)). A requirement that takes or returns a `Self` by value is one no unsized type can meet, except where its `where` clause leaves the type out, as `Comparable`'s `min` does with `Self: Copyable`.
 
 **The language's own type parameters that need no layout are `@opaque` too:** the pointee of `*T` and `*T?`, the `T` of a type value `Type<T>`, so `T.self` names any type, and the target `U` of `p.cast(to: U.self)` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). `*T` and `*T?` are sized whatever `T` is, so they may stand for unmarked parameters, as in `List<*T>`.
 
 **In an `@opaque` type parameter's body, anything that needs `T`'s layout or a `T` value is a compile error:**
 
 - a local, field, parameter, result, element or payload of type `T`, or of a type that holds a `T` by value, such as `T?` or `(T, Int)`;
+- a reference to a `T`, `&T` or `mutable &T`, whose layout depends on whether `T` has a size ([01](../01-values-and-ownership/references.md#layout));
 - a function type that takes or gives a `T`, a `@c` one included;
 - `.pointee`, `p + n`, `p[i]` and `q - p` on a `*T` ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers));
 - a reflective query of `T`'s layout, fields, cases or conformances: `T.size`, `T.alignment`, `T.layoutId`, `T.isPaddingFree`, `T.fields`, `T.cases`, `T.field(ofType:)`, `T.hasField(ofType:)`, `T.conforms`, `T.isConstructible`, `T.construct` and `T.makeCase` ([09](../09-compile-time/reflection.md#what-reflection-can-read));
@@ -185,7 +195,7 @@ let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_
 
 ## Instantiation
 
-**Generics are monomorphized**: each is compiled separately for each set of type arguments, and never implicitly called through a witness table (a type's table of implementations of a protocol's requirements), in any build or across any module boundary. So a call through a witness table happens only through `any P`, where the source shows it ([11](../11-compilation-model.md#runtime-costs)).
+**Generics are monomorphized**: each is compiled separately for each set of type arguments, and never implicitly called through a witness table (a type's table of implementations of a protocol's requirements), in any build or across any module boundary. So a call through a witness table happens only through an existential, where the source shows it ([11](../11-compilation-model.md#runtime-costs)).
 
 **Instantiation always ends.** Since every instantiation is compiled, a generic function, subscript or type that reaches itself with a type argument that strictly contains one of its own parameters would need infinitely many. So it is a compile error at the definition:
 
@@ -211,14 +221,14 @@ func f<let N: Int>() { f<N + 1>() }   // grows through its value argument: an er
 
 **A generic parameter declared `let` takes a `const` value** of an integer type, `Bool` or an enum without payloads, as `N` does in `Simd<T, N>`. Such a parameter is a **value parameter**. Two arguments are the same exactly when they are the same value: the same integer, the same `Bool` or the same case, whatever `==` the type declares.
 
-**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` one included ([above](#type-parameters-with-no-known-size-opaque)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a span's `reinterpret` does:
+**`T.self` is a value that names the type `T`, of type `Type<T>`**: empty, copyable, `Sendable` and `const`. `T` may be any type, an `@opaque` or unsized one included ([above](#type-parameters-with-no-known-size-opaque)). Such a value is a **type value**. So a function can take a type as an argument and bind a type parameter from it, as a run's `reinterpret` does:
 
 ```swift
-func reinterpret<U: Pod>(as _: Type<U>) -> Span<U>?   // binds U from the type value it is passed
+func reinterpret<U: Pod>(as _: Type<U>) -> (&[U])?    // binds U from the type value it is passed
 let verts = bytes.reinterpret(as: Vertex.self)         // U is Vertex
 ```
 
-**A type that isn't a name is parenthesized**, as in `(Int, Float).self` and `([4 of Float]).self`. For a protocol `P`, `P.self` names the protocol, and only a reflection query that takes a protocol accepts it, such as `T.conforms(P.self)` ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
+**A type that isn't a name is parenthesized**, as in `(Int, Float).self`, `([4 of Float]).self` and `(any Drawable).self`. For a protocol `P`, `P.self` names the protocol, and only a reflection query that takes a protocol accepts it, such as `T.conforms(P.self)` ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
 **`T == U`, `T != U` and `T.conforms(P.self)` are `const`**, usable in `static if`. A `where` clause states the same as `T == U`, `T != U` and `T: P` ([12](../12-grammar/declarations.md#files-and-declarations)).
 
@@ -232,8 +242,8 @@ struct Map<K: Hashable, V, H: Hashing = SeededHashing>(…)
 let a: Map<Name, Int> = alloc [:]                     // Map<Name, Int, SeededHashing>
 let b: Map<Name, Int, FixedHashing> = alloc [:]       // the default replaced
 let c: Map<Name, Int, FixedHashing> = alloc Map()     // H comes from the expected type
-func report<K>(_ m: Map<K, Int>) { … }                // takes only maps with SeededHashing
-func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any hashing type
+func report<K>(_ m: &Map<K, Int>) { … }               // takes only maps with SeededHashing
+func reportAny<K, H>(_ m: &Map<K, Int, H>) { … }      // takes a map with any hashing type
 ```
 
 **A type parameter of a struct, enum or union may name a type after `=`**, which a written type that leaves the argument out takes instead. That type is the parameter's **default type argument**. A function's, an initializer's or a subscript's type parameters name none, and neither does a value parameter. A default follows these rules:
@@ -247,13 +257,17 @@ func reportAny<K, H>(_ m: Map<K, Int, H>) { … }       // takes a map with any 
 
 ## Conformances
 
-**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). The language also makes the number types, `Bool`, raw pointers, small `Simd` vectors and some tuples conform to `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-with-no-known-size-opaque)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
+**A type conforms by declaring it, except the conformances the language gives**: the derived marker protocols, such as `Copyable`, `Sendable` and `Frozen`, the structural `Equatable`, `Comparable` and `Hashable` conformances ([Equality and ordering](operators.md#equality-and-ordering)), and `SimdLane`'s, which no type can declare ([04](../04-types/numbers-and-math.md#simd-and-math)). The language also makes the number types, `Bool`, raw pointers, shared references, small `Simd` vectors and some tuples conform to `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). An `@opaque` type has none of them, and declares none ([above](#type-parameters-with-no-known-size-opaque)). A **marker protocol** has no requirements, and states a property of a type. Each requirement is met by a **witness**: a method, initializer, operator, subscript, property or stored field, and for an associated type, a type.
 
 ```swift
 protocol HasHp { var hp: Float { get set } }
 struct Crate(var hp: Float): HasHp        // the stored field 'hp' is the witness
-struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only get and read requirements
+struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only get and borrow requirements
 ```
+
+**A reference conforms to three protocols through what it refers to: `Equatable`, `Hashable` and `Formattable`.** A `&T` or `mutable &T` conforms to each when `T` does, and its witnesses are `T`'s, reached by forwarding ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Each of their requirements only reads the value, so the reference meets it with no access of its own. So a `Map<&Text, Int>` hashes and compares the text each key refers to ([Equality and ordering](operators.md#equality-and-ordering)), and `print(&name)` writes what `name` holds ([04](../04-types/collections.md#printing)).
+
+**A reference forwards no other conformance.** A shared reference is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(&b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. A mutable reference is never `Comparable` either. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
 
 **These rules say where a conformance is declared, and what it implies:**
 
@@ -281,108 +295,120 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 ## `any P`: explicit dynamic dispatch
 
-**`any P` views a value of any type conforming to `P`, and calls its requirements through the witness table.** It is for a type known only at run time, as in a list of different widgets:
+A list of widgets holds buttons, sliders and other types that only the running program knows. Code reaches each one through its protocol, and each call goes through the value's own implementation:
 
 ```swift
-func drawAll(_ items: Span<any Drawable>, _ ctx: mutable DrawContext) {
-    for d in items { d.draw(&ctx) }                  // dynamic dispatch, visible in the signature
+protocol Drawable { func draw(_ ctx: mutable &DrawContext) }
+
+func drawAll(_ items: &[Box<any Drawable>], _ ctx: mutable &DrawContext) {
+    for b in &items { b.value.draw(mutable &ctx) }      // dynamic dispatch, visible in the signature
 }
 
+func strike(_ d: mutable &any Damageable) { d.takeDamage(10) }
+strike(mutable &barrel)                                 // a 'mutable &Barrel' converts to a 'mutable &any Damageable'
+
 var widgets = alloc List<Box<any Widget>>()
-widgets.append(alloc Box(Button(label: "Play")))    // allocation, visible in source
-for w in &widgets { w.value.update(dt) }           // a mutating requirement, through dynamic dispatch
+widgets.append(alloc Box(Button(label: "Play")))        // allocation, visible in source
+for w in mutable &widgets { w.value.update(dt) }        // a mutating requirement, through dynamic dispatch
 ```
 
-**`any P` is an existential, and never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out. It has three kinds of form: views, which borrow a value; borrows of a place that holds one; and unscoped existentials, which hold one or point at one:
+**`any P` is an existential: a value of some type that conforms to `P`, known only at run time.** The types that conform to `P` have different sizes, so `any P` is unsized, and code holds it only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)). A call on it reaches the value's witness through its witness table.
+
+**An existential never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out. Each way of holding one is a form of its own:
 
 | Form | What it is | Made from |
 | --- | --- | --- |
-| `any P` | Shared view: scoped, copyable | A shared borrow of a `T: P`, or of an unscoped existential's `value` |
-| `MutableRef<any P>` | Exclusive view: scoped, move-only | `&place` of a `T: P`, or of an unscoped existential's `value` |
-| A parameter, borrowed or `mutable`, or a `ref let` or `ref var`, of type `any P` | A borrow of a place, through which calls dispatch dynamically | A place holding a `T: P`, or `&` of one; for a borrowed parameter or a `ref let`, an `any P` too |
+| `&any P` | Shared existential reference: implicitly copyable, scoped | `&x` of a `T: P`, or of an unscoped existential's `value` |
+| `mutable &any P` | Mutable existential reference: move-only, scoped | `mutable &x` of a `T: P`, or of an unscoped existential's `value` |
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
 
-**`MutableRef<any P>` is a type of its own, which the language provides.** std's `MutableRef<T>` with `T` bound to `any P` is a different type, which lends a place holding an `any P`, written `MutableRef<(any P)>` ([12](../12-grammar/notes.md#parentheses-in-types)). `MutableRef<any P>` has the members `MutableRef<T>` has:
+**`&any P` and `mutable &any P` are references like any other**, each an **existential reference**. So they follow the rules for every reference ([01](../01-values-and-ownership/references.md#references)): a shared one is implicitly copyable, a mutable one is move-only, both are scoped, and each is a pointer and a witness table ([01](../01-values-and-ownership/references.md#layout)). `&x` and `mutable &x` of a place holding a `T: P` make one where one is expected, by a conversion ([Implicit conversions](implicit-conversions.md#implicit-conversions)). `&box.value` makes one with no conversion, since `box.value` is a place of type `any P` (below).
 
-- **A `value` place property** lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
-- **Its layout** holds a pointer to the value and the value's witness table, and is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
-- **It is move-only**, as `MutableRef<T>` is ([01](../01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)).
-
-**`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.
+**An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.** `any P & Sendable` accepts only `Sendable` types, so `&any P & Sendable`, a reference to an `any P & Sendable`, is `Sendable`, and so is a `Box<any P & Sendable>` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)).
 
 **A `Shared`'s value must be `Frozen` or `Synchronized`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and an existential is `Frozen` only when its protocols say so, as for `Sendable`. So a `Shared`'s existential is `Shared<any P & Frozen>`, or `Shared<any P>` for a `P` that inherits `Frozen` or `Synchronized`, as `WakeTarget` inherits `Synchronized` ([07](../07-concurrency/tasks.md#awaitables)).
 
-**A shared view or a shared borrow of an existential calls only requirements that are neither `mutating` nor `consuming`.** That is an `any P`, a borrowed parameter or a `ref let` of that type. Other views may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable borrow calls `mutating` requirements too: a `mutable` parameter, a `ref var`, or the `value` of a `MutableRef<any P>` or an unscoped existential, lent for change. No view or borrow calls a `consuming` requirement, since none owns the value. An owned `Box<any P>` reaches one by unpacking as an `owned T`, as a static or `init` requirement is called only on an unpacked value's type ([below](#unpacking-an-existential)).
+### What an existential may call
 
-**`mutable` before `any P` is the parameter convention, as it is before any other type.** So a `mutable any P` parameter borrows the caller's place holding a `T: P` for change, and the call writes `&` before it ([01](../01-values-and-ownership/parameters.md#parameters)). A `ref var` of type `any P` binds one, and a `MutableRef<any P>` holds one as a value, as a list of targets does:
+**A shared existential reference calls only requirements that are neither `mutating` nor `consuming`.** Other references may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable existential reference calls `mutating` requirements too, when it is held in a changeable place, as every write through a reference needs ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So does an unscoped existential's `value`, lent for change.
 
-```swift
-func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // the 'mutable' convention on an 'any Damageable'
-strike(&barrel)                                                // lends 'barrel' for change
-ref var hit: any Damageable = &barrel                          // a binding of one
-hit.takeDamage(1)                                              // changes 'barrel' through 'hit'
-var targets = alloc List<MutableRef<any Damageable>>()
-targets.append(&boss)                                          // a stored one: 'boss' stays borrowed exclusively
-for d in targets { d.value.takeDamage(1) }                     // error: 'd' is a read-only borrow of its view
-for d in &targets { d.value.takeDamage(1) }                    // fine: the loop lends 'targets', so 'd' is a mutable borrow
-```
+**No existential calls a `consuming` requirement, since none owns its value.** An owned `Box<any P>` reaches one by unpacking as a `T` argument, which moves the value out of the box ([below](#unpacking-an-existential)). A static or `init` requirement is called the same way, on an unpacked value's type.
 
-**`&place` makes a `MutableRef<any P>` wherever one is expected**, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)). A shared borrow of a place makes an `any P` the same way ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
-
-**A non-`mutating` closure captures a `MutableRef<any P>` shared**, so parallel work can't call `mutating` requirements through it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
-
-**A changeable place holding an `any P` changes which value it views, never that value.** Assigning to a `var` of one, or to a `List<any P>`'s element, points it at another value, and a `mutating` requirement called through it is a compile error, since the value is borrowed shared.
-
-**So `&v` of a place holding an `any P` makes no `MutableRef<any P>`, and a `mutable` parameter or a `ref var` of type `any P` given it is a compile error.** Each of those always lends a place holding a `T: P`, so its meaning never depends on its argument. Code that picks a new view for its caller returns it, and the caller assigns it.
-
-**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning to `box.value`, or through a `mutable` parameter, a `ref var` or a `MutableRef<any P>`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
-
-**`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
+**Nothing assigns a whole value through an existential**, since `any P` is unsized, and a place of unsized type is never assigned as a whole ([01](../01-values-and-ownership/references.md#unsized-types)). So a requirement called through one can change the value, but never its type or size. Unpacking as a `mutable &T` argument can replace the value, with one of the same type:
 
 ```swift
-if ref var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+func reset(_ d: mutable &any Damageable) {
+    d.takeDamage(1)                    // fine: a mutating requirement, through the reference
+    d = makeCrate()                    // error: 'any Damageable' is unsized, so 'd' is never assigned as a whole
+}
 ```
 
-**The unscoped existentials are types of their own, which binding a type parameter never makes.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
+**A requirement whose signature mentions `Self` or an associated type can be called only on an unpacked value** ([below](#unpacking-an-existential)), since two existentials' dynamic types needn't match.
+
+**A generic requirement, one with type parameters of its own, is callable through an existential too, unless its signature mentions `Self` or an associated type**, as unpacking works ([below](#unpacking-an-existential)). It has one witness per set of type arguments, and the call reaches the witness of the value's dynamic type, specialized for the call's type arguments.
+
+### Holding existential references
+
+**A value may hold existential references, as a list of targets does**, and each one keeps the place it refers to borrowed, as every stored reference does, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)):
+
+```swift
+var targets = alloc List<mutable &any Damageable>()
+targets.append(mutable &boss)                   // 'boss' stays borrowed exclusively while the list holds the reference
+targets.append(mutable &barrel)
+for d in mutable &targets { d.takeDamage(1) }   // 'd' names each element for change, and writes through its reference
+for d in &targets { d.takeDamage(1) }           // error: 'd' names each element read-only, so it can't write through it
+targets[0] = mutable &crate                     // points the first reference at 'crate'
+```
+
+**A loop over a list of references names each element, a place that holds a reference**, as a `ref let` through `&` and a `ref var` through `mutable &` ([04](../04-types/collections.md#iteration)). A call through `d` forwards to the existential, and writing through it needs the `ref var` ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Assigning an element, as the last line does, or `d` in the first loop, points that reference elsewhere, as assigning any place that holds a reference does ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
+
+**A box that holds a shared existential reference is `Box<&any P>`**, a box like any other, which generic code gets from `Box<T>` with `T` bound to `&any P`. It is scoped, since it holds a reference ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
+
+### Unscoped existentials
+
+**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property of type `any P`, with a `borrow` and a `mutate` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). So `&box.value` is a `&any P`, and `mutable &box.value` a `mutable &any P`. Assigning to `box.value` is a compile error, since `any P` is unsized ([above](#what-an-existential-may-call)).
+
+**`box[as: T.self]` is an optional place property that hands out the value as a `T` place**, with a `borrow` and a `mutate` as `box.value` has, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
+
+```swift
+if ref var s = mutable &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+```
+
+**An unscoped existential is a type of its own, which binding a type parameter never makes.** The **unscoped existentials** are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
 
 - the conversion to it ([Implicit conversions](implicit-conversions.md#implicit-conversions));
 - for a weak pointer or a weak link, `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - another unscoped existential of the same protocol, as `u.weak()` makes a `WeakPointer<any P>` from a `UniquePointer<any P>`.
 
-**A box that holds a shared view `any P` itself is a different type**, written `Box<(any P)>` ([12](../12-grammar/notes.md#parentheses-in-types)). Generic code gets it from `Box<T>` with `T` bound to `any P`, and it is scoped, since it holds a view ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
+**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. A `UniquePointer<any P>`'s `value` is a place of type `any P`, as `box.value` is, and a `WeakPointer<any P>`'s is an optional place that hands one out, or `nil` once the object is gone. Either way, `&` lends the place for a shared access, and `mutable &` for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
 
-**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. Their accesses lend the value as `box.value` does, as an `any P` borrowed for a shared access, and for change for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
-
-**Reference-counted pointers to `any P`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) lend the value through `s.value` as an `any P` borrowed shared, and `w.upgrade()` on a `WeakShared<any P>` gives a `Shared<any P>?`.
-
-**A requirement whose signature mentions `Self` or an associated type can be called only on an unpacked value** ([below](#unpacking-an-existential)), not through `any P`, since two existentials' dynamic types needn't match.
-
-**A generic requirement, one with type parameters of its own, is callable through `any P` too, unless its signature mentions `Self` or an associated type**, as unpacking works (next). It has one witness per set of type arguments, and the call reaches the witness of the value's dynamic type, specialized for the call's type arguments.
+**Reference-counted pointers to `any P`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) lend the value through `s.value`, a place of type `any P` with only a `borrow`, so `&s.value` is a `&any P`. `w.upgrade()` on a `WeakShared<any P>` gives a `Shared<any P>?`.
 
 ## Unpacking an existential
 
 ```swift
-func refill<T: Damageable>(_ t: mutable T) { t.hp = 100 }
+func refill<T: Damageable>(_ t: mutable &T) { t.hp = 100 }
 
-func refillAll(_ targets: mutable List<Box<any Damageable>>) {
-    for b in &targets { refill(&b.value) }       // unpacks each box: T is that value's dynamic type
+func refillAll(_ targets: mutable &List<Box<any Damageable>>) {
+    for b in mutable &targets { refill(mutable &b.value) }    // unpacks each box: T is that value's dynamic type
 }
 ```
 
-**Passing an existential to a generic parameter `T: P` unpacks it: `T` is the value's dynamic type for that call.** An `any P`, or a shared borrow of an existential, unpacks only as a borrowed `T`. A mutable borrow of one, such as a `mutable any P` parameter, a `MutableRef<any P>`'s `value` or an unscoped existential's `value` lent for change, also unpacks as `mutable T`, whose whole value the generic code may replace, since the type can't change. An owned `Box<any P>` also unpacks as an `owned T`: its value moves out into the call, and its allocation is freed.
+**Passing an existential reference to a parameter `&T` or `mutable &T`, with `T: P`, unpacks it: `T` is the value's dynamic type for that call.** This is **unpacking**. A `&any P` unpacks into a `&T` parameter, and a `mutable &any P` into a `mutable &T` one, whose whole value the generic code may replace, since `T` has a size there and the type can't change. An owned `Box<any P>` passed to a parameter `T` unpacks as well: its value moves out into the call, and its allocation is freed.
 
-**`any P` never conforms to `P`, so it can't bind `T` without unpacking.** Two existentials unpack to two types, and a box's `value` isn't a place of type `any P` that `T` could bind as the view type (below). So passing two boxes' values for one `T` is a compile error:
+**`any P` never conforms to `P`, and it is unsized, so it binds no unmarked `T`** ([above](#type-parameters-with-no-known-size-opaque)). Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
 
 ```swift
-swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
+swap(mutable &a.value, mutable &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
 ```
 
 **These rules decide whether a call unpacks:**
 
-- **Where it unpacks.** Only where the next bullet binds no `T`, and only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
-- **Where it doesn't.** When `any P` itself meets `T`'s constraints, as it meets those of an unconstrained `T` or of `T: Copyable`, it binds `T` as the view type instead, and a `MutableRef<any P>` or a `Box<any P>` that meets them binds `T` as itself. Any other call that would need `T` to be `any P` is a compile error.
+- **Where it doesn't.** A call binds `T` from an existential's own type wherever that meets `T`'s constraints. So an existential reference or a `Box<any P>` given to a parameter `T` binds `T` as itself, as `List<&any Drawable>`'s `append` takes a reference as its element, and `any P` binds an `@opaque` `T` as itself.
+- **Where it unpacks.** Only where that binds no `T`, and only into a parameter whose type is `&T` or `mutable &T` for an existential reference, or `T` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
+- **Anything else is a compile error.** A call that would need `T` to be `any P` and meets neither rule doesn't compile.
 
 **An unpacking call costs one indirect call, and an instance for each possible dynamic type.** An unpacking call site names one generic function, every type argument but `T` fixed. The program holds an instance of it for every type that can be the dynamic type of an existential of `P`:
 
