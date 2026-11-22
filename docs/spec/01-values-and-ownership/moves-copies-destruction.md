@@ -131,12 +131,12 @@ log(hp)                            // error: 'hp' was moved
 var lead = enemies[0]              // error: write 'copy' or 'consume' before 'enemies[0]', or declare 'ref let'
 ```
 
-**What code writes keeps its meaning, whatever the type:**
+**What code writes means the same for an implicitly copyable type as for any other:**
 
-- **`copy p`** stays valid, and means the same.
-- **`consume p`** still moves `p`, which can't be used until it gets a new value. So does a `[move p]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
-- **A `ref let` or `ref var`** still refers to the place.
-- **A borrowed argument** still borrows, so a call copies nothing that its parameter doesn't keep.
+- **`copy p`** makes a copy.
+- **`consume p`** moves `p`, which can't be used until it gets a new value. So does a `[move p]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+- **A `ref let` or `ref var`** refers to the place.
+- **A borrowed argument** borrows, so a call copies nothing that its parameter doesn't keep.
 
 ### Operations that copy
 

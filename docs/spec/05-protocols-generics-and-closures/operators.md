@@ -16,7 +16,7 @@ extension Vec3 {                                                // in std.math
 pos += vel * dt                                                 // pos = pos + vel * dt
 ```
 
-**Lookup is bounded: the candidates for `a ⊕ b` are the operators declared on the types of `a` and `b`, and nothing else.** Those include the defaults of protocols the types conform to, such as `Equatable`'s `!=`, and, for a type parameter, its constraints' requirements. A text type's are `StringView`'s comparisons alone, since every text type shares them and declares none of its own (below). No global set of operators exists to search, so type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
+**Lookup is bounded: the candidates for `a ⊕ b` are the operators declared on the types of `a` and `b`, and nothing else.** Those include the defaults of protocols the types conform to, such as `Equatable`'s `!=`, and, for a type parameter, its constraints' requirements. A text type's are `StringView`'s comparisons alone, since every text type shares them and declares none of its own (below). So lookup reads only the operands' types, and type checking stays local ([11](../11-compilation-model.md#type-checking-is-local)).
 
 **The other rules fix what an operator expression can mean:**
 

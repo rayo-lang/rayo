@@ -234,7 +234,7 @@ _ = Thread.start { [copy m, copy clip] in                         // '_ =' detac
 }
 ```
 
-**Threads, locks and job systems are library code, not language features** ([07](../spec/07-concurrency.md)). The runtime's one primitive for starting a thread is `Runtime.startThread`, and a job system of your own can start its workers with it ([07](../spec/07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)).
+**Threads, locks and job systems are library code** ([07](../spec/07-concurrency.md)). The runtime's one primitive for starting a thread is `Runtime.startThread`, and a job system of your own can start its workers with it ([07](../spec/07-concurrency/thread-work.md#starting-a-thread-runtimestartthread)).
 
 ### Queues and channels
 

@@ -61,7 +61,7 @@ func f<T>(_ x: T) { … }     // needs no conversion either, but declares T
 
 ## Static and instance members
 
-**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Qualified code reaches them through different receivers, a type or a value, so no call picks between them:
+**A type's static members and its instance members are separate namespaces**, so a static member and an instance member may share a name whatever their kinds and parameters. Qualified code reaches a static member through its type, and an instance member through a value:
 
 ```swift
 let lowest = Int.min        // the static property
@@ -154,7 +154,7 @@ alloc scores.sorted()             // error: a sorted copy, never used; 'scores.s
 let saved = save(level)           // error if no code reads 'saved': its error would be lost
 ```
 
-**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `alloc x.sorted()` written where `x.sort()` was meant. One rule for every type also can't miss an error, however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
+**A value whose type isn't `Void` or `Never` must be used, or it is a compile error.** A value nobody uses is usually a bug: an error dropped, or `alloc x.sorted()` written where `x.sort()` was meant. The rule covers every type, so it also catches an error however deeply a value holds it ([10](../10-errors-and-safety/typed-errors.md#keeping-an-error-as-a-value)). `Void` carries nothing, and an expression of type `Never` never finishes, so neither is checked. A call that returns `Void!Never` has type `Void` ([10](../10-errors-and-safety/typed-errors.md#what-a-failure-type-names)), so it is exempt too.
 
 **A value is unused when it is:**
 
@@ -333,7 +333,7 @@ var oops = Hotkey(action: { log("pressed \(id)") })                // error: 'id
 **`Closure<F>`**, such as `Closure<mutating (Int) -> Int>`, is an unscoped, move-only value that owns every capture. It is `Sendable` only when its function type is `@sendable`, such as `Closure<mutating @sendable (Int) -> Int>` ([below](#function-typed-values)).
 
 - **Captures are listed.** Each is `[move x]`, or `[copy x]` for a copyable value, which leaves `x` usable. An implicitly copyable value is listed with `copy` too, as `id` is above, since the list is where a closure says how it holds each capture. `self` is listed too, and only a `consuming` method can move it. An unlisted capture is a compile error. A capture the body moves out of is already owned ([above](#closure-kinds)) and needs no entry. A global is never a capture of any closure: the body reaches it as any function does ([07](../07-concurrency/global-state.md#global-state)).
-- **Size.** A `Closure` holds small captures inline, laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). How much it holds inline, and so its own size, is a layout choice that may change, so the language leaves it open, and code never depends on it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A capture whose layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one, is never inline.
+- **Size.** A `Closure` holds small captures inline, laid out as a struct, as a literal's are ([below](#closures-by-concrete-type-some-f)). How much it holds inline, and so its own size, is a layout choice the language leaves open, and code never depends on it ([11](../11-compilation-model.md#what-the-language-leaves-open)). A capture whose layout the language or a library leaves open, such as a task's state, a `Pin<T>` or a value that holds one, is never inline.
 - **Allocation.** Captures that aren't inline go in an out-of-line context that the closure owns. So converting a closure to a `Closure` may allocate, as `append` may, and takes no `alloc`: the `Closure` type shows that it may. The context's allocator follows the rule for allocations with no construction ([06](../06-memory-and-allocators/allocator-basics.md#allocations-with-no-construction)). In `@noalloc` code, every conversion into a `Closure` is an error, whether or not that one would allocate.
 - **It counts as holding a `Synchronized` value.** Its inline captures may hold one, unseen in its type. So a borrowed `Closure` is always the caller's place ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)), and a packed struct can't hold one ([04](../04-types/structs.md#packed-structs-and-under-aligned-places)).
 - **An out-of-line context is checked like any owning storage** ([06](../06-memory-and-allocators/arena-safety.md#opening-an-owning-value-checks-it)). Calling a `Closure` whose context outlived its allocator's memory, as when an arena was reset since the closure was made, panics. Destroying such a `Closure` skips its captures' `deinit`s and the free, as for a stale `Box`.

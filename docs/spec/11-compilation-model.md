@@ -83,17 +83,15 @@ let count = 60           // nothing gives this literal a type, so it is an Int
 
 **The interface carries those facts because other modules' checks need them, and the fields that decide them may be private.** Whether `copy` applies to an imported value, for one, depends on whether its type is copyable, which depends on all of the type's fields ([01](01-values-and-ownership/moves-copies-destruction.md#copyable-types)). Whether a binding of an imported value's place copies it with nothing written depends on whether the type is implicitly copyable, which the compiler confirms from the same fields ([01](01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-**Local type checking rules out some convenience features.** Each row gives a rule of local checking, and the feature it rules out:
+**These rules keep type checking local:**
 
-| Rule | Rules out |
-| --- | --- |
-| Inference is local: an expression's type comes from its operands and the expected type, and no later use changes it | Constraint solving across an expression |
-| A literal gets its type in one local step: from the expected type, the other operand, or a generic parameter the other arguments bind ([05](05-protocols-generics-and-closures/operators.md#operators)), else its default, such as `Int` or `Double` ([04](04-types/collections.md#literals)) | Literal-overload search |
-| Operator candidates come only from the two operand types ([05](05-protocols-generics-and-closures/operators.md#operators)) | Global operator overload sets |
-| Implicit conversions are a fixed set, each decided by the expected type alone: widening along a fixed order, and the few non-numeric ones that 05 lists ([05](05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)) | User-defined implicit conversions, except an error type's `@converts` initializers under `try` and `throw` ([10](10-errors-and-safety/typed-errors.md#propagating-errors-with-try)) |
-| A public function's return type is written, or `Void` when omitted, never inferred; conformances are declared | Whole-program inference |
-| Generics are checked once, at definition, except what 05 lists as checked per instantiation ([05](05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)) | Checking each instantiation of a generic body |
-| Overloads on argument labels are free; type-only overloads are allowed, and resolved per call without backtracking ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)) | Overload resolution that cascades across an expression |
+- **Inference.** An expression's type comes from its operands and the expected type, and no later use changes it.
+- **Literals.** A literal gets its type in one local step: from the expected type, the other operand, or a generic parameter the other arguments bind ([05](05-protocols-generics-and-closures/operators.md#operators)), else its default, such as `Int` or `Double` ([04](04-types/collections.md#literals)).
+- **Operators.** Operator candidates come only from the two operand types ([05](05-protocols-generics-and-closures/operators.md#operators)).
+- **Implicit conversions.** They are a fixed set, each decided by the expected type alone: widening along a fixed order, and the few non-numeric ones that 05 lists ([05](05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). The only conversions code declares are an error type's `@converts` initializers, which apply under `try` and `throw` ([10](10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
+- **Declared signatures.** A public function's return type is written, or `Void` when omitted, never inferred, and conformances are declared.
+- **Generics.** They are checked once, at definition, except what 05 lists as checked per instantiation ([05](05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
+- **Overloads.** Overloads on argument labels are free. Type-only overloads are allowed, and resolved per call without backtracking ([05](05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)).
 
 ## Runtime costs
 

@@ -62,7 +62,7 @@ So a value hands its allocator to what it allocates, and nothing else does. Code
 
 **A function that builds a new value for its caller is an `alloc func`**, as `clone()` is. The `alloc` before its call gives it the allocator its result goes in, and inside it a bare `alloc` takes that allocator ([06](../spec/06-memory-and-allocators/allocator-basics.md#functions-that-make-a-new-value-alloc-func)).
 
-**`alloc` applies only to values that allocate.** There is no hidden boxing:
+**`alloc` applies only to values that allocate.** A plain value goes on the heap only inside a value that allocates, such as a `Box`:
 
 ```swift
 var boxed = alloc enemy          // error: 'Enemy' isn't Allocating
@@ -225,7 +225,7 @@ print(wet.value.roughness)                                               // 'val
 
 **`s.value` lends the value read-only**, for as long as `s` is borrowed.
 
-**The last owner destroys the value at once**, on the thread that drops it. Its `deinit` runs and its memory is freed right there, with no collector to run later.
+**The last owner destroys the value at once**, on the thread that drops it. Its `deinit` runs and its memory is freed right there.
 
 **A `Frozen` value can't form a cycle**, since nothing in it can change to point back at it. A `Synchronized` value can: a `Shared<Mutex<Node>>` can come to hold an owner of itself, and that cycle leaks.
 

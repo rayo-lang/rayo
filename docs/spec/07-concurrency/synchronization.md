@@ -2,7 +2,7 @@
 
 [07 · Concurrency](../07-concurrency.md)
 
-Some values must be shared even while their state changes. Atomics, locks and queues make those changes safe by coordinating access among threads. Rayo treats them as library types with a synchronization contract, rather than giving each one a separate language rule.
+Some values must be shared even while their state changes. Atomics, locks and queues make those changes safe by coordinating access among threads. In Rayo they are library types with a synchronization contract.
 
 ## Atomics and locks
 

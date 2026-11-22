@@ -80,7 +80,7 @@ Written this way, two threads may write one cell with nothing ordering the write
 
 ### C12 · A job and thread library written in Rayo (also C13, C15)
 
-**A team writes its own job system in Rayo**: worker threads, `join`, and a parallel loop over a collection type it can split into disjoint parts. The language builds in none of these: threads, locks and job systems are libraries, which the language gives its checking rules ([07](../../spec/07-concurrency.md)).
+**A team writes its own job system in Rayo**: worker threads, `join`, and a parallel loop over a collection type it can split into disjoint parts. Threads, locks and job systems are libraries, which the language gives its checking rules ([07](../../spec/07-concurrency.md)).
 
 The team writes its workers twice, once over `Runtime.startThread` and once over the platform's thread API through `import c`, with a `@c func` start routine. Workers run bodies of type `Closure<consuming @sendable () -> Void>` from a list, and one worker parks on a queue it owns between jobs. The list, the queue and the bodies' captures came from an arena: the list and the queue through `alloc`, and the captures through each body's conversion to a `Closure` in a method of a value allocated there. The arena is reset while the workers are parked.
 

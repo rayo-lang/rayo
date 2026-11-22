@@ -194,7 +194,7 @@ extension Game: TimeSource { var now: Instant<Game> { simulationTime } }   // so
 
 **`elapsed(_:)` waits on the task's resume parameter, which is a `TimeSource`**, such as a game's simulation time. Each poll compares the parameter's `now` with the time the wait is due, and a poll that isn't due wakes the task itself.
 
-**It wakes itself since nothing tells it when the program's own time advances.** Such a clock usually advances once per pass of the loop that steps the tasks, so a poll at each step comes as often as its time can change. A `TimeSource` that let waits register wakes would have to keep `Waker`s and call them as it advances, a cost on every clock that only a runner that parks would use. So under `run`, a task awaits `sleep(for:)` instead.
+**It wakes itself since nothing tells it when the program's own time advances.** Such a clock usually advances once per pass of the loop that steps the tasks, so a poll at each step comes as often as its time can change. Under `run` or `block(on:)`, where such a wait busy-waits, a task awaits `sleep(for:)` instead ([above](#awaitables-in-std)).
 
 **A suspended task's awaitable is stored in its state, so it can't hold a borrow either.** So `until`'s condition receives the resume parameter as its argument on every poll. `until` takes the condition by concrete type and moves it in ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closures-by-concrete-type-some-f)):
 
