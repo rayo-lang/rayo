@@ -32,27 +32,27 @@ struct SimStats(
     var maxSpeed: Float = 0,
 )
 
-func step(_ sim: mutable Sim, dt: Float) {
+func step(_ sim: mutable &Sim, dt: Float) {
     let gravity: Vec3 = [0, -9.81, 0]
 
     // Independent systems run as two jobs. The checker proves that the two closures
     // touch disjoint places, as it does for any two arguments of one call: particles
     // and cloth are written by one closure each; wind is only read, so both share it.
-    join({ integrateParticles(&sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
-         { integrateCloth(&sim.cloth, gravity: gravity, wind: sim.wind, dt: dt) })
+    join({ integrateParticles(mutable &sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
+         { integrateCloth(mutable &sim.cloth, gravity: gravity, wind: sim.wind, dt: dt) })
 
     // Uncommenting this is a compile error:
     //
-    // join({ integrateParticles(&sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
+    // join({ integrateParticles(mutable &sim.particles, gravity: gravity, wind: sim.wind, dt: dt) },
     //      { sim.wind += [0.1, 0, 0] })
     //
     // error: 'sim.wind' is written by the second argument while the first reads it
 
-    relaxCloth(&sim.cloth, sim.clothConstraints.span, iterations: 4)
-    sim.stats = gatherStats(sim.particles)
+    relaxCloth(mutable &sim.cloth, &sim.clothConstraints, iterations: 4)
+    sim.stats = gatherStats(&sim.particles)
 }
 
-func integrateParticles(_ ps: mutable SoA<Particle>, gravity: Vec3, wind: Vec3, dt: Float) {
+func integrateParticles(_ ps: mutable &SoA<Particle>, gravity: Vec3, wind: Vec3, dt: Float) {
     ps.forEachInParallel(batch: 1024) { p in     // per job: a disjoint slice of each column
         p.vel += (gravity + wind) * dt
         p.pos += p.vel * dt
@@ -61,7 +61,7 @@ func integrateParticles(_ ps: mutable SoA<Particle>, gravity: Vec3, wind: Vec3, 
     ps.removeAll { $0.life <= 0 }                // single-threaded compaction after the join
 }
 
-func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec3, dt: Float) {
+func integrateCloth(_ verts: mutable &List<ClothVertex>, gravity: Vec3, wind: Vec3, dt: Float) {
     let accel = gravity + wind
     verts.forEachInParallel { v in
         if v.pinned { return }
@@ -75,10 +75,10 @@ func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec
 // into disjoint element ranges. It stays single-threaded, and the checker agrees:
 // a parallel loop over the constraints would have to write the captured 'verts',
 // which makes its body a 'mutating' closure, one that can't run on many threads at once.
-func relaxCloth(_ verts: mutable List<ClothVertex>, _ cs: Span<(a: UInt32, b: UInt32, rest: Float)>, iterations: UInt) {
+func relaxCloth(_ verts: mutable &List<ClothVertex>, _ cs: &[(a: UInt32, b: UInt32, rest: Float)], iterations: UInt) {
     for _ in 0..<iterations {
-        for c in cs {
-            if ref var (a, b) = &verts[c.a, c.b] {                  // checked: c.a != c.b
+        for c in &cs {
+            if ref var (a, b) = mutable &verts[c.a, c.b] {          // checked: c.a != c.b
                 let delta = b.pos - a.pos
                 let len = delta.length
                 guard len > 1e-6 else { continue }
@@ -90,7 +90,7 @@ func relaxCloth(_ verts: mutable List<ClothVertex>, _ cs: Span<(a: UInt32, b: UI
     }
 }
 
-func gatherStats(_ ps: SoA<Particle>) -> SimStats {
+func gatherStats(_ ps: &SoA<Particle>) -> SimStats {
     // Each job folds its slice starting from the identity (0), and the partial
     // results are combined with 'max'.
     let maxSpeed = ps.vel.parallelReduce(Float(0), combine: max) { acc, v in max(acc, v.length) }
@@ -102,10 +102,10 @@ func gatherStats(_ ps: SoA<Particle>) -> SimStats {
 let frameArena = Allocator.register(Arena(size: 64.mb))
 
 // Scratch memory for a debug overlay, released for free at the next reset.
-func debugDraw(_ sim: Sim, _ draw: mutable DebugDraw) {
+func debugDraw(_ sim: &Sim, _ draw: mutable &DebugDraw) {
     var lines = frameArena.alloc List<(Vec3, Vec3)>(reservingCapacity: sim.clothConstraints.count)
-    for c in sim.clothConstraints {                     // 'sim' is borrowed, so the positions are copied
+    for c in &sim.clothConstraints {                    // 'sim' is borrowed; each Vec3 is copied with nothing written
         lines.append((sim.cloth[c.a].pos, sim.cloth[c.b].pos))
     }
-    draw.lines(lines.span, color: .yellow)
+    draw.lines(&lines, color: .yellow)
 }

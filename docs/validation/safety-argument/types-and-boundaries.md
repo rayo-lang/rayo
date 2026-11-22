@@ -9,8 +9,8 @@
 - **`Pod` means every bit pattern is valid and nothing is owned** ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)). Its fields are visible and not `unsafe`, so bytes can't forge a value whose invariant a `private init` or an `unsafe` field guards, and `@pod` is a promise.
 - **Padding is uninitialized, so no cast reads it as data** ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)). Each cast needs padding-free types:
     - a bit cast, a padding-free source;
-    - a shared span cast, a padding-free source type;
-    - a mutable span cast, both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see the source type.
+    - a shared run cast, `reinterpret(as:)`, a padding-free source type;
+    - a mutable run cast, `mutableReinterpret(as:)`, both types padding-free, since a store through a padded type leaves its padding unspecified while other references still see the source type.
 - **Union reads** ([04](../../spec/04-types/enums.md#untagged-unions)). Writing a whole member is safe. Reading needs every member `Pod`, none `unsafe`, and the union padding-free, so whatever a write left is a valid value of the member read. Members are copyable, so nothing needs to know which one to destroy.
 - **Niches** ([04](../../spec/04-types/enums.md#optionals)) are bit patterns a type never uses, in which an optional stores its `nil`. None lies in a `Synchronized` value, whose bytes other threads write while a tag is read with a plain load, or in a bitfield, whose width may leave no room.
 - **Under-aligned places are used only by value** ([04](../../spec/04-types/structs.md#packed-structs-and-under-aligned-places)), through aligned temporaries, so no view of one exists. A view would load or store at a misaligned address, which is invalid and faults on some targets. Generic code takes the safe bound, and a packed struct holds no `Synchronized` value, which needs its alignment.

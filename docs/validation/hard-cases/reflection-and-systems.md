@@ -66,7 +66,7 @@ struct Player { Camera* camera; Vec3 pos; };
 struct Camera { Player* target; float zoom; };
 ```
 
-In Rayo, a view of memory that can be freed, such as a `Span`, can't be stored in long-lived state, since it must stay within the scope that lent it ([02](../../spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
+In Rayo, a view of memory that can be freed, such as a reference, can't be stored in long-lived state, since it must stay within the scope that lent it ([02](../../spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 
 - **Must accept** in safe code, without making either of the pair own the other.
 - State the per-access cost, and whether it is avoidable where the compiler can see the target is alive.
@@ -178,9 +178,9 @@ void player_update(struct Base* b, float dt) {
 
 ### I12 · Type punning and bit reinterpretation
 
-**Reinterpret a `Float` as a `UInt32`, and view a `Span<UInt8>` as a span of a struct type, with checks for alignment and size.** Code uses bytes from a file or a packet as values this way ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
+**Reinterpret a `Float` as a `UInt32`, and a `&[UInt8]` as a `&[T]` of a struct type `T`, with checks for alignment and size.** Code uses bytes from a file or a packet as values this way ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)).
 
-- **Must hold:** a bit cast is safe from a padding-free `Pod` type to a `Pod` type of the same size ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)), and the span reinterpretation is safe when checked.
+- **Must hold:** a bit cast is safe from a padding-free `Pod` type to a `Pod` type of the same size ([04](../../spec/04-types/data-layout.md#plain-data-pod-and-bit-casts)), and the run's reinterpretation is safe when checked.
 - State which types qualify.
 
 ### I13 · Memory-mapped I/O / volatile access

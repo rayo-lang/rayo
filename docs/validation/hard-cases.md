@@ -10,7 +10,8 @@ The cases test Rayo's design goal: **no reasonable systems pattern is forbidden*
 
 The cases and criteria use these terms from the spec:
 
-- A **view** is a value that borrows memory something else owns, such as a `Span<T>` of a list's elements or a `StringView` of a string's text.
+- A **reference** is a value that refers to a place and borrows it: a `&T` reads the place, and a `mutable &T` may change it ([01](../spec/01-values-and-ownership/references.md#references)). A `&[T]` refers to a list's elements, and a `&Text` to a string's text.
+- A **view** is a value that borrows memory something else owns, such as a reference.
 - A **scoped** value, one whose type conforms to `Scoped`, must stay within the scope that lent it, as every view that borrows memory that can be freed must ([02](../spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
 - A `Handle<T>` is a small checked index into a pool of `T`s.
 - A `UniquePointer<T>` owns one object, and a `WeakPointer<T>` is a checked pointer to it, which other values may store. Both stay on the thread that made the object.

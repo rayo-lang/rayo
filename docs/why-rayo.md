@@ -50,14 +50,14 @@ Six principles decide Rayo's trade-offs.
 | The allocator API for std collections is unstable | Allocators are stable values that every owning collection records, every construction that allocates says `alloc`, and arena resets are memory-safe. | [06](spec/06-memory-and-allocators.md) |
 | A hash map built at compile time needs an external crate, such as `phf` | A `const` `Map` that names `FixedHashing` is built by ordinary code in the compiler and frozen into read-only data. The default hashing is still seeded for each map, as `RandomState` is. | [04](spec/04-types/collections.md#hash-maps-and-sets) |
 | Portable SIMD is unstable | SIMD vectors of up to 64 lanes are built in, with shuffles, swizzles, masks and reductions. | [04](spec/04-types/numbers-and-math.md#simd-and-math), [08](spec/08-c-interop.md) |
-| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. A binding says what it is where it is declared, as a parameter's convention does, whatever the type: `ref let b = a` borrows, `let b = copy a` copies, and `let b = consume a` moves. C# marks such a borrow with `ref` too. | [01](spec/01-values-and-ownership.md) |
+| Steep learning curve for large, mixed teams | Swift-shaped syntax and three tiers instead of lifetimes, variance and pinned self-references, with one derived `Sendable` marker where Rust has `Send` and `Sync`. Each borrow, copy and move of a place is written where it happens: `f(&a)` and `ref let b = &a` borrow, `let b = copy a` copies, and `let b = consume a` moves. Only a place of an implicitly copyable type, such as an `Int`, is copied with nothing written. C# marks such a borrow with `ref` too. | [01](spec/01-values-and-ownership.md) |
 
 ### Swift's problems
 
 | Problem | Rayo's answer | Spec |
 | --- | --- | --- |
 | ARC retain/release traffic; the optimizer moves refcounts between builds | No implicit reference counting: only reference-counted pointers such as `Shared<T>` count, where the code makes an owner. Handing a value over moves it, and every copy is written out, except one its type declares cheap, such as an `Int`'s. | [01](spec/01-values-and-ownership.md) |
-| ARC cycles leak unless code marks each back-reference `weak` or `unowned` | Stored references (weak pointers, handles) own nothing, so a back-reference never keeps its target alive, and a dead target reads `nil`. | [03](spec/03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert) |
+| ARC cycles leak unless code marks each back-reference `weak` or `unowned` | Stored links (weak pointers, handles) own nothing, so a back-reference never keeps its target alive, and a dead target reads `nil`. | [03](spec/03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert) |
 | Release cascades free big graphs synchronously | Arenas reset in O(1), and a `TrivialFree` value is released into its arena without walking it. Ownership moves, so a library can also destroy a value later or a piece at a time. | [06](spec/06-memory-and-allocators/allocation-lifecycle.md#releasing-a-value-without-destroying-it-trivialfree) |
 | Unspecialized generics, existentials, exclusivity and COW checks appear after harmless changes | Generics are always monomorphized, `any P` is written out and never boxes implicitly, dynamic exclusivity checks run only where a type or declaration announces them, and there is no copy-on-write, only the one deferred copy a `String` made from a plain literal or a static view takes, as `alloc "jump"` does, with no count to check ([04](spec/04-types/collections.md#strings)). | [03](spec/03-handles-and-objects.md#dynamic-exclusivity), [05](spec/05-protocols-generics-and-closures.md) |
 | Unoptimized builds are dramatically slower | No build makes runtime calls beyond the ones [11](spec/11-compilation-model.md#runtime-costs) lists, and generic code is always specialized. | [11](spec/11-compilation-model.md#runtime-costs) |
@@ -110,9 +110,9 @@ extension World: TimeSource {               // what elapsed(_:) counts in: here,
 }
 
 // Moves every enemy toward its target.
-func steer(_ world: mutable World, dt: Float) {
+func steer(_ world: mutable &World, dt: Float) {
     world.enemies.forEachInParallel { e in                   // e: one enemy, borrowed mutably
-        guard e.target != nil, ref let p = world.players[e.target] // a stale handle reads nil: skip this enemy
+        guard e.target != nil, ref let p = &world.players[e.target] // a stale handle reads nil: skip this enemy
         else { return }
         e.vel = (p.pos - e.pos).normalized * 4
         e.pos += e.vel * dt
@@ -121,7 +121,7 @@ func steer(_ world: mutable World, dt: Float) {
 
 // A script that plays out over several frames. Calling openDoor(d) runs nothing yet:
 // it returns the task's state, and whoever holds that state steps it.
-task func openDoor(_ door: owned Handle<Door>) with (world: mutable World) {   // owns its door; each step lends it the World
+task func openDoor(_ door: Handle<Door>) with (world: mutable &World) {   // owns its door; each step lends it the World
     world.doors[door]?.state = .opening     // '?': does nothing if the door is gone
     await elapsed(.seconds(0.5))            // suspends until a step finds half a second of world time has passed
     world.doors[door]?.state = .open        // no borrow survives an await: 'world' is re-lent on resume
@@ -140,8 +140,8 @@ func main() {
     while true {
         let now = unsafe plat.time_seconds()
         world.clock += Duration.seconds(now - last)
-        steer(&world, dt: Float(now - last)) // '&' marks a mutable borrow
-        scripts.step(&world)                // runs each woken script to its next await that isn't done
+        steer(mutable &world, dt: Float(now - last))   // 'mutable &' lends the world for change
+        scripts.step(mutable &world)        // runs each woken script to its next await that isn't done
         last = consume now
     }
 }
