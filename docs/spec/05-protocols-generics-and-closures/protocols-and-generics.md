@@ -167,9 +167,9 @@ let db = CHandle(raw: conn, release: sqlite3_close)        // conn: the *sqlite3
 let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_stmt>: a different type
 ```
 
-**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type were `@opaque`. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for one of these types, which have no size:
+**A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type had none. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for a type with no size ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)):
 
-- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built));
+- **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
 - **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box` or a pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
 
 **So an unsized type binds no type parameter but an `@opaque` one**, as the `T` of a type value is, which makes `Text.self` and `(any Drawable).self` type values ([below](#value-parameters-and-type-values)). A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`.
@@ -265,6 +265,10 @@ struct Crate(var hp: Float): HasHp        // the stored field 'hp' is the witnes
 struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only get and borrow requirements
 ```
 
+**A reference conforms to three protocols through what it refers to: `Equatable`, `Hashable` and `Formattable`.** A `&T` or `mutable &T` conforms to each when `T` does, and its witnesses are `T`'s, reached by forwarding ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Each of their requirements only reads the value, so the reference meets it with no access of its own. So a `Map<&Text, Int>` hashes and compares the text each key refers to ([Equality and ordering](operators.md#equality-and-ordering)), and `print(&name)` writes what `name` holds ([04](../04-types/collections.md#printing)).
+
+**A reference forwards no other conformance.** It is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(&b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
+
 **These rules say where a conformance is declared, and what it implies:**
 
 - **Conformances are declared** in the type's module or the protocol's (the orphan rule), so lookup is local. An implied conformance obeys it too. Take a conformance to `Q` declared in neither the type's module nor that of a protocol `B` that `Q` inherits. It implies one to `B` only where the type's conformance to `B` is already declared in the type's module or `B`'s, or given by the language. Otherwise it is a compile error that asks for that declaration. So every module that sees the type and `B` sees the one conformance between them.
@@ -358,7 +362,7 @@ for d in &targets { d.takeDamage(1) }           // error: 'd' names each element
 targets[0] = mutable &crate                     // points the first reference at 'crate'
 ```
 
-**A loop over a list of references names each element, a place that holds a reference**, as a `ref let` through `&` and a `ref var` through `mutable &` ([04](../04-types/collections.md#iteration)). A call through `d` forwards to the existential, and writing through it needs the `ref var` ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Assigning an element, as the last line does, or `d` in the first loop, points that reference elsewhere, as assigning any place that holds a reference does ([01](../01-values-and-ownership/bindings.md#bindings-that-own-a-value)).
+**A loop over a list of references names each element, a place that holds a reference**, as a `ref let` through `&` and a `ref var` through `mutable &` ([04](../04-types/collections.md#iteration)). A call through `d` forwards to the existential, and writing through it needs the `ref var` ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Assigning an element, as the last line does, or `d` in the first loop, points that reference elsewhere, as assigning any place that holds a reference does ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)).
 
 **A box that holds a shared existential reference is `Box<&any P>`**, a box like any other, which generic code gets from `Box<T>` with `T` bound to `&any P`. It is scoped, since it holds a reference ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
