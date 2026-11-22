@@ -33,7 +33,7 @@ struct Enemy(
 - **Dynamic.** Handles, objects and the other links that a value may store, and a few kinds of state, such as thread-locals and locks. Each use is checked when it runs: a stale link reads `nil` or panics instead of dangling, and conflicting uses panic or wait instead of racing.
 - **Unsafe.** Raw pointers and calls into C, which nothing checks ([C and compile time](08-c-and-compile-time.md)).
 
-**A pattern the compiler can't prove moves to the dynamic tier, never into `unsafe`.** A link that a struct keeps can outlive the function that stored it, so no one function body can check it. Rayo checks the link at each use instead of forbidding it.
+**A pattern the compiler can't prove moves to the dynamic tier, never into `unsafe`.** A link that a struct keeps can outlive the function that stored it, so no one function body can check it. Rayo checks the link at each use.
 
 **You can see each dynamic check in the code.** It shows in a type, such as `Handle<Player>`, or for a thread-local, in its declaration.
 

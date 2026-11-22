@@ -118,7 +118,7 @@ func report(_ level: Level) {
 
 A closure's body takes the ambient allocator of the function the closure is written in, since the rule follows where code is written.
 
-**The ambient allocator is never a setting the program changes.** It follows from where the code is written, so code deep in a call tree allocates from an allocator only when the allocator reaches it through a value or an `alloc` its caller wrote.
+**Where the code is written alone decides the ambient allocator.** So code deep in a call tree allocates from an allocator only when the allocator reaches it through a value or an `alloc` its caller wrote.
 
 ### Growth
 

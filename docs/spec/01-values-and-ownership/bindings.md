@@ -106,7 +106,7 @@ func hit(_ e: mutable Enemy, _ d: Float) {
 
 ## Names in scope
 
-**A local or a parameter can't take a name that a local or a parameter in scope already has.** That holds whether the other one was declared in the same block or in an enclosing one, and the compiler rejects the second declaration. So each name stands for one binding wherever the body uses it. A reader never has to work out which of two declarations a use reaches. What the compiler says about a name, that it was moved, is borrowed or is narrowed, is about the one binding declared with it.
+**A local or a parameter can't take a name that a local or a parameter in scope already has.** That holds whether the other one was declared in the same block or in an enclosing one, and the compiler rejects the second declaration. So each name stands for one binding wherever the body uses it. A reader finds the declaration a use reaches by its name alone. What the compiler says about a name, that it was moved, is borrowed or is narrowed, is about the one binding declared with it.
 
 ```swift
 func total(_ prices: Span<Int>, discount: Int) -> Int {

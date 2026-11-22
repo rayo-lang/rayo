@@ -76,7 +76,7 @@ log("\(squares.count) squares")
 
 **A pair `R!E` of type parameters binds from a `Result` type as its two payloads, and from any other type `U` as `U!Never`, through the function-value conversion above.** So a function value returning `Int!IoError` binds `R` to `Int` and `E` to `IoError`, and one returning `Int` binds `E` to `Never`. A value argument binds the same way through the `.success` wrap ([below](#propagating-errors-with-try)), so `f(5)`, for `f<R, E>(_ x: R!E)`, binds `R` to `Int` and `E` to `Never`.
 
-**`T!Never` is a type of its own, not another name for `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
+**`T!Never` is a type of its own, distinct from `T`.** So a conformance declared for `Result` never gives `T` a second one, and reflection reads a `T!Never` as the enum it is ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
 
 **A call whose result type, worked out at the call, is `T!Never` has type `T`, and so does an `await` whose awaitable's `Failure` is `Never` there** ([07](../07-concurrency/tasks.md#awaitables)). The result type is worked out after the call's generic arguments are substituted, so `tryMap(xs, square)` above is a `List<Int>`. The compiler takes the value out, which can't fail, so code that can't fail never writes `try`. A `try` on such a call is a compile error, since the call is no `Result`.
 
@@ -194,7 +194,7 @@ _ = loadLevel(path)                 // fine: the outcome is dropped on purpose
 
 **A `Result` that is never used is a compile error, as every unused value whose type isn't `Void` or `Never` is** ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unused-values)). So no error is dropped without the code saying so, however deeply a value holds it, as in the `(Void!IoError)?` that `player?.save()` gives. `_ = r` drops one on purpose.
 
-**A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). So `Result` needs no other way to run code and keep its error:
+**A closure literal called in place turns a block of `try`s into one `Result`**, since its body fails as the body of a function with a bare `!` does ([above](#what-a-failure-type-names)). So code runs a block and keeps its first failure as a value this way:
 
 ```swift
 let outcome = {

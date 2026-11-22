@@ -112,7 +112,7 @@ log("boss has \(boss.hp)")      // fine: boss has 500
 
 `copy` duplicates a value's own bytes. An `Enemy`'s bytes are the whole value, so the copy is a second, separate enemy ([01](../spec/01-values-and-ownership/moves-copies-destruction.md#copies)). An implicit copy of an `Int` is the same `copy`, made without the word.
 
-Why not copy every such value quietly? Because a copy's cost grows with the value. An `Int` is 8 bytes, but a struct can hold a long array, and a quiet copy of it would hide real work in a line that reads like a move. So a type copies with nothing written only when its author promises its copies stay cheap, by listing `ImplicitlyCopyable`:
+A copy's cost grows with the value. An `Int` is 8 bytes, but a struct can hold a long array, and a quiet copy of it would hide real work in a line that reads like a move. So a type copies with nothing written only when its author promises its copies stay cheap, by listing `ImplicitlyCopyable`:
 
 ```swift
 struct EntityId(let index: UInt32, let generation: UInt32): ImplicitlyCopyable
