@@ -66,8 +66,15 @@ struct BindingChecker {
     func check(_ binding: Binding, declaredWith kind: BindingKind) -> CheckedStmt? {
         // Checked before the name, so a declaration of `_` still reports its type's and its value's errors.
         let declared = checkTypeAndValue(of: binding)
+
         // A binding of `_` is reported, and declares no local.
         guard errors.isNaming(binding.name, at: binding.nameRange) else { return nil }
+
+        // A `var` that borrowed a place could never change what it holds, so a place it is given is reported.
+        if kind == .var, let value = declared.value {
+            expressions.reportHandedPlaces(of: value, as: ErrorCode.varBorrowsPlace)
+        }
+
         let type = checkLocalType(declared, of: binding)
         let local = names.declare(binding.name, type: type, kind: LocalKind(kind), at: binding.nameRange)
         return local.map { .binding($0, at: binding.nameRange, declared.value) }

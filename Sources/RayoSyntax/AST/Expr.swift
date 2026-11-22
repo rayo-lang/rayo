@@ -26,6 +26,9 @@ public indirect enum ExprKind: Sendable {
     /// `copy place`: the value of a local, or of a part of one at any depth, which the place keeps. `place` is a
     /// name, a member of a place, or an element of one.
     case copy(Expr)
+    /// `consume place`: the value moved out of a local, or out of a part of one at any depth, which then holds no
+    /// value until it is assigned again. `place` is a name, a member of a place, or an element of one.
+    case consume(Expr)
     /// An `if` whose value is that of the branch that runs.
     case `if`(IfExpr)
     /// `[elements]`: an array literal, whose elements are in the order the source writes them.

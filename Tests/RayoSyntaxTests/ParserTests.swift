@@ -235,6 +235,22 @@ struct ParserErrorTests {
         #expect(errors(source) == [expected])
     }
 
+    @Test(arguments: [
+        "func f() { print(consume e) }", "func f() { let s = consume e.stats.hp + consume a[i].n }",
+        "func f() {\n    let a = consume e\n        .hp\n}",
+    ])
+    func `'consume' takes a name and the members and elements after it`(source: String) {
+        #expect(errors(source) == [])
+    }
+
+    @Test(arguments: [
+        ("func f() { consume }", ErrorCode.missingConsumedName(found: .token("}"))),
+        ("func f() { print(consume (e).hp) }", .missingConsumedName(found: .token("("))),
+    ])
+    func `'consume' needs a name first`(source: String, expected: ErrorCode) {
+        #expect(errors(source) == [expected])
+    }
+
     @Test func `a struct's body that the file ends inside is reported at the file's end`() {
         #expect(errors("struct S {") == [.unclosedStructBody(found: .endOfFile)])
     }

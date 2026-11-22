@@ -8,8 +8,8 @@ func "main()"() -> Void {
   bind %1 @3:9-3:10
   assign
     place %1 @4:5-4:6
-    value: Int @4:9-4:10
-      place %0 @4:9-4:10
+    copy: Int @4:9-4:15
+      place %0 @4:14-4:15
   compound-assign add
     place %1 @5:5-5:6
     integer 2: Int @5:10-5:11

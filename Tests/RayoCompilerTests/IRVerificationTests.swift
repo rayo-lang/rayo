@@ -119,7 +119,7 @@ private func mainOfRounds(_ count: Int) -> String {
         """
             let i\(round): UInt = \(round % 4)
             let x\(round) = a[i\(round)] + \(round)
-            if x\(round) > s { s = x\(round) } else { a[i\(round)] = copy s }
+            if x\(round) > s { s = consume x\(round) } else { a[i\(round)] = copy s }
         """
     }
     return """
