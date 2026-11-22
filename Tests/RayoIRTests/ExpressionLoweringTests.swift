@@ -21,7 +21,8 @@ struct ExpressionLoweringTests {
         try expectLowering(ofMain: "let a = 1\nlet b = -a\nlet c = consume a", toMatch: "reads-and-moves")
     }
 
-    @Test func `'_ =', an assignment and a 'consume' in an 'if' move a local, and an argument's 'if' reads it`()
+    @Test
+    func `'_ =', an assignment and a 'consume' in an 'if' move a local, and a borrowed argument's 'if' reads it`()
         throws {
         let source = """
             func main() {
@@ -44,7 +45,7 @@ struct ExpressionLoweringTests {
     @Test func `a position that takes an Int, a UInt or a Bool from a place copies it, so the place keeps its value`()
         throws {
         // A `_ =`, an initializer's argument, an array literal's element, a branch of an `if` in such a position and
-        // a `return` each read the place, where `_ =` moves an array of Ints, as each would any other type's value.
+        // a `return` each read the place. Each would move a value of any other type, as `_ =` moves the array of Ints.
         let source = """
             func main() {}
             func kept(_ n: Int, _ level: UInt, _ alive: Bool, _ row: [2 of Int]) -> Int {

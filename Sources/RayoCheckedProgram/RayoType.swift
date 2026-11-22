@@ -38,7 +38,7 @@ public indirect enum RayoType: Hashable, Sendable, CustomStringConvertible {
 
     /// Whether the type is implicitly copyable: a value of it that a position takes from a place is copied, and the
     /// place keeps its value, with no `copy` written. A scalar type is. An array never is, and a struct is only by
-    /// listing the conformance, which no struct declaration does, so no struct is.
+    /// listing the conformance, which a struct declaration can't, so no struct is.
     public var isImplicitlyCopyable: Bool {
         if case .scalar = self { true } else { false }
     }
