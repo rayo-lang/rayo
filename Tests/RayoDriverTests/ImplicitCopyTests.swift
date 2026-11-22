@@ -57,7 +57,8 @@ struct ImplicitCopyTests {
                 print(r + s)
                 print(t)
                 print(alive)
-                print(hpOf(Stats(hp: 7)))
+                let stats = Stats(hp: 7)
+                print(hpOf(&stats))
             }
             func hpOf(_ s: &Stats) -> Int {
                 let hp = s.hp

@@ -23,7 +23,8 @@ struct ArrayTests {
                 board.grid = relayGrid(&moved)
                 let none: [0 of Int] = []
                 _ = relayNone(&none)
-                _ = relayNone([])
+                let empty: [0 of Int] = []
+                _ = relayNone(&empty)
                 print(count(of: &board, &kept, &returned))
             }
             func relayInts(_ a: &[2 of Int]) -> [2 of Int] { copy a }
@@ -63,7 +64,7 @@ struct ArrayTests {
                 print(hits[0][0].damage + hits[999][99].damage)
             }
             func relay(_ a: &[100000 of Int]) -> [100000 of Int] { copy a }
-            func relayAll(_ a: &[100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(copy a) }
+            func relayAll(_ a: &[100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { relay(&a) }
             func relay(_ a: &[100000 of [2 of Hit]]) -> [100000 of [2 of Hit]] { copy a }
             struct Hit(var damage: Int, let crit: Bool)
             """
@@ -88,16 +89,17 @@ struct FilledArrayTests {
     func `.init(repeating:) fills arrays of Ints, Bools, structs and arrays wherever an array type is expected`(
         mode: [String],
     ) {
-        // Each array is filled where a local's annotation, an argument, a `return`, an assignment, a field's argument
-        // or an outer array expects it, and each of its elements is printed. `relayFlags` and `made` each print their
-        // array's count as they run, so the run shows each was called.
+        // Each array is filled where a local's annotation, a `return`, an assignment, a field's argument or an outer
+        // array expects it, and each of its elements is printed. `relayFlags` and `made` each print their array's
+        // count as they run, so the run shows each was called.
         let source = """
             func main() {
                 var ints: [3 of Int] = .init(repeating: 7)
                 show(&ints)
                 ints = .init(repeating: -1)
                 show(&ints)
-                let flags = relayFlags(.init(repeating: true))
+                let given: [2 of Bool] = .init(repeating: true)
+                let flags = relayFlags(&given)
                 print(flags[0])
                 print(flags[1])
                 let hit = Hit(damage: 3)

@@ -48,18 +48,24 @@ struct ReferenceParameterTests {
     }
 
     @Test(arguments: [
-        "show(makeEnemy())", "show(copy e)", "read(1)", "read(a + 1)", "read(makeEnemy().stats.hp)",
-        "show(if c { makeEnemy() } else { copy e })",
+        ("show(makeEnemy())", [10]), ("show(copy e)", [10]), ("read(1)", [10]), ("read(a + 1)", [10]),
+        ("read(makeEnemy().stats.hp)", [10]), ("show(if c { makeEnemy() } else { copy e })", [17, 38]),
+        ("show(if c { &e } else { makeEnemy() })", [29]),
     ])
-    func `a '&T' parameter takes a value that no local holds, with nothing written`(statement: String) {
-        #expect(messages(of: statement) == [])
+    func `a value that no local or parameter holds can't be lent to a '&T' parameter`(
+        statement: String, columns: [Int],
+    ) {
+        #expect(messages(of: statement) == columns.map {
+            "\($0): error[E0286]: only a local, a parameter, or a field or element of one can be lent; put the value "
+                + "in a 'let' and lend that"
+        })
     }
 
     @Test(arguments: [
         ("show(e)", 10, "an Enemy", "e"), ("read(a)", 10, "an Int", "a"),
         ("read(e.stats.hp)", 10, "an Int", "e.stats.hp"), ("show(g[i])", 10, "an Enemy", "g[i]"),
         ("showStats(e.stats)", 15, "a Stats", "e.stats"), ("pair(a, with: a)", 10, "an Int", "a"),
-        ("show(if c { e } else { makeEnemy() })", 17, "an Enemy", "e"),
+        ("show(if c { e } else { &g[0] })", 17, "an Enemy", "e"),
     ])
     func `a place given to a '&T' parameter without '&' names the place with '&'`(
         statement: String, column: Int, type: String, place: String,

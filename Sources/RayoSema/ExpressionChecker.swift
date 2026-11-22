@@ -126,14 +126,20 @@ struct ExpressionChecker {
     }
 
     /// Makes `value` stand where a position expects what `expected` names, reporting its mismatch where it can't, and
-    /// each place it gives bare to a parameter that borrows it.
+    /// reporting it where it is given, without a `&`, to a parameter that borrows it.
     func fitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
-        // A value of another type can't stand there.
+        guard let fitted = typeFitted(value, to: expected) else { return nil }
+        reportUnlent(fitted, to: expected)
+        return fitted
+    }
+
+    /// `value` as a value of the type `expected` names, or nil, with its mismatch reported, where it is of another
+    /// type.
+    func typeFitted(_ value: CheckedExpr, to expected: Expectation) -> CheckedExpr? {
         guard let fitted = TypeFit.fitted(value, to: expected.type) else {
             reportMismatch(of: value.type, at: value.range, expected)
             return nil
         }
-        reportUnlentPlaces(of: fitted, to: expected)
         return fitted
     }
 

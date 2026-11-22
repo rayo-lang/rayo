@@ -230,7 +230,8 @@ private let passingOwnedCopies = """
     }
     """
 
-/// The IR that `rayoc --emit=ir` gives for this source, whose two temporaries each hold an array `filled` makes:
+/// IR whose `main` holds the array `filled(3)` makes in a temporary and lends it to `sum`, then does the same with
+/// `filled(5)`, printing each sum. `filled` and `sum` are the IR that `rayoc --emit=ir` gives for this source:
 ///
 /// ```
 /// func filled(_ i: UInt) -> [100000 of Int] {
@@ -246,10 +247,6 @@ private let passingOwnedCopies = """
 ///         j += 1
 ///     }
 ///     return total
-/// }
-/// func main() {
-///     print(sum(filled(3)))
-///     print(sum(filled(5)))
 /// }
 /// ```
 ///

@@ -94,12 +94,12 @@ struct ArrayTypeTests {
 struct ArrayLiteralTests {
     @Test(arguments: [
         "let a: [2 of Int] = [1, -2]\n_ = sum(&a)",
-        "_ = sum([1, 2])",
-        "let a: [0 of Bool] = []\nnone(&a)\nnone([])",
+        "_ = Holder(hits: [Hit(damage: 1), Hit(damage: 2)])",
+        "let a: [0 of Bool] = []\nnone(&a)",
         "var a = [[1, 2], [3, 4]]\n_ = a\na = [[5, 6], [7, 8]]\n_ = a",
         "let h = Hit(damage: 1)\n_ = [h, Hit(damage: 2)]",
         "let n = 3\n_ = [1, n]",
-        "pick([1, 2, 3])",
+        "let a: [3 of Int] = [1, 2, 3]\npick(&a)",
         "let a: [2 of UInt] = [1, 2]\n_ = a\nlet b: [1 of [2 of UInt]] = [[3, 4]]\n_ = b",
         "_ = [if true { 1 } else { 2 }, 3]",
     ])
@@ -145,8 +145,8 @@ struct ArrayInitializerTests {
     @Test(arguments: [
         "var a: [3 of Int] = .init(repeating: 0)\n_ = a",
         "let a: [2 of UInt] = .init(repeating: 7)\n_ = a",
-        "_ = sum(.init(repeating: 1))",
-        "none(.init(repeating: true))",
+        "let a: [2 of Int] = .init(repeating: 1)\n_ = sum(&a)",
+        "let a: [0 of Bool] = .init(repeating: true)\nnone(&a)",
         "var a: [2 of Int] = [1, 2]\n_ = a\na = .init(repeating: 3)\n_ = a",
         "_ = Holder(hits: .init(repeating: Hit(damage: 1)))",
         "let a: [2 of [2 of Int]] = [.init(repeating: 1), [2, 3]]\n_ = a",

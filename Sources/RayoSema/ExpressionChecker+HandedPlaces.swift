@@ -13,23 +13,26 @@ extension ExpressionChecker {
         }
     }
 
-    /// Reports each place rooted in a local that `value` hands its position to, where `expected` names a parameter
-    /// that borrows its argument, which a call lends a place with `&`. A value of an implicitly copyable type is
-    /// reported too, since a copy is a value, and the parameter takes the place. The call still lends the place, so
-    /// the error leaves the body's meaning whole.
-    func reportUnlentPlaces(of value: CheckedExpr, to expected: Expectation) {
+    /// Reports `value` where `expected` names a parameter that borrows its argument, since a call lends such a
+    /// parameter a place with `&`. A place rooted in a local is reported with the `&` to write, even where its type
+    /// is implicitly copyable, since a copy is a value, and the parameter takes the place; the call still lends the
+    /// place, so that error leaves the body's meaning whole. Any other value, such as a call's result or a copy, has
+    /// no place that the call can lend.
+    func reportUnlent(_ value: CheckedExpr, to expected: Expectation) {
         guard let parameter = expected.parameter, parameter.convention == .borrowed else { return }
-        for handed in value.handedPlaces {
-            let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
-                                             place: sourceName(of: handed))
-            file.errors.reportKeepingMeaning(code, at: handed.place.range)
+        // A value that stands here is no `if`, since each branch of an `if` stands in its place on its own.
+        guard let handed = value.handedPlaces.first else {
+            file.errors.report(.unlendableValue, at: value.range)
+            return
         }
+        let code = ErrorCode.unlentPlace(name: parameter.callee, type: typeName(of: value.type),
+                                         place: sourceName(of: handed))
+        file.errors.reportKeepingMeaning(code, at: handed.place.range)
     }
 
     /// `lent`, a `&` of a place, as it stands where a position expects what `expected` names. The argument of a
     /// parameter that borrows takes the place itself, and checks its type as it would the value's. Reports the `&`
-    /// anywhere else: given to a parameter that owns its argument, it names the parameter's type, and the call takes
-    /// the place's value as it would with nothing written, so the error leaves the body's meaning whole.
+    /// anywhere else.
     func lent(_ lent: LentPlace, to expected: Expectation) -> CheckedExpr? {
         // Only a call's argument takes a reference.
         guard let parameter = expected.parameter else {
@@ -37,28 +40,26 @@ extension ExpressionChecker {
             return nil
         }
 
-        let value = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
-        switch parameter.convention {
-        // A parameter that borrows takes the place, where it holds a value of the parameter's type.
-        case .borrowed:
-            guard let fitted = TypeFit.fitted(value, to: expected.type) else {
-                file.errors.report(expected.mismatch(typeName(of: expected.type), typeName(of: value.type)),
-                                   at: lent.range)
-                return nil
-            }
-            return fitted
-
-        // A parameter that owns its argument takes the place's value.
-        case .owned:
-            let code = ErrorCode.referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type))
-            file.errors.reportKeepingMeaning(code, at: lent.range)
-            return fitted(value, to: expected)
-
+        let place = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
+        return switch parameter.convention {
+        case .borrowed: typeFitted(place, to: expected)
+        case .owned: reportReference(lent, toOwning: parameter, expected)
         // Checking reports a `mutable &` parameter that the source writes, and declares it as one that borrows, and no
         // built-in or initializer takes its argument for change.
-        case .mutable:
-            preconditionFailure("no parameter that checking declares borrows its argument for change")
+        case .mutable: preconditionFailure("no parameter that checking declares borrows its argument for change")
         }
+    }
+
+    /// Reports `lent`, given to `parameter`, which owns its argument of the type `expected` names, and takes the
+    /// place's value as the call would with nothing written, so the error leaves the body's meaning whole.
+    private func reportReference(
+        _ lent: LentPlace, toOwning parameter: ArgumentParameter, _ expected: Expectation,
+    ) -> CheckedExpr? {
+        file.errors.reportKeepingMeaning(
+            .referenceToOwnedParameter(name: parameter.callee, type: typeName(of: expected.type)), at: lent.range,
+        )
+        let place = CheckedExpr(kind: .place(lent.place), type: lent.placeType, range: lent.range)
+        return fitted(place, to: expected)
     }
 
     /// Reports each place that `value` hands the `ref let` called `binding` in a local out of scope here: one that a

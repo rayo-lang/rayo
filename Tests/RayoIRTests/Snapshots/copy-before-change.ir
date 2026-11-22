@@ -12,7 +12,7 @@ func "main()"() -> Void {
   var %2 p: P @5:9-5:10
   temp %3: Int
   temp %4: Int
-  temp %5: P
+  temp %5: Int
   temp %6: Int
 bb0:
   declare %0
@@ -35,26 +35,25 @@ bb3:
   declare %2
   %2 @5:9-5:10 = call "P(hp: Int)"(1) @5:13-5:21
   declare %5
-  %5 @6:10-6:16 = operand read %2 @6:10-6:16 @6:10-6:16
+  %5 @6:10-6:19 = operand read %2.0 @6:10-6:19 @6:10-6:19
   declare %6
   branch true, bb4, bb5
 bb4:
-  %2.0 @6:28-6:32 = operand 7 @6:35-6:36
-  %6 @6:18-6:52 = operand 0 @6:38-6:39
+  %2.0 @6:31-6:35 = operand 7 @6:38-6:39
+  %6 @6:21-6:55 = operand 0 @6:41-6:42
   goto bb6
 bb5:
-  %6 @6:18-6:52 = operand 0 @6:49-6:50
+  %6 @6:21-6:55 = operand 0 @6:52-6:53
   goto bb6
 bb6:
-  begin a0 read %5 @6:10-6:16
-  _ = call "show(_: &P, _: Int)"(a0, read %6 @6:18-6:52) @6:5-6:53
+  _ = call "show(_: Int, _: Int)"(read %5 @6:10-6:19, read %6 @6:21-6:55) @6:5-6:56
   _ = call builtin "print(_: Int)"(read %2.0 @7:11-7:15) @7:5-7:16
   return
 }
 
-func "show(_: &P, _: Int)"(_: P, _: owned Int) -> Void {
-  param %0 a: P @9:13-9:14
-  param %1 b: owned Int @9:22-9:23
+func "show(_: Int, _: Int)"(_: owned Int, _: owned Int) -> Void {
+  param %0 a: owned Int @9:13-9:14
+  param %1 b: owned Int @9:23-9:24
 bb0:
   return
 }
