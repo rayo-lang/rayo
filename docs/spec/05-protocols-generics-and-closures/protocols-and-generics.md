@@ -299,7 +299,7 @@ for w in &widgets { w.value.update(dt) }           // a mutating requirement, th
 | --- | --- | --- |
 | `any P` | Shared view: scoped, copyable | A shared borrow of a `T: P`, or of an unscoped existential's `value` |
 | `MutableRef<any P>` | Exclusive view: scoped, move-only | `&place` of a `T: P`, or of an unscoped existential's `value` |
-| A parameter, borrowed or `mutable`, or a `ref let` or `ref var`, of type `any P` | A borrow of a place, through which calls dispatch dynamically | A place holding a `T: P`, or `&` of one; for a borrowed one, an `any P` too |
+| A parameter, borrowed or `mutable`, or a `ref let` or `ref var`, of type `any P` | A borrow of a place, through which calls dispatch dynamically | A place holding a `T: P`, or `&` of one; for a borrowed parameter or a `ref let`, an `any P` too |
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
