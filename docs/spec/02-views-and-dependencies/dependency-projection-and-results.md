@@ -166,7 +166,18 @@ forEachLine(src.view) { line in lines.append(line) }
 - a `mutating` or `consuming` function value, or a closure with an exclusive capture;
 - a value holding one of these.
 
-**A mutable view holds what it can change exclusively, so it is also called an exclusive view**, as against a shared view, such as a `Span`, whose memory others may read at the same time. So an **exclusive view** is any of the values above, and an exclusive `SoA` row too ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+**An exclusive view is a mutable view that changes only what it views, never itself:**
+
+- a `MutableSpan` or a `MutableRef`;
+- a lock guard ([07](../07-concurrency/synchronization.md#locks-mutex-and-rwlock));
+- an exclusive `SoA` row, whose fields' places lie in the columns ([04](../04-types/data-layout.md#struct-of-arrays-soat));
+- a `mutating` function value, whose call changes only the closure it views ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values)).
+
+**The other mutable views aren't exclusive views, since each may change itself:**
+
+- a `consuming` function value, which ends when it is called;
+- a closure literal with an exclusive capture, whose call changes the closure itself;
+- a value that holds a mutable view, such as a struct of spans, which may change its own fields.
 
 **A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 

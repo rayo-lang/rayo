@@ -68,9 +68,9 @@ parse(lines)                              // and the same as parse(lines.span)
 
 **A `MutableSpan` is move-only**, since two copies would be two ways to change the same elements at once.
 
-**The mutable view has a name of its own.** `hits.span` and `hits.mutableSpan` are two members, so `&` never has to pick between them: written before an expression, `&` always lends that place for change ([04](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection)).
+**A mutable span comes from a member of its own.** `hits.span` is a `Span<Int>`, and `hits.mutableSpan`, a `mutating` member, is a `MutableSpan<Int>`. Written before an expression, `&` lends that place for change ([04](../spec/04-types/collections.md#shared-and-mutable-views-of-one-collection)).
 
-**Writing through a `MutableSpan` takes a binding that may change.** `editable[0] = 0` changes an element of `hits` through the span, and Rayo lets code change something only through a binding that may change, such as a `var` ([01](../spec/01-values-and-ownership/bindings.md#changeable-places)). So a `let` that holds a span can read through it, but never write through it ([02](../spec/02-views-and-dependencies/scoped-values.md#writing-through-a-view)).
+**Writing through a `MutableSpan` takes a binding that may change.** `editable[0] = 0` changes an element of `hits` through the span, which takes a binding that may change, such as a `var` ([01](../spec/01-values-and-ownership/bindings.md#changeable-places)). So a `let` that holds a span can read through it, but never write through it ([02](../spec/02-views-and-dependencies/scoped-values.md#writing-through-a-view)).
 
 **A function that writes through a span takes it with no convention written, and receives it owned.** At the call, `&editable` lends the function a new view of the same elements, and `editable` works again once the call returns:
 

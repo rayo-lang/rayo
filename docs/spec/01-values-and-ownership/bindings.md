@@ -59,7 +59,7 @@ ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; 
 **A `let` or `var` declaration owns what it binds**, as a binding of a call's result does. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
 - **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)). The exceptions are below.
-- **A `let` or `var` given `&e` is a compile error that says to write `ref var`, whatever `e` is.** `&e` lends the place `e` for change, and a binding without `ref` refers to no place ([Lending a place for change](#lending-a-place-for-change)). That holds where the declared type would make a view from `&e`, such as a `MutableRef<any P>`, too. A `ref var` binds the place itself, so a declaration never needs that view. An argument or an assignment into a place of that type has no `ref` form, so there `&e` makes the view.
+- **A `let` or `var` given `&e` is a compile error that says to write `ref var`.** `&e` lends the place `e` for change, and a binding without `ref` refers to no place ([Lending a place for change](#lending-a-place-for-change)). That holds where the declared type would make a view from `&e`, such as a `MutableRef<any P>`, too. A `ref var` binds the place itself, so a declaration never needs that view. An argument or an assignment into a place of that type has no `ref` form, so there `&e` makes the view.
 - **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says. A place of an implicitly copyable type needs neither, as below.
 
 **Four exceptions need none of `copy`, `consume` and `ref let`, since each gives the binding a value of its own to own:**
@@ -390,7 +390,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 
 ## Lending a place for change
 
-**`&e` lends the place `e` for change, whatever `e` is, and `&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
+**`&e` lends the place `e` for change, and `&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
 
 - a `mutable` argument;
 - the place a `ref var` declaration or condition refers to;
@@ -411,7 +411,7 @@ targets.append(&boss)                                    // a view of 'boss', in
 
 **What follows `&` is a changeable place.** Leaving `&` out is a compile error, and so is `&` on something that lends nothing for change, such as a `let` or a property with a `borrow` and no `mutate`.
 
-- **`&` never picks a declaration, since each name has one.** A mutable view has a name of its own, made by a `mutating` member, as `particles.mutableLife` makes an [`SoA`](../04-types/data-layout.md#struct-of-arrays-soat) column a `MutableSpan<Float>`, where `particles.life` is a `Span<Float>` ([04](../04-types/collections.md#shared-and-mutable-views-of-one-collection)). Its receiver takes no `&`, as any `mutating` member's receiver doesn't, and a binding of it owns the view, as in the example below.
+- **A mutable view comes from a `mutating` member**, as `particles.mutableLife` makes an [`SoA`](../04-types/data-layout.md#struct-of-arrays-soat) column a `MutableSpan<Float>`, where `particles.life` is a `Span<Float>` ([04](../04-types/collections.md#shared-and-mutable-views-of-one-collection)). Its receiver takes no `&`, as any `mutating` member's receiver doesn't, and a binding of it owns the view, as in the example below.
 - **A binding of a value lends nothing, so it takes no `&`.** A call result bound to a name is owned by its binding. That includes an owned value of a move-only scoped type ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)), such as the guard that `registry.lock()` returns, which changes the registry through it.
 - **A call result lent for change takes `&`, as any changeable place does**, when it is a `mutable` argument, a loop's sequence or a `when` subject. It is a temporary, which its statement owns, or which the loop or the `when` owns in a hidden local, as in the example below.
 

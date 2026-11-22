@@ -517,7 +517,7 @@ for chunk in data.mutableChunks(64) { scale(&chunk) }   // one MutableSpan<Float
 
 **An iterator that hands out mutable views lends.** Its `mutating` `next()` makes each element depend exclusively on the iterator until the next call, so two are never live at once. Keeping a chunk past its iteration, or holding two, is a compile error. `split(at:)` gives two at once.
 
-**`zip` is a method of every collection, not part of the language.** `a.zip(b)` reads both, and `a.mutableZip(b)` changes the receiver's elements and reads the argument's. Each hands out tuples, and stops at the shorter, so every element is in bounds. Three or more nest: `a.zip(b).zip(c)` hands out `((x, y), z)`, and `a.mutableZip(b.zip(c))` changes `a`'s elements beside the other two's. A `mutableZip` is a move-only view whose only iteration is the consuming one. So a loop over a place holding one consumes it explicitly, and no two iterators hand out its `MutableRef`s:
+**`zip` is a method of every collection.** `a.zip(b)` reads both, and `a.mutableZip(b)` changes the receiver's elements and reads the argument's. Each hands out tuples, and stops at the shorter, so every element is in bounds. Three or more nest: `a.zip(b).zip(c)` hands out `((x, y), z)`, and `a.mutableZip(b.zip(c))` changes `a`'s elements beside the other two's. A `mutableZip` is a move-only view whose only iteration is the consuming one. So a loop over a place holding one consumes it explicitly, and no two iterators hand out its `MutableRef`s:
 
 ```swift
 for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iteration consumes it
@@ -525,7 +525,7 @@ for (x, y) in consume z { … }       // 'z' holds a mutableZip: its only iterat
 
 ### Shared and mutable views of one collection
 
-**A collection's shared and mutable views have names of their own, so `&e` always lends the place `e` and never picks a declaration.** A shared and a mutable form of one name would make `&` choose between two declarations, rather than lend a place. The mutable one is made by a `mutating` member, whose name puts `mutable` before the shared one's:
+**A collection's shared and mutable views have names of their own.** The mutable one is made by a `mutating` member, whose name puts `mutable` before the shared one's:
 
 | Shared | Mutable |
 | --- | --- |
@@ -554,7 +554,7 @@ func lives(_ p: mutable Particles) -> MutableSpan<Float> { p.mutableLife }   // 
 
 ### Mutating and consuming forms of one method
 
-**A `consuming` method may share a `mutating` one's name and parameters**, since the receiver's form picks between them, not `&` ([above](#shared-and-mutable-views-of-one-collection)):
+**A `consuming` method may share a `mutating` one's name and parameters**, since the receiver's form picks between them:
 
 ```swift
 let (a, b) = s.split(at: m)             // 's' is a place: the mutating form lends two halves

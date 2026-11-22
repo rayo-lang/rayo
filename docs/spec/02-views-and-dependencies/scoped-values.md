@@ -42,7 +42,7 @@ struct MutableSpan<Element>(                           // exclusive view: move-o
 
 ## Writing through a view
 
-**Writing through a view is `mutating`, so it needs a changeable place**, such as a `var` or a `for` name that owns the view, as any change does ([01](../01-values-and-ownership/bindings.md#changeable-places)). So a `let` never writes through a view it holds, whatever the view's type:
+**Writing through a view is `mutating`, so it needs a changeable place**, such as a `var` or a `for` name that owns the view, as any change does ([01](../01-values-and-ownership/bindings.md#changeable-places)). So a `let` can't write through a view it holds:
 
 ```swift
 var hot = heat.mutableSpan                              // a MutableSpan<Float> that a var owns
