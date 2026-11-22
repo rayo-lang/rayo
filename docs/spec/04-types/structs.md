@@ -37,7 +37,7 @@ enum Tree {
 struct Chain(var next: Chain?)    // error: a Chain would hold a Chain inline, in its optional
 ```
 
-**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose layout follows the target's pointer width, such as a raw pointer, a `Span` or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
+**A struct's fields lie in memory in its layout order.** A struct's **layout order** sorts its fields by decreasing alignment, and keeps declaration order among fields of equal alignment. Every alignment is a power of two and every size a multiple of its alignment, so no padding falls between fields, only after the last. The rule alone fixes the order, so a struct has one layout in every build. It has the same layout on every target too, unless it holds, at any depth, a value whose layout follows the target's pointer width, such as a raw pointer, a reference or a `Name` ([11](../11-compilation-model.md#what-a-target-must-provide)).
 
 **A `@c` or `@layout` struct's layout order is its declaration order** ([below](#layout-attributes)). That serves a layout something outside the program fixes, such as a C header, a file format or a network packet.
 
@@ -93,10 +93,10 @@ let s = Spawner(owner: nil)              // 'target', 'cooldown' and 'spawned' m
 
 **Every value of a struct is built by its primary initializer**, except a value that a `Pod` type takes from bytes ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)) and an imported C struct's zero-initialized one ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)). The primary initializer's parameters are the fields, in order and labeled by name:
 
-- **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let`, and takes no parameter convention. The value owns its fields, so the primary initializer takes every one `owned`: `Inventory(items: loot)` moves `loot` in, unless the call says `copy loot` or `alloc loot.clone()` ([01](../01-values-and-ownership/parameters.md#parameters)).
+- **Owned fields.** The header lists fields, not parameters: each entry is a `var` or `let` and its type. The value owns its fields, so the primary initializer owns every argument, as a `T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). So `Inventory(items: consume loot)` moves `loot` in, and `copy loot` or `alloc loot.clone()` gives it a second value instead. A field whose type is a reference holds the reference, which makes the struct scoped ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 - **Defaults.** A field's default makes its argument optional. A field with a default may leave its type to the default, as `spawned` does above.
 - **Optional `var`s.** A `var` declared with an optional type, `T?` written as such, with no default and not `unsafe`, starts as `nil`. It counts as defaulted, for the primary initializer and for reflection's `hasDefault` ([09](../09-compile-time/reflection.md#what-reflection-can-read)). A `let` of optional type does neither.
-- **`unsafe` fields.** An `unsafe` field, such as `Span`'s `baseAddress`, is given its argument only inside `unsafe`, just as naming it needs `unsafe`.
+- **`unsafe` fields.** An `unsafe` field, such as an index that `unchecked` code trusts ([Plain data](data-layout.md#plain-data-pod-and-bit-casts)), is given its argument only inside `unsafe`, just as naming it needs `unsafe`.
 
 **A type can also offer other initializers**, which can check an invariant before the value exists:
 
@@ -116,7 +116,7 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 }
 ```
 
-**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function whose parameters are borrowed unless marked. So it passes `copy x`, or an `owned` parameter, on to the primary one. A parameter of an implicitly copyable type is copied in with nothing written, as `Fraction` passes its `Int`s above ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
+**Every other `init` is secondary, and delegates.** It computes and checks what the primary initializer needs, then calls `self.init(…)`. It is an ordinary function, whose parameters' types say what it does with each argument ([01](../01-values-and-ownership/parameters.md#parameters)). So it passes the primary one `copy x` of a `&T` parameter, or `consume x` of a `T` parameter it owns. A parameter of an implicitly copyable type is copied in with nothing written, as `Fraction` passes its `Int`s above ([01](../01-values-and-ownership/moves-copies-destruction.md#implicit-copies)).
 
 **A secondary initializer calls `self.init` at most once on every path, and exactly once on every path that returns the new value.** A call that a path could reach twice, as one in a loop could, is a compile error. The call reaches the primary initializer directly or through other secondary ones, and secondary initializers that call each other without reaching it are a compile error.
 
@@ -142,9 +142,9 @@ public struct Body private init(let mass: Float, let invMass: Float, var velocit
 ```swift
 @layout(.packed) struct NetRec(var tag: UInt8, var ids: [4 of UInt32])     // 'ids' starts at offset 1
 
-func sum(_ r: NetRec) -> UInt32 {
+func sum(_ r: &NetRec) -> UInt32 {
     var total: UInt32 = 0
-    for i in r.ids { total += i }         // error: the loop borrows an under-aligned field in place
+    for i in &r.ids { total += i }        // error: the loop borrows an under-aligned field in place
     for i in copy r.ids { total += i }    // fine: iterates an aligned copy
     return total
 }
@@ -152,13 +152,13 @@ func sum(_ r: NetRec) -> UInt32 {
 
 **These places have a guaranteed alignment**, which their address is always a multiple of:
 
-- **Variables and separately allocated elements.** A variable's guarantee, or an element's of separately allocated storage, such as a `List`, a pool or a span, is its type's alignment.
+- **Variables and separately allocated elements.** A variable's guarantee, or an element's of separately allocated storage, such as a `List`, a pool or a run of elements, is its type's alignment.
 - **Fields.** A field's guarantee is the smaller of its enclosing place's guarantee and the largest power of two dividing its offset. A tuple's element is a field ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)). An element of `[N of T]` or a `Simd` counts as one at offset `index × stride`, using the stride for a dynamic index.
 
 **A place guaranteed less than its type's alignment, at any depth, is under-aligned, and is used only by value.** So `recs[1].id` in a `List` of the 5-byte `Rec` above is under-aligned: `id` is at offset 0, but `recs[1]` itself is guaranteed only 1. Using it by value means that nothing borrows it where it lies:
 
-- **No views.** Any borrow of it but an argument is a compile error: a `ref let` or `ref var` binding, a `when` subject, a loop's sequence, a span, an `any P` or a place property's place. So is a `for` or `when` name that binds it in place. A closure captures the aligned place that holds it instead ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
-- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable` one, a receiver included. A place property reached through such a receiver, or whose place may lie in such an argument, hands out a place in the temporary. So it is changed as a value property is, through a copy ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), and the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result, an error included ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+- **No references.** Any reference to it but an argument is a compile error: a `ref` binding, a `let` or `var` that holds a reference to it, a `when` or loop subject, a `&[T]` of it, a `&any P` or a place property's place. So is a `for` or `when` name that binds it in place. A closure captures the aligned place that holds it instead ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places)).
+- **Arguments go through an aligned temporary.** It is copied in, and back for a `mutable &` one, a receiver included. A place property reached through such a receiver, or whose place may lie in such an argument, hands out a place in the temporary. So it is changed as a value property is, through a copy ([02](../02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)), and the temporary is written back when the access ends. A call is a compile error if the argument place would enter the dependency set of its scoped result, an error included ([02](../02-views-and-dependencies/dependency-projection-and-results.md#rule-3-call-results)), or be absorbed into another argument ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 - **A panic still writes the temporary back.** The temporary holds the field's only value, since it was copied out bit for bit, so destroying it and keeping the field's old bytes would destroy one value twice. So unlike a value property's copy, it is written back, and changes made before the panic stay ([10](../10-errors-and-safety/panics.md#unwinding)). The write-back happens where the unwind would destroy the temporary, before the value holding the field, which was there before the access began ([01](../01-values-and-ownership/moves-copies-destruction.md#destruction-by-unwinding)).
 
 **Generic code takes the safe bound**, since it is checked once, at its definition ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)). A path that crosses no packed struct or union stays aligned, since ordinary layout keeps every field aligned for its type. Below a packed struct or union, generic code computes the enclosing guarantee and each offset only from the parts that don't depend on a type parameter: at least 1, and 1 after any field of parameter-dependent size. A field whose type depends on a parameter is taken to require the largest alignment any type can have:
@@ -167,7 +167,7 @@ func sum(_ r: NetRec) -> UInt32 {
 @layout(.packed(4)) struct Msg<T: Copyable>(var tag: UInt8, var payload: T)
 struct Env<T>(var rec: Rec, var body: T)
 
-func unpack<T: Copyable>(_ m: Msg<T>, _ e: Env<T>) {
+func unpack<T: Copyable>(_ m: &Msg<T>, _ e: &Env<T>) {
     let p = copy m.payload      // by value: under-aligned, since T may need more than 4
     let id = e.rec.id           // a copy, by value: under-aligned, since Env<UInt8> misaligns it
 }
