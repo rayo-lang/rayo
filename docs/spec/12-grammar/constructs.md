@@ -134,24 +134,24 @@ trailing-closure = closure ;
 ## Patterns
 
 ```ebnf
-pattern       = '_' | identifier | tuple-pattern ;                 (* a declaration's, a condition's or a for loop's: it always matches, and each name binds (01) *)
+pattern       = '_' | identifier | tuple-pattern ;                 (* a declaration's, a condition's or a for loop's (01) *)
 tuple-pattern = '(' pattern (',' pattern)* ','? ')' ;
 match-pattern = enum-pattern | type-pattern | expression-pattern ;   (* a when arm's top level: it compares, or matches a case or a type *)
 catch-pattern = identifier | enum-pattern | type-pattern ;         (* a catch clause's: a bare name binds the whole error (10) *)
 enum-pattern  = type? '.' identifier ('(' payload-elem (',' payload-elem)* ','? ')')? ;
 payload-elem  = (identifier ':')? payload-pattern ;
 payload-pattern = '_' | identifier | literal | '-' (int-literal | float-literal) | 'nil' | enum-pattern | type-pattern
-              | '(' payload-pattern (',' payload-pattern)* ','? ')' ;   (* inside a payload: a bare name binds, and a literal is the one comparison *)
+              | '(' payload-pattern (',' payload-pattern)* ','? ')' ;   (* inside a payload (04) *)
 type-pattern  = 'is' type | identifier 'as' type ;                 (* is ParseError; e as ParseError binds e *)
 expression-pattern = expression ;                                  (* 0..<10, maxHp, "jump" *)
 ```
 
 **Each position in a pattern reads a bare identifier one way:**
 
-- **In a declaration, a condition or a `for` loop**, whose pattern always matches, it binds a new name ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
-- **At a `when` arm's top level** it is an expression pattern, which compares with the constant or variable it names ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
-- **Inside an enum pattern's payload** it binds a new name. A literal is the only comparison there, and any other goes in the arm's `where`.
-- **In a `catch` clause** it binds the whole error, since a clause matches an error by member or case, never by comparing it with a value ([10](../10-errors-and-safety/typed-errors.md#handling-errors-with-do-and-catch)).
+- **In a declaration, a condition or a `for` loop** it binds a new name ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+- **At a `when` arm's top level** it is an expression pattern, except as the name of a type pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- **Inside an enum pattern's payload** it binds a new name ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+- **In a `catch` clause** it binds the whole error ([10](../10-errors-and-safety/typed-errors.md#handling-errors-with-do-and-catch)).
 
 **Two forms need a rule to tell them from an expression:**
 

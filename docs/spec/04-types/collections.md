@@ -493,7 +493,7 @@ for (h, e) in &pool.entries { … }             // 'e' is bound in place, and 'h
 for e in &enemies where e.hp > 0 { … }        // the body runs only where the condition holds
 ```
 
-**The pattern is a name, `_` or a tuple of these, with no `let` or `var`, and what each name binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
+**What each name of the pattern binds decides whether it can change** ([01](../01-values-and-ownership/bindings.md#for-and-when-names)):
 
 - **An element bound in place is read-only through a `Borrow` or a shared row, and changeable through a `MutableRef` or an exclusive row.** A loop over `&s` hands out the exclusive kind, and so does a `zip` for each `&` argument. So a loop that changes its elements writes `&` on the sequence and nothing on the pattern, as a loop that reads them writes nothing either.
 - **A value the iterator hands out is owned by its name**, such as a range's `Int`, a handle or a chunk. It is read-only, as a `let` is, and code that would change it declares a `var` from it.
@@ -507,6 +507,7 @@ So the `pool.entries` loop above binds `e` in place, where it can change it, and
 **Which elements outlive the iteration follows from the dependency rules** ([02](../02-views-and-dependencies.md#dependencies)):
 
 ```swift
+func scale(_ s: owned MutableSpan<Float>) { … }
 var names = alloc List<StringView>()
 for s in table.entries { names.append(s.name.view) }    // fine: each element depends on 'table', not the iterator
 for chunk in &data.chunks(64) { scale(chunk) }          // one MutableSpan<Float> at a time: 'chunk' owns it, and moves it into scale's 'owned' parameter

@@ -92,9 +92,9 @@ func contact(_ world: mutable World) {
 
 func damage(for kind: EnemyKind) -> Float {
     return when kind {
-        .grunt  -> 5
-        .runner -> 3
-        .brute  -> 20
+        .grunt  { 5 }
+        .runner { 3 }
+        .brute  { 20 }
     }
 }
 
@@ -103,12 +103,15 @@ func applyCommands(_ world: mutable World) {
     let commands = world.commands.take()              // moves the contents out; world.commands is left empty
     for c in commands {                               // 'c' borrows each command in place
         when c {
-            .despawn(h) ->
+            .despawn(h) {
                 world.enemies.remove(h)               // every copy of h goes stale at once
-            .spawn(kind, pos) ->                      // 'c' is a place, so the names borrow its payload
-                world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))
-            .damagePlayer(h, amount) ->
+            }
+            .spawn(kind, pos) {                       // 'c' is a place, so the names borrow its payload
+                _ = world.enemies.insert(Enemy(kind: copy kind, pos: copy pos))   // the new handle isn't needed
+            }
+            .damagePlayer(h, amount) {
                 world.players[h]?.hp -= amount        // silently skipped if the player is gone
+            }
         }
     }
 }

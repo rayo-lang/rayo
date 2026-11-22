@@ -57,8 +57,8 @@ if state == .idle { wander() }                 // a case without a payload, test
 
 **A pattern says which values its arm matches, and what it binds.** At its top level it compares the subject with a value, matches a case, or matches a type. Names bind only inside a case's payload, and in a type pattern:
 
-- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed and returns `Bool`, which can't fail. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier at the top level is always an expression pattern, which compares with the constant or variable it names ([12](../12-grammar/constructs.md#patterns)).
-- **Case patterns.** `.name` matches the case `name`, whatever its payload holds, and `.name(…)` matches its payload part by part too. Inside the parentheses, a bare name binds its part, `_` matches it without binding it, and a nested case pattern matches it further. A literal is the one comparison a payload holds, as in `.damage(0)`, and any other goes in the arm's `where`. An optional is matched with `nil` and `.some(t)`.
+- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed and returns `Bool`, which can't fail. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier at the top level is an expression pattern, which compares with the constant or variable it names, except as the name of a type pattern (below) ([12](../12-grammar/constructs.md#patterns)).
+- **Case patterns.** `.name` matches the case `name`, whatever its payload holds, and `.name(…)` matches its payload part by part too. Inside the parentheses, a bare name binds its part, `_` matches it without binding it, and a nested case pattern matches it further. A literal or `nil` is the only comparison a payload holds, as in `.damage(0)`, and any other goes in the arm's `where`. An optional is matched with `nil` and `.some(t)`.
 - **Type patterns.** `is E` matches, and `e as E` matches and binds, a subject or a payload part of type `E`, such as the error of a `do` block that fails only with `E`, or a member `E` of an error union ([10](../10-errors-and-safety/typed-errors.md#error-unions)). Nothing else has type patterns.
 
   When `E` is itself an error union, as a type parameter may turn out to be, `e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](../01-values-and-ownership/bindings.md#conversions)):
@@ -79,7 +79,7 @@ let label = when hit {
 
 **The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
-**Declarations, conditions and `for` loops take patterns that always match**: `_`, a name, or a tuple of these, in which every name binds ([12](../12-grammar/constructs.md#patterns)). A condition's binding matches the value inside an optional, and holds no other pattern. So a condition tests a case without a payload with `==`, as `if state == .idle` does at the top of this section, and a payload is bound by a `when` arm ([01](../01-values-and-ownership/bindings.md#conditions)). Each binding of a declaration or a condition binds a name ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
+**Declarations, conditions and `for` loops take patterns that always match, which bind names and test nothing** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
 
 **A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
 
@@ -109,7 +109,12 @@ ref let hp = enemies[h]?.hp ?? 0     // refers to the element's hp in place, or 
 - forcing, with `x!`;
 - a comparison with `nil`, `x == nil`, for any `T` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
-**An optional chain can be assigned through when it ends in a member or an element.** `a?.b = v` and `a?[i] = v` write only when `a` holds a value, and evaluate `v` before they read `a` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). `x? = v`, with nothing after the `?`, is a compile error that points to `if ref var t = &x { t = v }`. That form evaluates `v` only when `x` holds a value, so `x? = consume spare` can't destroy `spare` when nothing is written.
+**An optional chain can be assigned through when it ends in a member or an element.** `a?.b = v` and `a?[i] = v` write only when `a` holds a value, and evaluate `v` before they read `a` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). A chain with nothing after the `?` is a compile error that points to an optional binding. The binding evaluates the right side only when the optional holds a value, so nothing is destroyed when nothing is written:
+
+```swift
+x? = consume spare                         // error: write 'if ref var t = &x { t = consume spare }'
+if ref var t = &x { t = consume spare }    // moves 'spare' in only when 'x' holds a value
+```
 
 **`a ?? b` chooses as an `if` does.** It evaluates `b` only when `a` is `nil`, and hands its position to `a`'s payload or to `b`, as an `if` hands it to the arm that runs ([01](../01-values-and-ownership/bindings.md#if-and-when-as-values)). The payload of a place is a place, and the payload of a value is a value. When `b` is a `T?` too, the position goes to `a` or `b` whole, and the result is a `T?`.
 

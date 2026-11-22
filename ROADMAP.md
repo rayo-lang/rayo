@@ -100,7 +100,7 @@ Statements and control flow:
 
 - `for` loops and ranges ([04](docs/spec/04-types/collections.md#iteration)): v0.2's arrays wait on them for consuming iteration;
 - labeled `break` and `continue`, and `repeat`-`while` ([04](docs/spec/04-types/collections.md#iteration)): v0.1 builds `while`, and `break` and `continue` of the innermost loop;
-- several conditions in one `if` or `while` ([01](docs/spec/01-values-and-ownership/bindings.md#conditions-and-patterns)): v0.1 takes one `Bool`;
+- several conditions in one `if` or `while` ([01](docs/spec/01-values-and-ownership/bindings.md#conditions)): v0.1 takes one `Bool`;
 - `guard`, and a `when` with no subject ([04](docs/spec/04-types/enums.md#matching-with-when-and-choosing-with-if));
 - `do` blocks ([10](docs/spec/10-errors-and-safety/typed-errors.md#handling-errors-with-do-and-catch));
 - `defer` and typed errors ([10](docs/spec/10-errors-and-safety/typed-errors.md#typed-errors)).

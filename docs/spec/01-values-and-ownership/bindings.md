@@ -167,9 +167,9 @@ func report(_ count: UInt) {
 
 ## Conditions and patterns
 
-**Each construct that binds names binds them by one rule, and each position in a pattern reads a bare name one way** ([12](../12-grammar/constructs.md#patterns)). A condition's binding writes `let`, `var`, `ref let` or `ref var`, and each word means what it means in a declaration ([below](#conditions)). A `for` name and a `when` payload name write no word, and their subject says what each one is ([below](#for-and-when-names)).
+**A condition's binding writes `let`, `var`, `ref let` or `ref var`, with the meaning each word has in a declaration, and a `for` name or a `when` payload name writes no word, since its subject says what it is.** The two subsections below give each rule ([Conditions](#conditions), [`for` and `when` names](#for-and-when-names)). Each position in a pattern reads a bare name one way ([12](../12-grammar/constructs.md#patterns)).
 
-**No pattern holds a `let` or `var` of its own.** A declaration's, a condition's or a `for` loop's pattern is a name, `_` or a tuple of these, and every name in it binds. Code that binds names in two ways writes a declaration for each, as a `ref var` and a `ref let` borrow two fields of one value in two ways ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)). A `when` arm's pattern compares the subject with a value at its top level, and binds names only inside a case's payload or in a type pattern ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
+**No pattern holds a `let` or `var` of its own.** A declaration's, a condition's or a `for` loop's pattern is a name, `_` or a tuple of these, and every name in it binds. Code that binds names in two ways writes a declaration for each, as a `ref var` and a `ref let` borrow two fields of one value in two ways ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)). A `when` arm's pattern has rules of its own ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)).
 
 ### Conditions
 
@@ -205,9 +205,9 @@ if ref let e = enemies[0] { … }                   // error: 'enemies[0]' isn't
 if ref var a = &world.enemies[h1], ref var b = &world.enemies[h2] { … }   // error: both lend 'world.enemies' for change; write 'ref var (a, b) = &world.enemies[h1, h2]'
 ```
 
-**A `Bool` test that checks an optional against `nil` narrows it**, when the optional is a local, a parameter or a stored field of one ([04](../04-types/enums.md#narrowing)). It binds nothing, so the code goes on using the place's own name ([below](#unwrapping-an-optional)).
+**A `Bool` test that checks an optional against `nil` may narrow it instead of binding it** ([below](#unwrapping-an-optional)).
 
-**A condition holds no pattern, so it tests a case with `==`, and a `when` binds a payload** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). Every enum compares with one of its cases that carries no payload, as in `state == .idle` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). A case with a payload is matched by a `when` arm, which binds the payload's names for the arm's block:
+**A condition holds no case or comparison pattern, so it tests a case with `==`, and a `when` binds a payload** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). Every enum compares with one of its cases that carries no payload, as in `state == .idle` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). A case with a payload is matched by a `when` arm, which binds the payload's names for the arm's block:
 
 ```swift
 if state == .idle { wander() }
@@ -223,7 +223,7 @@ when state {
 
 | What the name binds | The name is |
 | --- | --- |
-| A part of a place, as in `for e in enemies` or `when event` | A read-only borrow of it, or a copy of it where its type copies without a written `copy` |
+| A part of a place, as in `for e in enemies` or `when event` | A read-only borrow of it |
 | A part of a place lent with `&`, as in `for e in &enemies` or `when &shape` | A mutable borrow of it, whatever its type |
 | A value: what an iterator hands out as its own, or a part of a call's result, of `consume s` or of `copy s` | Its owner |
 

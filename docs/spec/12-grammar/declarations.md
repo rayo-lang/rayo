@@ -42,8 +42,7 @@ var-decl      = 'var' binding (',' binding)* | 'var' identifier ':' type where-c
 binding       = pattern (':' type)? ('=' expression)? ;            (* each binding binds a name, so 'let _ = x' is an error (01); '_ = x' drops x (05) *)
 ref-decl      = 'ref' ('let' | 'var') ref-binding (',' ref-binding)* ;   (* ref let e = enemies[0]; ref var b = &enemies[0];
                                                                       a statement, so a local in a body, with no attributes or modifiers (01) *)
-ref-binding   = pattern (':' type)? '=' expression ;               (* a place to refer to: 'ref var' takes '&' before it, and 'ref let' takes none;
-                                                                      the pattern holds no 'let' or 'var', so each name borrows as the declaration says (01) *)
+ref-binding   = pattern (':' type)? '=' expression ;               (* a place to refer to: 'ref var' takes '&' before it, and 'ref let' takes none (01) *)
 
 func-decl     = 'func' func-name generic-params? param-clause ('->' result-type)?
                 where-clause? block ;
