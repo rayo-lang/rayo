@@ -35,7 +35,9 @@ Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop
 
 - `plat.PLATFORM_MAX_PADS` is a `const` `CInt` of 4. Prefix stripping is case-sensitive, so the macro keeps its name.
 - `plat.window` is an `@opaque` struct, which Rayo code uses only through a pointer, `*plat.window`.
-- `plat.pad` is a `@c struct` with C's layout, whose `left_stick` is a `[2 of Float]`. `plat.pad()` makes one of all zeros. A C struct owns nothing, so it is copyable, but an inline array never copies with nothing written, so neither does a `plat.pad`: code writes `copy` or `consume` before one. A C enum is an integer, and copies with nothing written ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- `plat.pad` is a `@c struct` with C's layout, whose `left_stick` is a `[2 of Float]`. `plat.pad()` makes one of all zeros.
+- A C struct such as `plat.pad` owns nothing, so it is copyable, but it never copies with nothing written, since no one has declared its copies cheap: code writes `copy` or `consume` before one ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
+- A C enum is one integer, so it copies with nothing written, as a number does.
 - `plat.window_create` is an `unsafe func` taking `(Int32, Int32, *CChar?)` and returning a `*plat.window?`.
 - `plat.poll_pad` is an `unsafe func` taking `(Int32, *plat.pad?)` and returning a `Bool`.
 
