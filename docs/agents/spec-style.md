@@ -12,7 +12,7 @@ The spec is **precise, plain and explained**: every rule stated exactly, with th
 - **Active voice, short words.** "The compiler rejects `f(&x, x)`", not "`f(&x, x)` is rejected". *Use*, not *utilize*; *so*, not *consequently*.
 - **The thing as the subject of a verb.** "`list[i]` hands out the list's element", not "the place an accessor yields from one".
 - **Common words for common ideas.** Where programmers already have a word, use it: *reference counting*, not *counted owner*. Coin a term only for an idea with no common name, and define it.
-- **Present tense, about what is.** Never "now", "no longer" or "previously".
+- **About what Rayo does, in the present tense.** A rule says what Rayo does, never how that differs from an earlier rule or from a design Rayo doesn't have: no reader has seen either, so the contrast is noise. Not "`hits.span` and `hits.mutableSpan` are two members, so `&` never has to pick between them", but what each member is and what `&` does. Never "now", "no longer" or "previously" either. A reason still says what would go wrong in Rayo without the rule ([below](#explaining)), and a contrast between two things Rayo has, such as a `let` that owns its value rather than borrowing it, states a rule and stays.
 - **Inline code is for names and short expressions**: a type, a keyword, an operator, or a few tokens such as `copy x`, `list[i]` or `T: Copyable`. A declaration, a signature or a statement goes in a code block, with what it shows in a trailing comment, never inside a sentence as in "as `struct S<T>(…): Scoped, ~Copyable` does".
 
 ## Paragraphs and sections

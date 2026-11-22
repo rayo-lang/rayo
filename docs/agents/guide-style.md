@@ -2,7 +2,7 @@
 
 The guide in `docs/guide/` teaches Rayo to a programmer who already knows C++, Rust, Swift or C#. Its unnumbered introduction welcomes the reader before chapter 1, and the chapters are read front to back. The spec states every rule exactly and lets readers find the full account of a construct; the guide picks the rules a reader needs first, shows them working, and links to the spec for the rest.
 
-The guide follows `spec-style.md` for inline code, lists and punctuation. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
+The guide follows `spec-style.md` in saying what Rayo does, in the present tense, and for inline code, lists and punctuation. The exceptions are the comparisons with other languages that [Teaching](#teaching) allows, such as one with what a reader expects from another language. Both documents explain in connected prose. The guide builds ideas in learning order; the spec gives each construct's complete rules where a reader can find them.
 
 ## Writing
 
@@ -11,7 +11,6 @@ The guide is good prose, as Orwell describes it in *Politics and the English Lan
 - **Plain.** Short, common words, and the thing itself as the subject of an active verb. Say what happens, in literal terms. A term the guide teaches is explained in everyday words where it first appears.
 - **Connected.** Each sentence follows from the one before, and the words that join them, such as *because*, *so*, *but* and *which*, carry the reasoning. A sentence ends where its thought does, so some are short and some are long.
 - **Economical.** Every sentence gives the reader something new, and every word in it is needed. An explanation the reader needs is never wordiness: a claim without its reason is shorter, but harder to understand and to trust.
-- **About what is,** in the present tense.
 - **Comparisons in full.** A comparison names its example, as in "such as a number", or takes a sentence of its own. Never a clipped tail such as "as a number's are" or "as a plain parameter does".
 - **Break any of these sooner than write something barbarous.**
 
