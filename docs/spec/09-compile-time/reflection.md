@@ -317,7 +317,7 @@ func integrateAll(_ w: mutable World, dt: Float) {          // "Transform and Ve
 
 - **Distinct fields.** The fields must be distinct `const` field descriptors, checked at instantiation. Distinct stored fields of a struct or tuple never overlap ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), except those the next bullet names.
 - **Overlapping members are rejected** at instantiation, since writing one can change the other ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)): two members of a union type (`T.isUnion`), which are all one place, and two imported bitfields in the same C memory location.
-- **One way per declaration.** A declaration borrows every place of a projection the one way its keyword says, so fields borrowed in different ways take a declaration each. Two such declarations are disjoint only where the fields are known apart when the borrows are checked, as for a concrete type. In generic code, where the fields may be one, they overlap, so one `value[fields:]` borrows both exclusively instead (below).
+- **One way per declaration.** Fields borrowed in different ways take a declaration each ([01](../01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)). In generic code, where the fields may be one, two such declarations overlap, so one `value[fields:]` borrows both exclusively instead (below).
 - **`SoA`.** `s[fields:]` on an `SoA` `s` returns a tuple of its columns: each a `Span`, or each a `MutableSpan` where `s` is marked `&` ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
 
 For one row of a table, held in a `var` in code generic over `Row`, the two fields may be one where the borrows are checked:
