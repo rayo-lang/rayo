@@ -92,6 +92,25 @@ struct BorrowTests {
         ])
     }
 
+    // A branch that borrows through another `ref let` keeps that one's borrow too, while the branch that gives a value
+    // borrows nothing; where the branches join, each holds the borrows the other still needs.
+    @Test(arguments: [
+        ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { 5 }\n"
+            + "    print(deep)\n    e.stats.hp = 2\n    print(e.stats.hp)", []),
+        ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { e.slots[1] }\n"
+            + "    print(deep)\n    e.stats.hp = 2\n    print(e.stats.hp)", []),
+        ("\(enemy)\n    let c = false\n    ref let st = e.stats\n    ref let deep = if c { st.hp } else { 5 }\n"
+            + "    e.stats.hp = 2\n    print(deep)", [
+                "6:5: error[E0313]: 'e.stats.hp' can't change while 'e.stats' is borrowed",
+                "4:18: note: borrowed here",
+            ]),
+    ])
+    func `a 'ref let' of an 'if' with one branch borrowing through another 'ref let' keeps that borrow`(
+        body: String, expected: [String],
+    ) {
+        #expect(reports(ofMain: body) == expected)
+    }
+
     // Each branch borrows the place on its own path, and a move after the `if` that conflicts with both is one mistake.
     @Test func `a use that conflicts with the borrow of each branch is reported once, with a note for each borrow`() {
         let body = "\(enemy)\n    let c = true\n    ref let v = if c { e.stats } else { e.stats }\n"

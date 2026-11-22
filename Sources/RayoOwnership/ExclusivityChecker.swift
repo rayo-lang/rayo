@@ -15,17 +15,19 @@ enum ExclusivityChecker {
         let accesses = places.body.begunAccesses
         guard !accesses.isEmpty else { return (places.body, []) }
 
-        // Check each block that a path reaches against the accesses live at each of its points, and work out where
-        // each is held: live where every path has begun it. A block that no path reaches runs no access.
+        // Work out where each access is live, at each point of each block.
         let extents = AccessExtents(places.body, uses: uses)
+        let live = places.body.blocks.indices.map { extents.live(in: BlockID(index: $0)) }
+
+        // Check each block that a path reaches; one that none reaches runs no access.
         var conflicts = AccessConflicts(places: places, accesses: accesses)
-        var held: [[Set<AccessID>]?] = Array(repeating: nil, count: places.body.blocks.count)
-        for block in places.body.blocks.indices.map({ BlockID(index: $0) }) {
-            guard let live = extents.live(in: block) else { continue }
-            conflicts.check(block, live: live)
-            held[block.index] = extents.held(in: block, live: live)
+        for (index, blockLive) in live.enumerated() {
+            guard let blockLive else { continue }
+            conflicts.check(BlockID(index: index), live: blockLive)
         }
 
+        // Each access ends after the last point where it is held.
+        let held = extents.held(given: live)
         return (AccessEnds.written(into: places.body, held: held), conflicts.errors)
     }
 }

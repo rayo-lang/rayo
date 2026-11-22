@@ -29,7 +29,7 @@ struct FunctionBuilder: ~Copyable {
         return IRBody(locals: locals, blocks: blocks)
     }
 
-    /// Whether `local` is a `let` that borrows the place its declaration gives it.
+    /// Whether `local` is a `ref let`, which borrows the place its declaration gives it.
     func isBorrowing(_ local: LocalID) -> Bool {
         if case .source(_, .refLet, _, _) = locals[local.index] { true } else { false }
     }

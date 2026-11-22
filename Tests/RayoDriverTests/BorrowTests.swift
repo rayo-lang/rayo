@@ -26,4 +26,25 @@ struct BorrowTests {
             """
         #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "18\n8\n10\n", errors: ""))
     }
+
+    // One branch borrows through another `ref let`, and the other gives a value, so the paths join holding different
+    // borrows.
+    @Test(arguments: [["--debug"], ["--release"]])
+    func `a 'ref let' of an 'if' that borrows through another 'ref let' on one path runs`(mode: [String]) {
+        let source = """
+            func main() {
+                var e = Enemy(stats: Stats(hp: 5))
+                let c = false
+                ref let st = e.stats
+                ref let deep = if c { st.hp } else { 4 }
+                ref let other = if !c { st.hp } else { 4 }
+                print(deep + other)
+                e.stats.hp = 2
+                print(e.stats.hp)
+            }
+            struct Enemy(var stats: Stats)
+            struct Stats(var hp: Int)
+            """
+        #expect(run(source, options: mode) == CommandResult(exitCode: 0, output: "9\n2\n", errors: ""))
+    }
 }

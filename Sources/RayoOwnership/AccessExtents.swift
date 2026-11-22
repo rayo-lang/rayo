@@ -44,15 +44,57 @@ struct AccessExtents {
         return live
     }
 
-    /// Of the accesses `live` at each point of `block`, those that every path there has begun. Only they can end
-    /// there, since a path that hasn't begun an access has nothing to end.
-    func held(in block: BlockID, live: [Set<AccessID>]) -> [Set<AccessID>] {
-        // `live` holds a block that some path reaches, so the walk visits each of its points.
-        var held = live
-        unbegun.walk(block) { point, state in
-            held[point] = live[point].subtracting(state.accesses)
+    /// The accesses held at each point of each block, given those `live` there, or nil for a block that no path
+    /// reaches: each that is live at the point or at a later point of some path from it, before anything begins it
+    /// again, and that every path to the point has begun. So each path into a block holds every access the block holds
+    /// where it begins, and no path ends one that another still holds there. Only a held access can end, since a path
+    /// that hasn't begun an access has nothing to end.
+    func held(given live: [[Set<AccessID>]?]) -> [[Set<AccessID>]?] {
+        let needed = carriedBack(live)
+        return needed.indices.map { index in
+            guard let points = needed[index] else { return nil }
+            var held = points
+            unbegun.walk(BlockID(index: index)) { point, state in
+                held[point] = points[point].subtracting(state.accesses)
+            }
+            return held
         }
-        return held
+    }
+
+    /// `live` carried back along every path: each access live at a point is also in the set at each point before it,
+    /// back to the statement that begins it. Where paths join, each path into the join takes what is live where the
+    /// join begins.
+    private func carriedBack(_ live: [[Set<AccessID>]?]) -> [[Set<AccessID>]?] {
+        var carried = live
+        var changed = true
+        while changed {
+            changed = false
+            for index in body.blocks.indices.reversed() {
+                guard let points = carried[index] else { continue }
+                let block = body.blocks[index]
+
+                // After the terminator, the block needs what each block it goes to needs where that block begins.
+                var next = points
+                for successor in block.terminator.successors {
+                    next[next.count - 1].formUnion(carried[successor.index]?.first ?? [])
+                }
+
+                // Before the terminator and each statement, it needs what the point after needs, but for an access
+                // the statement begins.
+                next[block.statements.count].formUnion(next[block.statements.count + 1])
+                for statement in block.statements.indices.reversed() {
+                    var after = next[statement + 1]
+                    for case .begin(let id, _) in block.statements[statement].effects { after.remove(id) }
+                    next[statement].formUnion(after)
+                }
+
+                if next != points {
+                    carried[index] = next
+                    changed = true
+                }
+            }
+        }
+        return carried
     }
 
     /// The accesses live at a point where later code does what `uses` holds, and values depend on what `dependencies`
