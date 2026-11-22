@@ -2,42 +2,35 @@
 
 [01 · Values and ownership](../01-values-and-ownership.md)
 
-A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes. A few constructs also take a value with no `consume` written ([Moves](moves-copies-destruction.md#moves)):
+A move hands a value to a new owner and leaves its old place without that value. `consume place` writes one, wherever a value goes: an argument, an initializer, an assignment, a `return` and every other position move a place only where they write `consume` ([References](references.md#places-given-to-a-position)). Three cases take a value from a place with nothing written:
 
-- `return`, `throw` and `await`;
-- `try`, `try?` and `try!`, and `_ = x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try));
-- an `owned` argument, and a `consuming` method's receiver ([Parameters](parameters.md#parameters));
-- a `[move x]` capture ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
-- a global's initializer;
-- the elements of a tuple or array literal, and an enum case's payload.
+- a `consuming` method's receiver, since the method's declaration says it takes `self` ([Parameters](parameters.md#parameters));
+- a `[move x]` capture, since the capture list says it moves ([05](../05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref));
+- any position given a part of a temporary, such as `makeHolder().items`, since the temporary dies with its statement ([References](references.md#unmarked-places)).
 
 Two kinds of value are exceptions, since taking one makes a new value and leaves the place as it was:
 
-- a value of an implicitly copyable type, which each of these but a `[move x]` capture copies ([Implicit copies](moves-copies-destruction.md#implicit-copies));
+- a value of an implicitly copyable type, which every position and a `consuming` receiver copy, though a `[move x]` capture moves it ([Implicit copies](moves-copies-destruction.md#implicit-copies));
 - a copyable `const` ([below](#constants)).
 
-A `ref let` or `ref var`, in a declaration or a condition, borrows a place instead, and so does a `for` or `when` name bound to a part of one ([`for` and `when` names](bindings.md#for-and-when-names)). A `let` or `var` of a place of any other type needs `copy`, `consume` or `ref let` ([Bindings](bindings.md#bindings)). An assignment of one needs `copy` or `consume` ([Moves](moves-copies-destruction.md#moves)).
-
-**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` also moves where the code would otherwise borrow, as `show` does below, and gives a `let` or `var` a place's value to own, as `kept` does. For a borrowed parameter, the moved value is a temporary, destroyed at the end of the statement.
+**`consume place` writes a move as an expression.** Moving a place's value out, implicitly or this way, is **consuming** the place. `consume` gives a parameter that owns its argument a place's value, as `give` takes below, and gives a `let` or `var` one to own, as `kept` does. `&` and `mutable &` borrow a place instead, and leave its value where it is ([References](references.md#making-a-reference)).
 
 ```swift
 var loot = alloc List<Item>()
-give(loot)                            // fine: 'loot' is a local that owns its list
-var spare = alloc List<Item>()
-show(consume spare)                   // 'show' only borrows; 'consume' moves 'spare' out, destroyed after the statement
+give(consume loot)                    // fine: 'loot' is a local that owns its list
 var bag = alloc List<Item>()
 let kept = consume bag                // 'kept' owns the list, and 'bag' holds no value
-give(player.inventory)                // error if 'player' is a mutable parameter: the caller still owns it
-let old = replace(&player.inventory, with: alloc List())    // the way to take it: leave a value behind
+give(consume player.inventory)        // error if 'player' is a 'mutable &' parameter: the caller still owns it
+let old = replace(mutable &player.inventory, with: alloc List())    // the way to take it: leave a value behind
 ```
 
 ## What can be moved from
 
 **Only code that owns a place may move from it**, implicitly or with `consume`. No borrow of that place may be live, and no scoped value may depend on it: a move is a mutable access ([The law of exclusivity](exclusivity.md#the-law-of-exclusivity)). These places can be moved from:
 
-- a local that owns its value: a `let` or `var`, such as one that owns an `SoA` column's `MutableSpan` ([Lending a place for change](bindings.md#lending-a-place-for-change)), but not one a `rebind` has pointed at a place ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
-- an `owned` parameter, including a function-typed one received owned, and an owned capture inside a `consuming` closure;
-- a temporary, such as a call result passed to an `owned` parameter;
+- a local that owns its value: a `let` or `var`, such as one that holds a mutable reference to an `SoA` column ([Bindings](bindings.md#bindings-that-own-a-value));
+- a parameter that owns its argument, and an owned capture inside a `consuming` closure;
+- a temporary, such as a call result passed to a parameter that owns it;
 - a field of one of those, through stored fields only, named or reached by reflection ([09](../09-compile-time/reflection.md#what-reflection-can-read)), when no type along the path declares a `deinit`, since a `deinit` takes the whole value;
 - a stored field of `self`, or a part of an enum `self`'s payload through a pattern of `when consume self`, in that type's own `deinit`;
 - the same, in a `consuming` method declared in the type's own module, when every path that moves one out then reaches `discard self` (below).
@@ -45,7 +38,7 @@ let old = replace(&player.inventory, with: alloc List())    // the way to take i
 **The condition on a field covers a temporary's fields and an enum's payload**, and a `when` name takes an enum's payload under the same condition ([`for` and `when` names](bindings.md#for-and-when-names)):
 
 ```swift
-take(makeHolder().items)        // moves 'items' out of the temporary: an error when makeHolder()'s type has a deinit
+take(makeHolder().items)        // a part of a temporary, so no mark: moves 'items' out, an error when makeHolder()'s type has a deinit
 ```
 
 These moves leave the rest of the value to be destroyed:
@@ -77,16 +70,15 @@ slots[0] = 1                       // fine: 'slots' holds all four elements
 **Nothing else can be consumed.** So none of these can:
 
 - a global, `const`s included;
-- a borrowing binding, such as a `ref let` or a `ref var`;
-- a borrowed or `mutable` parameter;
+- a borrowing binding, such as a `ref let`, a `ref var`, or a `&T` or `mutable &T` parameter;
 - an owned capture outside a `consuming` closure, since only a `consuming` closure runs at most once ([05](../05-protocols-generics-and-closures/functions-and-closures.md#closure-kinds));
 - an inline array's element, at any index, whether or not the index is known when the program is checked ([04](../04-types/collections.md#inline-array-elements));
-- a place reached through a weak pointer, an accessor or a subscript, such as a `List`'s element.
+- a place reached through a reference, a weak pointer, an accessor or a subscript, such as a `List`'s element.
 
 **The alternatives leave a value in the place:**
 
 - `copy place` and `alloc place.clone()` leave it as it was, and so does an implicit copy of an implicitly copyable value ([Implicit copies](moves-copies-destruction.md#implicit-copies));
-- through an exclusive view, `replace(&place, with: new)`, `swap(&a, &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
+- through a mutable reference, `replace(mutable &place, with: new)`, `swap(mutable &a, mutable &b)` or a type's own `take()`, such as `Optional.take()` and `List.take()`, leave a value behind.
 
 So such a place always holds a value, across a `throw`, an early return, an `await` and a panic too, a panic in the `deinit` of a value it overwrites included ([Destruction](moves-copies-destruction.md#destruction)). A caller, an alias, a later `deinit` or a `recover` closure that reaches it finds one there ([10](../10-errors-and-safety/panics.md#catching-a-panic-catchpanic)).
 
@@ -94,7 +86,7 @@ So such a place always holds a value, across a `throw`, an early return, an `awa
 
 **A `const` that reaches run time is a place in read-only data that lives as long as the program** ([09](../09-compile-time/constants-and-conditions.md#consts-that-reach-run-time)). A view of it is static storage, which any function may return.
 
-**A `const` of a copyable type is taken without `copy`**, as a new value each time, whether or not the type is implicitly copyable. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so a `ref let` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
+**A `const` of a copyable type is taken without `copy`**, as a new value each time, whether or not the type is implicitly copyable. So a `let` or `var` declared from one gets a new value, which it owns. A `const` of a move-only type can only be borrowed or cloned, so `&` borrows the const itself, and a `let` of one takes `alloc` and `.clone()`.
 
 ```swift
 const maxLives = 3

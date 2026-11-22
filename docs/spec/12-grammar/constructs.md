@@ -8,16 +8,19 @@ Within a declaration, the grammar describes the types, statements, expressions a
 
 ```ebnf
 type          = result-base ('!' failure-type)? ;                 (* Mesh!LoadError is Result<Mesh, LoadError>; Level!(IoError | ParseError) (10) *)
-result-base   = type-primary type-suffix* ;                        (* '!' applies after '?': Handle<Enemy>?!LoadError; (Mesh!LoadError)? is an optional Result *)
+result-base   = type-primary type-suffix* ;                        (* '!' applies after '?': Handle<Enemy>?!LoadError; (Mesh!LoadError)? is an optional Result;
+                                                                      &Mesh!LoadError is a Result whose success value is a &Mesh *)
 failure-type  = type-name | '(' type ('|' type)* ')' ;             (* a name, or a parenthesized type or error union *)
 type-primary  = type-name
               | 'Self' ('.' identifier generic-args?)*             (* Self, Self.Element *)
               | '(' tuple-type-elems? ')'                          (* tuple, or Void when empty *)
               | '(' type ('|' type)+ ')'                           (* error union (10): (IoError | ParseError)? *)
+              | ref-type
+              | '[' type ']'                                       (* a run of elements, an unsized type (01): &[Float] *)
               | '[' (expression | '_') 'of' type ']'               (* Array<T, N>, the inline array; '_' infers the count from the initializer *)
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
-              | 'static' type-primary                              (* a static type (02): static StringView, static Token, static any Logger;
-                                                                      static Span<Float>? is an optional static view *)
+              | 'static' type-primary                              (* a static type (02): static &Text, static Token, static &any Logger;
+                                                                      (static &[Float])? is an optional static reference *)
               | 'any' composition | 'some' composition
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
                                                                    (* C function pointer (08); 'noalloc': its calls allocate nothing (05) *)
@@ -26,10 +29,13 @@ type-primary  = type-name
                                                                       'mutating' may write its captures, 'consuming' is call-once;
                                                                       '@sendable' holds only closures with Sendable captures (07);
                                                                       '@noalloc' holds only functions whose calls can't allocate (05) *)
-composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; after a cast operator, the type takes every '&' that follows *)
-type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy> *)
-fn-param-type = 'keep'? param-convention? type ('|' type)* ;      (* some (mutable Context) -> Bool; mutating (keep StringView) -> Void; (IoError | ParseError) -> Void;
-                                                                     'keep' only without a convention or with 'owned' (05) *)
+ref-type      = 'mutable'? '&' type-primary type-suffix* ;         (* a reference (01): &Enemy, mutable &[Float], &any Drawable;
+                                                                      &T? refers to an optional, and (&T)? is an optional reference (see Notes) *)
+composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; &any P & Sendable is &(any P & Sendable);
+                                                                      after a cast operator, the type takes every '&' that follows *)
+type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy>, Text *)
+fn-param-type = 'keep'? type ('|' type)* ;                         (* some (mutable &Context) -> Bool; mutating (keep &Text) -> Void; (IoError | ParseError) -> Void;
+                                                                     'keep' only on a T or &T parameter, never a mutable &T one (05) *)
 type-suffix   = '?' ;                                              (* '*' binds to the name, '?' applies after *)
 generic-args  = '<' generic-arg (',' generic-arg)* ','? '>' ;
 generic-arg   = type | expression | '_' ;                          (* '_' only in a declaration's annotation or after 'as': filled from the initializer, as in List<_> (04) *)
@@ -45,7 +51,7 @@ statement     = declaration | ref-decl | expression | assignment | guard-stmt
               | 'return' expression? | 'throw' expression | 'break' label? | 'continue' label?
               | 'defer' block | 'unsafe' block | 'unchecked' block
               | attribute+ do-stmt                                      (* only @checks(…) applies to a block (10) *)
-              | rebind-stmt | static-if-stmt | static-for-stmt
+              | static-if-stmt | static-for-stmt
               | 'discard' 'self'                                        (* only in a consuming method of the type's own module (01) *)
               | '_' '=' expression                                      (* drops a value on purpose, which an unused one would otherwise make an error (05) *)
               | static-error
@@ -54,20 +60,21 @@ statement     = declaration | ref-decl | expression | assignment | guard-stmt
 assignment    = expression assign-op expression ;                (* an optional chain on the left ends in '.member' or '[index]': 'x? = v' is an error (04) *)
 assign-op     = '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>=' | '&+=' | '&-=' | '&*=' | '+|=' | '-|=' | '*|=' | '&<<=' | '&>>=' ;
                                                                    (* a ⊕= b is a = a ⊕ b, with a's place worked out once (05) *)
-rebind-stmt   = 'rebind' identifier 'to' expression ;                   (* rebind cur to &cur.children[i].value: '&' first for a ref var, nothing for a ref let (02) *)
 
 if-expr       = 'if' condition (',' condition)* block ('else' (if-expr | block))? ;   (* has a value only with 'else' (04) *)
 guard-stmt    = 'guard' condition (',' condition)* 'else' block ;
 condition     = expression                                         (* a Bool test *)
               | ('let' | 'var' | 'ref' 'let' | 'ref' 'var') pattern '=' expression ;
                                                                    (* an optional binding: the expression is an optional, whose payload the pattern binds;
-                                                                      each word means what it means in a declaration, so 'ref var' takes '&' before a place (01) *)
-when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s': payload names borrow s's parts for change; 'when consume s': they own them (01) *)
+                                                                      each word means what it means in a declaration, so 'ref var' takes a mutable reference
+                                                                      to an optional, such as 'mutable &p' (01) *)
+when-expr     = 'when' expression? '{' when-arm+ '}' ;             (* 'when &s': payload names are ref lets of s's parts; 'when mutable &s': ref vars;
+                                                                      'when consume s': they own them (01) *)
 when-arm      = (match-pattern (',' match-pattern)* ('where' expression)? | 'else') block ;
                                                                    (* with no subject, an arm's test is one Bool expression, with no ',' list and no 'where' *)
                                                                    (* an arm ends with its block's '}', so arms need no separator *)
 for-stmt      = 'for' pattern 'in' expression ('where' expression)? block ;
-                                                                   (* 'for x in &s' borrows elements for change (04); the sequence says what each name is (01) *)
+                                                                   (* 'for x in mutable &s' names each element for change (04); the subject says what each name is (01) *)
 while-stmt    = 'while' condition (',' condition)* block ;
 repeat-stmt   = 'repeat' block 'while' expression ;
 do-stmt       = 'do' block catch-clause* ;
@@ -90,7 +97,7 @@ static-for-stmt = 'static' 'for' identifier 'in' expression ('where' expression)
 | 5 | `..< ...` |
 | 6 | `+ - &+ &- +\| -\| \| ^` |
 | 7 | `* / % &* *\| & << >> &<< &>>` |
-| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy unsafe`, then `alloc` and `a.alloc` |
+| 8 | prefix `- ! ~ & ..< ... try try? try! await consume copy unsafe` and `mutable &`, then `alloc` and `a.alloc` |
 | 9 | postfix `?` `!` `...` `.member` `(args)` `[index]` `{trailing-closure}` |
 
 ```ebnf
@@ -102,14 +109,15 @@ binary-op     = '??' | '||' | '&&' | '==' | '!=' | '<' | '<=' | '>' | '>=' | '..
               | '+' | '-' | '&+' | '&-' | '+|' | '-|' | '|' | '^' | '*' | '/' | '%' | '&*' | '*|' | '&' | '<<' | '>>' | '&<<' | '&>>' ;   (* levels in the table above *)
 cast-op       = 'as' ;                                             (* level 4; the right-hand side is a type, not an expression (05) *)
 literal       = int-literal | float-literal | string-lit | 'true' | 'false' ;
-prefix-op     = '-' | '!' | '~' | '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'unsafe' ;
+prefix-op     = '-' | '!' | '~' | '&' | 'mutable' '&' | '..<' | '...' | 'try' | 'try?' | 'try!' | 'await' | 'consume' | 'copy' | 'unsafe' ;
+                                                                   (* '&p' makes a shared reference, 'mutable &p' a mutable one (01) *)
 postfix-expr  = primary postfix* ;
 postfix       = '.' (identifier generic-args? | keyword | int-literal)  (* keywords other than 'alloc' allowed after '.': T.self, .init(…); alloc gameplay.Box<Int>(x) *)
               | '?' | '!' | '...' | call-suffix | '[' argument-list ']' ;
 call-suffix   = '(' argument-list? ')' trailing-closures? | trailing-closures ;
 trailing-closures = trailing-closure (identifier ':' trailing-closure)* ;   (* catchPanic { … } recover: { … }; labels are identifiers *)
 argument-list = argument (',' argument)* ','? ;
-argument      = (arg-label ':')? ('&'? expression | operator) ;      (* combine: + passes the operator as a function value *)
+argument      = (arg-label ':')? (expression | operator) ;         (* show(&boss), heal(mutable &boss); combine: + passes the operator as a function value *)
 primary       = identifier generic-args? | literal | 'self' | 'Self' | 'nil'
               | '(' operator ')'                                    (* operator as a function value: (+), (<) *)
               | '.' (identifier | keyword)                          (* implicit member: .zero, .opening, .init *)
