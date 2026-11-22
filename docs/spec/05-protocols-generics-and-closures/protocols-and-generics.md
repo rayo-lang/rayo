@@ -179,7 +179,7 @@ A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&a
 **The language's own types whose argument needs no layout take some of these types by rules of their own:**
 
 - **Type values.** The `T` of `Type<T>` may be any type, so `Text.self` and `(any Drawable).self` are type values ([below](#value-parameters-and-type-values)).
-- **Raw pointers.** The pointee of `*T` and `*T?`, and the target `U` of `p.cast(to: U.self)`, is a sized type or an `@opaque` type, never an unsized one ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
+- **Raw pointers.** The pointee of `*T` and `*T?`, and the target `U` of `p.cast(to: U.self)`, are each a sized type or an `@opaque` type, never an unsized one ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)).
 - **Unscoped existentials.** `Box<any P>`, and each object pointer, reference-counted pointer and weak link to `any P`, is a type of its own, which binding a type parameter never makes ([below](#unscoped-existentials)).
 
 **An `@opaque` type conforms to no protocol**, since code never reaches a place of one, so no witness has a value to act on.
