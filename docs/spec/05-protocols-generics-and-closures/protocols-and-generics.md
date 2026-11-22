@@ -170,7 +170,7 @@ let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_
 **A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type had none. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for a type with no size ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)):
 
 - **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
-- **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
+- **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer, a reference-counted pointer or a raw pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
 
 **So an unsized type binds no type parameter but an `@opaque` one**, as the `T` of a type value is, which makes `Text.self` and `(any Drawable).self` type values ([below](#value-parameters-and-type-values)). A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`.
 
@@ -312,7 +312,7 @@ widgets.append(alloc Box(Button(label: "Play")))        // allocation, visible i
 for w in mutable &widgets { w.value.update(dt) }        // a mutating requirement, through dynamic dispatch
 ```
 
-**`any P` is an existential: a value of some type that conforms to `P`, known only at run time.** The types that conform to `P` have different sizes, so `any P` is unsized, and code holds it only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)). A call on it reaches the value's witness through its witness table.
+**`any P` is an existential: a value of some type that conforms to `P`, known only at run time.** The types that conform to `P` have different sizes, so `any P` is unsized, and code holds it only behind a reference, a `Box`, an object pointer, a reference-counted pointer or a raw pointer ([01](../01-values-and-ownership/references.md#unsized-types)). A call on it reaches the value's witness through its witness table.
 
 **An existential never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out. Each way of holding one is a form of its own:
 
