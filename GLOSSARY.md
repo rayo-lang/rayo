@@ -259,7 +259,7 @@ The type a struct's, enum's or union's type parameter names after `=`, which a w
 _Avoid_: default generic parameter
 
 **Existential**:
-A value of type `any P`, whose concrete type is known only at run time. Code reaches it through a borrow, a view such as `Borrow<any P>`, or an unscoped form such as `Box<any P>` ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+A value of type `any P` or `MutableRef<any P>`, or held in an unscoped form such as `Box<any P>`, whose concrete type is known only at run time ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 _Avoid_: trait object, protocol type, boxed protocol
 
 **Function value**:

@@ -47,7 +47,7 @@
 
 **A shallow argument gives a sealed result only what it carries.** A shallow value is copyable and holds no inline array, so it owns no memory. The only safe ways to view its own bytes are these:
 
-- a `Borrow<any P>` made from it;
+- an `any P` made from it;
 - a closure capturing it by reference;
 - an interpolated literal borrowing it.
 

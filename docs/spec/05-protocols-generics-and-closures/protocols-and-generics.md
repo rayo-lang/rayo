@@ -281,11 +281,11 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 ## `any P`: explicit dynamic dispatch
 
-**`any P` stands for a value of any type conforming to `P`, and calls its requirements through the witness table.** It is for a type known only at run time, as in a list of different widgets:
+**`any P` holds a value of any type conforming to `P`, and calls its requirements through the witness table.** It is for a type known only at run time, as in a list of different widgets:
 
 ```swift
-func drawAll(_ items: Span<Borrow<any Drawable>>, _ ctx: mutable DrawContext) {
-    for d in items { d.value.draw(&ctx) }            // dynamic dispatch, visible in the signature
+func drawAll(_ items: Span<any Drawable>, _ ctx: mutable DrawContext) {
+    for d in items { d.draw(&ctx) }                  // dynamic dispatch, visible in the signature
 }
 
 var widgets = alloc List<Box<any Widget>>()
@@ -293,32 +293,30 @@ widgets.append(alloc Box(Button(label: "Play")))    // allocation, visible in so
 for w in &widgets { w.value.update(dt) }           // a mutating requirement, through dynamic dispatch
 ```
 
-**`any P` is an existential, and never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out.
-
-**Nothing holds an `any P` directly, since its size is that of a type known only at run time.** So a `let`, a `var`, an `owned` parameter, a field, an element or a result of type `any P` is a compile error, and `any P` binds no type parameter. Code reaches the value through a borrow of the place that holds it, or through an unscoped existential, which holds one or points at one:
+**`any P` is an existential, and never allocates implicitly**, since no build does work at run time that its source doesn't show ([11](../11-compilation-model.md#runtime-costs)). So the `Box` above is written out. Its forms are views, which borrow a value, borrows of a place that holds one, and unscoped existentials, which hold one or point at one:
 
 | Form | What it is | Made from |
 | --- | --- | --- |
-| A parameter, borrowed or `mutable`, or a `ref let` or `ref var`, of type `any P` | A borrow of a place, through which calls dispatch dynamically | A place holding a `T: P`, or `&` of one |
-| `Borrow<any P>` | Shared view: scoped, implicitly copyable | A shared borrow of a `T: P`, or of an unscoped existential's `value` |
+| `any P` | Shared view: scoped, copyable | A shared borrow of a `T: P`, or of an unscoped existential's `value` |
 | `MutableRef<any P>` | Exclusive view: scoped, move-only | `&place` of a `T: P`, or of an unscoped existential's `value` |
+| A parameter, borrowed or `mutable`, or a `ref let` or `ref var`, of type `any P` | A borrow of a place, through which calls dispatch dynamically | A place holding a `T: P`, or `&` of one |
 | `Box<any P>` | Unscoped existential, on the heap | A `Box` holding an unscoped `T: P` |
 | `UniquePointer<any P>`, `WeakPointer<any P>` | Unscoped existentials of objects | An object pointer of the same kind to an unscoped `T: P` |
 | `Shared<any P>`, `LocalShared<any P>`, `WeakShared<any P>` | Unscoped existentials of reference-counted values | A reference-counted pointer or weak link of the same kind to an unscoped `T: P` |
 
-**The existential views are types of their own, which the language provides.** `Borrow<any P>` and `MutableRef<any P>` aren't instances of std's `Borrow<T>` and `MutableRef<T>`, since `any P` binds no type parameter, but each has the members its namesake has:
+**`MutableRef<any P>` is a type of its own, which the language provides, and binding a type parameter never makes it.** std's `MutableRef<T>` with `T` bound to `any P` lends a place holding a shared view, and is written `MutableRef<(any P)>` ([12](../12-grammar/notes.md#parentheses-in-types)). `MutableRef<any P>` has the members `MutableRef<T>` has:
 
-- **A `value` place property** lends the value as an `any P`, borrowed for a `Borrow`, and borrowed or `mutable` for a `MutableRef` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
+- **A `value` place property** lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)).
 - **Its layout** holds a pointer to the value and the value's witness table, and is left open ([11](../11-compilation-model.md#what-the-language-leaves-open)).
-- **Its conformances** are its namesake's: `Borrow<any P>` is implicitly copyable, and `MutableRef<any P>` is move-only ([01](../01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)).
+- **It is move-only**, as `MutableRef<T>` is ([01](../01-values-and-ownership/moves-copies-destruction.md#types-that-are-always-move-only)).
 
 **`any P & Sendable`** accepts only `Sendable` types, and is `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). An existential hides its value's type, which may not be `Sendable`, so it is `Sendable` only when its protocols say so.
 
 **A `Shared`'s value must be `Frozen` or `Synchronized`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)), and an existential is `Frozen` only when its protocols say so, as for `Sendable`. So a `Shared`'s existential is `Shared<any P & Frozen>`, or `Shared<any P>` for a `P` that inherits `Frozen` or `Synchronized`, as `WakeTarget` inherits `Synchronized` ([07](../07-concurrency/tasks.md#awaitables)).
 
-**A shared borrow of an `any P` calls only requirements that are neither `mutating` nor `consuming`.** That is a borrowed parameter, a `ref let` or a `Borrow<any P>`'s `value`. Other borrows may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable borrow calls `mutating` requirements too: a `mutable` parameter, a `ref var`, or the `value` of a `MutableRef<any P>` or an unscoped existential, lent for change. No borrow calls a `consuming` requirement, since none owns the value. An owned `Box<any P>` reaches one by unpacking as an `owned T`, as a static or `init` requirement is called only on an unpacked value's type ([below](#unpacking-an-existential)).
+**A shared view or a shared borrow of an existential calls only requirements that are neither `mutating` nor `consuming`.** That is an `any P`, a borrowed parameter or a `ref let` of that type. Other views may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable borrow calls `mutating` requirements too: a `mutable` parameter, a `ref var`, or the `value` of a `MutableRef<any P>` or an unscoped existential, lent for change. No view or borrow calls a `consuming` requirement, since none owns the value. An owned `Box<any P>` reaches one by unpacking as an `owned T`, as a static or `init` requirement is called only on an unpacked value's type ([below](#unpacking-an-existential)).
 
-**`mutable` before `any P` is the parameter convention, as it is before any other type.** So a `mutable any P` parameter borrows the caller's place for change, and the call writes `&` before it ([01](../01-values-and-ownership/parameters.md#parameters)). A `ref var` of type `any P` binds one, and a `MutableRef<any P>` holds one as a value, as a list of targets does:
+**`mutable` before `any P` is the parameter convention, as it is before any other type.** So a `mutable any P` parameter borrows the caller's place holding a `T: P` for change, and the call writes `&` before it ([01](../01-values-and-ownership/parameters.md#parameters)). A `ref var` of type `any P` binds one, and a `MutableRef<any P>` holds one as a value, as a list of targets does:
 
 ```swift
 func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // the 'mutable' convention on an 'any Damageable'
@@ -331,13 +329,15 @@ for d in targets { d.value.takeDamage(1) }                     // error: 'd' is 
 for d in &targets { d.value.takeDamage(1) }                    // fine: the loop lends 'targets', so 'd' is a mutable borrow
 ```
 
-**`&place` makes a `MutableRef<any P>` wherever one is expected**, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). A shared borrow of a place makes a `Borrow<any P>` the same way ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+**`&place` makes a `MutableRef<any P>` wherever one is expected**, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). A shared borrow of a place makes an `any P` the same way ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **A non-`mutating` closure captures a `MutableRef<any P>` shared**, so parallel work can't call `mutating` requirements through it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
-**A shared view is a value of its own, so a place that holds one can change which value it views without reaching that value.** `mutable Borrow<any P>` lets a callee reassign which value the caller's view refers to, and a `MutableRef<Borrow<any P>>`, what a loop over `&` a `List<Borrow<any P>>` yields, lets the loop do the same. Neither calls a `mutating` requirement, since the value is still borrowed shared.
+**A changeable place holding an `any P` changes which value it views, never that value.** Assigning to a `var` of one, or to a `List<any P>`'s element, points it at another value, and a `mutating` requirement called through it is a compile error, since the value is borrowed shared.
 
-**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning a whole `any P`, through `box.value` or any other borrow of one, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
+**So `&v` of a place holding an `any P` makes no `MutableRef<any P>`, and a `mutable` parameter or a `ref var` of type `any P` given it is a compile error.** Each of those always lends a place holding a `T: P`, so its meaning never depends on its argument. Code that picks a new view for its caller returns it, and the caller assigns it.
+
+**`Box<any P>` holds an unscoped value in a heap allocation.** `box.value` is a place property that lends the value as an `any P`, borrowed or `mutable` ([02](../02-views-and-dependencies/place-and-value-properties.md#place-properties-borrow-and-mutate)). Assigning to `box.value`, or through a `mutable` parameter, a `ref var` or a `MutableRef<any P>`, is a compile error, since it could change the value's type and size. Unpacking it as `mutable T` ([below](#unpacking-an-existential)) can replace the value, with one of the same type.
 
 **`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
@@ -345,13 +345,13 @@ for d in &targets { d.value.takeDamage(1) }                    // fine: the loop
 if ref var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
 ```
 
-**The unscoped existentials are types of their own, which binding a type parameter never makes, since `any P` binds none.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
+**The unscoped existentials are types of their own, which binding a type parameter never makes.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:
 
 - the conversion to it ([Implicit conversions](implicit-conversions.md#implicit-conversions));
 - for a weak pointer or a weak link, `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - another unscoped existential of the same protocol, as `u.weak()` makes a `WeakPointer<any P>` from a `UniquePointer<any P>`.
 
-**A box that holds a shared view is a different type**, `Box<Borrow<any P>>`, which generic code gets from `Box<T>` with `T` bound to `Borrow<any P>`. It is scoped, since it holds a view ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
+**A box that holds a shared view `any P` itself is a different type**, written `Box<(any P)>` ([12](../12-grammar/notes.md#parentheses-in-types)). Generic code gets it from `Box<T>` with `T` bound to `any P`, and it is scoped, since it holds a view ([02](../02-views-and-dependencies/scoped-values.md#which-types-are-scoped)).
 
 **Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. Their accesses lend the value as `box.value` does, as an `any P` borrowed for a shared access, and for change for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
 
@@ -371,9 +371,9 @@ func refillAll(_ targets: mutable List<Box<any Damageable>>) {
 }
 ```
 
-**Passing an existential to a generic parameter `T: P` unpacks it: `T` is the value's dynamic type for that call.** A shared borrow of an `any P` unpacks only as a borrowed `T`. A mutable borrow of one, such as a `mutable any P` parameter or an unscoped existential's `value` lent for change, also unpacks as `mutable T`, whose whole value the generic code may replace, since the type can't change. An owned `Box<any P>` also unpacks as an `owned T`: its value moves out into the call, and its allocation is freed.
+**Passing an existential to a generic parameter `T: P` unpacks it: `T` is the value's dynamic type for that call.** A shared `any P`, or a shared borrow of an existential, unpacks only as a borrowed `T`. A mutable borrow of one, such as a `mutable any P` parameter, a `MutableRef<any P>`'s `value` or an unscoped existential's `value` lent for change, also unpacks as `mutable T`, whose whole value the generic code may replace, since the type can't change. An owned `Box<any P>` also unpacks as an `owned T`: its value moves out into the call, and its allocation is freed.
 
-**`any P` never conforms to `P`, and binds no type parameter, so a `T` takes an existential's value only by unpacking it.** Two existentials unpack to two types, so passing two boxes' values for one `T` is a compile error:
+**`any P` never conforms to `P`, so it can't bind `T` without unpacking.** Two existentials unpack to two types, and a box's `value` isn't a place of type `any P` that `T` could bind as the view type (below). So passing two boxes' values for one `T` is a compile error:
 
 ```swift
 swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack to two types
@@ -382,7 +382,7 @@ swap(&a.value, &b.value)   // error: two Box<any Widget>s, whose values unpack t
 **These rules decide whether a call unpacks:**
 
 - **Where it unpacks.** Only into a parameter whose type is `T` itself, borrowed or `mutable`, or `owned` for an owned `Box<any P>`. Nothing else in the signature may mention `T`: no other parameter, the result, its failure type included, or a `where` clause beyond `T`'s own constraints. `P` must imply every one of `T`'s constraints, and an unscoped existential's `value` or owned value also meets `T: ~Scoped`, since it holds only unscoped values.
-- **Where it doesn't.** A `Borrow<any P>`, a `MutableRef<any P>` or a `Box<any P>` passed whole binds `T` as itself, as any value does, where it meets `T`'s constraints. Any other call that would need `T` to be `any P` is a compile error.
+- **Where it doesn't.** When `any P` itself meets `T`'s constraints, as it meets those of an unconstrained `T` or of `T: Copyable`, it binds `T` as the view type instead, and a `MutableRef<any P>` or a `Box<any P>` that meets them binds `T` as itself. Any other call that would need `T` to be `any P` is a compile error.
 
 **An unpacking call costs one indirect call, and an instance for each possible dynamic type.** An unpacking call site names one generic function, every type argument but `T` fixed. The program holds an instance of it for every type that can be the dynamic type of an existential of `P`:
 

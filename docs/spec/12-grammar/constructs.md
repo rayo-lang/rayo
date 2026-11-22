@@ -16,7 +16,7 @@ type-primary  = type-name
               | '(' type ('|' type)+ ')'                           (* error union (10): (IoError | ParseError)? *)
               | '[' (expression | '_') 'of' type ']'               (* Array<T, N>, the inline array; '_' infers the count from the initializer *)
               | '*' type-primary                                   (* raw pointer; *T? is a nullable pointer, *(T?) a pointer to an optional *)
-              | 'static' type-primary                              (* a static type (02): static StringView, static Token, static Borrow<any Logger>;
+              | 'static' type-primary                              (* a static type (02): static StringView, static Token, static any Logger;
                                                                       static Span<Float>? is an optional static view *)
               | 'any' composition | 'some' composition
               | '@c' 'noalloc'? c-stack? '(' (fn-param-type (',' fn-param-type)* ','?)? ')' '->' type
@@ -26,7 +26,7 @@ type-primary  = type-name
                                                                       'mutating' may write its captures, 'consuming' is call-once;
                                                                       '@sendable' holds only closures with Sendable captures (07);
                                                                       '@noalloc' holds only functions whose calls can't allocate (05) *)
-composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; after a cast operator, the type takes every '&' that follows *)
+composition   = type-primary ('&' type-primary)* ;                 (* any P & Sendable; any P? is (any P)?; after a cast operator, the type takes every '&' that follows *)
 type-name     = identifier generic-args? ('.' identifier generic-args?)* ;   (* Enemy, gameplay.Enemy, T.Element, List<gameplay.Enemy> *)
 fn-param-type = 'keep'? param-convention? type ('|' type)* ;      (* some (mutable Context) -> Bool; mutating (keep StringView) -> Void; (IoError | ParseError) -> Void;
                                                                      'keep' only without a convention or with 'owned' (05) *)
