@@ -85,7 +85,7 @@ extension Node {
 }
 ```
 
-**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)).
+**A `mutate` hands out a place only in `self`, a `mutable` parameter, or what one of them views exclusively**, since only those are changeable places ([01](../01-values-and-ownership/bindings.md#changeable-places)). An exclusive view's `mutate` needs only exclusive access to `self`, which isn't changeable there, so it hands out a place only in what `self` views, as a `MutableSpan`'s subscript does ([Exclusive views](scoped-values.md#exclusive-views)).
 
 **The compiler verifies that every place a body hands out lies in its sources.** It checks the place as rule 5 checks a result, restricted to the sources, whatever the place's type ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)). So the place must be reached from a source through stored fields, elements and other place properties. This is an error, since `other` is no source:
 
@@ -145,7 +145,7 @@ func leak() -> any Equatable {
 
 **Each source place is the caller's place, never a bit copy**, since the place lies inside it ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-**On an exclusive view type, a view of the place depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views:
+**On an exclusive view type, a view of the place depends on the view variable itself** ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)), as on a `MutableSpan` or a `MutableRef`. So this result depends on `s`, and through it on what `s` views. `s` is declared `mutable` rather than received owned, since no result may depend on an owned parameter's own storage, which ends with the call ([Rule 5: The callee side](dependency-absorption-and-accesses.md#rule-5-the-callee-side)):
 
 ```swift
 func label(_ s: mutable MutableSpan<Item>, _ i: UInt) -> StringView { s[i].name.view }

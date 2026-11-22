@@ -122,7 +122,7 @@ enemies.forEachInParallel { e in
     }
 }
 
-var g = deaths.lock()                    // a MutexGuard<List<Vec3>>
+let g = deaths.lock()                    // a MutexGuard<List<Vec3>>
 g.value.append(copy boss.pos)
 _ = g                                    // unlocks now; otherwise the end of the scope does
 

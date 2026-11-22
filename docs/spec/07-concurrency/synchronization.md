@@ -93,7 +93,7 @@ So by 11's rule the acquire load, which goes through the `Name`, reads a value n
 let log = Mutex(alloc List<Message>())
 log.lock { msgs in msgs.append(m) }      // closure form: lock takes 'consuming (mutable T) -> R', called once
 
-var g = log.lock()                       // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
+let g = log.lock()                       // guard form: an owned, move-only, scoped MutexGuard<List<Message>>
 g.value.append(n)                        // views of g.value depend on g
 _ = g                                    // unlocks; otherwise its deinit unlocks at scope end
 

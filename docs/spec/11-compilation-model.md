@@ -62,7 +62,7 @@ let boxed = Optional(value: 3)        // a name written in the source means this
 - the std types the language names, such as `Allocator` and `Allocating` for `alloc`;
 - the literal protocols ([04](04-types/collections.md#literals));
 - the C type aliases ([08](08-c-interop.md));
-- the protocols the compiler derives or checks;
+- the protocols the compiler derives or checks, such as `Copyable`, and `ExclusiveView`, whose conformers' `mutating` members it checks ([02](02-views-and-dependencies/scoped-values.md#exclusiveview));
 - the functions it gives meaning to, such as `precondition`, `typeInfo` and `fma`.
 
 ## Type checking is local

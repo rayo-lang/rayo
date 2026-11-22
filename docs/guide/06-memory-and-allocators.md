@@ -297,7 +297,7 @@ So a collection that must back off under a hard memory limit, such as a streamin
 
 ```swift
 @noalloc
-func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Float>) {
+func fillSilence(_ out: MutableSpan<Float>, _ history: mutable List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
     history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
 }

@@ -140,7 +140,7 @@ for p in &particles {                  // p is a row: one place per field
 **Subscripts reach columns by field.** `s[field: f]` returns one column, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of columns. Marked `&`, `s[fields:]` gives every column as a `MutableSpan`, and unmarked, every column as a `Span`. A `let` field's column is the exception, a `Span` in either case (below):
 
 ```swift
-var (ts, vs) = &table.rows[fields: (tf, vf)]       // 'ts' and 'vs' are MutableSpans of two distinct columns
+let (ts, vs) = &table.rows[fields: (tf, vf)]       // 'ts' and 'vs' are MutableSpans of two distinct columns
 ```
 
 **Each element a `for` loop over `s` hands out, and `s[i]`, is a row.** A **row** is a view of one index across every column. It is shared or, through `&`, exclusive, as `Borrow<T>` and `MutableRef<T>` are for other collections ([Iteration](collections.md#iteration)). It has one place property per field of `T`, named as the field is, which lends that field's place in its column. Those places are disjoint, as a struct's stored fields are ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.

@@ -34,7 +34,7 @@ func addSpawn(_ p: Vec3, to spawns: mutable SoA<Vec3>) -> Void!AllocError {
 
 ```swift
 @noalloc
-func fillSilence(_ out: mutable MutableSpan<Float>, _ history: mutable List<Float>) {
+func fillSilence(_ out: MutableSpan<Float>, _ history: mutable List<Float>) {
     for i in 0..<out.count { out[i] = 0 }        // fine: nothing here allocates
     history.append(0)                            // error: 'append' may allocate, and 'fillSilence' is @noalloc
     var spare = alloc List<Float>()              // error: 'alloc' allocates, and 'fillSilence' is @noalloc

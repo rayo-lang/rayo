@@ -259,6 +259,8 @@ A closure's type says what it does with its captures, and the compiler infers th
     - calling a `mutating` method on it;
     - capturing it exclusively in a nested literal.
 
+  Writing through a captured exclusive view calls a `mutating` member on it, so the literal captures the view exclusively. That needs exclusive access to the view, not a changeable place ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)), so a literal may write through a `let` that owns a `MutableSpan`.
+
   A `mutating` function value is move-only, and calling it mutates the closure itself. So it is passed `mutable` or owned, and runs on one thread at a time.
 - **`consuming`.** A literal whose body moves out of a capture owns that capture. The body moves out with `consume input`, or by taking the capture anywhere a value is taken ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). The capture moves in when the closure is created, as `[move input]` would. Calling the closure consumes it, so the compiler checks it is called at most once. Copying a capture with `copy` doesn't make it `consuming`.
 
@@ -269,6 +271,8 @@ A closure's type says what it does with its captures, and the compiler infers th
 ```swift
 var n = 0
 particles.forEachInParallel { _ in n += 1 }   // error: writes 'n', so it is mutating, but the loop runs it on many threads
+let lives = &particles.life
+times(3) { lives[0] += 1 }                    // fine: writes through the view 'lives' owns, so the literal is mutating
 ```
 
 **A parameter of `mutating` or `consuming` function type, or of `some F` where `F` is one, is received owned** unless declared `mutable`, since a borrowed one could never be called ([01](../01-values-and-ownership/parameters.md#parameters)). How a closure gets there depends on the parameter's type:
@@ -343,8 +347,8 @@ func times(_ n: UInt, _ body: some mutating () -> Void) { … }   // monomorphiz
 
 var hits = 0
 var misses = 0
-var onHit = { hits += 1 }                           // no annotation: the literal's own concrete type
-var onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function type, a view of the literal
+var onHit = { hits += 1 }                           // no annotation: the literal's own concrete type, which a call changes
+let onMiss: mutating () -> Void = { misses += 1 }   // annotated: the function type, a view of the literal, which a call writes through
 ```
 
 **Every closure literal has its own anonymous concrete type.** A local initialized with a literal and no type annotation has that type, so it only ever holds that literal; with an annotation it has the function type. The type is laid out as a struct whose fields are its captures ([04](../04-types/structs.md#structs)), declared in this order: the listed captures, in list order, then the others, by reference or moved, in order of first use. A capture by reference is a pointer.
@@ -425,7 +429,7 @@ func mk() -> () -> Int { let x = 5; return { [copy x] in copy x } }        // er
 
   A named function views no storage and depends on nothing, which is why `pick` compiles. An overloaded name is resolved by the expected type. A closure literal that captures nothing converts the same way, since its storage holds nothing. So `inc` and the default of `sorted(by:)` above compile.
 - **`@sendable` function types**, such as `@sendable (mutable Particle) -> Void`, hold only closures whose captures, by reference or owned, all have `Sendable` types, and their values are `Sendable` ([07](../07-concurrency/race-freedom-and-sendable.md#what-may-cross-threads-sendable)). A named function always converts to one. A `@sendable` value converts to the same type without the mark, never the reverse, and `Closure<F>` and `some F` carry the mark the same way.
-- **`@noalloc` function types**, such as `@noalloc (mutable MutableSpan<Float>) -> Void`, hold only functions whose calls can't allocate: a `@noalloc` named function, or a literal whose body passes the `@noalloc` check ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Where a call may destroy the literal's captures, the check covers that destruction too. A call may destroy them for a `consuming` literal, and for any literal moved into a `Closure` or passed owned for a `some F`, since a call through a `consuming` type destroys what it doesn't move out. A call through a `@noalloc` function type counts as a `@noalloc` call. The mark converts away as `@sendable` does, never the reverse, and `Closure<F>` and `some F` carry it the same way.
+- **`@noalloc` function types**, such as `@noalloc (MutableSpan<Float>) -> Void`, hold only functions whose calls can't allocate: a `@noalloc` named function, or a literal whose body passes the `@noalloc` check ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)). Where a call may destroy the literal's captures, the check covers that destruction too. A call may destroy them for a `consuming` literal, and for any literal moved into a `Closure` or passed owned for a `some F`, since a call through a `consuming` type destroys what it doesn't move out. A call through a `@noalloc` function type counts as a `@noalloc` call. The mark converts away as `@sendable` does, never the reverse, and `Closure<F>` and `some F` carry it the same way.
 
 **A literal is kept in a hidden local when it is in one of these places, and the local there depends on its storage after the statement**, by rules 3 and 4 ([02](../02-views-and-dependencies.md#dependencies)):
 

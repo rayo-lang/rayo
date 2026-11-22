@@ -16,7 +16,7 @@ extension Damageable {
 
 extension Enemy: Damageable {}
 
-func applyAoE<T: Damageable>(_ targets: mutable MutableSpan<T>, amount: Float) {
+func applyAoE<T: Damageable>(_ targets: MutableSpan<T>, amount: Float) {
     for t in &targets { t.takeDamage(amount) }
 }
 ```
@@ -301,15 +301,17 @@ for w in &widgets { w.value.update(dt) }           // mutable any Widget: mutati
 
 **`any P` calls only requirements that are neither `mutating` nor `consuming`.** It is a shared view, whose value other views may be reading, so it can't change that value ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). No existential view calls a `consuming` requirement, since none owns the value. An owned `Box<any P>` reaches one by unpacking as an `owned T`, as a static or `init` requirement is called only on an unpacked value's type ([below](#unpacking-an-existential)).
 
-**`mutable any P` is a type of its own.** `&place` makes one wherever one is expected, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). A `mutating` requirement called through it changes the value it views. So the view must be in a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)), such as a `var` binding, never a shared borrow:
+**`mutable any P` is a type of its own.** `&place` makes one wherever one is expected, including assigned into an existing slot, as `d = &crate` does in a loop over `&targets` ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind)). A `mutating` requirement called through it changes the value it views, never the view, so it is an exclusive view. Such a call needs exclusive access to the view, not a changeable place ([02](../02-views-and-dependencies/scoped-values.md#exclusive-views)). An owned `let` of one has that access, and a shared borrow never does:
 
 ```swift
+let hit: mutable any Damageable = &barrel  // a let owns the view
+hit.takeDamage(1)                           // fine: changes 'barrel' through the view
 targets.append(&boss)                       // a list of mutable any Damageable views: 'boss' stays borrowed exclusively
-for d in targets { d.takeDamage(1) }        // error: 'd' is a shared borrow of a view, not a changeable place
-for d in &targets { d.takeDamage(1) }       // fine: the loop lends 'targets', so 'd' can change
+for d in targets { d.takeDamage(1) }        // error: 'd' is a shared borrow of a view
+for d in &targets { d.takeDamage(1) }       // fine: the loop lends 'targets', so 'd' is a mutable borrow
 ```
 
-**So a parameter of type `mutable any P` is received owned** unless declared `mutable`, as a `mutating` function type's is ([Closure kinds](functions-and-closures.md#closure-kinds)). An owned parameter is a changeable place, so `strike` can call `mutating` requirements through `d`:
+**So a parameter of type `mutable any P` is received owned** unless declared `mutable`, as a `mutating` function type's is ([Closure kinds](functions-and-closures.md#closure-kinds)). An owned parameter has exclusive access, so `strike` can call `mutating` requirements through `d`:
 
 ```swift
 func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is received owned
@@ -317,7 +319,7 @@ func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is receiv
 
 **A non-`mutating` closure captures a `mutable any P` shared**, so parallel work can't call `mutating` requirements through it ([07](../07-concurrency/thread-work.md#lending-work-to-other-threads)).
 
-**At a call, `&place`, or `&v` for a variable holding a `mutable any P`, makes the view the parameter receives** ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+**At a call, `&place`, or `&v` for a `mutable any P` held with exclusive access, makes the view the parameter receives** ([Implicit conversions](implicit-conversions.md#implicit-conversions)). Stored views keep their places borrowed: after `targets.append(&boss)` above, `boss` stays borrowed exclusively, by rule 4 ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **Exclusive access to a place holding a shared `any P` changes which value it views, never that value:**
 
