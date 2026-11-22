@@ -35,7 +35,7 @@ let total = unsafe (a.pointee + b.pointee)  // covers both reads
 - the raw-memory operations ([below](#raw-memory)), and resizing or freeing a raw allocation ([below](#raw-allocations));
 - calls into C, since a header can't say that a pointer outlives the call, or that a buffer holds `n` elements ([08](../08-c-interop/imports-and-inline-c.md#calling-imported-functions));
 - calls through `@c` pointers, since the type can't tell a Rayo function from a C one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)), and calls to `unsafe` functions;
-- using a field or property declared `unsafe`, which `unsafe` code trusts, such as a run's `baseAddress` ([04](../04-types/collections.md#collections-and-strings)), whether by name, through reflection or as a `SoA` column;
+- using a field or property declared `unsafe`, which `unsafe` code trusts, such as a run's `baseAddress` ([04](../04-types/collections.md#runs-of-elements)), whether by name, through reflection or as a `SoA` column;
 - accessing a bare global `var` ([07](../07-concurrency/global-state.md#global-state)) or an imported C variable ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)), since every thread can reach it;
 - converting a function to a `@c` type by C representations alone, or a `@c` value to a `@c noalloc` one ([05](../05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers));
 - reading a union member where 04 requires it, since what another member's write left there may not be a valid value of it ([04](../04-types/enums.md#untagged-unions)).
