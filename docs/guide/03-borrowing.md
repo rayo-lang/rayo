@@ -236,7 +236,7 @@ A `for` loop over `hits` borrows the list for its whole run, and on each pass, `
 
 ```swift
 for h in hits {
-    h += 5                      // error: 'h' is read-only; write '&hits' to change the elements
+    h += 5                      // error: 'h' owns its Int, and is read-only; write '&hits' to change the elements
 }
 ```
 

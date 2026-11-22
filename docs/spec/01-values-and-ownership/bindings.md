@@ -10,6 +10,7 @@
 | Refers to a place | `ref let x = p` | `ref var x = &p` |
 
 **`ref` marks a binding that refers to a place.** `ref let` borrows the place read-only, and `ref var` borrows it for change. A `let` or `var` declaration without `ref` owns what it binds, and a condition's binding writes the same four words with the same meanings ([below](#conditions)). A `for` name or a `when` payload name writes none of them, since its subject says what it is ([below](#for-and-when-names)). Each other operation has one spelling, the same in every position: `&` lends a place for change, `copy` makes a second value, and `consume` moves the value out ([Moving values out](moving-values-out.md#moving-values-out)).
+
 ```swift
 var enemies = loadEnemies()
 
@@ -25,15 +26,13 @@ let mesh = loadMesh()              // a value, not a place: the binding owns it
 let all = consume enemies          // a move: 'enemies' can't be used until it gets a new value
 ```
 
-**A value whose type is implicitly copyable, such as an `Int` or a `Float`, needs no `copy`**: a `let` or `var` of its place copies it, as `hp` above does ([Implicit copies](moves-copies-destruction.md#implicit-copies)).
-
 | Form | Like the parameter | Meaning | Cost |
 | --- | --- | --- | --- |
 | `ref let x = place` | `_ x: T` | A shared **borrow** of `place`, of any type: `place` can't be changed, moved or destroyed while `x` is live | None |
 | `ref var x = &place` | `_ x: mutable T` | A mutable **borrow** of a [changeable place](#changeable-places): `place` is reachable only through `x` while `x` is live | None |
 | `let x = consume place`, `var x = consume place` | `_ x: owned T` | A **move** from a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)): `place` can't be used until it gets a new value | A `memcpy` at most |
 | `let x = copy place`, `var x = copy place` | | An independent **copy** of a copyable value; a move-only one is copied with `alloc place.clone()` | A `memcpy` |
-| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early | None |
+| `let x = f()`, `var x = f()` | | The binding owns the value, even a move-only scoped value such as a `MutableSpan` or a lock guard ([02](../02-views-and-dependencies/scoped-values.md#scoped-values)); `_ = x` ends it early, unless its type is implicitly copyable | None |
 | `let x = place`, `var x = place`, of an implicitly copyable type | | An independent **copy**, with nothing written ([Implicit copies](moves-copies-destruction.md#implicit-copies)) | A `memcpy` |
 | `let x = place`, `var x = place`, of any other type | | A compile error that names `copy`, `consume` and `ref let`, with the exceptions below | |
 
@@ -59,7 +58,7 @@ ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; 
 
 **A `let` or `var` declaration owns what it binds**, as a binding of a call's result does. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
-- **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. The exceptions are below. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)).
+- **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)). The exceptions are below.
 - **A `let` or `var` given `&place` is a compile error that says to write `ref var`**, since `&` lends the place, and a binding without `ref` refers to no place. Where `&place` makes a view of a type of its own, such as the mutable form of a `get`, the binding owns that view instead ([Lending a place for change](#lending-a-place-for-change)).
 - **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says. A place of an implicitly copyable type needs neither, as below.
 

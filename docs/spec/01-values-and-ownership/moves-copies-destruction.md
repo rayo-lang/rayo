@@ -104,11 +104,15 @@ extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as th
 
 **Generic code copies a `T` with nothing written only under `T: ImplicitlyCopyable`**, since an unconstrained or merely copyable `T` may be a large value. Under `T: Copyable` alone, it writes `copy x`.
 
-**The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, the ranges of implicitly copyable bounds, `Allocator`, `Stamp`, `std.math`'s `Vec3`, and `T?` where `T` conforms are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
+**No other type the language gives conforms**, such as an `any P`, a function value or a type value, so a copy of one is written.
+
+**The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, `Allocator`, `Stamp` and `std.math`'s `Vec3` are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
+
+**A generic type that holds only its type arguments, and at most a tag of its own, conforms where its arguments do**, such as a range of `Int`s, `T?` and `Result`. Its copy costs what copies of its arguments cost, which their own types have declared cheap, so the test applies to them, not to the whole.
 
 ### Implicit copies
 
-**A value of an implicitly copyable type taken from a place is copied, and the place stays usable.** That holds wherever the place would otherwise be moved, or bound by a `let` or `var`:
+**A value of an implicitly copyable type taken from a place is copied, and the place stays usable.** Such a copy is an **implicit copy**. That holds wherever the place would otherwise be moved, or bound by a `let` or `var`:
 
 - a `let` or `var` initializer, including the last expression of an `if` or `when` arm, or of an `unsafe` block, whose position it hands on ([Bindings](bindings.md#if-and-when-as-values));
 - the right side of an assignment;

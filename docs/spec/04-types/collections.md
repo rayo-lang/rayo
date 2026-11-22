@@ -18,7 +18,7 @@ let locks: [8 of Mutex<Int>] = .init(each: { _ in Mutex(0) })   // one call per 
 
 **Tuples may be labeled, and are laid out as a struct of their elements** ([Structs](structs.md#structs)). A one-element tuple is labeled or written with a trailing comma, `(x,)` of type `(Int,)`, since `(x)` is just `x`. A tuple whose elements are all implicitly copyable is implicitly copyable too, as `pair` is ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
-**Ranges are copyable values**, bounded at both ends or at one: `0..<n`, `a...b`, `..<n`, `...b` and `i...`. A range is implicitly copyable when its bounds are, as a range of `Int`s is, since it holds at most two of them.
+**Ranges are copyable values**, bounded at both ends or at one: `0..<n`, `a...b`, `..<n`, `...b` and `i...`. A range is implicitly copyable when its bounds are, as a range of `Int`s is, since it holds only its bounds ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **An array, `Array<T, N>`, written `[N of T]`, is `N` values of `T` stored inline**, with no heap allocation, and is copyable when `T` is. It is never implicitly copyable, even a `[4 of Float]`, so a copy of one is always written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). It is a language type, and what an array literal makes when nothing asks for another type ([below](#literals)).
 
@@ -91,7 +91,7 @@ The other rows, such as the owning collections and `Handle`, are std's ([11](../
 | `Span<T>`, `MutableSpan<T>` | no (scoped) | ptr + count; `list.span`, `list[a..<b]`; a `Span` is implicitly copyable, and a `MutableSpan` move-only |
 | `static Span<T>` | no (static) | ptr + count into data that lives as long as the program, implicitly copyable and unscoped ([02](../02-views-and-dependencies/scoped-values.md#static-values)) |
 | `Map<K, V, H>`, `Set<T, H>` | yes | Hash map and set, hashed as their hashing type `H` says, by default with a seed drawn for each run ([below](#hash-maps-and-sets)) |
-| `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates |
+| `InlineList<T, N>` | yes | Growable up to `N` elements, stored inline; never allocates; never implicitly copyable, as an inline array isn't |
 | `Pool<T>`, `Handle<T>` | yes / no | Slot map over densely packed elements: dense iteration, elements move on removal ([03](../03-handles-and-objects.md#pools-and-handles)) |
 | `StablePool<T>` | yes | Stable and pinnable element addresses |
 | `UniquePointer<T>`, `WeakPointer<T>` | yes / no | An object on one thread, with checked weak pointers to it ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) |
@@ -388,7 +388,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no `Allocator` id but `.heap`;
 - no pointer but one into immortal data, as a literal's `static StringView` or a `Name` holds.
 
-`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
+`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. A matrix holds an inline array of its columns, so it is never implicitly copyable, and a copy of one is written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
 
 **Any other literal runs its initializer on each evaluation**, as a `List`'s allocates from the allocator its `alloc` gives. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 

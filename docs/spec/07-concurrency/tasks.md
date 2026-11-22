@@ -112,7 +112,8 @@ enum Poll<Output, Failure: Error> {
     case done(Output)
     case failed(Failure)
     case pending          // not done yet: a call of the waker is arranged (below)
-}                         // implicitly copyable where Output and Failure are, as std declares it
+}
+extension Poll: ImplicitlyCopyable where Output: ImplicitlyCopyable, Failure: ImplicitlyCopyable {}
 
 struct Waker(                     // made by the task's runner
     let target: WeakShared<any WakeTarget>,

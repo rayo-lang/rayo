@@ -17,7 +17,7 @@ func heal(_ e: mutable Enemy) { e.hp = 100 }
 heal(&b)                           // lends 'b' to heal, which changes it in place: no copy
 ```
 
-In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `hp` gets a copy of `b.hp` with nothing written, since a `Float`'s type declares its copy cheap. `seen` refers to `b` where it lies, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
+In this example, `a` hands its enemy to `b`, `copy b` makes a separate value in `c`, and `hp` gets a copy of `b.hp` with nothing written, since a `Float` is implicitly copyable. `seen` refers to `b` where it lies, and `heal` changes `b` through a borrow. The following rules explain why each operation leaves a different set of names usable.
 
 A **place** is storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]`.
 
