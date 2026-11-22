@@ -312,13 +312,13 @@ _Avoid_: unsized parameter, `?Sized`
 `T.self`, a value of type `Type<T>` that names the type `T`, so a function can take a type as an argument ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 _Avoid_: metatype
 
-**Unscoped closure**:
-A `Closure<F>`, which owns its captures, and so may outlive the scope that made it ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
-_Avoid_: escaping closure, boxed closure
-
 **Unpacking**:
 Passing an existential reference to a `&T` or `mutable &T` parameter, or an owned `Box<any P>` to a `T` one, so that `T` is the value's dynamic type for that call ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#unpacking-an-existential)).
 _Avoid_: opening an existential
+
+**Unscoped closure**:
+A `Closure<F>`, which owns its captures, and so may outlive the scope that made it ([05](docs/spec/05-protocols-generics-and-closures/functions-and-closures.md#unscoped-closures-closuref)).
+_Avoid_: escaping closure, boxed closure
 
 **Unscoped existential**:
 A `Box<any P>`, or an object pointer, reference-counted pointer or weak link to `any P`, which holds or names only an unscoped value ([05](docs/spec/05-protocols-generics-and-closures/protocols-and-generics.md#unscoped-existentials)).

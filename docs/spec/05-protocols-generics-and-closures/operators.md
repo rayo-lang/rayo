@@ -125,7 +125,7 @@ struct Version(let major: Int, let minor: Int): Comparable {    // == derived; <
 }
 ```
 
-**Three protocols declare `==`, `<` and hashing.** A `Version` isn't implicitly copyable, so its `<` takes each operand as a `&Version`, as every requirement below takes a `&Self` ([above](#operators)):
+**Three protocols declare `==`, `<` and hashing.** `Version`'s `<` takes each operand as a `&Version`, since `==`, `<`, `min` and `max` take `&Self` and a witness declares the same types ([Protocols and generics](protocols-and-generics.md#protocols-and-generics)):
 
 - **`Equatable`** requires `==` and `!=`, and gives `!=` a default.
 
@@ -198,7 +198,7 @@ func max<T: Comparable & Copyable>(_ a: T, _ b: T) -> T { a.max(&b) }
 - **Cases without payloads.** Every enum compares with one of its cases that carries no payload, whatever its other cases carry: `x == .idle` and `x != .idle` test which case `x` holds, as `x == nil` does for an optional.
 - **Tuples and inline arrays.** A tuple is `Equatable`, `Hashable` or `Comparable` when each element is, comparing element by element in order, and `[N of T]` is the same when `T` is.
 - **Optionals.** Every optional compares with `nil`: `x == nil` and `x != nil` test for a value, whatever `T` is. `T?` is `Equatable` or `Hashable` when `T` is.
-- **References.** A reference is `Equatable` or `Hashable` when what it refers to is, through that type's `==` and `hash(into:)`, and never `Comparable` ([Conformances](protocols-and-generics.md#conformances)). So a `Set<&Tile>` or a `Map<&Text, Int>` compares and hashes what each key refers to.
+- **References.** A reference takes its `Equatable` and `Hashable` conformances from what it refers to ([Conformances](protocols-and-generics.md#conformances)), so a `Set<&Tile>` or a `Map<&Text, Int>` compares and hashes what each key refers to.
 - **Text.** `Text` is `Comparable` and `Hashable`, and its comparisons and hash are the only ones text has. `String` declares none of its own, and conforms through `Text`'s, converting a `&String` to a `&Text` as it does wherever one is expected ([Implicit conversions](implicit-conversions.md#implicit-conversions)). So `a == b` on two `String`s, `a == text` and `name == "grunt"` each have one candidate. They compare bytes, and order them byte by byte, a prefix before any longer text. Equal texts hash alike, whichever type holds them, so a `Map<String, V>` or a `Set<String>` is looked up by any text, as in `ages["grunt"]`. `Name` is `Hashable`: two are equal exactly when their texts are, though `==` never reads the text ([04](../04-types/collections.md#collections-and-strings)).
 
 **`Simd` vectors don't conform**, since their comparisons return masks ([04](../04-types/numbers-and-math.md#simd-and-math)).

@@ -103,7 +103,7 @@ struct Thermometer(let value: Int, var lastError: IoError?): Probe             /
 **A protocol extension of `P` declares members of every type conforming to `P`**, checked once as generic code over `Self: P`, and adds no requirement or stored member. The extension of `Damageable` above is one. Its members are of two kinds:
 
 - **Defaults.** A member that matches a requirement is its **default**, the witness of each conformance whose type declares none, as `takeDamage` is for `Enemy`. Only the protocol's module declares defaults. A member matching a requirement in another module's extension is a compile error, so every module sees the same witness ([below](#conformances)).
-- **Other members.** Any other member is never a witness. A call to it is resolved statically, with `Self` the receiver's type. A call to it through an existential reference unpacks the receiver, as an argument for a `&T` or `mutable &T` parameter unpacks ([below](#unpacking-an-existential)).
+- **Other members.** Any other member is never a witness. A call to it is resolved statically, with `Self` the receiver's type. A call to it on an existential, through a reference or an unscoped existential's `value`, as in `box.value.helper()`, unpacks the receiver, as an argument for a `&T` or `mutable &T` parameter unpacks ([below](#unpacking-an-existential)).
 
 ## Checking generic code
 
@@ -170,7 +170,7 @@ let query = CHandle(raw: stmt, release: sqlite3_finalize)  // a CHandle<sqlite3_
 **A type parameter has a size, unless it is an `@opaque` type parameter.** An **`@opaque` type parameter**, one marked `@opaque`, stands for any type, with a size or without, since its body is checked as though the type had none. An unmarked type parameter, an associated type and the `Self` of a protocol extension stand only for types with a size, since their bodies may hold a value of the type. Only an `@opaque` type parameter stands for a type with no size ([04](../04-types/data-layout.md#sizes-fixed-when-the-program-is-built)):
 
 - **an `@opaque` type**, an imported C type that Rayo uses only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what));
-- **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box` or a pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
+- **an unsized type**, `[T]`, `Text` or `any P`, which code holds only behind a reference, a `Box`, an object pointer or a reference-counted pointer ([01](../01-values-and-ownership/references.md#unsized-types)).
 
 **So an unsized type binds no type parameter but an `@opaque` one**, as the `T` of a type value is, which makes `Text.self` and `(any Drawable).self` type values ([below](#value-parameters-and-type-values)). A reference to an unsized type has a size of its own, so `&[T]`, `&Text` and `&any P` bind any type parameter, as in `List<&Text>`.
 
@@ -267,7 +267,7 @@ struct Rock(let hp: Float): HasHp         // error: a 'let' field witnesses only
 
 **A reference conforms to three protocols through what it refers to: `Equatable`, `Hashable` and `Formattable`.** A `&T` or `mutable &T` conforms to each when `T` does, and its witnesses are `T`'s, reached by forwarding ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). Each of their requirements only reads the value, so the reference meets it with no access of its own. So a `Map<&Text, Int>` hashes and compares the text each key refers to ([Equality and ordering](operators.md#equality-and-ordering)), and `print(&name)` writes what `name` holds ([04](../04-types/collections.md#printing)).
 
-**A reference forwards no other conformance.** It is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(&b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
+**A reference forwards no other conformance.** A shared reference is never `Comparable`, since its `min` and `max` would return a reference, where `a.min(&b)` through forwarding returns a copy of the value, and generic code would then disagree with concrete code. A mutable reference is never `Comparable` either. Any other protocol a reference meets, it meets by a conformance of its own, such as the `Scoped` the language gives every reference, and the `ImplicitlyCopyable` it gives a shared one.
 
 **These rules say where a conformance is declared, and what it implies:**
 
@@ -332,7 +332,7 @@ for w in mutable &widgets { w.value.update(dt) }        // a mutating requiremen
 
 ### What an existential may call
 
-**A shared existential reference calls only requirements that are neither `mutating` nor `consuming`.** Other references may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable existential reference calls `mutating` requirements too, held in a changeable place, as every write through a reference needs ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So does an unscoped existential's `value`, lent for change.
+**A shared existential reference calls only requirements that are neither `mutating` nor `consuming`.** Other references may be reading the value, so it can't change it ([01](../01-values-and-ownership/exclusivity.md#the-law-of-exclusivity)). A mutable existential reference calls `mutating` requirements too, when it is held in a changeable place, as every write through a reference needs ([01](../01-values-and-ownership/references.md#forwarding-through-a-reference)). So does an unscoped existential's `value`, lent for change.
 
 **No existential calls a `consuming` requirement, since none owns its value.** An owned `Box<any P>` reaches one by unpacking as a `T` argument, which moves the value out of the box ([below](#unpacking-an-existential)). A static or `init` requirement is called the same way, on an unpacked value's type.
 
@@ -382,7 +382,7 @@ if ref var s = mutable &box[as: Slider.self] { s.label = "Go" }   // a Slider ch
 - for a weak pointer or a weak link, `WeakPointer<any P>(bits:)` or `WeakShared<any P>(bits:)` ([03](../03-handles-and-objects.md#weak-pointers-as-bits-and-handing-objects-to-c), [06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners));
 - another unscoped existential of the same protocol, as `u.weak()` makes a `WeakPointer<any P>` from a `UniquePointer<any P>`.
 
-**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. Their `value` is a place of type `any P`, as `box.value` is: `&` lends it for a shared access, and `mutable &` for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
+**Object pointers to `any P`** ([03](../03-handles-and-objects.md#objects-and-weak-pointers-uniquepointert-and-weakpointert)) reference objects of different types, as an observer list `List<WeakPointer<any Listener>>` does. A `UniquePointer<any P>`'s `value` is a place of type `any P`, as `box.value` is, and a `WeakPointer<any P>`'s is an optional place that hands one out, or `nil` once the object is gone. Either way, `&` lends the place for a shared access, and `mutable &` for an exclusive one. `w.downcast(to: T.self)` gives back a `WeakPointer<T>?`.
 
 **Reference-counted pointers to `any P`** ([06](../06-memory-and-allocators/owning-values.md#sharedt-data-with-many-owners)) lend the value through `s.value`, a place of type `any P` with only a `borrow`, so `&s.value` is a `&any P`. `w.upgrade()` on a `WeakShared<any P>` gives a `Shared<any P>?`.
 

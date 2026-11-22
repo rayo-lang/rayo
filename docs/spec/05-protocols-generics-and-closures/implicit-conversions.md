@@ -25,7 +25,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 - **Static values** ([02](../02-views-and-dependencies/scoped-values.md#converting-to-and-from-a-static-type)):
     - A static value converts to its plain type, as a `static &Text` does to a `&Text`, referring to the same data. So a literal goes wherever a `&Text` is expected.
     - A value converts to its static type where it depends only on static storage and immortal data, as a reference to a global `let` does. Where a `static U` is expected, a value that converts to `U` (above) converts and then becomes static, in the same local step, as `T` → `T?` wraps one. A value that depends on anything else never converts, since it may refer to memory that can be freed.
-- **`Box<T>` → `Box<any P>`**, and likewise for each object pointer, reference-counted pointer and weak link, such as `WeakPointer<T>` → `WeakPointer<any P>` and `Shared<T>` → `Shared<any P>`. `T` must meet every protocol of the composition, as `T: Sendable` does for `any P & Sendable`, and `T: ~Scoped` must hold. The conversion takes the value, so a place given to it writes `consume`, as every position that takes a value does ([01](../01-values-and-ownership/bindings.md#conversions)). `~Scoped` is what makes the conversion sound: the existential forgets `T` and any dependency `T` carries, so `T` must carry none ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
+- **`Box<T>` → `Box<any P>`**, and likewise for each object pointer, reference-counted pointer and weak link, such as `WeakPointer<T>` → `WeakPointer<any P>` and `Shared<T>` → `Shared<any P>`. `T` must meet every protocol of the composition, as `T: Sendable` does for `any P & Sendable`, and `T: ~Scoped` must hold. The conversion takes the value, so a place given to it writes `consume` or `copy`, or is copied with nothing written where its type is implicitly copyable, as every position does ([01](../01-values-and-ownership/bindings.md#conversions)). `~Scoped` is what makes the conversion sound: the existential forgets `T` and any dependency `T` carries, so `T` must carry none ([02](../02-views-and-dependencies/scoped-values.md#generic-code-and-scoped)).
 - **Closures to `Closure<F>`** ([Unscoped closures: `Closure<F>`](functions-and-closures.md#unscoped-closures-closuref)). A closure literal, an owned value of a closure's concrete type, or a named function or operator moves into a `Closure`, allocating when its captures exceed the inline size. A `Closure<F>` converts to a `Closure<G>` when a function value of type `F` converts to `G` (below), keeping its context.
 - **Errors** ([10](../10-errors-and-safety/typed-errors.md#error-unions)). A value of an error union's member, or of a union whose members it all has, converts to that union, taking the value as `T` → `T?` does. A `T!F` converts to a `T!E` the same way when `F` is a member of `E`, or a union whose members `E` all has, so a `@converts` initializer never runs implicitly. Under `try` or `throw`, an error converts to the enclosing failure type through a `@converts` initializer ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)).
 - **Closures to function types**, in the ways listed next.
@@ -53,7 +53,7 @@ let pickMax: (Int, Int) -> Int = max            // a named function to a functio
 
 **The conversions to unsized types are safe through `mutable &`, since a place of unsized type is never assigned as a whole** ([01](../01-values-and-ownership/references.md#unsized-types)). So the callee can't store a value of another type there:
 
-- through a `mutable &[T]`, it changes elements, each a `T`, and can't add or remove one, since nothing knows the run's size;
+- through a `mutable &[T]`, it changes elements, each a `T`, and can't add or remove one, since the run's storage belongs to what owns it, such as the list, which alone can resize it ([04](../04-types/collections.md#runs-of-elements));
 - through a `mutable &any P`, it calls requirements, which change the value but never its type ([`any P`: explicit dynamic dispatch](protocols-and-generics.md#what-an-existential-may-call)).
 
 ```swift
@@ -64,7 +64,7 @@ clear(mutable &scores)     // fine: a 'mutable &List<Int>' converts to a 'mutabl
 widen(mutable &count)      // error: 'count' is an Int32, and 'widen' takes 'mutable &Int64'
 ```
 
-**A new reference of what a place that holds a reference refers to is a reborrow, not a conversion**, so `mutable &r` of a place holding a `mutable &T` passes as a `mutable &T` argument however often the code lends it ([01](../01-values-and-ownership/references.md#reborrowing)).
+**`&r` or `mutable &r` of a place that holds a reference is a reborrow, not a conversion**, so `mutable &r` of a place holding a `mutable &T` passes as a `mutable &T` argument however often the code lends it ([01](../01-values-and-ownership/references.md#reborrowing)).
 
 ## Function values of closures in places
 
