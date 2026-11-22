@@ -388,7 +388,7 @@ Literals of different kinds, such as `1` and `"a"`, are an error. An empty `[]` 
 - no `Allocator` id but `.heap`;
 - no pointer but one into immortal data, as a literal's `static StringView` or a `Name` holds.
 
-`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. A matrix holds an inline array of its columns, so it is never implicitly copyable, and a copy of one is written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time.
+`Name`, `Simd`, an `[N of T]` or `InlineList` of such values, and `std.math`'s `Vec3` and matrices qualify. Each evaluation takes a new copy of the bytes, as a `const` of a copyable type is taken ([01](../01-values-and-ownership/moving-values-out.md#constants)). So a `Name` literal costs nothing at run time. A matrix holds an inline array of its columns, so it is never implicitly copyable, and a copy of one is written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
 
 **Any other literal runs its initializer on each evaluation**, as a `List`'s allocates from the allocator its `alloc` gives. Whether or not a literal converts, when its initializer can run at compile time, a precondition it breaks on constant elements is a compile error.
 

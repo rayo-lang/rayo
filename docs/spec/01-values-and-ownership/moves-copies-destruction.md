@@ -108,7 +108,7 @@ extension Optional: ImplicitlyCopyable where T: ImplicitlyCopyable {}   // as th
 
 **The standard library declares the protocol on each copyable type that passes one test**: its copy is 16 bytes or less, and a second copy is as good as the first. So `Handle`, `Name`, `Allocator`, `Stamp` and `std.math`'s `Vec3` are implicitly copyable. A `Panic` is copyable but larger, so its copy is written. Each chapter that declares a copyable type of the standard library says whether it conforms.
 
-**A generic type that holds only its type arguments, and at most a tag of its own, conforms where its arguments do**, such as a range of `Int`s, `T?` and `Result`. Its copy costs what copies of its arguments cost, which their own types have declared cheap, so the test applies to them, not to the whole.
+**The standard library declares the protocol on each of its generic types that holds only its type arguments and at most a tag, for the arguments that conform.** So a range of `Int`s, `T?` and `Result` conform where their arguments do, as `Optional`'s extension above declares. Such a type's copy costs what copies of its arguments cost, which their own types have declared cheap, so the test applies to them, not to the whole.
 
 ### Implicit copies
 
