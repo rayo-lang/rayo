@@ -6,7 +6,7 @@ Across a call, the caller and callee have different parts of the dependency chec
 
 ## Rule 4: Absorption
 
-**After a call, every scoped argument lent with `mutable &`, a `mutating` method's `self` included, takes on what the other arguments borrow.** This is the caller's side of rule 5 for stores. A callee can store a view into a `mutable &` argument, as `append` does, and rule 5 lets it store only what its caller lent it. Absorption adds all of that to the argument's set, so the caller learns what the argument borrows after the call without seeing the body.
+**After a call, every scoped argument given to a `mutable &T` parameter, a `mutating` method's `self` included, takes on what the other arguments borrow.** This is the caller's side of rule 5 for stores. A callee can store a view into a `mutable &` argument, as `append` does, and rule 5 lets it store only what its caller lent it. Absorption adds all of that to the argument's set, so the caller learns what the argument borrows after the call without seeing the body.
 
 **An owned argument that is a mutable view absorbs too** (below). Each absorbing argument takes on the places and sets of the `&` arguments, and the sets of the `mutable &` and scoped owned ones, with the kinds of rule 3:
 

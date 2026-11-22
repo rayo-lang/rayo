@@ -156,7 +156,7 @@ func leak() -> &Int {
 
 **Each source place is the caller's place, never a bit copy**, since the place lies inside it ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 
-**What the source is reached through decides what a view of the place depends on**, as rule 1 says of any place ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)). Through a mutable reference, a view of the place depends on the place that holds the reference, so it keeps a chunk borrowed while it lives. Through a shared reference, it depends on what the reference carries, so a reference to an element of a `&[T]` depends on what owns the elements, not on the place that holds the `&[T]`:
+**What the source is reached through decides what a view of the place depends on**, as rule 1 says of any place ([Rule 1: Projection](dependency-projection-and-results.md#rule-1-projection)). So a view of an element reached through a chunk the loop owns keeps the chunk borrowed:
 
 ```swift
 for chunk in data.mutableChunks(64) {
@@ -178,7 +178,12 @@ A place property whose declared type is written `T?` is an **optional place prop
 - **So is the place of an optional chain through a place**, since `a?.b` names the `b` inside `a`'s payload and no `B?` lies in memory.
 - **A tuple of places is used element by element**, as a pattern binds them. It comes from a body that hands out several places at once, as `(mutable &a, mutable &b)` does, or from `value[fields:]` ([09](../09-compile-time/reflection.md#tuples-field-lists-and-queries)).
 
-**`&` or `mutable &` of an optional place makes a reference to an optional**, so `&world.enemies[h]` is a `&Enemy?` ([01](../01-values-and-ownership/references.md#making-a-reference)). A `ref` binding of a condition unwraps it to its payload, as `if ref var e = mutable &world.enemies[h]` does above, and binds nothing when the place is `nil` ([01](../01-values-and-ownership/bindings.md#conditions)).
+**`&` or `mutable &` of an optional place makes a reference to an optional, which exists only to be unwrapped at once**, so `&world.enemies[h]` is a `&Enemy?` ([01](../01-values-and-ownership/references.md#making-a-reference)). A `ref` binding of a condition unwraps it to its payload, as `if ref var e = mutable &world.enemies[h]` does above, and binds nothing when the place is `nil` ([01](../01-values-and-ownership/bindings.md#conditions)). No `Enemy?` lies in memory for the reference to keep referring to, so holding it is a compile error:
+
+```swift
+let r = &world.enemies[h]                     // error: an optional place is lent only to a condition or pattern that unwraps it
+if ref let e = &world.enemies[h] { show(&e) } // fine: unwrapped at once
+```
 
 **No such `T?` or tuple exists in memory, so none can be:**
 

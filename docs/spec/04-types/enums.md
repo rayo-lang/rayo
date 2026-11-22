@@ -174,7 +174,7 @@ An optional binding, such as `if ref let`, binds what such a place holds to a ne
 - lending it as a `mutable T?`, or lending a place that overlaps it for change, except its payload lent as a `mutable T`;
 - moving out of it, or out of a place that contains it;
 - a closure capturing it, or a place that overlaps it, exclusively ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
-- a `rebind` of the local it is reached through ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var));
+- an assignment of a reference to the `var` it is reached through ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var));
 - an `await`, for a place reached through a task's resume parameter, which the owner lends anew at each step ([07](../07-concurrency/tasks.md#semantics)).
 
 **Moving out of a narrowed place moves the whole payload**, and leaves the place holding no value, as any move does ([01](../01-values-and-ownership/moving-values-out.md#places-that-hold-no-value)). So the place can't be used until it is assigned again. A part of the payload moves out only through a pattern, as for any enum's payload ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)).

@@ -126,11 +126,12 @@ for w in nodes { names.append(w.value!.name.view) }   // error: the second pass'
 
 **A value moved out of `p`'s own storage carries only what `p` carried.** A value `p` owns can view `p`'s own storage only through a dependency of `p` on a part of itself. Then `&p` conflicts, so the call that moves it out can't happen ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#staying-valid-after-a-parameter-moves-on-outlives)).
 
-## `rebind`
+## Assigning a reference to a `var`
 
-**`rebind` moves a name, such as a cursor walking down a tree, to another place** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)). These rules keep the name's set covered at each step:
+**Assigning a reference to a `var` that holds one points the `var` at another place, as a cursor walking down a tree does at each step** ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var)). These rules keep the `var`'s set covered at each step:
 
-- **`rebind` changes which place a name stands for**, and the name's set follows the place: one reached through the name keeps the name's set, and any other starts a new borrow. A step through a place property also takes on the property's other sources. A binding that owns its value first hands it to a hidden local, so views already taken still reach a live value.
+- **The `var`'s set follows the place the new reference refers to.** A place reached through the `var` keeps the `var`'s set, since it lies inside the place the old reference referred to, and any other place starts a new borrow. A step through a place property also takes on the property's other sources.
+- **The new reference keeps no borrow of the `var` itself, since the assignment ends the old reference.** The new one takes over only what the old one carried, so no two references to the place are live at once. The `var` is a local of the body that assigns it, so that body sees every use of it.
 - **Through objects, the cursor holds only the new object's mark.** The new place lies in that object's value, which the mark guards. An alias that destroys the object panics, since the mark is live ([03](../../spec/03-handles-and-objects.md#destroying-an-object)), and an alias that reaches it conflicts.
 - **No step targets a value property's change**, since each step would nest another change whose `set` waits for the cursor's last use.
 

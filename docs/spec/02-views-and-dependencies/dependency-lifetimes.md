@@ -97,9 +97,9 @@ print("\(syms?.count ?? 0) symbols")
 - `return`, for the result, an error it fails with included, or for the place a place property hands out ([What a place depends on](place-and-value-properties.md#what-a-place-depends-on));
 - a parameter that absorbs under rule 4, for what it takes on: a `mutable &` one, `self` in a `mutating` method included, or one that owns a mutable view, such as an owned struct of mutable references.
 
-**An item says what its subject depends on:**
+**An item says what its subject depends on.** In every item, a `&T` or `mutable &T` parameter `x`, or the `self` of a plain or `mutating` method, stands for the place it names, so `x` is the caller's place, and what `x` borrows is that place's set ([01](../01-values-and-ownership/parameters.md#parameters)):
 
-- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. For a `&T` or `mutable &T` parameter, `x` is the place it names. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject. For a place property's place, `x` is a source instead: the shallow and sealed exemptions don't apply, and static storage counts only when an item names it ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
+- **`borrows x`**: the parameter `x` and what `x` borrows, and no other parameter. The subject may still view static storage, as rule 5 allows every function. Rules 3 and 4 apply to `x` alone, so a shallow argument still contributes only its set to a sealed subject. For a place property's place, `x` is a source instead: the shallow and sealed exemptions don't apply, and static storage counts only when an item names it ([Place and value properties](place-and-value-properties.md#the-place-lies-in-its-sources)).
 - **`borrows static`**: static storage only.
 - **`outlives x`**: only what `x` borrows, so the subject stays valid after `x` changes or is gone ([below](#staying-valid-after-a-parameter-moves-on-outlives)).
 

@@ -99,7 +99,7 @@ _Avoid_: dynamically sized type, DST
 ### Views and dependencies
 
 **Absorption**:
-The rule that after a call, each scoped argument lent with `mutable &` takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
+The rule that after a call, each scoped argument given to a `mutable &T` parameter, a `mutating` method's `self` included, takes on what the call's other arguments borrow ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-4-absorption)).
 
 **Dependency set**:
 The places and dynamic accesses a scoped value borrows from, each shared or exclusive; it is what the value **carries** ([02](docs/spec/02-views-and-dependencies.md#dependencies)).

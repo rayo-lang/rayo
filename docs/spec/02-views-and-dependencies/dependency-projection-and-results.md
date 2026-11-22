@@ -154,7 +154,7 @@ let hp = hpOf(&makeEnemy())                   // an error if 'hp' is used later:
 forEachLine(&src) { line in lines.append(&line) }
 ```
 
-**A function value or a closure lent with `mutable &` stays unsealed**, since the callee may replace it with another closure.
+**A function value or a closure given to a `mutable &` parameter stays unsealed**, since the callee may replace it with another closure.
 
 **In generic code, a type is shallow only if it is for every type argument its constraints allow**, since generic code is checked once for every type it may stand for. `&[T]` is. `T`, `T?`, `(T, Int)`, an associated type, and a struct whose fields a `static if` or `static for` generates aren't.
 
