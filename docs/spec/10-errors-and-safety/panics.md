@@ -273,7 +273,7 @@ func resumePanic(_ p: Panic) -> Never
 ```swift
 let caught: Panic? = catchPanic { piece(); return nil } recover: { p in copy p }   // on a worker: this piece's slot
 ...                                                                                // the library waits for every piece
-if let p = caught { resumePanic(p) }                                               // on the lending thread: carry it on
+if ref let p = caught { resumePanic(p) }                                           // on the lending thread: carry it on
 ```
 
 ## Panic strategy

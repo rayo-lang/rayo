@@ -108,7 +108,7 @@ extension World: TimeSource {               // what elapsed(_:) counts in: here,
 // Moves every enemy toward its target.
 func steer(_ world: mutable World, dt: Float) {
     world.enemies.forEachInParallel { e in                   // e: one enemy, borrowed mutably
-        guard e.target != nil, let p = world.players[e.target]     // a stale handle reads nil: skip this enemy
+        guard e.target != nil, ref let p = world.players[e.target] // a stale handle reads nil: skip this enemy
         else { return }
         e.vel = (p.pos - e.pos).normalized * 4
         e.pos += e.vel * dt

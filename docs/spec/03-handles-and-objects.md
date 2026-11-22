@@ -47,7 +47,7 @@ struct Node(var parent: WeakPointer<Node>?, var children: List<UniquePointer<Nod
 
 renderer.value.beginFrame()                    // through the owner: the object itself, no optional
 _ = r.value?.submit(mesh)                      // optional place property: nil once the object is destroyed
-if var rd = &r.value { rd.beginFrame(); rd.submit(mesh) }   // one modify access, held while 'rd' is used
+if ref var rd = &r.value { rd.beginFrame(); rd.submit(mesh) }   // one modify access, held while 'rd' is used
 r.value!.stats.drawCalls += 1                  // '!' panics if the object is gone
 ```
 

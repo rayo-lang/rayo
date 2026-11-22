@@ -164,10 +164,13 @@ func startRenderer() -> (Thread<Void>, Sender<Shared<Snapshot>>) {           // 
 }
 
 func runSimulation(_ world: mutable World) {                                 // called from main, after startup
-    let (render, var tx) = startRenderer()
+    var (render, tx) = startRenderer()
     while !world.quit {
         step(&world)
-        if case .failure = tx.send(alloc Shared(world.snapshot())) { break }   // the render thread is gone
+        when tx.send(alloc Shared(world.snapshot())) {
+            .failure { break }                                               // the render thread is gone
+            else {}
+        }
     }
     _ = tx                                                                   // drops the last sender: the render loop ends
     render.join()                                                            // waits for it, or resumes its panic here

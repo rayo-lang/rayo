@@ -15,9 +15,9 @@ enum Shape {
 
 func area(_ s: Shape) -> Float {
     return when s {
-        .circle(let r)         { .pi * r * r }
-        .rect(let size)        { size.x * size.y }
-        .polygon(let p, let n) { polygonArea(p[..<Int(n)]) }
+        .circle(r)         { .pi * r * r }
+        .rect(size)        { size.x * size.y }
+        .polygon(p, n)     { polygonArea(p[..<Int(n)]) }
     }
 }
 ```
@@ -35,7 +35,7 @@ func area(_ s: Shape) -> Float {
 ```swift
 let label = when state {
     .idle { "idle" }
-    .chase(let t) where t.isBoss { "fleeing" }
+    .chase(t) where t.isBoss { "fleeing" }
     .chase { "chasing" }
     .stunned, .frozen {
         playFx(.stars)
@@ -50,29 +50,38 @@ let sign = when {                              // no subject: the first arm whos
 }
 
 let bonus = if boosted { 10 } else { 0 }
-if case .chase(let t) = state { track(t) }     // one pattern as a condition
+if state == .idle { wander() }                 // a case without a payload, tested in a condition
 ```
 
 **`when` runs the first arm that matches.** With a subject, each arm lists one or more patterns ([12](../12-grammar/constructs.md#patterns)) and an optional `where` guard, which may use what the patterns bind. Without a subject, each arm tests one `Bool` condition. An `else` arm matches whatever is left. Every arm's body is a block, as an `if` branch is.
 
-**A pattern says which values its arm matches, and what it binds:**
+**A pattern says which values its arm matches, and what it binds.** At its top level it compares the subject with a value, matches a case, or matches a type. Names bind only inside a case's payload, and in a type pattern:
 
-- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed and returns `Bool`, which can't fail. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier compares with an existing value unless it is under `let` or `var`, where it binds a new name ([12](../12-grammar/constructs.md#patterns)).
-- **Type patterns.** `is E` matches, and `let e as E` matches and binds, a subject of type `E`, such as the error of a `do` block that fails only with `E`, or a member `E` of an error-union subject ([10](../10-errors-and-safety/typed-errors.md#error-unions)). No other subject has type patterns.
+- **Expression patterns.** A pattern that is an expression, such as `maxHp` or `"jump"`, matches when `pattern == subject` is true. It is a compile error unless that `==` takes both operands borrowed and returns `Bool`, which can't fail. A range, such as `0..<10`, `..<5`, `...5` or `start...`, matches when it contains the subject. A bare identifier at the top level is always an expression pattern, which compares with the constant or variable it names ([12](../12-grammar/constructs.md#patterns)).
+- **Case patterns.** `.name` matches the case `name`, whatever its payload holds, and `.name(…)` matches its payload part by part too. Inside the parentheses, a bare name binds its part, `_` matches it without binding it, and a nested case pattern matches it further. A literal is the one comparison a payload holds, as in `.damage(0)`, and any other goes in the arm's `where`. An optional is matched with `nil` and `.some(t)`.
+- **Type patterns.** `is E` matches, and `e as E` matches and binds, a subject or a payload part of type `E`, such as the error of a `do` block that fails only with `E`, or a member `E` of an error union ([10](../10-errors-and-safety/typed-errors.md#error-unions)). Nothing else has type patterns.
 
-  When `E` is itself an error union, as a type parameter may turn out to be, `let e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](../01-values-and-ownership/bindings.md#conversions)):
+  When `E` is itself an error union, as a type parameter may turn out to be, `e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](../01-values-and-ownership/bindings.md#conversions)):
     - from a value subject, such as `when consume e` or a `catch`, it takes what the subject held;
     - from a place subject it copies it. So there every member it may match is `Copyable`, and generic code whose `E` is a type parameter declares `E: Copyable`.
-- **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A `when` without a subject ends in `else` when its value is used.
-- **One set of names per arm.** Patterns that share an arm bind the same names, with the same types, and each name the same way: it looks, changes in place, or owns ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). No arm falls through into the next.
+- **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A literal in a payload covers its value the same way. A `when` without a subject ends in `else` when its value is used.
+- **One set of names per arm.** Patterns that share an arm bind the same names, with the same types. The subject says what each name is, a borrow or an owner, so every pattern of the arm binds it the same way ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). No arm falls through into the next.
 
-**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
+```swift
+let label = when hit {
+    .miss { "miss" }
+    .damage(0) { "graze" }                           // a literal inside a payload compares
+    .damage(d) where d >= lethal { "fatal" }         // any other comparison goes in 'where'
+    .damage(lethal) { "fatal" }                      // error: 'lethal' is already declared, and a name in a payload binds
+    .damage { "wounded" }
+}
+```
 
-**Conditions and declarations use patterns too:**
+**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
-- **One pattern as a condition.** `if case` tests one pattern as a `when` arm does, and binds its names for its block, as in the last line above. `guard case` and `while case` work the same way.
-- **A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
-- **Patterns that always match.** A `let`, `var`, `ref let` or `ref var` declaration, a `for` loop, and a `let` or `var` condition (whose pattern matches the optional's value) take only `_`, a name, or a tuple of these, under the binding kinds the position allows ([12](../12-grammar/constructs.md#statements)). Each `let`, `var`, `ref let` or `ref var` binds a name ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
+**Declarations, conditions and `for` loops take patterns that always match**: `_`, a name, or a tuple of these, in which every name binds ([12](../12-grammar/constructs.md#patterns)). A condition's binding matches the value inside an optional, and holds no other pattern. So a condition tests a case without a payload with `==`, as `if state == .idle` does at the top of this section, and a payload is bound by a `when` arm ([01](../01-values-and-ownership/bindings.md#conditions)). Each binding of a declaration or a condition binds a name ([01](../01-values-and-ownership/bindings.md#bindings-with-no-name)).
+
+**A `guard` leaves when its conditions fail.** Every path through its `else` block ends in `return`, `throw`, `break`, `continue` or a call that never returns, so what its conditions bind is bound on every path after it.
 
 **A `when` and an `if` are expressions, whose value is that of the arm that runs:**
 
@@ -94,13 +103,13 @@ ref let hp = enemies[h]?.hp ?? 0     // refers to the element's hp in place, or 
 **`T?` offers these operations:**
 
 - narrowing a place by checking it against `nil` ([below](#narrowing));
-- binding what an optional holds to a name, with `if let` and `guard let`, or to the optional's own name, with `if let x` ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x));
+- binding what an optional holds to a new name, with an optional binding such as `if let` or `guard ref let` ([01](../01-values-and-ownership/bindings.md#conditions));
 - a default, with `x ?? d` (below);
 - chaining, with `a?.b?.c`;
 - forcing, with `x!`;
 - a comparison with `nil`, `x == nil`, for any `T` ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)).
 
-**An optional chain can be assigned through.** `a?.b = v` writes only when `a` holds a value, and `x? = v` replaces `x`'s value only when it holds one ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)).
+**An optional chain can be assigned through when it ends in a member or an element.** `a?.b = v` and `a?[i] = v` write only when `a` holds a value, and evaluate `v` before they read `a` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). `x? = v`, with nothing after the `?`, is a compile error that points to `if ref var t = &x { t = v }`. That form evaluates `v` only when `x` holds a value, so `x? = consume spare` can't destroy `spare` when nothing is written.
 
 **`a ?? b` chooses as an `if` does.** It evaluates `b` only when `a` is `nil`, and hands its position to `a`'s payload or to `b`, as an `if` hands it to the arm that runs ([01](../01-values-and-ownership/bindings.md#if-and-when-as-values)). The payload of a place is a place, and the payload of a value is a value. When `b` is a `T?` too, the position goes to `a` or `b` whole, and the result is a `T?`.
 
@@ -148,7 +157,7 @@ chase(e.target)                    // a Handle<Player> to the end of the scope
 - an element, and a subscript's or a computed property's result, since each use runs the accessor again;
 - a global, and a place reached through an object, a weak pointer or a thread-local, since other code reaches them ([01](../01-values-and-ownership/bindings.md#how-long-a-borrow-lasts)).
 
-`if let` binds what such a place holds to a name instead ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). Where the place has a bare name, as a global or a thread-local does, `if let x` binds its payload under that name. A place that narrows can be unwrapped either way, and each way fits different code ([01](../01-values-and-ownership/bindings.md#unwrapping-under-the-same-name-if-let-x)).
+An optional binding, such as `if ref let`, binds what such a place holds to a new name instead ([01](../01-values-and-ownership/bindings.md#conditions)). A place that narrows can be unwrapped either way, and each way fits different code ([01](../01-values-and-ownership/bindings.md#unwrapping-an-optional)).
 
 **The narrowed place is its payload, as a place.** Reading it reads the payload in place, and `&` lends the payload, which can't become `nil`, to a `mutable T`.
 

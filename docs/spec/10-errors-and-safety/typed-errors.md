@@ -202,15 +202,15 @@ let outcome = {
 }()                                 // a Level!(IoError | ParseError): the first failure, kept as a value
 ```
 
-**A `Result` is an ordinary enum, so `when`, `if case` and `guard case` match it as they match any enum** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). A pattern on `.failure` matches an error union with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)). A place subject is borrowed, so a `when` reads a `Result` the code only borrows, which `try` can't take, and binds its payload in place:
+**A `Result` is an ordinary enum, so a `when` matches it as it matches any enum** ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). A pattern on `.failure` matches an error union with the patterns of a `catch` ([below](#handling-errors-with-do-and-catch)). A place subject is borrowed, so a `when` reads a `Result` the code only borrows, which `try` can't take, and binds its payload in place:
 
 ```swift
 func show(_ outcome: Level!(IoError | ParseError)) {
     let first = try? outcome                                    // error: 'outcome' is borrowed, and 'try?' takes it
     when outcome {
-        .success(let level) { preview(level) }                  // looks at the level in place
+        .success(level) { preview(level) }                      // borrows the level in place
         .failure(IoError.missing) { showMissingFileDialog() }
-        .failure(let e as ParseError) { log("parse error at \(e.offset)") }
+        .failure(e as ParseError) { log("parse error at \(e.offset)") }
         .failure { showDiskErrorDialog() }                      // the rest of IoError
     }
 }
@@ -228,7 +228,7 @@ do {
     showMissingFileDialog()
 } catch is IoError {                           // the rest of IoError
     showDiskErrorDialog()
-} catch let e as ParseError {                  // a whole member, by type
+} catch e as ParseError {                      // a whole member, by type
     log("parse error at \(e.offset)")
 }
 
@@ -243,7 +243,7 @@ func loadOrDefault(_ path: StringView) -> Level!IoError {
 
 **A `do` block's error type is the union of what its body's `try`s and `throw`s propagate, and its `catch` clauses handle it member by member.**
 
-- **Matching.** A clause matches one member by type (`catch let e as IoError`, `catch is ParseError`), or by one of its cases, with the patterns, `where` guards and coverage of a `when` arm ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). An unqualified case, such as `.notFound`, must name a case of exactly one member, and otherwise must be qualified, as in `catch IoError.missing`. A `catch` with no pattern, or with `_` or `let e`, matches whatever the earlier clauses leave, and `let e` binds it as the union of the members it can be.
+- **Matching.** A clause matches one member by type (`catch e as IoError`, `catch is ParseError`), or by one of its cases, with the case patterns, `where` guards and coverage of a `when` arm ([04](../04-types/enums.md#matching-with-when-and-choosing-with-if)). An unqualified case, such as `.notFound`, must name a case of exactly one member, and otherwise must be qualified, as in `catch IoError.missing`. A `catch` with no pattern matches whatever the earlier clauses leave, and so does one whose pattern is a bare name, as in `catch e`, which binds it as the union of the members it can be. A clause matches errors by member and case, not by comparing with a value, so a bare name there always binds ([12](../12-grammar/constructs.md#patterns)).
 - **Exhaustiveness.** It is checked member by member, with a `when` arm's coverage. What no clause covers, whole members and the rest of a partly covered one, propagates from the `do` as a `try` would. Where nothing can propagate, in a function that can't fail or in a `defer` block, the clauses must cover every member.
 
 ## Cleanup

@@ -43,7 +43,7 @@ binding       = pattern (':' type)? ('=' expression)? ;            (* each bindi
 ref-decl      = 'ref' ('let' | 'var') ref-binding (',' ref-binding)* ;   (* ref let e = enemies[0]; ref var b = &enemies[0];
                                                                       a statement, so a local in a body, with no attributes or modifiers (01) *)
 ref-binding   = pattern (':' type)? '=' expression ;               (* a place to refer to: 'ref var' takes '&' before it, and 'ref let' takes none;
-                                                                      the pattern has no 'let' or 'var' part, so 'ref let (var o, r) = …' is an error (01) *)
+                                                                      the pattern holds no 'let' or 'var', so each name borrows as the declaration says (01) *)
 
 func-decl     = 'func' func-name generic-params? param-clause ('->' result-type)?
                 where-clause? block ;

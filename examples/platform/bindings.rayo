@@ -88,7 +88,7 @@ func requestFile(_ path: static StringView, _ loads: mutable Loads) -> Handle<Lo
 func pumpLoads(_ loads: mutable Loads) {
     while let (ticket, result) = completedLoads.pop() {   // pop() never blocks; waitPop() would
         guard let h = loads.tickets.removeValue(forKey: ticket) else { continue }   // a ticket never issued: ignored
-        loads.requests[h]? = consume result   // optional assignment: skipped (and result dropped) if the request was cancelled
+        if ref var r = &loads.requests[h] { r = consume result }   // skipped if the request was cancelled: 'result' is then dropped
     }
 }
 

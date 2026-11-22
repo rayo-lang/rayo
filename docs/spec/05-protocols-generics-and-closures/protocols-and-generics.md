@@ -329,7 +329,7 @@ func strike(_ d: mutable any Damageable) { d.takeDamage(10) }   // 'd' is receiv
 **`box[as: T.self]` is an optional place property that hands out the value as a `T`**, borrowed or `mutable` as `box.value` is, and `nil` when its dynamic type isn't `T`. The language provides it, as it provides `UniquePointer.value` ([02](../02-views-and-dependencies/place-and-value-properties.md#places-behind-a-run-time-check)), since no Rayo declaration can be generic over the protocol inside `Box<any P>`. So a test that fails moves nothing:
 
 ```swift
-if var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
+if ref var s = &box[as: Slider.self] { s.label = "Go" }   // a Slider changes in place; any other value stays as it was
 ```
 
 **The unscoped existentials are types of their own, which binding a type parameter never makes.** They are `Box<any P>`, and the object pointers, reference-counted pointers and weak links to `any P`. A value of one holds or names only an unscoped value, and comes from one of these:

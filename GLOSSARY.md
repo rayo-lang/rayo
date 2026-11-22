@@ -14,7 +14,7 @@ Use of a value by code that doesn't own it: a **shared** borrow only reads it, a
 _Avoid_: loan
 
 **Borrowing binding**:
-A binding that refers to a place it borrows: a `ref let` declaration, which borrows it read-only, a `ref var`, which borrows it for change, or a condition's or pattern's binding of a place ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
+A binding that refers to a place it borrows, read-only or for change: a `ref let` or `ref var` declaration or condition, or a `for` or `when` name bound to a part of a place ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
 _Avoid_: reference variable, alias
 
 **Changeable place**:
@@ -48,6 +48,9 @@ _Avoid_: transfer, destructive copy
 **Move-only**:
 A type whose values are moved, or copied only with a named call such as `clone()`, never with `copy` ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 _Avoid_: non-copyable, linear, affine
+
+**Optional binding**:
+A condition of an `if`, `while` or `guard` that binds names to the value inside an optional, with `let`, `var`, `ref let` or `ref var` meaning what they mean in a declaration, only when the optional holds one ([01](docs/spec/01-values-and-ownership/bindings.md#conditions)).
 
 **Overlap**:
 Two places overlap when one contains the other, when they may be the same place, as `a[i]` and `a[j]` may, or when they share bytes, as a union's members do ([01](docs/spec/01-values-and-ownership/exclusivity.md#which-places-overlap)).

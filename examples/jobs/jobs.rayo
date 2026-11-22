@@ -78,7 +78,7 @@ func integrateCloth(_ verts: mutable List<ClothVertex>, gravity: Vec3, wind: Vec
 func relaxCloth(_ verts: mutable List<ClothVertex>, _ cs: Span<(a: UInt32, b: UInt32, rest: Float)>, iterations: UInt) {
     for _ in 0..<iterations {
         for c in cs {
-            if var (a, b) = &verts[c.a, c.b] {                      // checked: c.a != c.b
+            if ref var (a, b) = &verts[c.a, c.b] {                  // checked: c.a != c.b
                 let delta = b.pos - a.pos
                 let len = delta.length
                 guard len > 1e-6 else { continue }

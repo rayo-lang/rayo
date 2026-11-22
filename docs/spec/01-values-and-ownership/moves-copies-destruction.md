@@ -106,10 +106,10 @@ Generic code treats an unconstrained type parameter as possibly move-only, so co
 Some values that the code doesn't declare still count as locals, and take their place in that order:
 
 - **Parameters.** A function's `owned` parameters and a `consuming` method's `self` count as locals of its body declared before the others: `self` first, then the parameters in order.
-- **Hidden locals.** A **hidden local** is one the language declares to keep a value that a statement can't name, such as a `when` subject ([Conditions and patterns](bindings.md#conditions-and-patterns)) or a loop's sequence ([04](../04-types/collections.md#iteration)). Where each counts as declared depends on what made it:
+- **Hidden locals.** A **hidden local** is one the language declares to keep a value that a statement can't name, such as a `when` subject ([`for` and `when` names](bindings.md#for-and-when-names)) or a loop's sequence ([04](../04-types/collections.md#iteration)). Where each counts as declared depends on what made it:
     - a closure literal's counts as declared just before the local it was made for, in the order the literals are made, so the local that holds a view of the literal is destroyed first ([05](../05-protocols-generics-and-closures/functions-and-closures.md#function-typed-values));
     - a `rebind`'s counts as the binding whose value it took ([02](../02-views-and-dependencies/dependency-lifetimes.md#pointing-a-name-at-another-place-rebind));
-    - those of a `guard`, a `when` arm, an `if case`, a `while case` and a `for` loop count as declared where the statement stands: a loop's sequence temporaries in evaluation order, then its iterator ([04](../04-types/collections.md#iteration)).
+    - those of a `guard`, a `when` arm and a `for` loop count as declared where the statement stands: a loop's sequence temporaries in evaluation order, then its iterator ([04](../04-types/collections.md#iteration)).
 - **`defer`.** A `defer` block runs as a value declared where it stands would be destroyed ([10](../10-errors-and-safety/typed-errors.md#cleanup)).
 
 **What a destruction uses is checked in this order.** Where destroying a value uses what it borrows ([02](../02-views-and-dependencies/dependency-lifetimes.md#when-destroying-a-value-counts-as-using-it)), that use is checked in this order, against what is still alive at that point. So a lock guard declared after its mutex is released before the mutex is destroyed.

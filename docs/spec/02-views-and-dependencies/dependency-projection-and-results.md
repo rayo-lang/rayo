@@ -205,7 +205,7 @@ A **full statement** is a statement, except that each of these is a full stateme
 - the condition of each arm of a `when` without a subject;
 - a `where` guard of a `when` arm or a `catch`.
 
-So the temporaries of each of these die before the body runs, unless a value subject is kept in a hidden local ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)). That makes this an error too:
+So the temporaries of each of these die before the body runs, unless a `when` subject is kept in a hidden local ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). That makes this an error too:
 
 ```swift
 if let x = first(makeArray()) { use(x) }   // error: the array dies before the body runs

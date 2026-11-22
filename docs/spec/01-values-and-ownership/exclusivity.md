@@ -66,7 +66,7 @@ p.step(dt)
 g(&e.f, &e.u)                              // error when 'f' and 'u' are members of one union
 join({ e.f = 1 }, { use(e.u) })            // error: the same
 join({ v.x = copy x }, { v.y = copy y })   // error for a Simd 'v': each closure accesses the whole vector
-if var (first, second) = &pair { ... }     // fine for an optional tuple 'pair': two disjoint borrows
+if ref var (first, second) = &pair { ... } // fine for an optional tuple 'pair': two disjoint borrows
 ```
 
 ```c
@@ -78,10 +78,10 @@ struct { uint32_t a : 20; uint32_t b : 20; };  // 'a' and 'b' are one place, tho
 **Two elements at once need an API that checks at run time that they are distinct:**
 
 ```swift
-if var (a, b) = &world.enemies[h1, h2] {     // nil if h1 == h2 or either is stale
+if ref var (a, b) = &world.enemies[h1, h2] { // nil if h1 == h2 or either is stale
     swap(&a.hp, &b.hp)
 }
-if var (a, b) = &verts[i, j] { ... }         // lists too: nil if i == j; out of bounds still panics
+if ref var (a, b) = &verts[i, j] { ... }     // lists too: nil if i == j; out of bounds still panics
 list.swapAt(i, j)
 var (left, right) = list.split(at: mid)        // two disjoint MutableSpans, both depending on list
 ```
