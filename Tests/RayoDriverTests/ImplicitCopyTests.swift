@@ -2,8 +2,9 @@ import Testing
 import RayoDriver
 
 struct ImplicitCopyTests {
-    // An initializer's arguments, an array literal's elements and a `return` take an Int, a UInt or a Bool from a
-    // place that is used, and changed, after them.
+    // An initializer's arguments and an array literal's elements take an Int, a UInt or a Bool from a local that is
+    // used, and changed, after them. A `return` takes an Int from a borrowed parameter's field, which it can't move
+    // out of.
     @Test(arguments: [["--debug"], ["--release"]])
     func `an Int, UInt or Bool place passed on is copied, and stays usable, in debug and in release`(mode: [String]) {
         let source = """
