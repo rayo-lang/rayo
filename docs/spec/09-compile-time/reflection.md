@@ -126,7 +126,7 @@ For such a type, `T.fields` and `T.cases` are empty, the kind queries and `T.isC
     - every compile-time argument the declaration's body is instantiated with (below).
 
   So two sibling blocks' local `struct Scratch`s differ, and so do local types of a `get` and a `set`. An imported C type has, in place of these parts, the identity 08 gives it ([08](../08-c-interop/imports-and-inline-c.md#the-identity-of-an-imported-type)).
-- **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `Box<any P>` and `Box<&any P>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
+- **The type's own generic arguments** are part of it, a value argument by its value. So `Tag<Player>` and `Tag<Enemy>` differ, and so do `List<&Text>` and `List<static &Text>` ([02](../02-views-and-dependencies/scoped-values.md#static-values)).
 - **A type with no name**, a closure literal's or a task's state or an interpolated literal's value, has its parts as a declared type does, so a generic `task func`'s state differs for each of the function's generic arguments. In place of a name, it has its position among the unnamed types of its innermost scope, counted after `static if` and `static for` are expanded, so each element of a `static for` has its own.
 - **A structural type**, a tuple, inline array, run, raw pointer, reference, existential, function type or error union, is one part. The part holds the type's kind, the identities of the types inside the type, with aliases and parentheses resolved, and every other fact of the type's form:
     - a tuple's labels;
@@ -186,7 +186,7 @@ public struct Enemy(
 - **`@reflect(private)`** lets reflective code in other modules, such as a serializer, list the type's private fields and read them. Where the use site can call the type's primary initializer ([below](#constructing-values-reflectively)), it also lets that code write them and pass them to `T.construct`. It grants nothing else, so a `private init` keeps guarding the type's invariants.
 - **Writing.** `mutable &value[field]`, and a write through `value[field]`, reach only a `var` of a changeable place ([01](../01-values-and-ownership/bindings.md#changeable-places)) that code there could assign by name, or that `@reflect(private)` lets it write.
 - **Moving out.** `consume value[field]` moves the field out where consuming it by name could ([01](../01-values-and-ownership/moving-values-out.md#what-can-be-moved-from)): from a place the code may move from, with no `deinit` along the path. `consume value[case: c]` moves a payload out under the same conditions. A private field of another module's type is moved out only where `@reflect(private)` lets the use site write it.
-- **`unsafe` fields and unions.** A field declared `unsafe`, such as the raw pointer an `unsafe` core keeps, is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
+- **`unsafe` fields and unions.** A field declared `unsafe`, such as the raw pointer that an `unsafe` core keeps ([10](../10-errors-and-safety/unsafe-code.md#raw-allocations)), is read or written through reflection only inside `unsafe`, as by name. Reading a union member follows the union read rule ([04](../04-types/enums.md#untagged-unions)).
 
 ## Constructing values reflectively
 

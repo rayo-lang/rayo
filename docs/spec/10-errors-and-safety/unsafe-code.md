@@ -51,11 +51,16 @@ So a call the language makes on the code's behalf is allowed only where the call
 
 ## Raw pointers
 
-**`*T` is a non-null raw pointer to a `T` of a sized type, or of an `@opaque` one** ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)). It never points at an unsized type, such as `[T]` or `any P`, since one address can't say how many elements lie there or what type the value has ([01](../01-values-and-ownership/references.md#unsized-types)). A reference to an unsized value carries that, as a `&[T]` carries its count. `*T?` is nullable, with the same size and ABI as a C pointer, since its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)). Both are implicitly copyable, since each is one machine value, so taking one from a place copies it with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
+**`*T` is a non-null raw pointer to a `T` of any type, an `@opaque` or unsized one included**, as an `@opaque` type parameter may stand for either ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)). `*T?` is nullable, and its `nil` is the null pointer ([04](../04-types/enums.md#optionals)). Both are implicitly copyable, so taking one from a place copies it with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)). What a pointer holds depends on what it points at:
 
-- **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between pointer types, to a `U` of any type a pointer may point at.
-- **Integers.** A pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a `p` of type `*T` or `*T?`, is safe, with `nil` giving 0, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
-- **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero. So `*Void`, a pointer to an `@opaque` type and a `*T` whose `T` is an `@opaque` type parameter have none of them, nor `q - p` (below), and byte offsets go through `p.cast(to: UInt8.self)`.
+- **A thin pointer.** `*T` of a sized type or of an imported `@opaque` type is one address, the pointer C sees. It is as wide as the target's pointer width, 32 or 64 bits ([11](../11-compilation-model.md#what-a-target-must-provide)), and `*T?` of one has the size and ABI of a C pointer.
+- **A pointer to an unsized type.** One address can't say how many elements lie there or what type the value has, so `*T` of an unsized type carries what a reference to it carries ([01](../01-values-and-ownership/references.md#layout)): a count for `[T]` and `Text`, and the conformance for `any P`. So it has no C representation ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)). Its `p.pointee` is the unsized place at `p`, which code reaches through a reference, as `&p.pointee` does.
+
+**Raw pointers follow these rules:**
+
+- **Untyped pointers.** `*Void` points at memory of no stated type, and `p.cast(to: U.self)` converts between thin pointer types.
+- **Integers.** A thin pointer and a `CUIntPtr` have the same size, so each converts to the other as a bit cast does ([04](../04-types/data-layout.md#plain-data-pod-and-bit-casts)). `CUIntPtr(bitPattern: p)`, for a thin `p` of type `*T` or `*T?`, is safe, with `nil` giving 0, though it can't run at compile time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). Its result converts on to `UInt` as any `UIntN` does ([04](../04-types/numbers-and-math.md#conversions)). The reverse, `*T?(bitPattern: c)` of a `CUIntPtr`, is `unsafe`. A `UInt` converts to a `CUIntPtr` first, as `CUIntPtr(u)`, which checks that it fits.
+- **Reading and offsetting.** `p.pointee` is the `T` at `p`, `p + n` is `n` times `T`'s size further on, and `p[i]` is `(p + i).pointee`. They need a `T` whose size is known and nonzero, apart from an unsized `T`'s `pointee` (above). So `*Void`, a pointer to an `@opaque` type and a `*T` whose `T` is an `@opaque` type parameter have none of them, nor `q - p` (below), and byte offsets go through `p.cast(to: UInt8.self)`.
 - **Runs.** `p[a..<b]` is the run of `T`s from `p + a` up to `p + b`, a `[T]` place with a `borrow` and a `mutate`, under the same condition on `T`. So `&p[0..<n]` makes a `&[T]` of the `n` elements at `p`, and `mutable &p[0..<n]` a `mutable &[T]`. A reference made through a raw pointer carries no dependency the compiler can check, so the code that makes one keeps the promises below for as long as it is used ([Values, views and threads](#values-views-and-threads)).
 - **Alignment.** Every type's size is a multiple of its alignment, so consecutive values stay aligned.
 - **Alignment and distance queries.** `p.isAligned(to: n)` tells whether `p`'s address is a multiple of `n`, a power of two, and `p.alignedUp(to: n)` is the first pointer at or after `p` whose address is one. `q - p` is how many `T`s lie from `p` to `q`, as an `Int`.
@@ -164,7 +169,7 @@ If `make()` panics, the unwind destroys the buffer, or a `recover` closure reads
 ```swift
 subscript(i: UInt) -> T {
     get { unsafe (storage + i).move() }                      // unsound: a read, or a panic before set, leaves slot i empty
-    set { unsafe (storage + i).initialize(to: newValue) }
+    set { unsafe (storage + i).initialize(to: consume newValue) }
 }
 subscript(i: UInt) -> T {
     borrow { unsafe &storage[i] }                            // sound: hands out slot i itself, which stays full
@@ -193,7 +198,7 @@ let q = unsafe ptr(to: &particles[0])             // the shared form: the addres
 ```
 
 - **Builtin.** It is builtin, and the call's mark chooses the form: `mutable &` lends the place for change, and `&` lends it shared ([01](../01-values-and-ownership/references.md#making-a-reference)).
-- **Sized places.** The place's type is sized or `@opaque`, as a raw pointer's target is ([above](#raw-pointers)). So `ptr(to: &hits.span)` is a compile error, and a run's address is its `baseAddress`.
+- **Unsized places.** The address of an unsized place carries what a reference to it carries ([above](#raw-pointers)), so `ptr(to: &hits.span)` is a `*[Int]` that holds the run's count, and the run's `baseAddress` is the thin pointer to its first element.
 - **Never a function value.** It converts to no function type or `Closure` and binds no `some F`, so every call of it is direct.
 - **The caller's place.** Its argument, of either form, is always the caller's place, never a copy, since its result is that place's address ([01](../01-values-and-ownership/parameters.md#borrowed-arguments)).
 - **A short access.** The access ends with the call, since a raw pointer is unscoped.

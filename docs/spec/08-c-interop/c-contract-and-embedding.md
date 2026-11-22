@@ -10,7 +10,7 @@ At a C boundary, Rayo can check only what the imported or exported types express
 
 - **Valid values.** Every value C passes, returns or writes into Rayo memory is valid for its Rayo type ([10](../10-errors-and-safety/unsafe-code.md#raw-accesses)):
     - a `Bool` is 0 or 1, and a Rayo enum, or an imported enum declared closed, holds one of its cases;
-    - a non-null pointer isn't null, and neither is a reference's, a `&[T]`'s included when its count is 0, since null is a `(&[T])?`'s `nil`;
+    - a non-null pointer isn't null, and neither is a reference's pointer, a `&[T]`'s included when its count is 0, since null is a `(&[T])?`'s `nil`;
     - a raw pointer need only be non-null where its type says so, since only `unsafe` code dereferences it;
     - a `String`, or a `&Text`, `static` or not, holds whole UTF-8 sequences ([04](../04-types/collections.md#strings));
     - a weak pointer, a weak link or a `Handle` holds bits that Rayo gave out for that type, stale or not;

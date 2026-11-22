@@ -450,7 +450,7 @@ The end of a future that its producer fulfills once with the value, which `fulfi
 _Avoid_: promise (in plain text; the library's promise is a different guarantee)
 
 **Resume parameter**:
-The parameter a task's `with` clause declares, a mutable reference to its context, which the task's owner lends it anew at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
+The parameter a task's `with` clause declares, a mutable reference to its context, which the task's owner lends the task anew at every step ([07](docs/spec/07-concurrency/tasks.md#semantics)).
 
 **Runner**:
 What polls a task and makes its `Waker`s, such as std's `TaskSet` and `block(on:)` ([07](docs/spec/07-concurrency/tasks.md#running-tasks)).

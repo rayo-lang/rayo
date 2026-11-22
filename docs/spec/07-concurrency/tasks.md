@@ -18,7 +18,7 @@ task func handshake(_ sock: Handle<Socket>) with (net: mutable &Reactor) -> Sess
     try await send(sock, Hello(version: 3))                    // pending until the socket can take the bytes
     let reply = try await receive(sock, timeout: replyLimit)   // fails with .timedOut once the limit passes with no reply
     guard reply.version == 3 else { throw .badVersion }
-    return Session(sock, key: reply.key)
+    return Session(sock, key: consume reply.key)               // 'sock' is a Handle, implicitly copyable; the key moves out of 'reply'
 }
 ```
 
@@ -46,7 +46,7 @@ task func openDoor(_ door: Handle<Door>) with (game: mutable &Game) {
 
 **A task is move-only, and it borrows nothing.** It is move-only since a copy would be a second owner of its locals. It borrows nothing, since its parameters are unscoped and no borrow is live across an `await` (below).
 
-**Locals that are live across an `await`, and parameters, are stored in the state.** So they must be owned: every task parameter owns its argument, as a parameter `x: T` does, and its type is unscoped ([01](../01-values-and-ownership/parameters.md#parameters)). So no task parameter's type is a reference, which is scoped. A `task func` method is `consuming` or `static`, so `self` is owned too, and its type is unscoped.
+**Locals that are live across an `await`, and parameters, are stored in the state.** So they must be owned: every task parameter owns its argument, as a parameter `x: T` does, and its type is unscoped ([01](../01-values-and-ownership/parameters.md#parameters)). So no parameter in its parameter list has a reference type, which is scoped. A `task func` method is `consuming` or `static`, so `self` is owned too, and its type is unscoped.
 
 **The `with (...)` clause declares the task's one resume parameter**, of type `mutable &C`, where `C` is the task's `Context` ([below](#awaitables)). A task without the clause has `Void` as its `Context`. The owner lends it anew at every step, as `scripts.step(mutable &game)` does ([below](#running-tasks)). Its type is a mutable reference, since the owner only lends it for the step, and every awaitable's `poll` takes a `mutable &Context`. So inside the body it names the owner's place, as any `mutable &T` parameter does ([01](../01-values-and-ownership/parameters.md#parameters)). It has no default value.
 
@@ -69,7 +69,7 @@ let p = await pointsFor(n)            // fine: the 'await' comes first
 game.score += p                       // and the write after it
 ```
 
-**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with the task's resume parameter, or `Void`, polled with `()`.** The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await elapsed(.seconds(0.5))`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
+**In a task whose `Context` is `C`, `await x` needs an `Awaitable` whose `Context` is `C`, polled with `mutable &ctx`, a reborrow of the task's resume parameter `ctx`, or `Void`, polled with a mutable reference to a `()` of the task's own.** The operand is checked expecting an `Awaitable` whose `Context` is `C`. So a generic parameter that appears only in the operand's `Context` is bound to `C` before the operand's arguments are checked, as in `await elapsed(.seconds(0.5))`. A closure argument then gets its parameter types from that binding, as `until`'s condition does in `openDoor`.
 
 **`await` takes its operand as a parameter `x: T` takes its argument** ([01](../01-values-and-ownership/parameters.md#parameters)): it moves into the task's state and is polled there. So an operand that is a place writes its mark, as every position's does ([01](../01-values-and-ownership/references.md#places-given-to-a-position)), and awaiting a local `Future` is `await consume f`, which consumes it.
 
@@ -92,6 +92,7 @@ game.score += p                       // and the write after it
 **Results and errors.** A task returns and fails as a function does:
 
 ```swift
+struct LevelId(let index: UInt32): ImplicitlyCopyable                                     // passed with nothing written
 task func loadLevel(_ id: LevelId) with (ctx: mutable &Loader) -> Level!LoadError { … }   // a success type and a failure type
 let level = try await loadLevel(id)          // in another task: yields the result, or propagates the error
 ```
@@ -271,10 +272,10 @@ catchPanic {
 
 ```swift
 var conns = TaskSet<Server>(capacity: 1024)            // the connections' tasks, run with the server's state
-_ = conns.start(acceptLoop(listener))                  // puts each new socket in 'server.accepted', and never finishes
+_ = conns.start(acceptLoop(consume listener))          // puts each new socket in 'server.accepted', and never finishes
 while !stopping.load(.acquire) {                      // stopping: a global Atomic<Bool>, which another thread may set
     conns.run(mutable &server, until: { s in !s.accepted.isEmpty || stopping.load(.acquire) })   // parks the thread between wakes
-    while let sock = server.accepted.popLast() { _ = conns.start(serve(sock)) }
+    while let sock = server.accepted.popLast() { _ = conns.start(serve(consume sock)) }
 }
 ```
 

@@ -79,7 +79,7 @@ extension List {
     alloc func filter(_ keep: (&Element) -> Bool) -> List<Element> where Element: Copyable {
         var out = alloc List<Element>()                  // the allocator the call received
         for x in &self where keep(&x) { out.append(copy x) }
-        return out
+        return consume out
     }
 }
 ```

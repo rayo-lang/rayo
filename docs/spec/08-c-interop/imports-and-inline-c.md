@@ -209,6 +209,11 @@ join({ pad.buttons = 1 }, { pad.trigger = 2 })   // error: adjacent bitfields ar
 
 **The rules below say how Rayo code builds and uses an imported struct, union or enum.**
 
+**Copies.** A C type has no destructor and owns nothing outside its bytes, so every imported struct, union and enum is copyable ([01](../01-values-and-ownership/moves-copies-destruction.md#copyable-types)). Which of them is implicitly copyable follows 01's rule for a type that lists `ImplicitlyCopyable` ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
+
+- **Enums.** An imported enum, and a flag set, is one integer of its underlying type, so each is implicitly copyable, and `when stick` below copies `stick` with nothing written.
+- **Structs and unions.** One is implicitly copyable when every field or member is, as `Pad` above is. One that holds a C array, which imports as an inline array, isn't, since an inline array never is, so its copies and moves are written.
+
 **Structs.** An imported struct's primary initializer takes the fields that reflection lists for it ([09](../09-compile-time/reflection.md#what-reflection-can-read)), in order, each labeled by its name and an anonymous union or struct member unlabeled, so `T.construct` builds one too. It also gets a zero-initializing `init()` when all-zero bytes are a valid value of every field, and an `unsafe` one otherwise, as when a field is a `_Nonnull` pointer.
 
 **Bitfields keep the layout the target ABI gives them: each holds a run of bits in a storage unit.** So a bitfield differs from other fields in these ways:

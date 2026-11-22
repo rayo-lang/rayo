@@ -35,7 +35,7 @@ Rayo maps each C declaration to the closest Rayo form ([08](../spec/08-c-interop
 
 - `plat.PLATFORM_MAX_PADS` is a `const` `CInt` of 4. Prefix stripping is case-sensitive, so the macro keeps its name.
 - `plat.window` is an `@opaque` struct, which Rayo code uses only through a pointer, `*plat.window`.
-- `plat.pad` is a `@c struct` with C's layout, whose `left_stick` is a `[2 of Float]`. `plat.pad()` makes one of all zeros.
+- `plat.pad` is a `@c struct` with C's layout, whose `left_stick` is a `[2 of Float]`. `plat.pad()` makes one of all zeros. A C struct owns nothing, so it is copyable, but an inline array never copies with nothing written, so neither does a `plat.pad`: code writes `copy` or `consume` before one. A C enum is an integer, and copies with nothing written ([08](../spec/08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
 - `plat.window_create` is an `unsafe func` taking `(Int32, Int32, *CChar?)` and returning a `*plat.window?`.
 - `plat.poll_pad` is an `unsafe func` taking `(Int32, *plat.pad?)` and returning a `Bool`.
 
@@ -158,7 +158,7 @@ unsafe { plat.set_audio_callback(onAudioEvent, nil) }
 
 **An error it returns is a value like any other**, so a `Result` reaches C as a struct of a tag and the value or the error, when their types have C representations or take no space, as `Void` does. A panic in it stops the program, without unwinding into C.
 
-**An imported callback type takes only C's own types**, plain data that C passes as a copy. So a `@c func` that takes a `List` or a reference doesn't convert to one.
+**An imported callback type takes only C's own types**, plain data that C passes as a copy. So outside `unsafe`, a `@c func` that takes a `List` or a reference doesn't convert to one ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
 **Calling through a `@c` pointer needs `unsafe`**, since its type can't tell a Rayo function from a C one ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#c-function-pointers)).
 
@@ -187,7 +187,7 @@ Say your studio's level editor, written in C++, asks the game whether an enemy d
 
 **An exported function is a plain C function.** It has no type parameters. An error it returns reaches C as a value, in a struct of a tag and the result or the error.
 
-**An exported function's parameters pass as their types say.** One that owns its argument, such as `desc`, takes the value itself, and a `&T` or `mutable &T` one takes a pointer to the caller's value.
+**An exported function's parameters pass as their types say.** One that owns its argument, such as `desc`, takes the value itself, and a reference parameter takes a pointer to the caller's value, or a pointer and a count for a `&[T]`.
 
 **An exported name is a promise the compiler can't check.** The build fails when two objects it links define one name. But nothing checks a symbol the program loads at run time, or that every C caller uses this signature. So `@export` is an **unverified promise**, taken on trust as an `unsafe` block is ([10](../spec/10-errors-and-safety/unsafe-code.md#unverified-promises)).
 

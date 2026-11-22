@@ -231,7 +231,7 @@ let crc = hashing.join()                                      // waits, then ret
 let mixer = alloc Shared(Mutex(AudioMixer()))
 let m = mixer.weak()                                              // a WeakShared<Mutex<AudioMixer>>
 _ = Thread.start { [copy m, copy clip] in                         // '_ =' detaches the thread: nothing joins it
-    if let mx = m.upgrade() { mx.value.lock { $0.play(clip) } }   // one more owner while 'mx' lives
+    if let mx = m.upgrade() { mx.value.lock { $0.play(&clip) } }  // one more owner while 'mx' lives
 }
 ```
 
@@ -345,7 +345,7 @@ scripts.step(mutable &game)                                // steps each task th
 ```swift
 let quitLoading = Atomic(false)                                  // a global, which the main thread sets
 var loads = TaskSet<Loader>(capacity: 64)
-_ = loads.start(streamZone(next))                                // its reads go through an I/O library, which wakes it as each completes
+_ = loads.start(streamZone(consume next))                        // its reads go through an I/O library, which wakes it as each completes
 loads.run(mutable &loader, until: { _ in quitLoading.load(.acquire) })   // parks the thread whenever no task is woken
 ```
 

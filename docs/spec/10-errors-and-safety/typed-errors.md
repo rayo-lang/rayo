@@ -141,7 +141,7 @@ func loadBossLevel(_ path: &Text) -> Level!LoadError {
 
 - **`return v`** of a `T`, where the result type is `T!E`, returns `.success(v)`, as a value converts to `T?` ([05](../05-protocols-generics-and-closures/implicit-conversions.md#implicit-conversions)). A `Result` returned whole is returned as it is. Its failure type may also be one that converts implicitly to the result's, as a member converts to its union ([above](#error-unions)).
 - **`throw e`** returns `.failure(e)`, converting `e`'s members as `try` does (below). Inside a `do` block, it fails the block instead ([below](#handling-errors-with-do-and-catch)).
-- **Each operand is a position**, so a place given to `return` or `throw` writes `consume` or `copy`, unless its type is implicitly copyable, as in `return consume level` above ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
+- **Each operand is a position**, so a place given to `return` or `throw` writes its mark, as in `return consume level` above ([01](../01-values-and-ownership/references.md#places-given-to-a-position)).
 
 **`try r` gives the success value of the `Result` `r`, or fails with its error.** `r` is any expression whose type is a `Result`: a call, a local or a field. On an operand of any other type, `try` is a compile error, and the operand takes no implicit conversion into a `Result`, so `let n: Int = try 5` is an error too. `try` takes `r` as a value, so a place given to it writes `consume` or `copy` before it, unless its type is implicitly copyable, as every position does ([01](../01-values-and-ownership/references.md#places-given-to-a-position)). A reference to a `Result` is no `Result`, so `try &r` is a compile error. On a `T!Never`, it gives the `T`, and never fails.
 
