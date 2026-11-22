@@ -57,7 +57,7 @@ let entry = symbols.find(tok.text)             // view into symbols; key only us
 lexer.advance()                                // mutates lexer
 use(entry)
 
-func labelOf(_ d: any Named) -> StringView { d.label() }   // an ordinary helper over an existential view
+func labelOf(_ d: any Named) -> StringView { d.label() }   // an ordinary helper over a borrowed existential
 ```
 
 The difficulty is that, by default, a call's result depends on everything the call was lent, even an argument it only read ([02](../../spec/02-views-and-dependencies/dependency-lifetimes.md#precise-dependencies-opt-in)).

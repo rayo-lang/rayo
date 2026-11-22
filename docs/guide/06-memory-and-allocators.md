@@ -172,7 +172,7 @@ enum Tree {
 
 ### Boxes of `any P`
 
-**An existential, `any P`, holds a value of any type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
+**An existential, `any P`, views a value of any type that conforms to the protocol `P`** ([05](../spec/05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). It calls `P`'s requirements through a table, so the value's type can be one you know only at run time.
 
 **A plain `any P` only borrows its value, as a view does.** To own a value whose type you know only at run time, put it in a box: a `Box<any P>`.
 

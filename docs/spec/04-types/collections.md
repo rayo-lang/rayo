@@ -554,7 +554,7 @@ func lives(_ p: mutable Particles) -> MutableSpan<Float> { p.mutableLife }   // 
 
 ### Mutating and consuming methods
 
-**A `consuming` method that hands over what a `mutating` one lends puts `consuming` in its name**, as `makeConsumingIterator()` does. Each name has one declaration, so the name a call writes says whether it lends or hands over ([05](../05-protocols-generics-and-closures/functions-and-closures.md)):
+**A `consuming` method that hands over what a `mutating` one lends puts `consuming` in its name**, as `makeConsumingIterator()` does. Each name has one declaration, so the name a call writes says whether it lends or hands over ([05](../05-protocols-generics-and-closures/functions-and-closures.md#functions-and-closures)):
 
 ```swift
 let (a, b) = s.split(at: m)            // lends two halves of what 's' views
