@@ -66,7 +66,7 @@ func fight(between goblin: Enemy, and troll: Enemy) -> Int {
         // The goblin is enraged on the round its health falls below half, and its fury cracks the troll's armor.
         let raging = g.stats.hp * 2 < g.stats.maxHp
         if raging != g.enraged {
-            g.enraged = raging
+            g.enraged = copy raging
             t.stats.armor /= 2
             print(g.enraged)
         }

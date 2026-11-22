@@ -18,6 +18,9 @@ struct AssignmentChecker {
         let value = checkAssigned(valueExpr, by: op, to: current?.type)
         guard let current, let value else { return nil }
 
+        // A plain assignment's target owns what it holds, so it can't borrow a place it is given, which is reported.
+        if op.binary == nil { expressions.reportHandedPlaces(of: value, as: ErrorCode.assignmentBorrowsPlace) }
+
         return switch op.binary {
         case nil: .assign(current.place, value)
         case let binaryOp?:

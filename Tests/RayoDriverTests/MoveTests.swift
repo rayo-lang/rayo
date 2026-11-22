@@ -11,7 +11,7 @@ struct MoveTests {
                 let b = a
                 a = 2
                 var c: Int
-                c = b
+                c = consume b
                 print(a)
                 print(c)
                 print(answer())

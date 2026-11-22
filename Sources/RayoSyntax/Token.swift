@@ -3,7 +3,7 @@ public import RayoSource
 /// Reserved words. Other words, such as `keep`, lex as identifiers.
 public enum Keyword: String, Sendable {
     case `let`, `var`, `func`, `struct`, `if`, `else`, `while`, `break`, `continue`, `return`, copy, `true`, `false`
-    case `self`, mutable, owned, mutating
+    case consume, `self`, mutable, owned, mutating
 }
 
 /// Punctuation and operators. The lexer takes the longest match.

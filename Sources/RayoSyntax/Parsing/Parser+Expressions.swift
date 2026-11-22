@@ -19,8 +19,8 @@ extension Parser {
         return left
     }
 
-    /// `'-' int-literal`, `'copy' identifier ('.' member | '[' expression ']')*`, `('-' | '!') unary`, or a postfix
-    /// expression.
+    /// `'-' int-literal`, `('copy' | 'consume') identifier ('.' member | '[' expression ']')*`,
+    /// `('-' | '!') unary`, or a postfix expression.
     private mutating func parseUnary() throws(ParseFailure) -> Expr {
         let start = current.range
 
@@ -30,11 +30,14 @@ extension Parser {
             advance()
             return Expr(kind: .negativeIntLiteral(digits), range: range(from: start))
         }
-        // A `copy` takes the local it copies, or a part of it at any depth.
+        // A `copy` takes the local it copies, or a part of it at any depth, and a `consume` the one it moves.
         if consume(.copy) {
-            let (name, nameRange) = try expectIdentifier(else: ErrorCode.missingCopiedName)
-            let place = try parseParts(of: Expr(kind: .name(name), range: nameRange))
+            let place = try parseNamedPlace(else: ErrorCode.missingCopiedName)
             return Expr(kind: .copy(place), range: range(from: start))
+        }
+        if consume(.consume) {
+            let place = try parseNamedPlace(else: ErrorCode.missingConsumedName)
+            return Expr(kind: .consume(place), range: range(from: start))
         }
         // An expression without a `-` or `!` in front is a postfix one.
         guard case .punct(let punct) = current.kind, let op = punct.unaryOperator else {
@@ -77,6 +80,13 @@ extension Parser {
                 return value
             }
         }
+    }
+
+    /// `identifier ('.' member | '[' expression ']')*`: a place that starts from a name, such as `e.party[i].hp`. A
+    /// token other than a name first is reported as `error`.
+    private mutating func parseNamedPlace(else error: ErrorCase) throws(ParseFailure) -> Expr {
+        let (name, nameRange) = try expectIdentifier(else: error)
+        return try parseParts(of: Expr(kind: .name(name), range: nameRange))
     }
 
     /// After `base`: the parts of it that a place names, each a member after a `.` or an element between `[` and `]`,

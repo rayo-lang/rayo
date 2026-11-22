@@ -80,6 +80,12 @@ struct ExpressionChecker {
                 .typed(CheckedExpr(kind: .copy($0.place), type: $0.type, range: expr.range))
             }
 
+        // A `consume` moves the value out of the place it names, and covers the whole `consume place`.
+        case .consume(let consumed):
+            place(consumed, under: self).map {
+                .typed(CheckedExpr(kind: .consume($0.place), type: $0.type, range: expr.range))
+            }
+
         // An `if` read for its value gives the value of the branch that runs, so its branches' values wait for its
         // position as the `if` does.
         case .if(let ifExpr):

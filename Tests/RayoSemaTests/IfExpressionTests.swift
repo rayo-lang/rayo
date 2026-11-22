@@ -44,7 +44,7 @@ struct IfExpressionTests {
     }
 
     @Test(arguments: [
-        "var v = u\nv += if c { 1 } else { 2 }\ntake(v)",
+        "var v = copy u\nv += if c { 1 } else { 2 }\ntake(v)",
         "let a: [2 of UInt] = [if c { 1 } else { 2 }, u]\ntake(a[0])",
         "take(u + if c { 1 } else { 2 })",
         "pick(if c { 1 } else { 2 })\ntake(u)",
