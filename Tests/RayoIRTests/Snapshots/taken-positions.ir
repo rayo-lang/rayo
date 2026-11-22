@@ -10,11 +10,11 @@ func "main()"() -> Void {
   let %0 a: Hit @2:9-2:10
   var %1 b: Hit @3:9-3:10
   let %2 t: Bool @6:9-6:10
-  let %3 d: Int @7:9-7:10
-  let %4 e: Int @8:9-8:10
-  let %5 g: Int @9:9-9:10
-  temp %6: Int
-  temp %7: Int
+  let %3 d: Hit @7:9-7:10
+  let %4 e: Hit @8:9-8:10
+  let %5 g: Hit @9:9-9:10
+  temp %6: Hit
+  temp %7: Hit
 bb0:
   declare %0
   %0 @2:9-2:10 = call "Hit(damage: Int)"(1) @2:13-2:27
@@ -25,30 +25,36 @@ bb0:
   declare %2
   %2 @6:9-6:10 = operand true @6:13-6:17
   declare %3
-  %3 @7:9-7:10 = operand 3 @7:13-7:14
+  %3 @7:9-7:10 = call "Hit(damage: Int)"(3) @7:13-7:27
   declare %4
   declare %6
   branch read %2 @8:16-8:17, bb1, bb2
 bb1:
-  %6 @8:13-8:42 = operand move %3 @8:20-8:29 @8:20-8:29
+  %6 @8:13-8:55 = operand move %3 @8:20-8:29 @8:20-8:29
   goto bb3
 bb2:
-  %6 @8:13-8:42 = operand 4 @8:39-8:40
+  %6 @8:13-8:55 = call "Hit(damage: Int)"(4) @8:39-8:53
   goto bb3
 bb3:
-  %4 @8:9-8:10 = operand read %6 @8:13-8:42 @8:13-8:42
+  %4 @8:9-8:10 = operand read %6 @8:13-8:55 @8:13-8:55
   declare %5
-  %5 @9:9-9:10 = operand 5 @9:13-9:14
+  %5 @9:9-9:10 = call "Hit(damage: Int)"(5) @9:13-9:27
   declare %7
-  branch read %2 @10:14-10:15, bb4, bb5
+  branch read %2 @10:13-10:14, bb4, bb5
 bb4:
-  %7 @10:11-10:32 = operand read %5 @10:18-10:19 @10:18-10:19
+  %7 @10:10-10:31 = operand read %5 @10:17-10:18 @10:17-10:18
   goto bb6
 bb5:
-  %7 @10:11-10:32 = operand read %4 @10:29-10:30 @10:29-10:30
+  %7 @10:10-10:31 = operand read %4 @10:28-10:29 @10:28-10:29
   goto bb6
 bb6:
-  begin a0 read %7 @10:11-10:32
-  _ = call builtin "print(_: Int)"(a0) @10:5-10:33
+  begin a0 read %7 @10:10-10:31
+  _ = call "show(_: Hit)"(a0) @10:5-10:32
+  return
+}
+
+func "show(_: Hit)"(_: Hit) -> Void {
+  param %0 h: Hit @12:13-12:14
+bb0:
   return
 }
