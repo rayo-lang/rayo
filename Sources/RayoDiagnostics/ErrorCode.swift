@@ -441,6 +441,9 @@ public enum ErrorCode: Sendable, Hashable {
     @Code(317, error:
         "can't move '{field}' out of '{local}', which refers to a place; write 'copy' before it to take a copy")
     case moveFieldFromReference(field: String, local: String)
+
+    @Code(318, error: "the parameter '{name}' is never read; write '_ = {name}' to drop it")
+    case unreadParameter(name: String)
 }
 
 extension ErrorCode {

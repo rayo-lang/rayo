@@ -325,7 +325,7 @@ struct UnusedValueCheckerTests {
 
     @Test(arguments: [
         (#"_ = call builtin "print(_: Int)"(read %0 @1:1-1:1) @1:1-1:1"#, [Diagnostic]()),
-        ("_ = operand 1 @1:1-1:1", [Diagnostic(.unreadValue(name: "n"), at: at(1))]),
+        ("_ = operand 1 @1:1-1:1", [Diagnostic(.unreadParameter(name: "n"), at: at(1))]),
     ])
     func `an owned parameter that no code reads is reported where it is declared`(
         statement: String, expected: [Diagnostic],
