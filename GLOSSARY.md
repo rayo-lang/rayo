@@ -7,18 +7,18 @@ Rayo is a systems programming language with the control of C++ and memory safety
 ### Ownership and borrowing
 
 **Argument label**:
-The name a call writes before an argument, as `by` in `damage(&boss, by: 10)` ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
+The name a call writes before an argument, as `by` in `damage(mutable &boss, by: 10)` ([01](docs/spec/01-values-and-ownership/parameters.md#argument-labels)).
 
 **Borrow**:
-Use of a value by code that doesn't own it: a **shared** borrow only reads it, and a **mutable** borrow may change it ([01](docs/spec/01-values-and-ownership.md)).
+Use of a value by code that doesn't own it, through a reference: a **shared** borrow only reads it, and a **mutable** borrow may change it ([01](docs/spec/01-values-and-ownership.md)).
 _Avoid_: loan
 
 **Borrowing binding**:
-A binding that refers to a place it borrows, read-only or for change: a `ref let` or `ref var` declaration or condition, or a `for` or `when` name bound to a part of a place ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
+A binding that is a place it borrows: a `ref let` or `ref var`, a `&T` or `mutable &T` parameter, or a `for` or `when` name whose subject is a reference ([01](docs/spec/01-values-and-ownership/bindings.md#bindings-that-refer-to-a-place)).
 _Avoid_: reference variable, alias
 
 **Changeable place**:
-A place that may be changed or lent with `&`, such as a `var` that owns its value, a temporary or a `mutable` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
+A place that may be changed or lent with `mutable &`, such as a `var`, a temporary or a `mutable &T` parameter ([01](docs/spec/01-values-and-ownership/bindings.md#changeable-places)).
 
 **Consume**:
 To move a value out of a place the code owns, implicitly or with `consume place` ([01](docs/spec/01-values-and-ownership/moving-values-out.md#moving-values-out)).
@@ -29,6 +29,10 @@ A second value with the same contents: `copy x` duplicates a copyable value's by
 **Copyable**:
 A type whose values `copy` duplicates byte for byte, without allocating ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#copyable-types)).
 _Avoid_: trivially copyable, bitwise-copyable
+
+**Forwarding**:
+A reference's passing on of its members, methods, subscripts and operators to the value it refers to, so `r.hp` reads that value's `hp` ([01](docs/spec/01-values-and-ownership/references.md#forwarding-through-a-reference)).
+_Avoid_: auto-deref, dereferencing
 
 **Hidden local**:
 A local the language declares to keep a value that a statement can't name, such as a `when` subject or a loop's sequence ([01](docs/spec/01-values-and-ownership/moves-copies-destruction.md#destruction)).
@@ -70,6 +74,16 @@ _Avoid_: holder
 Storage that holds a value: a local, a global, a parameter or a temporary, or a part of one, such as `enemy.hp` or `list[i]` ([01](docs/spec/01-values-and-ownership.md)).
 _Avoid_: lvalue
 
+**Position**:
+A part of the code that takes a value, such as an argument, an initializer, a loop's subject or a `return`, where a place writes `&`, `mutable &`, `consume` or `copy` unless it is implicitly copyable ([01](docs/spec/01-values-and-ownership/references.md#places-given-to-a-position)).
+
+**Reborrow**:
+A new reference, made by `&r` or `mutable &r` of a place `r` that holds a reference, to what `r` refers to, which keeps `r` borrowed until its last use ([01](docs/spec/01-values-and-ownership/references.md#reborrowing)).
+
+**Reference**:
+A value that refers to a place and borrows it: a **shared reference** `&T`, made by `&p`, or a **mutable reference** `mutable &T`, made by `mutable &p`, which may change it ([01](docs/spec/01-values-and-ownership/references.md#references)).
+_Avoid_: pointer (a raw, object or reference-counted one)
+
 **Safe code**:
 All code outside `unsafe` code, `unchecked` blocks and C, which has no undefined behavior ([01](docs/spec/01-values-and-ownership.md#tiers-of-checking)).
 _Avoid_: checked code
@@ -77,6 +91,10 @@ _Avoid_: checked code
 **Tier**:
 One of the three levels at which a pattern is checked: **static**, by the compiler at no run-time cost; **dynamic**, at each use; and **unsafe**, not at all ([01](docs/spec/01-values-and-ownership.md#tiers-of-checking)).
 _Avoid_: safety level, mode
+
+**Unsized type**:
+`[T]`, `Text` or `any P`: a type whose size isn't known where code is compiled, held only behind a reference, a `Box` or a pointer ([01](docs/spec/01-values-and-ownership/references.md#unsized-types)).
+_Avoid_: dynamically sized type, DST
 
 ### Views and dependencies
 
@@ -142,8 +160,8 @@ _Avoid_: static string, static span, `'static`
 A computed property or subscript whose `get` returns a value and whose optional `set` takes one back, so a change works on a copy that `set` writes back ([02](docs/spec/02-views-and-dependencies/place-and-value-properties.md#value-properties-get-and-set)).
 
 **View**:
-A value that borrows memory something else owns, such as a `Span` or a `StringView` ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
-_Avoid_: reference (as a noun), pointer (raw, object and reference-counted pointers are other things)
+A value that borrows memory something else owns, such as a reference `&[T]` or `&Text` ([02](docs/spec/02-views-and-dependencies/scoped-values.md#scoped-values)).
+_Avoid_: pointer (raw, object and reference-counted pointers are other things)
 
 ### Handles and objects
 

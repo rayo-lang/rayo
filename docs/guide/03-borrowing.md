@@ -129,7 +129,7 @@ heal(hp: enemyHp)               // error: a mutable argument needs '&'
 
 The `&` is there so that you can see the change. A move needs no mark, since the compiler stops you if you use the variable again. A change gives no such warning. `enemyHp` would just hold a different number, with nothing in the call to say why. So among the arguments in a call's parentheses, the ones marked `&` are the ones it may change.
 
-The value before the dot needs no `&`, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change)).
+The value before the dot needs no `&`, even when the method changes it, as `hits.append(5)` changes `hits`. The call names that value as the one it acts on. So you know which value might change, though not whether it does. The method's declaration says whether it changes the value. `append`'s does, and `clone()`'s doesn't ([01](../spec/01-values-and-ownership/references.md#places-given-to-a-position)).
 
 Whether through an `&` argument or the value before the dot, a call can change only a variable you could change yourself:
 
@@ -349,7 +349,7 @@ Some values bend this chapter's rules. A value that several pointers can reach c
 - [01 Borrowed arguments](../spec/01-values-and-ownership/parameters.md#borrowed-arguments): when a borrowed argument is passed as its bits, and when as the caller's place.
 - [01 What can be moved from](../spec/01-values-and-ownership/moving-values-out.md#what-can-be-moved-from): which places can be moved from, and what to do with the rest.
 - [01 Changeable places](../spec/01-values-and-ownership/bindings.md#changeable-places): every place that can be changed or lent with `&`.
-- [01 Lending a place for change](../spec/01-values-and-ownership/bindings.md#lending-a-place-for-change): every place that takes `&`, and why the value a method is called on doesn't.
+- [01 Places given to a position](../spec/01-values-and-ownership/references.md#places-given-to-a-position): every place that takes `&`, and why the value a method is called on doesn't.
 - [01 Bindings](../spec/01-values-and-ownership/bindings.md#bindings): how `ref let` and `ref var` borrow, and how long a borrow lasts.
 - [01 Evaluation order](../spec/01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin): the order a call works out its parts, and when its borrows begin.
 - [01 The law of exclusivity](../spec/01-values-and-ownership/exclusivity.md#the-law-of-exclusivity): which places overlap, two elements of one list at once, and the values checked while the program runs.

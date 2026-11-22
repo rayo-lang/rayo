@@ -63,7 +63,7 @@ if ref var e = &world.enemies[h] { e.hp = 0 }
 ref let pos = world.enemies[h]!.pos          // the borrow accessor; '!' panics on a stale handle
 ```
 
-**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `&`, as every place lent for change is marked ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). Nothing is copied or moved, so the caller reaches the place itself.
+**A `borrow` lends a place for reading, and a `mutate` lends it for change.** Each body hands out its place as a `get` body returns a value: as its single expression, or with `return`. A `mutate` body marks its place with `&`, as every place lent for change is marked ([01](../01-values-and-ownership/references.md#making-a-reference)). Nothing is copied or moved, so the caller reaches the place itself.
 
 **Each source's access ends at the last use of the place and of every value that depends on it**, as a borrow of a stored field does, and nothing runs then ([below](#the-place-lies-in-its-sources)). An argument that is no source is lent only for the accessor's call. So `world.enemies[h]?.hp -= 10` changes the element where it lies in the pool. A view of the place can outlive the statement that took it, as a view of a field can ([below](#what-a-place-depends-on)).
 

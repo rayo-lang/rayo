@@ -39,10 +39,11 @@ attribute-arg = ((identifier | keyword) ':')? (expression | keyword) ;   (* @lay
 const-decl    = 'const' identifier (':' type)? '=' expression ;
 let-decl      = 'let' binding (',' binding)* ;                      (* let lo = 0, hi = 10 *)
 var-decl      = 'var' binding (',' binding)* | 'var' identifier ':' type where-clause? accessor-block ;
-binding       = pattern (':' type)? ('=' expression)? ;            (* each binding binds a name, so 'let _ = x' is an error (01); '_ = x' drops x (05) *)
-ref-decl      = 'ref' ('let' | 'var') ref-binding (',' ref-binding)* ;   (* ref let e = enemies[0]; ref var b = &enemies[0];
+binding       = pattern (':' type)? ('=' expression)? ;            (* each binding binds a name, so 'let _ = x' is an error (01); '_ = consume x' drops x (05) *)
+ref-decl      = 'ref' ('let' | 'var') ref-binding (',' ref-binding)* ;   (* ref let e = &enemies[0]; ref var b = mutable &enemies[0];
                                                                       a statement, so a local in a body, with no attributes or modifiers (01) *)
-ref-binding   = pattern (':' type)? '=' expression ;               (* a place to refer to: 'ref var' takes '&' before it, and 'ref let' takes none (01) *)
+ref-binding   = pattern (':' type)? '=' expression ;               (* a reference, whose place the pattern names: 'ref let' takes a shared one,
+                                                                      such as '&p', and 'ref var' a mutable one, such as 'mutable &p' (01) *)
 
 func-decl     = 'func' func-name generic-params? param-clause ('->' result-type)?
                 where-clause? block ;
@@ -52,12 +53,13 @@ operator      = '+' | '-' | '*' | '/' | '%' | '==' | '!=' | '<' | '<=' | '>' | '
                                                                    One parameter declares a prefix operator ('-', '!', '~'), two a binary one (05) *)
 label         = identifier ;
 task-decl     = 'task' 'func' identifier generic-params? param-clause
-                ('with' '(' identifier ':' 'mutable' type ')')? ('->' result-type)? where-clause? block ;
-                                                                   (* one resume parameter (07) *)
+                ('with' '(' identifier ':' 'mutable' '&' type-primary type-suffix* ')')? ('->' result-type)? where-clause? block ;
+                                                                   (* one resume parameter, a mutable reference: with (ctx: mutable &C) (07) *)
 param-clause  = '(' (param (',' param)* ','?)? ')' ;
-param         = (arg-label | '_')? identifier ':' param-convention? type ('=' expression)? ;
-arg-label     = identifier | keyword ;                            (* func index(of x: T, in s: Span<T>) *)
-param-convention = 'mutable' | 'owned' ;                           (* none: borrowed, or received owned for the parameters 01 lists *)
+param         = (arg-label | '_')? identifier ':' 'keep'? type ('=' expression)? ;
+                                                                   (* x: T owns its argument, x: &T borrows it, x: mutable &T borrows it for change (01);
+                                                                      'keep' only where 05 allows it, on a T or &T parameter *)
+arg-label     = identifier | keyword ;                            (* func index(of x: &T, in s: &[T]) *)
 result-type   = type | result-base '!' ;                           (* a bare '!' infers the failure type: only on a non-public function with a body (10) *)
 init-result   = '->' 'Self' '!' failure-type? ;                    (* an initializer that can fail: init(mass: Float) -> Self!PhysicsError; bare only on a non-public one (10) *)
 
@@ -79,7 +81,7 @@ protocol-member = 'associatedtype' identifier inheritance? ('=' type)?
               | attribute* modifier* 'func' func-name generic-params? param-clause ('->' type)? where-clause?
               | attribute* modifier* 'var' identifier ':' type where-clause? '{' ('get' 'set'? | 'borrow' 'mutate'?) '}'
               | attribute* modifier* 'subscript' param-clause '->' type where-clause? '{' ('get' 'set'? | 'borrow' 'mutate'?) '}'
-              | attribute* modifier* 'init' '?'? generic-params? param-clause ('->' 'Self' '!' failure-type)? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: owned IoError); not both '?' and '!' *)
+              | attribute* modifier* 'init' '?'? generic-params? param-clause ('->' 'Self' '!' failure-type)? where-clause? ;   (* static var version: Int { get }; @converts init(_ e: IoError); not both '?' and '!' *)
 extension-decl= 'extension' type inheritance? where-clause? '{' member* '}' ;
                                                                    (* no stored member or enum case, directly or generated, and a deinit
                                                                       only in an unconditional extension, in the type's module (04);

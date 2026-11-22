@@ -16,7 +16,7 @@ do { reset() }      // groups statements, and runs them
 **A `{` right after `when` begins its body, so that `when` has no subject.** A subject that is a closure literal is written in parentheses:
 
 ```swift
-when action {
+when &action {
     .retry { attempt() }          // the arm's value is what attempt() returns
     else { ({ attempt() }) }      // a closure literal, in parentheses: the arm's value is the closure
 }
@@ -36,15 +36,15 @@ let shown: DoorState = if open {
 **A `{` right after a trailing closure's `}` is a compile error**, though `postfix*` would read it as a call of the first call's result. So an unlabeled closure never follows a trailing closure, and a later one carries its label, as in `} recover: {` ([05](../05-protocols-generics-and-closures/functions-and-closures.md#trailing-closures)). To call a call's result with a closure, parenthesize the call, or bind the result first:
 
 ```swift
-makeHandler { cfg } { event in log(event) }       // error: a trailing closure after the first carries a label
-(makeHandler { cfg })({ event in log(event) })    // calls the handler that makeHandler returns
+makeHandler { copy cfg } { event in log(&event) }       // error: a trailing closure after the first carries a label
+(makeHandler { copy cfg })({ event in log(&event) })    // calls the handler that makeHandler returns
 ```
 
 **In any expression that a statement's block follows, a `{` always starts the block, never a trailing closure.** To pass a closure there, parenthesize the call:
 
 ```swift
-for x in alloc items.filter { $0.alive } { use(x) }     // error: '{ $0.alive }' is read as the loop's body
-for x in alloc items.filter({ $0.alive }) { use(x) }   // the closure is inside the call's parentheses
+for x in alloc items.filter { $0.alive } { use(&x) }     // error: '{ $0.alive }' is read as the loop's body
+for x in alloc items.filter({ $0.alive }) { use(&x) }   // the closure is inside the call's parentheses
 ```
 
 **These are the expressions that a block follows:**
@@ -69,8 +69,8 @@ unsafe { platform_set_audio_callback(onAudioEvent, nil) }   // a statement: an o
 **`try`, `try?` and `try!` take the whole postfix chain after them**, as every prefix operator does. So `try f().x` takes the `x` of `f()`'s `Result`, and a member of the success value is written `(try f()).x` ([10](../10-errors-and-safety/typed-errors.md#propagating-errors-with-try)):
 
 ```swift
-let size = (try readText(path)).count   // the count of the String that readText succeeds with
-let bad = try readText(path).count      // error: '.count' applies to the Result, which has no 'count'
+let size = (try readText(&path)).count   // the count of the String that readText succeeds with
+let bad = try readText(&path).count      // error: '.count' applies to the Result, which has no 'count'
 ```
 
 **`alloc` takes the whole postfix chain after it, and `a.alloc` the postfix chain before it.** So `alloc x.clone()` allocates the clone, and `level.alloc xs.filter { … }` the filtered list from `level`. A `.alloc` after a postfix expression always begins an allocation, never a member access, since `alloc` is a keyword. The prefix operators come before it, so `try alloc Box(v)` is the fallible form of `alloc Box(v)`, and `try?` and `try!` apply to it as `try` does ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).
@@ -82,11 +82,11 @@ let bad = try readText(path).count      // error: '.count' applies to the Result
 ```swift
 let hp = target?.hp                 // '?' after an operand: optional chaining
 let all = 0..<n                     // between two operands, with whitespace on neither side: binary
-let tail = xs[3...]                 // attached to 3 only, and closed by ']': postfix
-let head = xs[..<n]                 // attached to n only: prefix
+let tail = &xs[3...]                // attached to 3 only, and closed by ']': postfix
+let head = &xs[..<n]                // attached to n only: prefix
 ```
 
-**The `&` prefix marks a place lent for change.** It is valid only in the positions that 01 lists ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)), such as a `mutable` argument, a binding, pattern or loop sequence that lends a place, and an `if` or `when` arm's value that stands in one.
+**The prefix `&` makes a shared reference, and `mutable &` a mutable one** ([01](../01-values-and-ownership/references.md#making-a-reference)). Each takes the whole postfix chain after it, as every prefix operator does, so `&enemies[0].pos` refers to the enemy's position. `mutable &` is one operator, and `mutable` before an expression means nothing else.
 
 **An operator can be passed as a function value.** Bare, it is allowed only as a whole argument, as in `reduce(0, +)`. Elsewhere it is written in parentheses, `(+)`. The expected function type chooses the overload, using 05's bounded lookup ([05](../05-protocols-generics-and-closures/operators.md#operators)).
 
@@ -112,7 +112,7 @@ static if T == List<Int> || T == Set<Int> { … }   // '||' can't begin an opera
 **While generic arguments are being parsed, a `>>`, `>>=` or `>=` token is split into `>` followed by the rest.** That holds for generic arguments in a type, and for those after an `identifier <` that starts them:
 
 ```swift
-var b: Box<Int>= a                                      // '>=' splits, so 'b' is a Box<Int>
+var b: Box<Int>= consume a                              // '>=' splits, so 'b' is a Box<Int>
 let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing two argument lists
 ```
 
@@ -124,7 +124,7 @@ let q = alloc SpscQueue<Shared<Snapshot>>(capacity: 3)  // '>>' splits, closing 
 
 - **Function type parameters.** When the matching `)` is followed by `->`, the list is a function type's parameters, so `(IoError | ParseError) -> Void` takes one union parameter.
 - **Error unions and tuples.** Otherwise `(A | B)` is an error union and `(A, B)` a tuple.
-- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple. The exception is `(any P)` as the type argument of an existential's own type name, which keeps `any P` apart from the form `any` makes there (below).
+- **A single type.** A parenthesized single type without a label or a trailing comma is that type, not a one-element tuple, as `(&T)?` shows ([below](#references-and-unsized-types)).
 
 ```swift
 typealias OnError = (IoError | ParseError) -> Void    // ')' then '->': one error-union parameter
@@ -133,8 +133,6 @@ typealias Hit = (target: Handle<Enemy>, damage: Float) // a tuple
 typealias Count = (Int)                               // just Int, not a one-element tuple
 typealias Single = (Int,)                             // a one-element tuple
 ```
-
-**After an existential's own type name, `any` right after `<` makes that existential**, as in `MutableRef<any P>`, `Box<any P>` and `Shared<any P>`. Those names are `MutableRef`, `Box`, the object pointers, the reference-counted pointers and the weak links ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)). So the type such a name gives with its type parameter bound to `any P` is written with `(any P)`, as `Box<(any P)>` is.
 
 **An expression names a type in two ways**: by a type name followed by a member, as in `Vertex.self`, `T.fields` and `Int.max`, or as an operand of `==` or `!=` that compares types, as in `T == List<Int>` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#value-parameters-and-type-values)).
 
@@ -145,6 +143,26 @@ let size = (*Int).size                // '*' starts as only a type can
 let pair = (Int, Float).self          // ')' is followed by '.self'
 typealias Pair = (Int, Float)
 let p = Pair.construct { … }          // any other such type is named through a typealias
+```
+
+## References and unsized types
+
+**A reference type takes every `?` after it, so `?` binds tighter than `&`.** `&T?` is a reference to an optional, and an optional reference is parenthesized as `(&T)?` ([01](../01-values-and-ownership/references.md#making-a-reference)). So an optional reference to elements is written `(&[T])?`, never `&[T]?`, which would refer to an optional run of elements.
+
+**These follow from where `&` and `static` stand in the productions:**
+
+- **Compositions.** An existential's composition takes every `&` after it, so `&any P & Sendable` is a reference to an `any P & Sendable`.
+- **Static types.** `static` applies to the type that follows it, a reference included, so `static &Text` is a static reference to text, and an optional one is written `(static &Text)?`.
+- **Results.** `!` applies after a reference, as it applies after `?`, so `&Mesh!LoadError` is a `Result` whose success value is a `&Mesh`.
+
+**`[` in a type begins an inline array when `of` stands at its top level before the matching `]`, and the unsized `[T]` otherwise**, so `[4 of Float]` is an inline array and `[Float]` a run of elements ([01](../01-values-and-ownership/references.md#unsized-types)). In a generic argument, `[` begins a type, never an array literal.
+
+**`Text`, the unsized run of UTF-8, is a type name of the standard library**, and parses as any other type name does ([01](../01-values-and-ownership/references.md#unsized-types)).
+
+```swift
+let picked: (&Enemy)? = nil               // an optional reference
+let slot: &Enemy? = &world.enemies[h]     // a reference to an optional element
+let name: (static &Text)? = nil           // an optional static reference to text
 ```
 
 ## Trailing commas

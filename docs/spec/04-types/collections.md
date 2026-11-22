@@ -482,11 +482,11 @@ for (i, e) in makeEnemies().mutableEnumerated() { … }   // the new list is a h
 | a whole value whose type conforms to `ConsumingSequence` | `var it = S.makeConsumingIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 | anything else | `var it = S.makeIterator()` | `while let b = it.next()`: bind the pattern to `b′`, then run the body |
 
-- **A loop over `&s` holds `S`, and through it the collection, exclusively.** The `&` selects this form, and is required to change elements, as it is in any binding ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)).
-- **`&` on a subject needs a changeable place, as `&` anywhere does** ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)). That may be a temporary, such as a call's or a `get`'s result. A property with a `borrow` and no `mutate` takes no `&`.
+- **A loop over `&s` holds `S`, and through it the collection, exclusively.** The `&` selects this form, and is required to change elements, as it is in any binding ([01](../01-values-and-ownership/references.md#making-a-reference)).
+- **`&` on a subject needs a changeable place, as `&` anywhere does** ([01](../01-values-and-ownership/references.md#making-a-reference)). That may be a temporary, such as a call's or a `get`'s result. A property with a `borrow` and no `mutate` takes no `&`.
 - **A temporary lent with `&` is changed in place.** Through a view, such as `&hits.mutableSpan`, the change reaches the viewed storage. A temporary that owns its elements, such as `&makeEnemies()`, is destroyed with its changes when the loop ends.
 - **A loop over a whole value whose type conforms to `ConsumingSequence`**, such as a call result or `consume x`, gives `S` to the iterator. So a loop over `consume jobs` hands each job over, and the iterator's `deinit` destroys the elements a `break`, `return` or `throw` leaves. `[N of T]` conforms to `ConsumingSequence`, as std's owning collections do.
-- **An element that lives in the collection is bound in place**: `b′` is `b.value` for a `Borrow`, and `r′` is `&r.value` for a `MutableRef`. So a loop without `&` can't change the elements that live in `s`, and changing one is a compile error ([01](../01-values-and-ownership/bindings.md#lending-a-place-for-change)).
+- **An element that lives in the collection is bound in place**: `b′` is `b.value` for a `Borrow`, and `r′` is `&r.value` for a `MutableRef`. So a loop without `&` can't change the elements that live in `s`, and changing one is a compile error ([01](../01-values-and-ownership/references.md#making-a-reference)).
 - **Any other element is a value the iterator hands out**, such as a range's `Int` or a chunk. Then `b′` is `consume b`, `r′` is `consume r`, and the loop variable owns it for the iteration, as `i` does below.
 
 ```swift

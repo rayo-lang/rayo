@@ -40,14 +40,14 @@ let banner = """
 
 **The keywords are these:** `let var ref const func task struct enum protocol extension typealias import public private
 init deinit self Self if else guard when case for in while repeat break continue return
-throw try catch do defer static mutable owned consuming copy consume borrow mutating any some
+throw try catch do defer static mutable consuming copy consume borrow mutating any some
 where with await unsafe unchecked alloc extern as is nil true false
 associatedtype subscript`.
 
 **Contextual keywords are keywords only in the positions below, and can be used as identifiers anywhere else.** They are `mutate`, `get`, `set`, `c`, `move`, `of`, `error`, `prefix`, `noalloc`, `stack`, `union`, `keep`, `borrows`, `outlives`, `rebind`, `to` and `discard`. Some of those positions are narrow:
 
 - **`union`** is a keyword only after a declaration's attributes and modifiers, or at the start of an import config rule, when an identifier follows it, so `a.union(b)` stays a method call;
-- **`keep`** only at the start of a function type's parameter, when a convention or a type follows it, so a parameter whose type is named `keep` still parses;
+- **`keep`** only at the start of a parameter's type, or of a function type's parameter, when a type follows it, so a parameter whose type is named `keep` still parses;
 - **`error`** only after `static`;
 - **`prefix`** only in an `import c … where` clause;
 - **`noalloc`** only at the start of a rule inside an import config, or after `extern c`;
@@ -59,10 +59,10 @@ associatedtype subscript`.
 **Argument labels may be keywords.** A parameter's argument label ([01](../01-values-and-ownership/parameters.md#argument-labels)), and the label a call writes before an argument, can be any keyword:
 
 ```swift
-func index<T: Equatable>(of x: T, in s: Span<T>) -> UInt?   // 'of' and 'in' as the parameters' labels
-let i = index(of: h, in: handles.span)                      // and before the arguments
+func index<T: Equatable>(of x: &T, in s: &[T]) -> UInt?    // 'of' and 'in' as the parameters' labels
+let i = index(of: &h, in: &handles)                         // and before the arguments
 ```
 
-**A keyword label is never ambiguous.** A label before an argument is always followed by `:`, and a label in a parameter by the parameter's name and then `:`, with the convention after the `:`.
+**A keyword label is never ambiguous.** A label before an argument is always followed by `:`, and a label in a parameter by the parameter's name and then `:`, with the type after the `:`.
 
 **A trailing closure's label is an identifier, never a keyword**, so a keyword after a closure's `}`, such as `else` or `catch`, always reads as that keyword. A parameter whose argument label is a keyword takes its closure inside the parentheses.
