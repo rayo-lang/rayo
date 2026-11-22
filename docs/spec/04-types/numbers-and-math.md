@@ -151,7 +151,7 @@ let r = 7.5 % 2.0       // error: '%' takes integers
 
 **`fma(a, b, c)` computes `a * b + c` with a single rounding, as IEEE 754's `fusedMultiplyAdd` does.** That makes it one correctly rounded IEEE 754 operation, under the rule above. The compiler never fuses `a * b + c` itself, so code that wants one rounding, or a target's fused multiply-add instruction, names `fma`.
 
-**`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It is one generic function, which borrows its operands, as `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)):
+**`fma` is a prelude function that the language builds in** ([11](../11-compilation-model.md#the-prelude)). So it runs in a `const` initializer, which calls no C function, and gives the bits it gives at run time ([09](../09-compile-time/constants-and-conditions.md#running-code-at-compile-time-const)). It is one generic function, which owns copies of its operands, as the free `min` does ([05](../05-protocols-generics-and-closures/operators.md#equality-and-ordering)). Each operand is a number or a vector of numbers, which a call copies with nothing written where it is implicitly copyable ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)):
 
 ```swift
 func fma<T>(_ a: T, _ b: T, _ c: T) -> T    // T: Half, Float, Double, or a Simd of one of them
@@ -208,15 +208,15 @@ if (a < Vec4(repeating: 8)).all { … }     // 'all' reduces the mask to one Boo
 - **In generic code.** Generic code that names `Simd<T, N>` for its own `T` states `T: SimdLane`, as `reversed` does ([below](#shuffles-and-swizzles)). A lane count it doesn't fix is checked at each instantiation ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#checking-generic-code)).
 - **Moving lanes.** Any operation that only moves lanes works for every `T: SimdLane`, generic or not: indexing and lane assignment, array literals, the initializers from lanes and `repeating:`, loads and stores, `select`, shuffles and swizzles. Operations that compute with lanes, such as arithmetic, comparisons, conversions and [reductions](#reductions), need a concrete `T`.
 - **Operators.** A scalar operand broadcasts to every lane, on either side: `v * 2`, `2 * v`. A comparison gives a mask ([below](#masks)). Integer lanes follow the integer rules ([above](#integer-overflow-division-and-shifts)) lane by lane, so `v / w` panics when any lane of `w` is 0.
-- **`min` and `max`.** `a.min(b)` and `a.max(b)` of two vectors work lane by lane, and so do the vector forms of the free `min(a, b)` and `max(a, b)`, each lane through its type's `Comparable` witness. All of them borrow their operands and return a new vector. So integer lanes compare by value and floating-point lanes as [above](#floating-point). `minNumber` and `maxNumber` of two floating-point vectors work lane by lane too. The reductions `v.min()` and `v.max()` take no argument, which tells them apart ([below](#reductions)).
+- **`min` and `max`.** `a.min(&b)` and `a.max(&b)` of two vectors work lane by lane, and so do the vector forms of the free `min(a, b)` and `max(a, b)`, each lane through its type's `Comparable` witness. The methods borrow their argument, the free functions take copies, and all of them return a new vector. So integer lanes compare by value and floating-point lanes as [above](#floating-point). `minNumber` and `maxNumber` of two floating-point vectors work lane by lane too. The reductions `v.min()` and `v.max()` take no argument, which tells them apart ([below](#reductions)).
 - **`fma`.** `fma(a, b, c)` of three floating-point vectors of one type works lane by lane, and rounds each lane once, as the scalar `fma` does ([above](#floating-point)). It returns a new vector. A scalar and a vector can't bind one `T`, so a scalar operand doesn't broadcast as it does for an operator: code passes a vector made with `repeating:` instead, such as `Vec4(repeating: s)`.
-- **Lanes are never viewed.** A lane is read and assigned by swizzle or by index, and `v[i]` panics when `i` is out of range. No span or `Borrow` of a lane exists, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
-- **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled and borrowed, and copies them, as `Vec2(x, y)` and `IVec2(1280, 720)` do.
+- **Lanes are never referred to.** A lane is read and assigned by swizzle or by index, as a value, and `v[i]` panics when `i` is out of range. No reference reaches a lane, so a vector lends nothing of its own bytes ([02](../02-views-and-dependencies/dependency-projection-and-results.md#shallow-values)).
+- **Making a vector.** A vector comes from an array literal, such as `[1, 2, 3, 4]`, from `Vec4.zero` or `Vec4(repeating: 1)`, or from `Simd<T, N>(a, b, …)`. That initializer takes its `N` lanes in order, unlabeled, as copies, since every lane type is implicitly copyable, as `Vec2(x, y)` and `IVec2(1280, 720)` show.
 - **Converting lanes.** `Simd<U, N>(converting: v)` converts each lane of `v` as the unlabeled scalar conversion `U(x)` does ([Conversions](#conversions)). A widening conversion is exact, and any other rounds or checks each lane, and panics where `U(x)` would.
 - **Truncating and clamping.** `Simd<U, N>(truncating: v)` and `Simd<U, N>(clamping: v)` apply `U(truncating: x)` and `U(clamping: x)` to each lane, with the scalar rules. So they exist where those forms do: truncating between integer types, and clamping to an integer type from an integer or floating-point one.
 - **Masks don't convert.** A mask has no numeric lanes to convert, so code that wants numbers writes `select(mask, ones, zeros)`.
-- **Loads and stores.** `Simd<T, N>(loading: span, at: i)` reads `N` lanes from a `Span<T>`, starting at element `i`, and `v.store(into: &out, at: i)` writes them into a `MutableSpan<T>` there. Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
-- **Bounds.** A load or a store panics when `i + N` exceeds the span's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
+- **Loads and stores.** `Simd<T, N>(loading: &data, at: i)` reads `N` lanes from a `&[T]`, starting at element `i`, and `v.store(into: mutable &out, at: i)` writes them into a `mutable &[T]` there ([Runs of elements](collections.md#runs-of-elements)). Neither needs any alignment, since ordinary data is laid out for its elements, not for vectors. A 3-lane load or store touches 3 elements, never the padding lane.
+- **Bounds.** A load or a store panics when `i + N` exceeds the run's count, as indexing does. It is a bounds check, which only an `unchecked` block removes ([10](../10-errors-and-safety/checks-and-build-modes.md#unchecked-blocks)).
 
 **Packing lanes into a narrower type says what happens to a lane that doesn't fit**, as a scalar conversion does:
 
@@ -288,7 +288,7 @@ func reversedLanes<let N: UInt>() -> [N of UInt] {    // ordinary code, run by t
 }
 
 func reversed<T: SimdLane, let N: UInt>(_ v: Simd<T, N>) -> Simd<T, N> {
-    shuffle(v, reversedLanes<N>())                    // the list is computed for each N
+    shuffle(consume v, reversedLanes<N>())            // the list is computed for each N
 }
 ```
 
@@ -303,10 +303,10 @@ func reversed<T: SimdLane, let N: UInt>(_ v: Simd<T, N>) -> Simd<T, N> {
 A **mask** is a `Simd<Bool, N>`, one `Bool` per lane. A comparison of vectors gives one, whose lane `i` says whether the comparison holds in lane `i`. A delimiter scan loads 64 bytes at a time from any offset, compares them at once, and turns the mask into an integer to find the first match:
 
 ```swift
-func firstNewline(in bytes: Span<UInt8>) -> UInt? {
+func firstNewline(in bytes: &[UInt8]) -> UInt? {
     var i: UInt = 0
     while i + 64 <= bytes.count {
-        let chunk = Simd<UInt8, 64>(loading: bytes, at: i)    // any offset: no alignment needed
+        let chunk = Simd<UInt8, 64>(loading: &bytes, at: i)   // any offset: no alignment needed
         let hits = (chunk == 10).bits                         // a UInt64: bit k is set where byte i + k is a newline
         if hits != 0 { return i + hits.trailingZeroCount }
         i += 64
@@ -356,7 +356,7 @@ let t = d.sum()        // 0: (100 + -100) + (100 + -100) never overflows, though
 **A sum that may overflow its lane type widens the lanes first, or wraps on purpose:**
 
 ```swift
-let bytes = Simd<UInt8, 16>(loading: data, at: i)
+let bytes = Simd<UInt8, 16>(loading: &data, at: i)
 let wide = Simd<UInt16, 16>(converting: bytes)    // exact: every UInt8 fits in a UInt16
 let total = wide.sum()                            // at most 16 × 255, which fits in a UInt16
 let check = bytes.wrappingSum()                   // a UInt8 checksum: wraps, never panics
@@ -381,7 +381,7 @@ struct Light4(var pos: Simd<Float, 3>, var radius: Float)    // 32 bytes: the ve
 public struct Vec3(public var x: Float, public var y: Float, public var z: Float): ExpressibleByArrayLiteral, ImplicitlyCopyable {
     @inline public init(_ x: Float, _ y: Float, _ z: Float) { self.init(x: x, y: y, z: z) }
 
-    @inline @noalloc public init<let N: UInt>(arrayLiteral e: owned [N of Float]) {   // @noalloc: literals work anywhere
+    @inline @noalloc public init<let N: UInt>(arrayLiteral e: [N of Float]) {   // @noalloc: literals work anywhere
         static if N == 3 { self.init(x: e[0], y: e[1], z: e[2]) }
         else { static error("a Vec3 literal needs 3 elements") }
     }

@@ -9,17 +9,22 @@ Rayo normally lays out a value according to its fields. Systems code sometimes n
 ```swift
 let w: [4 of Float] = [0.1, 0.2, 0.3, 0.4]   // 16 bytes: the count is part of the type
 let names = alloc ["ana", "bo"]              // a List: a fixed-size value, with its elements in storage it allocated
-let first: StringView = names[0]             // a pointer and a length, whatever the text's length
+let first: &Text = names[0]                  // a pointer and a length, whatever the text's length
 ```
 
-**Every type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live in a field, in an array or in a register, and on the stack up to a bound ([below](#the-largest-value-on-the-stack)), and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
+**Every sized type has a size and an alignment fixed when the program is built**, which `T.size` and `T.alignment` read ([09](../09-compile-time/reflection.md#what-reflection-can-read)). So any value can live in a field, in an array or in a register, and on the stack up to a bound ([below](#the-largest-value-on-the-stack)), and a move copies a number of bytes known from its type ([01](../01-values-and-ownership/moves-copies-destruction.md#moves)). A generic function is compiled for each type it is called with, so its type parameters have fixed sizes too ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#instantiation)).
 
-**An `@opaque` type is the one exception.** It is a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)). So it has no values, and `T.size` and `T.alignment` on it are compile errors. Only an `@opaque` type parameter may stand for one, and its body is checked as though its type were one, so it is the one type parameter whose body may not rely on a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
+**The unsized types have no size of their own, so they have no values that sit in a place by themselves:**
+
+- **`[T]`, `Text` and `any P`**, which code holds only behind a value of fixed size that refers to them ([01](../01-values-and-ownership/references.md#unsized-types));
+- **an `@opaque` type**, a C type whose layout Rayo doesn't know or whose members it can't map, usable only behind a pointer ([08](../08-c-interop/imports-and-inline-c.md#what-imports-as-what)).
+
+`T.size` and `T.alignment` of an unsized type are compile errors. Only an `@opaque` type parameter may stand for one, and its body is checked as though its type were unsized, so it is the one type parameter whose body may not rely on a size ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#type-parameters-with-no-known-size-opaque)).
 
 **No value's size depends on what it holds.** A count whose bound is fixed when the program is built is part of the type, and the elements lie inside the value. That bound is an array's `N` ([Tuples, ranges and arrays](collections.md#tuples-ranges-and-arrays)), or the capacity of an `InlineList` or of std's `FixedString`, which may hold fewer ([Collections and strings](collections.md#collections-and-strings)). A count with no such bound puts the elements outside the value, which reaches them through a fixed-size part:
 
 - **an owner**, such as a `List`, a `String` or a `TrailingArray`, holds them in storage it allocated ([06](../06-memory-and-allocators/allocator-basics.md#allocating-with-alloc));
-- **a view**, such as a `Span` or a `StringView`, holds a pointer to them and their count, and lends them from wherever they lie ([02](../02-views-and-dependencies.md)).
+- **a reference to an unsized run**, a `&[T]` or a `&Text`, holds a pointer to them and their count, and lends them from wherever they lie ([01](../01-values-and-ownership/references.md#layout)).
 
 ### The largest value on the stack
 
@@ -50,7 +55,7 @@ public struct Vertex(public var pos: Vec3, public var normal: Vec3, public var u
 
 let f: Float = 1.5
 let bits = UInt32(bitPattern: f)                      // a safe bit cast: Float has no padding
-if let verts = bytes.reinterpret(as: Vertex.self) {   // Span<UInt8> to Span<Vertex>?, checked once
+if let verts = bytes.reinterpret(as: Vertex.self) {   // a '&[UInt8]' to a '(&[Vertex])?', checked once
     upload(verts)
 }
 ```
@@ -66,7 +71,7 @@ if let verts = bytes.reinterpret(as: Vertex.self) {   // Span<UInt8> to Span<Ver
 **These are not `Pod`:**
 
 - `Bool`, which is 0 or 1, and Rayo enums and closed C enums, which hold one of their cases ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
-- pointers, which are never null ([Optionals](enums.md#optionals)), and `Handle`s, weak pointers and weak links, which hold only bits Rayo gave out ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
+- pointers and references, which are never null ([Optionals](enums.md#optionals)), and `Handle`s, weak pointers and weak links, which hold only bits Rayo gave out ([08](../08-c-interop/c-contract-and-embedding.md#what-c-must-uphold));
 - owners of memory, since bytes taken as one would be a second owner of what it holds ([10](../10-errors-and-safety/unsafe-code.md#values-views-and-threads));
 - a `Synchronized` type, or anything that holds one at any depth, since other threads write its bytes while a `Pod` read would load them plainly ([07](../07-concurrency/synchronization.md#the-synchronized-contract));
 - a type the compiler builds, whose fields nothing names: a closure literal's or a task's state, or an interpolated literal's value ([09](../09-compile-time/reflection.md#what-reflection-can-read)).
@@ -91,7 +96,8 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 **Casts between `Pod` types depend on padding**, so that no uninitialized byte is read as data:
 
 - **Bit casts.** `U(bitPattern: t)` between `Pod` types of equal size is safe when `t`'s type is padding-free.
-- **Span casts.** `span.reinterpret(as: Vertex.self)` views a span of a `Pod` type `A` as a `Span<U>?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. Its alignment check is an alignment query, so it runs at compile time for a `U` aligned no more than the span's allocation ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). A shared cast needs `A` padding-free, so every byte read is initialized. A mutable cast needs both types padding-free, since a store through a padded type leaves its padding unspecified while other views still see `A`.
+- **Run casts.** `bytes.reinterpret(as: Vertex.self)` refers to a run of a `Pod` type `A` as a `(&[U])?` of a `Pod` type `U` of nonzero size, here `Vertex`, checking size divisibility and alignment once. Its alignment check is an alignment query, so it runs at compile time for a `U` aligned no more than the run's allocation ([10](../10-errors-and-safety/unsafe-code.md#raw-pointers)). This shared cast needs `A` padding-free, so every byte read is initialized.
+- **Mutable run casts.** `bytes.mutableReinterpret(as: Vertex.self)` gives a `(mutable &[U])?`, checked the same way ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). It needs both types padding-free, since a store through a padded type leaves its padding unspecified while other references still see `A`.
 
 ## A header and trailing elements: `TrailingArray`
 
@@ -100,10 +106,10 @@ Each is `Pod` only through `@pod`, which states that every bit pattern is valid.
 ```swift
 var msg = alloc TrailingArray<PacketHeader, UInt8>(header: h, count: n, repeating: 0)
 msg.header.kind = .snapshot
-msg.elements[0..<4].copy(from: payload[0..<4]) // MutableSpan<UInt8> over the trailing storage; lengths checked
+msg.elements[0..<4].copy(from: &payload[0..<4]) // a '[UInt8]' place in the trailing storage; lengths checked
 ```
 
-It is move-only, and owns its allocation, whose element count is fixed when it is made. **`Header` must be copyable**, since the header is read and written as a value (below). It has a C representation when its header and element types both have one ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
+It is move-only, and owns its allocation, whose element count is fixed when it is made. `msg.elements` is the elements as a `[Element]` place, with a `borrow` and a `mutate` ([Runs of elements](collections.md#runs-of-elements)). **`Header` must be copyable**, since the header is read and written as a value (below). It has a C representation when its header and element types both have one ([08](../08-c-interop/calling-rayo-from-c.md#c-representations)).
 
 **The header starts the allocation, and the elements follow it.** The allocation is aligned for both types. The elements follow one `Element` stride apart, from the first multiple of `Element`'s alignment at or after the header's size. The allocation is at least as large as the header's size and as the elements' end, so the whole header lies inside it.
 
@@ -128,23 +134,33 @@ It is move-only, and owns its allocation, whose element count is fixed when it i
 var particles = alloc SoA<Particle>(capacity: 100_000)  // or alloc SoA<Particle>(), as for List
 particles.append(Particle(pos: p, vel: v, life: 2))
 
-for p in &particles {                  // p is a row: one place per field
+for p in mutable &particles {          // p is a row: one place per field
     p.pos += p.vel * dt                // touches only the pos and vel arrays
 }
 ```
 
 **`SoA<T>` is builtin, and its columns are `T`'s stored fields in declaration order**, private ones included, as `T.fields` lists them ([09](../09-compile-time/reflection.md#static-reflection)). A tuple's columns are `s.0`, `s.1`, and so on. An anonymous union is one field, so its members share a column. `SoA`'s own members, such as `count`, `capacity` and `append`, hide a field of the same name, whose column `s[field: f]` still reaches.
 
-**Columns are views.** `s.life` returns a `Span` of the column's buffer, and the `mutating` member `s.mutableLife`, named with `mutable` before the field's capitalized name, returns a `MutableSpan` of it ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). A binding of either owns the view ([01](../01-values-and-ownership/bindings.md#bindings-that-own-a-value)). The view depends on that column alone, a part of `s` disjoint from the other columns as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `s.mutablePos` and `s.vel` can be held at once.
-
-**Subscripts reach columns by field.** `s[field: f]` returns one column as a `Span`, as `s.f` does, and `s[fields: (f1, f2)]` a tuple of them. `s[mutableField: f]` and `s[mutableFields: (f1, f2)]` give them as `MutableSpan`s. A `let` field has no mutable column, so naming one there is a compile error (below):
+**Columns are places.** `s.life` is the column's buffer as a `[Float]` place, a place property with a `borrow` and a `mutate`. So `&s.life` is a `&[Float]`, and `mutable &s.life` a `mutable &[Float]` ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)). A reference to a column depends on that column alone, a part of `s` disjoint from the other columns, as a stored field is from its siblings ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)). So `mutable &s.pos` and `&s.vel` can be held at once:
 
 ```swift
-var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // 'ts' and 'vs' are MutableSpans of two distinct columns
+var lives = mutable &particles.life    // a 'mutable &[Float]' of one column
+let vels = &particles.vel              // a '&[Vec3]' of another, held at the same time
+lives[0] -= 1
 ```
 
-**Each element a `for` loop over `s` hands out, and `s[i]`, is a row.** A **row** is a view of one index across every column. It is shared or, through `&`, exclusive, as `Borrow<T>` and `MutableRef<T>` are for other collections ([Iteration](collections.md#iteration)). It has one place property per field of `T`, named as the field is, which lends that field's place in its column. Those places are disjoint, as a struct's stored fields are ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
+**Subscripts reach columns by field.** `s[field: f]` is one column, a place with both accessors, as `s.f` is. `s[fields: (f1, f2)]` hands out a tuple of shared references to several columns, and `s[mutableFields: (f1, f2)]` a tuple of mutable references. A tuple of references is a value, not a place, so its two forms have two names, as a method's do ([Shared and mutable views of one collection](collections.md#shared-and-mutable-views-of-one-collection)):
 
-**Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](../09-compile-time/reflection.md#reflection-and-access-control)), a column is a `MutableSpan`, and a row's field can be written, only for a `var` field that could be assigned there. So a `let` field has no `mutable` column member, and `s[mutableField:]` or `s[mutableFields:]` of one is a compile error. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this.
+```swift
+var (ts, vs) = table.rows[mutableFields: (tf, vf)]  // 'ts' and 'vs' are mutable references to two distinct columns
+```
+
+**Each element that a loop over `&s` or `mutable &s` hands out is a row.** A **row** is a value that lends one index across every column: shared from `&s`, and exclusive from `mutable &s`. The loop name owns each row, as it owns a chunk ([Iteration](collections.md#iteration)). `s.row(i)` and `s.mutableRow(i)` hand out the row at index `i` the same way. A row has one place property per field of `T`, named as the field is, which lends that field's place in its column.
+
+**A shared row's field places have only a `borrow`.** So a row from `&s` or `s.row(i)` reads its fields, and `mutable &` of one, or a write through it, is a compile error. Only a row from `mutable &s` or `s.mutableRow(i)` lends its fields with `mutable &`, since only it holds `s` exclusively.
+
+**A row's places are disjoint, as a struct's stored fields are** ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)), so `p.pos += p.vel * dt` writes one while it reads another. A row isn't a `T`: code reads and writes it field by field, and appending and removing move whole `T` values.
+
+**Columns and rows obey the rules of `value[field]` at the use site.** Under those rules ([09](../09-compile-time/reflection.md#reflection-and-access-control)), a column can be lent with `mutable &`, and a row's field written, only for a `var` field that could be assigned there. So a `let` field's column has only a `borrow`, and `mutable &` of it, or `s[mutableFields:]` naming it, is a compile error. A column of an `unsafe` field is available only inside `unsafe`, and a private field's column exists only where the field is visible. Appending and removing whole rows moves whole values, so it needs none of this.
 
 **A growing operation grows every column or none.** When an allocation fails, `tryAppend` fails with `AllocError`, with every column as it was, and `append` ends the program ([06](../06-memory-and-allocators/allocation-lifecycle.md#allocation-failure)).

@@ -13,11 +13,11 @@ enum Shape {
     case polygon(points: [8 of Vec2], count: UInt8)
 }
 
-func area(_ s: Shape) -> Float {
-    return when s {
+func area(_ s: &Shape) -> Float {
+    return when &s {
         .circle(r)         { .pi * r * r }
         .rect(size)        { size.x * size.y }
-        .polygon(p, n)     { polygonArea(p[..<Int(n)]) }
+        .polygon(p, n)     { polygonArea(&p[..<UInt(n)]) }    // a '&[Vec2]' of the first n points
     }
 }
 ```
@@ -33,7 +33,7 @@ func area(_ s: Shape) -> Float {
 ## Matching with `when`, and choosing with `if`
 
 ```swift
-let label = when state {
+let label = when &state {
     .idle { "idle" }
     .chase(t) where t.isBoss { "fleeing" }
     .chase { "chasing" }
@@ -63,12 +63,12 @@ if state == .idle { wander() }                 // a case without a payload, test
 
   When `E` is itself an error union, as a type parameter may turn out to be, `e as E` matches a value of any of its members, binds it converted to `E`, and covers each. That conversion makes a new value ([01](../01-values-and-ownership/bindings.md#conversions)):
     - from a value subject, such as `when consume e` or a `catch`, it takes what the subject held;
-    - from a place subject it copies it. So there every member it may match is `Copyable`, and generic code whose `E` is a type parameter declares `E: Copyable`.
+    - from a reference subject, such as `when &e`, it copies it. So there every member it may match is `Copyable`, and generic code whose `E` is a type parameter declares `E: Copyable`.
 - **Exhaustive.** A `when` with a subject covers every value of its subject's type, or ends in `else`. An arm with a `where` guard covers nothing. An expression pattern covers its values only when it is a literal of a number type or `Bool`, or a range between such literals, compared by the language's own `==` or `contains`, never a user-defined one. A literal in a payload covers its value the same way. A `when` without a subject ends in `else` when its value is used.
-- **One set of names per arm.** Patterns that share an arm bind the same names, with the same types. The subject says what each name is, a borrow or an owner, so every pattern of the arm binds it the same way ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). No arm falls through into the next.
+- **One set of names per arm.** Patterns that share an arm bind the same names, with the same types. The subject says what each name is, a `ref let` or a `ref var` of its part, or an owner, so every pattern of the arm binds it the same way ([01](../01-values-and-ownership/bindings.md#for-and-when-names)). No arm falls through into the next.
 
 ```swift
-let label = when hit {
+let label = when &hit {
     .miss { "miss" }
     .damage(0) { "graze" }                           // a literal inside a payload compares
     .damage(d) where d >= lethal { "fatal" }         // any other comparison goes in 'where'
@@ -77,7 +77,9 @@ let label = when hit {
 }
 ```
 
-**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `&`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
+**A `when`'s subject is written as an argument is**: `when &e`, `when mutable &e`, `when consume e`, or a value, such as a call's result ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
+
+**The subject holds still while arms are tested.** A `when` borrows its subject from when it is evaluated until an arm is chosen: shared, or exclusively when it is marked `mutable &`. It holds a dynamic place's access as any borrow does ([02](../02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)). Patterns and guards run under that borrow, so a guard sees the value its arm then binds. A guard can't change or consume the subject, every part is a shared view inside a guard, and a part of a consumed subject, or of any value subject, takes its value only once its arm is chosen ([01](../01-values-and-ownership/bindings.md#for-and-when-names)).
 
 **Declarations, conditions and `for` loops take patterns that always match: they bind names, and test nothing of their own** ([01](../01-values-and-ownership/bindings.md#conditions-and-patterns)).
 
@@ -95,7 +97,7 @@ let label = when hit {
 ```swift
 var target: Handle<Enemy>? = nil     // 8 bytes, the same as Handle<Enemy>
 if target != nil { attack(target) }  // a Handle<Enemy> inside the check
-ref let hp = enemies[h]?.hp ?? 0     // refers to the element's hp in place, or to a 0
+let hp = enemies[h]?.hp ?? 0         // the element's hp, copied, or 0 when 'h' names no enemy
 ```
 
 **`T?` is `Optional<T>`, an enum whose cases are `.some(T)` and `.none`, written `nil`.** A `nil` pattern is `.none` and covers it. The two spellings differ only as a place property's declared type. There `T?` makes an optional place property, which hands out a place of type `T` or `nil`, and `Optional<T>` makes one that hands out a whole place of the enum ([02](../02-views-and-dependencies/place-and-value-properties.md#optional-places-and-tuples-of-places)). The prelude declares `T?` implicitly copyable where `T` is, so a `Handle<Enemy>?` copies with no `copy` written ([01](../01-values-and-ownership/moves-copies-destruction.md#implicitly-copyable-types)).
@@ -112,11 +114,18 @@ ref let hp = enemies[h]?.hp ?? 0     // refers to the element's hp in place, or 
 **An optional chain can be assigned through when it ends in a member or an element.** `a?.b = v` and `a?[i] = v` write only when `a` holds a value, and evaluate `v` before they read `a` ([01](../01-values-and-ownership/parameters.md#evaluation-order-and-when-a-calls-borrows-begin)). A chain with nothing after the `?` is a compile error that points to an optional binding. The binding evaluates the right side only when the optional holds a value, so nothing is destroyed when nothing is written:
 
 ```swift
-x? = consume spare                         // error: write 'if ref var t = &x { t = consume spare }'
-if ref var t = &x { t = consume spare }    // moves 'spare' in only when 'x' holds a value
+x? = consume spare                                 // error: write 'if ref var t = mutable &x { t = consume spare }'
+if ref var t = mutable &x { t = consume spare }    // moves 'spare' in only when 'x' holds a value
 ```
 
-**`a ?? b` chooses as an `if` does.** It evaluates `b` only when `a` is `nil`, and hands its position to `a`'s payload or to `b`, as an `if` hands it to the arm that runs ([01](../01-values-and-ownership/bindings.md#if-and-when-as-values)). The payload of a place is a place, and the payload of a value is a value. When `b` is a `T?` too, the position goes to `a` or `b` whole, and the result is a `T?`.
+**`a ?? b` chooses as an `if` does.** It evaluates `b` only when `a` is `nil`, and hands its position to `a`'s payload or to `b`, as an `if` hands it to the arm that runs ([01](../01-values-and-ownership/bindings.md#if-and-when-as-values)). So each operand writes the mark that position needs. When `b` is a `T?` too, the position goes to `a` or `b` whole, and the result is a `T?`.
+
+**Where `a` is a reference to an optional, a `&T?` or a `mutable &T?`, its payload is a reference of the same kind to the value inside.** So `??` gives a reference to `a`'s payload or `b`'s, as a `ref` binding unwraps such a reference in a condition ([01](../01-values-and-ownership/bindings.md#conditions)):
+
+```swift
+ref let shown = &nickname ?? &player.name    // names the String inside 'nickname', or the player's name
+let label = nickname ?? player.name          // error: write 'copy', 'consume' or '&' before 'nickname'
+```
 
 **An optional stores `nil` in a niche, a bit pattern `T` never uses, when `T` has one, and then costs no extra bytes.** These types have one:
 
@@ -164,14 +173,14 @@ chase(e.target)                    // a Handle<Player> to the end of the scope
 
 An optional binding, such as `if ref let`, binds what such a place holds to a new name instead ([01](../01-values-and-ownership/bindings.md#conditions)). A place that narrows can be unwrapped either way, and each way fits different code ([01](../01-values-and-ownership/bindings.md#unwrapping-an-optional)).
 
-**The narrowed place is its payload, as a place.** Reading it reads the payload in place, and `&` lends the payload, which can't become `nil`, to a `mutable T`.
+**The narrowed place is its payload, as a place.** Reading it reads the payload in place, and `mutable &x` lends the payload, which can't become `nil`, as a `mutable &T`.
 
-**Where a `T?` is expected, or a member that `Optional` declares is named, the narrowed place is the whole optional.** So passing it to a `T?` parameter borrows the optional, with no conversion, and `x.take()` is `Optional`'s `take()`.
+**Where a `T?` is expected, or a member that `Optional` declares is named, the narrowed place is the whole optional.** So `&x` given to a `&T?` parameter lends the optional, with no conversion, and `x.take()` is `Optional`'s `take()`.
 
 **The narrowing ends wherever the place could become `nil`**, and the place is a `T?` again until the next check. These are the ending events:
 
 - an assignment to a place that overlaps it ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap));
-- lending it as a `mutable T?`, or lending a place that overlaps it for change, except its payload lent as a `mutable T`;
+- lending it as a `mutable &T?`, or lending a place that overlaps it for change, except its payload lent as a `mutable &T`;
 - moving out of it, or out of a place that contains it;
 - a closure capturing it, or a place that overlaps it, exclusively ([05](../05-protocols-generics-and-closures/functions-and-closures.md#capturing-places));
 - an assignment of a reference to the `var` it is reached through ([02](../02-views-and-dependencies/dependency-lifetimes.md#assigning-a-reference-to-a-var));
@@ -197,5 +206,5 @@ unsafe { use(m.byte) }     // reading a member of Mixed needs unsafe
 - **Layout.** Every member is at offset 0, and the union is sized to its largest member, rounded up to its largest alignment, as a C union is. A packed union counts each member's alignment as 1, or at most `N`, as a packed struct does ([Layout attributes](structs.md#layout-attributes)). `@c union` adds the `@c` field checks, and imported C unions arrive in this form ([08](../08-c-interop/imports-and-inline-c.md#structs-unions-and-enums)).
 - **Members.** They are copyable, since a union doesn't record which member it holds, and so couldn't tell which one to destroy. They are all one place for exclusivity, since writing one can change another ([01](../01-values-and-ownership/exclusivity.md#which-places-overlap)).
 - **Initializers.** A union is built from one member, as in `Bits(f: 1.5)`, and its own `init` builds its value as an enum's does ([above](#enums)).
-- **Access.** Writing a whole new value into a member that isn't `unsafe` is safe: initializing the union with it, or assigning it. An `unsafe` member, like an `unsafe` field, is given a value only inside `unsafe` ([Initializers](structs.md#initializers)). Every other access reads, since it starts from the bytes already there: a borrow, `&`, a `mutating` call, `b.u += 1` or a reflective change through `value[field]`.
+- **Access.** Writing a whole new value into a member that isn't `unsafe` is safe: initializing the union with it, or assigning it. An `unsafe` member, like an `unsafe` field, is given a value only inside `unsafe` ([Initializers](structs.md#initializers)). Every other access reads, since it starts from the bytes already there: a reference made with `&` or `mutable &`, a `mutating` call, `b.u += 1` or a reflective change through `value[field]`.
 - **Reading.** Reading is safe when every member's type is `Pod`, no member is `unsafe`, and the union is padding-free ([Plain data: `Pod` and bit casts](data-layout.md#plain-data-pod-and-bit-casts)), since whatever a write left is then a valid value of the member read. Otherwise it needs `unsafe`. Unlike the union's own `Pod` conformance, this doesn't ask its members to be as visible as it: a read names a member it can see, and any bytes are a valid value of that member's type.

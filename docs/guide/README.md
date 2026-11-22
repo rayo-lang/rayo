@@ -8,7 +8,7 @@ Start with the [Introduction](introduction.md), then read the chapters in order.
 | [1 Basics](01-basics.md) | Variables, numbers and their conversions, structs, functions, `if`, and loops |
 | [2 Moves and copies](02-moves-and-copies.md) | Owners, moves, `copy` and `clone()`, and when values are destroyed |
 | [3 Borrowing](03-borrowing.md) | References with `&` and `mutable &`, `ref let` and `ref var`, and the law of exclusivity |
-| [4 Views](04-views.md) | Spans and other views, what a function's result may borrow, and why no view outlives what it borrows |
+| [4 Views](04-views.md) | References to runs of elements and text, what a function's result may borrow, and why no view outlives what it borrows |
 | [5 Handles and objects](05-handles-and-objects.md) | Links that outlive a function: pools and handles, objects and weak pointers |
 | [6 Memory and allocators](06-memory-and-allocators.md) | Allocators as values, arenas and resets, `Box`, and reference counting with `Shared` |
 | [7 Concurrency](07-concurrency.md) | Lending work to other threads, `Sendable`, locks, threads and tasks |

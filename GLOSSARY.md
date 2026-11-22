@@ -241,7 +241,11 @@ An operation that combines a vector's lanes into one value, such as `sum()` or a
 _Avoid_: horizontal operation
 
 **Row**:
-A view of one index of an `SoA<T>` across every column, with one place property per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
+A value that lends one index of an `SoA<T>` across every column, shared or exclusive, with one place property per field of `T` ([04](docs/spec/04-types/data-layout.md#struct-of-arrays-soat)).
+
+**Run of elements**:
+`[T]`: `T`s laid end to end in storage something else owns, reached through a `&[T]` or a `mutable &[T]` ([04](docs/spec/04-types/collections.md#runs-of-elements)).
+_Avoid_: span (as a type name), array slice, slice (a `Slice<T>` is a checked long-lived view)
 
 **Shuffle**:
 An operation that builds a vector from lanes of one or two vectors, picked by a list of lane indices known at compile time, as `shuffle(v, [3, 2, 1, 0])` does ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
@@ -253,6 +257,10 @@ _Avoid_: SimdElement
 
 **Swizzle**:
 A vector property whose name lists up to four of the lanes `x`, `y`, `z` and `w`, as `v.zyx` does: a swizzle of 2 to 4 lanes is shorthand for a shuffle, and one lane is `v[i]` ([04](docs/spec/04-types/numbers-and-math.md#shuffles-and-swizzles)).
+
+**Text**:
+`Text`: a run of UTF-8 text, unsized, reached through a `&Text`, such as a `String`'s text or a literal's text; a string literal is a `static &Text` ([04](docs/spec/04-types/collections.md#strings)).
+_Avoid_: string view, `str`
 
 **Unconditional extension**:
 An extension that gives none of its type's generic arguments and has no `where` clause ([04](docs/spec/04-types/structs.md#initializers)).

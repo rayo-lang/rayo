@@ -1,6 +1,6 @@
 # 04 · Types
 
-Types tell the compiler what a value contains and which operations are valid. They also make many costs visible in Rayo: a conversion that may lose information is explicit, and an owning collection is a different type from a view of its elements. The examples below show those choices in declarations, arithmetic and iteration.
+Types tell the compiler what a value contains and which operations are valid. They also make many costs visible in Rayo: a conversion that may lose information is explicit, and an owning collection is a different type from a reference to its elements. The examples below show those choices in declarations, arithmetic and iteration.
 
 ```swift
 struct Particle(var pos: Vec3, var vel: Vec3, var life: Float)     // 28 bytes, with no padding
@@ -11,7 +11,7 @@ let total: Int = n                                      // lossless widening is 
 let scale = Float(total) / 1024                         // a conversion that may round is spelled out
 
 var particles = alloc SoA<Particle>(capacity: 100_000)  // one buffer per field, still used with field syntax
-for p in &particles {
+for p in mutable &particles {
     p.pos += p.vel * dt                                 // vector math: no hidden calls where the processor has the operations
 }
 ```

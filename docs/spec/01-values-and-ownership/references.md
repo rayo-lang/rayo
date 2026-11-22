@@ -97,7 +97,7 @@ peek(&best)                         // refers to 'best' itself
 
 **Some types have no size known where code is compiled, so their values can't sit in a place of their own.** These are the **unsized** types:
 
-- **`[T]`, a run of elements**, such as a list's elements, a range of them, or an `SoA` column ([04](../04-types/collections.md#collections-and-strings));
+- **`[T]`, a run of elements**, such as a list's elements, a range of them, or an `SoA` column ([04](../04-types/collections.md#runs-of-elements));
 - **`Text`, a run of UTF-8**, such as a `String`'s text or a literal's ([04](../04-types/collections.md#strings));
 - **`any P`, an existential**, a value of some type that conforms to `P` ([05](../05-protocols-generics-and-closures/protocols-and-generics.md#any-p-explicit-dynamic-dispatch)).
 
