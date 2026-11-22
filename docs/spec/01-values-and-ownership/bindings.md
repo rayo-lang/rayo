@@ -59,7 +59,7 @@ ref let hp = makeEnemy().hp        // error: the enemy dies with the statement; 
 **A `let` or `var` declaration owns what it binds**, as a binding of a call's result does. So it can move its value on, and a `let` still can't change it. A condition's `let` or `var` owns an optional's payload by the same rules ([below](#conditions)).
 
 - **A `let` or `var` given a place writes `copy` or `consume` before it, or is declared `ref let`.** Leaving all three out is a compile error that names them, since the place's value already has an owner. That holds as well for an expression the initializer hands its position to: the last expression of an `if` or `when` arm or of an `unsafe` block ([below](#if-and-when-as-values)), or an operand of `??` ([04](../04-types/enums.md#optionals)). The exceptions are below.
-- **A `let` or `var` given `&e` is a compile error that says to write `ref var`, whatever `e` is.** `&e` is a mutable reference to the place `e`, and a binding without `ref` refers to no place ([Lending a place for change](#lending-a-place-for-change)). That holds where an argument of the declared type would make a view from `&e`, such as a `MutableRef<any P>`, too: a `ref var` binds the place itself.
+- **A `let` or `var` given `&e` is a compile error that says to write `ref var`, whatever `e` is.** `&e` lends the place `e` for change, and a binding without `ref` refers to no place ([Lending a place for change](#lending-a-place-for-change)). That holds where the declared type would make a view from `&e`, such as a `MutableRef<any P>`, too. A `ref var` binds the place itself, so a declaration never needs that view. An argument or an assignment into a place of that type has no `ref` form, so there `&e` makes the view.
 - **An assignment from a place writes `copy` or `consume`**, and leaving both out is a compile error that names them, as [Moves](moves-copies-destruction.md#moves) says. A place of an implicitly copyable type needs neither, as below.
 
 **Four exceptions need none of `copy`, `consume` and `ref let`, since each gives the binding a value of its own to own:**
@@ -224,7 +224,7 @@ when state {
 
 ### `for` and `when` names
 
-**A `for` name and a `when` payload name are bare, and what each one is follows from where what it binds lies, and from the subject's form.** A loop or a match binds all its names from one subject, so the subject's form says once what they all are. For a `for` name, the iterator that form picks says whether each element lies in storage or is a value the sequence makes ([04](../04-types/collections.md#iteration)):
+**A `for` name and a `when` payload name are bare, and what each one is follows from the subject's form, and from where each element or part lies.** A loop or a match binds all its names from one subject, so the subject's form says once what they all are. For a `for` name, the iterator that form picks says whether each element lies in storage or is a value the sequence makes ([04](../04-types/collections.md#iteration)):
 
 | Subject | Each name |
 | --- | --- |
@@ -235,7 +235,7 @@ when state {
 
 **A `when` payload name follows the same rule.** A part of a place, as in `when event`, is borrowed read-only, and one of a place lent with `&`, as in `when &shape`, is borrowed mutably. A part of a value, such as a call's result, `consume s` or `copy s`, is owned. An implicitly copyable part of a place is copied, and read-only, as a loop's element is.
 
-- **An owned name may change what it owns, but is never assigned as a whole.** It takes no `let` or `var`, and nothing points it at another value, so `job = Job()` below is a compile error. Otherwise it is a [changeable place](#changeable-places). So `job.priority += 1` changes the job, and a `mutating` method may be called on it. `&job` lends it to a `mutable` parameter, as that call lends its receiver, and a span it owns, such as a chunk, writes through itself.
+- **An owned name may change what it owns, but is never assigned as a whole.** It takes no `let` or `var`, and nothing points it at another value, so `job = Job()` below is a compile error. Otherwise it is a [changeable place](#changeable-places). So `job.priority += 1` changes the job, and a `mutating` method may be called on it. `&job` lends it to a `mutable` parameter, as a `mutating` call on `job` lends it as the receiver, and a span it owns, such as a chunk, writes through itself.
 - **A mutable borrow writes through to its element or part**, as a `ref var` does, so `r *= 2` below changes `shape`.
 - **A borrowing name can't be consumed**, since what it borrows has another owner. An owned name can be, as a `let` can.
 - **`consume` marks a subject whose names own what they bind**, as `&` marks one whose names borrow it for change. `consume` takes the subject out of a place the code owns ([What can be moved from](moving-values-out.md#what-can-be-moved-from)), as in the second example below.
@@ -390,7 +390,7 @@ _ = r.value?.submit(mesh)          // fine: an object's value is changeable thro
 
 ## Lending a place for change
 
-**`&e` is a mutable reference to the place `e`, whatever `e` is, and it marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
+**`&e` lends the place `e` for change, whatever `e` is, and `&` marks every place lent for change, in a binding as in a call.** The receiver of a `mutating` method call is the exception, since the call's form shows it. These places take `&`, each lent to code that may change it:
 
 - a `mutable` argument;
 - the place a `ref var` declaration or condition refers to;

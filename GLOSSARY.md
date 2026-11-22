@@ -90,6 +90,9 @@ _Avoid_: lifetime, region, loan set
 **Dynamic access**:
 An access to an object, a `Slice`'s buffer or a thread-local, checked at run time and held until nothing that depends on it is used ([02](docs/spec/02-views-and-dependencies/dependency-absorption-and-accesses.md#rule-6-dynamic-accesses)).
 
+**Exclusive view**:
+A mutable view, named for holding what it can change exclusively, as against a shared view such as a `Span` ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+
 **Full statement**:
 A statement, or a condition or subject that counts as a statement of its own, whose end destroys the temporaries it made ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#temporaries)).
 _Avoid_: full-expression
@@ -102,7 +105,7 @@ _Avoid_: lock token
 Memory that is never freed, and that nothing writes once a value names it, such as a literal's bytes or the runtime's tables, which a static value may view ([02](docs/spec/02-views-and-dependencies/scoped-values.md#static-values)).
 
 **Mutable view**:
-A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value. Writing through one is `mutating`, so it needs a changeable place ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
+A view through which what it views can be changed, such as a `MutableSpan`, a lock guard or a `mutating` function value. ([02](docs/spec/02-views-and-dependencies/dependency-projection-and-results.md#mutable-views)).
 _Avoid_: exclusive reference
 
 **Optional place property**:

@@ -141,7 +141,7 @@ nav.write { grid in grid.block(cellOf(crate.pos)) }                       // one
 
 **Locking doesn't make a closure `mutating`.** `lock` is a non-`mutating` method, so a body that only locks `deaths` still runs on many threads at once.
 
-**The guard form returns a guard, which holds the lock for as long as it lives.** `_ = g` releases it early, and shows where the lock ends. `g` is a `var`, since appending writes through the guard, as writing through a `MutableSpan` does ([Views](04-views.md#views)).
+**The guard form returns a guard, which holds the lock for as long as it lives.** `_ = g` releases it early, and shows where the lock ends. `g` is a `var`, since appending writes through the guard. Writing through any view, a guard as much as a `MutableSpan`, takes a binding that may change, such as a `var` ([Views](04-views.md#views)).
 
 **`_ =` drops a value on purpose.** Rayo rejects any value that code never uses, unless its type is `Void`, because an ignored result is usually a bug, such as an error nobody handled. So code that has no use for a value, such as the `Thread` that `Thread.start` returns below, drops it with `_ =` ([05](../spec/05-protocols-generics-and-closures/functions-and-closures.md#unused-values)).
 

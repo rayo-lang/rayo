@@ -166,12 +166,14 @@ forEachLine(src.view) { line in lines.append(line) }
 - a `mutating` or `consuming` function value, or a closure with an exclusive capture;
 - a value holding one of these.
 
+**A mutable view holds what it can change exclusively, so it is also called an exclusive view**, as against a shared view, such as a `Span`, whose memory others may read at the same time. So an **exclusive view** is any of the values above, and an exclusive `SoA` row too ([04](../04-types/data-layout.md#struct-of-arrays-soat)).
+
 **A scoped value that only holds shared views is no mutable view**, as `List<StringView>` isn't. Neither is a function value made from a named function, or from a literal that captures nothing, since it views no storage.
 
 **A function that returns a mutable view must take a `mutable` argument or an `owned` mutable view.** A parameter of a `MutableSpan` or a `MutableRef` type is received `owned` with no `owned` written, unless it is declared `mutable` ([01](../01-values-and-ownership/parameters.md#parameters)). A borrowed parameter that holds a `MutableSpan` doesn't qualify, since a second view could then write what the first still reads. An `unsafe` function is exempt (next).
 
 ```swift
-struct Halves<T>(let low: MutableSpan<T>, let high: MutableSpan<T>): Scoped
+struct Halves<T>(var low: MutableSpan<T>, var high: MutableSpan<T>): Scoped
 
 func rest<T>(_ s: MutableSpan<T>) -> MutableSpan<T>         // fine: 's' is an owned mutable view
 func peek<T>(_ h: Halves<T>) -> MutableSpan<T>              // error: 'h' is only borrowed

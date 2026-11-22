@@ -42,7 +42,7 @@ struct MutableSpan<Element>(                           // exclusive view: move-o
 
 ## Writing through a view
 
-**Writing through a view is `mutating`, so it needs a changeable place, as any change does** ([01](../01-values-and-ownership/bindings.md#changeable-places)). That is a `var`, a `ref var`, an owned parameter, or a `for` or `when` name that owns the view. A `let`, a `ref let`, a borrowed parameter and a loop name that borrows read-only can't write through one, so a `let` never changes anything, whatever its type:
+**Writing through a view is `mutating`, so it needs a changeable place**, such as a `var` or a `for` name that owns the view, as any change does ([01](../01-values-and-ownership/bindings.md#changeable-places)). So a `let` never writes through a view it holds, whatever the view's type:
 
 ```swift
 var hot = heat.mutableSpan                              // a MutableSpan<Float> that a var owns
@@ -172,7 +172,7 @@ func show(_ hint: Hint, _ token: Token) {
 
 **No other type takes `static`**, since its point is to stay in its scope or to change what it views. That rules out these, and any type that holds one:
 
-- an exclusive view, such as `MutableSpan<T>` or `MutableRef<T>` ([above](#writing-through-a-view));
+- an exclusive view, such as `MutableSpan<T>` or `MutableRef<T>` ([Mutable views](dependency-projection-and-results.md#mutable-views));
 - a lock guard ([Lock guards are released on the thread that took them](dependency-lifetimes.md#lock-guards-are-released-on-the-thread-that-took-them));
 - a function value or closure literal;
 - a type declared `Scoped` with no scoped field, such as a profiling zone.
